@@ -53,6 +53,7 @@ struct TripTrackerView: View {
     @State private var lastMatchedRegion: PlateRegion?
     @State private var showMatchConfirmation = false
     @State private var lastProcessedText: String = ""
+    @State private var showSettings = false
     @AppStorage("skipVoiceConfirmation") private var skipVoiceConfirmation = false
 
     var body: some View {
@@ -70,6 +71,19 @@ struct TripTrackerView: View {
         }
         .background(Color.Theme.background.ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                }
+            }
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+        }
         .onChange(of: selectedTab) { oldValue, newValue in
             if newValue == .voice {
                 Task {
@@ -746,6 +760,111 @@ private struct VoiceConfirmationDialog: View {
             )
         }
         .transition(.opacity.combined(with: .scale(scale: 0.9)))
+    }
+}
+
+// Settings View
+private struct SettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("skipVoiceConfirmation") private var skipVoiceConfirmation = false
+    @AppStorage("holdToTalk") private var holdToTalk = true
+    
+    enum SettingsSection: String, CaseIterable {
+        case voice = "Voice"
+        
+        var id: String { rawValue }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.Theme.background
+                    .ignoresSafeArea()
+                
+                List {
+                    ForEach(SettingsSection.allCases, id: \.id) { section in
+                        Section {
+                            switch section {
+                            case .voice:
+                                voiceSettings
+                            }
+                        } header: {
+                            Text(section.rawValue)
+                                .font(.system(.headline, design: .rounded))
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                        }
+                        .textCase(nil)
+                        .listRowBackground(Color.clear)
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .font(.system(.body, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                }
+            }
+        }
+        .background(Color.Theme.background)
+    }
+    
+    private var voiceSettings: some View {
+        Group {
+            SettingToggleRow(
+                title: "Skip Confirmation",
+                description: "Automatically add plates without confirmation",
+                isOn: $skipVoiceConfirmation
+            )
+            
+            SettingToggleRow(
+                title: "Hold to Talk",
+                description: "Press and hold the microphone button to record",
+                isOn: $holdToTalk
+            )
+        }
+    }
+}
+
+// Reusable setting toggle row with card styling
+private struct SettingToggleRow: View {
+    let title: String
+    let description: String
+    @Binding var isOn: Bool
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(.body, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                
+                Text(description)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+            }
+            
+            Spacer()
+            
+            Toggle("", isOn: $isOn)
+                .tint(Color.Theme.primaryBlue)
+                .labelsHidden()
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+        )
+        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
     }
 }
 
