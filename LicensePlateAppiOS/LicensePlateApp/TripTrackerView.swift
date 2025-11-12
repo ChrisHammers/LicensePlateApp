@@ -11,6 +11,18 @@ import SwiftData
 import Speech
 import AudioToolbox
 
+/***
+ 
+ TripTrackerView: Main view while game/trip is open. Top area the Trip name, how many licenses found out max number and eventually a map that changes as you scroll or if you limit your choices.
+ 
+ Tab bar to choose between  a list of states/provinces/regions that have license plates and if they are selected or not, and a voice option.
+ 
+ 
+
+ 
+ 
+ 
+ */
 struct TripTrackerView: View {
     enum Tab: CaseIterable, Identifiable {
         case list
@@ -41,6 +53,7 @@ struct TripTrackerView: View {
     @State private var lastMatchedRegion: PlateRegion?
     @State private var showMatchConfirmation = false
     @State private var lastProcessedText: String = ""
+    @AppStorage("skipVoiceConfirmation") private var skipVoiceConfirmation = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -75,13 +88,19 @@ struct TripTrackerView: View {
                 }
             }
         }
-        .alert("Plate Found!", isPresented: $showMatchConfirmation) {
-            Button("OK") {
-                showMatchConfirmation = false
-            }
-        } message: {
-            if let region = lastMatchedRegion {
-                Text("Added \(region.name) to your list!")
+        .overlay {
+            if showMatchConfirmation, let region = lastMatchedRegion {
+                VoiceConfirmationDialog(
+                    region: region,
+                    onAdd: {
+                        confirmAddRegion(region)
+                    },
+                    onCancel: {
+                        showMatchConfirmation = false
+                        lastMatchedRegion = nil
+                    },
+                    skipConfirmation: $skipVoiceConfirmation
+                )
             }
         }
     }
@@ -134,7 +153,7 @@ struct TripTrackerView: View {
              ForEach(PlateRegion.groupedByCountry(), id: \.country) { group in
                  Section(group.country.rawValue) {
                      ForEach(group.regions) { region in
-                         RegionRow(
+                         RegionCellView(
                              region: region,
                              isSelected: trip.hasFound(regionID: region.id),
                              toggleAction: { toggle(regionID: region.id) }
@@ -156,7 +175,7 @@ struct TripTrackerView: View {
         ForEach(PlateRegion.groupedByCountry(), id: \.country) { group in
               Section() {
                 ForEach(group.regions) { region in
-                  RegionRow(
+                  RegionCellView(
                     region: region,
                     isSelected: trip.hasFound(regionID: region.id),
                     toggleAction: { toggle(regionID: region.id) }
@@ -175,7 +194,7 @@ struct TripTrackerView: View {
             }
           }
         //}
-        .listStyle(.grouped)
+      .listStyle(.inset)
         .scrollContentBackground(.hidden)
         .background(Color.Theme.background)
     }
@@ -487,17 +506,30 @@ struct TripTrackerView: View {
     private func addRegionIfNotFound(_ region: PlateRegion) {
         // Only add if not already found
         if !trip.hasFound(regionID: region.id) {
-            toggle(regionID: region.id)
             lastMatchedRegion = region
-            showMatchConfirmation = true
             
-            // Clear recognized text and reset processed text after a short delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                speechRecognizer.recognizedText = ""
-                lastProcessedText = ""
+            // Check if user wants to skip confirmation
+            if skipVoiceConfirmation {
+                // Auto-add without confirmation
+                confirmAddRegion(region)
+            } else {
+                // Show confirmation popup
+                showMatchConfirmation = true
             }
         } else {
             print("ℹ️ [Speech Match] Region \(region.name) already found, skipping")
+        }
+    }
+    
+    private func confirmAddRegion(_ region: PlateRegion) {
+        toggle(regionID: region.id) // this toggles instead of a discrete set...we probably should have a direct set, just incase this gets called where it shouldn't (right now we make sure the trip hasn't found it)
+        showMatchConfirmation = false
+        lastMatchedRegion = nil
+        
+        // Clear recognized text and reset processed text after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            speechRecognizer.recognizedText = ""
+            lastProcessedText = ""
         }
     }
 
@@ -571,7 +603,7 @@ struct TripTrackerView: View {
 
 }
 
-private struct RegionRow: View {
+private struct RegionCellView: View {
     let region: PlateRegion
     let isSelected: Bool
     var toggleAction: () -> Void
@@ -606,6 +638,114 @@ private struct RegionRow: View {
             .padding(.vertical, 6)
         }
         .buttonStyle(.plain)
+    }
+}
+
+// Custom confirmation dialog for voice recognition
+private struct VoiceConfirmationDialog: View {
+    let region: PlateRegion
+    let onAdd: () -> Void
+    let onCancel: () -> Void
+    @Binding var skipConfirmation: Bool
+    
+    var body: some View {
+        ZStack {
+            // Semi-transparent background
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    onCancel()
+                }
+            
+            // Dialog box
+            VStack(spacing: 0) {
+                VStack(spacing: 20) {
+                    Text("Hey, we heard the following \(region.country == .unitedStates ? "state" : region.country == .canada ? "province" : "state"):")
+                        .font(.system(.title3, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .multilineTextAlignment(.center)
+                    
+                    Text(region.name)
+                        .font(.system(.largeTitle, design: .rounded))
+                        .fontWeight(.bold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                        .multilineTextAlignment(.center)
+                        .padding(.vertical, 4)
+                    
+                    Text("Add this to the list of license plates found?")
+                        .font(.system(.body, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.top, 32)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
+                
+                Divider()
+                    .background(Color.Theme.softBrown.opacity(0.2))
+                
+                VStack(spacing: 16) {
+                    // Don't show again checkbox
+                    Button {
+                        skipConfirmation.toggle()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: skipConfirmation ? "checkmark.square.fill" : "square")
+                                .font(.system(size: 20))
+                                .foregroundStyle(skipConfirmation ? Color.Theme.primaryBlue : Color.Theme.softBrown)
+                            
+                            Text("Don't show this again")
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 16)
+                    
+                    // Action buttons
+                    HStack(spacing: 16) {
+                        Button {
+                            onCancel()
+                        } label: {
+                            Text("Cancel")
+                                .font(.system(.headline, design: .rounded))
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .fill(Color.Theme.cardBackground)
+                                )
+                        }
+                        
+                        Button {
+                            onAdd()
+                        } label: {
+                            Text("Add")
+                                .font(.system(.headline, design: .rounded))
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Color.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                        .fill(Color.Theme.primaryBlue)
+                                )
+                        }
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 24)
+            }
+            .frame(maxWidth: 320)
+            .background(
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(Color.Theme.cardBackground)
+                    .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
+            )
+        }
+        .transition(.opacity.combined(with: .scale(scale: 0.9)))
     }
 }
 

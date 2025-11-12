@@ -244,7 +244,7 @@ private struct TripRow: View {
 
                 Spacer()
 
-                Label("\(trip.foundRegionIDs.count)", systemImage: "scope")
+              Label("\(trip.foundRegionIDs.count)/\(PlateRegion.all.count)", systemImage: "scope")
                     .font(.system(.subheadline, design: .rounded))
                     .fontWeight(.medium)
                     .foregroundStyle(Color.Theme.accentYellow)
