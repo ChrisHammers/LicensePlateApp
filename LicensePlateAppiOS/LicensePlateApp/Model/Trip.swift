@@ -14,6 +14,7 @@ final class Trip {
     var createdAt: Date
     //var lastEditedAt: Date
     var name: String
+  // var voiceRecordedRegionsFound: a Dictionary of the regionID and the date found, so we can log it later.
     var foundRegionIDs: [String] // Do we want to include the list of countries & states/provinces involved?  If new terrorities are added to canada, we can not break this game, and then we show a checkbox on what countries to include?  NOT MVP
 
     init(

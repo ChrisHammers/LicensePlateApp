@@ -112,6 +112,8 @@ class SpeechRecognizer: ObservableObject {
                         // Ignore cancellation errors
                         return
                     }
+                  print(error.localizedDescription)
+                  
                     self.errorMessage = "Recognition error: \(error.localizedDescription)"
                     self.stopListening()
                     return

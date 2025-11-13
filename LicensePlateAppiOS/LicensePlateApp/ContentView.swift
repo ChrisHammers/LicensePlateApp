@@ -21,6 +21,10 @@ struct ContentView: View {
         return formatter
     }()
 
+  init() {
+    UINavigationBar.appearance().titleTextAttributes = [.foregroundColor: Color.Theme.primaryBlue.uiColor]
+
+     }
     var body: some View {
         NavigationStack(path: $path) {
             ZStack {
