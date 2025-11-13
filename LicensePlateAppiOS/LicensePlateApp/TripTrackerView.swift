@@ -1096,7 +1096,7 @@ private struct FullScreenMapView: View {
             // Full screen map
             Map(position: $mapCameraPosition) {
                 // Region annotations
-                ForEach(regions) { region in
+                ForEach(PlateRegion.all) { region in
                     Annotation(region.name, coordinate: coordinateForRegion(region)) {
                         Circle()
                             .fill(foundRegionIDs.contains(region.id) ? Color.Theme.accentYellow : Color.Theme.primaryBlue.opacity(0.6))
@@ -1221,13 +1221,33 @@ private struct RegionMapView: View {
         }
     }
     
-    private var regions: [PlateRegion] {
+    private var regionsForCurrentCountry: [PlateRegion] {
         PlateRegion.all.filter { $0.country == country }
     }
+  
+  private var regionsFound: [PlateRegion] {
+    PlateRegion.all.filter { foundRegionIDs.contains($0.id)}
+  }
     
     var body: some View {
         ZStack {
-            Map(coordinateRegion: $mapRegion, annotationItems: regions) { region in
+          
+//          Map(initialPosition: .region(mapRegion)){
+//              ForEach(regionsFound) { region in
+//                Annotation(region.name, coordinate: coordinateForRegion(region)) {
+//                  Circle()
+//                      .fill(foundRegionIDs.contains(region.id) ? Color.Theme.accentYellow : Color.Theme.primaryBlue.opacity(0.6))
+//                      .frame(width: 12, height: 12)
+//                      .overlay(
+//                          Circle()
+//                              .stroke(Color.white, lineWidth: 2)
+//                      )
+//                      .shadow(color: Color.black.opacity(0.3), radius: 2, x: 0, y: 1)
+//                }
+//              }
+//            }
+          
+          Map(coordinateRegion: $mapRegion, annotationItems: regionsFound) { region in
                 MapAnnotation(coordinate: coordinateForRegion(region)) {
                     Circle()
                         .fill(foundRegionIDs.contains(region.id) ? Color.Theme.accentYellow : Color.Theme.primaryBlue.opacity(0.6))

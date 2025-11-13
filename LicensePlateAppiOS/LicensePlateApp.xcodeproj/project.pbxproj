@@ -401,6 +401,7 @@
 				DEVELOPMENT_TEAM = ZGH4D6QBA8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "RoadTrip Royale";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This app uses your location to show where you are on the map while tracking license plates.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app needs access to your microphone to listen for state and province names when using voice input.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "This app uses speech recognition to help you quickly log license plates by saying the state or province name out loud.";
@@ -439,6 +440,7 @@
 				DEVELOPMENT_TEAM = ZGH4D6QBA8;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "RoadTrip Royale";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "This app uses your location to show where you are on the map while tracking license plates.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "This app needs access to your microphone to listen for state and province names when using voice input.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "This app uses speech recognition to help you quickly log license plates by saying the state or province name out loud.";
