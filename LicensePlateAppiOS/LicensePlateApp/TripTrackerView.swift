@@ -57,7 +57,6 @@ struct TripTrackerView: View {
     @State private var visibleCountry: PlateRegion.Country = .unitedStates
     @State private var showFullScreenMap = false
     @Namespace private var mapNamespace
-    @AppStorage("skipVoiceConfirmation") private var skipVoiceConfirmation = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -90,7 +89,7 @@ struct TripTrackerView: View {
         }
         .toolbar(showFullScreenMap ? .hidden : .visible, for: .navigationBar)
         .sheet(isPresented: $showSettings) {
-            SettingsView()
+            SettingsView(trip: trip, modelContext: modelContext)
         }
         .overlay {
             if showFullScreenMap {
@@ -140,7 +139,13 @@ struct TripTrackerView: View {
                         showMatchConfirmation = false
                         lastMatchedRegion = nil
                     },
-                    skipConfirmation: $skipVoiceConfirmation
+                    skipConfirmation: Binding(
+                        get: { trip.skipVoiceConfirmation },
+                        set: { newValue in
+                            trip.skipVoiceConfirmation = newValue
+                            try? modelContext.save()
+                        }
+                    )
                 )
             }
         }
@@ -572,7 +577,7 @@ struct TripTrackerView: View {
             lastMatchedRegion = region
             
             // Check if user wants to skip confirmation
-            if skipVoiceConfirmation {
+            if trip.skipVoiceConfirmation {
                 // Auto-add without confirmation
                 confirmAddRegion(region)
             } else {
@@ -813,11 +818,11 @@ private struct VoiceConfirmationDialog: View {
     }
 }
 
-// Settings View
+// Settings View for current trip
 private struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("skipVoiceConfirmation") private var skipVoiceConfirmation = false
-    @AppStorage("holdToTalk") private var holdToTalk = true
+    @Bindable var trip: Trip
+    let modelContext: ModelContext
     
     enum SettingsSection: String, CaseIterable {
         case voice = "Voice"
@@ -870,14 +875,26 @@ private struct SettingsView: View {
         Group {
             SettingToggleRow(
                 title: "Skip Confirmation",
-                description: "Automatically add plates without confirmation",
-                isOn: $skipVoiceConfirmation
+                description: "Automatically add license plates without confirmation when using Voice",
+                isOn: Binding(
+                    get: { trip.skipVoiceConfirmation },
+                    set: { newValue in
+                        trip.skipVoiceConfirmation = newValue
+                        try? modelContext.save()
+                    }
+                )
             )
             
             SettingToggleRow(
                 title: "Hold to Talk",
-                description: "Press and hold the microphone button to record",
-                isOn: $holdToTalk
+                description: "Press and hold the microphone button to record. If disabled the system will listen until you hit stop.",
+                isOn: Binding(
+                    get: { trip.holdToTalk },
+                    set: { newValue in
+                        trip.holdToTalk = newValue
+                        try? modelContext.save()
+                    }
+                )
             )
         }
     }

@@ -13,6 +13,7 @@ struct ContentView: View {
     @Query(sort: \Trip.createdAt, order: .reverse) private var trips: [Trip]
     @State private var path: [UUID] = []
     @State private var isShowingCreateSheet = false
+    @State private var isShowingSettings = false
 
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -61,10 +62,16 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    EditButton()
-                        .tint(Color.Theme.primaryBlue)
-                        .disabled(trips.isEmpty)
+                    Button {
+                        isShowingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
                 }
+            }
+            .sheet(isPresented: $isShowingSettings) {
+                DefaultSettingsView()
             }
             .overlay(alignment: .bottomTrailing) {
                 addTripButton
@@ -165,6 +172,9 @@ struct ContentView: View {
         .padding(.bottom, 32)
     }
 
+    @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
+    @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
+    
     private func createTrip(named name: String?) {
         let finalName: String
         let createdAt = Date()
@@ -175,7 +185,13 @@ struct ContentView: View {
             finalName = dateFormatter.string(from: createdAt)
         }
 
-        let newTrip = Trip(createdAt: createdAt, name: finalName, foundRegionIDs: [])
+        let newTrip = Trip(
+            createdAt: createdAt,
+            name: finalName,
+            foundRegionIDs: [],
+            skipVoiceConfirmation: defaultSkipVoiceConfirmation,
+            holdToTalk: defaultHoldToTalk
+        )
 
         modelContext.insert(newTrip)
 
@@ -302,6 +318,111 @@ private struct TripMissingView: View {
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.Theme.background)
+    }
+}
+
+// Default Settings View for new trips
+private struct DefaultSettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
+    @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
+    
+    enum SettingsSection: String, CaseIterable {
+        case voice = "Voice"
+        
+        var id: String { rawValue }
+    }
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.Theme.background
+                    .ignoresSafeArea()
+                
+                List {
+                    ForEach(SettingsSection.allCases, id: \.id) { section in
+                        Section {
+                            switch section {
+                            case .voice:
+                                voiceSettings
+                            }
+                        } header: {
+                            Text(section.rawValue)
+                                .font(.system(.headline, design: .rounded))
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                        }
+                        .textCase(nil)
+                        .listRowBackground(Color.clear)
+                    }
+                }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                    .font(.system(.body, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                }
+            }
+        }
+        .background(Color.Theme.background)
+    }
+    
+    private var voiceSettings: some View {
+        Group {
+            DefaultSettingToggleRow(
+                title: "Skip Confirmation",
+                description: "Automatically add license plates without confirmation when using Voice. This is the default for NEW trips.",
+                isOn: $defaultSkipVoiceConfirmation
+            )
+            
+            DefaultSettingToggleRow(
+                title: "Hold to Talk",
+                description: "Press and hold the microphone button to record. If disabled the system will listen until you hit stop. This is the default for NEW trips.",
+                isOn: $defaultHoldToTalk
+            )
+        }
+    }
+}
+
+// Reusable setting toggle row with card styling for default settings
+private struct DefaultSettingToggleRow: View {
+    let title: String
+    let description: String
+    @Binding var isOn: Bool
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(.body, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                
+                Text(description)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+            }
+            
+            Spacer()
+            
+            Toggle("", isOn: $isOn)
+                .tint(Color.Theme.primaryBlue)
+                .labelsHidden()
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+        )
+        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
     }
 }
 
