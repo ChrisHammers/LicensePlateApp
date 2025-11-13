@@ -634,7 +634,7 @@ struct TripTrackerView: View {
                 .fill(Color.Theme.cardBackground)
                 .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: -3)
                 .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.vertical, 12	)
         )
     }
   
@@ -1113,7 +1113,7 @@ private struct FullScreenMapView: View {
                     }
                 }
             }
-            .mapStyle(.imagery)
+            .mapStyle(.hybrid)
             .matchedGeometryEffect(id: "map", in: namespace)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ignoresSafeArea()
@@ -1222,7 +1222,7 @@ private struct RegionMapView: View {
                         .shadow(color: Color.black.opacity(0.3), radius: 2, x: 0, y: 1)
                 }
             }
-            .mapStyle(.imagery)
+            .mapStyle(.hybrid)
             .disabled(true)
             .matchedGeometryEffect(id: "map", in: namespace)
             

@@ -86,11 +86,17 @@ struct ContentView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Spot Plates, Build Memories")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("RoadTrip Royale")
                 .font(.system(.largeTitle, design: .rounded))
                 .fontWeight(.bold)
                 .foregroundStyle(Color.Theme.primaryBlue)
+                .shadow(color: Color.Theme.primaryBlue.opacity(0.5), radius: 5)
+            
+            Text("Spot license plates, conquer the map, and rule the open road!")
+                .font(.system(.title2, design: .rounded))
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.Theme.primaryBlue.opacity(0.8))
 
             Text("Track every plate you see across the United States, Canada, and Mexico.")
                 .font(.system(.body, design: .rounded))
