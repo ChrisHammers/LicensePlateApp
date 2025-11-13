@@ -73,6 +73,7 @@ struct TripTrackerView: View {
             customTabBar
         }
         .background(Color.Theme.background.ignoresSafeArea())
+        .ignoresSafeArea(.all, edges: .bottom)
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(trip.name)
         .toolbar {
@@ -633,6 +634,7 @@ struct TripTrackerView: View {
                 .fill(Color.Theme.cardBackground)
                 .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: -3)
                 .padding(.horizontal, 12)
+                .padding(.vertical, 8)
         )
     }
   
