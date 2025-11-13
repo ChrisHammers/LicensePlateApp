@@ -362,7 +362,7 @@ struct TripTrackerView: View {
                                 .multilineTextAlignment(.leading)
                                 .padding()
                         }
-                        .frame(maxHeight: 80)
+                        .frame(maxHeight: .infinity)
                         .background(
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .fill(Color.Theme.cardBackground)
