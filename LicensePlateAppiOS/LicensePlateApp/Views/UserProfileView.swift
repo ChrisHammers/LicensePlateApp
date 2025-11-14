@@ -21,6 +21,7 @@ struct UserProfileView: View {
     @State private var isEditingUserName = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @FocusState private var isTextFieldFocused: Bool
     
     init(user: AppUser, authService: FirebaseAuthService) {
         self.user = user
@@ -47,6 +48,7 @@ struct UserProfileView: View {
                                     TextField("Enter username", text: $editingUserName)
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(.body, design: .rounded))
+                                        .focused($isTextFieldFocused)
                                     
                                     Button("Save") {
                                         saveUserName()
@@ -78,6 +80,11 @@ struct UserProfileView: View {
                                     Button {
                                         editingUserName = currentUserName
                                         isEditingUserName = true
+                                        // Set focus after a small delay to ensure the text field is visible
+                                        Task { @MainActor in
+                                            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                                            isTextFieldFocused = true
+                                        }
                                     } label: {
                                         Image(systemName: "pencil")
                                             .font(.system(size: 16, weight: .semibold))
@@ -236,11 +243,13 @@ struct UserProfileView: View {
         }
         
         isEditingUserName = false
+        isTextFieldFocused = false
     }
     
     private func cancelEditing() {
         editingUserName = ""
         isEditingUserName = false
+        isTextFieldFocused = false
     }
 }
 
