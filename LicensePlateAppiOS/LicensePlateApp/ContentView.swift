@@ -349,6 +349,7 @@ private struct DefaultSettingsView: View {
     
     @EnvironmentObject var authService: FirebaseAuthService
     @Environment(\.modelContext) private var modelContext
+    @State private var showUserProfile = false
     
     enum SettingsSection: String, CaseIterable {
         case user = "User"
@@ -396,15 +397,20 @@ private struct DefaultSettingsView: View {
                     .foregroundStyle(Color.Theme.primaryBlue)
                 }
             }
+            .navigationDestination(isPresented: $showUserProfile) {
+                if let user = authService.currentUser {
+                    UserProfileView(user: user, authService: authService)
+                }
+            }
         }
         .background(Color.Theme.background)
     }
     
     private var userSettings: some View {
         Group {
-            if let user = authService.currentUser {
-                NavigationLink {
-                    UserProfileView(user: user, authService: authService)
+            if let _ = authService.currentUser {
+                Button {
+                    showUserProfile = true
                 } label: {
                     HStack(spacing: 16) {
                         VStack(alignment: .leading, spacing: 6) {
@@ -431,6 +437,7 @@ private struct DefaultSettingsView: View {
                             .fill(Color.Theme.cardBackground)
                     )
                 }
+                .buttonStyle(.plain)
             }
         }
     }
