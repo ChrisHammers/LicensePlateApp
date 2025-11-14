@@ -423,88 +423,30 @@ private struct DefaultSettingsView: View {
     private var userSettings: some View {
         Group {
             if let _ = authService.currentUser {
-                Button {
+                SettingNavigationRow(
+                    title: "Profile",
+                    description: "Edit username and manage account"
+                ) {
                     showUserProfile = true
-                } label: {
-                    HStack(spacing: 16) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Profile")
-                                .font(.system(.body, design: .rounded))
-                                .fontWeight(.semibold)
-                                .foregroundStyle(Color.Theme.primaryBlue)
-                            
-                            Text("Edit username and manage account")
-                                .font(.system(.caption, design: .rounded))
-                                .foregroundStyle(Color.Theme.softBrown)
-                        }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Color.Theme.softBrown)
-                    }
-                    .padding(.vertical, 12)
-                    .padding(.horizontal, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(Color.Theme.cardBackground)
-                    )
                 }
-                .buttonStyle(.plain)
             }
         }
     }
     
     private var voiceSettings: some View {
         Group {
-            DefaultSettingToggleRow(
+            SettingToggleRow(
                 title: "Skip Confirmation",
                 description: "Automatically add license plates without confirmation when using Voice. This is the default for NEW trips.",
                 isOn: $defaultSkipVoiceConfirmation
             )
             
-            DefaultSettingToggleRow(
+            SettingToggleRow(
                 title: "Hold to Talk",
                 description: "Press and hold the microphone button to record. If disabled the system will listen until you hit stop. This is the default for NEW trips.",
                 isOn: $defaultHoldToTalk
             )
         }
-    }
-}
-
-// Reusable setting toggle row with card styling for default settings
-private struct DefaultSettingToggleRow: View {
-    let title: String
-    let description: String
-    @Binding var isOn: Bool
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.system(.body, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                
-                Text(description)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-            }
-            
-            Spacer()
-            
-            Toggle("", isOn: $isOn)
-                .tint(Color.Theme.primaryBlue)
-                .labelsHidden()
-        }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.Theme.cardBackground)
-        )
-        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
     }
 }
 
