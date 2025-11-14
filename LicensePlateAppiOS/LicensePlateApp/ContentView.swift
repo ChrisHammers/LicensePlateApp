@@ -11,6 +11,8 @@ import SwiftData
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Trip.createdAt, order: .reverse) private var trips: [Trip]
+    @Query private var users: [AppUser]
+    @EnvironmentObject var authService: FirebaseAuthService
     @State private var path: [UUID] = []
     @State private var isShowingCreateSheet = false
     @State private var isShowingSettings = false
@@ -72,6 +74,24 @@ struct ContentView: View {
             }
             .sheet(isPresented: $isShowingSettings) {
                 DefaultSettingsView()
+                    .environmentObject(authService)
+            }
+            .task {
+                // Ensure user exists in SwiftData
+                if users.isEmpty {
+                    let newUser = AppUser(
+                        id: UUID().uuidString,
+                        userName: "User",
+                        createdAt: .now
+                    )
+                    modelContext.insert(newUser)
+                    authService.currentUser = newUser
+                    authService.isAuthenticated = true
+                    try? modelContext.save()
+                } else if let firstUser = users.first {
+                    authService.currentUser = firstUser
+                    authService.isAuthenticated = true
+                }
             }
             .overlay(alignment: .bottomTrailing) {
                 addTripButton
@@ -327,7 +347,11 @@ private struct DefaultSettingsView: View {
     @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
     @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
     
+    @EnvironmentObject var authService: FirebaseAuthService
+    @Environment(\.modelContext) private var modelContext
+    
     enum SettingsSection: String, CaseIterable {
+        case user = "User"
         case voice = "Voice"
         
         var id: String { rawValue }
@@ -343,6 +367,8 @@ private struct DefaultSettingsView: View {
                     ForEach(SettingsSection.allCases, id: \.id) { section in
                         Section {
                             switch section {
+                            case .user:
+                                userSettings
                             case .voice:
                                 voiceSettings
                             }
@@ -372,6 +398,41 @@ private struct DefaultSettingsView: View {
             }
         }
         .background(Color.Theme.background)
+    }
+    
+    private var userSettings: some View {
+        Group {
+            if let user = authService.currentUser {
+                NavigationLink {
+                    UserProfileView(user: user, authService: authService)
+                } label: {
+                    HStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Profile")
+                                .font(.system(.body, design: .rounded))
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                            
+                            Text("Edit username and manage account")
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                        }
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color.Theme.cardBackground)
+                    )
+                }
+            }
+        }
     }
     
     private var voiceSettings: some View {
