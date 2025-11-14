@@ -77,6 +77,7 @@ struct UserProfileView: View {
                                     
                                     Spacer()
                                     
+                                  //WTF Does this button work on
                                     Button {
                                         editingUserName = currentUserName
                                         isEditingUserName = true
@@ -95,29 +96,30 @@ struct UserProfileView: View {
                         }
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .fill(Color.Theme.cardBackground)
+                        )
+                      
+                        // Email Card
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Email")
+                                .font(.system(.headline, design: .rounded))
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                            
+                            Text((user.email != nil) ? "\(user.email!)" : "Not set")
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                        }
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .background(
                             RoundedRectangle(cornerRadius: 20, style: .continuous)
                                 .fill(Color.Theme.cardBackground)
                         )
                         
-                        // Email Card (if available)
-                        if let email = user.email {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("Email")
-                                    .font(.system(.headline, design: .rounded))
-                                    .foregroundStyle(Color.Theme.primaryBlue)
-                                
-                                Text(email)
-                                    .font(.system(.body, design: .rounded))
-                                    .foregroundStyle(Color.Theme.softBrown)
-                            }
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                    .fill(Color.Theme.cardBackground)
-                            )
-                        }
                     } header: {
                         Text("Account Information")
                             .font(.system(.headline, design: .rounded))
