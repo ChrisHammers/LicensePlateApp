@@ -44,37 +44,61 @@ final class AppUser {
     @Attribute(.unique) var id: String // Firebase UID or local UUID
     var userName: String
     var email: String?
+    var phoneNumber: String?
     var createdAt: Date
     var lastUpdated: Date
     var avatarColor: AvatarColor
     var avatarType: AvatarType
     
-    // Platform linking (structure for future implementation)
+    // Device identifier for default username generation
+    var deviceIdentifier: String?
+    
+    // Track if username was manually changed by user
+    var isUsernameManuallyChanged: Bool = false
+    
+    // Privacy settings for public profile
+    var isEmailPublic: Bool = false
+    var isPhonePublic: Bool = false
+    
+    // Platform linking
     var linkedPlatforms: [LinkedPlatform]
     
     init(
         id: String = UUID().uuidString,
         userName: String = "User",
         email: String? = nil,
+        phoneNumber: String? = nil,
         createdAt: Date = .now,
         lastUpdated: Date = .now,
         avatarColor: AvatarColor? = nil,
         avatarType: AvatarType? = nil,
+        deviceIdentifier: String? = nil,
+        isUsernameManuallyChanged: Bool = false,
+        isEmailPublic: Bool = false,
+        isPhonePublic: Bool = false,
         linkedPlatforms: [LinkedPlatform] = []
     ) {
         self.id = id
         self.userName = userName
         self.email = email
+        self.phoneNumber = phoneNumber
         self.createdAt = createdAt
         self.lastUpdated = lastUpdated
         self.avatarColor = avatarColor ?? AvatarColor.random()
         self.avatarType = avatarType ?? AvatarType.random()
+        self.deviceIdentifier = deviceIdentifier
+        self.isUsernameManuallyChanged = isUsernameManuallyChanged
+        self.isEmailPublic = isEmailPublic
+        self.isPhonePublic = isPhonePublic
         self.linkedPlatforms = linkedPlatforms
     }
     
-    func updateUserName(_ newName: String) {
+    func updateUserName(_ newName: String, isManual: Bool = true) {
         self.userName = newName
         self.lastUpdated = .now
+        if isManual {
+            self.isUsernameManuallyChanged = true
+        }
     }
 }
 
@@ -83,13 +107,18 @@ struct LinkedPlatform: Codable {
     var platform: PlatformType
     var platformUserId: String
     var linkedAt: Date
+    var email: String?
+    var phoneNumber: String?
+    var displayName: String?
     
-    enum PlatformType: String, Codable {
+    enum PlatformType: String, Codable, CaseIterable {
         case google = "Google"
         case apple = "Apple"
         case facebook = "Facebook"
         case twitter = "Twitter"
         case instagram = "Instagram"
+        case yahoo = "Yahoo"
+        case microsoft = "Microsoft"
         // Add more platforms as needed
     }
 }
