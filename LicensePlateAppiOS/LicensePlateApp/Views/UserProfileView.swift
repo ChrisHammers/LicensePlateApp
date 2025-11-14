@@ -36,14 +36,14 @@ struct UserProfileView: View {
                 
                 List {
                     Section {
-                        // User Name
+                        // User Name Card
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Username")
                                 .font(.system(.headline, design: .rounded))
                                 .foregroundStyle(Color.Theme.primaryBlue)
                             
                             if isEditingUserName {
-                                HStack {
+                                HStack(spacing: 12) {
                                     TextField("Enter username", text: $editingUserName)
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(.body, design: .rounded))
@@ -53,7 +53,13 @@ struct UserProfileView: View {
                                     }
                                     .font(.system(.body, design: .rounded))
                                     .fontWeight(.semibold)
-                                    .foregroundStyle(Color.Theme.primaryBlue)
+                                    .foregroundStyle(Color.white)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        Capsule()
+                                            .fill(Color.Theme.primaryBlue)
+                                    )
                                     
                                     Button("Cancel") {
                                         cancelEditing()
@@ -74,14 +80,20 @@ struct UserProfileView: View {
                                         isEditingUserName = true
                                     } label: {
                                         Image(systemName: "pencil")
+                                            .font(.system(size: 16, weight: .semibold))
                                             .foregroundStyle(Color.Theme.primaryBlue)
                                     }
                                 }
                             }
                         }
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .fill(Color.Theme.cardBackground)
+                        )
                         
-                        // Email (if available)
+                        // Email Card (if available)
                         if let email = user.email {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Email")
@@ -92,7 +104,12 @@ struct UserProfileView: View {
                                     .font(.system(.body, design: .rounded))
                                     .foregroundStyle(Color.Theme.softBrown)
                             }
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .fill(Color.Theme.cardBackground)
+                            )
                         }
                     } header: {
                         Text("Account Information")
@@ -101,6 +118,7 @@ struct UserProfileView: View {
                     }
                     .textCase(nil)
                     .listRowBackground(Color.clear)
+                    .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
                     
                     // Platform Linking Section (for future implementation)
                     Section {
@@ -136,7 +154,12 @@ struct UserProfileView: View {
                                 .italic()
                                 .padding(.top, 4)
                         }
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .fill(Color.Theme.cardBackground)
+                        )
                     } header: {
                         Text("Social Accounts")
                             .font(.system(.headline, design: .rounded))
@@ -144,12 +167,14 @@ struct UserProfileView: View {
                     }
                     .textCase(nil)
                     .listRowBackground(Color.clear)
+                    .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
             .navigationTitle("Profile")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {
