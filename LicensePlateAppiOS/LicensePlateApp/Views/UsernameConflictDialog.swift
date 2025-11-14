@@ -88,3 +88,32 @@ struct UsernameConflictDialog: View {
     }
 }
 
+#Preview {
+    struct PreviewWrapper: View {
+        @StateObject private var authService = FirebaseAuthService()
+        
+        var body: some View {
+            ZStack {
+                Color.Theme.background
+                    .ignoresSafeArea()
+                
+                Button("Show Dialog") {
+                    authService.conflictDialogMessage = "Your username 'User123' is already taken. Please choose a new username to link your Google account."
+                    authService.conflictDialogNewUsername = ""
+                    authService.showUsernameConflictDialog = true
+                }
+                .padding()
+                .background(Color.Theme.primaryBlue)
+                .foregroundStyle(.white)
+                .cornerRadius(12)
+                
+                if authService.showUsernameConflictDialog {
+                    UsernameConflictDialog(authService: authService)
+                }
+            }
+        }
+    }
+    
+    return PreviewWrapper()
+}
+

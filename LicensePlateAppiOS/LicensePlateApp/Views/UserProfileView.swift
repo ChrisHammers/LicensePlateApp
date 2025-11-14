@@ -17,12 +17,9 @@ struct UserProfileView: View {
     // Keep a local copy for editing
     @State private var currentUserName: String
     
-    @State private var editingUserName: String = ""
-    @State private var isEditingUserName = false
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var isCheckingUsername = false
-    @FocusState private var isTextFieldFocused: Bool
     
     init(user: AppUser, authService: FirebaseAuthService) {
         self.user = user
@@ -38,140 +35,47 @@ struct UserProfileView: View {
                 
                 List {
                     Section {
-                        // User Name Card
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Username")
-                                .font(.system(.headline, design: .rounded))
-                                .foregroundStyle(Color.Theme.primaryBlue)
-                            
-                            if isEditingUserName {
-                                HStack(spacing: 12) {
-                                    TextField("Enter username", text: $editingUserName)
-                                        .textFieldStyle(.roundedBorder)
-                                        .font(.system(.body, design: .rounded))
-                                        .focused($isTextFieldFocused)
-                                    
-                                    Button("Save") {
-                                        saveUserName()
-                                    }
-                                    .font(.system(.body, design: .rounded))
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(Color.white)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(
-                                        Capsule()
-                                            .fill(Color.Theme.primaryBlue)
-                                    )
-                                    .disabled(isCheckingUsername)
-                                    
-                                    Button("Cancel") {
-                                        cancelEditing()
-                                    }
-                                    .font(.system(.body, design: .rounded))
-                                    .foregroundStyle(Color.Theme.softBrown)
-                                }
-                            } else {
-                                HStack {
-                                    Text(currentUserName)
-                                        .font(.system(.body, design: .rounded))
-                                        .foregroundStyle(Color.Theme.primaryBlue)
-                                    
-                                    Spacer()
-                                    
-                                  //WTF Does this button work on
-                                    Button {
-                                        editingUserName = currentUserName
-                                        isEditingUserName = true
-                                        // Set focus after a small delay to ensure the text field is visible
-                                        Task { @MainActor in
-                                            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-                                            isTextFieldFocused = true
-                                        }
-                                    } label: {
-                                        Image(systemName: "pencil")
-                                            .font(.system(size: 16, weight: .semibold))
-                                            .foregroundStyle(Color.Theme.primaryBlue)
-                                    }
-                                }
+                        // Username - Editable
+                        SettingEditableTextRow(
+                            title: "Username",
+                            value: $currentUserName,
+                            placeholder: "Enter username",
+                            detail: nil,
+                            isDisabled: isCheckingUsername,
+                            onSave: {
+                                saveUserName()
+                            },
+                            onCancel: {
+                                cancelEditing()
                             }
-                        }
-                        .padding(.vertical, 12)
-                        .padding(.horizontal, 16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .fill(Color.Theme.cardBackground)
                         )
                       
-                        // Email Card
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("Email")
-                                    .font(.system(.headline, design: .rounded))
-                                    .foregroundStyle(Color.Theme.primaryBlue)
-                                
-                                Spacer()
-                                
-                                Toggle("", isOn: Binding(
-                                    get: { user.isEmailPublic },
-                                    set: { newValue in
-                                        user.isEmailPublic = newValue
-                                        try? modelContext.save()
-                                    }
-                                ))
-                                .labelsHidden()
-                            }
-                            
-                            Text((user.email != nil) ? "\(user.email!)" : "Not set")
-                                .font(.system(.body, design: .rounded))
-                                .foregroundStyle(Color.Theme.softBrown)
-                            
-                            Text(user.isEmailPublic ? "Public - Others can find you by email" : "Private - Only you can see this")
-                                .font(.system(.caption, design: .rounded))
-                                .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
-                        }
-                        .padding(.vertical, 12)
-                        .padding(.horizontal, 16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .fill(Color.Theme.cardBackground)
+                        // Email - Toggle with Info
+                        SettingToggleRow(
+                            title: "Email",
+                            description: (user.email != nil) ? "\(user.email!)" : "Not set",
+                            detail: user.isEmailPublic ? "Public - Allows friends to find you" : "Private - Only you can see this",
+                            isOn: Binding(
+                                get: { user.isEmailPublic },
+                                set: { newValue in
+                                    user.isEmailPublic = newValue
+                                    try? modelContext.save()
+                                }
+                            )
                         )
                         
-                        // Phone Card
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Text("Phone")
-                                    .font(.system(.headline, design: .rounded))
-                                    .foregroundStyle(Color.Theme.primaryBlue)
-                                
-                                Spacer()
-                                
-                                Toggle("", isOn: Binding(
-                                    get: { user.isPhonePublic },
-                                    set: { newValue in
-                                        user.isPhonePublic = newValue
-                                        try? modelContext.save()
-                                    }
-                                ))
-                                .labelsHidden()
-                            }
-                            
-                            Text((user.phoneNumber != nil) ? "\(user.phoneNumber!)" : "Not set")
-                                .font(.system(.body, design: .rounded))
-                                .foregroundStyle(Color.Theme.softBrown)
-                            
-                            Text(user.isPhonePublic ? "Public - Others can find you by phone" : "Private - Only you can see this")
-                                .font(.system(.caption, design: .rounded))
-                                .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
-                        }
-                        .padding(.vertical, 12)
-                        .padding(.horizontal, 16)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .fill(Color.Theme.cardBackground)
+                        // Phone - Toggle with Info
+                        SettingToggleRow(
+                            title: "Phone",
+                            description: (user.phoneNumber != nil) ? "\(user.phoneNumber!)" : "Not set",
+                            detail: user.isPhonePublic ? "Public - Allows friends to find you" : "Private - Only you can see this",
+                            isOn: Binding(
+                                get: { user.isPhonePublic },
+                                set: { newValue in
+                                    user.isPhonePublic = newValue
+                                    try? modelContext.save()
+                                }
+                            )
                         )
                         
                     } header: {
@@ -279,17 +183,17 @@ struct UserProfileView: View {
     }
     
     private func saveUserName() {
-        let trimmedName = editingUserName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = currentUserName.trimmingCharacters(in: .whitespacesAndNewlines)
         
         guard !trimmedName.isEmpty else {
             errorMessage = "Username cannot be empty"
             showError = true
+            currentUserName = user.userName // Reset to original
             return
         }
         
-        guard trimmedName != currentUserName else {
-            isEditingUserName = false
-            return
+        guard trimmedName != user.userName else {
+            return // No change needed
         }
         
         // Check username uniqueness
@@ -302,6 +206,7 @@ struct UserProfileView: View {
                 if isTaken {
                     errorMessage = "This username is already taken. Please choose another."
                     showError = true
+                    currentUserName = user.userName // Reset to original
                     isCheckingUsername = false
                     return
                 }
@@ -309,27 +214,21 @@ struct UserProfileView: View {
                 // Update in auth service (which also checks uniqueness)
                 try await authService.updateUserName(trimmedName)
                 
-                // Update local state
-                currentUserName = trimmedName
-                
                 // Save to SwiftData
                 try modelContext.save()
                 
-                isEditingUserName = false
-                isTextFieldFocused = false
                 isCheckingUsername = false
             } catch {
                 errorMessage = error.localizedDescription
                 showError = true
+                currentUserName = user.userName // Reset to original
                 isCheckingUsername = false
             }
         }
     }
     
     private func cancelEditing() {
-        editingUserName = ""
-        isEditingUserName = false
-        isTextFieldFocused = false
+        currentUserName = user.userName // Reset to original
     }
 }
 

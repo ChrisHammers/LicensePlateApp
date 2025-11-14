@@ -925,41 +925,6 @@ private struct SettingsView: View {
     }
 }
 
-// Reusable setting toggle row with card styling
-private struct SettingToggleRow: View {
-    let title: String
-    let description: String
-    @Binding var isOn: Bool
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.system(.body, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                
-                Text(description)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-            }
-            
-            Spacer()
-            
-            Toggle("", isOn: $isOn)
-                .tint(Color.Theme.primaryBlue)
-                .labelsHidden()
-        }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.Theme.cardBackground)
-        )
-        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-    }
-}
-
 // Full screen map view with location support
 private struct FullScreenMapView: View {
     let country: PlateRegion.Country
