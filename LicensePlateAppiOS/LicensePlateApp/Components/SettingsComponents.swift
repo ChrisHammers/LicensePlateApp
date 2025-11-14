@@ -76,7 +76,8 @@ struct SettingInfoRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)
-                .font(.system(.headline, design: .rounded))
+                .font(.system(.body, design: .rounded))
+                .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue)
             
             Text(value)
@@ -137,7 +138,8 @@ struct SettingEditableTextRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)
-                .font(.system(.headline, design: .rounded))
+                .font(.system(.body, design: .rounded))
+                .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue)
             
             if isEditing {
@@ -257,7 +259,7 @@ struct SettingNavigationRow: View {
             )
         }
         .buttonStyle(.plain)
-        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20)) //Why as this here, when it wasnt in original...It was in the original reusable ones.
+        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
     }
 }
 
