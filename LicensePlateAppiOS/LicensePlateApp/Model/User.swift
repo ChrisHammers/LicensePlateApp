@@ -8,6 +8,37 @@
 import Foundation
 import SwiftData
 
+// Avatar color enum
+enum AvatarColor: String, Codable, CaseIterable {
+    case red = "red"
+    case green = "green"
+    case blue = "blue"
+    case orange = "orange"
+    case purple = "purple"
+    case yellow = "yellow"
+    case white = "white"
+    case black = "black"
+    
+    static func random() -> AvatarColor {
+        AvatarColor.allCases.randomElement() ?? .blue
+    }
+}
+
+// Avatar type enum
+enum AvatarType: String, Codable, CaseIterable {
+    case woman = "woman"
+    case man = "man"
+    case dog = "dog"
+    case cat = "cat"
+    case bird = "bird"
+    case car = "car"
+    case building = "building"
+    
+    static func random() -> AvatarType {
+        AvatarType.allCases.randomElement() ?? .man
+    }
+}
+
 @Model
 final class AppUser {
     @Attribute(.unique) var id: String // Firebase UID or local UUID
@@ -15,6 +46,8 @@ final class AppUser {
     var email: String?
     var createdAt: Date
     var lastUpdated: Date
+    var avatarColor: AvatarColor
+    var avatarType: AvatarType
     
     // Platform linking (structure for future implementation)
     var linkedPlatforms: [LinkedPlatform]
@@ -25,6 +58,8 @@ final class AppUser {
         email: String? = nil,
         createdAt: Date = .now,
         lastUpdated: Date = .now,
+        avatarColor: AvatarColor? = nil,
+        avatarType: AvatarType? = nil,
         linkedPlatforms: [LinkedPlatform] = []
     ) {
         self.id = id
@@ -32,6 +67,8 @@ final class AppUser {
         self.email = email
         self.createdAt = createdAt
         self.lastUpdated = lastUpdated
+        self.avatarColor = avatarColor ?? AvatarColor.random()
+        self.avatarType = avatarType ?? AvatarType.random()
         self.linkedPlatforms = linkedPlatforms
     }
     
