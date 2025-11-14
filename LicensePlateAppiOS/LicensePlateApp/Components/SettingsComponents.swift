@@ -223,6 +223,146 @@ struct SettingEditableTextRow: View {
     }
 }
 
+// MARK: - Setting Share Data Toggle Row
+
+/// Reusable toggle row for shareable data (email, phone, etc.) with optional editing
+/// Combines toggle functionality with editable text field
+struct SettingShareDataToggleRow: View {
+    let title: String
+    let value: String?
+    let detail: String?
+    @Binding var isOn: Bool
+    var isEditable: Bool = false
+    let onEdit: (() -> Void)?
+    
+    @State private var isEditing = false
+    @State private var editingValue: String = ""
+    @FocusState private var isTextFieldFocused: Bool
+    
+    init(
+        title: String,
+        value: String?,
+        detail: String? = nil,
+        isOn: Binding<Bool>,
+        isEditable: Bool = false,
+        onEdit: (() -> Void)? = nil
+    ) {
+        self.title = title
+        self.value = value
+        self.detail = detail
+        self._isOn = isOn
+        self.isEditable = isEditable
+        self.onEdit = onEdit
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Title and value row
+            HStack {
+                Text(title)
+                    .font(.system(.body, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                
+                Spacer()
+                
+                if isEditing {
+                    HStack(spacing: 12) {
+                        TextField("Enter value", text: $editingValue)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(.body, design: .rounded))
+                            .focused($isTextFieldFocused)
+                            .frame(maxWidth: 150)
+                        
+                        Button("Save") {
+                            if let onEdit = onEdit {
+                                onEdit()
+                            }
+                            isEditing = false
+                        }
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(Color.Theme.primaryBlue)
+                        )
+                        
+                        Button("Cancel") {
+                            editingValue = value ?? ""
+                            isEditing = false
+                        }
+                        .font(.system(.body, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        Text(value != nil && !value!.isEmpty ? value! : "Not set")
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                        
+                        if isEditable {
+                            Button {
+                                editingValue = value ?? ""
+                                isEditing = true
+                                Task { @MainActor in
+                                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                                    isTextFieldFocused = true
+                                }
+                            } label: {
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(Color.Theme.primaryBlue)
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Detail text (if provided) - using .body size
+            if let detail = detail {
+                Text(detail)
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+            }
+            
+            // Spacer to push toggle to bottom
+            Spacer(minLength: 0)
+            
+            // Toggle at bottom
+            HStack {
+                Text(isOn ? "Public - Allows friends to find you" : "Private - Only you can see this")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+                
+                Spacer()
+                
+                Toggle("", isOn: $isOn)
+                    .tint(Color.Theme.primaryBlue)
+                    .labelsHidden()
+            }
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, minHeight: 100, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+        )
+        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+        .onAppear {
+            editingValue = value ?? ""
+        }
+        .onChange(of: value) { oldValue, newValue in
+            if !isEditing {
+                editingValue = newValue ?? ""
+            }
+        }
+    }
+}
+
 // MARK: - Setting Navigation Row
 
 /// Reusable navigation row with card styling (like Profile button)
@@ -330,5 +470,35 @@ struct SettingNavigationRow: View {
     }
     .listStyle(.insetGrouped)
     .background(Color.Theme.background)
+}
+
+#Preview("Share Data Toggle Row") {
+    struct PreviewWrapper: View {
+        @State private var isEmailPublic = false
+        @State private var isPhonePublic = true
+        
+        var body: some View {
+            List {
+                SettingShareDataToggleRow(
+                    title: "Email",
+                    value: "user@example.com",
+                    isOn: $isEmailPublic,
+                    isEditable: true
+                ) {
+                    print("Edit email")
+                }
+                
+                SettingShareDataToggleRow(
+                    title: "Phone",
+                    value: nil,
+                    isOn: $isPhonePublic,
+                    isEditable: false
+                )
+            }
+            .listStyle(.insetGrouped)
+            .background(Color.Theme.background)
+        }
+    }
+    return PreviewWrapper()
 }
 
