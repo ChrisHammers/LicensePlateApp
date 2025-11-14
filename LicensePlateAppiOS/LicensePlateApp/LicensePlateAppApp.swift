@@ -13,6 +13,7 @@ struct LicensePlateAppApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Trip.self,
+            AppUser.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -22,10 +23,19 @@ struct LicensePlateAppApp: App {
             fatalError("Could not create ModelContainer: \(error)")
         }
     }()
+    
+    @StateObject private var authService = FirebaseAuthService()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(authService)
+                .task {
+                    // Initialize with anonymous sign-in if no user exists
+                    if !authService.isAuthenticated {
+                        try? await authService.signInAnonymously()
+                    }
+                }
         }
         .modelContainer(sharedModelContainer)
     }
