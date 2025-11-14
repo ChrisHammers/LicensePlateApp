@@ -175,10 +175,10 @@ struct SettingEditableTextRow: View {
                     .foregroundStyle(Color.Theme.softBrown)
                 }
             } else {
-                HStack {
+              HStack(spacing: 8) {
                     Text(value)
                         .font(.system(.body, design: .rounded))
-                        .foregroundStyle(Color.Theme.primaryBlue)
+                        .foregroundStyle(Color.Theme.softBrown)
                     
                     Spacer()
                     
@@ -229,11 +229,14 @@ struct SettingEditableTextRow: View {
 /// Combines toggle functionality with editable text field
 struct SettingShareDataToggleRow: View {
     let title: String
-    let value: String?
+    @Binding var value: String?
+    let placeholder: String
     let detail: String?
     @Binding var isOn: Bool
     var isEditable: Bool = false
-    let onEdit: (() -> Void)?
+    let onSave: () -> Void
+    let onCancel: () -> Void
+    var isDisabled: Bool = false
     
     @State private var isEditing = false
     @State private var editingValue: String = ""
@@ -241,30 +244,45 @@ struct SettingShareDataToggleRow: View {
     
     init(
         title: String,
-        value: String?,
+        value: Binding<String?>,
+        placeholder: String = "Enter value",
         detail: String? = nil,
         isOn: Binding<Bool>,
         isEditable: Bool = false,
-        onEdit: (() -> Void)? = nil
+        isDisabled: Bool = false,
+        onSave: @escaping () -> Void,
+        onCancel: @escaping () -> Void
     ) {
         self.title = title
-        self.value = value
+        self._value = value
+        self.placeholder = placeholder
         self.detail = detail
         self._isOn = isOn
         self.isEditable = isEditable
-        self.onEdit = onEdit
+        self.isDisabled = isDisabled
+        self.onSave = onSave
+        self.onCancel = onCancel
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             // Title and value row
-            HStack {
-                Text(title)
-                    .font(.system(.body, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                
-                Spacer()
+          HStack {
+            Text(title)
+              .font(.system(.body, design: .rounded))
+              .fontWeight(.semibold)
+              .foregroundStyle(Color.Theme.primaryBlue)
+            
+            Text(isOn ? "Public: Allows friends to find you" : "Private: Only you can see this") // TODO: should I allow this to be set in init?
+              .font(.system(.caption2, design: .rounded))
+              .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+            
+             Spacer()
+            
+            Toggle("", isOn: $isOn)
+              .tint(Color.Theme.primaryBlue)
+              .labelsHidden()
+          }
                 
                 if isEditing {
                     HStack(spacing: 12) {
@@ -273,12 +291,12 @@ struct SettingShareDataToggleRow: View {
                             .font(.system(.body, design: .rounded))
                             .focused($isTextFieldFocused)
                             .frame(maxWidth: 150)
+                            .disabled(isDisabled)
                         
                         Button("Save") {
-                            if let onEdit = onEdit {
-                                onEdit()
-                            }
+                            value = editingValue.isEmpty ? nil : editingValue
                             isEditing = false
+                            onSave()
                         }
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.semibold)
@@ -289,10 +307,12 @@ struct SettingShareDataToggleRow: View {
                             Capsule()
                                 .fill(Color.Theme.primaryBlue)
                         )
+                        .disabled(isDisabled)
                         
                         Button("Cancel") {
                             editingValue = value ?? ""
                             isEditing = false
+                            onCancel()
                         }
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
@@ -316,33 +336,19 @@ struct SettingShareDataToggleRow: View {
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundStyle(Color.Theme.primaryBlue)
                             }
+                            .disabled(isDisabled)
                         }
                     }
                 }
-            }
             
-            // Detail text (if provided) - using .body size
+            
+            // Detail text
             if let detail = detail {
                 Text(detail)
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
-            }
-            
-            // Spacer to push toggle to bottom
-            Spacer(minLength: 0)
-            
-            // Toggle at bottom
-            HStack {
-                Text(isOn ? "Public - Allows friends to find you" : "Private - Only you can see this")
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
-                
-                Spacer()
-                
-                Toggle("", isOn: $isOn)
-                    .tint(Color.Theme.primaryBlue)
-                    .labelsHidden()
             }
+            
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 16)
@@ -474,6 +480,8 @@ struct SettingNavigationRow: View {
 
 #Preview("Share Data Toggle Row") {
     struct PreviewWrapper: View {
+        @State private var email: String? = "user@example.com"
+        @State private var phone: String? = nil
         @State private var isEmailPublic = false
         @State private var isPhonePublic = true
         
@@ -481,18 +489,28 @@ struct SettingNavigationRow: View {
             List {
                 SettingShareDataToggleRow(
                     title: "Email",
-                    value: "user@example.com",
+                    value: $email,
                     isOn: $isEmailPublic,
-                    isEditable: true
-                ) {
-                    print("Edit email")
-                }
+                    isEditable: true,
+                    onSave: {
+                        print("Saved email: \(email ?? "nil")")
+                    },
+                    onCancel: {
+                        print("Cancelled email edit")
+                    }
+                )
                 
                 SettingShareDataToggleRow(
                     title: "Phone",
-                    value: nil,
+                    value: $phone,
                     isOn: $isPhonePublic,
-                    isEditable: false
+                    isEditable: true,
+                    onSave: {
+                        print("Saved phone: \(phone ?? "nil")")
+                    },
+                    onCancel: {
+                        print("Cancelled phone edit")
+                    }
                 )
             }
             .listStyle(.insetGrouped)

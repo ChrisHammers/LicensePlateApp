@@ -53,7 +53,12 @@ struct UserProfileView: View {
                         // Email - Share Data Toggle
                         SettingShareDataToggleRow(
                             title: "Email",
-                            value: user.email,
+                            value: Binding(
+                                get: { user.email },
+                                set: { newValue in
+                                    user.email = newValue
+                                }
+                            ),
                             detail: nil,
                             isOn: Binding(
                                 get: { user.isEmailPublic },
@@ -62,13 +67,24 @@ struct UserProfileView: View {
                                     try? modelContext.save()
                                 }
                             ),
-                            isEditable: true
+                            isEditable: false,
+                            onSave: {
+                                try? modelContext.save()
+                            },
+                            onCancel: {
+                                // Reset to original value if needed
+                            }
                         )
                         
                         // Phone - Share Data Toggle
                         SettingShareDataToggleRow(
                             title: "Phone",
-                            value: user.phoneNumber,
+                            value: Binding(
+                                get: { user.phoneNumber },
+                                set: { newValue in
+                                    user.phoneNumber = newValue
+                                }
+                            ),
                             detail: nil,
                             isOn: Binding(
                                 get: { user.isPhonePublic },
@@ -77,7 +93,13 @@ struct UserProfileView: View {
                                     try? modelContext.save()
                                 }
                             ),
-                            isEditable: false
+                            isEditable: false,
+                            onSave: {
+                                try? modelContext.save()
+                            },
+                            onCancel: {
+                                // Reset to original value if needed
+                            }
                         )
                         
                     } header: {
