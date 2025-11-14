@@ -50,32 +50,34 @@ struct UserProfileView: View {
                             }
                         )
                       
-                        // Email - Toggle with Info
-                        SettingToggleRow(
+                        // Email - Share Data Toggle
+                        SettingShareDataToggleRow(
                             title: "Email",
-                            description: (user.email != nil) ? "\(user.email!)" : "Not set",
-                            detail: user.isEmailPublic ? "Public - Allows friends to find you" : "Private - Only you can see this",
+                            value: user.email,
+                            detail: nil,
                             isOn: Binding(
                                 get: { user.isEmailPublic },
                                 set: { newValue in
                                     user.isEmailPublic = newValue
                                     try? modelContext.save()
                                 }
-                            )
+                            ),
+                            isEditable: true
                         )
                         
-                        // Phone - Toggle with Info
-                        SettingToggleRow(
+                        // Phone - Share Data Toggle
+                        SettingShareDataToggleRow(
                             title: "Phone",
-                            description: (user.phoneNumber != nil) ? "\(user.phoneNumber!)" : "Not set",
-                            detail: user.isPhonePublic ? "Public - Allows friends to find you" : "Private - Only you can see this",
+                            value: user.phoneNumber,
+                            detail: nil,
                             isOn: Binding(
                                 get: { user.isPhonePublic },
                                 set: { newValue in
                                     user.isPhonePublic = newValue
                                     try? modelContext.save()
                                 }
-                            )
+                            ),
+                            isEditable: false
                         )
                         
                     } header: {
