@@ -188,7 +188,7 @@ struct ContentView: View {
         let newTrip = Trip(
             createdAt: createdAt,
             name: finalName,
-            foundRegionIDs: [],
+            foundRegions: [],
             skipVoiceConfirmation: defaultSkipVoiceConfirmation,
             holdToTalk: defaultHoldToTalk
         )

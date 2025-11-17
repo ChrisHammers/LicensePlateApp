@@ -271,7 +271,7 @@ struct TripTrackerView: View {
   
   private func setFound(regionID: String, usingTab: Trip.inputUsedToFindRegion) {
     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-        trip.setFound(regionID: regionID, usingTab: usingTab)
+        trip.setFound(regionID: regionID, usingTab: usingTab, location: locationManager.location)
     }
 
     do {
@@ -296,7 +296,7 @@ struct TripTrackerView: View {
 
     private func toggle(regionID: String) {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            trip.toggle(regionID: regionID)
+          trip.toggle(regionID: regionID, usingTab: .list, foundBy: <#T##String?#> location: locationManager.location)
         }
 
         do {
