@@ -45,6 +45,7 @@ struct TripTrackerView: View {
     }
 
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var authService: FirebaseAuthService
     @Bindable var trip: Trip
     @StateObject private var speechRecognizer = SpeechRecognizer()
     @StateObject private var locationManager = LocationManager()
@@ -271,7 +272,12 @@ struct TripTrackerView: View {
   
   private func setFound(regionID: String, usingTab: Trip.inputUsedToFindRegion) {
     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-        trip.setFound(regionID: regionID, usingTab: usingTab, location: locationManager.location)
+        trip.setFound(
+            regionID: regionID,
+            usingTab: usingTab,
+            foundBy: authService.currentUser?.id,
+            location: locationManager.location
+        )
     }
 
     do {
@@ -284,7 +290,12 @@ struct TripTrackerView: View {
   
   private func setNotFound(regionID: String, usingTab: Trip.inputUsedToFindRegion) {
     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-        trip.setNotFound(regionID: regionID, usingTab: usingTab)
+        trip.setNotFound(
+            regionID: regionID,
+            usingTab: usingTab,
+            foundBy: authService.currentUser?.id,
+            location: locationManager.location
+        )
     }
 
     do {
@@ -296,7 +307,12 @@ struct TripTrackerView: View {
 
     private func toggle(regionID: String) {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-          trip.toggle(regionID: regionID, usingTab: .list, foundBy: <#T##String?#> location: locationManager.location)
+            trip.toggle(
+                regionID: regionID,
+                usingTab: .list,
+                foundBy: authService.currentUser?.id,
+                location: locationManager.location
+            )
         }
 
         do {
@@ -1406,11 +1422,13 @@ private struct RegionMapView: View {
         let container = try ModelContainer(for: Trip.self, configurations: configuration)
 
         let context = container.mainContext
+        let authService = FirebaseAuthService()
         let sampleTrip = Trip(name: "Autumn Road Trip")
         context.insert(sampleTrip)
 
         return TripTrackerView(trip: sampleTrip)
             .modelContainer(container)
+            .environmentObject(authService)
     } catch {
         return Text("Preview Error: \(error.localizedDescription)")
     }

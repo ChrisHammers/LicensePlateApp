@@ -132,18 +132,18 @@ final class Trip {
                 location: CLLocation? = nil
     ) {
         lastUpdated = Date.now
-      print("Toggle of Region: \(regionID), from screen: \(usingTab) at \(lastUpdated) by User: \(foundBy) at: \(location)")
+        print("Toggle of Region: \(regionID), from screen: \(usingTab) at \(lastUpdated) by User: \(foundBy ?? "nil") at: \(location?.description ?? "nil")")
         
         if let index = foundRegions.firstIndex(where: { $0.regionID == regionID }) {
             foundRegions.remove(at: index)
         } else {
-            // Default to list input method for toggle (manual selection)
+            // Add new found region with metadata
             let locationData = location.map { LocationData(from: $0) }
             foundRegions.append(FoundRegion(
                 regionID: regionID,
                 foundAt: lastUpdated,
-                inputMethod: .list,
-                foundBy: nil,
+                inputMethod: usingTab.asFoundRegionMethod,
+                foundBy: foundBy,
                 foundAtLocation: locationData
             ))
         }
@@ -157,7 +157,7 @@ final class Trip {
         location: CLLocation? = nil
     ) {
         lastUpdated = Date.now
-        print("Setting Region Found: \(regionID), from screen: \(usingTab) at \(lastUpdated) by User: \(foundBy) at: \(location)")
+        print("Setting Region Found: \(regionID), from screen: \(usingTab) at \(lastUpdated) by User: \(foundBy ?? "nil") at: \(location?.description ?? "nil")")
         
         let locationData = location.map { LocationData(from: $0) }
         
@@ -194,7 +194,7 @@ final class Trip {
                      location: CLLocation? = nil
                  ) {
         lastUpdated = Date.now
-        print("Setting Region Not Found: \(regionID), from screen: \(usingTab) at \(lastUpdated) by User: \(foundBy) at: \(location)")
+        print("Setting Region Not Found: \(regionID), from screen: \(usingTab) at \(lastUpdated) by User: \(foundBy ?? "nil") at: \(location?.description ?? "nil")")
         
         if let index = foundRegions.firstIndex(where: { $0.regionID == regionID }) {
             foundRegions.remove(at: index)
