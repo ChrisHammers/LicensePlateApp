@@ -64,7 +64,7 @@ final class Trip {
     lastUpdated = Date.now
     print("Setting Region Found: \(regionID), from screen: \(usingTab) at \(lastUpdated)")
     
-     if let index = foundRegionIDs.firstIndex(of: regionID) {
+     if let _ = foundRegionIDs.firstIndex(of: regionID) {
         print("Region \(regionID) already found.")
       } else {
           foundRegionIDs.append(regionID)

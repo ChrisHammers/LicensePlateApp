@@ -58,7 +58,7 @@ struct ContentView: View {
                 .scrollContentBackground(.hidden)
                 .listStyle(.insetGrouped)
             }
-            .navigationTitle("Trips")
+            .navigationTitle("RoadTrip Royale")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
