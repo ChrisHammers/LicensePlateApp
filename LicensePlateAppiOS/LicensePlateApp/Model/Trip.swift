@@ -10,9 +10,17 @@ import SwiftData
 
 @Model
 final class Trip {
+  
+  enum inputUsedToFindRegion: CaseIterable, Identifiable {
+    var id: Self { self }
+    
+    case list
+    case voice
+    
+  }
     @Attribute(.unique) var id: UUID
     var createdAt: Date
-   // var lastEditedAt: Date
+    var lastUpdated: Date
     var name: String
   // var voiceRecordedRegionsFound: a Dictionary of the regionID and the date found, so we can log it later.
     var foundRegionIDs: [String] // Do we want to include the list of countries & states/provinces involved?  If new terrorities are added to canada, we can not break this game, and then we show a checkbox on what countries to include?  NOT MVP
@@ -24,7 +32,7 @@ final class Trip {
     init(
         id: UUID = UUID(),
         createdAt: Date = .now,
-     //   lastEditedAt: Date = .now,
+        lastUpdated: Date = .now,
         name: String,
         foundRegionIDs: [String] = [],
         skipVoiceConfirmation: Bool = false,
@@ -36,17 +44,43 @@ final class Trip {
         self.foundRegionIDs = foundRegionIDs
         self.skipVoiceConfirmation = skipVoiceConfirmation
         self.holdToTalk = holdToTalk
-    //    self.lastEditedAt = lastEditedAt
+        self.lastUpdated = lastUpdated
     }
 
     func toggle(regionID: String) {
-        if let index = foundRegionIDs.firstIndex(of: regionID) {
+      lastUpdated = Date.now
+      print("Toggle of Region: \(regionID) at \(lastUpdated)")
+      
+      if let index = foundRegionIDs.firstIndex(of: regionID) {
             foundRegionIDs.remove(at: index)
         } else {
             foundRegionIDs.append(regionID)
         }
-      //lastEditedAt = Date.now
+      
     }
+  
+  //The UI currently stops this from being needed, as it doens't run toggle when getting a confirmation etc.  But it makes sense to have this so we can track that data.
+  func setFound(regionID: String, usingTab: inputUsedToFindRegion) {
+    lastUpdated = Date.now
+    print("Setting Region Found: \(regionID), from screen: \(usingTab) at \(lastUpdated)")
+    
+     if let index = foundRegionIDs.firstIndex(of: regionID) {
+        print("Region \(regionID) already found.")
+      } else {
+          foundRegionIDs.append(regionID)
+      }
+  }
+  
+  func setNotFound(regionID: String, usingTab: inputUsedToFindRegion) {
+    lastUpdated = Date.now
+    print("Setting Region Found: \(regionID), from screen: \(usingTab) at \(lastUpdated)")
+    
+     if let index = foundRegionIDs.firstIndex(of: regionID) {
+          foundRegionIDs.remove(at: index)
+      } else {
+           print("Region \(regionID) already not found.")
+      }
+  }
 
     func hasFound(regionID: String) -> Bool {
         foundRegionIDs.contains(regionID)

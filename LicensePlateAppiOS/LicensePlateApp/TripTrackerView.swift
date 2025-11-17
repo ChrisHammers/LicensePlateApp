@@ -51,7 +51,7 @@ struct TripTrackerView: View {
 
     @State private var selectedTab: Tab = .list
     @State private var lastMatchedRegion: PlateRegion?
-    @State private var showMatchConfirmation = false
+    @State private var showVoiceMatchConfirmation = false
     @State private var lastProcessedText: String = ""
     @State private var showSettings = false
     @State private var visibleCountry: PlateRegion.Country = .unitedStates
@@ -129,14 +129,14 @@ struct TripTrackerView: View {
             }
         }
         .overlay {
-            if showMatchConfirmation, let region = lastMatchedRegion {
+            if showVoiceMatchConfirmation, let region = lastMatchedRegion {
                 VoiceConfirmationDialog(
                     region: region,
                     onAdd: {
-                        confirmAddRegion(region)
+                      confirmAddRegion(region, usingTab: .voice)
                     },
                     onCancel: {
-                        showMatchConfirmation = false
+                        showVoiceMatchConfirmation = false
                         lastMatchedRegion = nil
                     },
                     skipConfirmation: Binding(
@@ -268,6 +268,31 @@ struct TripTrackerView: View {
         .scrollContentBackground(.hidden)
         .background(Color.Theme.background)
     }
+  
+  private func setFound(regionID: String, usingTab: Trip.inputUsedToFindRegion) {
+    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+        trip.setFound(regionID: regionID, usingTab: usingTab)
+    }
+
+    do {
+        try modelContext.save()
+    } catch {
+        assertionFailure("Failed to save trip update: \(error)")
+    }
+  }
+  
+  
+  private func setNotFound(regionID: String, usingTab: Trip.inputUsedToFindRegion) {
+    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+        trip.setNotFound(regionID: regionID, usingTab: usingTab)
+    }
+
+    do {
+        try modelContext.save()
+    } catch {
+        assertionFailure("Failed to save trip update: \(error)")
+    }
+  }
 
     private func toggle(regionID: String) {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -579,19 +604,19 @@ struct TripTrackerView: View {
             // Check if user wants to skip confirmation
             if trip.skipVoiceConfirmation {
                 // Auto-add without confirmation
-                confirmAddRegion(region)
+              confirmAddRegion(region, usingTab: .voice)
             } else {
                 // Show confirmation popup
-                showMatchConfirmation = true
+                showVoiceMatchConfirmation = true
             }
         } else {
             print("ℹ️ [Speech Match] Region \(region.name) already found, skipping")
         }
     }
     
-    private func confirmAddRegion(_ region: PlateRegion) {
-        toggle(regionID: region.id) // this toggles instead of a discrete set...we probably should have a direct set, just incase this gets called where it shouldn't (right now we make sure the trip hasn't found it)
-        showMatchConfirmation = false
+  private func confirmAddRegion(_ region: PlateRegion, usingTab: Trip.inputUsedToFindRegion) {
+        setFound(regionID: region.id, usingTab: usingTab)
+        showVoiceMatchConfirmation = false
         lastMatchedRegion = nil
         
         // Clear recognized text and reset processed text after a short delay
