@@ -52,7 +52,7 @@ struct UserProfileView: View {
                         )
                       
                         // Email - Share Data Toggle
-                        SettingShareDataToggleRow(
+                        SettingShareDataToggleRow3(
                             title: "Email",
                             value: Binding(
                                 get: { user.email },
@@ -78,7 +78,7 @@ struct UserProfileView: View {
                         )
                         
                         // Phone - Share Data Toggle
-                        SettingShareDataToggleRow(
+                        SettingShareDataToggleRow3(
                             title: "Phone",
                             value: Binding(
                                 get: { user.phoneNumber },

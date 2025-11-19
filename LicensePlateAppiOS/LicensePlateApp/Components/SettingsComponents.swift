@@ -322,6 +322,8 @@ struct SettingShareDataToggleRow: View {
                         Text(value != nil && !value!.isEmpty ? value! : "Not set")
                             .font(.system(.body, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
+                      
+                      Spacer()
                         
                         if isEditable {
                             Button {
@@ -352,7 +354,308 @@ struct SettingShareDataToggleRow: View {
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity, minHeight: 100, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+        )
+        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+        .onAppear {
+            editingValue = value ?? ""
+        }
+        .onChange(of: value) { oldValue, newValue in
+            if !isEditing {
+                editingValue = newValue ?? ""
+            }
+        }
+    }
+}
+
+struct SettingShareDataToggleRow2: View {
+    let title: String
+    @Binding var value: String?
+    let placeholder: String
+    let detail: String?
+    @Binding var isOn: Bool
+    var isEditable: Bool = false
+    let onSave: () -> Void
+    let onCancel: () -> Void
+    var isDisabled: Bool = false
+    
+    @State private var isEditing = false
+    @State private var editingValue: String = ""
+    @FocusState private var isTextFieldFocused: Bool
+    
+    init(
+        title: String,
+        value: Binding<String?>,
+        placeholder: String = "Enter value",
+        detail: String? = nil,
+        isOn: Binding<Bool>,
+        isEditable: Bool = false,
+        isDisabled: Bool = false,
+        onSave: @escaping () -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.title = title
+        self._value = value
+        self.placeholder = placeholder
+        self.detail = detail
+        self._isOn = isOn
+        self.isEditable = isEditable
+        self.isDisabled = isDisabled
+        self.onSave = onSave
+        self.onCancel = onCancel
+    }
+    
+    var body: some View {
+   //     VStack(alignment: .leading, spacing: 12) {
+            // Title and value row
+          HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+              HStack {
+                Text(title)
+                  .font(.system(.body, design: .rounded))
+                  .fontWeight(.semibold)
+                  .foregroundStyle(Color.Theme.primaryBlue)
+                
+                Text(isOn ? "Public: Allows friends to find you" : "Private: Only you can see this") // TODO: should I allow this to be set in init?
+                  .font(.system(.caption2, design: .rounded))
+                  .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+                
+              }
+              
+                    
+                    if isEditing {
+                        HStack(spacing: 12) {
+                            TextField("Enter value", text: $editingValue)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(.body, design: .rounded))
+                                .focused($isTextFieldFocused)
+                                .frame(maxWidth: 150)
+                                .disabled(isDisabled)
+                            
+                            Button("Save") {
+                                value = editingValue.isEmpty ? nil : editingValue
+                                isEditing = false
+                                onSave()
+                            }
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(Color.Theme.primaryBlue)
+                            )
+                            .disabled(isDisabled)
+                            
+                            Button("Cancel") {
+                                editingValue = value ?? ""
+                                isEditing = false
+                                onCancel()
+                            }
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                        }
+                    } else {
+                        HStack(spacing: 8) {
+                            Text(value != nil && !value!.isEmpty ? value! : "Not set")
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                          
+                          Spacer()
+                            
+                            if isEditable {
+                                Button {
+                                    editingValue = value ?? ""
+                                    isEditing = true
+                                    Task { @MainActor in
+                                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                                        isTextFieldFocused = true
+                                    }
+                                } label: {
+                                    Image(systemName: "pencil")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                }
+                                .disabled(isDisabled)
+                            }
+                        }
+                    }
+              
+                if let detail = detail {
+                    Text(detail)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+                }
+            }
+            
+             Spacer()
+            
+            Toggle("", isOn: $isOn)
+              .tint(Color.Theme.primaryBlue)
+              .labelsHidden()
+          }
+          
+          
+          
+        //}
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+        )
+        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+        .onAppear {
+            editingValue = value ?? ""
+        }
+        .onChange(of: value) { oldValue, newValue in
+            if !isEditing {
+                editingValue = newValue ?? ""
+            }
+        }
+    }
+}
+
+struct SettingShareDataToggleRow3: View {
+    let title: String
+    @Binding var value: String?
+    let placeholder: String
+    let detail: String?
+    @Binding var isOn: Bool
+    var isEditable: Bool = false
+    let onSave: () -> Void
+    let onCancel: () -> Void
+    var isDisabled: Bool = false
+    
+    @State private var isEditing = false
+    @State private var editingValue: String = ""
+    @FocusState private var isTextFieldFocused: Bool
+    
+    init(
+        title: String,
+        value: Binding<String?>,
+        placeholder: String = "Enter value",
+        detail: String? = nil,
+        isOn: Binding<Bool>,
+        isEditable: Bool = false,
+        isDisabled: Bool = false,
+        onSave: @escaping () -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.title = title
+        self._value = value
+        self.placeholder = placeholder
+        self.detail = detail
+        self._isOn = isOn
+        self.isEditable = isEditable
+        self.isDisabled = isDisabled
+        self.onSave = onSave
+        self.onCancel = onCancel
+    }
+    
+    var body: some View {
+   //     VStack(alignment: .leading, spacing: 12) {
+            // Title and value row
+          HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+              HStack {
+                Text(title)
+                  .font(.system(.body, design: .rounded))
+                  .fontWeight(.semibold)
+                  .foregroundStyle(Color.Theme.primaryBlue)
+                
+                Text(isOn ? "Public: Allows friends to find you" : "Private: Only you can see this") // TODO: should I allow this to be set in init?
+                  .font(.system(.caption2, design: .rounded))
+                  .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+                
+                
+                
+                 Spacer()
+                
+                Toggle("", isOn: $isOn)
+                  .tint(Color.Theme.primaryBlue)
+                  .labelsHidden()
+              }
+              
+                    
+                    if isEditing {
+                        HStack(spacing: 12) {
+                            TextField("Enter value", text: $editingValue)
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(.body, design: .rounded))
+                                .focused($isTextFieldFocused)
+                                .frame(maxWidth: 150)
+                                .disabled(isDisabled)
+                            
+                            Button("Save") {
+                                value = editingValue.isEmpty ? nil : editingValue
+                                isEditing = false
+                                onSave()
+                            }
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(Color.Theme.primaryBlue)
+                            )
+                            .disabled(isDisabled)
+                            
+                            Button("Cancel") {
+                                editingValue = value ?? ""
+                                isEditing = false
+                                onCancel()
+                            }
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                        }
+                    } else {
+                        HStack(spacing: 8) {
+                            Text(value != nil && !value!.isEmpty ? value! : "Not set")
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                          
+                          Spacer()
+                            
+                            if isEditable {
+                                Button {
+                                    editingValue = value ?? ""
+                                    isEditing = true
+                                    Task { @MainActor in
+                                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                                        isTextFieldFocused = true
+                                    }
+                                } label: {
+                                    Image(systemName: "pencil")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                }
+                                .disabled(isDisabled)
+                            }
+                        }
+                    }
+              
+                if let detail = detail {
+                    Text(detail)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+                }
+            }
+          }
+          
+          
+          
+        //}
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color.Theme.cardBackground)
