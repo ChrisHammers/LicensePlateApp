@@ -41,7 +41,7 @@ enum AvatarType: String, Codable, CaseIterable {
 
 @Model
 final class AppUser {
-    @Attribute(.unique) var id: String // Firebase UID or local UUID
+    @Attribute(.unique) var id: String // Primary ID - Firebase UID if authenticated, local UUID if not
     var userName: String
     var email: String?
     var phoneNumber: String?
@@ -63,6 +63,12 @@ final class AppUser {
     // Platform linking
     var linkedPlatforms: [LinkedPlatform]
     
+    // Firebase sync tracking (offline-first)
+    var firebaseUID: String? // Firebase Authentication UID (nil if local-only)
+    var lastSyncedToFirebase: Date? // Last successful sync to Firestore
+    var needsSync: Bool = false // Flag to sync when online
+    var localIDBeforeFirebase: String? // Original local ID before Firebase migration
+    
     init(
         id: String = UUID().uuidString,
         userName: String = "User",
@@ -76,7 +82,11 @@ final class AppUser {
         isUsernameManuallyChanged: Bool = false,
         isEmailPublic: Bool = false,
         isPhonePublic: Bool = false,
-        linkedPlatforms: [LinkedPlatform] = []
+        linkedPlatforms: [LinkedPlatform] = [],
+        firebaseUID: String? = nil,
+        lastSyncedToFirebase: Date? = nil,
+        needsSync: Bool = false,
+        localIDBeforeFirebase: String? = nil
     ) {
         self.id = id
         self.userName = userName
@@ -91,6 +101,15 @@ final class AppUser {
         self.isEmailPublic = isEmailPublic
         self.isPhonePublic = isPhonePublic
         self.linkedPlatforms = linkedPlatforms
+        self.firebaseUID = firebaseUID
+        self.lastSyncedToFirebase = lastSyncedToFirebase
+        self.needsSync = needsSync
+        self.localIDBeforeFirebase = localIDBeforeFirebase
+    }
+    
+    /// Check if user is authenticated with Firebase
+    var isFirebaseAuthenticated: Bool {
+        firebaseUID != nil
     }
     
     func updateUserName(_ newName: String, isManual: Bool = true) {

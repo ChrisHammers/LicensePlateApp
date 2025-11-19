@@ -20,5 +20,1457 @@
             landmarkType = "24">
          </BreakpointContent>
       </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "68CD5B00-11D5-49F8-9784-3760C4F8EFC2"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "30"
+            endingLineNumber = "30"
+            landmarkName = "init()"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "8F627398-6FF9-4066-9C0F-95F113093404"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "204"
+            endingLineNumber = "204"
+            landmarkName = "signInAnonymously()"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "469B2125-1E13-4C90-B201-F0924C60825D"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "223"
+            endingLineNumber = "223"
+            landmarkName = "signIn(email:password:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "469B2125-1E13-4C90-B201-F0924C60825D - 1790de7aba8831ac"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(3) suspend resume partial function for LicensePlateApp.FirebaseAuthService.signIn(email: Swift.String, password: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "224"
+                  endingLineNumber = "224">
+               </Location>
+               <Location
+                  uuid = "469B2125-1E13-4C90-B201-F0924C60825D - 1790de7aba8831ac"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(3) suspend resume partial function for LicensePlateApp.FirebaseAuthService.signIn(email: Swift.String, password: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "224"
+                  endingLineNumber = "224">
+               </Location>
+               <Location
+                  uuid = "469B2125-1E13-4C90-B201-F0924C60825D - c693bb864bb75ae"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(5) suspend resume partial function for LicensePlateApp.FirebaseAuthService.signIn(email: Swift.String, password: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "224"
+                  endingLineNumber = "224">
+               </Location>
+               <Location
+                  uuid = "469B2125-1E13-4C90-B201-F0924C60825D - da1df0279b1dfdaa"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(9) suspend resume partial function for LicensePlateApp.FirebaseAuthService.signIn(email: Swift.String, password: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "224"
+                  endingLineNumber = "224">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "5242F231-E5CB-43CC-A68B-7468C37226E2"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "871"
+            endingLineNumber = "871"
+            landmarkName = "linkAppleAccount()"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "32DCB017-E93F-46BB-9ACE-69EA45CCA34A"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "809"
+            endingLineNumber = "809"
+            landmarkName = "signInWithApple()"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "32DCB017-E93F-46BB-9ACE-69EA45CCA34A - d3a5cab62e0ebb6c"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkPlatformCredential(_: FirebaseAuth.AuthCredential, platform: LicensePlateApp.LinkedPlatform.PlatformType, email: Swift.Optional&lt;Swift.String&gt;, displayName: Swift.Optional&lt;Swift.String&gt;) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "810"
+                  endingLineNumber = "810">
+               </Location>
+               <Location
+                  uuid = "32DCB017-E93F-46BB-9ACE-69EA45CCA34A - 758922aaa828776a"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(3) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkPlatformCredential(_: FirebaseAuth.AuthCredential, platform: LicensePlateApp.LinkedPlatform.PlatformType, email: Swift.Optional&lt;Swift.String&gt;, displayName: Swift.Optional&lt;Swift.String&gt;) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "810"
+                  endingLineNumber = "810">
+               </Location>
+               <Location
+                  uuid = "32DCB017-E93F-46BB-9ACE-69EA45CCA34A - 177eba8f22533368"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(5) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkPlatformCredential(_: FirebaseAuth.AuthCredential, platform: LicensePlateApp.LinkedPlatform.PlatformType, email: Swift.Optional&lt;Swift.String&gt;, displayName: Swift.Optional&lt;Swift.String&gt;) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "810"
+                  endingLineNumber = "810">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "DF97838F-CE51-4311-8219-236CF040D9D5"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "806"
+            endingLineNumber = "806"
+            landmarkName = "signInWithApple()"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "DF97838F-CE51-4311-8219-236CF040D9D5 - d3a5cab62e0ebcae"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkPlatformCredential(_: FirebaseAuth.AuthCredential, platform: LicensePlateApp.LinkedPlatform.PlatformType, email: Swift.Optional&lt;Swift.String&gt;, displayName: Swift.Optional&lt;Swift.String&gt;) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "808"
+                  endingLineNumber = "808">
+               </Location>
+               <Location
+                  uuid = "DF97838F-CE51-4311-8219-236CF040D9D5 - d3a5cab62e0ebcae"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkPlatformCredential(_: FirebaseAuth.AuthCredential, platform: LicensePlateApp.LinkedPlatform.PlatformType, email: Swift.Optional&lt;Swift.String&gt;, displayName: Swift.Optional&lt;Swift.String&gt;) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "808"
+                  endingLineNumber = "808">
+               </Location>
+               <Location
+                  uuid = "DF97838F-CE51-4311-8219-236CF040D9D5 - 758922aaa82870a8"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(3) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkPlatformCredential(_: FirebaseAuth.AuthCredential, platform: LicensePlateApp.LinkedPlatform.PlatformType, email: Swift.Optional&lt;Swift.String&gt;, displayName: Swift.Optional&lt;Swift.String&gt;) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "808"
+                  endingLineNumber = "808">
+               </Location>
+               <Location
+                  uuid = "DF97838F-CE51-4311-8219-236CF040D9D5 - 758922aaa82870a8"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(3) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkPlatformCredential(_: FirebaseAuth.AuthCredential, platform: LicensePlateApp.LinkedPlatform.PlatformType, email: Swift.Optional&lt;Swift.String&gt;, displayName: Swift.Optional&lt;Swift.String&gt;) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "808"
+                  endingLineNumber = "808">
+               </Location>
+               <Location
+                  uuid = "DF97838F-CE51-4311-8219-236CF040D9D5 - 177eba8f225334aa"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(5) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkPlatformCredential(_: FirebaseAuth.AuthCredential, platform: LicensePlateApp.LinkedPlatform.PlatformType, email: Swift.Optional&lt;Swift.String&gt;, displayName: Swift.Optional&lt;Swift.String&gt;) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "808"
+                  endingLineNumber = "808">
+               </Location>
+               <Location
+                  uuid = "DF97838F-CE51-4311-8219-236CF040D9D5 - 177eba8f225334aa"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(5) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkPlatformCredential(_: FirebaseAuth.AuthCredential, platform: LicensePlateApp.LinkedPlatform.PlatformType, email: Swift.Optional&lt;Swift.String&gt;, displayName: Swift.Optional&lt;Swift.String&gt;) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "808"
+                  endingLineNumber = "808">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "E53E6387-DCFA-4D29-AB52-ABF5E055F766"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "804"
+            endingLineNumber = "804"
+            landmarkName = "signInWithApple()"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "E53E6387-DCFA-4D29-AB52-ABF5E055F766 - d3a5cab62e0ebc03"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkPlatformCredential(_: FirebaseAuth.AuthCredential, platform: LicensePlateApp.LinkedPlatform.PlatformType, email: Swift.Optional&lt;Swift.String&gt;, displayName: Swift.Optional&lt;Swift.String&gt;) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "805"
+                  endingLineNumber = "805">
+               </Location>
+               <Location
+                  uuid = "E53E6387-DCFA-4D29-AB52-ABF5E055F766 - 758922aaa8287005"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(3) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkPlatformCredential(_: FirebaseAuth.AuthCredential, platform: LicensePlateApp.LinkedPlatform.PlatformType, email: Swift.Optional&lt;Swift.String&gt;, displayName: Swift.Optional&lt;Swift.String&gt;) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "805"
+                  endingLineNumber = "805">
+               </Location>
+               <Location
+                  uuid = "E53E6387-DCFA-4D29-AB52-ABF5E055F766 - 177eba8f22533407"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(5) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkPlatformCredential(_: FirebaseAuth.AuthCredential, platform: LicensePlateApp.LinkedPlatform.PlatformType, email: Swift.Optional&lt;Swift.String&gt;, displayName: Swift.Optional&lt;Swift.String&gt;) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "805"
+                  endingLineNumber = "805">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "A999B16A-06D0-4EA7-807F-5C7890E3922B"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "724"
+            endingLineNumber = "724"
+            landmarkName = "linkGoogleAccount(presentingViewController:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "A999B16A-06D0-4EA7-807F-5C7890E3922B - d9d7d4d1b891ea0c"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkMicrosoftAccount() async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "724"
+                  endingLineNumber = "724">
+               </Location>
+               <Location
+                  uuid = "A999B16A-06D0-4EA7-807F-5C7890E3922B - 44d835596037f00f"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(4) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkMicrosoftAccount() async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "724"
+                  endingLineNumber = "724">
+               </Location>
+               <Location
+                  uuid = "A999B16A-06D0-4EA7-807F-5C7890E3922B - 7f3e52c7cf621200"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(5) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkMicrosoftAccount() async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "724"
+                  endingLineNumber = "724">
+               </Location>
+               <Location
+                  uuid = "A999B16A-06D0-4EA7-807F-5C7890E3922B - a99472425a9eb401"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(6) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkMicrosoftAccount() async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "724"
+                  endingLineNumber = "724">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "5B012D66-CF81-43C3-81E0-E56820C17E54"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "711"
+            endingLineNumber = "711"
+            landmarkName = "linkGoogleAccount(presentingViewController:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "8EB086BD-1B96-40F8-92A6-6783F488B75A"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "700"
+            endingLineNumber = "700"
+            landmarkName = "FirebaseAuthService"
+            landmarkType = "3">
+            <Locations>
+               <Location
+                  uuid = "8EB086BD-1B96-40F8-92A6-6783F488B75A - 1967def926b4cebe"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkAppleAccount() async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "700"
+                  endingLineNumber = "700">
+               </Location>
+               <Location
+                  uuid = "8EB086BD-1B96-40F8-92A6-6783F488B75A - f9f76e6818db8ac0"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(3) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkAppleAccount() async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "700"
+                  endingLineNumber = "700">
+               </Location>
+               <Location
+                  uuid = "8EB086BD-1B96-40F8-92A6-6783F488B75A - c6873fdb4d0146c2"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(5) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkAppleAccount() async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "700"
+                  endingLineNumber = "700">
+               </Location>
+               <Location
+                  uuid = "8EB086BD-1B96-40F8-92A6-6783F488B75A - b6c0e782d41be0c3"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(6) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkAppleAccount() async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "700"
+                  endingLineNumber = "700">
+               </Location>
+               <Location
+                  uuid = "8EB086BD-1B96-40F8-92A6-6783F488B75A - a708cf4abf3402c4"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(7) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkAppleAccount() async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "700"
+                  endingLineNumber = "700">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "33B175CF-1E3C-4FCA-9BBE-494BB0A64E3B"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "687"
+            endingLineNumber = "687"
+            landmarkName = "signInWithGoogle(presentingViewController:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "B59954F3-5B88-4319-9A78-62AFBDF874AF"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "676"
+            endingLineNumber = "676"
+            landmarkName = "signInWithGoogle(presentingViewController:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "40EA991F-49F2-4924-90C4-663480FCFBB1"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "660"
+            endingLineNumber = "660"
+            landmarkName = "signInWithGoogle(presentingViewController:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "F3DBAA8B-C853-44A4-BD2D-68578D4A62B9"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "636"
+            endingLineNumber = "636"
+            landmarkName = "signInWithGoogle(presentingViewController:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "F3DBAA8B-C853-44A4-BD2D-68578D4A62B9 - 45923e8e7a88e1f"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkGoogleAccount(presentingViewController: __C.UIViewController) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "637"
+                  endingLineNumber = "637">
+               </Location>
+               <Location
+                  uuid = "F3DBAA8B-C853-44A4-BD2D-68578D4A62B9 - e4a9063212ef3e4f"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(2) await resume partial function for LicensePlateApp.FirebaseAuthService.linkGoogleAccount(presentingViewController: __C.UIViewController) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "637"
+                  endingLineNumber = "637">
+               </Location>
+               <Location
+                  uuid = "F3DBAA8B-C853-44A4-BD2D-68578D4A62B9 - b4f72bae3bfd1663"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(3) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkGoogleAccount(presentingViewController: __C.UIViewController) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "637"
+                  endingLineNumber = "637">
+               </Location>
+               <Location
+                  uuid = "F3DBAA8B-C853-44A4-BD2D-68578D4A62B9 - 4dcc371828695a69"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(6) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkGoogleAccount(presentingViewController: __C.UIViewController) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "637"
+                  endingLineNumber = "637">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "60403B8D-6944-46FA-8146-68DAD753092B"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "625"
+            endingLineNumber = "625"
+            landmarkName = "FirebaseAuthService"
+            landmarkType = "3">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "3B2578C5-4E19-4C1E-883A-D9BA3C7589CC"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "618"
+            endingLineNumber = "618"
+            landmarkName = "randomNonceString(length:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "3B2578C5-4E19-4C1E-883A-D9BA3C7589CC - b4f72bae3bfd10f4"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(3) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkGoogleAccount(presentingViewController: __C.UIViewController) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "618"
+                  endingLineNumber = "618">
+               </Location>
+               <Location
+                  uuid = "3B2578C5-4E19-4C1E-883A-D9BA3C7589CC - 45923e8e7a88888"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkGoogleAccount(presentingViewController: __C.UIViewController) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "618"
+                  endingLineNumber = "618">
+               </Location>
+               <Location
+                  uuid = "3B2578C5-4E19-4C1E-883A-D9BA3C7589CC - 4dcc371828695cfe"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(6) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkGoogleAccount(presentingViewController: __C.UIViewController) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "618"
+                  endingLineNumber = "618">
+               </Location>
+               <Location
+                  uuid = "3B2578C5-4E19-4C1E-883A-D9BA3C7589CC - 12133b3c829020fc"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(7) suspend resume partial function for LicensePlateApp.FirebaseAuthService.linkGoogleAccount(presentingViewController: __C.UIViewController) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "618"
+                  endingLineNumber = "618">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "B58254A5-4E6F-4C82-8568-A1A498DA19D4"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "601"
+            endingLineNumber = "601"
+            landmarkName = "randomNonceString(length:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "B58254A5-4E6F-4C82-8568-A1A498DA19D4 - 78ca8fc51b4a0aba"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "static LicensePlateApp.FirebaseAuthService.randomNonceString(length: Swift.Int) -&gt; Swift.String"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "602"
+                  endingLineNumber = "602">
+               </Location>
+               <Location
+                  uuid = "B58254A5-4E6F-4C82-8568-A1A498DA19D4 - 70bb635a5325a838"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "closure #1 (Swift.UInt8) -&gt; () in static LicensePlateApp.FirebaseAuthService.randomNonceString(length: Swift.Int) -&gt; Swift.String"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "602"
+                  endingLineNumber = "602">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "A82BE24A-F435-4E32-84AA-08F93C9EFC64"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "320"
+            endingLineNumber = "320"
+            landmarkName = "createAccount(email:password:userName:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "A82BE24A-F435-4E32-84AA-08F93C9EFC64 - 3ff276df716a85b7"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(3) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "322"
+                  endingLineNumber = "322">
+               </Location>
+               <Location
+                  uuid = "A82BE24A-F435-4E32-84AA-08F93C9EFC64 - 1c82064ea391c1b5"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(5) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "322"
+                  endingLineNumber = "322">
+               </Location>
+               <Location
+                  uuid = "A82BE24A-F435-4E32-84AA-08F93C9EFC64 - fd13d63195c73db3"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(7) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "322"
+                  endingLineNumber = "322">
+               </Location>
+               <Location
+                  uuid = "A82BE24A-F435-4E32-84AA-08F93C9EFC64 - dda367a0c7ea79b1"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(9) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "322"
+                  endingLineNumber = "322">
+               </Location>
+               <Location
+                  uuid = "A82BE24A-F435-4E32-84AA-08F93C9EFC64 - afefe6327d8e46fa"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(10) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "322"
+                  endingLineNumber = "322">
+               </Location>
+               <Location
+                  uuid = "A82BE24A-F435-4E32-84AA-08F93C9EFC64 - cf112839c645e1fb"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(11) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "322"
+                  endingLineNumber = "322">
+               </Location>
+               <Location
+                  uuid = "A82BE24A-F435-4E32-84AA-08F93C9EFC64 - ee446a2d50fbbcf8"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(12) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "322"
+                  endingLineNumber = "322">
+               </Location>
+               <Location
+                  uuid = "A82BE24A-F435-4E32-84AA-08F93C9EFC64 - 177ac113db15ff9"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(13) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "322"
+                  endingLineNumber = "322">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "5C28344D-3A60-4F10-8B86-2998A5307F37"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "317"
+            endingLineNumber = "317"
+            landmarkName = "createAccount(email:password:userName:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "5C28344D-3A60-4F10-8B86-2998A5307F37 - 1c82064ea391c00a"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(5) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "317"
+                  endingLineNumber = "317">
+               </Location>
+               <Location
+                  uuid = "5C28344D-3A60-4F10-8B86-2998A5307F37 - cf112839c645e044"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(11) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "317"
+                  endingLineNumber = "317">
+               </Location>
+               <Location
+                  uuid = "5C28344D-3A60-4F10-8B86-2998A5307F37 - ee446a2d50fbbd47"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(12) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "317"
+                  endingLineNumber = "317">
+               </Location>
+               <Location
+                  uuid = "5C28344D-3A60-4F10-8B86-2998A5307F37 - 177ac113db15e46"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(13) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "317"
+                  endingLineNumber = "317">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "A2E4F3DB-6D5C-4420-8440-A814508932D9"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "240"
+            endingLineNumber = "240"
+            landmarkName = "signIn(email:password:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "A2E4F3DB-6D5C-4420-8440-A814508932D9 - 3ec6453cf066cfc0"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(1) suspend resume partial function for LicensePlateApp.FirebaseAuthService.signIn(email: Swift.String, password: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "242"
+                  endingLineNumber = "242">
+               </Location>
+               <Location
+                  uuid = "A2E4F3DB-6D5C-4420-8440-A814508932D9 - c693bb864bb77dc"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(5) suspend resume partial function for LicensePlateApp.FirebaseAuthService.signIn(email: Swift.String, password: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "242"
+                  endingLineNumber = "242">
+               </Location>
+               <Location
+                  uuid = "A2E4F3DB-6D5C-4420-8440-A814508932D9 - e54394e62eeabbda"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(7) suspend resume partial function for LicensePlateApp.FirebaseAuthService.signIn(email: Swift.String, password: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "242"
+                  endingLineNumber = "242">
+               </Location>
+               <Location
+                  uuid = "A2E4F3DB-6D5C-4420-8440-A814508932D9 - e9a8a246f40559db"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(8) suspend resume partial function for LicensePlateApp.FirebaseAuthService.signIn(email: Swift.String, password: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "242"
+                  endingLineNumber = "242">
+               </Location>
+               <Location
+                  uuid = "A2E4F3DB-6D5C-4420-8440-A814508932D9 - da1df0279b1dffd8"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(9) suspend resume partial function for LicensePlateApp.FirebaseAuthService.signIn(email: Swift.String, password: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "242"
+                  endingLineNumber = "242">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "92927C7C-6FFC-46CD-BE07-2B1EA4916EC3"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "237"
+            endingLineNumber = "237"
+            landmarkName = "signIn(email:password:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "92927C7C-6FFC-46CD-BE07-2B1EA4916EC3 - e9a8a246f4055904"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(8) suspend resume partial function for LicensePlateApp.FirebaseAuthService.signIn(email: Swift.String, password: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "237"
+                  endingLineNumber = "237">
+               </Location>
+               <Location
+                  uuid = "92927C7C-6FFC-46CD-BE07-2B1EA4916EC3 - da1df0279b1dff07"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(9) suspend resume partial function for LicensePlateApp.FirebaseAuthService.signIn(email: Swift.String, password: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "237"
+                  endingLineNumber = "237">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "422FC429-3022-4DAB-9F53-527945AAB23B"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "216"
+            endingLineNumber = "216"
+            landmarkName = "signIn(email:password:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "18EE0C57-2391-4A89-AD0A-21EED93868DF"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "175"
+            endingLineNumber = "175"
+            landmarkName = "isUsernameTaken(_:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "18EE0C57-2391-4A89-AD0A-21EED93868DF - 6bff93dbb3684bce"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(3) suspend resume partial function for LicensePlateApp.FirebaseAuthService.isUsernameTaken(Swift.String) async throws -&gt; Swift.Bool"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "175"
+                  endingLineNumber = "175">
+               </Location>
+               <Location
+                  uuid = "18EE0C57-2391-4A89-AD0A-21EED93868DF - ffc7e52e6831ca29"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(4) await resume partial function for LicensePlateApp.FirebaseAuthService.isUsernameTaken(Swift.String) async throws -&gt; Swift.Bool"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "175"
+                  endingLineNumber = "175">
+               </Location>
+               <Location
+                  uuid = "18EE0C57-2391-4A89-AD0A-21EED93868DF - bcd655a28e07cfec"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(5) suspend resume partial function for LicensePlateApp.FirebaseAuthService.isUsernameTaken(Swift.String) async throws -&gt; Swift.Bool"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "175"
+                  endingLineNumber = "175">
+               </Location>
+               <Location
+                  uuid = "18EE0C57-2391-4A89-AD0A-21EED93868DF - 1ad170d8a9543b2"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(7) suspend resume partial function for LicensePlateApp.FirebaseAuthService.isUsernameTaken(Swift.String) async throws -&gt; Swift.Bool"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "175"
+                  endingLineNumber = "175">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "D4C38489-3345-4C94-8071-F103E2736E5B"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "256"
+            endingLineNumber = "256"
+            landmarkName = "createAccount(email:password:userName:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "05FEE3F7-822C-417D-B22B-55149380ABDF"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "176"
+            endingLineNumber = "176"
+            landmarkName = "isUsernameTaken(_:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "7D46845C-17D9-4405-ACA5-7E1DDFC386C8"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "251"
+            endingLineNumber = "251"
+            landmarkName = "createAccount(email:password:userName:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "268F8E45-93C3-4106-8BCD-263DE5276F7B"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "261"
+            endingLineNumber = "261"
+            landmarkName = "createAccount(email:password:userName:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "8A13C6FB-AD52-43FE-8B8A-1724AE746833"
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "254"
+            endingLineNumber = "254"
+            landmarkName = "createAccount(email:password:userName:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "BDBECC23-4DB8-4D2F-B488-7B8AD8743B07"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "283"
+            endingLineNumber = "283"
+            landmarkName = "createAccount(email:password:userName:)"
+            landmarkType = "7">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "EA7E0507-C195-43A5-971A-3A52192D9CA2"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "313"
+            endingLineNumber = "313"
+            landmarkName = "createAccount(email:password:userName:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "EA7E0507-C195-43A5-971A-3A52192D9CA2 - 1c82064ea391c08e"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(5) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "313"
+                  endingLineNumber = "313">
+               </Location>
+               <Location
+                  uuid = "EA7E0507-C195-43A5-971A-3A52192D9CA2 - cf112839c645e0c0"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(11) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "313"
+                  endingLineNumber = "313">
+               </Location>
+               <Location
+                  uuid = "EA7E0507-C195-43A5-971A-3A52192D9CA2 - ee446a2d50fbbdc3"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(12) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "313"
+                  endingLineNumber = "313">
+               </Location>
+               <Location
+                  uuid = "EA7E0507-C195-43A5-971A-3A52192D9CA2 - 177ac113db15ec2"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(13) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "313"
+                  endingLineNumber = "313">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            uuid = "DE01EA90-F4D2-4BF0-8966-B3AD6B898ABE"
+            shouldBeEnabled = "Yes"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "LicensePlateApp/Services/FirebaseAuthService.swift"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "315"
+            endingLineNumber = "315"
+            landmarkName = "createAccount(email:password:userName:)"
+            landmarkType = "7">
+            <Locations>
+               <Location
+                  uuid = "DE01EA90-F4D2-4BF0-8966-B3AD6B898ABE - 1c82064ea391c0cc"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(5) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "315"
+                  endingLineNumber = "315">
+               </Location>
+               <Location
+                  uuid = "DE01EA90-F4D2-4BF0-8966-B3AD6B898ABE - cf112839c645e082"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(11) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "315"
+                  endingLineNumber = "315">
+               </Location>
+               <Location
+                  uuid = "DE01EA90-F4D2-4BF0-8966-B3AD6B898ABE - ee446a2d50fbbd81"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(12) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "315"
+                  endingLineNumber = "315">
+               </Location>
+               <Location
+                  uuid = "DE01EA90-F4D2-4BF0-8966-B3AD6B898ABE - 177ac113db15e80"
+                  shouldBeEnabled = "Yes"
+                  ignoreCount = "0"
+                  continueAfterRunningActions = "No"
+                  symbolName = "(13) suspend resume partial function for LicensePlateApp.FirebaseAuthService.createAccount(email: Swift.String, password: Swift.String, userName: Swift.String) async throws -&gt; ()"
+                  moduleName = "LicensePlateApp.debug.dylib"
+                  usesParentBreakpointCondition = "Yes"
+                  urlString = "file:///Users/christopherhammers/Documents/GitHub/LicensePlateApp/LicensePlateAppiOS/LicensePlateApp/Services/FirebaseAuthService.swift"
+                  startingColumnNumber = "9223372036854775807"
+                  endingColumnNumber = "9223372036854775807"
+                  startingLineNumber = "315"
+                  endingLineNumber = "315">
+               </Location>
+            </Locations>
+         </BreakpointContent>
+      </BreakpointProxy>
    </Breakpoints>
 </Bucket>
