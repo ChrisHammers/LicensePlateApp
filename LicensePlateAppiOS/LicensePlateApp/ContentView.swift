@@ -23,15 +23,7 @@ struct ContentView: View {
     
     // Computed property for color scheme
     private var colorScheme: ColorScheme? {
-        let darkMode = AppDarkMode(rawValue: appDarkModeRaw) ?? .system
-        switch darkMode {
-        case .light:
-            return .light
-        case .dark:
-            return .dark
-        case .system:
-            return nil // nil means use system setting
-        }
+        AppPreferences.colorSchemeFromPreference(rawValue: appDarkModeRaw)
     }
 
     private let dateFormatter: DateFormatter = {
@@ -373,40 +365,7 @@ private struct TripMissingView: View {
     }
 }
 
-// MARK: - App Preferences Enums
-
-enum AppDarkMode: String, CaseIterable {
-    case light = "Light"
-    case dark = "Dark"
-    case system = "System"
-}
-
-enum AppDistanceUnit: String, CaseIterable {
-    case miles = "Miles"
-    case kilometers = "Kilometers"
-}
-
-enum AppMapStyle: String, CaseIterable {
-    case standard = "Standard"
-    case satellite = "Satellite"
-    
-    /// Returns the MapStyle based on the preference
-    /// Note: Standard preference uses .hybrid, Satellite preference uses .standard (as requested)
-    var mapStyle: MapStyle {
-        switch self {
-        case .standard:
-            return .hybrid
-        case .satellite:
-            return .standard
-        }
-    }
-}
-
-enum AppLanguage: String, CaseIterable {
-    case english = "English"
-    case spanish = "Spanish"
-    case french = "French"
-}
+// App Preferences enums are now in Core/AppPreferences.swift
 
 // Default Settings View for new trips
 private struct DefaultSettingsView: View {
@@ -416,6 +375,11 @@ private struct DefaultSettingsView: View {
     
     // App Preferences
     @AppStorage("appDarkMode") private var appDarkModeRaw: String = AppDarkMode.system.rawValue
+    
+    // Computed property for color scheme (reactive to appDarkModeRaw changes)
+    private var colorScheme: ColorScheme? {
+        AppPreferences.colorSchemeFromPreference(rawValue: appDarkModeRaw)
+    }
     @AppStorage("appDistanceUnit") private var appDistanceUnitRaw: String = AppDistanceUnit.miles.rawValue
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     @AppStorage("appLanguage") private var appLanguageRaw: String = AppLanguage.english.rawValue
@@ -504,6 +468,7 @@ private struct DefaultSettingsView: View {
                     .foregroundStyle(Color.Theme.primaryBlue)
                 }
             }
+            .preferredColorScheme(colorScheme)
             .navigationDestination(isPresented: $showUserProfile) {
                 if let user = authService.currentUser {
                     UserProfileView(user: user, authService: authService)

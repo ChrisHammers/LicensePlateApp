@@ -949,13 +949,7 @@ private struct FullScreenMapView: View {
     let namespace: Namespace.ID
     @Binding var isPresented: Bool
     
-    @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     @State private var mapCameraPosition: MapCameraPosition
-    
-    private var mapStyleFromPreference: MapStyle {
-        let mapStyle = AppMapStyle(rawValue: appMapStyleRaw) ?? .standard
-        return mapStyle.mapStyle
-    }
     
     init(country: PlateRegion.Country, foundRegionIDs: [String], locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
         self.country = country
@@ -1142,7 +1136,7 @@ private struct FullScreenMapView: View {
                     }
                 }
             }
-            .mapStyle(mapStyleFromPreference)
+            .mapStyle(AppPreferences.mapStyleFromPreference())
             .matchedGeometryEffect(id: "map", in: namespace)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ignoresSafeArea()
@@ -1203,13 +1197,7 @@ private struct RegionMapView: View {
     @Binding var showFullScreen: Bool
     @ObservedObject var locationManager: LocationManager
     
-    @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     @State private var mapRegion: MKCoordinateRegion
-    
-    private var mapStyleFromPreference: MapStyle {
-        let mapStyle = AppMapStyle(rawValue: appMapStyleRaw) ?? .standard
-        return mapStyle.mapStyle
-    }
     
     init(country: PlateRegion.Country, foundRegionIDs: [String], namespace: Namespace.ID, showFullScreen: Binding<Bool>, locationManager: LocationManager) {
         self.country = country
@@ -1277,7 +1265,7 @@ private struct RegionMapView: View {
                         .shadow(color: Color.black.opacity(0.3), radius: 2, x: 0, y: 1)
                 }
             }
-            .mapStyle(mapStyleFromPreference)
+            .mapStyle(AppPreferences.mapStyleFromPreference())
             .disabled(true)
             .matchedGeometryEffect(id: "map", in: namespace)
             
