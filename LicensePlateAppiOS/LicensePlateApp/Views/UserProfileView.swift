@@ -15,17 +15,24 @@ struct UserProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     
-    // Keep a local copy for editing
+    // Keep local copies for editing
     @State private var currentUserName: String
+    @State private var currentFirstName: String
+    @State private var currentLastName: String
     
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var isCheckingUsername = false
+    @State private var isUploadingImage = false
+    @State private var showImagePicker = false
+    @State private var selectedImage: UIImage?
     
     init(user: AppUser, authService: FirebaseAuthService) {
         self.user = user
         self.authService = authService
         _currentUserName = State(initialValue: user.userName)
+        _currentFirstName = State(initialValue: user.firstName ?? "")
+        _currentLastName = State(initialValue: user.lastName ?? "")
     }
     
     var body: some View {
@@ -35,7 +42,84 @@ struct UserProfileView: View {
                     .ignoresSafeArea()
                 
                 List {
+                    // Profile Image Section
                     Section {
+                        VStack(spacing: 16) {
+                            // User Image
+                            Button {
+                                showImagePicker = true
+                            } label: {
+                                ZStack {
+                                    UserImageView(user: user, size: 120)
+                                    
+                                    // Edit overlay
+                                    VStack {
+                                        Spacer()
+                                        HStack {
+                                            Spacer()
+                                            Image(systemName: "camera.fill")
+                                                .font(.system(size: 16, weight: .semibold))
+                                                .foregroundStyle(.white)
+                                                .padding(8)
+                                                .background(
+                                                    Circle()
+                                                        .fill(Color.Theme.primaryBlue)
+                                                )
+                                                .offset(x: -8, y: -8)
+                                        }
+                                    }
+                                }
+                            }
+                            .disabled(isUploadingImage)
+                            
+                            if isUploadingImage {
+                                ProgressView("Uploading...")
+                                    .font(.system(.caption, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown)
+                            }
+                            
+                            Text(user.displayName)
+                                .font(.system(.title2, design: .rounded))
+                                .fontWeight(.bold)
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
+                    
+                    Section {
+                        // First Name - Editable
+                        SettingEditableTextRow(
+                            title: "First Name",
+                            value: $currentFirstName,
+                            placeholder: "Enter first name",
+                            detail: nil,
+                            isDisabled: false,
+                            onSave: {
+                                saveFirstName()
+                            },
+                            onCancel: {
+                                cancelFirstNameEditing()
+                            }
+                        )
+                        
+                        // Last Name - Editable
+                        SettingEditableTextRow(
+                            title: "Last Name",
+                            value: $currentLastName,
+                            placeholder: "Enter last name",
+                            detail: nil,
+                            isDisabled: false,
+                            onSave: {
+                                saveLastName()
+                            },
+                            onCancel: {
+                                cancelLastNameEditing()
+                            }
+                        )
+                        
                         // Username - Editable
                         SettingEditableTextRow(
                             title: "Username",
@@ -315,6 +399,20 @@ struct UserProfileView: View {
             .sheet(isPresented: $authService.showSignInSheet) {
                 SignInView(authService: authService)
             }
+            .sheet(isPresented: $showImagePicker) {
+                ImagePickerView(selectedImage: $selectedImage)
+            }
+            .onChange(of: selectedImage) { oldValue, newValue in
+                if let newImage = newValue {
+                    uploadUserImage(newImage)
+                }
+            }
+            .onChange(of: user.firstName) { oldValue, newValue in
+                currentFirstName = newValue ?? ""
+            }
+            .onChange(of: user.lastName) { oldValue, newValue in
+                currentLastName = newValue ?? ""
+            }
         }
         .background(Color.Theme.background)
     }
@@ -366,6 +464,93 @@ struct UserProfileView: View {
     
     private func cancelEditing() {
         currentUserName = user.userName // Reset to original
+    }
+    
+    private func saveFirstName() {
+        let trimmed = currentFirstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        user.firstName = trimmed.isEmpty ? nil : trimmed
+        user.lastUpdated = .now
+        try? modelContext.save()
+        
+        // Sync to Firestore if authenticated
+        if user.isFirebaseAuthenticated {
+            Task {
+                try? await authService.saveUserDataToFirestore(user)
+            }
+        }
+    }
+    
+    private func cancelFirstNameEditing() {
+        currentFirstName = user.firstName ?? ""
+    }
+    
+    private func saveLastName() {
+        let trimmed = currentLastName.trimmingCharacters(in: .whitespacesAndNewlines)
+        user.lastName = trimmed.isEmpty ? nil : trimmed
+        user.lastUpdated = .now
+        try? modelContext.save()
+        
+        // Sync to Firestore if authenticated
+        if user.isFirebaseAuthenticated {
+            Task {
+                try? await authService.saveUserDataToFirestore(user)
+            }
+        }
+    }
+    
+    private func cancelLastNameEditing() {
+        currentLastName = user.lastName ?? ""
+    }
+    
+    private func uploadUserImage(_ image: UIImage) {
+        let userId = user.firebaseUID ?? user.id
+        
+        isUploadingImage = true
+        
+        Task {
+            do {
+                // Compress image to JPEG
+                guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+                    throw NSError(domain: "ImageUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to compress image"])
+                }
+                
+                // Upload to Firebase Storage
+                let storageService = FirebaseStorageService()
+                let imageURL = try await storageService.uploadUserImage(userId: userId, imageData: imageData)
+                
+                // Update user
+                await MainActor.run {
+                    user.userImageURL = imageURL
+                    user.lastUpdated = .now
+                    
+                    // Clear old cache
+                    UserImageCache.shared.deleteCachedImage(for: userId)
+                    
+                    // Save to cache
+                    UserImageCache.shared.saveImage(imageData, for: userId)
+                    
+                    try? modelContext.save()
+                    isUploadingImage = false
+                }
+                
+                // Sync to Firestore
+                try await authService.saveUserDataToFirestore(user)
+                
+            } catch {
+                await MainActor.run {
+                    let errorDesc = error.localizedDescription
+                    print("❌ Image upload failed: \(errorDesc)")
+                    if let nsError = error as NSError? {
+                        print("   Error domain: \(nsError.domain)")
+                        print("   Error code: \(nsError.code)")
+                        print("   Error userInfo: \(nsError.userInfo)")
+                    }
+                    errorMessage = "Failed to upload image: \(errorDesc)"
+                    showError = true
+                    isUploadingImage = false
+                }
+            }
+        }
     }
 }
 

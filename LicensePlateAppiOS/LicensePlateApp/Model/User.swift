@@ -43,12 +43,17 @@ enum AvatarType: String, Codable, CaseIterable {
 final class AppUser {
     @Attribute(.unique) var id: String // Primary ID - Firebase UID if authenticated, local UUID if not
     var userName: String
+    var firstName: String?
+    var lastName: String?
     var email: String?
     var phoneNumber: String?
     var createdAt: Date
     var lastUpdated: Date
     var avatarColor: AvatarColor
     var avatarType: AvatarType
+    
+    // User image - Firebase Storage URL (nil means use default asset)
+    var userImageURL: String?
     
     // Device identifier for default username generation
     var deviceIdentifier: String?
@@ -72,12 +77,15 @@ final class AppUser {
     init(
         id: String = UUID().uuidString,
         userName: String = "User",
+        firstName: String? = nil,
+        lastName: String? = nil,
         email: String? = nil,
         phoneNumber: String? = nil,
         createdAt: Date = .now,
         lastUpdated: Date = .now,
         avatarColor: AvatarColor? = nil,
         avatarType: AvatarType? = nil,
+        userImageURL: String? = nil,
         deviceIdentifier: String? = nil,
         isUsernameManuallyChanged: Bool = false,
         isEmailPublic: Bool = false,
@@ -90,12 +98,15 @@ final class AppUser {
     ) {
         self.id = id
         self.userName = userName
+        self.firstName = firstName
+        self.lastName = lastName
         self.email = email
         self.phoneNumber = phoneNumber
         self.createdAt = createdAt
         self.lastUpdated = lastUpdated
         self.avatarColor = avatarColor ?? AvatarColor.random()
         self.avatarType = avatarType ?? AvatarType.random()
+        self.userImageURL = userImageURL
         self.deviceIdentifier = deviceIdentifier
         self.isUsernameManuallyChanged = isUsernameManuallyChanged
         self.isEmailPublic = isEmailPublic
@@ -118,6 +129,23 @@ final class AppUser {
         if isManual {
             self.isUsernameManuallyChanged = true
         }
+    }
+    
+    /// Get the default asset image name based on avatar type and color
+    var defaultImageName: String {
+        "\(avatarType.rawValue)_\(avatarColor.rawValue)"
+    }
+    
+    /// Get display name (firstName + lastName, or userName as fallback)
+    var displayName: String {
+        if let firstName = firstName, let lastName = lastName, !firstName.isEmpty, !lastName.isEmpty {
+            return "\(firstName) \(lastName)"
+        } else if let firstName = firstName, !firstName.isEmpty {
+            return firstName
+        } else if let lastName = lastName, !lastName.isEmpty {
+            return lastName
+        }
+        return userName
     }
 }
 

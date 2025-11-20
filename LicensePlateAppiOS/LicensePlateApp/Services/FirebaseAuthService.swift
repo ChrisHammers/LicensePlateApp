@@ -1110,11 +1110,20 @@ class FirebaseAuthService: ObservableObject {
             "isPhonePublic": user.isPhonePublic
         ]
         
+        if let firstName = user.firstName {
+            data["firstName"] = firstName
+        }
+        if let lastName = user.lastName {
+            data["lastName"] = lastName
+        }
         if let email = user.email {
             data["email"] = email
         }
         if let phoneNumber = user.phoneNumber {
             data["phoneNumber"] = phoneNumber
+        }
+        if let userImageURL = user.userImageURL {
+            data["userImageURL"] = userImageURL
         }
         if let deviceIdentifier = user.deviceIdentifier {
             data["deviceIdentifier"] = deviceIdentifier
@@ -1148,8 +1157,11 @@ class FirebaseAuthService: ObservableObject {
     
     private func appUserFromFirestoreData(_ data: [String: Any], id: String) -> AppUser {
         let userName = data["userName"] as? String ?? "User"
+        let firstName = data["firstName"] as? String
+        let lastName = data["lastName"] as? String
         let email = data["email"] as? String
         let phoneNumber = data["phoneNumber"] as? String
+        let userImageURL = data["userImageURL"] as? String
         let deviceIdentifier = data["deviceIdentifier"] as? String
         let isUsernameManuallyChanged = data["isUsernameManuallyChanged"] as? Bool ?? false
         let isEmailPublic = data["isEmailPublic"] as? Bool ?? false
@@ -1218,12 +1230,15 @@ class FirebaseAuthService: ObservableObject {
         return AppUser(
             id: id,
             userName: userName,
+            firstName: firstName,
+            lastName: lastName,
             email: email,
             phoneNumber: phoneNumber,
             createdAt: createdAt,
             lastUpdated: lastUpdated,
             avatarColor: avatarColor,
             avatarType: avatarType,
+            userImageURL: userImageURL,
             deviceIdentifier: deviceIdentifier,
             isUsernameManuallyChanged: isUsernameManuallyChanged,
             isEmailPublic: isEmailPublic,
