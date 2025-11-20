@@ -25,7 +25,9 @@ struct UserProfileView: View {
     @State private var isCheckingUsername = false
     @State private var isUploadingImage = false
     @State private var showImagePicker = false
+    @State private var showImageConfirmation = false
     @State private var selectedImage: UIImage?
+    @State private var previewImage: UIImage?
     
     init(user: AppUser, authService: FirebaseAuthService) {
         self.user = user
@@ -402,9 +404,28 @@ struct UserProfileView: View {
             .sheet(isPresented: $showImagePicker) {
                 ImagePickerView(selectedImage: $selectedImage)
             }
+            .sheet(isPresented: $showImageConfirmation) {
+                ImageConfirmationView(
+                    image: previewImage,
+                    onUse: {
+                        if let image = previewImage {
+                            uploadUserImage(image)
+                        }
+                        showImageConfirmation = false
+                        previewImage = nil
+                    },
+                    onCancel: {
+                        showImageConfirmation = false
+                        previewImage = nil
+                        selectedImage = nil
+                    }
+                )
+            }
             .onChange(of: selectedImage) { oldValue, newValue in
                 if let newImage = newValue {
-                    uploadUserImage(newImage)
+                    // Show confirmation instead of immediately uploading
+                    previewImage = newImage
+                    showImageConfirmation = true
                 }
             }
             .onChange(of: user.firstName) { oldValue, newValue in
