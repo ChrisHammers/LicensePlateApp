@@ -1287,7 +1287,7 @@ enum AuthError: LocalizedError {
         case .invalidCredentials:
             return "Invalid email or password."
         case .networkError:
-            return "Network error. Please check your connection."
+            return "Unknown Network Error. Please try again later." // Should pass the data here, so we can print out the error.
         case .usernameTaken:
             return "This username is already taken. Please choose another."
         case .invalidUsername:

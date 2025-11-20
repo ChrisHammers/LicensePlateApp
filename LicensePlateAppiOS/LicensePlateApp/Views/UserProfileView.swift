@@ -94,7 +94,7 @@ struct UserProfileView: View {
                                     try? modelContext.save()
                                 }
                             ),
-                            isEditable: false,
+                            isEditable: true,
                             onSave: {
                                 try? modelContext.save()
                             },
