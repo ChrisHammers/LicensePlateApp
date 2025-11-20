@@ -22,7 +22,7 @@ struct ContentView: View {
     @AppStorage("appDarkMode") private var appDarkModeRaw: String = AppDarkMode.system.rawValue
     
     // Computed property for color scheme
-    private var colorScheme: ColorScheme? {
+    private var currentColorScheme: ColorScheme? {
         AppPreferences.colorSchemeFromPreference(rawValue: appDarkModeRaw)
     }
 
@@ -133,7 +133,7 @@ struct ContentView: View {
                 }
             }
         }
-        .preferredColorScheme(colorScheme)
+        .preferredColorScheme(currentColorScheme)
     }
 
     private var header: some View {
@@ -370,15 +370,29 @@ private struct TripMissingView: View {
 // Default Settings View for new trips
 private struct DefaultSettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var systemColorScheme
     @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
     @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
     
     // App Preferences
     @AppStorage("appDarkMode") private var appDarkModeRaw: String = AppDarkMode.system.rawValue
     
-    // Computed property for color scheme (reactive to appDarkModeRaw changes)
-    private var colorScheme: ColorScheme? {
-        AppPreferences.colorSchemeFromPreference(rawValue: appDarkModeRaw)
+    // Use @State to explicitly track color scheme and ensure view updates
+    @State private var currentColorScheme: ColorScheme?
+    
+    // Computed property to determine color scheme from preference
+    private func updateColorScheme() {
+      print("Current: \(appDarkModeRaw)--System: \(systemColorScheme)")
+        let darkMode = AppDarkMode(rawValue: appDarkModeRaw) ?? .system
+        switch darkMode {
+        case .light:
+            currentColorScheme = .light
+        case .dark:
+            currentColorScheme = .dark
+        case .system:
+            // When system, use the actual system color scheme
+            currentColorScheme = systemColorScheme
+        }
     }
     @AppStorage("appDistanceUnit") private var appDistanceUnitRaw: String = AppDistanceUnit.miles.rawValue
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
@@ -468,7 +482,20 @@ private struct DefaultSettingsView: View {
                     .foregroundStyle(Color.Theme.primaryBlue)
                 }
             }
-            .preferredColorScheme(colorScheme)
+            .preferredColorScheme(currentColorScheme)
+            .onAppear {
+                updateColorScheme()
+            }
+            .onChange(of: appDarkModeRaw) { oldValue, newValue in
+                updateColorScheme()
+            }
+            .onChange(of: systemColorScheme) { oldValue, newValue in
+                // Update if we're using system mode
+                let darkMode = AppDarkMode(rawValue: appDarkModeRaw) ?? .system
+                if darkMode == .system {
+                    currentColorScheme = newValue
+                }
+            }
             .navigationDestination(isPresented: $showUserProfile) {
                 if let user = authService.currentUser {
                     UserProfileView(user: user, authService: authService)

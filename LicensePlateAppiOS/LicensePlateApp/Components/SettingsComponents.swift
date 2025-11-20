@@ -685,7 +685,7 @@ struct SettingPickerRow<T: Hashable & CaseIterable & RawRepresentable>: View whe
     }
     
     var body: some View {
-      HStack(spacing: 16) {
+      HStack(alignment: .center, spacing: 16) {
         VStack(alignment: .leading, spacing: 6) {
           Text(title)
             .font(.system(.body, design: .rounded))
@@ -698,7 +698,7 @@ struct SettingPickerRow<T: Hashable & CaseIterable & RawRepresentable>: View whe
               .foregroundStyle(Color.Theme.softBrown)
           }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+       // .frame(maxWidth: .infinity, alignment: .leading)
         .layoutPriority(1)
         
             Picker("", selection: $selection) {
@@ -709,15 +709,15 @@ struct SettingPickerRow<T: Hashable & CaseIterable & RawRepresentable>: View whe
             }
             .pickerStyle(.menu)
             .tint(Color.Theme.primaryBlue)
-            .frame(maxWidth: .infinity, alignment: .trailing)
+         //   .frame(maxWidth: .infinity, alignment: .trailing)
             .layoutPriority(0)
             
            
         }
         .padding(.vertical, 6) //Not 100% sure why this is different than the rest for same result on top, but then is less on bottom
         .padding(.horizontal, 16)
-        //.frame(maxWidth: .infinity, alignment: .leading)
-        //.frame(maxHeight: .infinity, alignment: .center)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxHeight: .infinity, alignment: .center)
         //.fixedSize(horizontal: true, vertical: false) // Ensures HStack takes up only the necessary horizontal space for its content
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
