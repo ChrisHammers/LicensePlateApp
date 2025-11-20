@@ -505,11 +505,14 @@ private struct DefaultSettingsView: View {
                 selection: appDarkMode
             )
             
+          // Hidden for now
+          if false {
             SettingPickerRow(
-                title: "Distance Unit",
-                description: "Select miles or kilometers",
-                selection: appDistanceUnit
+              title: "Distance Unit",
+              description: "Select miles or kilometers",
+              selection: appDistanceUnit
             )
+          }
             
             SettingPickerRow(
                 title: "Map Style",

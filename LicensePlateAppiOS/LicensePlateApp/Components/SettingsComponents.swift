@@ -582,8 +582,7 @@ struct SettingShareDataToggleRow3: View {
                   .labelsHidden()
               }
               
-                    
-                    if isEditing {
+              if isEditing {
                         HStack(spacing: 12) {
                             TextField("Enter value", text: $editingValue)
                                 .textFieldStyle(.roundedBorder)
@@ -649,9 +648,6 @@ struct SettingShareDataToggleRow3: View {
                 }
             }
           }
-          
-          
-          
         //}
         .padding(.vertical, 12)
         .padding(.horizontal, 16)
@@ -689,12 +685,22 @@ struct SettingPickerRow<T: Hashable & CaseIterable & RawRepresentable>: View whe
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.system(.body, design: .rounded))
-                .fontWeight(.semibold)
-                .foregroundStyle(Color.Theme.primaryBlue)
-            
+      HStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 6) {
+          Text(title)
+            .font(.system(.body, design: .rounded))
+            .fontWeight(.semibold)
+            .foregroundStyle(Color.Theme.primaryBlue)
+          
+          if let description = description {
+            Text(description)
+              .font(.system(.caption, design: .rounded))
+              .foregroundStyle(Color.Theme.softBrown)
+          }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .layoutPriority(1)
+        
             Picker("", selection: $selection) {
                 ForEach(allCases, id: \.self) { option in
                     Text(option.rawValue.capitalized)
@@ -703,16 +709,16 @@ struct SettingPickerRow<T: Hashable & CaseIterable & RawRepresentable>: View whe
             }
             .pickerStyle(.menu)
             .tint(Color.Theme.primaryBlue)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .layoutPriority(0)
             
-            if let description = description {
-                Text(description)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
-            }
+           
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 6) //Not 100% sure why this is different than the rest for same result on top, but then is less on bottom
         .padding(.horizontal, 16)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        //.frame(maxWidth: .infinity, alignment: .leading)
+        //.frame(maxHeight: .infinity, alignment: .center)
+        //.fixedSize(horizontal: true, vertical: false) // Ensures HStack takes up only the necessary horizontal space for its content
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color.Theme.cardBackground)
