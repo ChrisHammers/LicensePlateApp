@@ -428,6 +428,7 @@ private struct DefaultSettingsView: View {
     
     enum SettingsSection: String, CaseIterable {
         case user = "User"
+        case appPreferences = "App Preferences"
         case voice = "Voice"
         
         var id: String { rawValue }
@@ -445,6 +446,8 @@ private struct DefaultSettingsView: View {
                             switch section {
                             case .user:
                                 userSettings
+                            case .appPreferences:
+                                appPreferencesSettings
                             case .voice:
                                 voiceSettings
                             }
@@ -491,22 +494,11 @@ private struct DefaultSettingsView: View {
                     showUserProfile = true
                 }
             }
-            
-            // App Preferences Section Header
-            VStack(alignment: .leading, spacing: 8) {
-                Text("App Preferences")
-                    .font(.system(.headline, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 16)
-                    .padding(.bottom, 4)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
-            .listRowBackground(Color.clear)
-            
-            // App Preferences Options
+        }
+    }
+    
+    private var appPreferencesSettings: some View {
+        Group {
             SettingPickerRow(
                 title: "Dark Mode",
                 description: "Choose your preferred appearance",
