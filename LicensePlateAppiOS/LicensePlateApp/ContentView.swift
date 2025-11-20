@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import MapKit
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
@@ -16,6 +17,22 @@ struct ContentView: View {
     @State private var path: [UUID] = []
     @State private var isShowingCreateSheet = false
     @State private var isShowingSettings = false
+    
+    // App Preferences
+    @AppStorage("appDarkMode") private var appDarkModeRaw: String = AppDarkMode.system.rawValue
+    
+    // Computed property for color scheme
+    private var colorScheme: ColorScheme? {
+        let darkMode = AppDarkMode(rawValue: appDarkModeRaw) ?? .system
+        switch darkMode {
+        case .light:
+            return .light
+        case .dark:
+            return .dark
+        case .system:
+            return nil // nil means use system setting
+        }
+    }
 
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -124,6 +141,7 @@ struct ContentView: View {
                 }
             }
         }
+        .preferredColorScheme(colorScheme)
     }
 
     private var header: some View {
@@ -371,6 +389,17 @@ enum AppDistanceUnit: String, CaseIterable {
 enum AppMapStyle: String, CaseIterable {
     case standard = "Standard"
     case satellite = "Satellite"
+    
+    /// Returns the MapStyle based on the preference
+    /// Note: Standard preference uses .hybrid, Satellite preference uses .standard (as requested)
+    var mapStyle: MapStyle {
+        switch self {
+        case .standard:
+            return .hybrid
+        case .satellite:
+            return .standard
+        }
+    }
 }
 
 enum AppLanguage: String, CaseIterable {
