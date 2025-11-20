@@ -51,7 +51,7 @@ struct UserImageView: View {
             }
         }
         .task {
-            await loadUserImage()
+            await loadUserImage() // TODO: We should be downloading this right away, as app start
         }
         .onChange(of: user.userImageURL) { oldValue, newValue in
             if oldValue != newValue {
@@ -62,6 +62,7 @@ struct UserImageView: View {
         }
     }
     
+    //TODO: this shouldn't be only place we loadUserImage.  This same functionality.
     private func loadUserImage() async {
         // If no custom image URL, use default asset
         guard let imageURL = user.userImageURL, !imageURL.isEmpty else {
@@ -72,6 +73,7 @@ struct UserImageView: View {
         // Check cache first
         if let cachedData = UserImageCache.shared.loadImage(for: user.id) {
             if let image = UIImage(data: cachedData) {
+                print("Found Cached image for userID: \(user.id)")
                 loadedImage = image
                 return
             }
@@ -85,6 +87,7 @@ struct UserImageView: View {
             let storageService = FirebaseStorageService()
             let imageData = try await storageService.downloadUserImage(userId: user.id)
             
+            print("Downloading image for userID: \(user.id)")
             // Cache the image
             UserImageCache.shared.saveImage(imageData, for: user.id)
             

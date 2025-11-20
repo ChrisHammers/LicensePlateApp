@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import GoogleSignInSwift
+import FirebaseAuth
 
 struct UserProfileView: View {
     @Bindable var user: AppUser
@@ -559,7 +560,19 @@ struct UserProfileView: View {
 
   
     private func uploadUserImage(_ image: UIImage) {
-        let userId = user.firebaseUID ?? user.id
+        // Must use Firebase UID for Storage (not local ID)
+        guard let firebaseUID = user.firebaseUID else {
+            errorMessage = "You must be signed in to upload images. Please sign in first."
+            showError = true
+            return
+        }
+        
+        // Verify user is authenticated with Firebase
+        guard Auth.auth().currentUser != nil else {
+            errorMessage = "You must be authenticated with Firebase to upload images. Please sign in first."
+            showError = true
+            return
+        }
         
         isUploadingImage = true
         
@@ -570,9 +583,12 @@ struct UserProfileView: View {
                     throw NSError(domain: "ImageUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to compress image"])
                 }
                 
-                // Upload to Firebase Storage
+                print("📤 Uploading image for Firebase user: \(firebaseUID)")
+                print("📤 Image size after compression: \(imageData.count) bytes")
+                
+                // Upload to Firebase Storage (must use Firebase UID)
                 let storageService = FirebaseStorageService()
-                let imageURL = try await storageService.uploadUserImage(userId: userId, imageData: imageData)
+                let imageURL = try await storageService.uploadUserImage(userId: firebaseUID, imageData: imageData)
                 
                 // Update user
                 await MainActor.run {
@@ -580,10 +596,10 @@ struct UserProfileView: View {
                     user.lastUpdated = .now
                     
                     // Clear old cache
-                    UserImageCache.shared.deleteCachedImage(for: userId)
+                    UserImageCache.shared.deleteCachedImage(for: firebaseUID)
                     
                     // Save to cache
-                    UserImageCache.shared.saveImage(imageData, for: userId)
+                    UserImageCache.shared.saveImage(imageData, for: firebaseUID)
                     
                     try? modelContext.save()
                     isUploadingImage = false

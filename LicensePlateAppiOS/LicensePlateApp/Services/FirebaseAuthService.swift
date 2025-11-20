@@ -455,6 +455,7 @@ class FirebaseAuthService: ObservableObject {
         
         if let existingUser = try? modelContext.fetch(descriptor).first {
             currentUser = existingUser
+          print("Loaded existing user \(currentUser?.firebaseUID ?? "unknown")--\(currentUser?.userName ?? "unknown")")
             isAuthenticated = true
             return
         }
@@ -464,6 +465,7 @@ class FirebaseAuthService: ObservableObject {
             modelContext.insert(firestoreUser)
             try? modelContext.save()
             currentUser = firestoreUser
+            print("Loaded user \(currentUser?.firebaseUID ?? "unknown")--\(currentUser?.userName ?? "unknown")")
             isAuthenticated = true
         } else {
             // Create new user from Firebase auth
