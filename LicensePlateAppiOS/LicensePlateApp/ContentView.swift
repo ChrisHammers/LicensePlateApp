@@ -355,15 +355,76 @@ private struct TripMissingView: View {
     }
 }
 
+// MARK: - App Preferences Enums
+
+enum AppDarkMode: String, CaseIterable {
+    case light = "Light"
+    case dark = "Dark"
+    case system = "System"
+}
+
+enum AppDistanceUnit: String, CaseIterable {
+    case miles = "Miles"
+    case kilometers = "Kilometers"
+}
+
+enum AppMapStyle: String, CaseIterable {
+    case standard = "Standard"
+    case satellite = "Satellite"
+}
+
+enum AppLanguage: String, CaseIterable {
+    case english = "English"
+    case spanish = "Spanish"
+    case french = "French"
+}
+
 // Default Settings View for new trips
 private struct DefaultSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
     @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
     
+    // App Preferences
+    @AppStorage("appDarkMode") private var appDarkModeRaw: String = AppDarkMode.system.rawValue
+    @AppStorage("appDistanceUnit") private var appDistanceUnitRaw: String = AppDistanceUnit.miles.rawValue
+    @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
+    @AppStorage("appLanguage") private var appLanguageRaw: String = AppLanguage.english.rawValue
+    @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
+    @AppStorage("appUseVibrations") private var appUseVibrations = true
+    
     @EnvironmentObject var authService: FirebaseAuthService
     @Environment(\.modelContext) private var modelContext
     @State private var showUserProfile = false
+    
+    // Computed properties for picker bindings
+    private var appDarkMode: Binding<AppDarkMode> {
+        Binding(
+            get: { AppDarkMode(rawValue: appDarkModeRaw) ?? .system },
+            set: { appDarkModeRaw = $0.rawValue }
+        )
+    }
+    
+    private var appDistanceUnit: Binding<AppDistanceUnit> {
+        Binding(
+            get: { AppDistanceUnit(rawValue: appDistanceUnitRaw) ?? .miles },
+            set: { appDistanceUnitRaw = $0.rawValue }
+        )
+    }
+    
+    private var appMapStyle: Binding<AppMapStyle> {
+        Binding(
+            get: { AppMapStyle(rawValue: appMapStyleRaw) ?? .standard },
+            set: { appMapStyleRaw = $0.rawValue }
+        )
+    }
+    
+    private var appLanguage: Binding<AppLanguage> {
+        Binding(
+            get: { AppLanguage(rawValue: appLanguageRaw) ?? .english },
+            set: { appLanguageRaw = $0.rawValue }
+        )
+    }
     
     enum SettingsSection: String, CaseIterable {
         case user = "User"
@@ -429,6 +490,60 @@ private struct DefaultSettingsView: View {
                 ) {
                     showUserProfile = true
                 }
+            }
+            
+            // App Preferences Section Header
+            VStack(alignment: .leading, spacing: 8) {
+                Text("App Preferences")
+                    .font(.system(.headline, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 4)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .listRowInsets(EdgeInsets(top: 0, leading: 20, bottom: 0, trailing: 20))
+            .listRowBackground(Color.clear)
+            
+            // App Preferences Options
+            SettingPickerRow(
+                title: "Dark Mode",
+                description: "Choose your preferred appearance",
+                selection: appDarkMode
+            )
+            
+            SettingPickerRow(
+                title: "Distance Unit",
+                description: "Select miles or kilometers",
+                selection: appDistanceUnit
+            )
+            
+            SettingPickerRow(
+                title: "Map Style",
+                description: "Choose standard or satellite view",
+                selection: appMapStyle
+            )
+            
+            // Hidden for now
+            if false {
+                SettingPickerRow(
+                    title: "Language",
+                    description: "Select your preferred language",
+                    selection: appLanguage
+                )
+                
+                SettingToggleRow(
+                    title: "Play Sound Effects",
+                    description: "Enable audio feedback for app interactions",
+                    isOn: $appPlaySoundEffects
+                )
+                
+                SettingToggleRow(
+                    title: "Use Vibrations",
+                    description: "Enable haptic feedback",
+                    isOn: $appUseVibrations
+                )
             }
         }
     }

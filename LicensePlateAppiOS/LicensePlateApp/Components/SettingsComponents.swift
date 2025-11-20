@@ -672,6 +672,55 @@ struct SettingShareDataToggleRow3: View {
     }
 }
 
+// MARK: - Setting Picker Row
+
+/// Reusable picker row with card styling for selecting from multiple options
+struct SettingPickerRow<T: Hashable & CaseIterable & RawRepresentable>: View where T.RawValue == String {
+    let title: String
+    let description: String?
+    @Binding var selection: T
+    let allCases: [T]
+    
+    init(title: String, description: String? = nil, selection: Binding<T>, allCases: [T] = Array(T.allCases)) {
+        self.title = title
+        self.description = description
+        self._selection = selection
+        self.allCases = allCases
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.system(.body, design: .rounded))
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.Theme.primaryBlue)
+            
+            Picker("", selection: $selection) {
+                ForEach(allCases, id: \.self) { option in
+                    Text(option.rawValue.capitalized)
+                        .tag(option)
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(Color.Theme.primaryBlue)
+            
+            if let description = description {
+                Text(description)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+            }
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+        )
+        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+    }
+}
+
 // MARK: - Setting Navigation Row
 
 /// Reusable navigation row with card styling (like Profile button)
