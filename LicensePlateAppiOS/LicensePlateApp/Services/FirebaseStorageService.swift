@@ -8,6 +8,7 @@
 import Foundation
 import FirebaseStorage
 import UIKit
+import FirebaseCore
 
 /// Service for uploading and downloading user images from Firebase Storage
 class FirebaseStorageService {
@@ -16,6 +17,10 @@ class FirebaseStorageService {
     /// Upload user image to Firebase Storage
     func uploadUserImage(userId: String, imageData: Data) async throws -> String {
         let imageRef = storage.reference().child("user_images/\(userId).jpg")
+        
+        print("📤 Starting upload for user: \(userId)")
+        print("📤 Image data size: \(imageData.count) bytes")
+        print("📤 Storage path: user_images/\(userId).jpg")
         
         // Set metadata
         let metadata = StorageMetadata()
@@ -27,9 +32,17 @@ class FirebaseStorageService {
             let uploadTask = imageRef.putData(imageData, metadata: metadata) { metadata, error in
                 if let error = error {
                     print("❌ Upload error: \(error.localizedDescription)")
+                    if let nsError = error as NSError? {
+                        print("   Error domain: \(nsError.domain)")
+                        print("   Error code: \(nsError.code)")
+                      print("   Error userInfo: \(nsError.userInfo)")
+                      print("   Error description: \(nsError.description)")
+                    }
                     continuation.resume(throwing: error)
                 } else if let metadata = metadata {
                     print("✅ Upload successful")
+                    print("   Metadata path: \(metadata.path ?? "nil")")
+                    print("   Metadata bucket: \(metadata.bucket ?? "nil")")
                     continuation.resume(returning: metadata)
                 } else {
                     continuation.resume(throwing: NSError(domain: "FirebaseStorage", code: -1, userInfo: [NSLocalizedDescriptionKey: "Unknown error during upload"]))
@@ -39,19 +52,22 @@ class FirebaseStorageService {
             _ = uploadTask
         }
         
-        // Wait a brief moment for the file to be fully processed
-        try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        print("✅ Upload metadata received, getting download URL...")
+        print("⏳ Fetching download URL from storage reference...")
         
         // Get download URL - retry a few times if needed
         var downloadURL: URL?
         var lastError: Error?
         
-        for attempt in 1...3 {
+        for attempt in 1...5 {
             do {
                 downloadURL = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, Error>) in
                     imageRef.downloadURL { url, error in
                         if let error = error {
                             print("❌ Download URL error (attempt \(attempt)): \(error.localizedDescription)")
+                            if let nsError = error as NSError? {
+                                print("   Error code: \(nsError.code)")
+                            }
                             continuation.resume(throwing: error)
                         } else if let url = url {
                             print("✅ Got download URL: \(url.absoluteString)")
@@ -64,15 +80,22 @@ class FirebaseStorageService {
                 break // Success, exit retry loop
             } catch {
                 lastError = error
-                if attempt < 3 {
-                    // Wait before retrying
-                    try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                print("⚠️ Attempt \(attempt) failed, waiting before retry...")
+                if attempt < 5 {
+                    // Wait longer between retries
+                    try? await Task.sleep(nanoseconds: UInt64(attempt) * 1_000_000_000) // 1s, 2s, 3s, 4s
                 }
             }
         }
         
         guard let url = downloadURL else {
-            throw lastError ?? NSError(domain: "FirebaseStorage", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to get download URL after upload"])
+            // If we still can't get the URL, construct it manually as a fallback
+            print("⚠️ Could not get download URL, constructing manually...")
+            let bucket = storage.app.options.storageBucket ?? ""
+            let encodedPath = "user_images/\(userId).jpg".addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? "user_images/\(userId).jpg"
+            let manualURL = "https://firebasestorage.googleapis.com/v0/b/\(bucket)/o/\(encodedPath)?alt=media"
+            print("📝 Using constructed URL: \(manualURL)")
+            return manualURL
         }
         
         return url.absoluteString

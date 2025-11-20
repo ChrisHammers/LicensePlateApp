@@ -523,6 +523,41 @@ struct UserProfileView: View {
         currentLastName = user.lastName ?? ""
     }
     
+  
+  func optimizedImage(_ originalImage: UIImage) -> Data? {
+    let scaledImage = scaleImageIfNeeded(originalImage)
+    let compression: CGFloat = 0.8 // 80% quality
+    let imageData = scaledImage.jpegData(compressionQuality: compression)
+    return imageData
+  }
+  
+  private func scaleImageIfNeeded(_ image: UIImage) -> UIImage {
+    let size = image.size
+    
+    // If image is smaller than max dimension, return original
+    if size.width <= 300 && size.height <= 300 {
+      return image
+    }
+    
+    // Calculate aspect ratio
+    let aspectRatio = size.width / size.height
+    
+    // Calculate new size while maintaining aspect ratio
+    var newSize: CGSize
+    if size.width > size.height {
+      newSize = CGSize(width: 300, height: 300 / aspectRatio)
+    } else {
+      newSize = CGSize(width: 300 * aspectRatio, height: 300)
+    }
+    
+    // Scale down the image
+    let renderer = UIGraphicsImageRenderer(size: newSize)
+    return renderer.image { context in
+      image.draw(in: CGRect(origin: .zero, size: newSize))
+    }
+  }
+
+  
     private func uploadUserImage(_ image: UIImage) {
         let userId = user.firebaseUID ?? user.id
         
@@ -531,7 +566,7 @@ struct UserProfileView: View {
         Task {
             do {
                 // Compress image to JPEG
-                guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+                guard let imageData = optimizedImage(image) else {
                     throw NSError(domain: "ImageUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to compress image"])
                 }
                 
