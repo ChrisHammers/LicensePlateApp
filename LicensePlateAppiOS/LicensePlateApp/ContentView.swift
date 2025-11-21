@@ -8,6 +8,9 @@
 import SwiftUI
 import SwiftData
 import MapKit
+import CoreLocation
+import AVFoundation
+import UserNotifications
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
@@ -435,6 +438,7 @@ private struct DefaultSettingsView: View {
     
     enum SettingsSection: String, CaseIterable {
         case user = "User"
+        case privacyPermissions = "Privacy & Permissions"
         case appPreferences = "App Preferences"
         case voice = "Voice"
         case helpAbout = "Help & About"
@@ -454,6 +458,8 @@ private struct DefaultSettingsView: View {
                             switch section {
                             case .user:
                                 userSettings
+                            case .privacyPermissions:
+                                privacyPermissionsSettings
                             case .appPreferences:
                                 appPreferencesSettings
                             case .voice:
@@ -533,6 +539,284 @@ private struct DefaultSettingsView: View {
                     showUserProfile = true
                 }
             }
+        }
+    }
+    
+    // Privacy & Permissions
+    @AppStorage("saveLocationWhenMarkingPlates") private var saveLocationWhenMarkingPlates = true
+    @AppStorage("showMyLocationOnLargeMap") private var showMyLocationOnLargeMap = true
+    @AppStorage("trackMyLocationDuringTrips") private var trackMyLocationDuringTrips = true
+    @AppStorage("notifyPlateFoundByOpponent") private var notifyPlateFoundByOpponent = true
+    @AppStorage("notifyPlateFoundByCoPilots") private var notifyPlateFoundByCoPilots = true
+    @AppStorage("notifyPromotionsAndNews") private var notifyPromotionsAndNews = false
+    
+    @StateObject private var locationManager = LocationManager()
+    @State private var microphonePermission: AVAudioSession.RecordPermission = .undetermined
+    @State private var cameraPermission: AVAuthorizationStatus = .notDetermined
+    @State private var notificationPermission: UNAuthorizationStatus = .notDetermined
+    
+    private var privacyPermissionsSettings: some View {
+        Group {
+            // Location Permission
+            PermissionRow(
+                title: "Location",
+                icon: "location.fill",
+                status: locationPermissionStatus,
+                statusColor: locationPermissionColor,
+                onTap: openLocationSettings
+            )
+            
+            SettingToggleRow(
+                title: "Save location when marking plates",
+                description: "Store location data when you mark a plate as found",
+                isOn: $saveLocationWhenMarkingPlates
+            )
+            
+            SettingToggleRow(
+                title: "Show my location on large map",
+                description: "Display your current location on the full-screen map",
+                isOn: $showMyLocationOnLargeMap
+            )
+            
+            SettingToggleRow(
+                title: "Track my location during trips",
+                description: "Continuously track your location while a trip is active",
+                isOn: $trackMyLocationDuringTrips
+            )
+            
+            // Microphone Permission
+            PermissionRow(
+                title: "Microphone",
+                icon: "mic.fill",
+                status: microphonePermissionStatus,
+                statusColor: microphonePermissionColor,
+                onTap: openMicrophoneSettings
+            )
+            
+            // Camera Permission (hidden for now)
+            if false {
+                PermissionRow(
+                    title: "Camera",
+                    icon: "camera.fill",
+                    status: cameraPermissionStatus,
+                    statusColor: cameraPermissionColor,
+                    onTap: openCameraSettings
+                )
+            }
+            
+            // Notifications Permission
+            PermissionRow(
+                title: "Notifications",
+                icon: "bell.fill",
+                status: notificationPermissionStatus,
+                statusColor: notificationPermissionColor,
+                onTap: openNotificationSettings
+            )
+            
+            SettingToggleRow(
+                title: "Plate found by opponent",
+                description: "Get notified when an opponent finds a plate",
+                isOn: $notifyPlateFoundByOpponent
+            )
+            
+            SettingToggleRow(
+                title: "Plate found by co-pilots",
+                description: "Get notified when a co-pilot finds a plate",
+                isOn: $notifyPlateFoundByCoPilots
+            )
+            
+            SettingToggleRow(
+                title: "Promotion & News",
+                description: "Receive promotional offers and app news",
+                isOn: $notifyPromotionsAndNews
+            )
+            
+            // Open System Settings button
+            Button {
+                openSystemSettings()
+            } label: {
+                HStack {
+                    Text("Open System Settings")
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    
+                    Spacer()
+                    
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.system(size: 16))
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Color.Theme.cardBackground)
+                )
+            }
+            .buttonStyle(.plain)
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+        }
+        .onAppear {
+            checkPermissions()
+        }
+        .onChange(of: locationManager.authorizationStatus) { oldValue, newValue in
+            checkPermissions()
+        }
+    }
+    
+    // Permission status helpers
+    private var locationPermissionStatus: String {
+        switch locationManager.authorizationStatus {
+        case .authorizedAlways:
+            return "Allowed"
+        case .authorizedWhenInUse:
+            return "While App is Open"
+        case .denied, .restricted:
+            return "Disabled"
+        case .notDetermined:
+            return "Not Set"
+        @unknown default:
+            return "Unknown"
+        }
+    }
+    
+    private var locationPermissionColor: Color {
+        switch locationManager.authorizationStatus {
+        case .authorizedAlways:
+            return .green
+        case .authorizedWhenInUse:
+            return Color(red: 1.0, green: 0.84, blue: 0.0) // Yellowish
+        case .denied, .restricted:
+            return .red
+        case .notDetermined:
+          return Color(red: 1.0, green: 0.14, blue: 0.14) // Redish
+        @unknown default:
+          return Color(red: 1.0, green: 0.14, blue: 0.14) // Redish
+        }
+    }
+    
+    private var microphonePermissionStatus: String {
+        switch microphonePermission {
+        case .granted:
+            return "Allowed"
+        case .denied:
+            return "Disabled"
+        case .undetermined:
+            return "Not Set"
+        @unknown default:
+            return "Unknown"
+        }
+    }
+    
+    private var microphonePermissionColor: Color {
+        switch microphonePermission {
+        case .granted:
+            return .green
+        case .denied:
+            return .red
+        case .undetermined:
+          return Color(red: 1.0, green: 0.37, blue: 0.12) // Reddish
+        @unknown default:
+          return Color(red: 1.0, green: 0.37, blue: 0.12) // Reddish
+        }
+    }
+    
+    private var cameraPermissionStatus: String {
+        switch cameraPermission {
+        case .authorized:
+            return "Allowed"
+        case .denied, .restricted:
+            return "Disabled"
+        case .notDetermined:
+            return "Not Set"
+        @unknown default:
+            return "Unknown"
+        }
+    }
+    
+    private var cameraPermissionColor: Color {
+        switch cameraPermission {
+        case .authorized:
+            return .green
+        case .denied, .restricted:
+            return .red
+        case .notDetermined:
+          return Color(red: 1.0, green: 0.37, blue: 0.12) // Reddish
+        @unknown default:
+          return Color(red: 1.0, green: 0.37, blue: 0.12) // Reddish
+        }
+    }
+    
+    private var notificationPermissionStatus: String {
+        switch notificationPermission {
+        case .authorized, .provisional, .ephemeral:
+            return "Allowed"
+        case .denied:
+            return "Disabled"
+        case .notDetermined:
+            return "Not Set"
+        @unknown default:
+            return "Unknown"
+        }
+    }
+    
+    private var notificationPermissionColor: Color {
+        switch notificationPermission {
+        case .authorized, .provisional, .ephemeral:
+            return .green
+        case .denied:
+            return .red
+        case .notDetermined:
+          return Color(red: 1.0, green: 0.37, blue: 0.12) // Reddish
+        @unknown default:
+          return Color(red: 1.0, green: 0.37, blue: 0.12) // Reddish
+        }
+    }
+    
+    private func checkPermissions() {
+        // Check microphone permission
+        microphonePermission = AVAudioSession.sharedInstance().recordPermission
+        
+        // Check camera permission
+        cameraPermission = AVCaptureDevice.authorizationStatus(for: .video)
+        
+        // Check notification permission
+        Task {
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            await MainActor.run {
+                notificationPermission = settings.authorizationStatus
+            }
+        }
+    }
+    
+    private func openLocationSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+    }
+    
+    private func openMicrophoneSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+    }
+    
+    private func openCameraSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+    }
+    
+    private func openNotificationSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+    }
+    
+    private func openSystemSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
         }
     }
     
@@ -1222,5 +1506,48 @@ private struct PrivacyView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Permission Row Component
+
+private struct PermissionRow: View {
+    let title: String
+    let icon: String
+    let status: String
+    let statusColor: Color
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 16) {
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .frame(width: 24)
+                
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title)
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                }
+                
+                Spacer()
+                
+                Text(status)
+                    .font(.system(.caption, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(statusColor)
+            }
+            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color.Theme.cardBackground)
+            )
+        }
+        .buttonStyle(.plain)
+        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
     }
 }
