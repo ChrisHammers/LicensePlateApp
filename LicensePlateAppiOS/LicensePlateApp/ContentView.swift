@@ -11,6 +11,7 @@ import MapKit
 import CoreLocation
 import AVFoundation
 import UserNotifications
+import Speech
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
@@ -552,6 +553,7 @@ private struct DefaultSettingsView: View {
     
     @StateObject private var locationManager = LocationManager()
     @State private var microphonePermission: AVAudioSession.RecordPermission = .undetermined
+    @State private var speechRecognitionPermission: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     @State private var cameraPermission: AVAuthorizationStatus = .notDetermined
     @State private var notificationPermission: UNAuthorizationStatus = .notDetermined
     
@@ -580,7 +582,7 @@ private struct DefaultSettingsView: View {
             
             SettingToggleRow(
                 title: "Track my location during trips",
-                description: "Continuously track your location while a trip is active",
+                description: "Continuously track your location while a trip is active (Can be disabled at any time)",
                 isOn: $trackMyLocationDuringTrips
             )
             
@@ -591,6 +593,15 @@ private struct DefaultSettingsView: View {
                 status: microphonePermissionStatus,
                 statusColor: microphonePermissionColor,
                 onTap: openMicrophoneSettings
+            )
+            
+            // Speech Recognizer Permission
+            PermissionRow(
+                title: "Speech Recognizer",
+                icon: "waveform",
+                status: speechRecognitionPermissionStatus,
+                statusColor: speechRecognitionPermissionColor,
+                onTap: openSpeechRecognitionSettings
             )
             
             // Camera Permission (hidden for now)
@@ -696,6 +707,32 @@ private struct DefaultSettingsView: View {
         }
     }
     
+    private var speechRecognitionPermissionStatus: String {
+        switch speechRecognitionPermission {
+        case .authorized:
+            return "Allowed"
+        case .denied, .restricted:
+            return "Disabled"
+        case .notDetermined:
+            return "Not Set"
+        @unknown default:
+            return "Unknown"
+        }
+    }
+    
+    private var speechRecognitionPermissionColor: Color {
+        switch speechRecognitionPermission {
+        case .authorized:
+            return .green
+        case .denied, .restricted:
+            return .red
+        case .notDetermined:
+            return Color.Theme.permissionOrange
+        @unknown default:
+            return Color.Theme.permissionOrange
+        }
+    }
+    
     private var cameraPermissionStatus: String {
         switch cameraPermission {
         case .authorized:
@@ -752,6 +789,9 @@ private struct DefaultSettingsView: View {
         // Check microphone permission
         microphonePermission = AVAudioSession.sharedInstance().recordPermission
         
+        // Check speech recognition permission
+        speechRecognitionPermission = SFSpeechRecognizer.authorizationStatus()
+        
         // Check camera permission
         cameraPermission = AVCaptureDevice.authorizationStatus(for: .video)
         
@@ -771,6 +811,12 @@ private struct DefaultSettingsView: View {
     }
     
     private func openMicrophoneSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+    }
+    
+    private func openSpeechRecognitionSettings() {
         if let url = URL(string: UIApplication.openSettingsURLString) {
             UIApplication.shared.open(url)
         }
