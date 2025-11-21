@@ -441,7 +441,7 @@ private struct DefaultSettingsView: View {
         case user = "User"
         case privacyPermissions = "Privacy & Permissions"
         case appPreferences = "App Preferences"
-        case voice = "Voice"
+        case voice = "Voice Defaults"
         case helpAbout = "Help & About"
         
         var id: String { rawValue }
@@ -456,18 +456,22 @@ private struct DefaultSettingsView: View {
                 List {
                     ForEach(SettingsSection.allCases, id: \.id) { section in
                         Section {
+                          VStack {
                             switch section {
                             case .user:
-                                userSettings
+                              userSettings
                             case .privacyPermissions:
-                                privacyPermissionsSettings
+                              privacyPermissionsSettings
                             case .appPreferences:
-                                appPreferencesSettings
+                              appPreferencesSettings
                             case .voice:
-                                voiceSettings
+                              voiceSettings
                             case .helpAbout:
-                                helpAboutSettings
+                              helpAboutSettings
                             }
+                          }
+                          .background(Color.Theme.cardBackground)
+                          .cornerRadius(20)
                         } header: {
                             Text(section.rawValue)
                                 .font(.system(.headline, design: .rounded))
@@ -585,6 +589,8 @@ private struct DefaultSettingsView: View {
                 description: "Continuously track your location while a trip is active (Can be disabled at any time)",
                 isOn: $trackMyLocationDuringTrips
             )
+          
+          Divider()
             
             // Microphone Permission
             PermissionRow(
@@ -594,6 +600,8 @@ private struct DefaultSettingsView: View {
                 statusColor: microphonePermissionColor,
                 onTap: openMicrophoneSettings
             )
+          
+          Divider()
             
             // Speech Recognizer Permission
             PermissionRow(
@@ -603,6 +611,8 @@ private struct DefaultSettingsView: View {
                 statusColor: speechRecognitionPermissionColor,
                 onTap: openSpeechRecognitionSettings
             )
+          
+          Divider()
             
             // Camera Permission (hidden for now)
             if false {
@@ -613,6 +623,8 @@ private struct DefaultSettingsView: View {
                     statusColor: cameraPermissionColor,
                     onTap: openCameraSettings
                 )
+              
+              Divider()
             }
             
             // Notifications Permission
@@ -847,6 +859,8 @@ private struct DefaultSettingsView: View {
                 description: "Choose your preferred appearance",
                 selection: appDarkMode
             )
+          
+          Divider()
             
           // Hidden for now
           if false {
@@ -855,6 +869,8 @@ private struct DefaultSettingsView: View {
               description: "Select miles or kilometers",
               selection: appDistanceUnit
             )
+            
+            Divider()
           }
             
             SettingPickerRow(
@@ -862,6 +878,8 @@ private struct DefaultSettingsView: View {
                 description: "Choose standard or satellite view",
                 selection: appMapStyle
             )
+          
+          Divider()
             
             // Hidden for now
             if false {
@@ -870,6 +888,8 @@ private struct DefaultSettingsView: View {
                     description: "Select your preferred language",
                     selection: appLanguage
                 )
+              
+              Divider()
                 
                 SettingToggleRow(
                     title: "Play Sound Effects",
@@ -894,6 +914,8 @@ private struct DefaultSettingsView: View {
                 isOn: $defaultSkipVoiceConfirmation
             )
           if false {
+            Divider()
+            
             SettingToggleRow(
               title: "Hold to Talk",
               description: "Press and hold the microphone button to record. If disabled the system will listen until you hit stop. This is the default for NEW trips created, this can be changed per trip as well.",
@@ -917,6 +939,8 @@ private struct DefaultSettingsView: View {
             ) {
                 showAbout = true
             }
+          
+          Divider()
             
             SettingNavigationRow(
                 title: "Acknowledgements",
@@ -924,6 +948,8 @@ private struct DefaultSettingsView: View {
             ) {
                 showAcknowledgements = true
             }
+          
+          Divider()
             
             SettingNavigationRow(
                 title: "FAQ",
@@ -931,6 +957,8 @@ private struct DefaultSettingsView: View {
             ) {
                 showFAQ = true
             }
+          
+          Divider()
             
             Button {
                 sendEmail(to: "hammerstechllc@gmail.com", subject: "RoadTrip Royale Bug Report")
@@ -964,6 +992,8 @@ private struct DefaultSettingsView: View {
             .buttonStyle(.plain)
             .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
             
+          Divider()
+          
             Button {
                 sendEmail(to: "hammerstechllc@gmail.com", subject: "RoadTrip Royale Feature Suggestion")
             } label: {
@@ -996,6 +1026,8 @@ private struct DefaultSettingsView: View {
             .buttonStyle(.plain)
             .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
             
+          Divider()
+          
             Button {
                 sendEmail(to: "hammerstechllc@gmail.com", subject: "RoadTrip Royale Support Issue")
             } label: {
@@ -1028,6 +1060,8 @@ private struct DefaultSettingsView: View {
             .buttonStyle(.plain)
             .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
             
+          Divider()
+          
             // App Version and Legal
             VStack(spacing: 12) {
                 Text("App Version \(appVersion)")

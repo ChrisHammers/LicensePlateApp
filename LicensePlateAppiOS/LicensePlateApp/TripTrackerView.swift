@@ -880,10 +880,14 @@ private struct SettingsView: View {
                 List {
                     ForEach(SettingsSection.allCases, id: \.id) { section in
                         Section {
+                          VStack {
                             switch section {
                             case .voice:
-                                voiceSettings
+                              voiceSettings
                             }
+                          }
+                          .background(Color.Theme.cardBackground)
+                          .cornerRadius(20)
                         } header: {
                             Text(section.rawValue)
                                 .font(.system(.headline, design: .rounded))
