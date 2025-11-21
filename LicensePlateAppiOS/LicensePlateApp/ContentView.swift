@@ -729,31 +729,41 @@ private struct DefaultSettingsView: View {
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
                 
-                HStack(spacing: 16) {
-                    Button {
-                        showTerms = true
-                    } label: {
-                        Text("Terms")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(Color.Theme.primaryBlue)
-                    }
+                HStack(spacing: 20) {
+                    // Terms button - isolated tap area
+                    Text("Terms")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            showTerms = true
+                        }
                     
                     Text("·")
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
+                        .allowsHitTesting(false)
                     
-                    Button {
-                        showPrivacy = true
-                    } label: {
-                        Text("Privacy")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(Color.Theme.primaryBlue)
-                    }
+                    // Privacy button - isolated tap area
+                    Text("Privacy")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            showPrivacy = true
+                        }
                 }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+            .listRowSeparator(.hidden)
+            .contentShape(Rectangle())
+            .allowsHitTesting(true)
         }
     }
     
