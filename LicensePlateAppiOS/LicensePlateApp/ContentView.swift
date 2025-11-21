@@ -889,16 +889,17 @@ private struct DefaultSettingsView: View {
     private var voiceSettings: some View {
         Group {
             SettingToggleRow(
-                title: "Skip Confirmation",
-                description: "Automatically add license plates without confirmation when using Voice. This is the default for NEW trips.",
+                title: "Skip Voice Confirmation",
+                description: "Automatically add license plates heard by speech recognition without requiring user confirmation. This is the default for NEW trips created, this can be changed per trip as well.",
                 isOn: $defaultSkipVoiceConfirmation
             )
-            
+          if false {
             SettingToggleRow(
-                title: "Hold to Talk",
-                description: "Press and hold the microphone button to record. If disabled the system will listen until you hit stop. This is the default for NEW trips.",
-                isOn: $defaultHoldToTalk
+              title: "Hold to Talk",
+              description: "Press and hold the microphone button to record. If disabled the system will listen until you hit stop. This is the default for NEW trips created, this can be changed per trip as well.",
+              isOn: $defaultHoldToTalk
             )
+          }
         }
     }
     

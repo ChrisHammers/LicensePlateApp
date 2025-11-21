@@ -925,18 +925,19 @@ private struct SettingsView: View {
                     }
                 )
             )
-            
+          if false {
             SettingToggleRow(
-                title: "Hold to Talk",
-                description: "Press and hold the microphone button to record. If disabled the system will listen until you hit stop.",
-                isOn: Binding(
-                    get: { trip.holdToTalk },
-                    set: { newValue in
-                        trip.holdToTalk = newValue
-                        try? modelContext.save()
-                    }
-                )
+              title: "Hold to Talk",
+              description: "Press and hold the microphone button to record. If disabled the system will listen until you hit stop.",
+              isOn: Binding(
+                get: { trip.holdToTalk },
+                set: { newValue in
+                  trip.holdToTalk = newValue
+                  try? modelContext.save()
+                }
+              )
             )
+          }
         }
     }
 }
