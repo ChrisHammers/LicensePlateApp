@@ -630,32 +630,6 @@ private struct DefaultSettingsView: View {
                 description: "Receive promotional offers and app news",
                 isOn: $notifyPromotionsAndNews
             )
-            
-            // Open System Settings button
-            Button {
-                openSystemSettings()
-            } label: {
-                HStack {
-                    Text("Open System Settings")
-                        .font(.system(.body, design: .rounded))
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                    
-                    Spacer()
-                    
-                    Image(systemName: "arrow.up.right.square")
-                        .font(.system(size: 16))
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.Theme.cardBackground)
-                )
-            }
-            .buttonStyle(.plain)
-            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
         }
         .onAppear {
             checkPermissions()
@@ -686,13 +660,13 @@ private struct DefaultSettingsView: View {
         case .authorizedAlways:
             return .green
         case .authorizedWhenInUse:
-            return Color(red: 1.0, green: 0.84, blue: 0.0) // Yellowish
+            return Color.Theme.permissionYellow
         case .denied, .restricted:
             return .red
         case .notDetermined:
-          return Color(red: 1.0, green: 0.14, blue: 0.14) // Redish
+            return Color.Theme.permissionOrangeDark
         @unknown default:
-          return Color(red: 1.0, green: 0.14, blue: 0.14) // Redish
+            return Color.Theme.permissionOrangeDark
         }
     }
     
@@ -716,9 +690,9 @@ private struct DefaultSettingsView: View {
         case .denied:
             return .red
         case .undetermined:
-          return Color(red: 1.0, green: 0.37, blue: 0.12) // Reddish
+            return Color.Theme.permissionOrange
         @unknown default:
-          return Color(red: 1.0, green: 0.37, blue: 0.12) // Reddish
+            return Color.Theme.permissionOrange
         }
     }
     
@@ -742,9 +716,9 @@ private struct DefaultSettingsView: View {
         case .denied, .restricted:
             return .red
         case .notDetermined:
-          return Color(red: 1.0, green: 0.37, blue: 0.12) // Reddish
+            return Color.Theme.permissionOrange
         @unknown default:
-          return Color(red: 1.0, green: 0.37, blue: 0.12) // Reddish
+            return Color.Theme.permissionOrange
         }
     }
     
@@ -768,9 +742,9 @@ private struct DefaultSettingsView: View {
         case .denied:
             return .red
         case .notDetermined:
-          return Color(red: 1.0, green: 0.37, blue: 0.12) // Reddish
+            return Color.Theme.permissionOrange
         @unknown default:
-          return Color(red: 1.0, green: 0.37, blue: 0.12) // Reddish
+            return Color.Theme.permissionOrange
         }
     }
     
@@ -1539,6 +1513,12 @@ private struct PermissionRow: View {
                     .font(.system(.caption, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundStyle(statusColor)
+              
+            if statusColor != .green {
+              Image(systemName: "arrow.up.right.square")
+                  .font(.system(size: 12))
+                  .foregroundStyle(Color.Theme.primaryBlue)
+            }
             }
             .padding(.vertical, 12)
             .padding(.horizontal, 16)

@@ -39,6 +39,30 @@ extension Color {
             light: Color(red: 0.87, green: 0.85, blue: 0.80),
             dark: Color(red: 0.18, green: 0.18, blue: 0.20)
         )
+        
+        // Permission Yellow: For "While App is Open" status
+        // Light mode: More saturated/darker for visibility on light background
+        // Dark mode: Bright yellow as provided
+        static let permissionYellow = Color(//254,255,136, // original // light: Color(red: 0.85, green: 0.65, blue: 0.0), // not bad //light: Color(red: 0.85, green: 0.75, blue: 0.18),
+          light: Color(red: 0.99, green: 1.0, blue: 0.53),
+            dark: Color(red: 1.0, green: 0.84, blue: 0.0)
+        )
+        
+        // Permission Orange: For "Not Set" status
+        // Light mode: More saturated/darker for visibility on light background
+        // Dark mode: Orange-red as provided
+        static let permissionOrange = Color(
+            light: Color(red: 0.85, green: 0.40, blue: 0.15),
+            dark: Color(red: 1.0, green: 0.37, blue: 0.12)
+        )
+        
+        // Permission Orange Dark: For location "Not Set" (slightly more red)
+        // Light mode: More saturated/darker for visibility on light background
+        // Dark mode: Red-orange as provided
+        static let permissionOrangeDark = Color(
+            light: Color(red: 0.85, green: 0.25, blue: 0.25),
+            dark: Color(red: 1.0, green: 0.14, blue: 0.14)
+        )
     }
 }
 
