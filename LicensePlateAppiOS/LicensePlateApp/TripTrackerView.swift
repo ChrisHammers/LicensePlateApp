@@ -1029,7 +1029,7 @@ private struct SettingsView: View {
                     try? modelContext.save()
                 } label: {
                     HStack {
-                        Text("Start Now")
+                        Text("Start Trip")
                             .font(.system(.body, design: .rounded))
                             .fontWeight(.semibold)
                             .foregroundStyle(.white)
@@ -1074,6 +1074,11 @@ private struct SettingsView: View {
                 .disabled(!isTripCreator)
                 
                 Divider()
+            } else if let endedAt = trip.tripEndedAt {
+              SettingInfoRow(
+                  title: "Ended",
+                  value: dateFormatter.string(from: endedAt)
+              )
             }
             
             // Reset Button
