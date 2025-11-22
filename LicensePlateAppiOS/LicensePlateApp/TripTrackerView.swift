@@ -91,6 +91,7 @@ struct TripTrackerView: View {
         .toolbar(showFullScreenMap ? .hidden : .visible, for: .navigationBar)
         .sheet(isPresented: $showSettings) {
             SettingsView(trip: trip, modelContext: modelContext)
+                .environmentObject(authService)
         }
         .overlay {
             if showFullScreenMap {
@@ -109,6 +110,16 @@ struct TripTrackerView: View {
             // Request location permission when view appears
             if locationManager.authorizationStatus == .notDetermined {
                 locationManager.requestAuthorization()
+            }
+            // Switch to list tab if trip is ended and currently on voice tab
+            if trip.isTripEnded && selectedTab == .voice {
+                selectedTab = .list
+            }
+        }
+        .onChange(of: trip.isTripEnded) { oldValue, newValue in
+            // If trip just ended and we're on voice tab, switch to list
+            if newValue && selectedTab == .voice {
+                selectedTab = .list
             }
         }
         .onChange(of: selectedTab) { oldValue, newValue in
@@ -238,7 +249,8 @@ struct TripTrackerView: View {
                         RegionCellView(
                             region: region,
                             isSelected: trip.hasFound(regionID: region.id),
-                            toggleAction: { toggle(regionID: region.id) }
+                            toggleAction: { toggle(regionID: region.id) },
+                            isDisabled: trip.isTripEnded
                         )
                         .listRowBackground(Color.Theme.cardBackground)
                         .onAppear {
@@ -306,6 +318,9 @@ struct TripTrackerView: View {
   }
 
     private func toggle(regionID: String) {
+        // Don't allow toggling if trip is ended
+        guard !trip.isTripEnded else { return }
+        
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             trip.toggle(
                 regionID: regionID,
@@ -643,9 +658,29 @@ struct TripTrackerView: View {
     }
 
     private var customTabBar: some View {
+//          VStack(spacing: 16) {
+//              Image(systemName: "stop.circle.fill")
+//                  .font(.system(size: 64))
+//                  .foregroundStyle(Color.red.opacity(0.5))
+//              Text("Trip Ended")
+//                  .font(.system(.title2, design: .rounded))
+//                  .fontWeight(.semibold)
+//                  .foregroundStyle(Color.Theme.primaryBlue)
+//              Text("This trip has been ended. You can no longer add states.")
+//                  .font(.system(.body, design: .rounded))
+//                  .foregroundStyle(Color.Theme.softBrown)
+//                  .multilineTextAlignment(.center)
+//                  .padding(.horizontal)
+//          }
+//          .frame(maxWidth: .infinity, maxHeight: .infinity)
         HStack(spacing: 16) {
             ForEach(Tab.allCases) { tab in
+                let isTabDisabled = tab == .voice && trip.isTripEnded
                 Button {
+                    // Prevent switching to voice tab if trip is ended
+                    if isTabDisabled {
+                        return
+                    }
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         selectedTab = tab
                     }
@@ -671,6 +706,8 @@ struct TripTrackerView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .disabled(isTabDisabled)
+                .opacity(isTabDisabled ? 0.5 : 1.0)
             }
         }
         .padding(.horizontal, 20)
@@ -717,10 +754,13 @@ private struct RegionCellView: View {
     let region: PlateRegion
     let isSelected: Bool
     var toggleAction: () -> Void
+    var isDisabled: Bool = false
 
     var body: some View {
         Button {
-            toggleAction()
+            if !isDisabled {
+                toggleAction()
+            }
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: "mappin.and.ellipse")
@@ -748,6 +788,8 @@ private struct RegionCellView: View {
             .padding(.vertical, 6)
         }
         .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.5 : 1.0)
     }
 }
 
@@ -866,9 +908,32 @@ private struct SettingsView: View {
     let modelContext: ModelContext
     
     enum SettingsSection: String, CaseIterable {
+        case tripInfo = "Trip Info"
+        case trackingPrivacy = "Tracking & Privacy"
         case voice = "Voice"
         
         var id: String { rawValue }
+    }
+    
+    @EnvironmentObject var authService: FirebaseAuthService
+    @StateObject private var locationManager = LocationManager()
+    
+    @State private var showEndTripConfirmation = false
+    @State private var showResetConfirmation = false
+    @State private var showDeleteConfirmation = false
+    @State private var isEditingTripName = false
+    @State private var editingTripName: String = ""
+    
+    private var isTripCreator: Bool {
+        guard let currentUserID = authService.currentUser?.id else { return false }
+        return trip.createdBy == currentUserID
+    }
+    
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
     }
     
     var body: some View {
@@ -882,6 +947,10 @@ private struct SettingsView: View {
                         Section {
                           VStack {
                             switch section {
+                            case .tripInfo:
+                                tripInfoSettings
+                            case .trackingPrivacy:
+                                trackingPrivacySettings
                             case .voice:
                               voiceSettings
                             }
@@ -914,6 +983,261 @@ private struct SettingsView: View {
             }
         }
         .background(Color.Theme.background)
+    }
+    
+    private var tripInfoSettings: some View {
+        Group {
+            // Edit Trip Name
+            SettingEditableTextRow(
+                title: "Trip Name",
+                value: Binding(
+                    get: { trip.name },
+                    set: { newValue in
+                        trip.name = newValue
+                        trip.lastUpdated = Date.now
+                        try? modelContext.save()
+                    }
+                ),
+                placeholder: "Enter trip name",
+                onSave: {
+                    try? modelContext.save()
+                },
+                onCancel: {}
+            )
+            
+            Divider()
+            
+            // Created At Date
+            SettingInfoRow(
+                title: "Created",
+                value: dateFormatter.string(from: trip.createdAt)
+            )
+            
+            Divider()
+            
+            // Start Date
+            if let startedAt = trip.startedAt {
+                SettingInfoRow(
+                    title: "Started",
+                    value: dateFormatter.string(from: startedAt)
+                )
+            } else {
+                Button {
+                    trip.startedAt = Date.now
+                    trip.lastUpdated = Date.now
+                    try? modelContext.save()
+                } label: {
+                    HStack {
+                        Text("Start Now")
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                        Spacer()
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color.Theme.primaryBlue)
+                            .frame(maxWidth: .infinity, maxHeight: 50)
+                            .padding(.horizontal, 6)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(!isTripCreator)
+                .opacity(isTripCreator ? 1.0 : 0.5)
+            }
+            
+            Divider()
+            
+            // End Trip Button
+            if trip.startedAt != nil && !trip.isTripEnded {
+                Button {
+                    showEndTripConfirmation = true
+                } label: {
+                    HStack {
+                        Text("End Trip")
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                        Spacer()
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color.red)
+                    )
+                }
+                .buttonStyle(.plain)
+                
+                Divider()
+            }
+            
+            // Reset Button
+            Button {
+                showResetConfirmation = true
+            } label: {
+                HStack {
+                    Text("Reset Trip")
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    Spacer()
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+            }
+            .buttonStyle(.plain)
+            
+            Divider()
+            
+            // Delete Button
+            Button {
+                showDeleteConfirmation = true
+            } label: {
+                HStack {
+                    Text("Delete Trip")
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.red)
+                    Spacer()
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+            }
+            .buttonStyle(.plain)
+        }
+        .alert("End Trip", isPresented: $showEndTripConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("End Trip", role: .destructive) {
+                trip.isTripEnded = true
+                trip.tripEndedAt = Date.now
+                trip.tripEndedBy = authService.currentUser?.id
+                trip.lastUpdated = Date.now
+                try? modelContext.save()
+            }
+        } message: {
+            Text("This will stop the game. You won't be able to add states in this trip anymore.")
+        }
+        .alert("Reset Trip", isPresented: $showResetConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Reset", role: .destructive) {
+                // Reset all trip settings except name
+                trip.startedAt = nil
+                trip.isTripEnded = false
+                trip.tripEndedAt = nil
+                trip.tripEndedBy = nil
+                trip.foundRegions = []
+                trip.skipVoiceConfirmation = false
+                trip.holdToTalk = true
+                trip.saveLocationWhenMarkingPlates = true
+                trip.showMyLocationOnLargeMap = true
+                trip.trackMyLocationDuringTrip = true
+                trip.showMyActiveTripOnLargeMap = true
+                trip.showMyActiveTripOnSmallMap = true
+                trip.lastUpdated = Date.now
+                // TODO: Add log entry for reset
+                try? modelContext.save()
+            }
+        } message: {
+            Text("This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset.")
+        }
+        .alert("Delete Trip", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                modelContext.delete(trip)
+                try? modelContext.save()
+                dismiss()
+            }
+        } message: {
+            Text("This will delete the trip and all scores will be removed.")
+        }
+    }
+    
+    private var trackingPrivacySettings: some View {
+        Group {
+            let locationAuthorized = locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways
+            
+            SettingToggleRow(
+                title: "Save location when marking plates",
+                description: "Store location data when you mark a plate as found",
+                isOn: Binding(
+                    get: { trip.saveLocationWhenMarkingPlates },
+                    set: { newValue in
+                        trip.saveLocationWhenMarkingPlates = newValue
+                        trip.lastUpdated = Date.now
+                        try? modelContext.save()
+                    }
+                )
+            )
+            .disabled(!locationAuthorized)
+            .opacity(locationAuthorized ? 1.0 : 0.5)
+            
+            Divider()
+            
+            SettingToggleRow(
+                title: "Show my location on large map",
+                description: "Display your current location on the full-screen map",
+                isOn: Binding(
+                    get: { trip.showMyLocationOnLargeMap },
+                    set: { newValue in
+                        trip.showMyLocationOnLargeMap = newValue
+                        trip.lastUpdated = Date.now
+                        try? modelContext.save()
+                    }
+                )
+            )
+            
+            Divider()
+            
+            SettingToggleRow(
+                title: "Track my location during trip",
+                description: "Continuously track your location while a trip is active",
+                isOn: Binding(
+                    get: { trip.trackMyLocationDuringTrip },
+                    set: { newValue in
+                        trip.trackMyLocationDuringTrip = newValue
+                        trip.lastUpdated = Date.now
+                        try? modelContext.save()
+                    }
+                )
+            )
+            
+            Divider()
+            
+            SettingToggleRow(
+                title: "Show my active trip on the large map",
+                description: "Display your active trip on the full-screen map",
+                isOn: Binding(
+                    get: { trip.showMyActiveTripOnLargeMap },
+                    set: { newValue in
+                        trip.showMyActiveTripOnLargeMap = newValue
+                        trip.lastUpdated = Date.now
+                        try? modelContext.save()
+                    }
+                )
+            )
+            .disabled(!trip.trackMyLocationDuringTrip)
+            .opacity(trip.trackMyLocationDuringTrip ? 1.0 : 0.5)
+            
+            Divider()
+            
+            SettingToggleRow(
+                title: "Show my active trip on the small map",
+                description: "Display your active trip on the small map",
+                isOn: Binding(
+                    get: { trip.showMyActiveTripOnSmallMap },
+                    set: { newValue in
+                        trip.showMyActiveTripOnSmallMap = newValue
+                        trip.lastUpdated = Date.now
+                        try? modelContext.save()
+                    }
+                )
+            )
+            .disabled(!trip.trackMyLocationDuringTrip)
+            .opacity(trip.trackMyLocationDuringTrip ? 1.0 : 0.5)
+        }
     }
     
     private var voiceSettings: some View {

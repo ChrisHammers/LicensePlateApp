@@ -98,6 +98,20 @@ final class Trip {
     // Trip-specific voice settings (optional for backward compatibility)
     var skipVoiceConfirmation: Bool = false
     var holdToTalk: Bool = true
+    
+    // Trip creator and lifecycle
+    var createdBy: String? // User ID of trip creator
+    var startedAt: Date?
+    var isTripEnded: Bool = false
+    var tripEndedAt: Date?
+    var tripEndedBy: String? // User ID who ended the trip
+    
+    // Location and tracking settings
+    var saveLocationWhenMarkingPlates: Bool = true
+    var showMyLocationOnLargeMap: Bool = true
+    var trackMyLocationDuringTrip: Bool = true
+    var showMyActiveTripOnLargeMap: Bool = true
+    var showMyActiveTripOnSmallMap: Bool = true
 
     init(
         id: UUID = UUID(),
@@ -106,7 +120,17 @@ final class Trip {
         name: String,
         foundRegions: [FoundRegion] = [],
         skipVoiceConfirmation: Bool = false,
-        holdToTalk: Bool = true
+        holdToTalk: Bool = true,
+        createdBy: String? = nil,
+        startedAt: Date? = nil,
+        isTripEnded: Bool = false,
+        tripEndedAt: Date? = nil,
+        tripEndedBy: String? = nil,
+        saveLocationWhenMarkingPlates: Bool = true,
+        showMyLocationOnLargeMap: Bool = true,
+        trackMyLocationDuringTrip: Bool = true,
+        showMyActiveTripOnLargeMap: Bool = true,
+        showMyActiveTripOnSmallMap: Bool = true
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -115,6 +139,16 @@ final class Trip {
         self.skipVoiceConfirmation = skipVoiceConfirmation
         self.holdToTalk = holdToTalk
         self.lastUpdated = lastUpdated
+        self.createdBy = createdBy
+        self.startedAt = startedAt
+        self.isTripEnded = isTripEnded
+        self.tripEndedAt = tripEndedAt
+        self.tripEndedBy = tripEndedBy
+        self.saveLocationWhenMarkingPlates = saveLocationWhenMarkingPlates
+        self.showMyLocationOnLargeMap = showMyLocationOnLargeMap
+        self.trackMyLocationDuringTrip = trackMyLocationDuringTrip
+        self.showMyActiveTripOnLargeMap = showMyActiveTripOnLargeMap
+        self.showMyActiveTripOnSmallMap = showMyActiveTripOnSmallMap
     }
     
     // MARK: - Computed Properties for Backward Compatibility

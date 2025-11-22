@@ -182,17 +182,16 @@ struct SettingEditableTextRow: View {
                     
                     Spacer()
                     
-                    Button {
-                        editingValue = value
-                        isEditing = true
-                        Task { @MainActor in
-                            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-                            isTextFieldFocused = true
-                        }
-                    } label: {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundStyle(Color.Theme.primaryBlue)
+                Image(systemName: "pencil")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .onTapGesture {
+                      editingValue = value
+                      isEditing = true
+                      Task { @MainActor in
+                          try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                          isTextFieldFocused = true
+                      }
                     }
                     .disabled(isDisabled)
                 }

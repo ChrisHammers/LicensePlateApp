@@ -238,7 +238,8 @@ struct ContentView: View {
             name: finalName,
             foundRegions: [],
             skipVoiceConfirmation: defaultSkipVoiceConfirmation,
-            holdToTalk: defaultHoldToTalk
+            holdToTalk: defaultHoldToTalk,
+            createdBy: authService.currentUser?.id
         )
 
         modelContext.insert(newTrip)
