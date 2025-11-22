@@ -1068,6 +1068,8 @@ private struct SettingsView: View {
                     .background(
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .fill(Color.red)
+                            .frame(maxWidth: .infinity, maxHeight: 50)
+                            .padding(.horizontal, 6)
                     )
                 }
                 .buttonStyle(.plain)
