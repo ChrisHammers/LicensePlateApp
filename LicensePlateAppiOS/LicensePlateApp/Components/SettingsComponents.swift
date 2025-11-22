@@ -179,21 +179,36 @@ struct SettingEditableTextRow: View {
                     Text(value)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.Theme.cardBackground)
+                        .onTapGesture {
+                          if !isDisabled {
+                            editingValue = value ?? ""
+                            isEditing = true
+                            Task { @MainActor in
+                              try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                              isTextFieldFocused = true
+                            }
+                          }
+                        }
                     
                     Spacer()
                     
-                Image(systemName: "pencil")
+                if !isDisabled {
+                  Image(systemName: "pencil")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color.Theme.primaryBlue)
                     .onTapGesture {
                       editingValue = value
                       isEditing = true
                       Task { @MainActor in
-                          try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-                          isTextFieldFocused = true
+                        try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                        isTextFieldFocused = true
                       }
                     }
-                    .disabled(isDisabled)
+                    .disabled(isDisabled) //Isn't making it clear its disabled enough, so hiding.
+                }
+                
                 }
             }
             
@@ -321,23 +336,36 @@ struct SettingShareDataToggleRow: View {
                         Text(value != nil && !value!.isEmpty ? value! : "Not set")
                             .font(.system(.body, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.Theme.cardBackground)
+                            .onTapGesture {
+                              if !isDisabled && isEditable {
+                                editingValue = value ?? ""
+                                isEditing = true
+                                Task { @MainActor in
+                                  try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                                  isTextFieldFocused = true
+                                }
+                              }
+                            }
                       
                       Spacer()
                         
                         if isEditable {
-                            Button {
+                          if !isDisabled {
+                            Image(systemName: "pencil")
+                              .font(.system(size: 16, weight: .semibold))
+                              .foregroundStyle(Color.Theme.primaryBlue)
+                              .onTapGesture {
                                 editingValue = value ?? ""
                                 isEditing = true
                                 Task { @MainActor in
                                     try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                                     isTextFieldFocused = true
                                 }
-                            } label: {
-                                Image(systemName: "pencil")
-                                    .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(Color.Theme.primaryBlue)
-                            }
-                            .disabled(isDisabled)
+                              }
+                              .disabled(isDisabled) //Isn't making it clear its disabled enough, so hiding.
+                          }
                         }
                     }
                 }
@@ -463,23 +491,36 @@ struct SettingShareDataToggleRow2: View {
                             Text(value != nil && !value!.isEmpty ? value! : "Not set")
                                 .font(.system(.body, design: .rounded))
                                 .foregroundStyle(Color.Theme.softBrown)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.Theme.cardBackground)
+                                .onTapGesture {
+                                  if !isDisabled && isEditable {
+                                    editingValue = value ?? ""
+                                    isEditing = true
+                                    Task { @MainActor in
+                                      try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                                      isTextFieldFocused = true
+                                    }
+                                  }
+                                }
                           
                           Spacer()
                             
                             if isEditable {
-                                Button {
+                              if !isDisabled {
+                                Image(systemName: "pencil")
+                                  .font(.system(size: 16, weight: .semibold))
+                                  .foregroundStyle(Color.Theme.primaryBlue)
+                                  .onTapGesture {
                                     editingValue = value ?? ""
                                     isEditing = true
                                     Task { @MainActor in
                                         try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                                         isTextFieldFocused = true
                                     }
-                                } label: {
-                                    Image(systemName: "pencil")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(Color.Theme.primaryBlue)
-                                }
-                                .disabled(isDisabled)
+                                  }
+                                  .disabled(isDisabled) //Isn't making it clear its disabled enough, so hiding.
+                              }
                             }
                         }
                     }
@@ -619,23 +660,36 @@ struct SettingShareDataToggleRow3: View {
                             Text(value != nil && !value!.isEmpty ? value! : "Not set")
                                 .font(.system(.body, design: .rounded))
                                 .foregroundStyle(Color.Theme.softBrown)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(Color.Theme.cardBackground)
+                                .onTapGesture {
+                                  if !isDisabled && isEditable {
+                                    editingValue = value ?? ""
+                                    isEditing = true
+                                    Task { @MainActor in
+                                      try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                                      isTextFieldFocused = true
+                                    }
+                                  }
+                                }
                           
                           Spacer()
                             
                             if isEditable {
-                                Button {
+                              if !isDisabled {
+                                Image(systemName: "pencil")
+                                  .font(.system(size: 16, weight: .semibold))
+                                  .foregroundStyle(Color.Theme.primaryBlue)
+                                  .onTapGesture {
                                     editingValue = value ?? ""
                                     isEditing = true
                                     Task { @MainActor in
                                         try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                                         isTextFieldFocused = true
                                     }
-                                } label: {
-                                    Image(systemName: "pencil")
-                                        .font(.system(size: 16, weight: .semibold))
-                                        .foregroundStyle(Color.Theme.primaryBlue)
-                                }
-                                .disabled(isDisabled)
+                                  }
+                                  .disabled(isDisabled) //Isn't making it clear its disabled enough, so hiding.
+                              }
                             }
                         }
                     }

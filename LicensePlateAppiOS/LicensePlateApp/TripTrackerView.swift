@@ -999,6 +999,7 @@ private struct SettingsView: View {
                     }
                 ),
                 placeholder: "Enter trip name",
+                isDisabled: !isTripCreator,
                 onSave: {
                     try? modelContext.save()
                 },
@@ -1070,6 +1071,7 @@ private struct SettingsView: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .disabled(!isTripCreator)
                 
                 Divider()
             }
@@ -1089,6 +1091,7 @@ private struct SettingsView: View {
                 .padding(.horizontal, 16)
             }
             .buttonStyle(.plain)
+            .disabled(!isTripCreator)
             
             Divider()
             
@@ -1107,6 +1110,7 @@ private struct SettingsView: View {
                 .padding(.horizontal, 16)
             }
             .buttonStyle(.plain)
+            .disabled(!isTripCreator)
         }
         .alert("End Trip", isPresented: $showEndTripConfirmation) {
             Button("Cancel", role: .cancel) {}
