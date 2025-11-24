@@ -469,6 +469,7 @@ class FirebaseAuthService: ObservableObject {
             isAuthenticated = true
         } else {
             // Create new user from Firebase auth
+          // If no internet, we fail and make a new user, that's not good.  THen they should be at minimum using the defaultUser name in DeviceIdentifier, instead of user anyways.  Why are we allowing multiple users locally? If you are not logged in
             let newUser = AppUser(
                 id: firebaseUID,
                 userName: email?.components(separatedBy: "@").first ?? "User",

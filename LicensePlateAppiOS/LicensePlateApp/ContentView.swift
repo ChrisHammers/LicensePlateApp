@@ -63,7 +63,7 @@ struct ContentView: View {
                         }
                         .textCase(nil)
                     } else {
-                        Section("Previous Trips") {
+                        Section("Trips") {
                             tripList
                         }
                         .textCase(nil)
@@ -329,13 +329,13 @@ private struct TripRow: View {
                 .background(Color.Theme.softBrown.opacity(0.2))
 
             HStack {
-                Label("Started", systemImage: "calendar")
+              Label(trip.startedAt != nil ? "Started" :"Created", systemImage: "calendar")
                     .font(.system(.footnote, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
 
                 Spacer()
 
-                Text(dateFormatter.string(from: trip.createdAt))
+              Text(dateFormatter.string(from: trip.startedAt != nil ? trip.startedAt! : trip.createdAt))
                     .font(.system(.footnote, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
             }

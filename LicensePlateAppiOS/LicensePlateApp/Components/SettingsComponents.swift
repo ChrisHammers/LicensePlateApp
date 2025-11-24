@@ -767,7 +767,7 @@ struct SettingPickerRow<T: Hashable & CaseIterable & RawRepresentable>: View whe
             
            
         }
-        .padding(.vertical, 6) //Not 100% sure why this is different than the rest for same result on top, but then is less on bottom
+        .padding(.vertical, 12) //Not 100% sure why this is different than the rest for same result on top, but then is less on bottom
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(maxHeight: .infinity, alignment: .center)
