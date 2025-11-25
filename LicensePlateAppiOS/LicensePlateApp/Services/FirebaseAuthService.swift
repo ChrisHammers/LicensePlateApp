@@ -240,9 +240,9 @@ class FirebaseAuthService: ObservableObject {
             let firebaseUID = result.user.uid
             
             // Check if we have a local user to migrate
-            if let localUser = currentUser, localUser.firebaseUID == nil {
+            if shouldMigrateUser(to: firebaseUID) {
                 // Migrate local user to Firebase
-                try await migrateLocalUserToFirebase(localUser: localUser, firebaseUID: firebaseUID)
+                try await migrateLocalUserToFirebase(localUser: currentUser!, firebaseUID: firebaseUID)
             } else {
                 // Load user from Firestore or create new
                 await loadOrCreateUserFromFirebase(firebaseUID: firebaseUID, email: email)
@@ -312,10 +312,10 @@ class FirebaseAuthService: ObservableObject {
             let firebaseUID = result.user.uid
             
             // Check if we have a local user to migrate
-            if let localUser = currentUser, localUser.firebaseUID == nil {
+            if shouldMigrateUser(to: firebaseUID) {
                 // Migrate local user to Firebase account
                 try await migrateLocalUserToFirebase(
-                    localUser: localUser,
+                    localUser: currentUser!,
                     firebaseUID: firebaseUID,
                     email: email,
                     userName: userName,
@@ -409,6 +409,37 @@ class FirebaseAuthService: ObservableObject {
     }
     
     // MARK: - User Migration (Local to Firebase)
+    
+    /// Determine if the current user should be migrated to a new Firebase account
+    /// Returns true if:
+    /// - User has no firebaseUID (truly local)
+    /// - User has a different firebaseUID (different account)
+    /// - User is anonymous and we're signing in with a real account
+    private func shouldMigrateUser(to firebaseUID: String) -> Bool {
+        guard let currentUser = currentUser else {
+            return false // No user to migrate
+        }
+        
+        // If no firebaseUID, definitely migrate (local-only user)
+        guard let existingFirebaseUID = currentUser.firebaseUID else {
+            return true
+        }
+        
+        // If firebaseUIDs match, don't migrate (already linked)
+        if existingFirebaseUID == firebaseUID {
+            return false
+        }
+        
+        // If firebaseUIDs differ, check if current user is anonymous
+        // If anonymous, we should migrate to the new account
+        if let firebaseUser = auth.currentUser, firebaseUser.isAnonymous {
+            return true
+        }
+        
+        // If firebaseUIDs differ and not anonymous, still migrate
+        // (user is switching accounts)
+        return true
+    }
     
     /// Migrate local user to Firebase account
     private func migrateLocalUserToFirebase(
@@ -734,9 +765,9 @@ class FirebaseAuthService: ObservableObject {
             let firebaseUID = authResult.user.uid
             
             // Check if user exists locally or in Firestore
-            if let existingUser = currentUser, existingUser.firebaseUID == nil {
+            if shouldMigrateUser(to: firebaseUID) {
                 // Migrate local user to Firebase
-                try await migrateLocalUserToFirebase(localUser: existingUser, firebaseUID: firebaseUID, email: googleUser.profile?.email)
+                try await migrateLocalUserToFirebase(localUser: currentUser!, firebaseUID: firebaseUID, email: googleUser.profile?.email)
             } else {
                 // Load or create user from Firebase
                 await loadOrCreateUserFromFirebase(firebaseUID: firebaseUID, email: googleUser.profile?.email)
@@ -858,9 +889,9 @@ class FirebaseAuthService: ObservableObject {
             let finalDisplayName = displayName?.isEmpty == false ? displayName : nil
             
             // Check if user exists locally or in Firestore
-            if let existingUser = currentUser, existingUser.firebaseUID == nil {
+            if shouldMigrateUser(to: firebaseUID) {
                 // Migrate local user to Firebase
-                try await migrateLocalUserToFirebase(localUser: existingUser, firebaseUID: firebaseUID, email: email)
+                try await migrateLocalUserToFirebase(localUser: currentUser!, firebaseUID: firebaseUID, email: email)
             } else {
                 // Load or create user from Firebase
                 await loadOrCreateUserFromFirebase(firebaseUID: firebaseUID, email: email)
@@ -1007,7 +1038,7 @@ class FirebaseAuthService: ObservableObject {
             } else {
                 throw AuthError.noUser
             }
-          return
+            return
         }
         
         guard let user = currentUser else {
@@ -1166,10 +1197,10 @@ class FirebaseAuthService: ObservableObject {
           let firebaseUID = firebaseUser.uid
           
           // Check if we already have a currentUser that needs to be linked
-          if let localUser = currentUser, localUser.firebaseUID == nil {
+          if shouldMigrateUser(to: firebaseUID) {
               // We have a local user that needs to be linked to this Firebase UID
               print("🔗 Linking existing local user to Firebase UID: \(firebaseUID)")
-              await linkLocalUserToFirebase(localUser: localUser, firebaseUID: firebaseUID)
+              await linkLocalUserToFirebase(localUser: currentUser!, firebaseUID: firebaseUID)
               return
           }
           
