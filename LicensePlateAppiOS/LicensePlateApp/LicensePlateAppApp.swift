@@ -80,12 +80,6 @@ struct LicensePlateAppApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(authService)
-                .task {
-                    // Initialize with local user (works offline)
-                    if !authService.isAuthenticated {
-                        try? await authService.signInAnonymously()
-                    }
-                }
         }
         .modelContainer(sharedModelContainer)
     }

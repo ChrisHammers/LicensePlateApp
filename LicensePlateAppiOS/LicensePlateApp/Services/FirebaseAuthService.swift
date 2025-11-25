@@ -418,13 +418,34 @@ class FirebaseAuthService: ObservableObject {
     }
     
     /// Link local user to Firebase (for anonymous auth)
-    private func linkLocalUserToFirebase(localUser: AppUser, firebaseUID: String) async {
-        guard let modelContext = modelContext else { return }
-        
-        let originalLocalID = localUser.id
-        localUser.localIDBeforeFirebase = originalLocalID
-        localUser.firebaseUID = firebaseUID
-        localUser.id = firebaseUID
+  private func linkLocalUserToFirebase(localUser: AppUser, firebaseUID: String) async {
+      guard let modelContext = modelContext else { return }
+      
+      // Prevent duplicate linking if already linked
+      if localUser.firebaseUID == firebaseUID {
+          print("⚠️ User already linked to this Firebase UID")
+          currentUser = localUser
+          isAuthenticated = true
+          return
+      }
+      
+      // Check if another user already has this firebaseUID
+      let descriptor = FetchDescriptor<AppUser>(
+          predicate: #Predicate<AppUser> { $0.id == firebaseUID }
+      )
+      
+      if let existingUser = try? modelContext.fetch(descriptor).first, existingUser != localUser {
+          print("⚠️ Another user already has this Firebase UID, merging...")
+          // Merge logic here if needed, or just use the existing user
+          currentUser = existingUser
+          isAuthenticated = true
+          return
+      }
+      
+      let originalLocalID = localUser.id
+      localUser.localIDBeforeFirebase = originalLocalID
+      localUser.firebaseUID = firebaseUID
+      localUser.id = firebaseUID
         
         // Update trips
         let tripDescriptor = FetchDescriptor<Trip>()
@@ -1085,19 +1106,57 @@ class FirebaseAuthService: ObservableObject {
     }
     
     // MARK: - Helper Methods
-    
-    private func handleAuthStateChange(_ user: User?) async {
-        if let firebaseUser = user {
-            guard let modelContext = modelContext else { return }
-            await loadOrCreateUserFromFirebase(firebaseUID: firebaseUser.uid, email: firebaseUser.email)
-        } else {
-            // Firebase signed out, but keep local user
-            if let localUser = currentUser {
-                localUser.needsSync = true
-                try? modelContext?.save()
-            }
-        }
-    }
+  private func handleAuthStateChange(_ user: User?) async {
+      if let firebaseUser = user {
+          guard let modelContext = modelContext else { return }
+          
+          // Extract firebaseUID to a local constant for use in predicates
+          let firebaseUID = firebaseUser.uid
+          
+          // Check if we already have a currentUser that needs to be linked
+          if let localUser = currentUser, localUser.firebaseUID == nil {
+              // We have a local user that needs to be linked to this Firebase UID
+              print("🔗 Linking existing local user to Firebase UID: \(firebaseUID)")
+              await linkLocalUserToFirebase(localUser: localUser, firebaseUID: firebaseUID)
+              return
+          }
+          
+          // Check if a user with this firebaseUID already exists locally
+          let descriptor = FetchDescriptor<AppUser>(
+              predicate: #Predicate<AppUser> { $0.id == firebaseUID }
+          )
+          
+          if let existingUser = try? modelContext.fetch(descriptor).first {
+              // User already exists locally with this firebaseUID
+              currentUser = existingUser
+              isAuthenticated = true
+              print("✅ Found existing user with Firebase UID: \(firebaseUID)")
+              return
+          }
+          
+          // Check if there's a local user (by deviceIdentifier) that should be linked
+          let deviceId = DeviceIdentifier.getDeviceIdentifier()
+          let deviceDescriptor = FetchDescriptor<AppUser>(
+              predicate: #Predicate<AppUser> { $0.deviceIdentifier == deviceId && $0.firebaseUID == nil }
+          )
+          
+          if let localUser = try? modelContext.fetch(deviceDescriptor).first {
+              // Found a local user for this device that needs linking
+              print("🔗 Linking device user to Firebase UID: \(firebaseUID)")
+              await linkLocalUserToFirebase(localUser: localUser, firebaseUID: firebaseUID)
+              return
+          }
+          
+          // No local user found, load or create from Firebase
+          await loadOrCreateUserFromFirebase(firebaseUID: firebaseUID, email: firebaseUser.email)
+      } else {
+          // Firebase signed out, but keep local user
+          if let localUser = currentUser {
+              localUser.needsSync = true
+              try? modelContext?.save()
+          }
+      }
+  }
     
     // MARK: - Firestore Serialization
     

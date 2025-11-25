@@ -16,7 +16,6 @@ import Speech
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Trip.createdAt, order: .reverse) private var trips: [Trip]
-    @Query private var users: [AppUser]
     @EnvironmentObject var authService: FirebaseAuthService
     @State private var path: [UUID] = []
     @State private var isShowingCreateSheet = false
@@ -92,28 +91,12 @@ struct ContentView: View {
             .task {
                 // Set model context for auth service
                 authService.setModelContext(modelContext)
-                
-                // Ensure user exists in SwiftData
-                if users.isEmpty {
-                    // Create default user with device-based username
-                    do {
-                        _ = try await authService.createDefaultUser(modelContext: modelContext)
-                    } catch {
-                        // Fallback to simple user creation if default creation fails
-                        let newUser = AppUser(
-                            id: UUID().uuidString,
-                            userName: "User",
-                            createdAt: .now
-                        )
-                        modelContext.insert(newUser)
-                        authService.currentUser = newUser
-                        authService.isAuthenticated = true
-                        try? modelContext.save()
-                    }
-                } else if let firstUser = users.first {
-                    authService.currentUser = firstUser
-                    authService.isAuthenticated = true
-                }
+              
+              
+                  // Initialize with local user (works offline)
+                  if !authService.isAuthenticated {
+                      try? await authService.signInAnonymously()
+                  }
             }
             .overlay {
                 if authService.showUsernameConflictDialog {
