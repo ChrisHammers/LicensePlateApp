@@ -148,19 +148,36 @@ class FirebaseAuthService: ObservableObject {
     // MARK: - Username Uniqueness Checking
     
     /// Check if username is taken locally (always works offline)
-    func isUsernameTakenLocally(_ username: String) async throws -> Bool {
+    /// - Parameters:
+    ///   - username: The username to check
+    ///   - excludingUserId: Optional user ID to exclude from the check (e.g., current user's ID)
+    func isUsernameTakenLocally(_ username: String, excludingUserId: String? = nil) async throws -> Bool {
         guard let modelContext = modelContext else { return false }
         let descriptor = FetchDescriptor<AppUser>(
             predicate: #Predicate<AppUser> { $0.userName == username }
         )
         let users = try? modelContext.fetch(descriptor)
-        return !(users?.isEmpty ?? true)
+        
+        guard let users = users, !users.isEmpty else {
+            return false
+        }
+        
+        // If we have a user ID to exclude, filter it out
+        if let excludingID = excludingUserId {
+            let otherUsers = users.filter { $0.id != excludingID }
+            return !otherUsers.isEmpty
+        }
+        
+        return true
     }
     
     /// Check if username is taken (checks local first, then Firebase if online)
-    func isUsernameTaken(_ username: String) async throws -> Bool {
+    /// - Parameters:
+    ///   - username: The username to check
+    ///   - excludingUserId: Optional user ID to exclude from the check (e.g., current user's ID)
+    func isUsernameTaken(_ username: String, excludingUserId: String? = nil) async throws -> Bool {
         // Always check local first (works offline)
-        if try await isUsernameTakenLocally(username) {
+        if try await isUsernameTakenLocally(username, excludingUserId: excludingUserId) {
             return true
         }
         
@@ -172,8 +189,23 @@ class FirebaseAuthService: ObservableObject {
         do {
             let usersRef = db.collection("users")
             let query = usersRef.whereField("userName", isEqualTo: username).limit(to: 1)
+            
+            // If we have a firebaseUID to exclude, we need to check the results manually
+            // since Firestore doesn't support != in whereField
             let snapshot = try await query.getDocuments()
-            return !snapshot.documents.isEmpty
+            
+            // If no results, username is available
+            guard !snapshot.documents.isEmpty else {
+                return false
+            }
+            
+            // If we have a user ID to exclude, check if the only match is that user
+            if let excludingUID = excludingUserId {
+                let matchingDocs = snapshot.documents.filter { $0.documentID != excludingUID }
+                return !matchingDocs.isEmpty
+            }
+            
+            return true
         } catch {
             // If Firebase check fails, fall back to local-only
             print("⚠️ Firebase username check failed, using local-only: \(error)")
@@ -272,9 +304,25 @@ class FirebaseAuthService: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         
-        // Check username uniqueness (works offline for local, online for Firebase)
-        guard try await !isUsernameTaken(userName) else {
-            throw AuthError.usernameTaken
+        // Security check: If we have a current user, verify they should be allowed to use this username
+        if let user = currentUser {
+            // Security: If username matches current user's username, allow it (they're migrating)
+            // But if it's different and taken, we need to check more carefully
+            if userName == user.userName {
+                // Same username as current user - this is fine, they're claiming their own username
+                // No need to check uniqueness since it's their own username
+            } else {
+                // Different username - check if it's taken by someone else
+                // Exclude current user from the check
+                guard try await !isUsernameTaken(userName, excludingUserId: user.id) else {
+                    throw AuthError.usernameTaken
+                }
+            }
+        } else {
+            // No current user, do normal check
+            guard try await !isUsernameTaken(userName) else {
+                throw AuthError.usernameTaken
+            }
         }
         
         guard isOnline else {
