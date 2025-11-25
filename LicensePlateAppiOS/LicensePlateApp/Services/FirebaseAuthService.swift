@@ -261,7 +261,14 @@ class FirebaseAuthService: ObservableObject {
     }
     
     /// Create account with email and password
-    func createAccount(email: String, password: String, userName: String) async throws {
+    func createAccount(
+        email: String,
+        password: String,
+        userName: String,
+        firstName: String? = nil,
+        lastName: String? = nil,
+        phoneNumber: String? = nil
+    ) async throws {
         isLoading = true
         defer { isLoading = false }
         
@@ -280,7 +287,10 @@ class FirebaseAuthService: ObservableObject {
             let newUser = AppUser(
                 id: localID,
                 userName: userName,
+                firstName: firstName,
+                lastName: lastName,
                 email: email,
+                phoneNumber: phoneNumber,
                 deviceIdentifier: DeviceIdentifier.getDeviceIdentifier(),
                 isUsernameManuallyChanged: true,
                 needsSync: true
@@ -304,13 +314,24 @@ class FirebaseAuthService: ObservableObject {
             // Check if we have a local user to migrate
             if let localUser = currentUser, localUser.firebaseUID == nil {
                 // Migrate local user to Firebase account
-                try await migrateLocalUserToFirebase(localUser: localUser, firebaseUID: firebaseUID, email: email, userName: userName)
+                try await migrateLocalUserToFirebase(
+                    localUser: localUser,
+                    firebaseUID: firebaseUID,
+                    email: email,
+                    userName: userName,
+                    firstName: firstName,
+                    lastName: lastName,
+                    phoneNumber: phoneNumber
+                )
             } else {
                 // Create new user with Firebase UID
                 let newUser = AppUser(
                     id: firebaseUID,
                     userName: userName,
+                    firstName: firstName,
+                    lastName: lastName,
                     email: email,
+                    phoneNumber: phoneNumber,
                     deviceIdentifier: DeviceIdentifier.getDeviceIdentifier(),
                     isUsernameManuallyChanged: true,
                     firebaseUID: firebaseUID
@@ -394,7 +415,10 @@ class FirebaseAuthService: ObservableObject {
         localUser: AppUser,
         firebaseUID: String,
         email: String? = nil,
-        userName: String? = nil
+        userName: String? = nil,
+        firstName: String? = nil,
+        lastName: String? = nil,
+        phoneNumber: String? = nil
     ) async throws {
         guard let modelContext = modelContext else {
             throw AuthError.notImplemented
@@ -413,6 +437,15 @@ class FirebaseAuthService: ObservableObject {
         if let userName = userName {
             localUser.userName = userName
             localUser.isUsernameManuallyChanged = true
+        }
+        if let firstName = firstName {
+            localUser.firstName = firstName
+        }
+        if let lastName = lastName {
+            localUser.lastName = lastName
+        }
+        if let phoneNumber = phoneNumber {
+            localUser.phoneNumber = phoneNumber
         }
         
         // Update all trips that reference the old user ID

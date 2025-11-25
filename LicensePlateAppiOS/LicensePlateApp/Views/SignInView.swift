@@ -11,6 +11,9 @@ struct SignInView: View {
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var userName = ""
+    @State private var firstName = ""
+    @State private var lastName = ""
+    @State private var phoneNumber = ""
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var isLoading = false
@@ -54,6 +57,32 @@ struct SignInView: View {
                                         .autocapitalization(.none)
                                         .autocorrectionDisabled()
                                 }
+                                
+                                // First Name field
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("First Name")
+                                        .font(.system(.body, design: .rounded))
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                    
+                                    TextField("Enter your first name", text: $firstName)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(.body, design: .rounded))
+                                        .autocapitalization(.words)
+                                }
+                                
+                                // Last Name field
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Last Name")
+                                        .font(.system(.body, design: .rounded))
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                    
+                                    TextField("Enter your last name", text: $lastName)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(.body, design: .rounded))
+                                        .autocapitalization(.words)
+                                }
                             }
                             
                             // Email field
@@ -69,6 +98,22 @@ struct SignInView: View {
                                     .keyboardType(.emailAddress)
                                     .autocapitalization(.none)
                                     .autocorrectionDisabled()
+                            }
+                            
+                            if !isSignInMode {
+                                // Phone Number field (only for create account)
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Phone Number (Optional)")
+                                        .font(.system(.body, design: .rounded))
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                    
+                                    TextField("Enter your phone number", text: $phoneNumber)
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(.body, design: .rounded))
+                                        .keyboardType(.phonePad)
+                                        .autocapitalization(.none)
+                                }
                             }
                             
                             // Password field
@@ -130,8 +175,28 @@ struct SignInView: View {
                             // Toggle between sign in and create account
                             Button {
                                 withAnimation {
+                                    if isSignInMode {
+                                        // Switching to create account - clear password fields first, then autofill
+                                        password = ""
+                                        confirmPassword = ""
+                                        email = ""
+                                        // Autofill from current user
+                                        if let currentUser = authService.currentUser {
+                                            userName = currentUser.userName
+                                            firstName = currentUser.firstName ?? ""
+                                            lastName = currentUser.lastName ?? ""
+                                            phoneNumber = currentUser.phoneNumber ?? ""
+                                        }
+                                    } else {
+                                        // Switching to sign in - clear all fields
+                                        password = ""
+                                        confirmPassword = ""
+                                        userName = ""
+                                        firstName = ""
+                                        lastName = ""
+                                        phoneNumber = ""
+                                    }
                                     isSignInMode.toggle()
-                                    clearForm()
                                 }
                             } label: {
                                 Text(isSignInMode ? "Don't have an account? Create one" : "Already have an account? Sign in")
@@ -232,6 +297,9 @@ struct SignInView: View {
         password = ""
         confirmPassword = ""
         userName = ""
+        firstName = ""
+        lastName = ""
+        phoneNumber = ""
         errorMessage = ""
     }
     
@@ -276,7 +344,14 @@ struct SignInView: View {
         isLoading = true
         Task {
             do {
-                try await authService.createAccount(email: email, password: password, userName: userName)
+                try await authService.createAccount(
+                    email: email,
+                    password: password,
+                    userName: userName,
+                    firstName: firstName.isEmpty ? nil : firstName,
+                    lastName: lastName.isEmpty ? nil : lastName,
+                    phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber
+                )
                 await MainActor.run {
                     isLoading = false
                     authService.showSignInSheet = false
