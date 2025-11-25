@@ -268,9 +268,9 @@ class FirebaseAuthService: ObservableObject {
   /// Check if the current user was previously signed in to Firebase
   var wasPreviouslySignedIn: Bool {
       guard let user = currentUser else { return false }
-      // If they have localIDBeforeFirebase, they were migrated from local to Firebase (signed in)
-      // If they have an email but no firebaseUID, they were likely signed in and then signed out
-      return user.localIDBeforeFirebase != nil || (user.email != nil && user.firebaseUID == nil)
+      // If they have a firebaseUID but are not authenticated, they were signed out
+      // This is the primary indicator since we now keep firebaseUID on sign out
+      return user.firebaseUID != nil && !isAuthenticated
   }
     
     // MARK: - Authentication Methods (Offline-First)
@@ -558,22 +558,23 @@ class FirebaseAuthService: ObservableObject {
             }
         }
         
-        // Update local user to disconnect from Firebase
+        // Update local user to mark as signed out, but KEEP firebaseUID
+        // This prevents creating duplicate accounts when app restarts
         if let user = currentUser {
-            // Store the local ID before clearing Firebase UID
-            if user.firebaseUID != nil {
-                user.localIDBeforeFirebase = user.id
+            // Store the local ID before clearing (if needed for migration tracking)
+            if user.firebaseUID != nil && user.localIDBeforeFirebase == nil {
+                // Only set if not already set (preserve original local ID)
+                if user.id != user.firebaseUID {
+                    user.localIDBeforeFirebase = user.id
+                }
             }
             
-            // Clear Firebase authentication but keep local user
-            user.firebaseUID = nil
+            // DON'T clear firebaseUID - keep it to prevent duplicate accounts
+            // Just clear linked platforms and sync status
             user.linkedPlatforms.removeAll()
-            user.needsSync = false // No longer needs sync since we're local-only
-            user.lastSyncedToFirebase = nil
-            
-            // If the user's ID was a Firebase UID, we need to generate a new local ID
-            // But we should keep the same user object, so we'll keep the ID as is
-            // The user will get a new Firebase UID if they sign in again
+            user.needsSync = false
+            // Keep firebaseUID and lastSyncedToFirebase for reference
+            // This allows us to detect they were previously signed in
             
             try modelContext.save()
         }
@@ -723,14 +724,31 @@ class FirebaseAuthService: ObservableObject {
     private func loadOrCreateUserFromFirebase(firebaseUID: String, email: String?) async {
         guard let modelContext = modelContext else { return }
         
-        // Check if user exists locally
-        let descriptor = FetchDescriptor<AppUser>(
+        // Check if user exists locally by id first (most common case)
+        let descriptorById = FetchDescriptor<AppUser>(
             predicate: #Predicate<AppUser> { $0.id == firebaseUID }
         )
         
-        if let existingUser = try? modelContext.fetch(descriptor).first {
+        if let existingUser = try? modelContext.fetch(descriptorById).first {
             currentUser = existingUser
-          print("Loaded existing user \(currentUser?.firebaseUID ?? "unknown")--\(currentUser?.userName ?? "unknown")")
+            print("Loaded existing user \(currentUser?.firebaseUID ?? "unknown")--\(currentUser?.userName ?? "unknown")")
+            isAuthenticated = true
+            return
+        }
+        
+        // Also check by firebaseUID field (for users who signed out but kept firebaseUID)
+        let descriptorByFirebaseUID = FetchDescriptor<AppUser>(
+            predicate: #Predicate<AppUser> { $0.firebaseUID == firebaseUID }
+        )
+        
+        if let existingUser = try? modelContext.fetch(descriptorByFirebaseUID).first {
+            // Update the user's id to match firebaseUID if it doesn't already
+            if existingUser.id != firebaseUID {
+                existingUser.id = firebaseUID
+                try? modelContext.save()
+            }
+            currentUser = existingUser
+            print("Loaded existing user by firebaseUID field \(currentUser?.firebaseUID ?? "unknown")--\(currentUser?.userName ?? "unknown")")
             isAuthenticated = true
             return
         }
@@ -808,6 +826,8 @@ class FirebaseAuthService: ObservableObject {
     
     /// Sync local user to Firebase (for default users)
     private func syncLocalUserToFirebase(_ user: AppUser) async throws {
+        // Don't create new anonymous account if user already has firebaseUID (was signed out)
+        // This prevents duplicate accounts when app restarts after sign out
         guard isOnline, user.firebaseUID == nil else { return }
         
         // Try anonymous Firebase auth
@@ -1388,15 +1408,29 @@ class FirebaseAuthService: ObservableObject {
           }
           
           // Check if a user with this firebaseUID already exists locally
-          let descriptor = FetchDescriptor<AppUser>(
+          // Check by id first (most common case)
+          let descriptorById = FetchDescriptor<AppUser>(
               predicate: #Predicate<AppUser> { $0.id == firebaseUID }
           )
           
-          if let existingUser = try? modelContext.fetch(descriptor).first {
-              // User already exists locally with this firebaseUID
+          if let existingUser = try? modelContext.fetch(descriptorById).first {
+              // User already exists locally with this firebaseUID as their id
               currentUser = existingUser
               isAuthenticated = true
               print("✅ Found existing user with Firebase UID: \(firebaseUID)")
+              return
+          }
+          
+          // Also check by firebaseUID field (for users who signed out but kept firebaseUID)
+          let descriptorByFirebaseUID = FetchDescriptor<AppUser>(
+              predicate: #Predicate<AppUser> { $0.firebaseUID == firebaseUID }
+          )
+          
+          if let existingUser = try? modelContext.fetch(descriptorByFirebaseUID).first {
+              // User already exists locally with this firebaseUID stored in firebaseUID field
+              currentUser = existingUser
+              isAuthenticated = true
+              print("✅ Found existing user with Firebase UID in firebaseUID field: \(firebaseUID)")
               return
           }
           
