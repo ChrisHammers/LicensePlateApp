@@ -300,12 +300,12 @@ struct UserProfileView: View {
                                       Image(systemName: "arrow.right")
                                           .font(.system(size: 14, weight: .semibold))
                                   }
-                                  .foregroundStyle(Color.Theme.primaryBlue)
+                                  .foregroundStyle(Color.red)
                                   .padding(.vertical, 12)
                                   .padding(.horizontal, 16)
                                   .background(
                                       RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                          .stroke(Color.Theme.primaryBlue, lineWidth: 2)
+                                          .stroke(Color.red, lineWidth: 2)
                                   )
                               }
                           }

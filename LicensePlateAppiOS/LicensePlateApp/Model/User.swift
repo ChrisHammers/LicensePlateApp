@@ -39,6 +39,19 @@ enum AvatarType: String, Codable, CaseIterable {
     }
 }
 
+// Login location structure
+struct LoginLocation: Codable {
+    var latitude: Double
+    var longitude: Double
+    var timestamp: Date
+    
+    init(latitude: Double, longitude: Double, timestamp: Date = .now) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.timestamp = timestamp
+    }
+}
+
 @Model
 final class AppUser {
     @Attribute(.unique) var id: String // Primary ID - Firebase UID if authenticated, local UUID if not
@@ -74,6 +87,10 @@ final class AppUser {
     var needsSync: Bool = false // Flag to sync when online
     var localIDBeforeFirebase: String? // Original local ID before Firebase migration
     
+    // Login tracking
+    var lastDateLoggedIn: Date?
+    var lastLoginLocation: [LoginLocation] // Array of last 5 login locations
+    
     init(
         id: String = UUID().uuidString,
         userName: String = "User",
@@ -94,7 +111,9 @@ final class AppUser {
         firebaseUID: String? = nil,
         lastSyncedToFirebase: Date? = nil,
         needsSync: Bool = false,
-        localIDBeforeFirebase: String? = nil
+        localIDBeforeFirebase: String? = nil,
+        lastDateLoggedIn: Date? = nil,
+        lastLoginLocation: [LoginLocation] = []
     ) {
         self.id = id
         self.userName = userName
@@ -116,6 +135,8 @@ final class AppUser {
         self.lastSyncedToFirebase = lastSyncedToFirebase
         self.needsSync = needsSync
         self.localIDBeforeFirebase = localIDBeforeFirebase
+        self.lastDateLoggedIn = lastDateLoggedIn
+        self.lastLoginLocation = lastLoginLocation
     }
     
     func updateUserName(_ newName: String, isManual: Bool = true) {

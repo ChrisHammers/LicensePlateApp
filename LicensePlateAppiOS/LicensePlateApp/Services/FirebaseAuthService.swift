@@ -16,6 +16,7 @@ import AuthenticationServices
 import GoogleSignIn
 import Network
 import CryptoKit
+import CoreLocation
 
 /// Network monitoring for offline detection
 @MainActor
@@ -58,6 +59,12 @@ class FirebaseAuthService: ObservableObject {
     private var modelContext: ModelContext?
     private var authStateListener: AuthStateDidChangeListenerHandle?
     private let networkMonitor = NetworkMonitor()
+    
+    // Store location delegates to prevent deallocation
+    var activeLocationDelegates: [OneTimeLocationDelegate] = []
+    
+    // Track last login tracking time to prevent duplicates
+    private var lastLoginTrackingTime: Date?
     
     init() {
         // Observe auth state changes
@@ -298,6 +305,7 @@ class FirebaseAuthService: ObservableObject {
         do {
             let result = try await auth.signIn(withEmail: email, password: password)
             await loadUserFromFirebase(result.user)
+            // updateLoginTracking is called in loadUserFromFirebase
         } catch {
             if let error = error as NSError? {
                 switch error.code {
@@ -358,16 +366,25 @@ class FirebaseAuthService: ObservableObject {
                     try await saveUserDataToFirestore(currentUser)
                     
                     isAuthenticated = true
+                    
+                    // Update login tracking
+                    await updateLoginTracking()
                 } catch {
                     // If linking fails (email already in use), create new account
                     try auth.signOut()
                     let result = try await auth.createUser(withEmail: email, password: password)
                     await createNewUserFromFirebase(result.user, email: email, userName: userName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber)
+                    
+                    // Update login tracking
+                    await updateLoginTracking()
                 }
             } else {
                 // Not anonymous, create new account
                 let result = try await auth.createUser(withEmail: email, password: password)
                 await createNewUserFromFirebase(result.user, email: email, userName: userName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber)
+                
+                // Update login tracking
+                await updateLoginTracking()
             }
         } catch {
             if let error = error as NSError? {
@@ -444,9 +461,12 @@ class FirebaseAuthService: ObservableObject {
                      if let firebaseUser = auth.currentUser, firebaseUser.isAnonymous {
                          let result = try await firebaseUser.link(with: credential)
                          await updateUserFromOAuth(result.user, email: googleUser.profile?.email, displayName: googleUser.profile?.name)
+                         // Update login tracking
+                         await updateLoginTracking()
                      } else {
                 let authResult = try await auth.signIn(with: credential)
                 await loadUserFromFirebase(authResult.user)
+                // updateLoginTracking is called in loadUserFromFirebase
             }
         } catch {
             if let error = error as NSError? {
@@ -509,9 +529,12 @@ class FirebaseAuthService: ObservableObject {
                      if let firebaseUser = auth.currentUser, firebaseUser.isAnonymous {
                          let result = try await firebaseUser.link(with: credential)
                          await updateUserFromOAuth(result.user, email: email, displayName: finalDisplayName)
+                         // Update login tracking
+                         await updateLoginTracking()
                      } else {
                 let authResult = try await auth.signIn(with: credential)
                 await loadUserFromFirebase(authResult.user)
+                // updateLoginTracking is called in loadUserFromFirebase
             }
         } catch {
             if let error = error as NSError? {
@@ -775,6 +798,82 @@ class FirebaseAuthService: ObservableObject {
          usernameConflictResolver?(newUsername)
      }
     
+    /// Update login tracking (date and location if available)
+    private func updateLoginTracking() async {
+        guard let user = currentUser,
+              let modelContext = modelContext else {
+            return
+        }
+        
+        // Debounce: Only track if it's been more than 5 seconds since last tracking
+        if let lastTracking = lastLoginTrackingTime,
+           Date().timeIntervalSince(lastTracking) < 5.0 {
+            // Too soon since last tracking, skip
+            return
+        }
+        
+        // Update last tracking time
+        lastLoginTrackingTime = .now
+        
+        // Always update last login date
+        user.lastDateLoggedIn = .now
+        
+        // Check location permission and update location if available
+        let locationManager = CLLocationManager()
+        let authStatus = locationManager.authorizationStatus
+        
+        if authStatus == .authorizedWhenInUse || authStatus == .authorizedAlways {
+            // Location is authorized, try to get current location
+            if let location = await getCurrentLocation() {
+                let loginLocation = LoginLocation(
+                    latitude: location.coordinate.latitude,
+                    longitude: location.coordinate.longitude
+                )
+                
+                // Add new location and keep only last 5
+                user.lastLoginLocation.append(loginLocation)
+                if user.lastLoginLocation.count > 5 {
+                    user.lastLoginLocation.removeFirst()
+                }
+            }
+        }
+        // If location not authorized, silently skip (don't ask user)
+        
+        try? modelContext.save()
+        user.needsSync = true
+        
+        // Sync to Firestore if online
+        if isOnline {
+            Task {
+                try? await saveUserDataToFirestore(user)
+            }
+        }
+    }
+    
+    /// Get current location (one-time request)
+    private func getCurrentLocation() async -> CLLocation? {
+        return await withCheckedContinuation { continuation in
+            let locationManager = CLLocationManager()
+            let authStatus = locationManager.authorizationStatus
+            
+            guard authStatus == .authorizedWhenInUse || authStatus == .authorizedAlways else {
+                continuation.resume(returning: nil)
+                return
+            }
+            
+            // Create delegate with reference to self for cleanup
+            let delegate = OneTimeLocationDelegate(service: self) { location in
+                continuation.resume(returning: location)
+            }
+            
+            // Store delegate to keep it alive
+            activeLocationDelegates.append(delegate)
+            
+            locationManager.delegate = delegate
+            locationManager.requestLocation()
+        }
+    }
+    
     // MARK: - Helper Methods
     
     private func handleAuthStateChange(_ user: User?) async {
@@ -807,6 +906,9 @@ class FirebaseAuthService: ObservableObject {
             currentUser = existingUser
             isAuthenticated = true
             
+            // Update login tracking
+            await updateLoginTracking()
+            
             // Load from Firestore to get latest data
             Task {
                 if let firestoreUser = try? await loadUserDataFromFirestore(userId: firebaseUID) {
@@ -828,9 +930,15 @@ class FirebaseAuthService: ObservableObject {
                 try? modelContext.save()
                 currentUser = firestoreUser
                 isAuthenticated = true
+                
+                // Update login tracking
+                await updateLoginTracking()
             } else {
                 // Create new user from Firebase auth
                 await createNewUserFromFirebase(firebaseUser, email: firebaseUser.email, userName: nil, firstName: nil, lastName: nil, phoneNumber: nil)
+                
+                // Update login tracking
+                await updateLoginTracking()
             }
         }
     }
@@ -953,6 +1061,18 @@ class FirebaseAuthService: ObservableObject {
         if let deviceIdentifier = user.deviceIdentifier {
             data["deviceIdentifier"] = deviceIdentifier
         }
+        if let lastDateLoggedIn = user.lastDateLoggedIn {
+            data["lastDateLoggedIn"] = Timestamp(date: lastDateLoggedIn)
+        }
+        if !user.lastLoginLocation.isEmpty {
+            data["lastLoginLocation"] = user.lastLoginLocation.map { location in
+                [
+                    "latitude": location.latitude,
+                    "longitude": location.longitude,
+                    "timestamp": Timestamp(date: location.timestamp)
+                ]
+            }
+        }
         
         if !user.linkedPlatforms.isEmpty {
             data["linkedPlatforms"] = user.linkedPlatforms.map { platform in
@@ -1001,6 +1121,36 @@ class FirebaseAuthService: ObservableObject {
             lastUpdated = timestamp.dateValue()
         } else {
             lastUpdated = .now
+        }
+        
+        let lastDateLoggedIn: Date?
+        if let timestamp = data["lastDateLoggedIn"] as? Timestamp {
+            lastDateLoggedIn = timestamp.dateValue()
+        } else {
+            lastDateLoggedIn = nil
+        }
+        
+        var lastLoginLocation: [LoginLocation] = []
+        if let locationsArray = data["lastLoginLocation"] as? [[String: Any]] {
+            for locationData in locationsArray {
+                guard let latitude = locationData["latitude"] as? Double,
+                      let longitude = locationData["longitude"] as? Double else {
+                    continue
+                }
+                
+                let timestamp: Date
+                if let ts = locationData["timestamp"] as? Timestamp {
+                    timestamp = ts.dateValue()
+                } else {
+                    timestamp = .now
+                }
+                
+                lastLoginLocation.append(LoginLocation(
+                    latitude: latitude,
+                    longitude: longitude,
+                    timestamp: timestamp
+                ))
+            }
         }
         
         let avatarColor: AvatarColor
@@ -1067,7 +1217,9 @@ class FirebaseAuthService: ObservableObject {
             linkedPlatforms: linkedPlatforms,
             firebaseUID: id,
             lastSyncedToFirebase: .now,
-            needsSync: false
+            needsSync: false,
+            lastDateLoggedIn: lastDateLoggedIn,
+            lastLoginLocation: lastLoginLocation
         )
     }
     
@@ -1102,6 +1254,31 @@ class FirebaseAuthService: ObservableObject {
         }
         
         return result
+    }
+}
+
+// MARK: - One-Time Location Helper
+ class OneTimeLocationDelegate: NSObject, CLLocationManagerDelegate {
+    private weak var service: FirebaseAuthService?
+    private let completion: (CLLocation?) -> Void
+    
+    init(service: FirebaseAuthService, completion: @escaping (CLLocation?) -> Void) {
+        self.service = service
+        self.completion = completion
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        manager.stopUpdatingLocation()
+        completion(locations.first)
+        // Remove self from service's delegate array
+        service?.activeLocationDelegates.removeAll { $0 === self }
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        manager.stopUpdatingLocation()
+        completion(nil)
+        // Remove self from service's delegate array
+        service?.activeLocationDelegates.removeAll { $0 === self }
     }
 }
 
