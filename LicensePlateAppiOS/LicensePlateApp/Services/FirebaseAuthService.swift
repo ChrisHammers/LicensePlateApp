@@ -264,6 +264,14 @@ class FirebaseAuthService: ObservableObject {
       }
       return firebaseUser.isAnonymous
   }
+  
+  /// Check if the current user was previously signed in to Firebase
+  var wasPreviouslySignedIn: Bool {
+      guard let user = currentUser else { return false }
+      // If they have localIDBeforeFirebase, they were migrated from local to Firebase (signed in)
+      // If they have an email but no firebaseUID, they were likely signed in and then signed out
+      return user.localIDBeforeFirebase != nil || (user.email != nil && user.firebaseUID == nil)
+  }
     
     // MARK: - Authentication Methods (Offline-First)
     

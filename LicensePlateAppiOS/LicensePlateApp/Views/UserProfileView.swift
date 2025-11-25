@@ -214,6 +214,15 @@ struct UserProfileView: View {
                                       Text("Your account is synced to the cloud")
                                           .font(.system(.caption, design: .rounded))
                                           .foregroundStyle(Color.Theme.softBrown)
+                                  } else if authService.wasPreviouslySignedIn {
+                                      Text("Signed Out")
+                                          .font(.system(.body, design: .rounded))
+                                          .fontWeight(.semibold)
+                                          .foregroundStyle(Color.Theme.primaryBlue)
+                                      
+                                      Text("You are signed out. Sign in to sync your account and access all features")
+                                          .font(.system(.caption, design: .rounded))
+                                          .foregroundStyle(Color.Theme.softBrown)
                                   } else if authService.isAnonymousUser || user.firebaseUID != nil {
                                       Text("Anonymous Account")
                                           .font(.system(.body, design: .rounded))
