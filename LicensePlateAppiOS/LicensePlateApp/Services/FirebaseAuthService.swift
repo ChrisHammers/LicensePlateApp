@@ -77,6 +77,39 @@ class FirebaseAuthService: ObservableObject {
         self.modelContext = context
     }
     
+    /// Initialize authentication state from Firebase Auth (call on app startup)
+    func initializeAuthState(modelContext: ModelContext) async {
+        self.modelContext = modelContext
+        
+        // Check if Firebase Auth already has a user (persisted session)
+        if let firebaseUser = auth.currentUser {
+            // Firebase has a user, load it
+            await handleAuthStateChange(firebaseUser)
+        } else {
+            // No Firebase user, check for local user
+            let deviceId = DeviceIdentifier.getDeviceIdentifier()
+            let descriptor = FetchDescriptor<AppUser>(
+                predicate: #Predicate<AppUser> { $0.deviceIdentifier == deviceId }
+            )
+            
+            if let existingUser = try? modelContext.fetch(descriptor).first {
+                // Found local user, set as current
+                currentUser = existingUser
+                isAuthenticated = true
+                
+                // Try to sync if online (non-blocking)
+                if isOnline && existingUser.needsSync {
+                    Task {
+                        try? await syncUserToFirebase(existingUser)
+                    }
+                }
+            } else {
+                // No user at all, create anonymous one
+                try? await signInAnonymously()
+            }
+        }
+    }
+    
     // MARK: - Network Status
     
     /// Check if device is online
@@ -241,6 +274,19 @@ class FirebaseAuthService: ObservableObject {
         
         guard let modelContext = modelContext else {
             throw AuthError.notImplemented
+        }
+        
+        // Check if Firebase already has a user (shouldn't happen, but safety check)
+        if let existingFirebaseUser = auth.currentUser {
+            // Firebase already has a user, just link the local user to it
+            let localUser: AppUser
+            if let currentUser = currentUser {
+                localUser = currentUser
+            } else {
+                localUser = try await createDefaultUser(modelContext: modelContext)
+            }
+            await linkLocalUserToFirebase(localUser: localUser, firebaseUID: existingFirebaseUser.uid)
+            return
         }
         
         // Always create local user first (works offline)
@@ -693,7 +739,7 @@ class FirebaseAuthService: ObservableObject {
           // If no internet, we fail and make a new user, that's not good.  THen they should be at minimum using the defaultUser name in DeviceIdentifier, instead of user anyways.  Why are we allowing multiple users locally? If you are not logged in
             let newUser = AppUser(
                 id: firebaseUID,
-                userName: email?.components(separatedBy: "@").first ?? "User",
+                userName: email?.components(separatedBy: "@").first ?? generateDefaultUsername,
                 email: email,
                 firebaseUID: firebaseUID
             )

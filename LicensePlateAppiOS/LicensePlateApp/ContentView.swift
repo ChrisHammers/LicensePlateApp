@@ -89,14 +89,8 @@ struct ContentView: View {
                     .environmentObject(authService)
             }
             .task {
-                // Set model context for auth service
-                authService.setModelContext(modelContext)
-              
-              
-                  // Initialize with local user (works offline)
-                  if !authService.isAuthenticated {
-                      try? await authService.signInAnonymously()
-                  }
+                // Initialize authentication state (checks Firebase Auth first, then local)
+                await authService.initializeAuthState(modelContext: modelContext)
             }
             .overlay {
                 if authService.showUsernameConflictDialog {
