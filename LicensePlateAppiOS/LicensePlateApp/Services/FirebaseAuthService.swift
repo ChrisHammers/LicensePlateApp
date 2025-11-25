@@ -375,6 +375,8 @@ class FirebaseAuthService: ObservableObject {
                             lastName: lastName,
                             phoneNumber: phoneNumber
                         )
+                        // Ensure authentication state is set (migrateLocalUserToFirebase sets it, but be explicit)
+                        isAuthenticated = true
                     }
                 } catch {
                     // If linking fails (e.g., email already in use), create new account
@@ -612,6 +614,7 @@ class FirebaseAuthService: ObservableObject {
         try await saveUserDataToFirestore(localUser)
         
         currentUser = localUser
+        isAuthenticated = true
     }
     
     /// Link local user to Firebase (for anonymous auth)
@@ -1309,6 +1312,15 @@ class FirebaseAuthService: ObservableObject {
           
           // Extract firebaseUID to a local constant for use in predicates
           let firebaseUID = firebaseUser.uid
+          
+          // First check if currentUser already matches this firebaseUID
+          if let currentUser = currentUser, currentUser.id == firebaseUID || currentUser.firebaseUID == firebaseUID {
+              // Current user already matches this Firebase UID - no migration needed
+              // Just ensure authentication state is set
+              isAuthenticated = true
+              print("✅ Current user already matches Firebase UID: \(firebaseUID)")
+              return
+          }
           
           // Check if we already have a currentUser that needs to be linked
           if shouldMigrateUser(to: firebaseUID) {
