@@ -34,8 +34,9 @@ class NetworkMonitor: ObservableObject {
     }
 }
 
-/// Firebase Authentication Service with offline-first architecture
-/// The app works completely offline - Firebase is used for sync when online
+/// Firebase Authentication Service - Simplified flow
+/// 1. On app startup: Create default user, sign in anonymously if online
+/// 2. User can upgrade anonymous account by linking credentials (email/password, OAuth)
 @MainActor
 class FirebaseAuthService: ObservableObject {
     @Published var currentUser: AppUser?
@@ -59,7 +60,7 @@ class FirebaseAuthService: ObservableObject {
     private let networkMonitor = NetworkMonitor()
     
     init() {
-        // Observe auth state changes (only affects online sync)
+        // Observe auth state changes
         authStateListener = auth.addStateDidChangeListener { [weak self] auth, user in
             Task { @MainActor in
                 await self?.handleAuthStateChange(user)
@@ -77,89 +78,72 @@ class FirebaseAuthService: ObservableObject {
         self.modelContext = context
     }
     
-    /// Initialize authentication state from Firebase Auth (call on app startup)
+    // MARK: - Network Status
+    
+    var isOnline: Bool {
+        networkMonitor.isConnected
+    }
+    
+    // MARK: - Initialization
+    
+    /// Initialize authentication state (call on app startup)
     func initializeAuthState(modelContext: ModelContext) async {
         self.modelContext = modelContext
         
         // Check if Firebase Auth already has a user (persisted session)
         if let firebaseUser = auth.currentUser {
             // Firebase has a user, load it
-            await handleAuthStateChange(firebaseUser)
+            await loadUserFromFirebase(firebaseUser)
         } else {
-            // No Firebase user, check for local user
+            // No Firebase user, check for local user by device
             let deviceId = DeviceIdentifier.getDeviceIdentifier()
             let descriptor = FetchDescriptor<AppUser>(
                 predicate: #Predicate<AppUser> { $0.deviceIdentifier == deviceId }
             )
             
             if let existingUser = try? modelContext.fetch(descriptor).first {
-                // Found local user, set as current
+                // Found existing user, set as current
                 currentUser = existingUser
                 isAuthenticated = true
                 
-                // Try to sync if online (non-blocking)
-                if isOnline && existingUser.needsSync {
+                // If online and user has firebaseUID, try to restore Firebase session
+                if isOnline, let firebaseUID = existingUser.firebaseUID {
+                    // Try to load from Firestore
                     Task {
-                        try? await syncUserToFirebase(existingUser)
+                        try? await loadUserDataFromFirestore(userId: firebaseUID)
+                    }
+                } else if isOnline, existingUser.firebaseUID == nil {
+                    // User exists locally but no Firebase account - sign in anonymously
+                    Task {
+                        try? await signInAnonymously()
                     }
                 }
             } else {
-                // No user at all, create anonymous one
-                try? await signInAnonymously()
+                // No user exists, create default user
+                try? await createDefaultUser()
             }
         }
     }
     
-    // MARK: - Network Status
+    // MARK: - Default User Creation
     
-    /// Check if device is online
-    var isOnline: Bool {
-        networkMonitor.isConnected
-    }
-    
-    // MARK: - Default Username Generation
-    
-    /// Create or get default user with device-based username (works offline)
-    func createDefaultUser(modelContext: ModelContext) async throws -> AppUser {
+    /// Create default user with device-based username
+    private func createDefaultUser() async throws {
+        guard let modelContext = modelContext else {
+            throw AuthError.noModelContext
+        }
+        
         let deviceId = DeviceIdentifier.getDeviceIdentifier()
+        let defaultUsername = DeviceIdentifier.generateDefaultUsername(deviceId: deviceId)
         
-        // Check if user already exists for this device (offline check)
-        let descriptor = FetchDescriptor<AppUser>(
-            predicate: #Predicate<AppUser> { $0.deviceIdentifier == deviceId }
-        )
-        
-        if let existingUser = try? modelContext.fetch(descriptor).first {
-            currentUser = existingUser
-            isAuthenticated = true
-            
-            // Try to sync if online (non-blocking)
-            if isOnline && existingUser.needsSync {
-                Task {
-                    try? await syncUserToFirebase(existingUser)
-                }
-            }
-            
-            return existingUser
-        }
-        
-        // Generate default username (offline)
-        var defaultUsername = DeviceIdentifier.generateDefaultUsername(deviceId: deviceId)
-        
-        // Check uniqueness locally first (always works offline)
-        var attempts = 0
-        while try await isUsernameTakenLocally(defaultUsername) && attempts < 10 {
-            defaultUsername = DeviceIdentifier.generateDefaultUsername(deviceId: deviceId)
-            attempts += 1
-        }
-        
-        // Create new local user (works offline)
+        // Create local user first
         let localID = UUID().uuidString
         let newUser = AppUser(
             id: localID,
             userName: defaultUsername,
             deviceIdentifier: deviceId,
             isUsernameManuallyChanged: false,
-            needsSync: true // Mark for sync when online
+            needsSync: true
         )
         
         modelContext.insert(newUser)
@@ -168,22 +152,64 @@ class FirebaseAuthService: ObservableObject {
         currentUser = newUser
         isAuthenticated = true
         
-        // Try to sync to Firebase if online (non-blocking, doesn't block app)
+        // If online, immediately sign in anonymously
         if isOnline {
             Task {
-                try? await syncLocalUserToFirebase(newUser)
+                try? await signInAnonymously()
             }
         }
+    }
+    
+    // MARK: - Anonymous Authentication
+    
+    /// Sign in anonymously (creates Firebase anonymous account and links to local user)
+    func signInAnonymously() async throws {
+        guard let modelContext = modelContext,
+              let localUser = currentUser else {
+            throw AuthError.noUser
+        }
         
-        return newUser
+        // If user already has firebaseUID, don't create new anonymous account
+        if localUser.firebaseUID != nil {
+            return
+        }
+        
+        isLoading = true
+        defer { isLoading = false }
+        
+        guard isOnline else {
+            // Offline - mark for sync later
+            localUser.needsSync = true
+            try? modelContext.save()
+            return
+        }
+        
+        do {
+            let result = try await auth.signInAnonymously()
+            let firebaseUID = result.user.uid
+            
+            // Link local user to Firebase anonymous account
+            localUser.firebaseUID = firebaseUID
+            localUser.id = firebaseUID // Update ID to Firebase UID
+            localUser.needsSync = false
+            
+            try modelContext.save()
+            
+            // Save to Firestore
+            try await saveUserDataToFirestore(localUser)
+            
+            currentUser = localUser
+            isAuthenticated = true
+        } catch {
+            print("⚠️ Anonymous sign-in failed: \(error)")
+            // Continue with local user
+            localUser.needsSync = true
+            try? modelContext.save()
+        }
     }
     
     // MARK: - Username Uniqueness Checking
     
-    /// Check if username is taken locally (always works offline)
-    /// - Parameters:
-    ///   - username: The username to check
-    ///   - excludingUserId: Optional user ID to exclude from the check (e.g., current user's ID)
     func isUsernameTakenLocally(_ username: String, excludingUserId: String? = nil) async throws -> Bool {
         guard let modelContext = modelContext else { return false }
         let descriptor = FetchDescriptor<AppUser>(
@@ -195,122 +221,70 @@ class FirebaseAuthService: ObservableObject {
             return false
         }
         
-        // If we have a user ID to exclude, filter it out
         if let excludingID = excludingUserId {
-            let otherUsers = users.filter { $0.id != excludingID }
+            let otherUsers = users.filter { $0.id != excludingID && $0.firebaseUID != excludingID }
             return !otherUsers.isEmpty
         }
         
         return true
     }
     
-    /// Check if username is taken (checks local first, then Firebase if online)
-    /// - Parameters:
-    ///   - username: The username to check
-    ///   - excludingUserId: Optional user ID to exclude from the check (e.g., current user's ID)
     func isUsernameTaken(_ username: String, excludingUserId: String? = nil) async throws -> Bool {
-        // Always check local first (works offline)
+        // Check local first
         if try await isUsernameTakenLocally(username, excludingUserId: excludingUserId) {
             return true
         }
         
         // Check Firebase if online
         guard isOnline else {
-            return false // If offline, only local check matters
+            return false
         }
         
         do {
             let usersRef = db.collection("users")
             let query = usersRef.whereField("userName", isEqualTo: username).limit(to: 1)
-            
-            // If we have a firebaseUID to exclude, we need to check the results manually
-            // since Firestore doesn't support != in whereField
             let snapshot = try await query.getDocuments()
             
-            // If no results, username is available
             guard !snapshot.documents.isEmpty else {
                 return false
             }
             
-            // If we have a user ID to exclude, check if the only match is that user
             if let excludingUID = excludingUserId {
-                let matchingDocs = snapshot.documents.filter { $0.documentID != excludingUID }
+                let matchingDocs = snapshot.documents.filter { doc in
+                    doc.documentID != excludingUID
+                }
                 return !matchingDocs.isEmpty
             }
             
             return true
         } catch {
-            // If Firebase check fails, fall back to local-only
-            print("⚠️ Firebase username check failed, using local-only: \(error)")
+            print("⚠️ Firebase username check failed: \(error)")
             return false
         }
     }
-  
-  /// Check if the current Firebase user is truly authenticated (not anonymous)
-  var isTrulyAuthenticated: Bool {
-      guard let firebaseUser = auth.currentUser else {
-          return false
-      }
-      // User is truly authenticated if they have a firebaseUID and are not anonymous
-      return !firebaseUser.isAnonymous
-  }
-
-  /// Check if the current user (local or Firebase) is anonymous
-  var isAnonymousUser: Bool {
-      guard let firebaseUser = auth.currentUser else {
-          // If no Firebase user, check if we have a local user with firebaseUID
-          // If they have firebaseUID but no Firebase user, they might be anonymous
-          return currentUser?.firebaseUID != nil
-      }
-      return firebaseUser.isAnonymous
-  }
-  
-  /// Check if the current user was previously signed in to Firebase
-  var wasPreviouslySignedIn: Bool {
-      guard let user = currentUser else { return false }
-      // If they have a firebaseUID but are not authenticated, they were signed out
-      // This is the primary indicator since we now keep firebaseUID on sign out
-      return user.firebaseUID != nil && !isAuthenticated
-  }
     
-    // MARK: - Authentication Methods (Offline-First)
+    // MARK: - Authentication Status
     
-    /// Sign in anonymously (creates local user, syncs to Firebase if online)
-    func signInAnonymously() async throws {
-        isLoading = true
-        defer { isLoading = false }
-        
-        guard let modelContext = modelContext else {
-            throw AuthError.notImplemented
+    var isTrulyAuthenticated: Bool {
+        guard let firebaseUser = auth.currentUser else {
+            return false
         }
-        
-        // Check if Firebase already has a user (shouldn't happen, but safety check)
-        if let existingFirebaseUser = auth.currentUser {
-            // Firebase already has a user, just link the local user to it
-            let localUser: AppUser
-            if let currentUser = currentUser {
-                localUser = currentUser
-            } else {
-                localUser = try await createDefaultUser(modelContext: modelContext)
-            }
-            await linkLocalUserToFirebase(localUser: localUser, firebaseUID: existingFirebaseUser.uid)
-            return
-        }
-        
-        // Always create local user first (works offline)
-        _ = try await createDefaultUser(modelContext: modelContext)
-        
-        // Try Firebase anonymous auth if online (non-blocking)
-        if isOnline {
-            do {
-                let result = try await auth.signInAnonymously()
-                await linkLocalUserToFirebase(localUser: currentUser!, firebaseUID: result.user.uid)
-            } catch {
-                // Firebase failed, but local user exists - app still works
-                print("⚠️ Firebase anonymous sign-in failed, continuing with local user: \(error)")
-            }
-        }
+        return !firebaseUser.isAnonymous
     }
+    
+    var isAnonymousUser: Bool {
+        guard let firebaseUser = auth.currentUser else {
+            return currentUser?.firebaseUID != nil && !isTrulyAuthenticated
+        }
+        return firebaseUser.isAnonymous
+    }
+    
+    var wasPreviouslySignedIn: Bool {
+        guard let user = currentUser else { return false }
+        return user.firebaseUID != nil && !isAuthenticated && !isAnonymousUser
+    }
+    
+    // MARK: - Sign In / Create Account
     
     /// Sign in with email and password
     func signIn(email: String, password: String) async throws {
@@ -318,21 +292,12 @@ class FirebaseAuthService: ObservableObject {
         defer { isLoading = false }
         
         guard isOnline else {
-            throw AuthError.networkError
+            throw AuthError.offline
         }
         
         do {
             let result = try await auth.signIn(withEmail: email, password: password)
-            let firebaseUID = result.user.uid
-            
-            // Check if we have a local user to migrate
-            if shouldMigrateUser(to: firebaseUID) {
-                // Migrate local user to Firebase
-                try await migrateLocalUserToFirebase(localUser: currentUser!, firebaseUID: firebaseUID)
-            } else {
-                // Load user from Firestore or create new
-                await loadOrCreateUserFromFirebase(firebaseUID: firebaseUID, email: email)
-            }
+            await loadUserFromFirebase(result.user)
         } catch {
             if let error = error as NSError? {
                 switch error.code {
@@ -346,7 +311,7 @@ class FirebaseAuthService: ObservableObject {
         }
     }
     
-    /// Create account with email and password
+    /// Create account with email and password (upgrades anonymous if exists)
     func createAccount(
         email: String,
         password: String,
@@ -358,174 +323,51 @@ class FirebaseAuthService: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         
-        // Security check: If we have a current user, verify they should be allowed to use this username
-        if let user = currentUser {
-            // Security: If username matches current user's username, allow it (they're migrating)
-            // But if it's different and taken, we need to check more carefully
-            if userName == user.userName {
-                // Same username as current user - this is fine, they're claiming their own username
-                // No need to check uniqueness since it's their own username
-            } else {
-                // Different username - check if it's taken by someone else
-                // Exclude current user from the check
-                guard try await !isUsernameTaken(userName, excludingUserId: user.id) else {
-                    throw AuthError.usernameTaken
-                }
-            }
-        } else {
-            // No current user, do normal check
-            guard try await !isUsernameTaken(userName) else {
-                throw AuthError.usernameTaken
-            }
+        guard isOnline else {
+            throw AuthError.offline
         }
         
-        guard isOnline else {
-            // Create local account, mark for sync
-            guard let modelContext = modelContext else {
-                throw AuthError.notImplemented
-            }
-            
-            let localID = UUID().uuidString
-            let newUser = AppUser(
-                id: localID,
-                userName: userName,
-                firstName: firstName,
-                lastName: lastName,
-                email: email,
-                phoneNumber: phoneNumber,
-                deviceIdentifier: DeviceIdentifier.getDeviceIdentifier(),
-                isUsernameManuallyChanged: true,
-                needsSync: true
-            )
-            
-            modelContext.insert(newUser)
-            try modelContext.save()
-            
-            currentUser = newUser
-            isAuthenticated = true
-            
-            // Will sync to Firebase when online
-            return
+        guard let modelContext = modelContext,
+              let currentUser = currentUser else {
+            throw AuthError.noUser
+        }
+        
+        // Check username uniqueness (exclude current user)
+        let excludingId = currentUser.firebaseUID ?? currentUser.id
+        guard try await !isUsernameTaken(userName, excludingUserId: excludingId) else {
+            throw AuthError.usernameTaken
         }
         
         do {
-            // Check if current user is anonymous - if so, link the account instead of creating new
+            // Check if current user is anonymous
             if let firebaseUser = auth.currentUser, firebaseUser.isAnonymous {
-                // User is anonymous, link email/password to existing anonymous account
+                // Link email/password to anonymous account
                 let credential = EmailAuthProvider.credential(withEmail: email, password: password)
                 
                 do {
                     let result = try await firebaseUser.link(with: credential)
-                    let firebaseUID = result.user.uid
+                    // Update user info
+                    currentUser.email = email
+                    currentUser.userName = userName
+                    currentUser.firstName = firstName
+                    currentUser.lastName = lastName
+                    currentUser.phoneNumber = phoneNumber
+                    currentUser.isUsernameManuallyChanged = true
                     
-                    // Migrate local user to the linked account
-                    if let localUser = currentUser {
-                        try await migrateLocalUserToFirebase(
-                            localUser: localUser,
-                            firebaseUID: firebaseUID,
-                            email: email,
-                            userName: userName,
-                            firstName: firstName,
-                            lastName: lastName,
-                            phoneNumber: phoneNumber
-                        )
-                        // Ensure authentication state is set (migrateLocalUserToFirebase sets it, but be explicit)
-                        isAuthenticated = true
-                    }
+                    try modelContext.save()
+                    try await saveUserDataToFirestore(currentUser)
+                    
+                    isAuthenticated = true
                 } catch {
-                    // If linking fails (e.g., email already in use), create new account
-                    // This will sign out the anonymous account and create a new one
+                    // If linking fails (email already in use), create new account
+                    try auth.signOut()
                     let result = try await auth.createUser(withEmail: email, password: password)
-                    let firebaseUID = result.user.uid
-                    
-                    // Check if we have a local user to migrate
-                    if shouldMigrateUser(to: firebaseUID) {
-                        // Migrate local user to Firebase account
-                        try await migrateLocalUserToFirebase(
-                            localUser: currentUser!,
-                            firebaseUID: firebaseUID,
-                            email: email,
-                            userName: userName,
-                            firstName: firstName,
-                            lastName: lastName,
-                            phoneNumber: phoneNumber
-                        )
-                    } else {
-                        // Create new user with Firebase UID
-                        let newUser = AppUser(
-                            id: firebaseUID,
-                            userName: userName,
-                            firstName: firstName,
-                            lastName: lastName,
-                            email: email,
-                            phoneNumber: phoneNumber,
-                            deviceIdentifier: DeviceIdentifier.getDeviceIdentifier(),
-                            isUsernameManuallyChanged: true,
-                            firebaseUID: firebaseUID
-                        )
-                        
-                        modelContext?.insert(newUser)
-                        try modelContext?.save()
-                        
-                        currentUser = newUser
-                        isAuthenticated = true
-                        
-                        // Save to Firestore (ensure it's saved)
-                        do {
-                            try await saveUserDataToFirestore(newUser)
-                            print("✅ User \(newUser.userName) saved to Firestore successfully")
-                        } catch {
-                            print("⚠️ Failed to save user to Firestore: \(error)")
-                            // Continue anyway - user is created locally and will sync later
-                        }
-                    }
+                    await createNewUserFromFirebase(result.user, email: email, userName: userName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber)
                 }
             } else {
-                // Not anonymous, create new account normally
+                // Not anonymous, create new account
                 let result = try await auth.createUser(withEmail: email, password: password)
-                let firebaseUID = result.user.uid
-                
-                // Check if we have a local user to migrate
-                if shouldMigrateUser(to: firebaseUID) {
-                    // Migrate local user to Firebase account
-                    try await migrateLocalUserToFirebase(
-                        localUser: currentUser!,
-                        firebaseUID: firebaseUID,
-                        email: email,
-                        userName: userName,
-                        firstName: firstName,
-                        lastName: lastName,
-                        phoneNumber: phoneNumber
-                    )
-                } else {
-                    // Create new user with Firebase UID
-                    let newUser = AppUser(
-                        id: firebaseUID,
-                        userName: userName,
-                        firstName: firstName,
-                        lastName: lastName,
-                        email: email,
-                        phoneNumber: phoneNumber,
-                        deviceIdentifier: DeviceIdentifier.getDeviceIdentifier(),
-                        isUsernameManuallyChanged: true,
-                        firebaseUID: firebaseUID
-                    )
-                    
-                    modelContext?.insert(newUser)
-                    try modelContext?.save()
-                    
-                    currentUser = newUser
-                    isAuthenticated = true
-                    
-                    // Save to Firestore (ensure it's saved)
-                    do {
-                        try await saveUserDataToFirestore(newUser)
-                        print("✅ User \(newUser.userName) saved to Firestore successfully")
-                    } catch {
-                        print("⚠️ Failed to save user to Firestore: \(error)")
-                        // Continue anyway - user is created locally and will sync later
-                    }
-                }
+                await createNewUserFromFirebase(result.user, email: email, userName: userName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber)
             }
         } catch {
             if let error = error as NSError? {
@@ -542,390 +384,34 @@ class FirebaseAuthService: ObservableObject {
         }
     }
     
-    /// Sign out (keeps local user, just disconnects from Firebase)
+    /// Sign out (keeps local user, clears Firebase auth)
     func signOut() async throws {
         guard let modelContext = modelContext else {
             throw AuthError.noModelContext
         }
         
-        // Sign out from Firebase if online
         if isOnline {
             do {
                 try auth.signOut()
             } catch {
                 print("⚠️ Firebase sign out failed: \(error)")
-                // Continue with local sign out even if Firebase fails
             }
         }
         
-        // Update local user to mark as signed out, but KEEP firebaseUID
-        // This prevents creating duplicate accounts when app restarts
+        // Keep user data, just mark as signed out
         if let user = currentUser {
-            // Store the local ID before clearing (if needed for migration tracking)
-            if user.firebaseUID != nil && user.localIDBeforeFirebase == nil {
-                // Only set if not already set (preserve original local ID)
-                if user.id != user.firebaseUID {
-                    user.localIDBeforeFirebase = user.id
-                }
-            }
-            
-            // DON'T clear firebaseUID - keep it to prevent duplicate accounts
-            // Just clear linked platforms and sync status
             user.linkedPlatforms.removeAll()
             user.needsSync = false
-            // Keep firebaseUID and lastSyncedToFirebase for reference
-            // This allows us to detect they were previously signed in
-            
+            // Keep firebaseUID for future sign-in
             try modelContext.save()
         }
         
-        // Update authentication state
         isAuthenticated = false
-        // Keep currentUser so the app still works offline
     }
     
-    // MARK: - User Migration (Local to Firebase)
+    // MARK: - OAuth Sign In
     
-    /// Determine if the current user should be migrated to a new Firebase account
-    /// Returns true if:
-    /// - User has no firebaseUID (truly local)
-    /// - User has a different firebaseUID (different account)
-    private func shouldMigrateUser(to firebaseUID: String) -> Bool {
-        guard let currentUser = currentUser else {
-            return false // No user to migrate
-        }
-        
-        // If no firebaseUID, definitely migrate (local-only user)
-        guard let existingFirebaseUID = currentUser.firebaseUID else {
-            return true
-        }
-        
-        // If firebaseUIDs match, don't migrate (already linked)
-        if existingFirebaseUID == firebaseUID {
-            return false
-        }
-        
-        // If firebaseUIDs differ, we should migrate
-        // This handles:
-        // - Anonymous account being replaced with email/password account
-        // - User switching accounts
-        return true
-    }
-    
-    /// Migrate local user to Firebase account
-    private func migrateLocalUserToFirebase(
-        localUser: AppUser,
-        firebaseUID: String,
-        email: String? = nil,
-        userName: String? = nil,
-        firstName: String? = nil,
-        lastName: String? = nil,
-        phoneNumber: String? = nil
-    ) async throws {
-        guard let modelContext = modelContext else {
-            throw AuthError.notImplemented
-        }
-        
-        // Store original local ID
-        let originalLocalID = localUser.id
-        localUser.localIDBeforeFirebase = originalLocalID
-        
-        // Update user with Firebase info
-        localUser.firebaseUID = firebaseUID
-        localUser.id = firebaseUID // Change primary ID to Firebase UID
-        if let email = email {
-            localUser.email = email
-        }
-        if let userName = userName {
-            localUser.userName = userName
-            localUser.isUsernameManuallyChanged = true
-        }
-        if let firstName = firstName {
-            localUser.firstName = firstName
-        }
-        if let lastName = lastName {
-            localUser.lastName = lastName
-        }
-        if let phoneNumber = phoneNumber {
-            localUser.phoneNumber = phoneNumber
-        }
-        
-        // Update all trips that reference the old user ID
-        let tripDescriptor = FetchDescriptor<Trip>()
-        if let trips = try? modelContext.fetch(tripDescriptor) {
-            for trip in trips {
-                // Update foundRegions that reference the old user ID
-                for i in 0..<trip.foundRegions.count {
-                    if trip.foundRegions[i].foundBy == originalLocalID {
-                        trip.foundRegions[i].foundBy = firebaseUID
-                    }
-                }
-            }
-        }
-        
-        try modelContext.save()
-        
-        // Save to Firestore
-        try await saveUserDataToFirestore(localUser)
-        
-        currentUser = localUser
-        isAuthenticated = true
-    }
-    
-    /// Link local user to Firebase (for anonymous auth)
-  private func linkLocalUserToFirebase(localUser: AppUser, firebaseUID: String) async {
-      guard let modelContext = modelContext else { return }
-      
-      // Prevent duplicate linking if already linked
-      if localUser.firebaseUID == firebaseUID {
-          print("⚠️ User already linked to this Firebase UID")
-          currentUser = localUser
-          isAuthenticated = true
-          return
-      }
-      
-      // Check if another user already has this firebaseUID
-      let descriptor = FetchDescriptor<AppUser>(
-          predicate: #Predicate<AppUser> { $0.id == firebaseUID }
-      )
-      
-      if let existingUser = try? modelContext.fetch(descriptor).first, existingUser != localUser {
-          print("⚠️ Another user already has this Firebase UID, merging...")
-          // Merge logic here if needed, or just use the existing user
-          currentUser = existingUser
-          isAuthenticated = true
-          return
-      }
-      
-      let originalLocalID = localUser.id
-      localUser.localIDBeforeFirebase = originalLocalID
-      localUser.firebaseUID = firebaseUID
-      localUser.id = firebaseUID
-        
-        // Update trips
-        let tripDescriptor = FetchDescriptor<Trip>()
-        if let trips = try? modelContext.fetch(tripDescriptor) {
-            for trip in trips {
-                for i in 0..<trip.foundRegions.count {
-                    if trip.foundRegions[i].foundBy == originalLocalID {
-                        trip.foundRegions[i].foundBy = firebaseUID
-                    }
-                }
-            }
-        }
-        
-        try? modelContext.save()
-        
-        // Sync to Firestore
-        try? await saveUserDataToFirestore(localUser)
-    }
-    
-    /// Load or create user from Firebase
-    private func loadOrCreateUserFromFirebase(firebaseUID: String, email: String?) async {
-        guard let modelContext = modelContext else { return }
-        
-        // Check if user exists locally by id first (most common case)
-        let descriptorById = FetchDescriptor<AppUser>(
-            predicate: #Predicate<AppUser> { $0.id == firebaseUID }
-        )
-        
-        if let existingUser = try? modelContext.fetch(descriptorById).first {
-            currentUser = existingUser
-            print("Loaded existing user \(currentUser?.firebaseUID ?? "unknown")--\(currentUser?.userName ?? "unknown")")
-            isAuthenticated = true
-            return
-        }
-        
-        // Also check by firebaseUID field (for users who signed out but kept firebaseUID)
-        let descriptorByFirebaseUID = FetchDescriptor<AppUser>(
-            predicate: #Predicate<AppUser> { $0.firebaseUID == firebaseUID }
-        )
-        
-        if let existingUser = try? modelContext.fetch(descriptorByFirebaseUID).first {
-            // Update the user's id to match firebaseUID if it doesn't already
-            if existingUser.id != firebaseUID {
-                existingUser.id = firebaseUID
-                try? modelContext.save()
-            }
-            currentUser = existingUser
-            print("Loaded existing user by firebaseUID field \(currentUser?.firebaseUID ?? "unknown")--\(currentUser?.userName ?? "unknown")")
-            isAuthenticated = true
-            return
-        }
-        
-        // Try to load from Firestore
-        if let firestoreUser = try? await loadUserDataFromFirestore(userId: firebaseUID) {
-            modelContext.insert(firestoreUser)
-            try? modelContext.save()
-            currentUser = firestoreUser
-            print("Loaded user \(currentUser?.firebaseUID ?? "unknown")--\(currentUser?.userName ?? "unknown")")
-            isAuthenticated = true
-        } else {
-            // Create new user from Firebase auth
-            // Use device-based username generation for consistency
-            let deviceId = DeviceIdentifier.getDeviceIdentifier()
-            let defaultUsername = DeviceIdentifier.generateDefaultUsername(deviceId: deviceId)
-            let newUser = AppUser(
-                id: firebaseUID,
-                userName: email?.components(separatedBy: "@").first ?? defaultUsername,
-                email: email,
-                deviceIdentifier: deviceId,
-                firebaseUID: firebaseUID
-            )
-            modelContext.insert(newUser)
-            try? modelContext.save()
-            currentUser = newUser
-            isAuthenticated = true
-            
-            // Save to Firestore (ensure it's saved)
-            do {
-                try await saveUserDataToFirestore(newUser)
-            } catch {
-                print("⚠️ Failed to save user to Firestore: \(error)")
-                // Continue anyway - user is created locally
-            }
-        }
-    }
-    
-    // MARK: - Firestore Serialization
-    
-    private func loadUserDataFromFirestore(userId: String) async throws -> AppUser? {
-        let docRef = db.collection("users").document(userId)
-        let document = try await docRef.getDocument()
-        
-        guard document.exists, let data = document.data() else {
-            return nil
-        }
-        
-        return appUserFromFirestoreData(data, id: userId)
-    }
-    
-    /// Save user data to Firestore (non-blocking, works offline)
-    func saveUserDataToFirestore(_ user: AppUser) async throws {
-        guard isOnline else {
-            // Mark for sync when online
-            user.needsSync = true
-            try? modelContext?.save()
-            return
-        }
-        
-        guard let firebaseUID = user.firebaseUID else {
-            // Local-only user, can't save to Firestore yet
-            user.needsSync = true
-            return
-        }
-        
-        let docRef = db.collection("users").document(firebaseUID)
-        let data = firestoreDataFromAppUser(user)
-        try await docRef.setData(data, merge: true)
-        
-        user.lastSyncedToFirebase = .now
-        user.needsSync = false
-        try? modelContext?.save()
-    }
-    
-    /// Sync local user to Firebase (for default users)
-    private func syncLocalUserToFirebase(_ user: AppUser) async throws {
-        // Don't create new anonymous account if user already has firebaseUID (was signed out)
-        // This prevents duplicate accounts when app restarts after sign out
-        guard isOnline, user.firebaseUID == nil else { return }
-        
-        // Try anonymous Firebase auth
-        do {
-            let result = try await auth.signInAnonymously()
-            await linkLocalUserToFirebase(localUser: user, firebaseUID: result.user.uid)
-        } catch {
-            // Failed, but that's OK - user still works offline
-            print("⚠️ Could not sync local user to Firebase: \(error)")
-        }
-    }
-    
-    /// Sync user to Firebase if needed (called periodically)
-    func syncUserToFirebase(_ user: AppUser) async throws {
-        guard isOnline, user.needsSync else { return }
-        
-        if user.firebaseUID == nil {
-            // Try to create anonymous Firebase account
-            try await syncLocalUserToFirebase(user)
-        } else {
-            // Sync existing Firebase user
-            try await saveUserDataToFirestore(user)
-        }
-    }
-    
-    /// Update user name with uniqueness check
-    func updateUserName(_ newName: String) async throws {
-        guard let user = currentUser else {
-            throw AuthError.noUser
-        }
-        
-        let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        guard !trimmedName.isEmpty else {
-            throw AuthError.invalidUsername
-        }
-        
-        guard trimmedName != user.userName else {
-            return
-        }
-        
-        // Check uniqueness (works offline for local, online for Firebase)
-        guard try await !isUsernameTaken(trimmedName) else {
-            throw AuthError.usernameTaken
-        }
-        
-        user.updateUserName(trimmedName, isManual: true)
-        user.needsSync = true
-        
-        // Save locally (always works)
-        if let modelContext = modelContext {
-            try modelContext.save()
-        }
-        
-        // Try to sync to Firebase if online (non-blocking)
-        if isOnline {
-            Task {
-                try? await saveUserDataToFirestore(user)
-            }
-        }
-    }
-    
-    // MARK: - Apple Nonce Helpers
-
-    private static func sha256(_ input: String) -> String {
-        guard let inputData = input.data(using: .utf8) else { return "" }
-        let hashed = SHA256.hash(data: inputData)
-        return hashed.compactMap { String(format: "%02x", $0) }.joined()
-    }
-
-    private static func randomNonceString(length: Int = 32) -> String {
-        precondition(length > 0)
-        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
-        var result = ""
-        var remainingLength = length
-
-        while remainingLength > 0 {
-            var randoms = [UInt8](repeating: 0, count: 16)
-            let errorCode = SecRandomCopyBytes(kSecRandomDefault, randoms.count, &randoms)
-            if errorCode != errSecSuccess {
-                fatalError("Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)")
-            }
-
-            randoms.forEach { random in
-                if remainingLength == 0 { return }
-                if random < charset.count {
-                    result.append(charset[Int(random)])
-                    remainingLength -= 1
-                }
-            }
-        }
-
-        return result
-    }
-    
-    // MARK: - Platform Linking
-    
-    /// Sign in with Google (creates account if needed)
+    /// Sign in with Google
     func signInWithGoogle(presentingViewController: UIViewController) async throws {
         guard isOnline else {
             throw AuthError.offline
@@ -954,41 +440,18 @@ class FirebaseAuthService: ObservableObject {
             
             let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: googleUser.accessToken.tokenString)
             
-            // Sign in with Firebase
-            let authResult = try await auth.signIn(with: credential)
-            let firebaseUID = authResult.user.uid
-            
-            // Check if user exists locally or in Firestore
-            if shouldMigrateUser(to: firebaseUID) {
-                // Migrate local user to Firebase
-                try await migrateLocalUserToFirebase(localUser: currentUser!, firebaseUID: firebaseUID, email: googleUser.profile?.email)
-            } else {
-                // Load or create user from Firebase
-                await loadOrCreateUserFromFirebase(firebaseUID: firebaseUID, email: googleUser.profile?.email)
-                
-                // Add Google as linked platform
-                if let user = currentUser {
-                    let platformInfo = LinkedPlatform(
-                        platform: .google,
-                        platformUserId: firebaseUID,
-                        linkedAt: .now,
-                        email: googleUser.profile?.email,
-                        phoneNumber: nil,
-                        displayName: googleUser.profile?.name
-                    )
-                    
-                    if !user.linkedPlatforms.contains(where: { $0.platform == .google }) {
-                        user.linkedPlatforms.append(platformInfo)
-                    }
-                    
-                    try modelContext.save()
-                    try await saveUserDataToFirestore(user)
-                }
+          // Check if anonymous, link if so
+                     if let firebaseUser = auth.currentUser, firebaseUser.isAnonymous {
+                         let result = try await firebaseUser.link(with: credential)
+                         await updateUserFromOAuth(result.user, email: googleUser.profile?.email, displayName: googleUser.profile?.name)
+                     } else {
+                let authResult = try await auth.signIn(with: credential)
+                await loadUserFromFirebase(authResult.user)
             }
         } catch {
             if let error = error as NSError? {
                 switch error.code {
-                case 17020: // Account exists with different credential
+                case 17020:
                     throw AuthError.emailAlreadyInUse
                 default:
                     throw AuthError.networkError
@@ -998,42 +461,7 @@ class FirebaseAuthService: ObservableObject {
         }
     }
     
-    /// Link Google account (for existing users)
-    func linkGoogleAccount(presentingViewController: UIViewController) async throws {
-        guard let user = currentUser else {
-            throw AuthError.noUser
-        }
-        
-        guard isOnline else {
-            throw AuthError.networkError
-        }
-        
-        isLoading = true
-        defer { isLoading = false }
-        
-        do {
-            guard let clientID = FirebaseApp.app()?.options.clientID else {
-                throw AuthError.notImplemented
-            }
-            
-            let config = GIDConfiguration(clientID: clientID)
-            GIDSignIn.sharedInstance.configuration = config
-            
-            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presentingViewController)
-            let googleUser = result.user
-            guard let idToken = googleUser.idToken?.tokenString else {
-                throw AuthError.networkError
-            }
-            
-            let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: googleUser.accessToken.tokenString)
-            
-            try await linkPlatformCredential(credential, platform: .google, email: googleUser.profile?.email, displayName: googleUser.profile?.name)
-        } catch {
-            throw AuthError.networkError
-        }
-    }
-    
-    /// Sign in with Apple (creates account if needed)
+    /// Sign in with Apple
     func signInWithApple() async throws {
         guard isOnline else {
             throw AuthError.offline
@@ -1067,12 +495,7 @@ class FirebaseAuthService: ObservableObject {
                 throw AuthError.networkError
             }
             
-            // Create OAuth credential for Apple Sign-In using nonce
             let credential = OAuthProvider.appleCredential(withIDToken: idTokenString, rawNonce: nonce, fullName: appleIDCredential.fullName)
-
-            // Sign in with Firebase
-            let authResult = try await auth.signIn(with: credential)
-            let firebaseUID = authResult.user.uid
             
             let email = appleIDCredential.email
             let displayName = appleIDCredential.fullName.map { name in
@@ -1082,37 +505,18 @@ class FirebaseAuthService: ObservableObject {
             }
             let finalDisplayName = displayName?.isEmpty == false ? displayName : nil
             
-            // Check if user exists locally or in Firestore
-            if shouldMigrateUser(to: firebaseUID) {
-                // Migrate local user to Firebase
-                try await migrateLocalUserToFirebase(localUser: currentUser!, firebaseUID: firebaseUID, email: email)
-            } else {
-                // Load or create user from Firebase
-                await loadOrCreateUserFromFirebase(firebaseUID: firebaseUID, email: email)
-                
-                // Add Apple as linked platform
-                if let user = currentUser {
-                    let platformInfo = LinkedPlatform(
-                        platform: .apple,
-                        platformUserId: firebaseUID,
-                        linkedAt: .now,
-                        email: email,
-                        phoneNumber: nil,
-                        displayName: finalDisplayName
-                    )
-                    
-                    if !user.linkedPlatforms.contains(where: { $0.platform == .apple }) {
-                        user.linkedPlatforms.append(platformInfo)
-                    }
-                    
-                    try modelContext.save()
-                    try await saveUserDataToFirestore(user)
-                }
+          // Check if anonymous, link if so
+                     if let firebaseUser = auth.currentUser, firebaseUser.isAnonymous {
+                         let result = try await firebaseUser.link(with: credential)
+                         await updateUserFromOAuth(result.user, email: email, displayName: finalDisplayName)
+                     } else {
+                let authResult = try await auth.signIn(with: credential)
+                await loadUserFromFirebase(authResult.user)
             }
         } catch {
             if let error = error as NSError? {
                 switch error.code {
-                case 17020: // Account exists with different credential
+                case 17020:
                     throw AuthError.emailAlreadyInUse
                 default:
                     throw AuthError.networkError
@@ -1122,14 +526,45 @@ class FirebaseAuthService: ObservableObject {
         }
     }
     
-    /// Link Apple account (for existing users)
-    func linkAppleAccount() async throws {
-        guard let user = currentUser else {
+    // MARK: - Platform Linking (for existing authenticated users)
+    
+    func linkGoogleAccount(presentingViewController: UIViewController) async throws {
+        guard let user = currentUser, isTrulyAuthenticated else {
             throw AuthError.noUser
         }
         
         guard isOnline else {
+            throw AuthError.offline
+        }
+        
+        isLoading = true
+        defer { isLoading = false }
+        
+        guard let clientID = FirebaseApp.app()?.options.clientID else {
+            throw AuthError.notImplemented
+        }
+        
+        let config = GIDConfiguration(clientID: clientID)
+        GIDSignIn.sharedInstance.configuration = config
+        
+        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presentingViewController)
+        let googleUser = result.user
+        guard let idToken = googleUser.idToken?.tokenString else {
             throw AuthError.networkError
+        }
+        
+        let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: googleUser.accessToken.tokenString)
+        
+        try await linkPlatformCredential(credential, platform: .google, email: googleUser.profile?.email, displayName: googleUser.profile?.name)
+    }
+    
+    func linkAppleAccount() async throws {
+        guard let user = currentUser, isTrulyAuthenticated else {
+            throw AuthError.noUser
+        }
+        
+        guard isOnline else {
+            throw AuthError.offline
         }
         
         isLoading = true
@@ -1143,45 +578,38 @@ class FirebaseAuthService: ObservableObject {
         
         let authorizationController = ASAuthorizationController(authorizationRequests: [request])
         
-        do {
-            let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ASAuthorization, Error>) in
-                authorizationController.delegate = AppleSignInDelegate(continuation: continuation)
-                authorizationController.presentationContextProvider = AppleSignInPresentationContextProvider()
-                authorizationController.performRequests()
-            }
-            
-            guard let appleIDCredential = result.credential as? ASAuthorizationAppleIDCredential,
-                  let identityToken = appleIDCredential.identityToken,
-                  let idTokenString = String(data: identityToken, encoding: .utf8) else {
-                throw AuthError.networkError
-            }
-            
-            // Create OAuth credential for Apple Sign-In using nonce
-            let credential = OAuthProvider.appleCredential(withIDToken: idTokenString, rawNonce: nonce, fullName: appleIDCredential.fullName)
-
-            
-            let email = appleIDCredential.email
-            let displayName = appleIDCredential.fullName.map { name in
-                let given = name.givenName ?? ""
-                let family = name.familyName ?? ""
-                return "\(given) \(family)".trimmingCharacters(in: .whitespaces)
-            }
-            let finalDisplayName = displayName?.isEmpty == false ? displayName : nil
-            
-            try await linkPlatformCredential(credential, platform: .apple, email: email, displayName: finalDisplayName)
-        } catch {
+        let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ASAuthorization, Error>) in
+            authorizationController.delegate = AppleSignInDelegate(continuation: continuation)
+            authorizationController.presentationContextProvider = AppleSignInPresentationContextProvider()
+            authorizationController.performRequests()
+        }
+        
+        guard let appleIDCredential = result.credential as? ASAuthorizationAppleIDCredential,
+              let identityToken = appleIDCredential.identityToken,
+              let idTokenString = String(data: identityToken, encoding: .utf8) else {
             throw AuthError.networkError
         }
+        
+        let credential = OAuthProvider.appleCredential(withIDToken: idTokenString, rawNonce: nonce, fullName: appleIDCredential.fullName)
+        
+        let email = appleIDCredential.email
+        let displayName = appleIDCredential.fullName.map { name in
+            let given = name.givenName ?? ""
+            let family = name.familyName ?? ""
+            return "\(given) \(family)".trimmingCharacters(in: .whitespaces)
+        }
+        let finalDisplayName = displayName?.isEmpty == false ? displayName : nil
+        
+        try await linkPlatformCredential(credential, platform: .apple, email: email, displayName: finalDisplayName)
     }
     
-    /// Link Microsoft account
     func linkMicrosoftAccount() async throws {
-        guard currentUser != nil else {
+        guard currentUser != nil, isTrulyAuthenticated else {
             throw AuthError.noUser
         }
         
         guard isOnline else {
-            throw AuthError.networkError
+            throw AuthError.offline
         }
         
         isLoading = true
@@ -1190,22 +618,17 @@ class FirebaseAuthService: ObservableObject {
         let provider = OAuthProvider(providerID: "microsoft.com")
         provider.scopes = ["openid", "email", "profile"]
         
-        do {
-            let credential = try await provider.credential(with: nil)
-            try await linkPlatformCredential(credential, platform: .microsoft, email: nil, displayName: nil)
-        } catch {
-            throw AuthError.networkError
-        }
+        let credential = try await provider.credential(with: nil)
+        try await linkPlatformCredential(credential, platform: .microsoft, email: nil, displayName: nil)
     }
     
-    /// Link Yahoo account
     func linkYahooAccount() async throws {
-        guard currentUser != nil else {
+        guard currentUser != nil, isTrulyAuthenticated else {
             throw AuthError.noUser
         }
         
         guard isOnline else {
-            throw AuthError.networkError
+            throw AuthError.offline
         }
         
         isLoading = true
@@ -1214,163 +637,126 @@ class FirebaseAuthService: ObservableObject {
         let provider = OAuthProvider(providerID: "yahoo.com")
         provider.scopes = ["openid", "email", "profile"]
         
-        do {
-            let credential = try await provider.credential(with: nil)
-            try await linkPlatformCredential(credential, platform: .yahoo, email: nil, displayName: nil)
-        } catch {
-            throw AuthError.networkError
-        }
+        let credential = try await provider.credential(with: nil)
+        try await linkPlatformCredential(credential, platform: .yahoo, email: nil, displayName: nil)
     }
     
-    /// Generic platform linking with credential
-    private func linkPlatformCredential(_ credential: AuthCredential, platform: LinkedPlatform.PlatformType, email: String?, displayName: String?) async throws {
-        guard let firebaseUser = auth.currentUser else {
-            // If not authenticated with Firebase, create anonymous account first
-            if let localUser = currentUser, localUser.firebaseUID == nil {
-                let result = try await auth.signInAnonymously()
-                await linkLocalUserToFirebase(localUser: localUser, firebaseUID: result.user.uid)
-            } else {
-                throw AuthError.noUser
-            }
+  private func linkPlatformCredential(_ credential: AuthCredential, platform: LinkedPlatform.PlatformType, email: String?, displayName: String?) async throws {
+         guard let firebaseUser = auth.currentUser, isTrulyAuthenticated else {
+             throw AuthError.noUser
+         }
+         
+         guard let user = currentUser, let modelContext = modelContext else {
+             throw AuthError.noUser
+         }
+         
+         do {
+             let result = try await firebaseUser.link(with: credential)
+             let linkedUser = result.user
+             
+             var platformEmail = email
+             var platformPhone: String? = nil
+             var platformDisplayName = displayName
+             
+             for providerData in linkedUser.providerData {
+                 if providerData.providerID == credential.provider {
+                     platformEmail = platformEmail ?? providerData.email
+                     platformPhone = providerData.phoneNumber
+                     platformDisplayName = platformDisplayName ?? providerData.displayName
+                 }
+             }
+             
+             // Check username conflict (only if username wasn't manually changed)
+             if !user.isUsernameManuallyChanged {
+                 let excludingId = user.firebaseUID ?? user.id
+                 if try await isUsernameTaken(user.userName, excludingUserId: excludingId) {
+                     await showUsernameConflictDialogForLinking(platform: platform)
+                     try? await firebaseUser.unlink(fromProvider: credential.provider)
+                     return
+                 }
+             }
+             
+             let platformInfo = LinkedPlatform(
+                 platform: platform,
+                 platformUserId: linkedUser.uid,
+                 linkedAt: .now,
+                 email: platformEmail,
+                 phoneNumber: platformPhone,
+                 displayName: platformDisplayName
+             )
+             
+             if !user.linkedPlatforms.contains(where: { $0.platform == platform }) {
+                 user.linkedPlatforms.append(platformInfo)
+             }
+             
+             if let email = platformEmail, user.email == nil {
+                 user.email = email
+             }
+             if let phone = platformPhone, user.phoneNumber == nil {
+                 user.phoneNumber = phone
+             }
+             
+             try modelContext.save()
+             try await saveUserDataToFirestore(user)
+         } catch {
+             throw AuthError.networkError
+         }
+     }
+     
+     /// Show username conflict dialog during linking
+     private func showUsernameConflictDialogForLinking(platform: LinkedPlatform.PlatformType) async {
+         guard let user = currentUser else { return }
+         
+         conflictDialogMessage = "Your username '\(user.userName)' is already taken. Please choose a new username to link your \(platform.rawValue) account."
+         conflictDialogNewUsername = ""
+         showUsernameConflictDialog = true
+         
+         await withCheckedContinuation { continuation in
+             usernameConflictResolver = { newUsername in
+                 continuation.resume()
+                 self.usernameConflictResolver = nil
+                 
+                 if let username = newUsername {
+                     Task { @MainActor in
+                         do {
+                             try await self.updateUserName(username)
+                             // Retry linking after username update
+                             // Note: This would need to be handled by the caller
+                         } catch {
+                             self.errorMessage = error.localizedDescription
+                         }
+                     }
+                 } else {
+                     Task { @MainActor in
+                         self.errorMessage = "Account linking cancelled."
+                     }
+                 }
+             }
+         }
+     }
+    // MARK: - User Management
+    
+    func updateUserName(_ newName: String) async throws {
+        guard let user = currentUser else {
+            throw AuthError.noUser
+        }
+        
+        let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        guard !trimmedName.isEmpty else {
+            throw AuthError.invalidUsername
+        }
+        
+        guard trimmedName != user.userName else {
             return
         }
         
-        guard let user = currentUser else {
-            throw AuthError.noUser
+        let excludingId = user.firebaseUID ?? user.id
+        guard try await !isUsernameTaken(trimmedName, excludingUserId: excludingId) else {
+            throw AuthError.usernameTaken
         }
         
-        do {
-            // Link the credential
-            let result = try await auth.currentUser?.link(with: credential)
-            let linkedUser = result?.user ?? auth.currentUser!
-            
-            // Extract user info
-            var platformEmail = email
-            var platformPhone: String? = nil
-            var platformDisplayName = displayName
-            
-            for providerData in linkedUser.providerData {
-                if providerData.providerID == credential.provider {
-                    platformEmail = platformEmail ?? providerData.email
-                    platformPhone = providerData.phoneNumber
-                    platformDisplayName = platformDisplayName ?? providerData.displayName
-                }
-            }
-            
-            // Check username conflict
-            if !user.isUsernameManuallyChanged {
-                if try await isUsernameTaken(user.userName) {
-                    await showUsernameConflictDialogForLinking(platform: platform)
-                    try? await auth.currentUser?.unlink(fromProvider: credential.provider)
-                    return
-                }
-            }
-            
-            // Create platform info
-            let platformInfo = LinkedPlatform(
-                platform: platform,
-                platformUserId: linkedUser.uid,
-                linkedAt: .now,
-                email: platformEmail,
-                phoneNumber: platformPhone,
-                displayName: platformDisplayName
-            )
-            
-            if !user.linkedPlatforms.contains(where: { $0.platform == platform }) {
-                user.linkedPlatforms.append(platformInfo)
-            }
-            
-            if let email = platformEmail, user.email == nil {
-                user.email = email
-            }
-            if let phone = platformPhone, user.phoneNumber == nil {
-                user.phoneNumber = phone
-            }
-            
-            user.needsSync = true
-            if let modelContext = modelContext {
-                try modelContext.save()
-            }
-            
-            if isOnline {
-                try await saveUserDataToFirestore(user)
-            }
-        } catch {
-            if let error = error as NSError? {
-                switch error.code {
-                case 17025:
-                    throw AuthError.networkError
-                default:
-                    throw AuthError.networkError
-                }
-            }
-            throw AuthError.networkError
-        }
-    }
-    
-    /// Show username conflict dialog during linking
-    private func showUsernameConflictDialogForLinking(platform: LinkedPlatform.PlatformType) async {
-        conflictDialogMessage = "Your username '\(currentUser?.userName ?? "")' is already taken. Please choose a new username to link your \(platform.rawValue) account."
-        conflictDialogNewUsername = ""
-        showUsernameConflictDialog = true
-        
-        await withCheckedContinuation { continuation in
-            usernameConflictResolver = { newUsername in
-                continuation.resume()
-                self.usernameConflictResolver = nil
-                
-                if let username = newUsername {
-                    Task { @MainActor in
-                        do {
-                            try await self.updateUserName(username)
-                        } catch {
-                            self.errorMessage = error.localizedDescription
-                        }
-                    }
-                } else {
-                    Task { @MainActor in
-                        self.errorMessage = "Account linking cancelled."
-                    }
-                }
-            }
-        }
-    }
-    
-    /// Resolve username conflict
-    func resolveUsernameConflict(newUsername: String?) {
-        usernameConflictResolver?(newUsername)
-    }
-    
-    /// Unlink a platform account
-    func unlinkPlatform(_ platform: LinkedPlatform.PlatformType) async throws {
-        guard let user = currentUser else {
-            throw AuthError.noUser
-        }
-        
-        guard let firebaseUser = auth.currentUser else {
-            throw AuthError.noUser
-        }
-        
-        let providerID: String
-        switch platform {
-        case .google: providerID = "google.com"
-        case .apple: providerID = "apple.com"
-        case .facebook: providerID = "facebook.com"
-        case .twitter: providerID = "twitter.com"
-        case .microsoft: providerID = "microsoft.com"
-        case .yahoo: providerID = "yahoo.com"
-        case .instagram: throw AuthError.notImplemented
-        }
-        
-        if isOnline {
-            do {
-                try await firebaseUser.unlink(fromProvider: providerID)
-            } catch {
-                throw AuthError.networkError
-            }
-        }
-        
-        user.linkedPlatforms.removeAll { $0.platform == platform }
+        user.updateUserName(trimmedName, isManual: true)
         user.needsSync = true
         
         if let modelContext = modelContext {
@@ -1378,87 +764,164 @@ class FirebaseAuthService: ObservableObject {
         }
         
         if isOnline {
-            try await saveUserDataToFirestore(user)
+            Task {
+                try? await saveUserDataToFirestore(user)
+            }
+        }
+    }
+  
+  /// Resolve username conflict
+     func resolveUsernameConflict(newUsername: String?) {
+         usernameConflictResolver?(newUsername)
+     }
+    
+    // MARK: - Helper Methods
+    
+    private func handleAuthStateChange(_ user: User?) async {
+        if let firebaseUser = user {
+            await loadUserFromFirebase(firebaseUser)
+        } else {
+            // Firebase signed out
+            isAuthenticated = false
         }
     }
     
-    // MARK: - Helper Methods
-  private func handleAuthStateChange(_ user: User?) async {
-      if let firebaseUser = user {
-          guard let modelContext = modelContext else { return }
-          
-          // Extract firebaseUID to a local constant for use in predicates
-          let firebaseUID = firebaseUser.uid
-          
-          // First check if currentUser already matches this firebaseUID
-          if let currentUser = currentUser, currentUser.id == firebaseUID || currentUser.firebaseUID == firebaseUID {
-              // Current user already matches this Firebase UID - no migration needed
-              // Just ensure authentication state is set
-              isAuthenticated = true
-              print("✅ Current user already matches Firebase UID: \(firebaseUID)")
-              return
-          }
-          
-          // Check if we already have a currentUser that needs to be linked
-          if shouldMigrateUser(to: firebaseUID) {
-              // We have a local user that needs to be linked to this Firebase UID
-              print("🔗 Linking existing local user to Firebase UID: \(firebaseUID)")
-              await linkLocalUserToFirebase(localUser: currentUser!, firebaseUID: firebaseUID)
-              return
-          }
-          
-          // Check if a user with this firebaseUID already exists locally
-          // Check by id first (most common case)
-          let descriptorById = FetchDescriptor<AppUser>(
-              predicate: #Predicate<AppUser> { $0.id == firebaseUID }
-          )
-          
-          if let existingUser = try? modelContext.fetch(descriptorById).first {
-              // User already exists locally with this firebaseUID as their id
-              currentUser = existingUser
-              isAuthenticated = true
-              print("✅ Found existing user with Firebase UID: \(firebaseUID)")
-              return
-          }
-          
-          // Also check by firebaseUID field (for users who signed out but kept firebaseUID)
-          let descriptorByFirebaseUID = FetchDescriptor<AppUser>(
-              predicate: #Predicate<AppUser> { $0.firebaseUID == firebaseUID }
-          )
-          
-          if let existingUser = try? modelContext.fetch(descriptorByFirebaseUID).first {
-              // User already exists locally with this firebaseUID stored in firebaseUID field
-              currentUser = existingUser
-              isAuthenticated = true
-              print("✅ Found existing user with Firebase UID in firebaseUID field: \(firebaseUID)")
-              return
-          }
-          
-          // Check if there's a local user (by deviceIdentifier) that should be linked
-          let deviceId = DeviceIdentifier.getDeviceIdentifier()
-          let deviceDescriptor = FetchDescriptor<AppUser>(
-              predicate: #Predicate<AppUser> { $0.deviceIdentifier == deviceId && $0.firebaseUID == nil }
-          )
-          
-          if let localUser = try? modelContext.fetch(deviceDescriptor).first {
-              // Found a local user for this device that needs linking
-              print("🔗 Linking device user to Firebase UID: \(firebaseUID)")
-              await linkLocalUserToFirebase(localUser: localUser, firebaseUID: firebaseUID)
-              return
-          }
-          
-          // No local user found, load or create from Firebase
-          await loadOrCreateUserFromFirebase(firebaseUID: firebaseUID, email: firebaseUser.email)
-      } else {
-          // Firebase signed out, but keep local user
-          if let localUser = currentUser {
-              localUser.needsSync = true
-              try? modelContext?.save()
-          }
-      }
-  }
+    private func loadUserFromFirebase(_ firebaseUser: User) async {
+        guard let modelContext = modelContext else { return }
+        
+        let firebaseUID = firebaseUser.uid
+        
+        // Check if user exists locally
+        let descriptor = FetchDescriptor<AppUser>(
+            predicate: #Predicate<AppUser> { $0.firebaseUID == firebaseUID || $0.id == firebaseUID }
+        )
+        
+        if let existingUser = try? modelContext.fetch(descriptor).first {
+            // Update user's id to firebaseUID if needed
+            if existingUser.id != firebaseUID {
+                existingUser.id = firebaseUID
+            }
+            existingUser.firebaseUID = firebaseUID
+            try? modelContext.save()
+            
+            currentUser = existingUser
+            isAuthenticated = true
+            
+            // Load from Firestore to get latest data
+            Task {
+                if let firestoreUser = try? await loadUserDataFromFirestore(userId: firebaseUID) {
+                    // Merge Firestore data with local user
+                    existingUser.userName = firestoreUser.userName
+                    existingUser.firstName = firestoreUser.firstName
+                    existingUser.lastName = firestoreUser.lastName
+                    existingUser.email = firestoreUser.email
+                    existingUser.phoneNumber = firestoreUser.phoneNumber
+                    existingUser.userImageURL = firestoreUser.userImageURL
+                    existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
+                    try? modelContext.save()
+                }
+            }
+        } else {
+            // Load from Firestore or create new
+            if let firestoreUser = try? await loadUserDataFromFirestore(userId: firebaseUID) {
+                modelContext.insert(firestoreUser)
+                try? modelContext.save()
+                currentUser = firestoreUser
+                isAuthenticated = true
+            } else {
+                // Create new user from Firebase auth
+                await createNewUserFromFirebase(firebaseUser, email: firebaseUser.email, userName: nil, firstName: nil, lastName: nil, phoneNumber: nil)
+            }
+        }
+    }
+    
+    private func createNewUserFromFirebase(_ firebaseUser: User, email: String?, userName: String?, firstName: String?, lastName: String?, phoneNumber: String?) async {
+        guard let modelContext = modelContext else { return }
+        
+        let firebaseUID = firebaseUser.uid
+        let deviceId = DeviceIdentifier.getDeviceIdentifier()
+        let defaultUsername = userName ?? DeviceIdentifier.generateDefaultUsername(deviceId: deviceId)
+        
+        let newUser = AppUser(
+            id: firebaseUID,
+            userName: defaultUsername,
+            firstName: firstName,
+            lastName: lastName,
+            email: email,
+            phoneNumber: phoneNumber,
+            deviceIdentifier: deviceId,
+            isUsernameManuallyChanged: userName != nil,
+            firebaseUID: firebaseUID
+        )
+        
+        modelContext.insert(newUser)
+        try? modelContext.save()
+        
+        currentUser = newUser
+        isAuthenticated = true
+        
+        // Save to Firestore
+        Task {
+            try? await saveUserDataToFirestore(newUser)
+        }
+    }
+    
+    private func updateUserFromOAuth(_ firebaseUser: User, email: String?, displayName: String?) async {
+        guard let modelContext = modelContext,
+              let user = currentUser else { return }
+        
+        // Update user info from OAuth
+        if let email = email, user.email == nil {
+            user.email = email
+        }
+        
+        if let displayName = displayName {
+            let components = displayName.components(separatedBy: " ")
+            if components.count >= 2 {
+                user.firstName = components[0]
+                user.lastName = components.dropFirst().joined(separator: " ")
+            } else {
+                user.firstName = displayName
+            }
+        }
+        
+        try? modelContext.save()
+        try? await saveUserDataToFirestore(user)
+    }
     
     // MARK: - Firestore Serialization
+    
+    private func loadUserDataFromFirestore(userId: String) async throws -> AppUser? {
+        let docRef = db.collection("users").document(userId)
+        let document = try await docRef.getDocument()
+        
+        guard document.exists, let data = document.data() else {
+            return nil
+        }
+        
+        return appUserFromFirestoreData(data, id: userId)
+    }
+    
+    func saveUserDataToFirestore(_ user: AppUser) async throws {
+        guard isOnline else {
+            user.needsSync = true
+            try? modelContext?.save()
+            return
+        }
+        
+        guard let firebaseUID = user.firebaseUID else {
+            user.needsSync = true
+            return
+        }
+        
+        let docRef = db.collection("users").document(firebaseUID)
+        let data = firestoreDataFromAppUser(user)
+        try await docRef.setData(data, merge: true)
+        
+        user.lastSyncedToFirebase = .now
+        user.needsSync = false
+        try? modelContext?.save()
+    }
     
     private func firestoreDataFromAppUser(_ user: AppUser) -> [String: Any] {
         var data: [String: Any] = [
@@ -1489,9 +952,6 @@ class FirebaseAuthService: ObservableObject {
         }
         if let deviceIdentifier = user.deviceIdentifier {
             data["deviceIdentifier"] = deviceIdentifier
-        }
-        if let localIDBeforeFirebase = user.localIDBeforeFirebase {
-            data["localIDBeforeFirebase"] = localIDBeforeFirebase
         }
         
         if !user.linkedPlatforms.isEmpty {
@@ -1528,7 +988,6 @@ class FirebaseAuthService: ObservableObject {
         let isUsernameManuallyChanged = data["isUsernameManuallyChanged"] as? Bool ?? false
         let isEmailPublic = data["isEmailPublic"] as? Bool ?? false
         let isPhonePublic = data["isPhonePublic"] as? Bool ?? false
-        let localIDBeforeFirebase = data["localIDBeforeFirebase"] as? String
         
         let createdAt: Date
         if let timestamp = data["createdAt"] as? Timestamp {
@@ -1608,9 +1067,41 @@ class FirebaseAuthService: ObservableObject {
             linkedPlatforms: linkedPlatforms,
             firebaseUID: id,
             lastSyncedToFirebase: .now,
-            needsSync: false,
-            localIDBeforeFirebase: localIDBeforeFirebase
+            needsSync: false
         )
+    }
+    
+    // MARK: - Apple Nonce Helpers
+    
+    private static func sha256(_ input: String) -> String {
+        guard let inputData = input.data(using: .utf8) else { return "" }
+        let hashed = SHA256.hash(data: inputData)
+        return hashed.compactMap { String(format: "%02x", $0) }.joined()
+    }
+    
+    private static func randomNonceString(length: Int = 32) -> String {
+        precondition(length > 0)
+        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        var result = ""
+        var remainingLength = length
+        
+        while remainingLength > 0 {
+            var randoms = [UInt8](repeating: 0, count: 16)
+            let errorCode = SecRandomCopyBytes(kSecRandomDefault, randoms.count, &randoms)
+            if errorCode != errSecSuccess {
+                fatalError("Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)")
+            }
+            
+            randoms.forEach { random in
+                if remainingLength == 0 { return }
+                if random < charset.count {
+                    result.append(charset[Int(random)])
+                    remainingLength -= 1
+                }
+            }
+        }
+        
+        return result
     }
 }
 
@@ -1664,7 +1155,7 @@ enum AuthError: LocalizedError {
         case .invalidCredentials:
             return "Invalid email or password."
         case .networkError:
-            return "Unknown Network Error. Please try again later." // Should pass the data here, so we can print out the error.
+            return "Unknown Network Error. Please try again later."
         case .usernameTaken:
             return "This username is already taken. Please choose another."
         case .invalidUsername:
@@ -1678,4 +1169,3 @@ enum AuthError: LocalizedError {
         }
     }
 }
-
