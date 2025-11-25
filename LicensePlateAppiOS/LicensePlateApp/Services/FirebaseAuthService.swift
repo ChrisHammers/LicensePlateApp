@@ -355,49 +355,120 @@ class FirebaseAuthService: ObservableObject {
         }
         
         do {
-            // Create Firebase account
-            let result = try await auth.createUser(withEmail: email, password: password)
-            let firebaseUID = result.user.uid
-            
-            // Check if we have a local user to migrate
-            if shouldMigrateUser(to: firebaseUID) {
-                // Migrate local user to Firebase account
-                try await migrateLocalUserToFirebase(
-                    localUser: currentUser!,
-                    firebaseUID: firebaseUID,
-                    email: email,
-                    userName: userName,
-                    firstName: firstName,
-                    lastName: lastName,
-                    phoneNumber: phoneNumber
-                )
-            } else {
-                // Create new user with Firebase UID
-                let newUser = AppUser(
-                    id: firebaseUID,
-                    userName: userName,
-                    firstName: firstName,
-                    lastName: lastName,
-                    email: email,
-                    phoneNumber: phoneNumber,
-                    deviceIdentifier: DeviceIdentifier.getDeviceIdentifier(),
-                    isUsernameManuallyChanged: true,
-                    firebaseUID: firebaseUID
-                )
+            // Check if current user is anonymous - if so, link the account instead of creating new
+            if let firebaseUser = auth.currentUser, firebaseUser.isAnonymous {
+                // User is anonymous, link email/password to existing anonymous account
+                let credential = EmailAuthProvider.credential(withEmail: email, password: password)
                 
-                modelContext?.insert(newUser)
-                try modelContext?.save()
-                
-                currentUser = newUser
-                isAuthenticated = true
-                
-                // Save to Firestore (ensure it's saved)
                 do {
-                    try await saveUserDataToFirestore(newUser)
-                    print("✅ User \(newUser.userName) saved to Firestore successfully")
+                    let result = try await firebaseUser.link(with: credential)
+                    let firebaseUID = result.user.uid
+                    
+                    // Migrate local user to the linked account
+                    if let localUser = currentUser {
+                        try await migrateLocalUserToFirebase(
+                            localUser: localUser,
+                            firebaseUID: firebaseUID,
+                            email: email,
+                            userName: userName,
+                            firstName: firstName,
+                            lastName: lastName,
+                            phoneNumber: phoneNumber
+                        )
+                    }
                 } catch {
-                    print("⚠️ Failed to save user to Firestore: \(error)")
-                    // Continue anyway - user is created locally and will sync later
+                    // If linking fails (e.g., email already in use), create new account
+                    // This will sign out the anonymous account and create a new one
+                    let result = try await auth.createUser(withEmail: email, password: password)
+                    let firebaseUID = result.user.uid
+                    
+                    // Check if we have a local user to migrate
+                    if shouldMigrateUser(to: firebaseUID) {
+                        // Migrate local user to Firebase account
+                        try await migrateLocalUserToFirebase(
+                            localUser: currentUser!,
+                            firebaseUID: firebaseUID,
+                            email: email,
+                            userName: userName,
+                            firstName: firstName,
+                            lastName: lastName,
+                            phoneNumber: phoneNumber
+                        )
+                    } else {
+                        // Create new user with Firebase UID
+                        let newUser = AppUser(
+                            id: firebaseUID,
+                            userName: userName,
+                            firstName: firstName,
+                            lastName: lastName,
+                            email: email,
+                            phoneNumber: phoneNumber,
+                            deviceIdentifier: DeviceIdentifier.getDeviceIdentifier(),
+                            isUsernameManuallyChanged: true,
+                            firebaseUID: firebaseUID
+                        )
+                        
+                        modelContext?.insert(newUser)
+                        try modelContext?.save()
+                        
+                        currentUser = newUser
+                        isAuthenticated = true
+                        
+                        // Save to Firestore (ensure it's saved)
+                        do {
+                            try await saveUserDataToFirestore(newUser)
+                            print("✅ User \(newUser.userName) saved to Firestore successfully")
+                        } catch {
+                            print("⚠️ Failed to save user to Firestore: \(error)")
+                            // Continue anyway - user is created locally and will sync later
+                        }
+                    }
+                }
+            } else {
+                // Not anonymous, create new account normally
+                let result = try await auth.createUser(withEmail: email, password: password)
+                let firebaseUID = result.user.uid
+                
+                // Check if we have a local user to migrate
+                if shouldMigrateUser(to: firebaseUID) {
+                    // Migrate local user to Firebase account
+                    try await migrateLocalUserToFirebase(
+                        localUser: currentUser!,
+                        firebaseUID: firebaseUID,
+                        email: email,
+                        userName: userName,
+                        firstName: firstName,
+                        lastName: lastName,
+                        phoneNumber: phoneNumber
+                    )
+                } else {
+                    // Create new user with Firebase UID
+                    let newUser = AppUser(
+                        id: firebaseUID,
+                        userName: userName,
+                        firstName: firstName,
+                        lastName: lastName,
+                        email: email,
+                        phoneNumber: phoneNumber,
+                        deviceIdentifier: DeviceIdentifier.getDeviceIdentifier(),
+                        isUsernameManuallyChanged: true,
+                        firebaseUID: firebaseUID
+                    )
+                    
+                    modelContext?.insert(newUser)
+                    try modelContext?.save()
+                    
+                    currentUser = newUser
+                    isAuthenticated = true
+                    
+                    // Save to Firestore (ensure it's saved)
+                    do {
+                        try await saveUserDataToFirestore(newUser)
+                        print("✅ User \(newUser.userName) saved to Firestore successfully")
+                    } catch {
+                        print("⚠️ Failed to save user to Firestore: \(error)")
+                        // Continue anyway - user is created locally and will sync later
+                    }
                 }
             }
         } catch {
@@ -462,7 +533,6 @@ class FirebaseAuthService: ObservableObject {
     /// Returns true if:
     /// - User has no firebaseUID (truly local)
     /// - User has a different firebaseUID (different account)
-    /// - User is anonymous and we're signing in with a real account
     private func shouldMigrateUser(to firebaseUID: String) -> Bool {
         guard let currentUser = currentUser else {
             return false // No user to migrate
@@ -478,14 +548,10 @@ class FirebaseAuthService: ObservableObject {
             return false
         }
         
-        // If firebaseUIDs differ, check if current user is anonymous
-        // If anonymous, we should migrate to the new account
-        if let firebaseUser = auth.currentUser, firebaseUser.isAnonymous {
-            return true
-        }
-        
-        // If firebaseUIDs differ and not anonymous, still migrate
-        // (user is switching accounts)
+        // If firebaseUIDs differ, we should migrate
+        // This handles:
+        // - Anonymous account being replaced with email/password account
+        // - User switching accounts
         return true
     }
     
