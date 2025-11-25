@@ -180,6 +180,25 @@ class FirebaseAuthService: ObservableObject {
             return false
         }
     }
+  
+  /// Check if the current Firebase user is truly authenticated (not anonymous)
+  var isTrulyAuthenticated: Bool {
+      guard let firebaseUser = auth.currentUser else {
+          return false
+      }
+      // User is truly authenticated if they have a firebaseUID and are not anonymous
+      return !firebaseUser.isAnonymous
+  }
+
+  /// Check if the current user (local or Firebase) is anonymous
+  var isAnonymousUser: Bool {
+      guard let firebaseUser = auth.currentUser else {
+          // If no Firebase user, check if we have a local user with firebaseUID
+          // If they have firebaseUID but no Firebase user, they might be anonymous
+          return currentUser?.firebaseUID != nil
+      }
+      return firebaseUser.isAnonymous
+  }
     
     // MARK: - Authentication Methods (Offline-First)
     

@@ -199,115 +199,135 @@ struct UserProfileView: View {
                     .listRowBackground(Color.clear)
                     .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
                     
-                    // Authentication Status Section
-                    Section {
-                        VStack(alignment: .leading, spacing: 16) {
-                            // Authentication status
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(user.isFirebaseAuthenticated ? "Signed In" : "Local Account")
-                                        .font(.system(.body, design: .rounded))
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(Color.Theme.primaryBlue)
-                                    
-                                    Text(user.isFirebaseAuthenticated ? "Your account is synced to the cloud" : "Your account is stored locally only")
-                                        .font(.system(.caption, design: .rounded))
-                                        .foregroundStyle(Color.Theme.softBrown)
-                                }
-                                
-                                Spacer()
-                                
-                                if user.isFirebaseAuthenticated {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.green)
-                                } else {
-                                    Image(systemName: "exclamationmark.circle.fill")
-                                        .foregroundStyle(Color.Theme.accentYellow)
-                                }
-                            }
-                            
-                            // Sign in / Create account button
-                            if !user.isFirebaseAuthenticated {
-                                Button {
-                                    authService.showSignInSheet = true
-                                } label: {
-                                    HStack {
-                                        Text("Sign In or Create Account")
-                                            .font(.system(.body, design: .rounded))
-                                            .fontWeight(.semibold)
-                                        
-                                        Spacer()
-                                        
-                                        Image(systemName: "arrow.right")
-                                            .font(.system(size: 14, weight: .semibold))
-                                    }
-                                    .foregroundStyle(.white)
-                                    .padding(.vertical, 12)
-                                    .padding(.horizontal, 16)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .fill(Color.Theme.primaryBlue)
-                                    )
-                                }
-                            } else {
-                                // Sign out button
-                                Button {
-                                    Task {
-                                        do {
-                                            try await authService.signOut()
-                                        } catch {
-                                            errorMessage = error.localizedDescription
-                                            showError = true
-                                        }
-                                    }
-                                } label: {
-                                    HStack {
-                                        Text("Sign Out")
-                                            .font(.system(.body, design: .rounded))
-                                            .fontWeight(.semibold)
-                                        
-                                        Spacer()
-                                        
-                                        Image(systemName: "arrow.right")
-                                            .font(.system(size: 14, weight: .semibold))
-                                    }
-                                    .foregroundStyle(Color.Theme.primaryBlue)
-                                    .padding(.vertical, 12)
-                                    .padding(.horizontal, 16)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                            .stroke(Color.Theme.primaryBlue, lineWidth: 2)
-                                    )
-                                }
-                            }
-                            
-                            // Sync status
-                            if user.needsSync && !authService.isOnline {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "arrow.clockwise")
-                                        .font(.system(.caption, design: .rounded))
-                                    Text("Changes will sync when you're online")
-                                        .font(.system(.caption, design: .rounded))
-                                }
-                                .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
-                                .padding(.top, 4)
-                            }
-                        }
-                        .padding(.vertical, 12)
-                        .padding(.horizontal, 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                                .fill(Color.Theme.cardBackground)
-                        )
-                    } header: {
-                        Text("Authentication")
-                            .font(.system(.headline, design: .rounded))
-                            .foregroundStyle(Color.Theme.primaryBlue)
-                    }
-                    .textCase(nil)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
-                    
+                  // Authentication Status Section
+                  Section {
+                      VStack(alignment: .leading, spacing: 16) {
+                          // Authentication status
+                          HStack {
+                              VStack(alignment: .leading, spacing: 4) {
+                                  if authService.isTrulyAuthenticated {
+                                      Text("Signed In")
+                                          .font(.system(.body, design: .rounded))
+                                          .fontWeight(.semibold)
+                                          .foregroundStyle(Color.Theme.primaryBlue)
+                                      
+                                      Text("Your account is synced to the cloud")
+                                          .font(.system(.caption, design: .rounded))
+                                          .foregroundStyle(Color.Theme.softBrown)
+                                  } else if authService.isAnonymousUser || user.firebaseUID != nil {
+                                      Text("Anonymous Account")
+                                          .font(.system(.body, design: .rounded))
+                                          .fontWeight(.semibold)
+                                          .foregroundStyle(Color.Theme.primaryBlue)
+                                      
+                                      Text("Sign up to sync your account and access more features")
+                                          .font(.system(.caption, design: .rounded))
+                                          .foregroundStyle(Color.Theme.softBrown)
+                                  } else {
+                                      Text("Local Account")
+                                          .font(.system(.body, design: .rounded))
+                                          .fontWeight(.semibold)
+                                          .foregroundStyle(Color.Theme.primaryBlue)
+                                      
+                                      Text("Your account is stored locally only. Sign in to sync to the cloud")
+                                          .font(.system(.caption, design: .rounded))
+                                          .foregroundStyle(Color.Theme.softBrown)
+                                  }
+                              }
+                              
+                              Spacer()
+                              
+                              if authService.isTrulyAuthenticated {
+                                  Image(systemName: "checkmark.circle.fill")
+                                      .foregroundStyle(.green)
+                              } else {
+                                  Image(systemName: "exclamationmark.circle.fill")
+                                      .foregroundStyle(Color.Theme.accentYellow)
+                              }
+                          }
+                          
+                          // Sign in / Create account button (show if NOT truly authenticated)
+                          if !authService.isTrulyAuthenticated {
+                              Button {
+                                  authService.showSignInSheet = true
+                              } label: {
+                                  HStack {
+                                      Text("Sign In or Create Account")
+                                          .font(.system(.body, design: .rounded))
+                                          .fontWeight(.semibold)
+                                      
+                                      Spacer()
+                                      
+                                      Image(systemName: "arrow.right")
+                                          .font(.system(size: 14, weight: .semibold))
+                                  }
+                                  .foregroundStyle(.white)
+                                  .padding(.vertical, 12)
+                                  .padding(.horizontal, 16)
+                                  .background(
+                                      RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                          .fill(Color.Theme.primaryBlue)
+                                  )
+                              }
+                          } else {
+                              // Sign out button (only show if truly authenticated)
+                              Button {
+                                  Task {
+                                      do {
+                                          try await authService.signOut()
+                                      } catch {
+                                          errorMessage = error.localizedDescription
+                                          showError = true
+                                      }
+                                  }
+                              } label: {
+                                  HStack {
+                                      Text("Sign Out")
+                                          .font(.system(.body, design: .rounded))
+                                          .fontWeight(.semibold)
+                                      
+                                      Spacer()
+                                      
+                                      Image(systemName: "arrow.right")
+                                          .font(.system(size: 14, weight: .semibold))
+                                  }
+                                  .foregroundStyle(Color.Theme.primaryBlue)
+                                  .padding(.vertical, 12)
+                                  .padding(.horizontal, 16)
+                                  .background(
+                                      RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                          .stroke(Color.Theme.primaryBlue, lineWidth: 2)
+                                  )
+                              }
+                          }
+                          
+                          // Sync status
+                          if user.needsSync && !authService.isOnline {
+                              HStack(spacing: 8) {
+                                  Image(systemName: "arrow.clockwise")
+                                      .font(.system(.caption, design: .rounded))
+                                  Text("Changes will sync when you're online")
+                                      .font(.system(.caption, design: .rounded))
+                              }
+                              .foregroundStyle(Color.Theme.softBrown)
+                              .padding(.top, 8)
+                          }
+                      }
+                      .padding(.vertical, 12)
+                      .padding(.horizontal, 16)
+                      .background(
+                          RoundedRectangle(cornerRadius: 20, style: .continuous)
+                              .fill(Color.Theme.cardBackground)
+                      )
+                  } header: {
+                      Text("Authentication Status")
+                          .font(.system(.headline, design: .rounded))
+                          .foregroundStyle(Color.Theme.primaryBlue)
+                  }
+                  .textCase(nil)
+                  .listRowBackground(Color.clear)
+                  .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
+                  
                     // Linked Accounts Section
                     Section {
                         VStack(alignment: .leading, spacing: 16) {
@@ -495,7 +515,7 @@ struct UserProfileView: View {
         try? modelContext.save()
         
         // Sync to Firestore if authenticated
-        if user.isFirebaseAuthenticated {
+        if authService.isTrulyAuthenticated {
             Task {
                 try? await authService.saveUserDataToFirestore(user)
             }
@@ -513,7 +533,7 @@ struct UserProfileView: View {
         try? modelContext.save()
         
         // Sync to Firestore if authenticated
-        if user.isFirebaseAuthenticated {
+      if authService.isTrulyAuthenticated {
             Task {
                 try? await authService.saveUserDataToFirestore(user)
             }

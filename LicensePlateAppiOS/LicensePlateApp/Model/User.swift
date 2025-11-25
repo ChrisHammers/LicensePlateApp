@@ -118,11 +118,6 @@ final class AppUser {
         self.localIDBeforeFirebase = localIDBeforeFirebase
     }
     
-    /// Check if user is authenticated with Firebase
-    var isFirebaseAuthenticated: Bool {
-        firebaseUID != nil
-    }
-    
     func updateUserName(_ newName: String, isManual: Bool = true) {
         self.userName = newName
         self.lastUpdated = .now
