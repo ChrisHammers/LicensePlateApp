@@ -985,7 +985,10 @@ class FirebaseAuthService: ObservableObject {
                     existingUser.userName = firestoreUser.userName
                     existingUser.firstName = firestoreUser.firstName
                     existingUser.lastName = firestoreUser.lastName
-                    existingUser.email = firestoreUser.email
+                    // For anonymous users, don't use email from Firestore
+                    if !firebaseUser.isAnonymous {
+                        existingUser.email = firestoreUser.email
+                    }
                     existingUser.phoneNumber = firestoreUser.phoneNumber
                     existingUser.userImageURL = firestoreUser.userImageURL
                     existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
@@ -995,6 +998,11 @@ class FirebaseAuthService: ObservableObject {
         } else {
             // Load from Firestore or create new
             if let firestoreUser = try? await loadUserDataFromFirestore(userId: firebaseUID) {
+                // For anonymous users, don't use email from Firestore if it exists
+                if firebaseUser.isAnonymous && firestoreUser.email != nil {
+                    firestoreUser.email = nil
+                }
+                
                 modelContext.insert(firestoreUser)
                 try? modelContext.save()
                 currentUser = firestoreUser
@@ -1004,7 +1012,9 @@ class FirebaseAuthService: ObservableObject {
                 await updateLoginTracking()
             } else {
                 // Create new user from Firebase auth
-                await createNewUserFromFirebase(firebaseUser, email: firebaseUser.email, userName: nil, firstName: nil, lastName: nil, phoneNumber: nil)
+                // Only use email if user is not anonymous (anonymous users don't have emails)
+                let email = firebaseUser.isAnonymous ? nil : firebaseUser.email
+                await createNewUserFromFirebase(firebaseUser, email: email, userName: nil, firstName: nil, lastName: nil, phoneNumber: nil)
                 
                 // Update login tracking
                 await updateLoginTracking()
