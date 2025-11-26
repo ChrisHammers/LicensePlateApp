@@ -346,48 +346,134 @@ struct UserProfileView: View {
                                     .foregroundStyle(Color.Theme.softBrown)
                             } else {
                                 ForEach(user.linkedPlatforms, id: \.platform) { platform in
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        HStack {
-                                            Text(platform.platform.rawValue)
-                                                .font(.system(.body, design: .rounded))
-                                                .fontWeight(.semibold)
-                                                .foregroundStyle(Color.Theme.primaryBlue)
+                                    HStack {
+                                        VStack(alignment: .leading, spacing: 4) {
+                                            HStack {
+                                                Text(platform.platform.rawValue)
+                                                    .font(.system(.body, design: .rounded))
+                                                    .fontWeight(.semibold)
+                                                    .foregroundStyle(Color.Theme.primaryBlue)
+                                                
+                                                Spacer()
+                                                
+                                                Text("Linked")
+                                                    .font(.system(.caption, design: .rounded))
+                                                    .foregroundStyle(Color.green)
+                                                    .padding(.horizontal, 8)
+                                                    .padding(.vertical, 4)
+                                                    .background(
+                                                        Capsule()
+                                                            .fill(Color.green.opacity(0.15))
+                                                    )
+                                            }
                                             
-                                            Spacer()
+                                            if let email = platform.email {
+                                                Text("Email: \(email)")
+                                                    .font(.system(.caption, design: .rounded))
+                                                    .foregroundStyle(Color.Theme.softBrown.opacity(0.8))
+                                            }
                                             
-                                            Text("Linked")
-                                                .font(.system(.caption, design: .rounded))
-                                                .foregroundStyle(Color.Theme.softBrown)
+                                            if let displayName = platform.displayName {
+                                                Text("Name: \(displayName)")
+                                                    .font(.system(.caption, design: .rounded))
+                                                    .foregroundStyle(Color.Theme.softBrown.opacity(0.8))
+                                            }
                                         }
                                         
-                                        if let email = platform.email {
-                                            Text("Email: \(email)")
-                                                .font(.system(.caption, design: .rounded))
-                                                .foregroundStyle(Color.Theme.softBrown.opacity(0.8))
-                                        }
-                                        
-                                        if let phone = platform.phoneNumber {
-                                            Text("Phone: \(phone)")
-                                                .font(.system(.caption, design: .rounded))
-                                                .foregroundStyle(Color.Theme.softBrown.opacity(0.8))
-                                        }
-                                        
-                                        if let displayName = platform.displayName {
-                                            Text("Name: \(displayName)")
-                                                .font(.system(.caption, design: .rounded))
-                                                .foregroundStyle(Color.Theme.softBrown.opacity(0.8))
+                                        // Unlink button
+                                        Button {
+                                            Task {
+                                                do {
+                                                    try await authService.unlinkPlatform(platform.platform)
+                                                } catch {
+                                                    errorMessage = error.localizedDescription
+                                                    showError = true
+                                                }
+                                            }
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundStyle(Color.red)
+                                                .font(.system(size: 20))
                                         }
                                     }
                                     .padding(.vertical, 8)
                                 }
                             }
                             
-                            // Placeholder for future platform linking buttons
-                            Text("Platform linking coming soon")
-                                .font(.system(.caption, design: .rounded))
-                                .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
-                                .italic()
-                                .padding(.top, 4)
+                            // Link new accounts section (only show if truly authenticated)
+                            if authService.isTrulyAuthenticated {
+                                Divider()
+                                    .padding(.vertical, 8)
+                                
+                                Text("Link Additional Accounts")
+                                    .font(.system(.subheadline, design: .rounded))
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(Color.Theme.primaryBlue)
+                                    .padding(.bottom, 4)
+                                
+                                // Available platforms to link
+                                let availablePlatforms = LinkedPlatform.PlatformType.allCases.filter { platformType in
+                                    !user.linkedPlatforms.contains(where: { $0.platform == platformType })
+                                }
+                                
+                                if availablePlatforms.isEmpty {
+                                    Text("All available accounts are linked")
+                                        .font(.system(.caption, design: .rounded))
+                                        .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+                                } else {
+                                    VStack(spacing: 8) {
+                                        ForEach(availablePlatforms, id: \.self) { platform in
+                                            Button {
+                                                Task {
+                                                    do {
+                                                        switch platform {
+                                                        case .google:
+                                                            try await authService.linkGoogleAccount()
+                                                        case .apple:
+                                                            try await authService.linkAppleAccount()
+                                                        case .microsoft:
+                                                            try await authService.linkMicrosoftAccount()
+                                                        case .yahoo:
+                                                            try await authService.linkYahooAccount()
+                                                        case .facebook, .twitter, .instagram:
+                                                            // Not yet implemented
+                                                            errorMessage = "\(platform.rawValue) linking is not yet available"
+                                                            showError = true
+                                                        }
+                                                    } catch {
+                                                        errorMessage = error.localizedDescription
+                                                        showError = true
+                                                    }
+                                                }
+                                            } label: {
+                                                HStack {
+                                                    Text("Link \(platform.rawValue)")
+                                                        .font(.system(.body, design: .rounded))
+                                                        .fontWeight(.medium)
+                                                    
+                                                    Spacer()
+                                                    
+                                                    Image(systemName: "plus.circle.fill")
+                                                        .font(.system(size: 18))
+                                                }
+                                                .foregroundStyle(Color.Theme.primaryBlue)
+                                                .padding(.vertical, 10)
+                                                .padding(.horizontal, 12)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                        .fill(Color.Theme.primaryBlue.opacity(0.1))
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                Text("Sign in to link additional accounts")
+                                    .font(.system(.caption, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+                                    .italic()
+                                    .padding(.top, 4)
+                            }
                         }
                         .padding(.vertical, 12)
                         .padding(.horizontal, 16)

@@ -664,6 +664,75 @@ class FirebaseAuthService: ObservableObject {
         try await linkPlatformCredential(credential, platform: .yahoo, email: nil, displayName: nil)
     }
     
+    // MARK: - Helper method for Google Sign-In (finds UIViewController automatically)
+    func linkGoogleAccount() async throws {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            throw AuthError.notImplemented
+        }
+        
+        try await linkGoogleAccount(presentingViewController: rootViewController)
+    }
+    
+    // MARK: - Unlink Platform
+    func unlinkPlatform(_ platform: LinkedPlatform.PlatformType) async throws {
+        guard let firebaseUser = auth.currentUser, isTrulyAuthenticated else {
+            throw AuthError.noUser
+        }
+        
+        guard let user = currentUser, let modelContext = modelContext else {
+            throw AuthError.noUser
+        }
+        
+        guard isOnline else {
+            throw AuthError.offline
+        }
+        
+        isLoading = true
+        defer { isLoading = false }
+        
+        // Map platform type to provider ID
+        let providerID: String
+        switch platform {
+        case .google:
+            providerID = "google.com"
+        case .apple:
+            providerID = "apple.com"
+        case .microsoft:
+            providerID = "microsoft.com"
+        case .yahoo:
+            providerID = "yahoo.com"
+        case .facebook:
+            providerID = "facebook.com"
+        case .twitter:
+            providerID = "twitter.com"
+        case .instagram:
+            providerID = "instagram.com"
+        }
+        
+        // Prevent unlinking if it's the only provider (user needs at least one way to sign in)
+        if firebaseUser.providerData.count <= 1 {
+            throw AuthError.cannotUnlinkLastProvider
+        }
+        
+        do {
+            try await firebaseUser.unlink(fromProvider: providerID)
+            
+            // Remove from local user's linked platforms
+            user.linkedPlatforms.removeAll { $0.platform == platform }
+            user.needsSync = true
+            
+            try modelContext.save()
+            
+            // Sync to Firestore
+            if isOnline {
+                try? await saveUserDataToFirestore(user)
+            }
+        } catch {
+            throw AuthError.networkError
+        }
+    }
+    
   private func linkPlatformCredential(_ credential: AuthCredential, platform: LinkedPlatform.PlatformType, email: String?, displayName: String?) async throws {
          guard let firebaseUser = auth.currentUser, isTrulyAuthenticated else {
              throw AuthError.noUser
@@ -1322,6 +1391,7 @@ enum AuthError: LocalizedError {
     case noModelContext
     case emailAlreadyInUse
     case offline
+    case cannotUnlinkLastProvider
     
     var errorDescription: String? {
         switch self {
@@ -1342,6 +1412,9 @@ enum AuthError: LocalizedError {
         case .emailAlreadyInUse:
             return "This email is already in use. Please sign in or use a different email."
         case .offline:
+            return "You are currently offline. Please check your connection."
+        case .cannotUnlinkLastProvider:
+            return "You cannot unlink your last sign-in method. Please link another account first."
             return "You are offline. Please connect to the internet to perform this action."
         }
     }
