@@ -24,14 +24,20 @@ struct LicensePlateAppApp: App {
   @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
   
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Trip.self,
-            AppUser.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
+        // Use versioned schema for future migration support
+        let schema = Schema(versionedSchema: CurrentSchema.self)
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false
+        )
+        
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            // Create ModelContainer with versioned schema and migration plan
+            return try ModelContainer(
+                for: schema,
+                migrationPlan: AppMigrationPlan.self,
+                configurations: [modelConfiguration]
+            )
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
