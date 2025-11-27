@@ -112,6 +112,19 @@ final class Trip {
     var trackMyLocationDuringTrip: Bool = true
     var showMyActiveTripOnLargeMap: Bool = true
     var showMyActiveTripOnSmallMap: Bool = true
+    
+    // Enabled countries for this trip (stored as strings for SwiftData compatibility)
+    var enabledCountryStrings: [String] = ["United States", "Canada", "Mexico"]
+    
+    // Computed property to get countries as enum array
+    var enabledCountries: [PlateRegion.Country] {
+        get {
+            enabledCountryStrings.compactMap { PlateRegion.Country(rawValue: $0) }
+        }
+        set {
+            enabledCountryStrings = newValue.map { $0.rawValue }
+        }
+    }
 
     init(
         id: UUID = UUID(),
@@ -130,7 +143,8 @@ final class Trip {
         showMyLocationOnLargeMap: Bool = true,
         trackMyLocationDuringTrip: Bool = true,
         showMyActiveTripOnLargeMap: Bool = true,
-        showMyActiveTripOnSmallMap: Bool = true
+        showMyActiveTripOnSmallMap: Bool = true,
+        enabledCountries: [PlateRegion.Country] = [.unitedStates, .canada, .mexico]
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -149,6 +163,7 @@ final class Trip {
         self.trackMyLocationDuringTrip = trackMyLocationDuringTrip
         self.showMyActiveTripOnLargeMap = showMyActiveTripOnLargeMap
         self.showMyActiveTripOnSmallMap = showMyActiveTripOnSmallMap
+        self.enabledCountryStrings = enabledCountries.map { $0.rawValue }
     }
     
     // MARK: - Computed Properties for Backward Compatibility

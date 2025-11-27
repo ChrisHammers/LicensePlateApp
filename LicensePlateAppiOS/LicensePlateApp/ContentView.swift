@@ -101,10 +101,10 @@ struct ContentView: View {
                 addTripButton
             }
             .sheet(isPresented: $isShowingCreateSheet) {
-                NewTripNameSheet { name in
-                    createTrip(named: name)
+                NewTripSheet { tripData in
+                    createTrip(with: tripData)
                 }
-                .presentationDetents([.medium])
+                .presentationDetents([.medium, .large])
             }
             .navigationDestination(for: UUID.self) { tripID in
                 if let trip = trips.first(where: { $0.id == tripID }) {
@@ -199,12 +199,34 @@ struct ContentView: View {
 
     @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
     @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
+    @AppStorage("defaultStartTripRightAway") private var defaultStartTripRightAway = false
+    @AppStorage("defaultIncludeUS") private var defaultIncludeUS = true
+    @AppStorage("defaultIncludeCanada") private var defaultIncludeCanada = true
+    @AppStorage("defaultIncludeMexico") private var defaultIncludeMexico = true
+    @AppStorage("defaultSaveLocationWhenMarkingPlates") private var defaultSaveLocationWhenMarkingPlates = true
+    @AppStorage("defaultShowMyLocationOnLargeMap") private var defaultShowMyLocationOnLargeMap = true
+    @AppStorage("defaultTrackMyLocationDuringTrip") private var defaultTrackMyLocationDuringTrip = true
+    @AppStorage("defaultShowMyActiveTripOnLargeMap") private var defaultShowMyActiveTripOnLargeMap = true
+    @AppStorage("defaultShowMyActiveTripOnSmallMap") private var defaultShowMyActiveTripOnSmallMap = true
     
-    private func createTrip(named name: String?) {
+    struct TripCreationData {
+        let name: String?
+        let enabledCountries: [PlateRegion.Country]
+        let startTripRightAway: Bool
+        let skipVoiceConfirmation: Bool
+        let holdToTalk: Bool
+        let saveLocationWhenMarkingPlates: Bool
+        let showMyLocationOnLargeMap: Bool
+        let trackMyLocationDuringTrip: Bool
+        let showMyActiveTripOnLargeMap: Bool
+        let showMyActiveTripOnSmallMap: Bool
+    }
+    
+    private func createTrip(with data: TripCreationData) {
         let finalName: String
         let createdAt = Date()
 
-        if let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if let name = data.name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             finalName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         } else {
             finalName = dateFormatter.string(from: createdAt)
@@ -214,9 +236,15 @@ struct ContentView: View {
             createdAt: createdAt,
             name: finalName,
             foundRegions: [],
-            skipVoiceConfirmation: defaultSkipVoiceConfirmation,
-            holdToTalk: defaultHoldToTalk,
-            createdBy: authService.currentUser?.id
+            skipVoiceConfirmation: data.skipVoiceConfirmation,
+            holdToTalk: data.holdToTalk,
+            createdBy: authService.currentUser?.id,
+            startedAt: data.startTripRightAway ? createdAt : nil,
+            saveLocationWhenMarkingPlates: data.saveLocationWhenMarkingPlates, showMyLocationOnLargeMap: data.showMyLocationOnLargeMap,
+            trackMyLocationDuringTrip: data.trackMyLocationDuringTrip,
+            showMyActiveTripOnLargeMap: data.showMyActiveTripOnLargeMap,
+            showMyActiveTripOnSmallMap: data.showMyActiveTripOnSmallMap,
+            enabledCountries: data.enabledCountries
         )
 
         modelContext.insert(newTrip)
@@ -243,18 +271,185 @@ struct ContentView: View {
     }
 }
 
-private struct NewTripNameSheet: View {
+private struct NewTripSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var tripName: String = ""
-    var onCreate: (String?) -> Void
+    
+    // Defaults from AppStorage
+    @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
+    @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
+    @AppStorage("defaultStartTripRightAway") private var defaultStartTripRightAway = false
+    @AppStorage("defaultIncludeUS") private var defaultIncludeUS = true
+    @AppStorage("defaultIncludeCanada") private var defaultIncludeCanada = true
+    @AppStorage("defaultIncludeMexico") private var defaultIncludeMexico = true
+    @AppStorage("defaultSaveLocationWhenMarkingPlates") private var defaultSaveLocationWhenMarkingPlates = true
+    @AppStorage("defaultShowMyLocationOnLargeMap") private var defaultShowMyLocationOnLargeMap = true
+    @AppStorage("defaultTrackMyLocationDuringTrip") private var defaultTrackMyLocationDuringTrip = true
+    @AppStorage("defaultShowMyActiveTripOnLargeMap") private var defaultShowMyActiveTripOnLargeMap = true
+    @AppStorage("defaultShowMyActiveTripOnSmallMap") private var defaultShowMyActiveTripOnSmallMap = true
+    
+    // Trip settings state
+    @State private var includeUS: Bool
+    @State private var includeCanada: Bool
+    @State private var includeMexico: Bool
+    @State private var startTripRightAway: Bool
+    @State private var skipVoiceConfirmation: Bool
+    @State private var holdToTalk: Bool
+    @State private var saveLocationWhenMarkingPlates: Bool
+    @State private var showMyLocationOnLargeMap: Bool
+    @State private var trackMyLocationDuringTrip: Bool
+    @State private var showMyActiveTripOnLargeMap: Bool
+    @State private var showMyActiveTripOnSmallMap: Bool
+    
+    var onCreate: (ContentView.TripCreationData) -> Void
+    
+    init(onCreate: @escaping (ContentView.TripCreationData) -> Void) {
+        self.onCreate = onCreate
+        
+        // Initialize with defaults
+        _includeUS = State(initialValue: UserDefaults.standard.bool(forKey: "defaultIncludeUS") ? true : true)
+        _includeCanada = State(initialValue: UserDefaults.standard.bool(forKey: "defaultIncludeCanada") ? true : true)
+        _includeMexico = State(initialValue: UserDefaults.standard.bool(forKey: "defaultIncludeMexico") ? true : true)
+        _startTripRightAway = State(initialValue: UserDefaults.standard.bool(forKey: "defaultStartTripRightAway"))
+        _skipVoiceConfirmation = State(initialValue: UserDefaults.standard.bool(forKey: "defaultSkipVoiceConfirmation"))
+        _holdToTalk = State(initialValue: UserDefaults.standard.object(forKey: "defaultHoldToTalk") as? Bool ?? true)
+        _saveLocationWhenMarkingPlates = State(initialValue: UserDefaults.standard.object(forKey: "defaultSaveLocationWhenMarkingPlates") as? Bool ?? true)
+        _showMyLocationOnLargeMap = State(initialValue: UserDefaults.standard.object(forKey: "defaultShowMyLocationOnLargeMap") as? Bool ?? true)
+        _trackMyLocationDuringTrip = State(initialValue: UserDefaults.standard.object(forKey: "defaultTrackMyLocationDuringTrip") as? Bool ?? true)
+        _showMyActiveTripOnLargeMap = State(initialValue: UserDefaults.standard.object(forKey: "defaultShowMyActiveTripOnLargeMap") as? Bool ?? true)
+        _showMyActiveTripOnSmallMap = State(initialValue: UserDefaults.standard.object(forKey: "defaultShowMyActiveTripOnSmallMap") as? Bool ?? true)
+    }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section("Trip Name") {
-                    TextField("Automatically use date & time", text: $tripName)
-                        .textInputAutocapitalization(.words)
+            ZStack {
+                Color.Theme.background
+                    .ignoresSafeArea()
+                
+                List {
+                    Section {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Trip Name")
+                                .font(.system(.headline, design: .rounded))
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                            
+                            TextField("Automatically use date & time", text: $tripName)
+                                .textInputAutocapitalization(.words)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color.Theme.cardBackground)
+                                )
+                        }
+                        .padding(.vertical, 8)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                        .listRowBackground(Color.clear)
+                    } header: {
+                        Text("Basic Info")
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    .textCase(nil)
+                    
+                    Section {
+                        VStack(spacing: 12) {
+                            // Countries
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Countries to Include")
+                                    .font(.system(.headline, design: .rounded))
+                                    .foregroundStyle(Color.Theme.primaryBlue)
+                                
+                                CountryCheckboxRow(title: "United States", isOn: $includeUS)
+                                CountryCheckboxRow(title: "Canada", isOn: $includeCanada)
+                                CountryCheckboxRow(title: "Mexico", isOn: $includeMexico)
+                            }
+                            
+                            Divider()
+                            
+                            // Start Trip
+                            SettingToggleRow(
+                                title: "Start Trip right away",
+                                description: "Automatically start the trip when created",
+                                isOn: $startTripRightAway
+                            )
+                        }
+                        .padding(.vertical, 8)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                        .listRowBackground(Color.clear)
+                    } header: {
+                        Text("Trip Options")
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    .textCase(nil)
+                    
+                    Section {
+                        VStack(spacing: 12) {
+                            // Voice Settings
+                            SettingToggleRow(
+                                title: "Skip Confirmation",
+                                description: "Automatically add license plates without confirmation when using Voice",
+                                isOn: $skipVoiceConfirmation
+                            )
+                            
+                            Divider()
+                            
+                            // Location Settings
+                            SettingToggleRow(
+                                title: "Save location when marking plates",
+                                description: "Store location data when you mark a plate as found",
+                                isOn: $saveLocationWhenMarkingPlates
+                            )
+                            
+                            Divider()
+                            
+                            SettingToggleRow(
+                                title: "Show my location on large map",
+                                description: "Display your current location on the full-screen map",
+                                isOn: $showMyLocationOnLargeMap
+                            )
+                            
+                            Divider()
+                            
+                            SettingToggleRow(
+                                title: "Track my location during trip",
+                                description: "Continuously track your location while a trip is active",
+                                isOn: $trackMyLocationDuringTrip
+                            )
+                            
+                            Divider()
+                            
+                            SettingToggleRow(
+                                title: "Show my active trip on the large map",
+                                description: "Display your active trip on the full-screen map",
+                                isOn: $showMyActiveTripOnLargeMap
+                            )
+                            .disabled(!trackMyLocationDuringTrip)
+                            .opacity(trackMyLocationDuringTrip ? 1.0 : 0.5)
+                            
+                            Divider()
+                            
+                            SettingToggleRow(
+                                title: "Show my active trip on the small map",
+                                description: "Display your active trip on the small map",
+                                isOn: $showMyActiveTripOnSmallMap
+                            )
+                            .disabled(!trackMyLocationDuringTrip)
+                            .opacity(trackMyLocationDuringTrip ? 1.0 : 0.5)
+                        }
+                        .padding(.vertical, 8)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                        .listRowBackground(Color.clear)
+                    } header: {
+                        Text("Trip Settings")
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    .textCase(nil)
                 }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
             }
             .navigationTitle("New Trip")
             .navigationBarTitleDisplayMode(.inline)
@@ -263,16 +458,65 @@ private struct NewTripNameSheet: View {
                     Button("Cancel") {
                         dismiss()
                     }
+                    .foregroundStyle(Color.Theme.primaryBlue)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Create") {
-                        onCreate(tripName)
+                        var enabledCountries: [PlateRegion.Country] = []
+                        if includeUS { enabledCountries.append(.unitedStates) }
+                        if includeCanada { enabledCountries.append(.canada) }
+                        if includeMexico { enabledCountries.append(.mexico) }
+                        
+                        // Ensure at least one country is selected
+                        if enabledCountries.isEmpty {
+                            enabledCountries = [.unitedStates, .canada, .mexico]
+                        }
+                        
+                        let tripData = ContentView.TripCreationData(
+                            name: tripName.isEmpty ? nil : tripName,
+                            enabledCountries: enabledCountries,
+                            startTripRightAway: startTripRightAway,
+                            skipVoiceConfirmation: skipVoiceConfirmation,
+                            holdToTalk: holdToTalk,
+                            saveLocationWhenMarkingPlates: saveLocationWhenMarkingPlates,
+                            showMyLocationOnLargeMap: showMyLocationOnLargeMap,
+                            trackMyLocationDuringTrip: trackMyLocationDuringTrip,
+                            showMyActiveTripOnLargeMap: showMyActiveTripOnLargeMap,
+                            showMyActiveTripOnSmallMap: showMyActiveTripOnSmallMap
+                        )
+                        onCreate(tripData)
                         dismiss()
                     }
                     .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
                 }
             }
         }
+    }
+}
+
+private struct CountryCheckboxRow: View {
+    let title: String
+    @Binding var isOn: Bool
+    
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(Color.Theme.primaryBlue)
+            
+            Spacer()
+            
+            Toggle("", isOn: $isOn)
+                .tint(Color.Theme.primaryBlue)
+                .labelsHidden()
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+        )
     }
 }
 
@@ -355,6 +599,15 @@ private struct DefaultSettingsView: View {
     @Environment(\.colorScheme) private var systemColorScheme
     @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
     @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
+    @AppStorage("defaultStartTripRightAway") private var defaultStartTripRightAway = false
+    @AppStorage("defaultIncludeUS") private var defaultIncludeUS = true
+    @AppStorage("defaultIncludeCanada") private var defaultIncludeCanada = true
+    @AppStorage("defaultIncludeMexico") private var defaultIncludeMexico = true
+    @AppStorage("defaultSaveLocationWhenMarkingPlates") private var defaultSaveLocationWhenMarkingPlates = true
+    @AppStorage("defaultShowMyLocationOnLargeMap") private var defaultShowMyLocationOnLargeMap = true
+    @AppStorage("defaultTrackMyLocationDuringTrip") private var defaultTrackMyLocationDuringTrip = true
+    @AppStorage("defaultShowMyActiveTripOnLargeMap") private var defaultShowMyActiveTripOnLargeMap = true
+    @AppStorage("defaultShowMyActiveTripOnSmallMap") private var defaultShowMyActiveTripOnSmallMap = true
     
     // App Preferences
     @AppStorage("appDarkMode") private var appDarkModeRaw: String = AppDarkMode.system.rawValue
@@ -419,6 +672,7 @@ private struct DefaultSettingsView: View {
         case user = "User"
         case privacyPermissions = "Privacy & Permissions"
         case appPreferences = "App Preferences"
+        case newTripDefaults = "New Trip Defaults"
         case voice = "Voice Defaults"
         case helpAbout = "Help & About"
         
@@ -442,6 +696,8 @@ private struct DefaultSettingsView: View {
                               privacyPermissionsSettings
                             case .appPreferences:
                               appPreferencesSettings
+                            case .newTripDefaults:
+                              newTripDefaultsSettings
                             case .voice:
                               voiceSettings
                             case .helpAbout:
@@ -881,6 +1137,74 @@ private struct DefaultSettingsView: View {
                     isOn: $appUseVibrations
                 )
             }
+        }
+    }
+    
+    private var newTripDefaultsSettings: some View {
+        Group {
+            // Countries
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Default Countries")
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .padding(.bottom, 4)
+                
+                CountryCheckboxRow(title: "United States", isOn: $defaultIncludeUS)
+                CountryCheckboxRow(title: "Canada", isOn: $defaultIncludeCanada)
+                CountryCheckboxRow(title: "Mexico", isOn: $defaultIncludeMexico)
+            }
+            
+            Divider()
+            
+            SettingToggleRow(
+                title: "Start Trip right away",
+                description: "Automatically start new trips when created",
+                isOn: $defaultStartTripRightAway
+            )
+            
+            Divider()
+            
+            SettingToggleRow(
+                title: "Save location when marking plates",
+                description: "Store location data when marking plates (default for new trips)",
+                isOn: $defaultSaveLocationWhenMarkingPlates
+            )
+            
+            Divider()
+            
+            SettingToggleRow(
+                title: "Show my location on large map",
+                description: "Display current location on full-screen map (default for new trips)",
+                isOn: $defaultShowMyLocationOnLargeMap
+            )
+            
+            Divider()
+            
+            SettingToggleRow(
+                title: "Track my location during trip",
+                description: "Continuously track location while trip is active (default for new trips)",
+                isOn: $defaultTrackMyLocationDuringTrip
+            )
+            
+            Divider()
+            
+            SettingToggleRow(
+                title: "Show my active trip on the large map",
+                description: "Display active trip on full-screen map (default for new trips)",
+                isOn: $defaultShowMyActiveTripOnLargeMap
+            )
+            .disabled(!defaultTrackMyLocationDuringTrip)
+            .opacity(defaultTrackMyLocationDuringTrip ? 1.0 : 0.5)
+            
+            Divider()
+            
+            SettingToggleRow(
+                title: "Show my active trip on the small map",
+                description: "Display active trip on small map (default for new trips)",
+                isOn: $defaultShowMyActiveTripOnSmallMap
+            )
+            .disabled(!defaultTrackMyLocationDuringTrip)
+            .opacity(defaultTrackMyLocationDuringTrip ? 1.0 : 0.5)
         }
     }
     
