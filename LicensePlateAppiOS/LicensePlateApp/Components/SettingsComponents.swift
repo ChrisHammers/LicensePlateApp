@@ -183,7 +183,7 @@ struct SettingEditableTextRow: View {
                         .background(Color.Theme.cardBackground)
                         .onTapGesture {
                           if !isDisabled {
-                            editingValue = value ?? ""
+                            editingValue = value
                             isEditing = true
                             Task { @MainActor in
                               try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds

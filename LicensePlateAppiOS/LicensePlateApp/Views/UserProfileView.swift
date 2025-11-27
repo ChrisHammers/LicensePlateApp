@@ -25,10 +25,99 @@ struct UserProfileView: View {
     @State private var errorMessage = ""
     @State private var isCheckingUsername = false
     @State private var isUploadingImage = false
+    @State private var linkingPlatform: LinkedPlatform.PlatformType? = nil
     @State private var showImagePicker = false
     @State private var showImageConfirmation = false
     @State private var selectedImage: UIImage?
     @State private var previewImage: UIImage?
+    
+    // Helper function to get topmost view controller
+    private func topViewController(controller: UIViewController? = nil) -> UIViewController? {
+        let controller = controller ?? UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }?.rootViewController
+        
+        if let navigationController = controller as? UINavigationController {
+            return topViewController(controller: navigationController.visibleViewController)
+        }
+        if let tabController = controller as? UITabBarController {
+            if let selected = tabController.selectedViewController {
+                return topViewController(controller: selected)
+            }
+        }
+        if let presented = controller?.presentedViewController {
+            return topViewController(controller: presented)
+        }
+        return controller
+    }
+    
+    // Helper function to handle platform linking
+    private func handleLinkPlatform(_ platform: LinkedPlatform.PlatformType) {
+        // Prevent multiple simultaneous taps
+        guard !authService.isLoading, linkingPlatform == nil else {
+            print("⚠️ Already linking, ignoring tap for \(platform.rawValue)")
+            return
+        }
+        
+        // Set the linking platform immediately
+        linkingPlatform = platform
+        
+        Task {
+            do {
+                print("🔗 User tapped to link: \(platform.rawValue)")
+                
+                guard let presentingViewController = topViewController() else {
+                    await MainActor.run {
+                        errorMessage = "Unable to present sign in"
+                        showError = true
+                        linkingPlatform = nil
+                    }
+                    return
+                }
+                
+                print("🔗 Calling link method for platform: \(platform.rawValue)")
+                
+                // Use explicit if-else instead of switch to prevent any fallthrough issues
+                if platform == .google {
+                    print("🔗 Linking Google account...")
+                    try await authService.linkGoogleAccount(presentingViewController: presentingViewController)
+                } else if platform == .apple {
+                    print("🔗 Linking Apple account...")
+                    try await authService.linkAppleAccount()
+                } else if platform == .microsoft {
+                    print("🔗 Linking Microsoft account...")
+                    try await authService.linkMicrosoftAccount(presentingViewController: presentingViewController)
+                } else if platform == .yahoo {
+                    print("🔗 Linking Yahoo account...")
+                    try await authService.linkYahooAccount(presentingViewController: presentingViewController)
+                } else {
+                    // Not yet implemented
+                    print("❌ \(platform.rawValue) linking not implemented")
+                    await MainActor.run {
+                        errorMessage = "\(platform.rawValue) linking is not yet available"
+                        showError = true
+                        linkingPlatform = nil
+                    }
+                    return
+                }
+                
+                print("✅ Successfully linked \(platform.rawValue)")
+                
+                // Clear linking platform on success
+                await MainActor.run {
+                    linkingPlatform = nil
+                }
+            } catch {
+                print("❌ Error linking \(platform.rawValue): \(error.localizedDescription)")
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    showError = true
+                    linkingPlatform = nil
+                }
+            }
+        }
+    }
     
     init(user: AppUser, authService: FirebaseAuthService) {
         self.user = user
@@ -411,8 +500,9 @@ struct UserProfileView: View {
                                     .foregroundStyle(Color.Theme.primaryBlue)
                                     .padding(.bottom, 4)
                                 
-                                // Available platforms to link
-                                let availablePlatforms = LinkedPlatform.PlatformType.allCases.filter { platformType in
+                                // Available platforms to link (only show supported ones)
+                                let supportedPlatforms: [LinkedPlatform.PlatformType] = [.google, .apple, .microsoft, .yahoo]
+                                let availablePlatforms = supportedPlatforms.filter { platformType in
                                     !user.linkedPlatforms.contains(where: { $0.platform == platformType })
                                 }
                                 
@@ -424,27 +514,7 @@ struct UserProfileView: View {
                                     VStack(spacing: 8) {
                                         ForEach(availablePlatforms, id: \.self) { platform in
                                             Button {
-                                                Task {
-                                                    do {
-                                                        switch platform {
-                                                        case .google:
-                                                            try await authService.linkGoogleAccount()
-                                                        case .apple:
-                                                            try await authService.linkAppleAccount()
-                                                        case .microsoft:
-                                                            try await authService.linkMicrosoftAccount()
-                                                        case .yahoo:
-                                                            try await authService.linkYahooAccount()
-                                                        case .facebook, .twitter, .instagram:
-                                                            // Not yet implemented
-                                                            errorMessage = "\(platform.rawValue) linking is not yet available"
-                                                            showError = true
-                                                        }
-                                                    } catch {
-                                                        errorMessage = error.localizedDescription
-                                                        showError = true
-                                                    }
-                                                }
+                                                handleLinkPlatform(platform)
                                             } label: {
                                                 HStack {
                                                     Text("Link \(platform.rawValue)")
@@ -456,7 +526,7 @@ struct UserProfileView: View {
                                                     Image(systemName: "plus.circle.fill")
                                                         .font(.system(size: 18))
                                                 }
-                                                .foregroundStyle(Color.Theme.primaryBlue)
+                                                .foregroundStyle(authService.isLoading ? Color.gray : Color.Theme.primaryBlue)
                                                 .padding(.vertical, 10)
                                                 .padding(.horizontal, 12)
                                                 .background(
@@ -464,6 +534,7 @@ struct UserProfileView: View {
                                                         .fill(Color.Theme.primaryBlue.opacity(0.1))
                                                 )
                                             }
+                                            .disabled(authService.isLoading || linkingPlatform != nil)
                                         }
                                     }
                                 }

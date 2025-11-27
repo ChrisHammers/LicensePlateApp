@@ -45,6 +45,9 @@ class FirebaseAuthService: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var showUsernameConflictDialog = false
+    
+    // Track active linking operations to prevent multiple simultaneous calls
+    private var isLinking = false
     @Published var conflictDialogMessage = ""
     @Published var conflictDialogNewUsername = ""
     @Published var showSignInSheet = false
@@ -552,6 +555,10 @@ class FirebaseAuthService: ObservableObject {
     // MARK: - Platform Linking (for existing authenticated users)
     
     func linkGoogleAccount(presentingViewController: UIViewController) async throws {
+        guard !isLinking else {
+            throw AuthError.networkError // Already linking
+        }
+        
         guard let user = currentUser, isTrulyAuthenticated else {
             throw AuthError.noUser
         }
@@ -560,8 +567,14 @@ class FirebaseAuthService: ObservableObject {
             throw AuthError.offline
         }
         
+        isLinking = true
         isLoading = true
-        defer { isLoading = false }
+        defer { 
+            isLinking = false
+            isLoading = false 
+        }
+        
+        print("🔗 Attempting to link Google account...")
         
         guard let clientID = FirebaseApp.app()?.options.clientID else {
             throw AuthError.notImplemented
@@ -570,18 +583,28 @@ class FirebaseAuthService: ObservableObject {
         let config = GIDConfiguration(clientID: clientID)
         GIDSignIn.sharedInstance.configuration = config
         
-        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presentingViewController)
-        let googleUser = result.user
-        guard let idToken = googleUser.idToken?.tokenString else {
-            throw AuthError.networkError
+        do {
+            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presentingViewController)
+            let googleUser = result.user
+            guard let idToken = googleUser.idToken?.tokenString else {
+                throw AuthError.networkError
+            }
+            
+            let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: googleUser.accessToken.tokenString)
+            print("🔗 Google credential received, provider: \(credential.provider)")
+            
+            try await linkPlatformCredential(credential, platform: .google, email: googleUser.profile?.email, displayName: googleUser.profile?.name)
+        } catch {
+            print("❌ Google linking failed: \(error.localizedDescription)")
+            throw error
         }
-        
-        let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: googleUser.accessToken.tokenString)
-        
-        try await linkPlatformCredential(credential, platform: .google, email: googleUser.profile?.email, displayName: googleUser.profile?.name)
     }
     
     func linkAppleAccount() async throws {
+        guard !isLinking else {
+            throw AuthError.networkError // Already linking
+        }
+        
         guard let user = currentUser, isTrulyAuthenticated else {
             throw AuthError.noUser
         }
@@ -590,8 +613,14 @@ class FirebaseAuthService: ObservableObject {
             throw AuthError.offline
         }
         
+        isLinking = true
         isLoading = true
-        defer { isLoading = false }
+        defer { 
+            isLinking = false
+            isLoading = false 
+        }
+        
+        print("🔗 Attempting to link Apple account...")
         
         let appleIDProvider = ASAuthorizationAppleIDProvider()
         let request = appleIDProvider.createRequest()
@@ -601,32 +630,57 @@ class FirebaseAuthService: ObservableObject {
         
         let authorizationController = ASAuthorizationController(authorizationRequests: [request])
         
-        let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ASAuthorization, Error>) in
-            authorizationController.delegate = AppleSignInDelegate(continuation: continuation)
-            authorizationController.presentationContextProvider = AppleSignInPresentationContextProvider()
-            authorizationController.performRequests()
+        // Store delegate and controller to prevent deallocation
+        var storedDelegate: AppleSignInDelegate?
+        
+        do {
+            let result = try await withTaskCancellationHandler(operation: {
+                try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ASAuthorization, Error>) in
+                    let signInDelegate = AppleSignInDelegate(continuation: continuation)
+                    storedDelegate = signInDelegate
+                    authorizationController.delegate = signInDelegate
+                    authorizationController.presentationContextProvider = AppleSignInPresentationContextProvider()
+                    authorizationController.performRequests()
+                }
+            }, onCancel: {
+                // If cancelled, ensure continuation resumes
+                if let delegate = storedDelegate, !delegate.hasResumed {
+                    print("⚠️ Apple Sign-In was cancelled, resuming continuation with error")
+                    // The delegate will handle the cancellation error
+                }
+            })
+            
+            guard let appleIDCredential = result.credential as? ASAuthorizationAppleIDCredential,
+                  let identityToken = appleIDCredential.identityToken,
+                  let idTokenString = String(data: identityToken, encoding: .utf8) else {
+                throw AuthError.networkError
+            }
+            
+            let credential = OAuthProvider.appleCredential(withIDToken: idTokenString, rawNonce: nonce, fullName: appleIDCredential.fullName)
+            print("🔗 Apple credential received, provider: \(credential.provider)")
+            
+            let email = appleIDCredential.email
+            let displayName = appleIDCredential.fullName.map { name in
+                let given = name.givenName ?? ""
+                let family = name.familyName ?? ""
+                return "\(given) \(family)".trimmingCharacters(in: .whitespaces)
+            }
+            let finalDisplayName = displayName?.isEmpty == false ? displayName : nil
+            
+            try await linkPlatformCredential(credential, platform: .apple, email: email, displayName: finalDisplayName)
+        } catch {
+            print("❌ Apple linking failed: \(error.localizedDescription)")
+            // Ensure delegate is cleaned up
+            storedDelegate = nil
+            throw error
         }
-        
-        guard let appleIDCredential = result.credential as? ASAuthorizationAppleIDCredential,
-              let identityToken = appleIDCredential.identityToken,
-              let idTokenString = String(data: identityToken, encoding: .utf8) else {
-            throw AuthError.networkError
-        }
-        
-        let credential = OAuthProvider.appleCredential(withIDToken: idTokenString, rawNonce: nonce, fullName: appleIDCredential.fullName)
-        
-        let email = appleIDCredential.email
-        let displayName = appleIDCredential.fullName.map { name in
-            let given = name.givenName ?? ""
-            let family = name.familyName ?? ""
-            return "\(given) \(family)".trimmingCharacters(in: .whitespaces)
-        }
-        let finalDisplayName = displayName?.isEmpty == false ? displayName : nil
-        
-        try await linkPlatformCredential(credential, platform: .apple, email: email, displayName: finalDisplayName)
     }
     
-    func linkMicrosoftAccount() async throws {
+    func linkMicrosoftAccount(presentingViewController: UIViewController) async throws {
+        guard !isLinking else {
+            throw AuthError.networkError // Already linking
+        }
+        
         guard currentUser != nil, isTrulyAuthenticated else {
             throw AuthError.noUser
         }
@@ -635,17 +689,52 @@ class FirebaseAuthService: ObservableObject {
             throw AuthError.offline
         }
         
+        isLinking = true
         isLoading = true
-        defer { isLoading = false }
+        defer { 
+            isLinking = false
+            isLoading = false 
+        }
+        
+        print("🔗 Attempting to link Microsoft account...")
+        
+        // Create a dedicated view controller that conforms to AuthUIDelegate
+        let authViewController = AuthUIDelegateViewController()
+        
+        // Present it first so OAuth can use it
+        await MainActor.run {
+            presentingViewController.present(authViewController, animated: true)
+        }
         
         let provider = OAuthProvider(providerID: "microsoft.com")
         provider.scopes = ["openid", "email", "profile"]
         
-        let credential = try await provider.credential(with: nil)
-        try await linkPlatformCredential(credential, platform: .microsoft, email: nil, displayName: nil)
+        do {
+            // Get credential - this will present the Microsoft OAuth flow
+            print("🔗 Getting Microsoft credential with provider ID: microsoft.com")
+            let credential = try await provider.credential(with: authViewController)
+            print("🔗 Microsoft credential received, provider: \(credential.provider)")
+            
+            // Dismiss the view controller
+            await MainActor.run {
+                authViewController.dismiss(animated: true)
+            }
+            
+            try await linkPlatformCredential(credential, platform: .microsoft, email: nil, displayName: nil)
+        } catch {
+            print("❌ Microsoft linking failed: \(error.localizedDescription)")
+            await MainActor.run {
+                authViewController.dismiss(animated: true)
+            }
+            throw error
+        }
     }
     
-    func linkYahooAccount() async throws {
+    func linkYahooAccount(presentingViewController: UIViewController) async throws {
+        guard !isLinking else {
+            throw AuthError.networkError // Already linking
+        }
+        
         guard currentUser != nil, isTrulyAuthenticated else {
             throw AuthError.noUser
         }
@@ -654,15 +743,47 @@ class FirebaseAuthService: ObservableObject {
             throw AuthError.offline
         }
         
+        isLinking = true
         isLoading = true
-        defer { isLoading = false }
+        defer { 
+            isLinking = false
+            isLoading = false 
+        }
+        
+        print("🔗 Attempting to link Yahoo account...")
+        
+        // Create a dedicated view controller that conforms to AuthUIDelegate
+        let authViewController = AuthUIDelegateViewController()
+        
+        // Present it first so OAuth can use it
+        await MainActor.run {
+            presentingViewController.present(authViewController, animated: true)
+        }
         
         let provider = OAuthProvider(providerID: "yahoo.com")
         provider.scopes = ["openid", "email", "profile"]
         
-        let credential = try await provider.credential(with: nil)
-        try await linkPlatformCredential(credential, platform: .yahoo, email: nil, displayName: nil)
+        do {
+            // Get credential - this will present the Yahoo OAuth flow
+            print("🔗 Getting Yahoo credential with provider ID: yahoo.com")
+            let credential = try await provider.credential(with: authViewController)
+            print("🔗 Yahoo credential received, provider: \(credential.provider)")
+            
+            // Dismiss the view controller
+            await MainActor.run {
+                authViewController.dismiss(animated: true)
+            }
+            
+            try await linkPlatformCredential(credential, platform: .yahoo, email: nil, displayName: nil)
+        } catch {
+            print("❌ Yahoo linking failed: \(error.localizedDescription)")
+            await MainActor.run {
+                authViewController.dismiss(animated: true)
+            }
+            throw error
+        }
     }
+    
     
     // MARK: - Helper method for Google Sign-In (finds UIViewController automatically)
     func linkGoogleAccount() async throws {
@@ -742,6 +863,35 @@ class FirebaseAuthService: ObservableObject {
              throw AuthError.noUser
          }
          
+         print("🔗 Linking platform: \(platform.rawValue), credential provider: \(credential.provider)")
+         
+         // Map platform to expected provider ID
+         let expectedProviderID: String
+         switch platform {
+         case .google:
+             expectedProviderID = "google.com"
+         case .apple:
+             expectedProviderID = "apple.com"
+         case .microsoft:
+             expectedProviderID = "microsoft.com"
+         case .yahoo:
+             expectedProviderID = "yahoo.com"
+         case .facebook:
+             expectedProviderID = "facebook.com"
+         case .twitter:
+             expectedProviderID = "twitter.com"
+         case .instagram:
+             expectedProviderID = "instagram.com"
+         }
+         
+         // Verify credential provider matches expected platform
+         guard credential.provider == expectedProviderID else {
+             print("❌ Provider mismatch: Expected \(expectedProviderID) for platform \(platform.rawValue), but got \(credential.provider)")
+             throw AuthError.networkError
+         }
+         
+         print("✅ Provider verified: \(credential.provider) matches \(platform.rawValue)")
+         
          do {
              let result = try await firebaseUser.link(with: credential)
              let linkedUser = result.user
@@ -750,11 +900,13 @@ class FirebaseAuthService: ObservableObject {
              var platformPhone: String? = nil
              var platformDisplayName = displayName
              
+             // Extract provider data - look for the provider we just linked
              for providerData in linkedUser.providerData {
-                 if providerData.providerID == credential.provider {
+                 if providerData.providerID == expectedProviderID {
                      platformEmail = platformEmail ?? providerData.email
                      platformPhone = providerData.phoneNumber
                      platformDisplayName = platformDisplayName ?? providerData.displayName
+                     break
                  }
              }
              
@@ -763,7 +915,7 @@ class FirebaseAuthService: ObservableObject {
                  let excludingId = user.firebaseUID ?? user.id
                  if try await isUsernameTaken(user.userName, excludingUserId: excludingId) {
                      await showUsernameConflictDialogForLinking(platform: platform)
-                     try? await firebaseUser.unlink(fromProvider: credential.provider)
+                     try? await firebaseUser.unlink(fromProvider: expectedProviderID)
                      return
                  }
              }
@@ -1364,18 +1516,51 @@ class FirebaseAuthService: ObservableObject {
 // MARK: - Apple Sign In Helpers
 
 private class AppleSignInDelegate: NSObject, ASAuthorizationControllerDelegate {
-    private let continuation: CheckedContinuation<ASAuthorization, Error>
+    private var continuation: CheckedContinuation<ASAuthorization, Error>?
+    private(set) var hasResumed = false
+    private let lock = NSLock()
     
     init(continuation: CheckedContinuation<ASAuthorization, Error>) {
         self.continuation = continuation
     }
     
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        lock.lock()
+        defer { lock.unlock() }
+        
+        guard !hasResumed, let continuation = continuation else { 
+            print("⚠️ Apple Sign-In delegate: Already resumed or no continuation")
+            return 
+        }
+        hasResumed = true
+        self.continuation = nil
         continuation.resume(returning: authorization)
     }
     
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        lock.lock()
+        defer { lock.unlock() }
+        
+        guard !hasResumed, let continuation = continuation else { 
+            print("⚠️ Apple Sign-In delegate: Already resumed or no continuation")
+            return 
+        }
+        hasResumed = true
+        self.continuation = nil
+        print("🔗 Apple Sign-In error: \(error.localizedDescription)")
         continuation.resume(throwing: error)
+    }
+    
+    deinit {
+        // Safety: If delegate is deallocated without resuming, resume with error
+        lock.lock()
+        defer { lock.unlock() }
+        
+        if !hasResumed, let continuation = continuation {
+            print("⚠️ Apple Sign-In delegate deallocated without resuming, resuming with cancellation error")
+            hasResumed = true
+            continuation.resume(throwing: NSError(domain: "AppleSignIn", code: -1, userInfo: [NSLocalizedDescriptionKey: "Sign-in was cancelled"]))
+        }
     }
 }
 
@@ -1387,6 +1572,13 @@ private class AppleSignInPresentationContextProvider: NSObject, ASAuthorizationC
         }
         return window
     }
+}
+
+// MARK: - AuthUIDelegate View Controller
+
+private class AuthUIDelegateViewController: UIViewController, AuthUIDelegate {
+    // AuthUIDelegate protocol - UIViewController already provides the necessary presentation context
+    // This view controller is used specifically for OAuth flows that require AuthUIDelegate
 }
 
 // MARK: - Auth Errors
