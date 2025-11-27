@@ -111,8 +111,14 @@ struct TripTrackerView: View {
             if locationManager.authorizationStatus == .notDetermined {
                 locationManager.requestAuthorization()
             }
-            // Switch to list tab if trip is ended and currently on voice tab
-            if trip.isTripEnded && selectedTab == .voice {
+            // Switch to list tab if trip is not active and currently on voice tab
+            if !isTripActive && selectedTab == .voice {
+                selectedTab = .list
+            }
+        }
+        .onChange(of: trip.startedAt) { oldValue, newValue in
+            // If trip just became inactive and we're on voice tab, switch to list
+            if !isTripActive && selectedTab == .voice {
                 selectedTab = .list
             }
         }
@@ -185,7 +191,9 @@ struct TripTrackerView: View {
             HStack(spacing: 24) {
                 summaryChip(title: "Found", value: "\(trip.foundRegionIDs.count)")
               
-                summaryChip(title: "Remaining", value: "\(PlateRegion.all.count - trip.foundRegionIDs.count)")
+                // Calculate remaining based on enabled countries only
+                let enabledRegions = PlateRegion.all.filter { trip.enabledCountries.contains($0.country) }
+                summaryChip(title: "Remaining", value: "\(enabledRegions.count - trip.foundRegionIDs.count)")
             }
             
            
@@ -242,15 +250,19 @@ struct TripTrackerView: View {
      }
   
     private var regionList: some View {
-        List {
-            ForEach(PlateRegion.groupedByCountry(), id: \.country) { group in
+        // Filter regions to only show enabled countries
+        let enabledCountries = trip.enabledCountries
+        let filteredGroups = PlateRegion.groupedByCountry().filter { enabledCountries.contains($0.country) }
+        
+        return List {
+            ForEach(filteredGroups, id: \.country) { group in
                 Section() {
                     ForEach(group.regions) { region in
                         RegionCellView(
                             region: region,
                             isSelected: trip.hasFound(regionID: region.id),
                             toggleAction: { toggle(regionID: region.id) },
-                            isDisabled: trip.isTripEnded
+                            isDisabled: !isTripActive
                         )
                         .listRowBackground(Color.Theme.cardBackground)
                         .onAppear {
@@ -280,6 +292,11 @@ struct TripTrackerView: View {
         .listStyle(.inset)
         .scrollContentBackground(.hidden)
         .background(Color.Theme.background)
+    }
+    
+    // Computed property to check if trip is active (started but not ended)
+    private var isTripActive: Bool {
+        trip.startedAt != nil && !trip.isTripEnded
     }
   
   private func setFound(regionID: String, usingTab: Trip.inputUsedToFindRegion) {
@@ -318,8 +335,8 @@ struct TripTrackerView: View {
   }
 
     private func toggle(regionID: String) {
-        // Don't allow toggling if trip is ended
-        guard !trip.isTripEnded else { return }
+        // Don't allow toggling if trip is not active
+        guard isTripActive else { return }
         
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             trip.toggle(
@@ -362,7 +379,7 @@ struct TripTrackerView: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
-                        if !speechRecognizer.isListening && speechRecognizer.authorizationStatus == .authorized {
+                        if isTripActive && !speechRecognizer.isListening && speechRecognizer.authorizationStatus == .authorized {
                             playStartSound()
                             speechRecognizer.startListening()
                         }
@@ -373,7 +390,7 @@ struct TripTrackerView: View {
                         }
                     }
             )
-            .disabled(speechRecognizer.authorizationStatus != .authorized)
+            .disabled(!isTripActive || speechRecognizer.authorizationStatus != .authorized)
             
             // Status text
             VStack(spacing: 12) {
@@ -467,6 +484,9 @@ struct TripTrackerView: View {
     }
     
     private func processRecognizedText(_ text: String) {
+        // Don't process if trip is not active
+        guard isTripActive else { return }
+        
         let normalizedText = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedText.isEmpty else { return }
         
@@ -490,7 +510,11 @@ struct TripTrackerView: View {
         var bestMatch: PlateRegion?
         var bestMatchScore = 0
         
-        for region in PlateRegion.all {
+        // Only search in enabled countries
+        let enabledCountries = trip.enabledCountries
+        let enabledRegions = PlateRegion.all.filter { enabledCountries.contains($0.country) }
+        
+        for region in enabledRegions {
             let normalizedRegionName = region.name.lowercased()
             let regionWords = normalizedRegionName.components(separatedBy: " ").filter { !$0.isEmpty }
             
@@ -675,9 +699,9 @@ struct TripTrackerView: View {
 //          .frame(maxWidth: .infinity, maxHeight: .infinity)
         HStack(spacing: 16) {
             ForEach(Tab.allCases) { tab in
-                let isTabDisabled = tab == .voice && trip.isTripEnded
+                let isTabDisabled = !isTripActive
                 Button {
-                    // Prevent switching to voice tab if trip is ended
+                    // Prevent switching to tabs if trip is not active
                     if isTabDisabled {
                         return
                     }
@@ -909,6 +933,7 @@ private struct SettingsView: View {
     
     enum SettingsSection: String, CaseIterable {
         case tripInfo = "Trip Info"
+        case gameSettings = "Game Settings"
         case trackingPrivacy = "Tracking & Privacy"
         case voice = "Voice"
         
@@ -949,6 +974,8 @@ private struct SettingsView: View {
                             switch section {
                             case .tripInfo:
                                 tripInfoSettings
+                            case .gameSettings:
+                                gameSettings
                             case .trackingPrivacy:
                                 trackingPrivacySettings
                             case .voice:
@@ -1166,9 +1193,84 @@ private struct SettingsView: View {
         }
     }
     
+    private var gameSettings: some View {
+        Group {
+            let canEditCountries = trip.startedAt == nil // Countries can only be edited before trip starts
+            
+            // Countries selection
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Countries to Include")
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .padding(.bottom, 4)
+                
+                CountryCheckboxRow(
+                    title: "United States",
+                    isOn: Binding(
+                        get: { trip.enabledCountries.contains(.unitedStates) },
+                        set: { newValue in
+                            if newValue {
+                                if !trip.enabledCountries.contains(.unitedStates) {
+                                    trip.enabledCountries.append(.unitedStates)
+                                }
+                            } else {
+                                trip.enabledCountries.removeAll { $0 == .unitedStates }
+                            }
+                            trip.lastUpdated = Date.now
+                            try? modelContext.save()
+                        }
+                    )
+                )
+                .disabled(!canEditCountries)
+                .opacity(canEditCountries ? 1.0 : 0.5)
+                
+                CountryCheckboxRow(
+                    title: "Canada",
+                    isOn: Binding(
+                        get: { trip.enabledCountries.contains(.canada) },
+                        set: { newValue in
+                            if newValue {
+                                if !trip.enabledCountries.contains(.canada) {
+                                    trip.enabledCountries.append(.canada)
+                                }
+                            } else {
+                                trip.enabledCountries.removeAll { $0 == .canada }
+                            }
+                            trip.lastUpdated = Date.now
+                            try? modelContext.save()
+                        }
+                    )
+                )
+                .disabled(!canEditCountries)
+                .opacity(canEditCountries ? 1.0 : 0.5)
+                
+                CountryCheckboxRow(
+                    title: "Mexico",
+                    isOn: Binding(
+                        get: { trip.enabledCountries.contains(.mexico) },
+                        set: { newValue in
+                            if newValue {
+                                if !trip.enabledCountries.contains(.mexico) {
+                                    trip.enabledCountries.append(.mexico)
+                                }
+                            } else {
+                                trip.enabledCountries.removeAll { $0 == .mexico }
+                            }
+                            trip.lastUpdated = Date.now
+                            try? modelContext.save()
+                        }
+                    )
+                )
+                .disabled(!canEditCountries)
+                .opacity(canEditCountries ? 1.0 : 0.5)
+            }
+        }
+    }
+    
     private var trackingPrivacySettings: some View {
         Group {
             let locationAuthorized = locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways
+            let canEditTracking = !trip.isTripEnded // Tracking settings can be edited while active, but not after ended
             
             SettingToggleRow(
                 title: "Save location when marking plates",
@@ -1182,8 +1284,8 @@ private struct SettingsView: View {
                     }
                 )
             )
-            .disabled(!locationAuthorized)
-            .opacity(locationAuthorized ? 1.0 : 0.5)
+            .disabled(!locationAuthorized || !canEditTracking)
+            .opacity((locationAuthorized && canEditTracking) ? 1.0 : 0.5)
             
             Divider()
             
@@ -1199,6 +1301,8 @@ private struct SettingsView: View {
                     }
                 )
             )
+            .disabled(!canEditTracking)
+            .opacity(canEditTracking ? 1.0 : 0.5)
             
             Divider()
             
@@ -1214,6 +1318,8 @@ private struct SettingsView: View {
                     }
                 )
             )
+            .disabled(!canEditTracking)
+            .opacity(canEditTracking ? 1.0 : 0.5)
             
             Divider()
             
@@ -1229,8 +1335,8 @@ private struct SettingsView: View {
                     }
                 )
             )
-            .disabled(!trip.trackMyLocationDuringTrip)
-            .opacity(trip.trackMyLocationDuringTrip ? 1.0 : 0.5)
+            .disabled(!trip.trackMyLocationDuringTrip || !canEditTracking)
+            .opacity((trip.trackMyLocationDuringTrip && canEditTracking) ? 1.0 : 0.5)
             
             Divider()
             
@@ -1246,13 +1352,15 @@ private struct SettingsView: View {
                     }
                 )
             )
-            .disabled(!trip.trackMyLocationDuringTrip)
-            .opacity(trip.trackMyLocationDuringTrip ? 1.0 : 0.5)
+            .disabled(!trip.trackMyLocationDuringTrip || !canEditTracking)
+            .opacity((trip.trackMyLocationDuringTrip && canEditTracking) ? 1.0 : 0.5)
         }
     }
     
     private var voiceSettings: some View {
         Group {
+            let canEditSettings = trip.startedAt == nil // Can only edit if trip hasn't started
+            
             SettingToggleRow(
                 title: "Skip Confirmation",
                 description: "Automatically add license plates without confirmation when using Voice",
@@ -1260,10 +1368,13 @@ private struct SettingsView: View {
                     get: { trip.skipVoiceConfirmation },
                     set: { newValue in
                         trip.skipVoiceConfirmation = newValue
+                        trip.lastUpdated = Date.now
                         try? modelContext.save()
                     }
                 )
             )
+            .disabled(!canEditSettings)
+            .opacity(canEditSettings ? 1.0 : 0.5)
           if false {
             SettingToggleRow(
               title: "Hold to Talk",
@@ -1272,12 +1383,41 @@ private struct SettingsView: View {
                 get: { trip.holdToTalk },
                 set: { newValue in
                   trip.holdToTalk = newValue
+                  trip.lastUpdated = Date.now
                   try? modelContext.save()
                 }
               )
             )
+            .disabled(!canEditSettings)
+            .opacity(canEditSettings ? 1.0 : 0.5)
           }
         }
+    }
+}
+
+// Country checkbox row component for trip settings
+private struct CountryCheckboxRow: View {
+    let title: String
+    @Binding var isOn: Bool
+    
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(Color.Theme.primaryBlue)
+            
+            Spacer()
+            
+            Toggle("", isOn: $isOn)
+                .tint(Color.Theme.primaryBlue)
+                .labelsHidden()
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+        )
     }
 }
 
