@@ -655,6 +655,11 @@ private struct DefaultSettingsView: View {
     @EnvironmentObject var authService: FirebaseAuthService
     @Environment(\.modelContext) private var modelContext
     @State private var showUserProfile = false
+    @State private var showPrivacyPermissions = false
+    @State private var showAppPreferences = false
+    @State private var showNewTripDefaults = false
+    @State private var showVoiceDefaults = false
+    @State private var showHelpAbout = false
     
     // Computed properties for picker bindings
     private var appDarkMode: Binding<AppDarkMode> {
@@ -685,17 +690,6 @@ private struct DefaultSettingsView: View {
         )
     }
     
-    enum SettingsSection: String, CaseIterable {
-        case user = "User"
-        case privacyPermissions = "Privacy & Permissions"
-        case appPreferences = "App Preferences"
-        case newTripDefaults = "New Trip Defaults"
-        case voice = "Voice Defaults"
-        case helpAbout = "Help & About"
-        
-        var id: String { rawValue }
-    }
-    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -703,34 +697,76 @@ private struct DefaultSettingsView: View {
                     .ignoresSafeArea()
                 
                 List {
-                    ForEach(SettingsSection.allCases, id: \.id) { section in
-                        Section {
-                          VStack {
-                            switch section {
-                            case .user:
-                              userSettings
-                            case .privacyPermissions:
-                              privacyPermissionsSettings
-                            case .appPreferences:
-                              appPreferencesSettings
-                            case .newTripDefaults:
-                              newTripDefaultsSettings
-                            case .voice:
-                              voiceSettings
-                            case .helpAbout:
-                              helpAboutSettings
+                    Section {
+                        VStack(spacing: 12) {
+                            // Profile (from User section, but no section header)
+                            if let _ = authService.currentUser {
+                                SettingNavigationRow(
+                                    title: "Profile",
+                                    description: "Edit username and manage account"
+                                ) {
+                                    showUserProfile = true
+                                }
+                                
+                                Divider()
                             }
-                          }
-                          .background(Color.Theme.cardBackground)
-                          .cornerRadius(20)
-                        } header: {
-                            Text(section.rawValue)
-                                .font(.system(.headline, design: .rounded))
-                                .foregroundStyle(Color.Theme.primaryBlue)
+                            
+                            // Privacy & Permissions
+                            SettingNavigationRow(
+                                title: "Privacy & Permissions",
+                                description: "Manage location, microphone, notifications, and other permissions"
+                            ) {
+                                showPrivacyPermissions = true
+                            }
+                            
+                            Divider()
+                            
+                            // App Preferences
+                            SettingNavigationRow(
+                                title: "App Preferences",
+                                description: "Customize dark mode, map style, and other app settings"
+                            ) {
+                                showAppPreferences = true
+                            }
+                            
+                            Divider()
+                            
+                            // New Trip Defaults
+                            SettingNavigationRow(
+                                title: "New Trip Defaults",
+                                description: "Set default countries, tracking, and voice settings for new trips"
+                            ) {
+                                showNewTripDefaults = true
+                            }
+                            
+                            Divider()
+                            
+                            // Voice Defaults
+                            SettingNavigationRow(
+                                title: "Voice Defaults",
+                                description: "Configure default voice recognition settings for new trips"
+                            ) {
+                                showVoiceDefaults = true
+                            }
+                            
+                            Divider()
+                            
+                            // Help & About
+                            SettingNavigationRow(
+                                title: "Help & About",
+                                description: "Get help, report bugs, suggest features, and learn about the app"
+                            ) {
+                                showHelpAbout = true
+                            }
                         }
-                        .textCase(nil)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .background(Color.Theme.cardBackground)
+                        .cornerRadius(20)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                         .listRowBackground(Color.clear)
                     }
+                    .textCase(nil)
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
@@ -766,675 +802,31 @@ private struct DefaultSettingsView: View {
                     UserProfileView(user: user, authService: authService)
                 }
             }
-            .navigationDestination(isPresented: $showAbout) {
-              AboutView()
+            .navigationDestination(isPresented: $showPrivacyPermissions) {
+                PrivacyPermissionsView()
             }
-            .navigationDestination(isPresented: $showAcknowledgements) {
-              AcknowledgementsView()
+            .navigationDestination(isPresented: $showAppPreferences) {
+                AppPreferencesView()
             }
-            .navigationDestination(isPresented: $showFAQ) {
-              FAQView()
+            .navigationDestination(isPresented: $showNewTripDefaults) {
+                NewTripDefaultsView()
             }
-            .navigationDestination(isPresented: $showTerms) {
-              TermsView()
+            .navigationDestination(isPresented: $showVoiceDefaults) {
+                VoiceDefaultsView()
             }
-            .navigationDestination(isPresented: $showPrivacy) {
-              PrivacyView()
+            .navigationDestination(isPresented: $showHelpAbout) {
+                HelpAboutView()
             }
         }
         .background(Color.Theme.background)
     }
     
-    private var userSettings: some View {
-        Group {
-            if let _ = authService.currentUser {
-                SettingNavigationRow(
-                    title: "Profile",
-                    description: "Edit username and manage account"
-                ) {
-                    showUserProfile = true
-                }
-            }
-        }
-    }
-    
-    // Privacy & Permissions
-    @AppStorage("saveLocationWhenMarkingPlates") private var saveLocationWhenMarkingPlates = true
-    @AppStorage("showMyLocationOnLargeMap") private var showMyLocationOnLargeMap = true
-    @AppStorage("trackMyLocationDuringTrips") private var trackMyLocationDuringTrips = true
-    @AppStorage("notifyPlateFoundByOpponent") private var notifyPlateFoundByOpponent = true
-    @AppStorage("notifyPlateFoundByCoPilots") private var notifyPlateFoundByCoPilots = true
-    @AppStorage("notifyPromotionsAndNews") private var notifyPromotionsAndNews = false
-    
-    @StateObject private var locationManager = LocationManager()
-    @State private var microphonePermission: AVAudioSession.RecordPermission = .undetermined
-    @State private var speechRecognitionPermission: SFSpeechRecognizerAuthorizationStatus = .notDetermined
-    @State private var cameraPermission: AVAuthorizationStatus = .notDetermined
-    @State private var notificationPermission: UNAuthorizationStatus = .notDetermined
-    
-    private var privacyPermissionsSettings: some View {
-        Group {
-            // Location Permission
-            PermissionRow(
-                title: "Location",
-                icon: "location.fill",
-                status: locationPermissionStatus,
-                statusColor: locationPermissionColor,
-                onTap: openLocationSettings
-            )
-            
-            SettingToggleRow(
-                title: "Save location when marking plates",
-                description: "Store location data when you mark a plate as found",
-                isOn: $saveLocationWhenMarkingPlates
-            )
-            
-            SettingToggleRow(
-                title: "Show my location on large map",
-                description: "Display your current location on the full-screen map",
-                isOn: $showMyLocationOnLargeMap
-            )
-            
-            SettingToggleRow(
-                title: "Track my location during trips",
-                description: "Continuously track your location while a trip is active (Can be disabled at any time)",
-                isOn: $trackMyLocationDuringTrips
-            )
-          
-          Divider()
-            
-            // Microphone Permission
-            PermissionRow(
-                title: "Microphone",
-                icon: "mic.fill",
-                status: microphonePermissionStatus,
-                statusColor: microphonePermissionColor,
-                onTap: openMicrophoneSettings
-            )
-          
-          Divider()
-            
-            // Speech Recognizer Permission
-            PermissionRow(
-                title: "Speech Recognizer",
-                icon: "waveform",
-                status: speechRecognitionPermissionStatus,
-                statusColor: speechRecognitionPermissionColor,
-                onTap: openSpeechRecognitionSettings
-            )
-          
-          Divider()
-            
-            // Camera Permission (hidden for now)
-            if false {
-                PermissionRow(
-                    title: "Camera",
-                    icon: "camera.fill",
-                    status: cameraPermissionStatus,
-                    statusColor: cameraPermissionColor,
-                    onTap: openCameraSettings
-                )
-              
-              Divider()
-            }
-            
-            // Notifications Permission
-            PermissionRow(
-                title: "Notifications",
-                icon: "bell.fill",
-                status: notificationPermissionStatus,
-                statusColor: notificationPermissionColor,
-                onTap: openNotificationSettings
-            )
-            
-            SettingToggleRow(
-                title: "Plate found by opponent",
-                description: "Get notified when an opponent finds a plate",
-                isOn: $notifyPlateFoundByOpponent
-            )
-            
-            SettingToggleRow(
-                title: "Plate found by co-pilots",
-                description: "Get notified when a co-pilot finds a plate",
-                isOn: $notifyPlateFoundByCoPilots
-            )
-            
-            SettingToggleRow(
-                title: "Promotion & News",
-                description: "Receive promotional offers and app news",
-                isOn: $notifyPromotionsAndNews
-            )
-        }
-        .onAppear {
-            checkPermissions()
-        }
-        .onChange(of: locationManager.authorizationStatus) { oldValue, newValue in
-            checkPermissions()
-        }
-    }
-    
-    // Permission status helpers
-    private var locationPermissionStatus: String {
-        switch locationManager.authorizationStatus {
-        case .authorizedAlways:
-            return "Allowed"
-        case .authorizedWhenInUse:
-            return "While App is Open"
-        case .denied, .restricted:
-            return "Disabled"
-        case .notDetermined:
-            return "Not Set"
-        @unknown default:
-            return "Unknown"
-        }
-    }
-    
-    private var locationPermissionColor: Color {
-        switch locationManager.authorizationStatus {
-        case .authorizedAlways:
-            return .green
-        case .authorizedWhenInUse:
-            return Color.Theme.permissionYellow
-        case .denied, .restricted:
-            return .red
-        case .notDetermined:
-            return Color.Theme.permissionOrangeDark
-        @unknown default:
-            return Color.Theme.permissionOrangeDark
-        }
-    }
-    
-    private var microphonePermissionStatus: String {
-        switch microphonePermission {
-        case .granted:
-            return "Allowed"
-        case .denied:
-            return "Disabled"
-        case .undetermined:
-            return "Not Set"
-        @unknown default:
-            return "Unknown"
-        }
-    }
-    
-    private var microphonePermissionColor: Color {
-        switch microphonePermission {
-        case .granted:
-            return .green
-        case .denied:
-            return .red
-        case .undetermined:
-            return Color.Theme.permissionOrange
-        @unknown default:
-            return Color.Theme.permissionOrange
-        }
-    }
-    
-    private var speechRecognitionPermissionStatus: String {
-        switch speechRecognitionPermission {
-        case .authorized:
-            return "Allowed"
-        case .denied, .restricted:
-            return "Disabled"
-        case .notDetermined:
-            return "Not Set"
-        @unknown default:
-            return "Unknown"
-        }
-    }
-    
-    private var speechRecognitionPermissionColor: Color {
-        switch speechRecognitionPermission {
-        case .authorized:
-            return .green
-        case .denied, .restricted:
-            return .red
-        case .notDetermined:
-            return Color.Theme.permissionOrange
-        @unknown default:
-            return Color.Theme.permissionOrange
-        }
-    }
-    
-    private var cameraPermissionStatus: String {
-        switch cameraPermission {
-        case .authorized:
-            return "Allowed"
-        case .denied, .restricted:
-            return "Disabled"
-        case .notDetermined:
-            return "Not Set"
-        @unknown default:
-            return "Unknown"
-        }
-    }
-    
-    private var cameraPermissionColor: Color {
-        switch cameraPermission {
-        case .authorized:
-            return .green
-        case .denied, .restricted:
-            return .red
-        case .notDetermined:
-            return Color.Theme.permissionOrange
-        @unknown default:
-            return Color.Theme.permissionOrange
-        }
-    }
-    
-    private var notificationPermissionStatus: String {
-        switch notificationPermission {
-        case .authorized, .provisional, .ephemeral:
-            return "Allowed"
-        case .denied:
-            return "Disabled"
-        case .notDetermined:
-            return "Not Set"
-        @unknown default:
-            return "Unknown"
-        }
-    }
-    
-    private var notificationPermissionColor: Color {
-        switch notificationPermission {
-        case .authorized, .provisional, .ephemeral:
-            return .green
-        case .denied:
-            return .red
-        case .notDetermined:
-            return Color.Theme.permissionOrange
-        @unknown default:
-            return Color.Theme.permissionOrange
-        }
-    }
-    
-    private func checkPermissions() {
-        // Check microphone permission
-        microphonePermission = AVAudioSession.sharedInstance().recordPermission
-        
-        // Check speech recognition permission
-        speechRecognitionPermission = SFSpeechRecognizer.authorizationStatus()
-        
-        // Check camera permission
-        cameraPermission = AVCaptureDevice.authorizationStatus(for: .video)
-        
-        // Check notification permission
-        Task {
-            let settings = await UNUserNotificationCenter.current().notificationSettings()
-            await MainActor.run {
-                notificationPermission = settings.authorizationStatus
-            }
-        }
-    }
-    
-    private func openLocationSettings() {
-        if let url = URL(string: UIApplication.openSettingsURLString) {
-            UIApplication.shared.open(url)
-        }
-    }
-    
-    private func openMicrophoneSettings() {
-        if let url = URL(string: UIApplication.openSettingsURLString) {
-            UIApplication.shared.open(url)
-        }
-    }
-    
-    private func openSpeechRecognitionSettings() {
-        if let url = URL(string: UIApplication.openSettingsURLString) {
-            UIApplication.shared.open(url)
-        }
-    }
-    
-    private func openCameraSettings() {
-        if let url = URL(string: UIApplication.openSettingsURLString) {
-            UIApplication.shared.open(url)
-        }
-    }
-    
-    private func openNotificationSettings() {
-        if let url = URL(string: UIApplication.openSettingsURLString) {
-            UIApplication.shared.open(url)
-        }
-    }
-    
-    private func openSystemSettings() {
-        if let url = URL(string: UIApplication.openSettingsURLString) {
-            UIApplication.shared.open(url)
-        }
-    }
-    
-    private var appPreferencesSettings: some View {
-        Group {
-            SettingPickerRow(
-                title: "Dark Mode",
-                description: "Choose your preferred appearance",
-                selection: appDarkMode
-            )
-          
-          Divider()
-            
-          // Hidden for now
-          if false {
-            SettingPickerRow(
-              title: "Distance Unit",
-              description: "Select miles or kilometers",
-              selection: appDistanceUnit
-            )
-            
-            Divider()
-          }
-            
-            SettingPickerRow(
-                title: "Map Style",
-                description: "Choose standard or satellite view",
-                selection: appMapStyle
-            )
-          
-          Divider()
-            
-            // Hidden for now
-            if false {
-                SettingPickerRow(
-                    title: "Language",
-                    description: "Select your preferred language",
-                    selection: appLanguage
-                )
-              
-              Divider()
-                
-                SettingToggleRow(
-                    title: "Play Sound Effects",
-                    description: "Enable audio feedback for app interactions",
-                    isOn: $appPlaySoundEffects
-                )
-                
-                SettingToggleRow(
-                    title: "Use Vibrations",
-                    description: "Enable haptic feedback",
-                    isOn: $appUseVibrations
-                )
-            }
-        }
-    }
-    
-    private var newTripDefaultsSettings: some View {
-        Group {
-            // Countries
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Default Countries")
-                    .font(.system(.headline, design: .rounded))
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                    .padding(.bottom, 4)
-                
-                CountryCheckboxRow(title: "United States", isOn: $defaultIncludeUS)
-                CountryCheckboxRow(title: "Canada", isOn: $defaultIncludeCanada)
-                CountryCheckboxRow(title: "Mexico", isOn: $defaultIncludeMexico)
-            }
-            
-            Divider()
-            
-            SettingToggleRow(
-                title: "Start Trip right away",
-                description: "Automatically start new trips when created",
-                isOn: $defaultStartTripRightAway
-            )
-            
-            Divider()
-            
-            SettingToggleRow(
-                title: "Save location when marking plates",
-                description: "Store location data when marking plates (default for new trips)",
-                isOn: $defaultSaveLocationWhenMarkingPlates
-            )
-            
-            Divider()
-            
-            SettingToggleRow(
-                title: "Show my location on large map",
-                description: "Display current location on full-screen map (default for new trips)",
-                isOn: $defaultShowMyLocationOnLargeMap
-            )
-            
-            Divider()
-            
-            SettingToggleRow(
-                title: "Track my location during trip",
-                description: "Continuously track location while trip is active (default for new trips)",
-                isOn: $defaultTrackMyLocationDuringTrip
-            )
-            
-            Divider()
-            
-            SettingToggleRow(
-                title: "Show my active trip on the large map",
-                description: "Display active trip on full-screen map (default for new trips)",
-                isOn: $defaultShowMyActiveTripOnLargeMap
-            )
-            .disabled(!defaultTrackMyLocationDuringTrip)
-            .opacity(defaultTrackMyLocationDuringTrip ? 1.0 : 0.5)
-            
-            Divider()
-            
-            SettingToggleRow(
-                title: "Show my active trip on the small map",
-                description: "Display active trip on small map (default for new trips)",
-                isOn: $defaultShowMyActiveTripOnSmallMap
-            )
-            .disabled(!defaultTrackMyLocationDuringTrip)
-            .opacity(defaultTrackMyLocationDuringTrip ? 1.0 : 0.5)
-        }
-    }
-    
-    private var voiceSettings: some View {
-        Group {
-            SettingToggleRow(
-                title: "Skip Voice Confirmation",
-                description: "Automatically add license plates heard by speech recognition without requiring user confirmation. This is the default for NEW trips created, this can be changed per trip as well.",
-                isOn: $defaultSkipVoiceConfirmation
-            )
-          if false {
-            Divider()
-            
-            SettingToggleRow(
-              title: "Hold to Talk",
-              description: "Press and hold the microphone button to record. If disabled the system will listen until you hit stop. This is the default for NEW trips created, this can be changed per trip as well.",
-              isOn: $defaultHoldToTalk
-            )
-          }
-        }
-    }
-    
-    @State private var showAbout = false
-    @State private var showAcknowledgements = false
-    @State private var showFAQ = false
-    @State private var showTerms = false
-    @State private var showPrivacy = false
-    
-    private var helpAboutSettings: some View {
-        Group {
-            SettingNavigationRow(
-                title: "About",
-                description: "Learn about RoadTrip Royale and HammersTechLLC"
-            ) {
-                showAbout = true
-            }
-          
-          Divider()
-            
-            SettingNavigationRow(
-                title: "Acknowledgements",
-                description: "Open source libraries and SDKs we use"
-            ) {
-                showAcknowledgements = true
-            }
-          
-          Divider()
-            
-            SettingNavigationRow(
-                title: "FAQ",
-                description: "Frequently asked questions"
-            ) {
-                showFAQ = true
-            }
-          
-          Divider()
-            
-            Button {
-                sendEmail(to: "hammerstechllc@gmail.com", subject: "RoadTrip Royale Bug Report")
-            } label: {
-                HStack(spacing: 16) {
-                    Image(systemName: "ladybug")
-                        .font(.system(size: 20))
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                        .frame(width: 24)
-                    
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Report a Bug")
-                            .font(.system(.body, design: .rounded))
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Color.Theme.primaryBlue)
-                        
-                        Text("Help us improve by reporting issues")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
-                    }
-                    
-                    Spacer()
-                }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.Theme.cardBackground)
-                )
-            }
-            .buttonStyle(.plain)
-            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-            
-          Divider()
-          
-            Button {
-                sendEmail(to: "hammerstechllc@gmail.com", subject: "RoadTrip Royale Feature Suggestion")
-            } label: {
-                HStack(spacing: 16) {
-                    Image(systemName: "lightbulb")
-                        .font(.system(size: 20))
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                        .frame(width: 24)
-                    
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Suggest a Feature")
-                            .font(.system(.body, design: .rounded))
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Color.Theme.primaryBlue)
-                        
-                        Text("Share your ideas for new features")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
-                    }
-                    
-                    Spacer()
-                }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.Theme.cardBackground)
-                )
-            }
-            .buttonStyle(.plain)
-            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-            
-          Divider()
-          
-            Button {
-                sendEmail(to: "hammerstechllc@gmail.com", subject: "RoadTrip Royale Support Issue")
-            } label: {
-                HStack(spacing: 16) {
-                    Image(systemName: "envelope")
-                        .font(.system(size: 20))
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                        .frame(width: 24)
-                    
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Contact Support")
-                            .font(.system(.body, design: .rounded))
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Color.Theme.primaryBlue)
-                        
-                        Text("Get help with the app")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
-                    }
-                    
-                    Spacer()
-                }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(Color.Theme.cardBackground)
-                )
-            }
-            .buttonStyle(.plain)
-            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-            
-          Divider()
-          
-            // App Version and Legal
-            VStack(spacing: 12) {
-                Text("App Version \(appVersion)")
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                
-                HStack(spacing: 20) {
-                    // Terms button - isolated tap area
-                    Text("Terms")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            showTerms = true
-                        }
-                    
-                    Text("·")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-                        .allowsHitTesting(false)
-                    
-                    // Privacy button - isolated tap area
-                    Text("Privacy")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            showPrivacy = true
-                        }
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-            .listRowSeparator(.hidden)
-            .contentShape(Rectangle())
-            .allowsHitTesting(true)
-        }
-    }
-    
-    private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-    }
-    
-    private func sendEmail(to email: String, subject: String) {
-        let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
-        if let url = URL(string: "mailto:\(email)?subject=\(encodedSubject)") {
-            UIApplication.shared.open(url)
-        }
-    }
+    // Removed: All settings content moved to separate view files
+    // - PrivacyPermissionsView
+    // - AppPreferencesView
+    // - NewTripDefaultsView
+    // - VoiceDefaultsView
+    // - HelpAboutView
 }
 
 #Preview {
@@ -1444,49 +836,51 @@ private struct DefaultSettingsView: View {
 
 // MARK: - Help & About Views
 
-private struct AboutView: View {
+struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
         NavigationStack {
+          ZStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("RoadTrip Royale")
-                        .font(.system(.largeTitle, design: .rounded))
-                        .fontWeight(.bold)
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                    
-                    Text("About the App")
-                        .font(.system(.title2, design: .rounded))
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                    
-                    Text("RoadTrip Royale is a fun and engaging license plate tracking game that lets you collect license plates from across the United States, Canada, and Mexico during your road trips. Spot plates, track your progress, and see your collection grow on an interactive map!")
-                        .font(.system(.body, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-                    
-                    Text("About HammersTechLLC")
-                        .font(.system(.title2, design: .rounded))
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                        .padding(.top)
-                    
-                    Text("RoadTrip Royale is developed by HammersTechLLC, a software development company dedicated to creating innovative and user-friendly mobile applications. We're passionate about building apps that make everyday activities more enjoyable and engaging.")
-                        .font(.system(.body, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-                    
-                    Text("Contact")
-                        .font(.system(.title3, design: .rounded))
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                        .padding(.top)
-                    
-                    Text("Email: hammerstechllc@gmail.com")
-                        .font(.system(.body, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-                }
-                .padding()
+              VStack(alignment: .leading, spacing: 20) {
+                Text("RoadTrip Royale")
+                  .font(.system(.largeTitle, design: .rounded))
+                  .fontWeight(.bold)
+                  .foregroundStyle(Color.Theme.primaryBlue)
+                
+                Text("About the App")
+                  .font(.system(.title2, design: .rounded))
+                  .fontWeight(.semibold)
+                  .foregroundStyle(Color.Theme.primaryBlue)
+                
+                Text("RoadTrip Royale is a fun and engaging license plate tracking game that lets you collect license plates from across the United States, Canada, and Mexico during your road trips. Spot plates, track your progress, and see your collection grow on an interactive map!")
+                  .font(.system(.body, design: .rounded))
+                  .foregroundStyle(Color.Theme.softBrown)
+                
+                Text("About HammersTechLLC")
+                  .font(.system(.title2, design: .rounded))
+                  .fontWeight(.semibold)
+                  .foregroundStyle(Color.Theme.primaryBlue)
+                  .padding(.top)
+                
+                Text("RoadTrip Royale is developed by HammersTechLLC, a software development company dedicated to creating innovative and user-friendly mobile applications. We're passionate about building apps that make everyday activities more enjoyable and engaging.")
+                  .font(.system(.body, design: .rounded))
+                  .foregroundStyle(Color.Theme.softBrown)
+                
+                Text("Contact")
+                  .font(.system(.title3, design: .rounded))
+                  .fontWeight(.semibold)
+                  .foregroundStyle(Color.Theme.primaryBlue)
+                  .padding(.top)
+                
+                Text("Email: hammerstechllc@gmail.com")
+                  .font(.system(.body, design: .rounded))
+                  .foregroundStyle(Color.Theme.softBrown)
+              }
+              .padding()
             }
+          }
             .background(Color.Theme.background)
             .navigationTitle("About")
             .navigationBarTitleDisplayMode(.inline)
@@ -1505,7 +899,7 @@ private struct AboutView: View {
     }
 }
 
-private struct AcknowledgementsView: View {
+struct AcknowledgementsView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -1610,7 +1004,7 @@ private struct AcknowledgementItem: View {
     }
 }
 
-private struct FAQView: View {
+struct FAQView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -1701,7 +1095,7 @@ private struct FAQItem: View {
     }
 }
 
-private struct TermsView: View {
+struct TermsView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -1787,7 +1181,7 @@ private struct TermsView: View {
     }
 }
 
-private struct PrivacyView: View {
+struct PrivacyView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
