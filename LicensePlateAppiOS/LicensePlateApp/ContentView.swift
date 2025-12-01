@@ -402,7 +402,7 @@ private struct NewTripSheet: View {
                         VStack(spacing: 12) {
                             // Voice Settings
                             SettingToggleRow(
-                                title: "Skip Confirmation",
+                                title: "Skip Voice Confirmation",
                                 description: "Automatically add license plates without confirmation when using Voice",
                                 isOn: $skipVoiceConfirmation
                             )

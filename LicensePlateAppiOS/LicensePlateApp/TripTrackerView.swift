@@ -1362,7 +1362,7 @@ private struct SettingsView: View {
             let canEditSettings = trip.startedAt == nil // Can only edit if trip hasn't started
             
             SettingToggleRow(
-                title: "Skip Confirmation",
+                title: "Skip Voice Confirmation",
                 description: "Automatically add license plates without confirmation when using Voice",
                 isOn: Binding(
                     get: { trip.skipVoiceConfirmation },
