@@ -347,10 +347,13 @@ private struct NewTripSheet: View {
                                 .padding(.vertical, 10)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                        .fill(Color.Theme.cardBackground)
+                                        .fill(Color.Theme.background)
                                 )
                         }
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .background(Color.Theme.cardBackground)
+                        .cornerRadius(20)
                         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                         .listRowBackground(Color.clear)
                     } header: {
@@ -382,7 +385,10 @@ private struct NewTripSheet: View {
                                 isOn: $startTripRightAway
                             )
                         }
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .background(Color.Theme.cardBackground)
+                        .cornerRadius(20)
                         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                         .listRowBackground(Color.clear)
                     } header: {
@@ -446,7 +452,10 @@ private struct NewTripSheet: View {
                             .disabled(!trackMyLocationDuringTrip)
                             .opacity(trackMyLocationDuringTrip ? 1.0 : 0.5)
                         }
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .background(Color.Theme.cardBackground)
+                        .cornerRadius(20)
                         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                         .listRowBackground(Color.clear)
                     } header: {
