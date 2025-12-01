@@ -42,6 +42,36 @@ enum AppLanguage: String, CaseIterable {
     case french = "French"
 }
 
+enum AppTripSortOrder: String, CaseIterable {
+    case dateCreated = "Date Created"
+    case name = "Name"
+    case progress = "Progress"
+    case lastActive = "Last Active"
+}
+
+enum AppFontSize: String, CaseIterable {
+    case small = "Small"
+    case medium = "Medium"
+    case large = "Large"
+}
+
+enum AppDefaultTab: String, CaseIterable {
+    case trips = "Trips"
+    case map = "Map"
+    case stats = "Stats"
+}
+
+enum AppPlateDisplayFormat: String, CaseIterable {
+    case fullName = "Full Name"
+    case abbreviation = "Abbreviation"
+}
+
+enum AppMapDefaultZoom: String, CaseIterable {
+    case close = "Close"
+    case medium = "Medium"
+    case far = "Far"
+}
+
 // MARK: - App Preferences Utilities
 
 struct AppPreferences {

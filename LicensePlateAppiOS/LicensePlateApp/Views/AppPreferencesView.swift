@@ -18,6 +18,18 @@ struct AppPreferencesView: View {
     @AppStorage("appLanguage") private var appLanguageRaw: String = AppLanguage.english.rawValue
     @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
     @AppStorage("appUseVibrations") private var appUseVibrations = true
+    @AppStorage("appTripSortOrder") private var appTripSortOrderRaw: String = AppTripSortOrder.dateCreated.rawValue
+    @AppStorage("appShowConfirmationDialogs") private var appShowConfirmationDialogs = true
+    
+    // Hidden preferences (for future use)
+    @AppStorage("appFontSize") private var appFontSizeRaw: String = AppFontSize.medium.rawValue
+    @AppStorage("appReduceMotion") private var appReduceMotion = false
+    @AppStorage("appAutoSync") private var appAutoSync = true
+    @AppStorage("appDefaultTab") private var appDefaultTabRaw: String = AppDefaultTab.trips.rawValue
+    @AppStorage("appShowStatistics") private var appShowStatistics = true
+    @AppStorage("appPlateDisplayFormat") private var appPlateDisplayFormatRaw: String = AppPlateDisplayFormat.fullName.rawValue
+    @AppStorage("appMapDefaultZoom") private var appMapDefaultZoomRaw: String = AppMapDefaultZoom.medium.rawValue
+    @AppStorage("appShowCompletedRegions") private var appShowCompletedRegions = true
     
     @State private var currentColorScheme: ColorScheme?
     
@@ -50,6 +62,42 @@ struct AppPreferencesView: View {
         )
     }
     
+    private var appTripSortOrder: Binding<AppTripSortOrder> {
+        Binding(
+            get: { AppTripSortOrder(rawValue: appTripSortOrderRaw) ?? .dateCreated },
+            set: { appTripSortOrderRaw = $0.rawValue }
+        )
+    }
+    
+    // Hidden preference bindings
+    private var appFontSize: Binding<AppFontSize> {
+        Binding(
+            get: { AppFontSize(rawValue: appFontSizeRaw) ?? .medium },
+            set: { appFontSizeRaw = $0.rawValue }
+        )
+    }
+    
+    private var appDefaultTab: Binding<AppDefaultTab> {
+        Binding(
+            get: { AppDefaultTab(rawValue: appDefaultTabRaw) ?? .trips },
+            set: { appDefaultTabRaw = $0.rawValue }
+        )
+    }
+    
+    private var appPlateDisplayFormat: Binding<AppPlateDisplayFormat> {
+        Binding(
+            get: { AppPlateDisplayFormat(rawValue: appPlateDisplayFormatRaw) ?? .fullName },
+            set: { appPlateDisplayFormatRaw = $0.rawValue }
+        )
+    }
+    
+    private var appMapDefaultZoom: Binding<AppMapDefaultZoom> {
+        Binding(
+            get: { AppMapDefaultZoom(rawValue: appMapDefaultZoomRaw) ?? .medium },
+            set: { appMapDefaultZoomRaw = $0.rawValue }
+        )
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -67,16 +115,13 @@ struct AppPreferencesView: View {
                           
                             Divider()
                             
-                            // Hidden for now
-                            if false {
-                                SettingPickerRow(
-                                    title: "Distance Unit",
-                                    description: "Select miles or kilometers",
-                                    selection: appDistanceUnit
-                                )
-                                
-                                Divider()
-                            }
+                            SettingPickerRow(
+                                title: "Distance Unit",
+                                description: "Select miles or kilometers",
+                                selection: appDistanceUnit
+                            )
+                            
+                            Divider()
                             
                             SettingPickerRow(
                                 title: "Map Style",
@@ -86,8 +131,39 @@ struct AppPreferencesView: View {
                           
                             Divider()
                             
-                            // Hidden for now
+                            SettingToggleRow(
+                                title: "Play Sound Effects",
+                                description: "Enable audio feedback for app interactions",
+                                isOn: $appPlaySoundEffects
+                            )
+                            
+                            SettingToggleRow(
+                                title: "Use Vibrations",
+                                description: "Enable haptic feedback",
+                                isOn: $appUseVibrations
+                            )
+                            
+                            // Hidden preferences (for future use)
                             if false {
+                                Divider()
+                                
+                                SettingPickerRow(
+                                    title: "Trip Sort Order",
+                                    description: "How to sort trips in the list",
+                                    selection: appTripSortOrder
+                                )
+                                
+                                Divider()
+                                
+                                SettingToggleRow(
+                                    title: "Show Confirmation Dialogs",
+                                    description: "Show confirmation prompts for destructive actions like deleting trips",
+                                    isOn: $appShowConfirmationDialogs
+                                )
+                                
+                                Divider()
+                                Divider()
+                                
                                 SettingPickerRow(
                                     title: "Language",
                                     description: "Select your preferred language",
@@ -96,16 +172,66 @@ struct AppPreferencesView: View {
                               
                                 Divider()
                                 
-                                SettingToggleRow(
-                                    title: "Play Sound Effects",
-                                    description: "Enable audio feedback for app interactions",
-                                    isOn: $appPlaySoundEffects
+                                SettingPickerRow(
+                                    title: "Font Size",
+                                    description: "Adjust text size for better readability",
+                                    selection: appFontSize
                                 )
                                 
+                                Divider()
+                                
                                 SettingToggleRow(
-                                    title: "Use Vibrations",
-                                    description: "Enable haptic feedback",
-                                    isOn: $appUseVibrations
+                                    title: "Reduce Motion",
+                                    description: "Respect iOS Reduce Motion setting",
+                                    isOn: $appReduceMotion
+                                )
+                                
+                                Divider()
+                                
+                                SettingToggleRow(
+                                    title: "Auto-Sync",
+                                    description: "Automatically sync data to cloud",
+                                    isOn: $appAutoSync
+                                )
+                                
+                                Divider()
+                                
+                                SettingPickerRow(
+                                    title: "Default Tab",
+                                    description: "Which tab to show when opening the app",
+                                    selection: appDefaultTab
+                                )
+                                
+                                Divider()
+                                
+                                SettingToggleRow(
+                                    title: "Show Statistics",
+                                    description: "Display statistics on the main screen",
+                                    isOn: $appShowStatistics
+                                )
+                                
+                                Divider()
+                                
+                                SettingPickerRow(
+                                    title: "Plate Display Format",
+                                    description: "How to display license plate regions",
+                                    selection: appPlateDisplayFormat
+                                )
+                                
+                                Divider()
+                                
+                                SettingPickerRow(
+                                    title: "Map Default Zoom",
+                                    description: "Default zoom level when opening maps",
+                                    selection: appMapDefaultZoom
+                                )
+                                
+                                Divider()
+                                
+                                SettingToggleRow(
+                                    title: "Show Completed Regions",
+                                    description: "Display regions that are already found in lists",
+                                    isOn: $appShowCompletedRegions
                                 )
                             }
                         }
