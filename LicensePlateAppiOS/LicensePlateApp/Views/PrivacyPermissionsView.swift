@@ -35,9 +35,9 @@ struct PrivacyPermissionsView: View {
                     .ignoresSafeArea()
                 
                 List {
+                    // Location Section
                     Section {
                         VStack(spacing: 12) {
-                            // Location Permission
                             PermissionRow(
                                 title: "Location",
                                 icon: "location.fill",
@@ -63,10 +63,23 @@ struct PrivacyPermissionsView: View {
                                 description: "Continuously track your location while a trip is active (Can be disabled at any time)",
                                 isOn: $trackMyLocationDuringTrips
                             )
-                          
-                            Divider()
-                            
-                            // Microphone Permission
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .background(Color.Theme.cardBackground)
+                        .cornerRadius(20)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                        .listRowBackground(Color.clear)
+                    } header: {
+                        Text("Location")
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    .textCase(nil)
+                    
+                    // Voice Section
+                    Section {
+                        VStack(spacing: 12) {
                             PermissionRow(
                                 title: "Microphone",
                                 icon: "mic.fill",
@@ -74,10 +87,7 @@ struct PrivacyPermissionsView: View {
                                 statusColor: microphonePermissionColor,
                                 onTap: openMicrophoneSettings
                             )
-                          
-                            Divider()
                             
-                            // Speech Recognizer Permission
                             PermissionRow(
                                 title: "Speech Recognizer",
                                 icon: "waveform",
@@ -85,8 +95,6 @@ struct PrivacyPermissionsView: View {
                                 statusColor: speechRecognitionPermissionColor,
                                 onTap: openSpeechRecognitionSettings
                             )
-                          
-                            Divider()
                             
                             // Camera Permission (hidden for now)
                             if false {
@@ -97,11 +105,24 @@ struct PrivacyPermissionsView: View {
                                     statusColor: cameraPermissionColor,
                                     onTap: openCameraSettings
                                 )
-                              
-                                Divider()
                             }
-                            
-                            // Notifications Permission
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .background(Color.Theme.cardBackground)
+                        .cornerRadius(20)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                        .listRowBackground(Color.clear)
+                    } header: {
+                        Text("Voice")
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    .textCase(nil)
+                    
+                    // Notifications Section
+                    Section {
+                        VStack(spacing: 12) {
                             PermissionRow(
                                 title: "Notifications",
                                 icon: "bell.fill",
@@ -134,6 +155,10 @@ struct PrivacyPermissionsView: View {
                         .cornerRadius(20)
                         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                         .listRowBackground(Color.clear)
+                    } header: {
+                        Text("Notifications")
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
                     }
                     .textCase(nil)
                 }
