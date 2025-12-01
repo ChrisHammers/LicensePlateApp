@@ -21,6 +21,10 @@ struct ContentView: View {
     @State private var isShowingCreateSheet = false
     @State private var isShowingSettings = false
     
+    // Custom detent for the new trip sheet - small enough to show only Basic Info
+    private let smallDetent = PresentationDetent.fraction(0.25)
+    @State private var sheetDetent: PresentationDetent = .fraction(0.25)
+    
     // App Preferences
     @AppStorage("appDarkMode") private var appDarkModeRaw: String = AppDarkMode.system.rawValue
     
@@ -104,7 +108,11 @@ struct ContentView: View {
                 NewTripSheet { tripData in
                     createTrip(with: tripData)
                 }
-                .presentationDetents([.medium, .large])
+                .presentationDetents([smallDetent, .medium, .large], selection: $sheetDetent)
+                .presentationDragIndicator(.visible)
+                .onAppear {
+                    sheetDetent = smallDetent
+                }
             }
             .navigationDestination(for: UUID.self) { tripID in
                 if let trip = trips.first(where: { $0.id == tripID }) {
