@@ -123,6 +123,7 @@ struct AppPreferencesView: View {
             }
             .navigationTitle("App Preferences")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {

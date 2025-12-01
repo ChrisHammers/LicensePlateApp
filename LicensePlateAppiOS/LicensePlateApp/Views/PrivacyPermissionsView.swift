@@ -142,6 +142,7 @@ struct PrivacyPermissionsView: View {
             }
             .navigationTitle("Privacy & Permissions")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {

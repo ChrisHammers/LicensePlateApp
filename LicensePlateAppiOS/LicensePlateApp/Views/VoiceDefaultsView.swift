@@ -53,6 +53,7 @@ struct VoiceDefaultsView: View {
             }
             .navigationTitle("Voice Defaults")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {

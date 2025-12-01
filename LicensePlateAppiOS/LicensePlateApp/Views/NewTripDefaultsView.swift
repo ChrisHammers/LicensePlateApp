@@ -110,6 +110,7 @@ struct NewTripDefaultsView: View {
             }
             .navigationTitle("New Trip Defaults")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") {
