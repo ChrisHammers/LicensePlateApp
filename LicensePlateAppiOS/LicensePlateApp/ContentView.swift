@@ -365,6 +365,15 @@ private struct NewTripSheet: View {
                     
                     Section {
                         VStack(spacing: 12) {
+                            // Start Trip
+                            SettingToggleRow(
+                                title: "Start Trip right away",
+                                description: "Automatically start the trip when created",
+                                isOn: $startTripRightAway
+                            )
+                            
+                            Divider()
+                            
                             // Countries
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("Countries to Include")
@@ -375,15 +384,6 @@ private struct NewTripSheet: View {
                                 CountryCheckboxRow(title: "Canada", isOn: $includeCanada)
                                 CountryCheckboxRow(title: "Mexico", isOn: $includeMexico)
                             }
-                            
-                            Divider()
-                            
-                            // Start Trip
-                            SettingToggleRow(
-                                title: "Start Trip right away",
-                                description: "Automatically start the trip when created",
-                                isOn: $startTripRightAway
-                            )
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 16)
