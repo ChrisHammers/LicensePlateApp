@@ -32,11 +32,24 @@ struct NewTripDefaultsView: View {
                 List {
                     Section {
                         VStack(spacing: 12) {
+                            // Start Trip - First item
+                            SettingToggleRow(
+                                title: "Start Trip right away",
+                                description: "Automatically start new trips when created",
+                                isOn: $defaultStartTripRightAway
+                            )
+                            
+                            Divider()
+                            
                             // Countries
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("Default Countries")
                                     .font(.system(.headline, design: .rounded))
                                     .foregroundStyle(Color.Theme.primaryBlue)
+                                
+                                Text("Select which countries' license plates will be included by default when creating new trips")
+                                    .font(.system(.caption, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown)
                                     .padding(.bottom, 4)
                                 
                                 CountryCheckboxRow(title: "United States", isOn: $defaultIncludeUS)
@@ -46,55 +59,56 @@ struct NewTripDefaultsView: View {
                             
                             Divider()
                             
+                            // Voice Settings
                             SettingToggleRow(
-                                title: "Start Trip right away",
-                                description: "Automatically start new trips when created",
-                                isOn: $defaultStartTripRightAway
+                                title: "Skip Voice Confirmation",
+                                description: "Automatically add license plates heard by speech recognition without requiring user confirmation. This is the default for NEW trips created, this can be changed per trip as well.",
+                                isOn: $defaultSkipVoiceConfirmation
                             )
                             
                             Divider()
                             
-                            SettingToggleRow(
-                                title: "Save location when marking plates",
-                                description: "Store location data when marking plates (default for new trips)",
-                                isOn: $defaultSaveLocationWhenMarkingPlates
-                            )
-                            
-                            Divider()
-                            
-                            SettingToggleRow(
-                                title: "Show my location on large map",
-                                description: "Display current location on full-screen map (default for new trips)",
-                                isOn: $defaultShowMyLocationOnLargeMap
-                            )
-                            
-                            Divider()
-                            
-                            SettingToggleRow(
-                                title: "Track my location during trip",
-                                description: "Continuously track location while trip is active (default for new trips)",
-                                isOn: $defaultTrackMyLocationDuringTrip
-                            )
-                            
-                            Divider()
-                            
-                            SettingToggleRow(
-                                title: "Show my active trip on the large map",
-                                description: "Display active trip on full-screen map (default for new trips)",
-                                isOn: $defaultShowMyActiveTripOnLargeMap
-                            )
-                            .disabled(!defaultTrackMyLocationDuringTrip)
-                            .opacity(defaultTrackMyLocationDuringTrip ? 1.0 : 0.5)
-                            
-                            Divider()
-                            
-                            SettingToggleRow(
-                                title: "Show my active trip on the small map",
-                                description: "Display active trip on small map (default for new trips)",
-                                isOn: $defaultShowMyActiveTripOnSmallMap
-                            )
-                            .disabled(!defaultTrackMyLocationDuringTrip)
-                            .opacity(defaultTrackMyLocationDuringTrip ? 1.0 : 0.5)
+                            // Tracking Options
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Location Tracking")
+                                    .font(.system(.headline, design: .rounded))
+                                    .foregroundStyle(Color.Theme.primaryBlue)
+                                    .padding(.bottom, 4)
+                                
+                                SettingToggleRow(
+                                    title: "Save location when marking plates",
+                                    description: "Store location data when marking plates (default for new trips)",
+                                    isOn: $defaultSaveLocationWhenMarkingPlates
+                                )
+                                
+                                SettingToggleRow(
+                                    title: "Show my location on large map",
+                                    description: "Display current location on full-screen map (default for new trips)",
+                                    isOn: $defaultShowMyLocationOnLargeMap
+                                )
+                                
+                                SettingToggleRow(
+                                    title: "Track my location during trip",
+                                    description: "Continuously track location while trip is active (default for new trips)",
+                                    isOn: $defaultTrackMyLocationDuringTrip
+                                )
+                                
+                                SettingToggleRow(
+                                    title: "Show my active trip on the large map",
+                                    description: "Display active trip on full-screen map (default for new trips)",
+                                    isOn: $defaultShowMyActiveTripOnLargeMap
+                                )
+                                .disabled(!defaultTrackMyLocationDuringTrip)
+                                .opacity(defaultTrackMyLocationDuringTrip ? 1.0 : 0.5)
+                                
+                                SettingToggleRow(
+                                    title: "Show my active trip on the small map",
+                                    description: "Display active trip on small map (default for new trips)",
+                                    isOn: $defaultShowMyActiveTripOnSmallMap
+                                )
+                                .disabled(!defaultTrackMyLocationDuringTrip)
+                                .opacity(defaultTrackMyLocationDuringTrip ? 1.0 : 0.5)
+                            }
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 16)

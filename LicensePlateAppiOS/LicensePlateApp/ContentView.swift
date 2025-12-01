@@ -741,15 +741,18 @@ private struct DefaultSettingsView: View {
                             
                             Divider()
                             
+                          if false {
                             // Voice Defaults
                             SettingNavigationRow(
-                                title: "Voice Defaults",
-                                description: "Configure default voice recognition settings for new trips"
+                              title: "Voice Defaults",
+                              description: "Configure default voice recognition settings for new trips"
                             ) {
-                                showVoiceDefaults = true
+                              showVoiceDefaults = true
                             }
                             
                             Divider()
+                            
+                          }
                             
                             // Help & About
                             SettingNavigationRow(

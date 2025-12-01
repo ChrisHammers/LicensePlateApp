@@ -11,7 +11,6 @@ struct VoiceDefaultsView: View {
     @Environment(\.dismiss) private var dismiss
     
     // Voice Defaults
-    @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
     @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
     
     var body: some View {
@@ -23,20 +22,18 @@ struct VoiceDefaultsView: View {
                 List {
                     Section {
                         VStack(spacing: 12) {
-                            SettingToggleRow(
-                                title: "Skip Voice Confirmation",
-                                description: "Automatically add license plates heard by speech recognition without requiring user confirmation. This is the default for NEW trips created, this can be changed per trip as well.",
-                                isOn: $defaultSkipVoiceConfirmation
-                            )
-                            
                             if false {
-                                Divider()
-                                
                                 SettingToggleRow(
                                     title: "Hold to Talk",
                                     description: "Press and hold the microphone button to record. If disabled the system will listen until you hit stop. This is the default for NEW trips created, this can be changed per trip as well.",
                                     isOn: $defaultHoldToTalk
                                 )
+                            } else {
+                                Text("No voice defaults available")
+                                    .font(.system(.body, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                    .padding(.vertical, 20)
                             }
                         }
                         .padding(.horizontal, 16)
