@@ -61,6 +61,7 @@ struct TripTrackerView: View {
     @State private var showSettings = false
     @State private var visibleCountry: PlateRegion.Country = .unitedStates
     @State private var showFullScreenMap = false
+    @State private var showEndTripConfirmation = false
     @Namespace private var mapNamespace
 
     var body: some View {
@@ -205,10 +206,14 @@ struct TripTrackerView: View {
             HStack(spacing: 24) {
                 summaryChip(title: "Found", value: "\(trip.foundRegionIDs.count)")
               
+                // Start/End Trip Button
+                startEndTripButton
+              
                 // Calculate remaining based on enabled countries only
                 let enabledRegions = PlateRegion.all.filter { trip.enabledCountries.contains($0.country) }
                 summaryChip(title: "Remaining", value: "\(enabledRegions.count - trip.foundRegionIDs.count)")
             }
+            .padding(.horizontal, 32)
             
            
         }
@@ -240,6 +245,101 @@ struct TripTrackerView: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color.Theme.background)
         )
+    }
+    
+    private var isTripCreator: Bool {
+        guard let currentUserID = authService.currentUser?.id else { return false }
+        return trip.createdBy == currentUserID
+    }
+    
+    private var startEndTripButton: some View {
+        Group {
+            if trip.startedAt == nil {
+                // Start Trip Button
+                Button {
+                    FeedbackService.shared.buttonTap()
+                    trip.startedAt = Date.now
+                    trip.lastUpdated = Date.now
+                    try? modelContext.save()
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(.title2, design: .rounded))
+                            .foregroundStyle(.white)
+                        Text("START")
+                            .font(.system(.caption, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.Theme.primaryBlue)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(!isTripCreator)
+                .opacity(isTripCreator ? 1.0 : 0.5)
+            } else if !trip.isTripEnded {
+                // End Trip Button
+                Button {
+                    FeedbackService.shared.buttonTap()
+                    showEndTripConfirmation = true
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: "stop.circle.fill")
+                            .font(.system(.title2, design: .rounded))
+                            .foregroundStyle(.white)
+                        Text("END")
+                            .font(.system(.caption, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.red)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(!isTripCreator)
+                .opacity(isTripCreator ? 1.0 : 0.5)
+            } else {
+                // Trip Ended - Show status
+                VStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(.title2, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                    Text("ENDED")
+                        .font(.system(.caption, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.softBrown)
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.Theme.background)
+                )
+            }
+        }
+        .alert("End Trip", isPresented: $showEndTripConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("End Trip", role: .destructive) {
+                trip.isTripEnded = true
+                trip.tripEndedAt = Date.now
+                trip.tripEndedBy = authService.currentUser?.id
+                trip.lastUpdated = Date.now
+                try? modelContext.save()
+            }
+        } message: {
+            Text("This will stop the game. You won't be able to add states in this trip anymore.")
+        }
     }
 
   
