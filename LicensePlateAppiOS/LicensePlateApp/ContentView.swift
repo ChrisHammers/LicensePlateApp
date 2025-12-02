@@ -21,9 +21,22 @@ struct ContentView: View {
     @State private var isShowingCreateSheet = false
     @State private var isShowingSettings = false
     
-    // Custom detent for the new trip sheet - small enough to show only Basic Info
-    private let smallDetent = PresentationDetent.fraction(0.25)
-    @State private var sheetDetent: PresentationDetent = .fraction(0.25)
+    // Custom detent for the new trip sheet - device-aware sizing
+    // On iPad, use a larger fraction since 25% is too small to show the text field
+    private var smallDetent: PresentationDetent {
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            return PresentationDetent.fraction(0.4) // 40% on iPad
+        } else {
+            return PresentationDetent.fraction(0.25) // 25% on iPhone
+        }
+    }
+    @State private var sheetDetent: PresentationDetent = {
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            return PresentationDetent.fraction(0.4)
+        } else {
+            return PresentationDetent.fraction(0.25)
+        }
+    }()
     
     // App Preferences
     @AppStorage("appDarkMode") private var appDarkModeRaw: String = AppDarkMode.system.rawValue
