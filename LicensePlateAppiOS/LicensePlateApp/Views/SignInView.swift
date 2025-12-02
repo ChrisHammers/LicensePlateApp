@@ -56,6 +56,7 @@ struct SignInView: View {
                                         .font(.system(.body, design: .rounded))
                                         .autocapitalization(.none)
                                         .autocorrectionDisabled()
+                                        .textContentType(.username)
                                 }
                                 
                                 // First Name field
@@ -69,6 +70,7 @@ struct SignInView: View {
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(.body, design: .rounded))
                                         .autocapitalization(.words)
+                                        .textContentType(.givenName)
                                 }
                                 
                                 // Last Name field
@@ -82,6 +84,7 @@ struct SignInView: View {
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(.body, design: .rounded))
                                         .autocapitalization(.words)
+                                        .textContentType(.familyName)
                                 }
                             }
                             
@@ -98,6 +101,7 @@ struct SignInView: View {
                                     .keyboardType(.emailAddress)
                                     .autocapitalization(.none)
                                     .autocorrectionDisabled()
+                                    .textContentType(isSignInMode ? .emailAddress : .emailAddress)
                             }
                             
                             if !isSignInMode {
@@ -113,6 +117,7 @@ struct SignInView: View {
                                         .font(.system(.body, design: .rounded))
                                         .keyboardType(.phonePad)
                                         .autocapitalization(.none)
+                                        .textContentType(.telephoneNumber)
                                 }
                             }
                             
@@ -126,6 +131,8 @@ struct SignInView: View {
                                 SecureField("Enter your password", text: $password)
                                     .textFieldStyle(.roundedBorder)
                                     .font(.system(.body, design: .rounded))
+                                    .textContentType(isSignInMode ? .password : .newPassword)
+                                    .autocorrectionDisabled()
                             }
                             
                             if !isSignInMode {
@@ -139,6 +146,8 @@ struct SignInView: View {
                                     SecureField("Confirm your password", text: $confirmPassword)
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(.body, design: .rounded))
+                                        .textContentType(.newPassword)
+                                        .autocorrectionDisabled()
                                 }
                             }
                             
