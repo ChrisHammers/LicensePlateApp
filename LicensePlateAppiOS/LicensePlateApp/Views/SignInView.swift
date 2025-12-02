@@ -41,6 +41,8 @@ struct SignInView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var isLoading = false
+    @State private var passwordMatchError: String? = nil
+    @State private var passwordMatchTask: Task<Void, Never>? = nil
     
     var body: some View {
         NavigationStack {
@@ -197,6 +199,20 @@ struct SignInView: View {
                                         .font(.system(.body, design: .rounded))
                                         .textContentType(.newPassword)
                                         .autocorrectionDisabled()
+                                    
+                                    // Password match error with debounce
+                                    if let matchError = passwordMatchError {
+                                        Text(matchError)
+                                            .font(.system(.caption, design: .rounded))
+                                            .foregroundStyle(.red)
+                                            .padding(.top, 4)
+                                    }
+                                }
+                                .onChange(of: password) { _, _ in
+                                    checkPasswordMatchDebounced()
+                                }
+                                .onChange(of: confirmPassword) { _, _ in
+                                    checkPasswordMatchDebounced()
                                 }
                             }
                             
@@ -338,6 +354,10 @@ struct SignInView: View {
                     dismiss()
                     authService.showSignInSheet = false
                 }
+            }
+            .onDisappear {
+                // Cancel any pending password match check when view disappears
+                passwordMatchTask?.cancel()
             }
         }
     }
@@ -530,6 +550,37 @@ struct SignInView: View {
             .padding(.top, 4)
         }
         .padding(.top, 4)
+    }
+    
+    // MARK: - Password Match Check (Debounced)
+    
+    private func checkPasswordMatchDebounced() {
+        // Cancel any existing task
+        passwordMatchTask?.cancel()
+        
+        // Only check if both fields have content
+        guard !password.isEmpty && !confirmPassword.isEmpty else {
+            passwordMatchError = nil
+            return
+        }
+        
+        // Create a new debounced task
+        passwordMatchTask = Task {
+            // Wait 0.5 seconds before checking
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            
+            // Check if task was cancelled
+            guard !Task.isCancelled else { return }
+            
+            // Check if passwords match
+            await MainActor.run {
+                if password != confirmPassword {
+                    passwordMatchError = "Passwords do not match"
+                } else {
+                    passwordMatchError = nil
+                }
+            }
+        }
     }
     
     // MARK: - Password Validation
