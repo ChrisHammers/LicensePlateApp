@@ -66,6 +66,7 @@ struct HelpAboutView: View {
                                         .font(.system(size: 20))
                                         .foregroundStyle(Color.Theme.primaryBlue)
                                         .frame(width: 24)
+                                        .accessibilityHidden(true)
                                     
                                     VStack(alignment: .leading, spacing: 6) {
                                         Text("Report a Bug")
@@ -89,6 +90,9 @@ struct HelpAboutView: View {
                             }
                             .buttonStyle(.plain)
                             .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                            .accessibilityLabel("Report a Bug")
+                            .accessibilityHint("Opens email to report a bug")
+                            .accessibilityAddTraits(.isButton)
                             
                             Divider()
                             
@@ -100,6 +104,7 @@ struct HelpAboutView: View {
                                         .font(.system(size: 20))
                                         .foregroundStyle(Color.Theme.primaryBlue)
                                         .frame(width: 24)
+                                        .accessibilityHidden(true)
                                     
                                     VStack(alignment: .leading, spacing: 6) {
                                         Text("Suggest a Feature")
@@ -123,6 +128,9 @@ struct HelpAboutView: View {
                             }
                             .buttonStyle(.plain)
                             .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                            .accessibilityLabel("Suggest a Feature")
+                            .accessibilityHint("Opens email to suggest a new feature")
+                            .accessibilityAddTraits(.isButton)
                             
                             Divider()
                             
@@ -134,6 +142,7 @@ struct HelpAboutView: View {
                                         .font(.system(size: 20))
                                         .foregroundStyle(Color.Theme.primaryBlue)
                                         .frame(width: 24)
+                                        .accessibilityHidden(true)
                                     
                                     VStack(alignment: .leading, spacing: 6) {
                                         Text("Contact Support")
@@ -157,6 +166,9 @@ struct HelpAboutView: View {
                             }
                             .buttonStyle(.plain)
                             .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                            .accessibilityLabel("Contact Support")
+                            .accessibilityHint("Opens email to contact support")
+                            .accessibilityAddTraits(.isButton)
                             
                             Divider()
                             
@@ -177,11 +189,15 @@ struct HelpAboutView: View {
                                         .onTapGesture {
                                             showTerms = true
                                         }
+                                        .accessibilityLabel("Terms of Use")
+                                        .accessibilityHint("Opens Terms of Use")
+                                        .accessibilityAddTraits(.isButton)
                                     
                                     Text("·")
                                         .font(.system(.caption, design: .rounded))
                                         .foregroundStyle(Color.Theme.softBrown)
                                         .allowsHitTesting(false)
+                                        .accessibilityHidden(true)
                                     
                                     // Privacy button - isolated tap area
                                     Text("Privacy")
@@ -193,6 +209,9 @@ struct HelpAboutView: View {
                                         .onTapGesture {
                                             showPrivacy = true
                                         }
+                                        .accessibilityLabel("Privacy Policy")
+                                        .accessibilityHint("Opens Privacy Policy")
+                                        .accessibilityAddTraits(.isButton)
                                 }
                             }
                             .frame(maxWidth: .infinity)
@@ -225,6 +244,8 @@ struct HelpAboutView: View {
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
+                    .accessibilityLabel("Done")
+                    .accessibilityHint("Closes this view")
                 }
             }
             .navigationDestination(isPresented: $showAbout) {

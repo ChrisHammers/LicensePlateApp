@@ -132,6 +132,8 @@ struct NewTripDefaultsView: View {
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
+                    .accessibilityLabel("Done")
+                    .accessibilityHint("Closes this view")
                 }
             }
     }

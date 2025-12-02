@@ -483,6 +483,8 @@ struct UserProfileView: View {
                                                 .foregroundStyle(Color.red)
                                                 .font(.system(size: 20))
                                         }
+                                        .accessibilityLabel("Unlink \(platform.platform.rawValue) account")
+                                        .accessibilityHint("Removes the linked \(platform.platform.rawValue) account")
                                     }
                                     .padding(.vertical, 8)
                                 }
@@ -524,6 +526,7 @@ struct UserProfileView: View {
                                                     
                                                     Image(systemName: "plus.circle.fill")
                                                         .font(.system(size: 18))
+                                                        .accessibilityHidden(true)
                                                 }
                                                 .foregroundStyle(authService.isLoading ? Color.gray : Color.Theme.primaryBlue)
                                                 .padding(.vertical, 10)
@@ -534,6 +537,9 @@ struct UserProfileView: View {
                                                 )
                                             }
                                             .disabled(authService.isLoading || linkingPlatform != nil)
+                                            .accessibilityLabel("Link \(platform.rawValue) account")
+                                            .accessibilityHint("Links your \(platform.rawValue) account to this profile")
+                                            .accessibilityAddTraits(.isButton)
                                         }
                                     }
                                 }
@@ -574,6 +580,8 @@ struct UserProfileView: View {
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
+                    .accessibilityLabel("Done")
+                    .accessibilityHint("Closes the profile view")
                 }
             }
             .alert("Error", isPresented: $showError) {

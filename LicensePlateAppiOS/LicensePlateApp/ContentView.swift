@@ -101,6 +101,8 @@ struct ContentView: View {
                         Image(systemName: "gearshape")
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
+                    .accessibilityLabel("Settings")
+                    .accessibilityHint("Opens app settings")
                 }
             }
             .sheet(isPresented: $isShowingSettings) {
@@ -201,6 +203,8 @@ struct ContentView: View {
             }
             .listRowInsets(.init(top: 6, leading: 20, bottom: 6, trailing: 20))
             .listRowBackground(Color.clear)
+            .accessibilityLabel("Trip: \(trip.name)")
+            .accessibilityHint("Double tap to open trip")
         }
         .onDelete(perform: deleteTrips)
     }
@@ -213,6 +217,7 @@ struct ContentView: View {
             HStack(spacing: 12) {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 24, weight: .bold))
+                    .accessibilityHidden(true)
                 Text("Create Trip")
                     .font(.system(.headline, design: .rounded))
                     .fontWeight(.semibold)
@@ -228,6 +233,9 @@ struct ContentView: View {
         }
         .padding(.trailing, 20)
         .padding(.bottom, 32)
+        .accessibilityLabel("Create Trip")
+        .accessibilityHint("Opens a sheet to create a new trip")
+        .accessibilityAddTraits(.isButton)
     }
 
     @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
@@ -383,6 +391,9 @@ private struct NewTripSheet: View {
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                                         .fill(Color.Theme.background)
                                 )
+                                .accessibilityLabel("Trip Name")
+                                .accessibilityHint("Enter a name for your trip, or leave blank to use date and time")
+                                .accessibilityValue(tripName.isEmpty ? "Will use date and time" : tripName)
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 16)
@@ -520,6 +531,8 @@ private struct NewTripSheet: View {
                         dismiss()
                     }
                     .foregroundStyle(Color.Theme.primaryBlue)
+                    .accessibilityLabel("Cancel")
+                    .accessibilityHint("Cancels creating a new trip")
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Create") {
@@ -606,21 +619,25 @@ private struct TripRow: View {
                     .font(.system(.subheadline, design: .rounded))
                     .fontWeight(.medium)
                     .foregroundStyle(Color.Theme.accentYellow)
+                    .accessibilityLabel("Progress: \(trip.foundRegionIDs.count) of \(PlateRegion.all.count) regions found")
             }
 
             Divider()
                 .background(Color.Theme.softBrown.opacity(0.2))
+                .accessibilityHidden(true)
 
             HStack {
               Label(trip.startedAt != nil ? "Started" :"Created", systemImage: "calendar")
                     .font(.system(.footnote, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
+                    .accessibilityLabel(trip.startedAt != nil ? "Started" : "Created")
 
                 Spacer()
 
               Text(dateFormatter.string(from: trip.startedAt != nil ? trip.startedAt! : trip.createdAt))
                     .font(.system(.footnote, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
+                    .accessibilityLabel("Date: \(dateFormatter.string(from: trip.startedAt != nil ? trip.startedAt! : trip.createdAt))")
             }
         }
         .padding()
@@ -630,6 +647,7 @@ private struct TripRow: View {
                 .fill(Color.Theme.cardBackground)
                 .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
         )
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -639,6 +657,7 @@ private struct TripMissingView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 48))
                 .foregroundStyle(Color.Theme.accentYellow)
+                .accessibilityHidden(true)
             Text("Trip Unavailable")
                 .font(.system(.title2, design: .rounded))
                 .fontWeight(.semibold)
@@ -650,6 +669,8 @@ private struct TripMissingView: View {
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.Theme.background)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Trip Unavailable. We could not find the trip you were looking for.")
     }
 }
 

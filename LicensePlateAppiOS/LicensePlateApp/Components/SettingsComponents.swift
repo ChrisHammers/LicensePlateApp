@@ -48,6 +48,9 @@ struct SettingToggleRow: View {
             Toggle("", isOn: $isOn)
                 .tint(Color.Theme.primaryBlue)
                 .labelsHidden()
+                .accessibilityLabel(title)
+                .accessibilityValue(isOn ? "On" : "Off")
+                .accessibilityHint(description)
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 16)
@@ -98,6 +101,8 @@ struct SettingInfoRow: View {
                 .fill(Color.Theme.cardBackground)
         )
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(value)")
     }
 }
 
@@ -149,6 +154,9 @@ struct SettingEditableTextRow: View {
                         .font(.system(.body, design: .rounded))
                         .focused($isTextFieldFocused)
                         .disabled(isDisabled)
+                        .accessibilityLabel(title)
+                        .accessibilityHint("Enter \(title.lowercased())")
+                        .accessibilityValue(editingValue)
                     
                     Button("Save") {
                         value = editingValue
@@ -165,6 +173,8 @@ struct SettingEditableTextRow: View {
                             .fill(Color.Theme.primaryBlue)
                     )
                     .disabled(isDisabled)
+                    .accessibilityLabel("Save \(title)")
+                    .accessibilityHint("Saves the \(title.lowercased())")
                     
                     Button("Cancel") {
                         editingValue = value
@@ -173,6 +183,8 @@ struct SettingEditableTextRow: View {
                     }
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
+                    .accessibilityLabel("Cancel editing \(title)")
+                    .accessibilityHint("Cancels editing and discards changes")
                 }
             } else {
               HStack(spacing: 8) {
@@ -207,6 +219,9 @@ struct SettingEditableTextRow: View {
                       }
                     }
                     .disabled(isDisabled) //Isn't making it clear its disabled enough, so hiding.
+                    .accessibilityLabel("Edit \(title)")
+                    .accessibilityHint("Double tap to edit \(title.lowercased())")
+                    .accessibilityAddTraits(.isButton)
                 }
                 
                 }
@@ -804,6 +819,7 @@ struct SettingNavigationRow: View {
                         .font(.system(size: 20))
                         .foregroundStyle(Color.Theme.primaryBlue)
                         .frame(width: 24)
+                        .accessibilityHidden(true)
                 }
                 
                 VStack(alignment: .leading, spacing: 6) {
@@ -822,6 +838,7 @@ struct SettingNavigationRow: View {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.Theme.softBrown)
+                    .accessibilityHidden(true)
             }
             .padding(.vertical, 12)
             .padding(.horizontal, 16)
@@ -832,6 +849,9 @@ struct SettingNavigationRow: View {
         }
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+        .accessibilityLabel(title)
+        .accessibilityHint(description)
+        .accessibilityAddTraits(.isButton)
     }
 }
 

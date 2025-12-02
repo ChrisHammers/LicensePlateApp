@@ -93,6 +93,8 @@ struct TripTrackerView: View {
                         Image(systemName: "gearshape")
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
+                    .accessibilityLabel("Trip Settings")
+                    .accessibilityHint("Opens settings for this trip")
                 }
             }
         }
@@ -281,6 +283,8 @@ struct TripTrackerView: View {
                 measuredHeight.wrappedValue = size.height
             }
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value)")
     }
     
     private var isTripCreator: Bool {
@@ -302,6 +306,7 @@ struct TripTrackerView: View {
                         Image(systemName: "play.circle.fill")
                             .font(.system(.title2, design: .rounded))
                             .foregroundStyle(.white)
+                            .accessibilityHidden(true)
                         Text("START")
                             .font(.system(.caption, design: .rounded))
                             .fontWeight(.semibold)
@@ -319,6 +324,9 @@ struct TripTrackerView: View {
                 .disabled(!isTripCreator)
                 .opacity(isTripCreator ? 1.0 : 0.5)
                 .frame(height: height > 0 ? height : nil)
+                .accessibilityLabel("Start Trip")
+                .accessibilityHint(isTripCreator ? "Starts the trip and begins tracking" : "Only the trip creator can start the trip")
+                .accessibilityAddTraits(.isButton)
             } else if !trip.isTripEnded {
                 // End Trip Button
                 Button {
@@ -329,6 +337,7 @@ struct TripTrackerView: View {
                         Image(systemName: "stop.circle.fill")
                             .font(.system(.title2, design: .rounded))
                             .foregroundStyle(.white)
+                            .accessibilityHidden(true)
                         Text("END")
                             .font(.system(.caption, design: .rounded))
                             .fontWeight(.semibold)
@@ -346,12 +355,16 @@ struct TripTrackerView: View {
                 .disabled(!isTripCreator)
                 .opacity(isTripCreator ? 1.0 : 0.5)
                 .frame(height: height > 0 ? height : nil)
+                .accessibilityLabel("End Trip")
+                .accessibilityHint(isTripCreator ? "Ends the trip and stops tracking" : "Only the trip creator can end the trip")
+                .accessibilityAddTraits(.isButton)
             } else {
                 // Trip Ended - Show status
                 VStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(.title2, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
+                        .accessibilityHidden(true)
                     Text("ENDED")
                         .font(.system(.caption, design: .rounded))
                         .fontWeight(.semibold)
@@ -365,6 +378,9 @@ struct TripTrackerView: View {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(Color.Theme.background)
                 )
+                .accessibilityLabel("Trip Ended")
+                .accessibilityValue("This trip has been completed")
+                .accessibilityAddTraits(.isStaticText)
             }
         }
         .alert("End Trip", isPresented: $showEndTripConfirmation) {
@@ -533,6 +549,7 @@ struct TripTrackerView: View {
                 Image(systemName: speechRecognizer.isListening ? "mic.fill" : "mic.slash.fill")
                     .font(.system(size: 44, weight: .semibold))
                     .foregroundStyle(speechRecognizer.isListening ? Color.white : Color.Theme.primaryBlue)
+                    .accessibilityHidden(true)
             }
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -549,6 +566,14 @@ struct TripTrackerView: View {
                     }
             )
             .disabled(!isTripActive || speechRecognizer.authorizationStatus != .authorized)
+            .accessibilityLabel("Voice Input")
+            .accessibilityValue(speechRecognizer.isListening ? "Recording" : "Not recording")
+            .accessibilityHint(
+                !isTripActive ? "Trip must be started to use voice input" :
+                speechRecognizer.authorizationStatus != .authorized ? "Speech recognition permission required" :
+                "Press and hold to record license plate"
+            )
+            .accessibilityAddTraits(.isButton)
             
             // Status text
             VStack(spacing: 12) {
@@ -867,6 +892,7 @@ struct TripTrackerView: View {
                     HStack(spacing: 10) {
                         Image(systemName: tab.systemImage)
                             .font(.system(size: 20, weight: .semibold))
+                            .accessibilityHidden(true)
 
                         Text(tab.title)
                             .font(.system(.headline, design: .rounded))
@@ -887,6 +913,10 @@ struct TripTrackerView: View {
                 .buttonStyle(.plain)
                 .disabled(isTabDisabled)
                 .opacity(isTabDisabled ? 0.5 : 1.0)
+                .accessibilityLabel(tab.title)
+                .accessibilityValue(selectedTab == tab ? "Selected" : "")
+                .accessibilityHint(isTabDisabled ? "Trip must be started to use this tab" : "Double tap to switch to \(tab.title.lowercased()) tab")
+                .accessibilityAddTraits(selectedTab == tab ? [.isButton, .isSelected] : .isButton)
             }
         }
         .padding(.horizontal, 20)
@@ -945,6 +975,7 @@ private struct RegionCellView: View {
                 Image(systemName: "mappin.and.ellipse")
                     .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(Color.Theme.primaryBlue)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(region.name)
@@ -963,12 +994,17 @@ private struct RegionCellView: View {
                     .font(.system(size: 22))
                     .foregroundStyle(isSelected ? Color.Theme.accentYellow : Color.Theme.softBrown.opacity(0.4))
                     .scaleEffect(isSelected ? 1.05 : 1.0)
+                    .accessibilityHidden(true)
             }
             .padding(.vertical, 6)
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.5 : 1.0)
+        .accessibilityLabel("\(region.name), \(region.country.rawValue)")
+        .accessibilityValue(isSelected ? "Found" : "Not found")
+        .accessibilityHint(isDisabled ? "Trip must be started to mark regions" : "Double tap to \(isSelected ? "unmark" : "mark") this region as found")
+        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -1912,6 +1948,9 @@ private struct RegionMapView: View {
                         showFullScreen = true
                     }
                 }
+                .accessibilityLabel("Map showing \(country.rawValue) regions")
+                .accessibilityHint("Double tap to open full screen map")
+                .accessibilityAddTraits(.isButton)
         }
         .onChange(of: country) { oldValue, newValue in
             // Update map region when country changes
