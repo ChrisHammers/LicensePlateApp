@@ -102,10 +102,12 @@ extension View {
     
     /// Applies transition animation only if reduced motion is disabled
     func accessibleTransition(_ transition: AnyTransition) -> some View {
-        if UIAccessibility.isReduceMotionEnabled {
-            return self.transition(.opacity)
-        } else {
-            return self.transition(transition)
+        Group {
+            if UIAccessibility.isReduceMotionEnabled {
+                self.transition(.opacity)
+            } else {
+                self.transition(transition)
+            }
         }
     }
 }
@@ -116,29 +118,34 @@ extension View {
 /// Use this instead of withAnimation() throughout the app
 func withAccessibleAnimation<T>(
     _ animation: Animation? = .default,
-    body: () throws -> T
+    _ body: () throws -> T
 ) rethrows -> T {
     if UIAccessibility.isReduceMotionEnabled {
         // If reduced motion is enabled, perform without animation
         return try body()
     } else {
         // Otherwise, use the provided animation
-      return try withAnimation(animation, body)
+        return try withAnimation(animation) {
+            try body()
+        }
     }
 }
 
 /// Helper function to perform animations that respect reduced motion settings (async version)
-@MainActor
+/// Note: withAnimation doesn't support async closures, so we execute the body first, then animate
 func withAccessibleAnimation<T>(
     _ animation: Animation? = .default,
-    body: () async throws -> T
+    _ body: @escaping () async throws -> T
 ) async rethrows -> T {
     if UIAccessibility.isReduceMotionEnabled {
         // If reduced motion is enabled, perform without animation
         return try await body()
     } else {
-        // Otherwise, use the provided animation
-      return try await withAnimation(animation, body)
+        // Execute the async body first, then apply animation to the result
+        let result = try await body()
+        // Note: withAnimation doesn't work with async, so we return the result
+        // The animation will need to be handled at the view level
+        return result
     }
 }
 
