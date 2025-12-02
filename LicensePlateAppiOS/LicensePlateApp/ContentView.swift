@@ -643,7 +643,10 @@ private struct TripMissingView: View {
 // App Preferences enums are now in Core/AppPreferences.swift
 
 // Default Settings View for new trips
-private struct DefaultSettingsView: View {
+struct DefaultSettingsView: View {
+    @StateObject private var coordinator = MainSettingsCoordinator()
+    @State private var navigationPath = NavigationPath()
+    
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var systemColorScheme
     @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
@@ -686,12 +689,6 @@ private struct DefaultSettingsView: View {
     
     @EnvironmentObject var authService: FirebaseAuthService
     @Environment(\.modelContext) private var modelContext
-    @State private var showUserProfile = false
-    @State private var showPrivacyPermissions = false
-    @State private var showAppPreferences = false
-    @State private var showNewTripDefaults = false
-    @State private var showVoiceDefaults = false
-    @State private var showHelpAbout = false
     
     // Computed properties for picker bindings
     private var appDarkMode: Binding<AppDarkMode> {
@@ -723,7 +720,7 @@ private struct DefaultSettingsView: View {
     }
     
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             ZStack {
                 Color.Theme.background
                     .ignoresSafeArea()
@@ -738,7 +735,7 @@ private struct DefaultSettingsView: View {
                                     description: "Edit username and manage account",
                                     icon: "person.circle"
                                 ) {
-                                    showUserProfile = true
+                                    coordinator.navigateToProfile(path: $navigationPath)
                                 }
                                 
                                 Divider()
@@ -750,7 +747,7 @@ private struct DefaultSettingsView: View {
                                 description: "Manage location, microphone, notifications, and other permissions",
                                 icon: "hand.raised.fill"
                             ) {
-                                showPrivacyPermissions = true
+                                coordinator.navigateToPrivacyPermissions(path: $navigationPath)
                             }
                             
                             Divider()
@@ -761,7 +758,7 @@ private struct DefaultSettingsView: View {
                                 description: "Customize dark mode, map style, and other app settings",
                                 icon: "slider.horizontal.3"
                             ) {
-                                showAppPreferences = true
+                                coordinator.navigateToAppPreferences(path: $navigationPath)
                             }
                             
                             Divider()
@@ -772,7 +769,7 @@ private struct DefaultSettingsView: View {
                                 description: "Set default countries, tracking, and voice settings for new trips",
                                 icon: "plus.circle.fill"
                             ) {
-                                showNewTripDefaults = true
+                                coordinator.navigateToNewTripDefaults(path: $navigationPath)
                             }
                             
                             Divider()
@@ -784,7 +781,7 @@ private struct DefaultSettingsView: View {
                               description: "Configure default voice recognition settings for new trips",
                               icon: "mic.fill"
                             ) {
-                              showVoiceDefaults = true
+                              coordinator.navigateToVoiceDefaults(path: $navigationPath)
                             }
                             
                             Divider()
@@ -797,7 +794,7 @@ private struct DefaultSettingsView: View {
                                 description: "Get help, report bugs, suggest features, and learn about the app",
                                 icon: "questionmark.circle.fill"
                             ) {
-                                showHelpAbout = true
+                                coordinator.navigateToHelpAbout(path: $navigationPath)
                             }
                         }
                         .padding(.horizontal, 16)
@@ -838,25 +835,29 @@ private struct DefaultSettingsView: View {
                     currentColorScheme = newValue
                 }
             }
-            .navigationDestination(isPresented: $showUserProfile) {
-                if let user = authService.currentUser {
-                    UserProfileView(user: user, authService: authService)
+            .navigationDestination(for: MainSettingsCoordinator.SettingsDestination.self) { destination in
+                Group {
+                    switch destination {
+                    case .profile:
+                        if let user = authService.currentUser {
+                            UserProfileView(user: user, authService: authService)
+                        } else {
+                            // Fallback view if no user (shouldn't happen since button is hidden)
+                            Text("No user available")
+                                .foregroundStyle(Color.Theme.softBrown)
+                        }
+                    case .privacyPermissions:
+                        PrivacyPermissionsView()
+                    case .appPreferences:
+                        AppPreferencesView()
+                    case .newTripDefaults:
+                        NewTripDefaultsView()
+                    case .voiceDefaults:
+                        VoiceDefaultsView()
+                    case .helpAbout:
+                        HelpAboutView()
+                    }
                 }
-            }
-            .navigationDestination(isPresented: $showPrivacyPermissions) {
-                PrivacyPermissionsView()
-            }
-            .navigationDestination(isPresented: $showAppPreferences) {
-                AppPreferencesView()
-            }
-            .navigationDestination(isPresented: $showNewTripDefaults) {
-                NewTripDefaultsView()
-            }
-            .navigationDestination(isPresented: $showVoiceDefaults) {
-                VoiceDefaultsView()
-            }
-            .navigationDestination(isPresented: $showHelpAbout) {
-                HelpAboutView()
             }
         }
         .background(Color.Theme.background)
