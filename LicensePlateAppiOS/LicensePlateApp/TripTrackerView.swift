@@ -62,6 +62,8 @@ struct TripTrackerView: View {
     @State private var visibleCountry: PlateRegion.Country = .unitedStates
     @State private var showFullScreenMap = false
     @State private var showEndTripConfirmation = false
+    @State private var chipWidth: CGFloat = 0
+    @State private var chipHeight: CGFloat = 0
     @Namespace private var mapNamespace
 
     var body: some View {
@@ -204,14 +206,17 @@ struct TripTrackerView: View {
           .padding(.horizontal, 32)
           
             HStack(spacing: 24) {
-                summaryChip(title: "Found", value: "\(trip.foundRegionIDs.count)")
-              
-                // Start/End Trip Button
-                startEndTripButton
-              
                 // Calculate remaining based on enabled countries only
                 let enabledRegions = PlateRegion.all.filter { trip.enabledCountries.contains($0.country) }
-                summaryChip(title: "Remaining", value: "\(enabledRegions.count - trip.foundRegionIDs.count)")
+                let foundValue = "\(trip.foundRegionIDs.count)"
+                let remainingValue = "\(enabledRegions.count - trip.foundRegionIDs.count)"
+                
+                summaryChip(title: "Found", value: foundValue, measuredWidth: $chipWidth, measuredHeight: $chipHeight)
+              
+                // Start/End Trip Button
+                startEndTripButton(height: chipHeight)
+              
+                summaryChip(title: "Remaining", value: remainingValue, measuredWidth: $chipWidth, measuredHeight: $chipHeight)
             }
             .padding(.horizontal, 32)
             
@@ -228,23 +233,54 @@ struct TripTrackerView: View {
         .padding(.bottom, 6)
     }
 
-    private func summaryChip(title: String, value: String) -> some View {
+    // PreferenceKey to measure chip size
+    private struct ChipSizePreference: PreferenceKey {
+        static var defaultValue: CGSize = .zero
+        static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+            value = CGSize(
+                width: max(value.width, nextValue().width),
+                height: max(value.height, nextValue().height)
+            )
+        }
+    }
+    
+    private func summaryChip(title: String, value: String, measuredWidth: Binding<CGFloat>, measuredHeight: Binding<CGFloat>) -> some View {
         VStack(spacing: 6) {
             Text(value)
                 .font(.system(.title, design: .rounded))
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue)
+                .lineLimit(1)
             Text(title.uppercased())
                 .font(.system(.caption, design: .rounded))
                 .fontWeight(.medium)
                 .foregroundStyle(Color.Theme.softBrown)
+                .lineLimit(1)
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 16)
+        .fixedSize(horizontal: true, vertical: false)
+        .background(
+            GeometryReader { geometry in
+                Color.clear
+                    .preference(key: ChipSizePreference.self, value: geometry.size)
+            }
+        )
+        .frame(width: measuredWidth.wrappedValue > 0 ? measuredWidth.wrappedValue : nil,
+               height: measuredHeight.wrappedValue > 0 ? measuredHeight.wrappedValue : nil)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .fill(Color.Theme.background)
         )
+        .onPreferenceChange(ChipSizePreference.self) { size in
+            // Update to the maximum size across all chips
+            if size.width > measuredWidth.wrappedValue {
+                measuredWidth.wrappedValue = size.width
+            }
+            if size.height > measuredHeight.wrappedValue {
+                measuredHeight.wrappedValue = size.height
+            }
+        }
     }
     
     private var isTripCreator: Bool {
@@ -252,7 +288,7 @@ struct TripTrackerView: View {
         return trip.createdBy == currentUserID
     }
     
-    private var startEndTripButton: some View {
+    private func startEndTripButton(height: CGFloat) -> some View {
         Group {
             if trip.startedAt == nil {
                 // Start Trip Button
@@ -282,6 +318,7 @@ struct TripTrackerView: View {
                 .buttonStyle(.plain)
                 .disabled(!isTripCreator)
                 .opacity(isTripCreator ? 1.0 : 0.5)
+                .frame(height: height > 0 ? height : nil)
             } else if !trip.isTripEnded {
                 // End Trip Button
                 Button {
@@ -308,6 +345,7 @@ struct TripTrackerView: View {
                 .buttonStyle(.plain)
                 .disabled(!isTripCreator)
                 .opacity(isTripCreator ? 1.0 : 0.5)
+                .frame(height: height > 0 ? height : nil)
             } else {
                 // Trip Ended - Show status
                 VStack(spacing: 6) {
@@ -322,6 +360,7 @@ struct TripTrackerView: View {
                 .padding(.vertical, 12)
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity)
+                .frame(height: height > 0 ? height : nil)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(Color.Theme.background)
