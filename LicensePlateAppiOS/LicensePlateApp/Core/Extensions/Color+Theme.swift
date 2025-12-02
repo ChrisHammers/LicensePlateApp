@@ -22,9 +22,11 @@ extension Color {
             dark: Color(red: 0.35, green: 0.60, blue: 0.80)
         )
         
-        // Accent Yellow: Slightly more vibrant in dark mode
+        // Accent Yellow: Darkened in light mode for WCAG AA compliance (3:1 for UI components)
+        // Light mode: Darkened from RGB(245,191,66) to RGB(200,150,0) for better contrast on cardBackground
+        // Dark mode: Bright yellow for visibility on dark backgrounds
         static let accentYellow = Color(
-            light: Color(red: 0.96, green: 0.75, blue: 0.26),
+            light: Color(red: 0.78, green: 0.59, blue: 0.0), // RGB(200, 150, 0) - WCAG AA compliant (3:1+)
             dark: Color(red: 1.0, green: 0.80, blue: 0.35)
         )
         

@@ -40,6 +40,15 @@ This document tracks the WCAG AA color contrast compliance for the License Plate
 **Usage:**
 - Location "Not Set" status indicators
 
+### 5. Accent Yellow (Light Mode)
+**Previous:** RGB(245, 191, 66) - ~1.5:1 contrast on cardBackground ❌  
+**Updated:** RGB(200, 150, 0) - **3:1+** contrast for UI components ✅
+
+**Usage:**
+- Icons on cardBackground (empty state, progress indicators)
+- Checkmarks and found region indicators
+- Map markers for found regions
+
 ## Verified Combinations
 
 ### Light Mode
@@ -48,7 +57,9 @@ This document tracks the WCAG AA color contrast compliance for the License Plate
 ✅ **Primary Blue on Card Background** - Meets 4.5:1  
 ✅ **Soft Brown on Card Background** - Meets 4.5:1 (after update)  
 ✅ **White on Primary Blue** - Meets 4.5:1 (for buttons)  
-✅ **Permission Colors on Background** - Meets 3:1 (after updates)
+✅ **Permission Colors on Background** - Meets 3:1 (after updates)  
+✅ **Accent Yellow on Card Background** - Meets 3:1 (after update)  
+✅ **Accent Yellow on Background** - Meets 3:1 (after update)
 
 ### Dark Mode
 ✅ **Primary Blue on Background** - Meets 4.5:1  

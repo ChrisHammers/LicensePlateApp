@@ -32,7 +32,8 @@ struct ColorContrastTest {
         let background = Color(red: 0.95, green: 0.94, blue: 0.90)
         let cardBackground = Color(red: 0.87, green: 0.85, blue: 0.80)
         let primaryBlue = Color(red: 0.18, green: 0.44, blue: 0.64)
-        let softBrown = Color(red: 0.58, green: 0.45, blue: 0.35)
+        let softBrown = Color(red: 0.39, green: 0.29, blue: 0.22) // Updated value
+        let accentYellow = Color(red: 0.96, green: 0.75, blue: 0.26)
         let white = Color.white
         
         // Primary Blue on Background
@@ -69,6 +70,20 @@ struct ColorContrastTest {
             background: primaryBlue,
             name: "White on Primary Blue (Light)"
         )
+        
+        // Accent Yellow on Card Background
+        ColorContrastChecker.printContrastReport(
+            foreground: accentYellow,
+            background: cardBackground,
+            name: "Accent Yellow on Card Background (Light)"
+        )
+        
+        // Accent Yellow on Background
+        ColorContrastChecker.printContrastReport(
+            foreground: accentYellow,
+            background: background,
+            name: "Accent Yellow on Background (Light)"
+        )
     }
     
     static func testDarkMode() {
@@ -79,6 +94,7 @@ struct ColorContrastTest {
         let cardBackground = Color(red: 0.18, green: 0.18, blue: 0.20)
         let primaryBlue = Color(red: 0.35, green: 0.60, blue: 0.80)
         let softBrown = Color(red: 0.75, green: 0.65, blue: 0.55)
+        let accentYellow = Color(red: 1.0, green: 0.80, blue: 0.35)
         let white = Color.white
         
         // Primary Blue on Background
@@ -114,6 +130,20 @@ struct ColorContrastTest {
             foreground: white,
             background: primaryBlue,
             name: "White on Primary Blue (Dark)"
+        )
+        
+        // Accent Yellow on Card Background
+        ColorContrastChecker.printContrastReport(
+            foreground: accentYellow,
+            background: cardBackground,
+            name: "Accent Yellow on Card Background (Dark)"
+        )
+        
+        // Accent Yellow on Background
+        ColorContrastChecker.printContrastReport(
+            foreground: accentYellow,
+            background: background,
+            name: "Accent Yellow on Background (Dark)"
         )
     }
 }
