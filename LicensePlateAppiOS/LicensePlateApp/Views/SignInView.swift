@@ -1,6 +1,30 @@
 import SwiftUI
 import SwiftData
 
+// MARK: - Password Strength
+
+enum PasswordStrength {
+    case weak
+    case medium
+    case strong
+    
+    var color: Color {
+        switch self {
+        case .weak: return .red
+        case .medium: return .orange
+        case .strong: return .green
+        }
+    }
+    
+    var message: String {
+        switch self {
+        case .weak: return "Weak password"
+        case .medium: return "Good password"
+        case .strong: return "Strong password"
+        }
+    }
+}
+
 struct SignInView: View {
     @ObservedObject var authService: FirebaseAuthService
     @Environment(\.dismiss) private var dismiss
@@ -133,6 +157,31 @@ struct SignInView: View {
                                     .font(.system(.body, design: .rounded))
                                     .textContentType(isSignInMode ? .password : .newPassword)
                                     .autocorrectionDisabled()
+                                
+                                // Password strength indicator (only for create account)
+                                if !isSignInMode && !password.isEmpty {
+                                    passwordStrengthIndicator
+                                } else if !isSignInMode {
+                                    // Show requirements hint when field is empty
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Password must contain:")
+                                            .font(.system(.caption, design: .rounded))
+                                            .foregroundStyle(Color.Theme.softBrown)
+                                        Text("• At least 8 characters")
+                                            .font(.system(.caption, design: .rounded))
+                                            .foregroundStyle(Color.Theme.softBrown)
+                                        Text("• Uppercase and lowercase letters")
+                                            .font(.system(.caption, design: .rounded))
+                                            .foregroundStyle(Color.Theme.softBrown)
+                                        Text("• At least one number")
+                                            .font(.system(.caption, design: .rounded))
+                                            .foregroundStyle(Color.Theme.softBrown)
+                                        Text("• Special characters are optional but recommended")
+                                            .font(.system(.caption, design: .rounded))
+                                            .foregroundStyle(Color.Theme.softBrown)
+                                    }
+                                    .padding(.top, 4)
+                                }
                             }
                             
                             if !isSignInMode {
@@ -297,7 +346,14 @@ struct SignInView: View {
         if isSignInMode {
             return !email.isEmpty && !password.isEmpty
         } else {
-            return !userName.isEmpty && !email.isEmpty && !password.isEmpty && password == confirmPassword && password.count >= 6
+            // For create account, check basic requirements
+            // Full validation happens in createAccount()
+            let basicValid = !userName.isEmpty && 
+                           !email.isEmpty && 
+                           !password.isEmpty && 
+                           password == confirmPassword &&
+                           password.count >= 8
+            return basicValid
         }
     }
     
@@ -343,9 +399,10 @@ struct SignInView: View {
             return
         }
         
-      //TODO: this should be more secure than 6 char long.
-        guard password.count >= 6 else {
-            errorMessage = "Password must be at least 6 characters"
+        // Validate password with security requirements
+        let validation = validatePassword(password)
+        guard validation.isValid else {
+            errorMessage = validation.errorMessage ?? "Password does not meet security requirements"
             showError = true
             return
         }
@@ -432,6 +489,116 @@ struct SignInView: View {
                     showError = true
                 }
             }
+        }
+    }
+    
+    // MARK: - Password Strength Indicator
+    
+    @ViewBuilder
+    private var passwordStrengthIndicator: some View {
+        let validation = validatePassword(password)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(validation.strength.color)
+                    .frame(height: 4)
+                    .frame(maxWidth: .infinity)
+                Text(validation.strength.message)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(validation.strength.color)
+            }
+            
+            // Password requirements checklist
+            VStack(alignment: .leading, spacing: 2) {
+                PasswordRequirement(
+                    text: "At least 8 characters",
+                    isMet: password.count >= 8
+                )
+                PasswordRequirement(
+                    text: "Contains uppercase letter",
+                    isMet: password.rangeOfCharacter(from: .uppercaseLetters) != nil
+                )
+                PasswordRequirement(
+                    text: "Contains lowercase letter",
+                    isMet: password.rangeOfCharacter(from: .lowercaseLetters) != nil
+                )
+                PasswordRequirement(
+                    text: "Contains number",
+                    isMet: password.rangeOfCharacter(from: .decimalDigits) != nil
+                )
+            }
+            .padding(.top, 4)
+        }
+        .padding(.top, 4)
+    }
+    
+    // MARK: - Password Validation
+    
+    private func validatePassword(_ password: String) -> (isValid: Bool, errorMessage: String?, strength: PasswordStrength) {
+        // Check minimum length
+        guard password.count >= 8 else {
+            return (false, "Password must be at least 8 characters long", .weak)
+        }
+        
+        // Check for at least one uppercase letter
+        let hasUppercase = password.rangeOfCharacter(from: .uppercaseLetters) != nil
+        guard hasUppercase else {
+            return (false, "Password must contain at least one uppercase letter", .weak)
+        }
+        
+        // Check for at least one lowercase letter
+        let hasLowercase = password.rangeOfCharacter(from: .lowercaseLetters) != nil
+        guard hasLowercase else {
+            return (false, "Password must contain at least one lowercase letter", .weak)
+        }
+        
+        // Check for at least one number
+        let hasNumber = password.rangeOfCharacter(from: .decimalDigits) != nil
+        guard hasNumber else {
+            return (false, "Password must contain at least one number", .weak)
+        }
+        
+        // Check for common passwords
+        let commonPasswords = ["password", "12345678", "password123", "qwerty123", "abc12345", 
+                               "Password1", "Password123", "Welcome1", "Welcome123"]
+        let lowercased = password.lowercased()
+        if commonPasswords.contains(where: { lowercased.contains($0.lowercased()) }) {
+            return (false, "This password is too common. Please choose a more unique password.", .weak)
+        }
+        
+        // Calculate strength
+        let hasSpecialChar = password.rangeOfCharacter(from: CharacterSet(charactersIn: "!@#$%^&*()_+-=[]{}|;:,.<>?")) != nil
+        let length = password.count
+        
+        let strength: PasswordStrength
+        if length >= 12 && hasUppercase && hasLowercase && hasNumber && hasSpecialChar {
+            strength = .strong
+        } else if length >= 10 && hasUppercase && hasLowercase && hasNumber {
+            strength = .strong
+        } else if length >= 8 && hasUppercase && hasLowercase && hasNumber {
+            strength = .medium
+        } else {
+            strength = .weak
+        }
+        
+        return (true, nil, strength)
+    }
+}
+
+// MARK: - Password Requirement Component
+
+struct PasswordRequirement: View {
+    let text: String
+    let isMet: Bool
+    
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: isMet ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(isMet ? .green : Color.Theme.softBrown)
+            Text(text)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(isMet ? Color.Theme.primaryBlue : Color.Theme.softBrown)
         }
     }
 }
