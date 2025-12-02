@@ -786,11 +786,26 @@ struct SettingPickerRow<T: Hashable & CaseIterable & RawRepresentable>: View whe
 struct SettingNavigationRow: View {
     let title: String
     let description: String
+    let icon: String?
     let action: () -> Void
+    
+    init(title: String, description: String, icon: String? = nil, action: @escaping () -> Void) {
+        self.title = title
+        self.description = description
+        self.icon = icon
+        self.action = action
+    }
     
     var body: some View {
         Button(action: action) {
             HStack(spacing: 16) {
+                if let icon = icon {
+                    Image(systemName: icon)
+                        .font(.system(size: 20))
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                        .frame(width: 24)
+                }
+                
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
                         .font(.system(.body, design: .rounded))
@@ -880,7 +895,8 @@ struct SettingNavigationRow: View {
     List {
         SettingNavigationRow(
             title: "Profile",
-            description: "Edit username and manage account"
+            description: "Edit username and manage account",
+            icon: "person.circle"
         ) {
             print("Navigate to profile")
         }

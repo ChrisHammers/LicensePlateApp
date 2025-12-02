@@ -31,7 +31,8 @@ struct HelpAboutView: View {
                         VStack(spacing: 12) {
                             SettingNavigationRow(
                                 title: "About",
-                                description: "Learn about RoadTrip Royale and HammersTechLLC"
+                                description: "Learn about RoadTrip Royale and HammersTechLLC",
+                                icon: "info.circle.fill"
                             ) {
                                 showAbout = true
                             }
@@ -40,7 +41,8 @@ struct HelpAboutView: View {
                             
                             SettingNavigationRow(
                                 title: "Acknowledgements",
-                                description: "Open source libraries and SDKs we use"
+                                description: "Open source libraries and SDKs we use",
+                                icon: "heart.fill"
                             ) {
                                 showAcknowledgements = true
                             }
@@ -49,7 +51,8 @@ struct HelpAboutView: View {
                             
                             SettingNavigationRow(
                                 title: "FAQ",
-                                description: "Frequently asked questions"
+                                description: "Frequently asked questions",
+                                icon: "questionmark.bubble.fill"
                             ) {
                                 showFAQ = true
                             }

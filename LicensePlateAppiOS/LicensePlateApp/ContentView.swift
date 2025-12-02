@@ -735,7 +735,8 @@ private struct DefaultSettingsView: View {
                             if let _ = authService.currentUser {
                                 SettingNavigationRow(
                                     title: "Profile",
-                                    description: "Edit username and manage account"
+                                    description: "Edit username and manage account",
+                                    icon: "person.circle"
                                 ) {
                                     showUserProfile = true
                                 }
@@ -746,7 +747,8 @@ private struct DefaultSettingsView: View {
                             // Privacy & Permissions
                             SettingNavigationRow(
                                 title: "Privacy & Permissions",
-                                description: "Manage location, microphone, notifications, and other permissions"
+                                description: "Manage location, microphone, notifications, and other permissions",
+                                icon: "hand.raised.fill"
                             ) {
                                 showPrivacyPermissions = true
                             }
@@ -756,7 +758,8 @@ private struct DefaultSettingsView: View {
                             // App Preferences
                             SettingNavigationRow(
                                 title: "App Preferences",
-                                description: "Customize dark mode, map style, and other app settings"
+                                description: "Customize dark mode, map style, and other app settings",
+                                icon: "slider.horizontal.3"
                             ) {
                                 showAppPreferences = true
                             }
@@ -766,7 +769,8 @@ private struct DefaultSettingsView: View {
                             // New Trip Defaults
                             SettingNavigationRow(
                                 title: "New Trip Defaults",
-                                description: "Set default countries, tracking, and voice settings for new trips"
+                                description: "Set default countries, tracking, and voice settings for new trips",
+                                icon: "plus.circle.fill"
                             ) {
                                 showNewTripDefaults = true
                             }
@@ -777,7 +781,8 @@ private struct DefaultSettingsView: View {
                             // Voice Defaults
                             SettingNavigationRow(
                               title: "Voice Defaults",
-                              description: "Configure default voice recognition settings for new trips"
+                              description: "Configure default voice recognition settings for new trips",
+                              icon: "mic.fill"
                             ) {
                               showVoiceDefaults = true
                             }
@@ -789,7 +794,8 @@ private struct DefaultSettingsView: View {
                             // Help & About
                             SettingNavigationRow(
                                 title: "Help & About",
-                                description: "Get help, report bugs, suggest features, and learn about the app"
+                                description: "Get help, report bugs, suggest features, and learn about the app",
+                                icon: "questionmark.circle.fill"
                             ) {
                                 showHelpAbout = true
                             }
