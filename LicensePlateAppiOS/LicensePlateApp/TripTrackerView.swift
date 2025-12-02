@@ -121,7 +121,7 @@ struct TripTrackerView: View {
                     namespace: mapNamespace,
                     isPresented: $showFullScreenMap
                 )
-                .transition(.opacity)
+                .accessibleTransition(.opacity)
                 .zIndex(1000)
             }
         }
@@ -436,7 +436,7 @@ struct TripTrackerView: View {
                         .listRowBackground(Color.Theme.cardBackground)
                         .onAppear {
                             // Update visible country when scrolling to this section
-                            withAnimation(.easeInOut(duration: 0.3)) {
+                            withAccessibleAnimation(.easeInOut(duration: 0.3)) {
                                 visibleCountry = group.country
                             }
                         }
@@ -451,7 +451,7 @@ struct TripTrackerView: View {
                         .listRowInsets(EdgeInsets())
                         .onAppear {
                             // Update visible country when section header appears
-                            withAnimation(.easeInOut(duration: 0.3)) {
+                            withAccessibleAnimation(.easeInOut(duration: 0.3)) {
                                 visibleCountry = group.country
                             }
                         }
@@ -470,7 +470,7 @@ struct TripTrackerView: View {
   
   private func setFound(regionID: String, usingTab: Trip.inputUsedToFindRegion) {
     FeedbackService.shared.actionSuccess()
-    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+    withAccessibleAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
         trip.setFound(
             regionID: regionID,
             usingTab: usingTab,
@@ -489,7 +489,7 @@ struct TripTrackerView: View {
   
   
   private func setNotFound(regionID: String, usingTab: Trip.inputUsedToFindRegion) {
-    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+    withAccessibleAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
         trip.setNotFound(
             regionID: regionID,
             usingTab: usingTab,
@@ -511,7 +511,7 @@ struct TripTrackerView: View {
         
         FeedbackService.shared.toggleRegion()
         
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+        withAccessibleAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             trip.toggle(
                 regionID: regionID,
                 usingTab: .list,
@@ -543,7 +543,7 @@ struct TripTrackerView: View {
                         .frame(width: 120, height: 120)
                         .opacity(0.6)
                         .scaleEffect(speechRecognizer.isListening ? 1.1 : 1.0)
-                        .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: speechRecognizer.isListening)
+                        .accessibleAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: speechRecognizer.isListening)
                 }
                 
                 Image(systemName: speechRecognizer.isListening ? "mic.fill" : "mic.slash.fill")
@@ -885,7 +885,7 @@ struct TripTrackerView: View {
                         return
                     }
                     FeedbackService.shared.selectionChange()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                    withAccessibleAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         selectedTab = tab
                     }
                 } label: {
@@ -1112,7 +1112,7 @@ private struct VoiceConfirmationDialog: View {
                     .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
             )
         }
-        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+        .accessibleTransition(.opacity.combined(with: .scale(scale: 0.9)))
     }
 }
 
@@ -1827,7 +1827,7 @@ private struct FullScreenMapView: View {
                     HStack {
                         Spacer()
                         Button {
-                            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                            withAccessibleAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                                 isPresented = false
                             }
                         } label: {
@@ -1944,7 +1944,7 @@ private struct RegionMapView: View {
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                    withAccessibleAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                         showFullScreen = true
                     }
                 }
@@ -1954,7 +1954,7 @@ private struct RegionMapView: View {
         }
         .onChange(of: country) { oldValue, newValue in
             // Update map region when country changes
-            withAnimation(.easeInOut(duration: 0.5)) {
+            withAccessibleAnimation(.easeInOut(duration: 0.5)) {
                 switch newValue {
                 case .unitedStates:
                     mapRegion = MKCoordinateRegion(

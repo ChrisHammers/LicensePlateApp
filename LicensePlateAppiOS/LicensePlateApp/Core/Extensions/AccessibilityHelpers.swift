@@ -99,5 +99,46 @@ extension View {
             return self.animation(animation, value: value)
         }
     }
+    
+    /// Applies transition animation only if reduced motion is disabled
+    func accessibleTransition(_ transition: AnyTransition) -> some View {
+        if UIAccessibility.isReduceMotionEnabled {
+            return self.transition(.opacity)
+        } else {
+            return self.transition(transition)
+        }
+    }
+}
+
+// MARK: - Animation Helpers
+
+/// Helper function to perform animations that respect reduced motion settings
+/// Use this instead of withAnimation() throughout the app
+func withAccessibleAnimation<T>(
+    _ animation: Animation? = .default,
+    body: () throws -> T
+) rethrows -> T {
+    if UIAccessibility.isReduceMotionEnabled {
+        // If reduced motion is enabled, perform without animation
+        return try body()
+    } else {
+        // Otherwise, use the provided animation
+      return try withAnimation(animation, body)
+    }
+}
+
+/// Helper function to perform animations that respect reduced motion settings (async version)
+@MainActor
+func withAccessibleAnimation<T>(
+    _ animation: Animation? = .default,
+    body: () async throws -> T
+) async rethrows -> T {
+    if UIAccessibility.isReduceMotionEnabled {
+        // If reduced motion is enabled, perform without animation
+        return try await body()
+    } else {
+        // Otherwise, use the provided animation
+      return try await withAnimation(animation, body)
+    }
 }
 

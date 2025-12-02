@@ -33,12 +33,31 @@ class FeedbackService {
         self.soundEnabled = soundEnabled
     }
     
+    // MARK: - System Accessibility Checks
+    
+    /// Checks if haptics should be enabled based on user preferences and system settings
+    @MainActor
+    private var shouldProvideHaptics: Bool {
+        guard hapticEnabled else { return false }
+        // Respect system accessibility settings
+        // Note: iOS doesn't have a direct "disable haptics" setting, but we respect user preferences
+        return true
+    }
+    
+    /// Checks if sounds should be enabled based on user preferences and system settings
+    @MainActor
+    private var shouldProvideSounds: Bool {
+        guard soundEnabled else { return false }
+        // Check if device is in silent mode (if needed, can be added)
+        return true
+    }
+    
     // MARK: - Haptic Feedback
     
     /// Light haptic feedback for subtle interactions
     @MainActor
     func lightImpact() {
-        guard hapticEnabled else { return }
+        guard shouldProvideHaptics else { return }
         lightImpactGenerator.impactOccurred()
         lightImpactGenerator.prepare() // Prepare for next use
     }
@@ -46,7 +65,7 @@ class FeedbackService {
     /// Medium haptic feedback for standard button taps
     @MainActor
     func mediumImpact() {
-        guard hapticEnabled else { return }
+        guard shouldProvideHaptics else { return }
         mediumImpactGenerator.impactOccurred()
         mediumImpactGenerator.prepare()
     }
@@ -54,7 +73,7 @@ class FeedbackService {
     /// Heavy haptic feedback for important actions
     @MainActor
     func heavyImpact() {
-        guard hapticEnabled else { return }
+        guard shouldProvideHaptics else { return }
         heavyImpactGenerator.impactOccurred()
         heavyImpactGenerator.prepare()
     }
@@ -62,7 +81,7 @@ class FeedbackService {
     /// Selection haptic feedback for picker/selection changes
     @MainActor
     func selection() {
-        guard hapticEnabled else { return }
+        guard shouldProvideHaptics else { return }
         selectionGenerator.selectionChanged()
         selectionGenerator.prepare()
     }
@@ -70,7 +89,7 @@ class FeedbackService {
     /// Success notification haptic feedback
     @MainActor
     func success() {
-        guard hapticEnabled else { return }
+        guard shouldProvideHaptics else { return }
         notificationGenerator.notificationOccurred(.success)
         notificationGenerator.prepare()
     }
@@ -78,7 +97,7 @@ class FeedbackService {
     /// Warning notification haptic feedback
     @MainActor
     func warning() {
-        guard hapticEnabled else { return }
+        guard shouldProvideHaptics else { return }
         notificationGenerator.notificationOccurred(.warning)
         notificationGenerator.prepare()
     }
@@ -86,7 +105,7 @@ class FeedbackService {
     /// Error notification haptic feedback
     @MainActor
     func error() {
-        guard hapticEnabled else { return }
+        guard shouldProvideHaptics else { return }
         notificationGenerator.notificationOccurred(.error)
         notificationGenerator.prepare()
     }
@@ -97,14 +116,14 @@ class FeedbackService {
     /// - Parameter soundID: System sound ID (see AudioToolbox for available sounds)
     @MainActor
     func playSystemSound(_ soundID: SystemSoundID) {
-        guard soundEnabled else { return }
+        guard shouldProvideSounds else { return }
         AudioServicesPlaySystemSound(soundID)
     }
     
     /// Play a tap/click sound
     @MainActor
     func tap() {
-        guard soundEnabled else { return }
+        guard shouldProvideSounds else { return }
         // System sound for tap/click
         AudioServicesPlaySystemSound(1104) // Tink sound
     }
@@ -112,7 +131,7 @@ class FeedbackService {
     /// Play a success sound
     @MainActor
     func successSound() {
-        guard soundEnabled else { return }
+        guard shouldProvideSounds else { return }
         // System sound for success
         AudioServicesPlaySystemSound(1057) // Success/alert sound
     }
@@ -120,7 +139,7 @@ class FeedbackService {
     /// Play an error sound
     @MainActor
     func errorSound() {
-        guard soundEnabled else { return }
+        guard shouldProvideSounds else { return }
         // System sound for error
         AudioServicesPlaySystemSound(1053) // Error/alert sound
     }
@@ -128,7 +147,7 @@ class FeedbackService {
     /// Play a recording start sound
     @MainActor
     func recordingStart() {
-        guard soundEnabled else { return }
+        guard shouldProvideSounds else { return }
         AudioServicesPlaySystemSound(1057) // Recording start sound
     }
     
