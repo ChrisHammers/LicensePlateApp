@@ -99,7 +99,6 @@ struct AppPreferencesView: View {
     }
     
     var body: some View {
-        NavigationStack {
             ZStack {
                 Color.Theme.background
                     .ignoresSafeArea()
@@ -274,7 +273,6 @@ struct AppPreferencesView: View {
                     currentColorScheme = newValue
                 }
             }
-        }
     }
     
     private func updateColorScheme() {

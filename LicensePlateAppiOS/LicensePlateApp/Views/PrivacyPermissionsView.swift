@@ -29,7 +29,6 @@ struct PrivacyPermissionsView: View {
     @State private var notificationPermission: UNAuthorizationStatus = .notDetermined
     
     var body: some View {
-        NavigationStack {
             ZStack {
                 Color.Theme.background
                     .ignoresSafeArea()
@@ -184,7 +183,6 @@ struct PrivacyPermissionsView: View {
             .onChange(of: locationManager.authorizationStatus) { oldValue, newValue in
                 checkPermissions()
             }
-        }
     }
     
     // Permission status helpers

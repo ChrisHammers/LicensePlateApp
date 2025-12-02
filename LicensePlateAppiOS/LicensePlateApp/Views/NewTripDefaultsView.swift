@@ -24,7 +24,6 @@ struct NewTripDefaultsView: View {
     @AppStorage("defaultShowMyActiveTripOnSmallMap") private var defaultShowMyActiveTripOnSmallMap = true
     
     var body: some View {
-        NavigationStack {
             ZStack {
                 Color.Theme.background
                     .ignoresSafeArea()
@@ -135,7 +134,6 @@ struct NewTripDefaultsView: View {
                     .foregroundStyle(Color.Theme.primaryBlue)
                 }
             }
-        }
     }
 }
 

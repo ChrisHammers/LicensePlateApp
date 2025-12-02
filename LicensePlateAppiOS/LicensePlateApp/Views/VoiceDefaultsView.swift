@@ -14,7 +14,6 @@ struct VoiceDefaultsView: View {
     @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
     
     var body: some View {
-        NavigationStack {
             ZStack {
                 Color.Theme.background
                     .ignoresSafeArea()
@@ -62,6 +61,5 @@ struct VoiceDefaultsView: View {
                 }
             }
         }
-    }
 }
 

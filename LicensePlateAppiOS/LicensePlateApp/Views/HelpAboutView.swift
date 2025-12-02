@@ -21,12 +21,11 @@ struct HelpAboutView: View {
     }
     
     var body: some View {
-        NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
-                List {
+        ZStack {
+            Color.Theme.background
+                .ignoresSafeArea()
+            
+            List {
                     Section {
                         VStack(spacing: 12) {
                             SettingNavigationRow(
@@ -244,7 +243,7 @@ struct HelpAboutView: View {
                 PrivacyView()
             }
         }
-    }
+    
     
     private func sendEmail(to email: String, subject: String) {
         let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject

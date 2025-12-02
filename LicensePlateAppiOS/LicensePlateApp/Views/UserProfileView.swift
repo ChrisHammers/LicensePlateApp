@@ -128,7 +128,6 @@ struct UserProfileView: View {
     }
     
     var body: some View {
-        NavigationStack {
             ZStack {
                 Color.Theme.background
                     .ignoresSafeArea()
@@ -621,8 +620,6 @@ struct UserProfileView: View {
             .onChange(of: user.lastName) { oldValue, newValue in
                 currentLastName = newValue ?? ""
             }
-        }
-        .background(Color.Theme.background)
     }
     
     private func saveUserName() {
