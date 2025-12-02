@@ -42,7 +42,7 @@ struct HelpAboutView: View {
                             SettingNavigationRow(
                                 title: "Acknowledgements",
                                 description: "Open source libraries and SDKs we use",
-                                icon: "heart.fill"
+                                icon: "doc.text.fill"
                             ) {
                                 showAcknowledgements = true
                             }
