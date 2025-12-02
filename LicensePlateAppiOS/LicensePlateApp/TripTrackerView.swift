@@ -49,6 +49,10 @@ struct TripTrackerView: View {
     @Bindable var trip: Trip
     @StateObject private var speechRecognizer = SpeechRecognizer()
     @StateObject private var locationManager = LocationManager()
+    
+    // App Preferences for feedback
+    @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
+    @AppStorage("appUseVibrations") private var appUseVibrations = true
 
     @State private var selectedTab: Tab = .list
     @State private var lastMatchedRegion: PlateRegion?
@@ -80,6 +84,7 @@ struct TripTrackerView: View {
             if !showFullScreenMap {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
+                       // FeedbackService.shared.buttonTap()
                         showSettings = true
                     } label: {
                         Image(systemName: "gearshape")
@@ -92,6 +97,15 @@ struct TripTrackerView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView(trip: trip, modelContext: modelContext)
                 .environmentObject(authService)
+        }
+        .onAppear {
+            FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: appPlaySoundEffects)
+        }
+        .onChange(of: appUseVibrations) { _, newValue in
+            FeedbackService.shared.updatePreferences(hapticEnabled: newValue, soundEnabled: appPlaySoundEffects)
+        }
+        .onChange(of: appPlaySoundEffects) { _, newValue in
+            FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: newValue)
         }
         .overlay {
             if showFullScreenMap {
@@ -300,6 +314,7 @@ struct TripTrackerView: View {
     }
   
   private func setFound(regionID: String, usingTab: Trip.inputUsedToFindRegion) {
+    FeedbackService.shared.actionSuccess()
     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
         trip.setFound(
             regionID: regionID,
@@ -312,6 +327,7 @@ struct TripTrackerView: View {
     do {
         try modelContext.save()
     } catch {
+        FeedbackService.shared.actionError()
         assertionFailure("Failed to save trip update: \(error)")
     }
   }
@@ -338,6 +354,8 @@ struct TripTrackerView: View {
         // Don't allow toggling if trip is not active
         guard isTripActive else { return }
         
+        FeedbackService.shared.toggleRegion()
+        
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             trip.toggle(
                 regionID: regionID,
@@ -350,6 +368,7 @@ struct TripTrackerView: View {
         do {
             try modelContext.save()
         } catch {
+            FeedbackService.shared.actionError()
             assertionFailure("Failed to save trip update: \(error)")
         }
     }
@@ -380,7 +399,7 @@ struct TripTrackerView: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
                         if isTripActive && !speechRecognizer.isListening && speechRecognizer.authorizationStatus == .authorized {
-                            playStartSound()
+                            FeedbackService.shared.startRecording()
                             speechRecognizer.startListening()
                         }
                     }
@@ -472,10 +491,6 @@ struct TripTrackerView: View {
         }
     }
     
-    private func playStartSound() {
-        // Play system sound to indicate recording has started
-        AudioServicesPlaySystemSound(1057) // System sound for recording start
-    }
     
     private func requestSpeechAuthorizationIfNeeded() async {
         if speechRecognizer.authorizationStatus == .notDetermined {
@@ -705,6 +720,7 @@ struct TripTrackerView: View {
                     if isTabDisabled {
                         return
                     }
+                    FeedbackService.shared.selectionChange()
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
                         selectedTab = tab
                     }

@@ -27,6 +27,8 @@ struct ContentView: View {
     
     // App Preferences
     @AppStorage("appDarkMode") private var appDarkModeRaw: String = AppDarkMode.system.rawValue
+    @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
+    @AppStorage("appUseVibrations") private var appUseVibrations = true
     
     // Computed property for color scheme
     private var currentColorScheme: ColorScheme? {
@@ -123,6 +125,15 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(currentColorScheme)
+        .onAppear {
+            FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: appPlaySoundEffects)
+        }
+        .onChange(of: appUseVibrations) { _, newValue in
+            FeedbackService.shared.updatePreferences(hapticEnabled: newValue, soundEnabled: appPlaySoundEffects)
+        }
+        .onChange(of: appPlaySoundEffects) { _, newValue in
+            FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: newValue)
+        }
     }
 
     private var header: some View {
@@ -183,6 +194,7 @@ struct ContentView: View {
 
     private var addTripButton: some View {
         Button {
+            FeedbackService.shared.buttonTap()
             isShowingCreateSheet = true
         } label: {
             HStack(spacing: 12) {
@@ -259,7 +271,9 @@ struct ContentView: View {
 
         do {
             try modelContext.save()
+            FeedbackService.shared.actionSuccess()
         } catch {
+            FeedbackService.shared.actionError()
             // In a production app, handle the error appropriately.
             assertionFailure("Failed to save new trip: \(error)")
         }
@@ -268,12 +282,15 @@ struct ContentView: View {
     }
 
     private func deleteTrips(at offsets: IndexSet) {
+        FeedbackService.shared.buttonTap()
         for index in offsets {
             modelContext.delete(trips[index])
         }
         do {
             try modelContext.save()
+            FeedbackService.shared.actionSuccess()
         } catch {
+            FeedbackService.shared.actionError()
             assertionFailure("Failed to delete trip: \(error)")
         }
     }
@@ -282,6 +299,10 @@ struct ContentView: View {
 private struct NewTripSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var tripName: String = ""
+    
+    // App Preferences for feedback
+    @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
+    @AppStorage("appUseVibrations") private var appUseVibrations = true
     
     // Defaults from AppStorage
     @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
@@ -470,15 +491,26 @@ private struct NewTripSheet: View {
             }
             .navigationTitle("New Trip")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: appPlaySoundEffects)
+            }
+            .onChange(of: appUseVibrations) { _, newValue in
+                FeedbackService.shared.updatePreferences(hapticEnabled: newValue, soundEnabled: appPlaySoundEffects)
+            }
+            .onChange(of: appPlaySoundEffects) { _, newValue in
+                FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: newValue)
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
+                        FeedbackService.shared.buttonTap()
                         dismiss()
                     }
                     .foregroundStyle(Color.Theme.primaryBlue)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Create") {
+                        FeedbackService.shared.buttonTap()
                         var enabledCountries: [PlateRegion.Country] = []
                         if includeUS { enabledCountries.append(.unitedStates) }
                         if includeCanada { enabledCountries.append(.canada) }
