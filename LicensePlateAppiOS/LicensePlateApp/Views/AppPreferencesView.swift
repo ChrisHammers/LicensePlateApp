@@ -16,6 +16,7 @@ struct AppPreferencesView: View {
     @AppStorage("appBackgroundStyle") private var appBackgroundStyleRaw: String = AppBackgroundStyle.none.rawValue
     @AppStorage("appDistanceUnit") private var appDistanceUnitRaw: String = AppDistanceUnit.miles.rawValue
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
+    @AppStorage("appShowRegionBorders") private var appShowRegionBorders = false
     @AppStorage("appLanguage") private var appLanguageRaw: String = AppLanguage.english.rawValue
     @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
     @AppStorage("appUseVibrations") private var appUseVibrations = true
@@ -142,6 +143,14 @@ struct AppPreferencesView: View {
                                 title: "Map Style",
                                 description: "Choose standard, satellite, or custom view optimized for region highlighting",
                                 selection: appMapStyle
+                            )
+                            
+                            Divider()
+                            
+                            SettingToggleRow(
+                                title: "Show Region Borders",
+                                description: "Display colored region boundaries on the map (blue for unfound, yellow for found)",
+                                isOn: $appShowRegionBorders
                             )
                           
                             Divider()

@@ -45,6 +45,11 @@ struct GoogleMapView: UIViewRepresentable {
         return mapStyle ?? GoogleMapStyle.styleFromPreference()
     }
     
+    /// Check if region borders should be shown based on user preference
+    private var shouldShowRegionBorders: Bool {
+        UserDefaults.standard.bool(forKey: "appShowRegionBorders")
+    }
+    
     func makeUIView(context: Context) -> GMSMapView {
         let mapView = GMSMapView(frame: .zero, camera: cameraPosition)
         mapView.delegate = context.coordinator
@@ -57,12 +62,14 @@ struct GoogleMapView: UIViewRepresentable {
             mapView.mapStyle = style
         }
         
-        // Render region polygons
-        context.coordinator.renderRegions(
-            on: mapView,
-            regions: regions,
-            foundRegionIDs: foundRegionIDs
-        )
+        // Render region polygons only if preference is enabled
+        if shouldShowRegionBorders {
+            context.coordinator.renderRegions(
+                on: mapView,
+                regions: regions,
+                foundRegionIDs: foundRegionIDs
+            )
+        }
         
         return mapView
     }
@@ -85,12 +92,17 @@ struct GoogleMapView: UIViewRepresentable {
             mapView.mapStyle = nil // Reset to default
         }
         
-        // Update region polygons
-        context.coordinator.renderRegions(
-            on: mapView,
-            regions: regions,
-            foundRegionIDs: foundRegionIDs
-        )
+        // Update region polygons only if preference is enabled
+        if shouldShowRegionBorders {
+            context.coordinator.renderRegions(
+                on: mapView,
+                regions: regions,
+                foundRegionIDs: foundRegionIDs
+            )
+        } else {
+            // Clear all polygons if preference is disabled
+            context.coordinator.clearAllPolygons(on: mapView)
+        }
     }
     
     func makeCoordinator() -> Coordinator {
@@ -187,8 +199,29 @@ struct GoogleMapView: UIViewRepresentable {
             lastFoundRegionIDs = currentFoundSet
             lastRegionIDs = currentRegionSet
             
-            // Render country boundaries for map context (map display only, not game regions)
-            renderCountryBoundaries(on: mapView)
+            // Render country boundaries for map context (only if region borders are enabled)
+            if parent.shouldShowRegionBorders {
+                renderCountryBoundaries(on: mapView)
+            }
+        }
+        
+        /// Clear all polygons from the map (when region borders are disabled)
+        func clearAllPolygons(on mapView: GMSMapView) {
+            // Remove all game region polygons
+            for (_, polygon) in polygons {
+                polygon.map = nil
+            }
+            polygons.removeAll()
+            cachedPaths.removeAll()
+            lastFoundRegionIDs.removeAll()
+            lastRegionIDs.removeAll()
+            
+            // Also remove country boundaries when borders are disabled
+            for (_, polygon) in countryPolygons {
+                polygon.map = nil
+            }
+            countryPolygons.removeAll()
+            countriesRendered = false
         }
         
         /// Render country boundaries from GeoJSON for map visual context only
