@@ -110,10 +110,13 @@ struct GoogleMapView: UIViewRepresentable {
             let currentCamera = mapView.camera
             let newCamera = cameraPosition
             
-            // Only animate if camera position actually changed
-            if currentCamera.target.latitude != newCamera.target.latitude ||
-               currentCamera.target.longitude != newCamera.target.longitude ||
-               abs(currentCamera.zoom - newCamera.zoom) > 0.1 {
+            // Check if the difference is significant (more than just rounding errors)
+            let latDiff = abs(currentCamera.target.latitude - newCamera.target.latitude)
+            let lonDiff = abs(currentCamera.target.longitude - newCamera.target.longitude)
+            let zoomDiff = abs(currentCamera.zoom - newCamera.zoom)
+            
+            // Only animate if there's a significant difference (user didn't just move it slightly)
+            if latDiff > 0.001 || lonDiff > 0.001 || zoomDiff > 0.1 {
                 mapView.animate(to: cameraPosition)
                 context.coordinator.lastCameraPosition = cameraPosition
             }
@@ -197,16 +200,23 @@ struct GoogleMapView: UIViewRepresentable {
         }
         
         func mapView(_ mapView: GMSMapView, didChange position: GMSCameraPosition) {
-            // Update last camera position when user moves the map
+            // Update the binding when user moves the map to keep them in sync
             if isUserInteracting {
                 lastCameraPosition = position
+                // Update parent's camera position binding to match user's movement
+                DispatchQueue.main.async {
+                  self.parent.$cameraPosition.wrappedValue = position
+                }
             }
         }
         
         func mapView(_ mapView: GMSMapView, idleAt position: GMSCameraPosition) {
-            // User finished interacting
+            // User finished interacting - update binding to final position
             isUserInteracting = false
             lastCameraPosition = position
+            DispatchQueue.main.async {
+              self.parent.$cameraPosition.wrappedValue = position
+            }
         }
         
         func renderRegions(

@@ -1668,7 +1668,7 @@ private struct FullScreenMapView: View {
         self.enabledCountries = enabledCountries
         self.foundRegionIDs = foundRegionIDs
         self.foundRegions = foundRegions
-        ç= cameraPosition
+        self._cameraPosition = cameraPosition
         self.locationManager = locationManager
         self.namespace = namespace
         self._isPresented = isPresented
@@ -1843,11 +1843,12 @@ private struct RegionMapView: View {
                 .accessibilityAddTraits(.isButton)
         }
         .onChange(of: visibleCountry) { oldValue, newValue in
-            // Update camera position when visible country changes (only for small map)
-            // This allows the small map to center on the country being viewed
-            let (center, zoom) = calculateCameraPosition(for: newValue)
-            withAccessibleAnimation(.easeInOut(duration: 0.5)) {
-                cameraPosition = GMSCameraPosition.from(coordinate: center, zoom: zoom)
+            // Only update camera position for small map, not full screen map
+            if !showFullScreen {
+                let (center, zoom) = calculateCameraPosition(for: newValue)
+                withAccessibleAnimation(.easeInOut(duration: 0.5)) {
+                    cameraPosition = GMSCameraPosition.from(coordinate: center, zoom: zoom)
+                }
             }
         }
     }
