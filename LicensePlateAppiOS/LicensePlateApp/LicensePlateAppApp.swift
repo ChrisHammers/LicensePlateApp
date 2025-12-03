@@ -30,7 +30,7 @@ struct LicensePlateAppApp: App {
             schema: schema,
             isStoredInMemoryOnly: false
         )
-        
+
         do {
             // Create ModelContainer with versioned schema and migration plan
             return try ModelContainer(

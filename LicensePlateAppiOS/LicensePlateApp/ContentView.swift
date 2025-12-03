@@ -17,6 +17,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Trip.createdAt, order: .reverse) private var trips: [Trip]
     @EnvironmentObject var authService: FirebaseAuthService
+    @StateObject private var syncService = FirebaseTripSyncService()
     @State private var path: [UUID] = []
     @State private var isShowingCreateSheet = false
     @State private var isShowingSettings = false
@@ -65,7 +66,7 @@ struct ContentView: View {
                 Color.Theme.background
                     .ignoresSafeArea()
 
-                List {
+            List {
                     Section {
                         header
                             .listRowInsets(.init(top: 24, leading: 20, bottom: 24, trailing: 20))
@@ -108,10 +109,33 @@ struct ContentView: View {
             .sheet(isPresented: $isShowingSettings) {
                 DefaultSettingsView()
                     .environmentObject(authService)
+                    .environmentObject(syncService)
             }
             .task {
                 // Initialize authentication state (checks Firebase Auth first, then local)
                 await authService.initializeAuthState(modelContext: modelContext)
+                
+                // Initialize sync service after auth is ready
+                syncService.initializeSync(modelContext: modelContext, authService: authService)
+            }
+            .onChange(of: authService.isTrulyAuthenticated) { _, isAuthenticated in
+                // Update sync enabled status when auth state changes
+                syncService.updateSyncEnabled()
+                
+                // If user just became authenticated, perform initial sync
+                if isAuthenticated {
+                    Task {
+                        await syncService.performInitialSync()
+                    }
+                }
+            }
+            .onChange(of: authService.isOnline) { _, isOnline in
+                // When network comes back online, check and process queue
+                if isOnline {
+                    Task {
+                        await syncService.checkNetworkAndSync()
+                    }
+                }
             }
             .overlay {
                 if authService.showUsernameConflictDialog {
@@ -198,7 +222,7 @@ struct ContentView: View {
     private var tripList: some View {
         ForEach(trips) { trip in
             NavigationLink(value: trip.id) {
-                TripRow(trip: trip)
+                TripRow(trip: trip, syncService: syncService)
                     .padding(.vertical, 8)
             }
             .listRowInsets(.init(top: 6, leading: 20, bottom: 6, trailing: 20))
@@ -293,6 +317,9 @@ struct ContentView: View {
         do {
             try modelContext.save()
             FeedbackService.shared.actionSuccess()
+            
+            // Trigger sync for new trip
+            syncService.handleTripChange(newTrip, changeType: .create)
         } catch {
             FeedbackService.shared.actionError()
             // In a production app, handle the error appropriately.
@@ -304,8 +331,11 @@ struct ContentView: View {
 
     private func deleteTrips(at offsets: IndexSet) {
         FeedbackService.shared.buttonTap()
-        for index in offsets {
-            modelContext.delete(trips[index])
+            for index in offsets {
+            let trip = trips[index]
+            // Trigger sync for deletion
+            syncService.handleTripChange(trip, changeType: .delete)
+            modelContext.delete(trip)
         }
         do {
             try modelContext.save()
@@ -597,6 +627,7 @@ private struct CountryCheckboxRow: View {
 
 private struct TripRow: View {
     let trip: Trip
+    @ObservedObject var syncService: FirebaseTripSyncService
 
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -604,6 +635,38 @@ private struct TripRow: View {
         formatter.timeStyle = .short
         return formatter
     }()
+    
+    private var syncStatusIcon: some View {
+        Group {
+            if let status = syncService.syncStatus[trip.id] {
+                switch status {
+                case .synced:
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Color.green)
+                        .font(.system(size: 14))
+                case .syncing:
+                    ProgressView()
+                        .scaleEffect(0.7)
+                case .pending:
+                    Image(systemName: "clock.fill")
+                        .foregroundStyle(Color.orange)
+                        .font(.system(size: 14))
+                case .error:
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Color.red)
+                        .font(.system(size: 14))
+                case .notSynced:
+                    Image(systemName: "icloud.slash")
+                        .foregroundStyle(Color.gray)
+                        .font(.system(size: 14))
+                }
+            } else if syncService.isSyncEnabled {
+                Image(systemName: "icloud.slash")
+                    .foregroundStyle(Color.gray)
+                    .font(.system(size: 14))
+            }
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -614,6 +677,12 @@ private struct TripRow: View {
                     .foregroundStyle(Color.Theme.primaryBlue)
 
                 Spacer()
+                
+                // Sync status indicator
+                if syncService.isSyncEnabled {
+                    syncStatusIcon
+                        .accessibilityLabel(syncStatusAccessibilityLabel)
+                }
 
               Label("\(trip.foundRegionIDs.count)/\(PlateRegion.all.count)", systemImage: "scope")
                     .font(.system(.subheadline, design: .rounded))
@@ -665,6 +734,24 @@ private struct TripRow: View {
                 .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
         )
         .accessibilityElement(children: .combine)
+    }
+    
+    private var syncStatusAccessibilityLabel: String {
+        guard let status = syncService.syncStatus[trip.id] else {
+            return "Sync status: Not synced"
+        }
+        switch status {
+        case .synced:
+            return "Sync status: Synced"
+        case .syncing:
+            return "Sync status: Syncing"
+        case .pending:
+            return "Sync status: Pending"
+        case .error:
+            return "Sync status: Error"
+        case .notSynced:
+            return "Sync status: Not synced"
+        }
     }
 }
 

@@ -46,6 +46,7 @@ struct TripTrackerView: View {
 
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
+    @EnvironmentObject var syncService: FirebaseTripSyncService
     @Bindable var trip: Trip
     @StateObject private var speechRecognizer = SpeechRecognizer()
     @StateObject private var locationManager = LocationManager()
@@ -102,6 +103,7 @@ struct TripTrackerView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView(trip: trip, modelContext: modelContext)
                 .environmentObject(authService)
+                .environmentObject(syncService)
         }
         .onAppear {
             FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: appPlaySoundEffects)
@@ -190,10 +192,21 @@ struct TripTrackerView: View {
 
     private var header: some View {
         VStack(spacing: 16) {
-//            Text(trip.name)
-//                .font(.system(.title2, design: .rounded))
-//                .fontWeight(.bold)
-//                .foregroundStyle(Color.Theme.primaryBlue)
+            // Trip name and sync status
+            HStack {
+                Text(trip.name)
+                    .font(.system(.title, design: .rounded))
+                    .fontWeight(.bold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                
+                Spacer()
+                
+                // Sync status indicator
+                if syncService.isSyncEnabled {
+                    syncStatusIndicator
+                }
+            }
+            .padding(.horizontal, 32)
 
           // Map view
           RegionMapView(
@@ -233,6 +246,61 @@ struct TripTrackerView: View {
         )
         .padding(.top, 6)
         .padding(.bottom, 6)
+    }
+    
+    // Sync status indicator for trip detail view
+    private var syncStatusIndicator: some View {
+        Group {
+            if let status = syncService.syncStatus[trip.id] {
+                HStack(spacing: 4) {
+                    switch status {
+                    case .synced:
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(Color.green)
+                            .font(.system(size: 16))
+                    case .syncing:
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    case .pending:
+                        Image(systemName: "clock.fill")
+                            .foregroundStyle(Color.orange)
+                            .font(.system(size: 16))
+                    case .error:
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(Color.red)
+                            .font(.system(size: 16))
+                    case .notSynced:
+                        Image(systemName: "icloud.slash")
+                            .foregroundStyle(Color.gray)
+                            .font(.system(size: 16))
+                    }
+                }
+                .accessibilityLabel(syncStatusAccessibilityLabel)
+            } else {
+                Image(systemName: "icloud.slash")
+                    .foregroundStyle(Color.gray)
+                    .font(.system(size: 16))
+                    .accessibilityLabel("Sync status: Not synced")
+            }
+        }
+    }
+    
+    private var syncStatusAccessibilityLabel: String {
+        guard let status = syncService.syncStatus[trip.id] else {
+            return "Sync status: Not synced"
+        }
+        switch status {
+        case .synced:
+            return "Sync status: Synced"
+        case .syncing:
+            return "Sync status: Syncing"
+        case .pending:
+            return "Sync status: Pending"
+        case .error:
+            return "Sync status: Error"
+        case .notSynced:
+            return "Sync status: Not synced"
+        }
     }
 
     // PreferenceKey to measure chip size
@@ -391,6 +459,8 @@ struct TripTrackerView: View {
                 trip.tripEndedBy = authService.currentUser?.id
                 trip.lastUpdated = Date.now
                 try? modelContext.save()
+                // Trigger sync
+                syncService.handleTripChange(trip, changeType: .update)
             }
         } message: {
             Text("This will stop the game. You won't be able to add states in this trip anymore.")
@@ -500,6 +570,8 @@ struct TripTrackerView: View {
 
     do {
         try modelContext.save()
+        // Trigger sync
+        syncService.handleTripChange(trip, changeType: .update)
     } catch {
         assertionFailure("Failed to save trip update: \(error)")
     }
@@ -522,6 +594,8 @@ struct TripTrackerView: View {
 
         do {
             try modelContext.save()
+            // Trigger sync
+            syncService.handleTripChange(trip, changeType: .update)
         } catch {
             FeedbackService.shared.actionError()
             assertionFailure("Failed to save trip update: \(error)")
@@ -1132,6 +1206,7 @@ private struct SettingsView: View {
     }
     
     @EnvironmentObject var authService: FirebaseAuthService
+    @EnvironmentObject var syncService: FirebaseTripSyncService
     @StateObject private var locationManager = LocationManager()
     
     @State private var showEndTripConfirmation = false
@@ -1345,6 +1420,8 @@ private struct SettingsView: View {
                 trip.tripEndedBy = authService.currentUser?.id
                 trip.lastUpdated = Date.now
                 try? modelContext.save()
+                // Trigger sync
+                syncService.handleTripChange(trip, changeType: .update)
             }
         } message: {
             Text("This will stop the game. You won't be able to add states in this trip anymore.")

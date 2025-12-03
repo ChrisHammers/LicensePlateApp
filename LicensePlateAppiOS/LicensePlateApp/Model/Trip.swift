@@ -27,6 +27,15 @@ struct LocationData: Codable {
         self.timestamp = location.timestamp
     }
     
+    init(latitude: Double, longitude: Double, altitude: Double, horizontalAccuracy: Double, verticalAccuracy: Double, timestamp: Date) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.altitude = altitude
+        self.horizontalAccuracy = horizontalAccuracy
+        self.verticalAccuracy = verticalAccuracy
+        self.timestamp = timestamp
+    }
+    
     /// Convert back to CLLocation
     func toCLLocation() -> CLLocation {
         let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -116,6 +125,10 @@ final class Trip {
     // Enabled countries for this trip (stored as comma-separated string for SwiftData compatibility)
     var enabledCountryStrings: String = "United States,Canada,Mexico"
     
+    // Cloud sync metadata (optional - only set for synced trips)
+    var lastSyncedAt: Date?
+    var firestoreId: String? // Firestore document ID
+    
     // Computed property to get countries as enum array
     var enabledCountries: [PlateRegion.Country] {
         get {
@@ -147,7 +160,9 @@ final class Trip {
         trackMyLocationDuringTrip: Bool = true,
         showMyActiveTripOnLargeMap: Bool = true,
         showMyActiveTripOnSmallMap: Bool = true,
-        enabledCountries: [PlateRegion.Country] = [.unitedStates, .canada, .mexico]
+        enabledCountries: [PlateRegion.Country] = [.unitedStates, .canada, .mexico],
+        lastSyncedAt: Date? = nil,
+        firestoreId: String? = nil
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -167,6 +182,8 @@ final class Trip {
         self.showMyActiveTripOnLargeMap = showMyActiveTripOnLargeMap
         self.showMyActiveTripOnSmallMap = showMyActiveTripOnSmallMap
         self.enabledCountryStrings = enabledCountries.map { $0.rawValue }.joined(separator: ",")
+        self.lastSyncedAt = lastSyncedAt
+        self.firestoreId = firestoreId
     }
     
     // MARK: - Computed Properties for Backward Compatibility

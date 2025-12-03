@@ -10,6 +10,8 @@ import SwiftUI
 struct AppPreferencesView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var systemColorScheme
+    @EnvironmentObject var authService: FirebaseAuthService
+    @EnvironmentObject var syncService: FirebaseTripSyncService
     
     // App Preferences
     @AppStorage("appDarkMode") private var appDarkModeRaw: String = AppDarkMode.system.rawValue
@@ -141,6 +143,81 @@ struct AppPreferencesView: View {
                                 description: "Enable haptic feedback",
                                 isOn: $appUseVibrations
                             )
+                            
+                            // Cloud Sync section (only visible when authenticated)
+                            if authService.isTrulyAuthenticated {
+                                Divider()
+                                
+                                VStack(alignment: .leading, spacing: 12) {
+                                    HStack {
+                                        Text("Cloud Sync")
+                                            .font(.system(.body, design: .rounded))
+                                            .fontWeight(.semibold)
+                                            .foregroundStyle(Color.Theme.primaryBlue)
+                                        
+                                        Spacer()
+                                        
+                                        if syncService.isSyncing {
+                                            ProgressView()
+                                                .scaleEffect(0.8)
+                                        } else if syncService.isSyncEnabled {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundStyle(Color.green)
+                                        } else {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundStyle(Color.red)
+                                        }
+                                    }
+                                    
+                                    if let lastSync = syncService.lastSyncTime {
+                                        Text("Last synced: \(lastSync, style: .relative)")
+                                            .font(.system(.caption, design: .rounded))
+                                            .foregroundStyle(Color.Theme.softBrown)
+                                    } else if syncService.isSyncEnabled {
+                                        Text("Never synced")
+                                            .font(.system(.caption, design: .rounded))
+                                            .foregroundStyle(Color.Theme.softBrown)
+                                    } else {
+                                        Text("Sign in to enable cloud sync")
+                                            .font(.system(.caption, design: .rounded))
+                                            .foregroundStyle(Color.Theme.softBrown)
+                                    }
+                                    
+                                    if let error = syncService.syncError {
+                                        Text("Error: \(error)")
+                                            .font(.system(.caption, design: .rounded))
+                                            .foregroundStyle(Color.red)
+                                    }
+                                    
+                                    Button {
+                                        Task {
+                                            await syncService.syncAllTrips()
+                                        }
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: "arrow.clockwise")
+                                            Text("Sync Now")
+                                        }
+                                        .font(.system(.subheadline, design: .rounded))
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(Color.white)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 8)
+                                        .background(
+                                            Capsule()
+                                                .fill(Color.Theme.primaryBlue)
+                                        )
+                                    }
+                                    .disabled(syncService.isSyncing || !syncService.isSyncEnabled)
+                                    .opacity((syncService.isSyncing || !syncService.isSyncEnabled) ? 0.5 : 1.0)
+                                }
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                        .fill(Color.Theme.cardBackground)
+                                )
+                            }
                             
                             // Hidden preferences (for future use)
                             if false {
