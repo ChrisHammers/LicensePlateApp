@@ -63,6 +63,9 @@ struct WorldCountries {
     ]
     
     /// Create PlateRegion for a country using ISO code
+    /// NOTE: Currently not used - countries are map-only for visual context
+    /// If countries are added as game regions in the future, uncomment and add .other to PlateRegion.Country enum
+    /*
     static func regionForCountry(code: String, name: String) -> PlateRegion {
         return PlateRegion(
             id: code.lowercased(),
@@ -75,5 +78,6 @@ struct WorldCountries {
     static var allCountryRegions: [PlateRegion] {
         return allCountries.map { regionForCountry(code: $0.code, name: $0.name) }
     }
+    */
 }
 

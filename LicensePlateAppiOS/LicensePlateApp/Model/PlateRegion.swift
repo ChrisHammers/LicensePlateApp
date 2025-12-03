@@ -12,7 +12,6 @@ struct PlateRegion: Identifiable, Hashable {
         case unitedStates = "United States"
         case canada = "Canada"
         case mexico = "Mexico"
-        case other = "Other Countries"
 
         var id: String { rawValue }
     }
@@ -132,15 +131,11 @@ struct PlateRegion: Identifiable, Hashable {
             .init(id: "mx-cmx", name: "Mexico City", country: .mexico)
         ]
 
-        // Add all other countries as single regions
-        let otherCountries = WorldCountries.allCountryRegions
-        
-        return (usStates + canadianProvinces + mexicanStates + otherCountries)
+        return (usStates + canadianProvinces + mexicanStates)
             .sorted { lhs, rhs in
                 if lhs.country == rhs.country {
                     lhs.name < rhs.name
                 } else {
-                    // Sort: US, Canada, Mexico, then Other Countries
                     lhs.country.rawValue < rhs.country.rawValue
                 }
             }

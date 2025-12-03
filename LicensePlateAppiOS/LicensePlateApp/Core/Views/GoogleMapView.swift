@@ -100,9 +100,11 @@ struct GoogleMapView: UIViewRepresentable {
     class Coordinator: NSObject, GMSMapViewDelegate {
         var parent: GoogleMapView
         private var polygons: [String: GMSPolygon] = [:]
+        private var countryPolygons: [String: GMSPolygon] = [:] // Separate storage for country boundaries (map context only)
         private var cachedPaths: [String: GMSMutablePath] = [:]
         private var lastFoundRegionIDs: Set<String> = []
         private var lastRegionIDs: Set<String> = []
+        private var countriesRendered = false // Track if country boundaries have been rendered
         
         init(_ parent: GoogleMapView) {
             self.parent = parent
@@ -184,6 +186,43 @@ struct GoogleMapView: UIViewRepresentable {
             // Update tracking sets
             lastFoundRegionIDs = currentFoundSet
             lastRegionIDs = currentRegionSet
+            
+            // Render country boundaries for map context (map display only, not game regions)
+            renderCountryBoundaries(on: mapView)
+        }
+        
+        /// Render country boundaries from GeoJSON for map visual context only
+        /// These are NOT game regions and cannot be found/selected
+        private func renderCountryBoundaries(on mapView: GMSMapView) {
+            // Only render once
+            guard !countriesRendered else { return }
+            
+            // Load country boundaries from GeoJSON
+            let countryBoundaries = GeoJSONLoader.loadBoundaries(from: "countries")
+            
+            for (countryCode, coordinates) in countryBoundaries {
+                guard !coordinates.isEmpty else { continue }
+                
+                // Skip if already rendered
+                if countryPolygons[countryCode] != nil { continue }
+                
+                let path = GMSMutablePath()
+                for coordinate in coordinates {
+                    path.add(coordinate)
+                }
+                path.add(coordinates[0]) // Close path
+                
+                let polygon = GMSPolygon(path: path)
+                // Lighter colors for country boundaries (map context only)
+                polygon.fillColor = UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.2)
+                polygon.strokeColor = UIColor.white.withAlphaComponent(0.6)
+                polygon.strokeWidth = 1.5
+                polygon.map = mapView
+                
+                countryPolygons[countryCode] = polygon
+            }
+            
+            countriesRendered = true
         }
     }
 }
