@@ -65,6 +65,11 @@ struct TripTrackerView: View {
     @State private var showEndTripConfirmation = false
     @State private var chipWidth: CGFloat = 0
     @State private var chipHeight: CGFloat = 0
+    @State private var cameraPosition: GMSCameraPosition = {
+        // Initialize with default US position, will be updated on appear
+        let center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
+        return GMSCameraPosition.from(coordinate: center, zoom: 4.0)
+    }()
     @Namespace private var mapNamespace
 
     var body: some View {
@@ -119,6 +124,7 @@ struct TripTrackerView: View {
                     enabledCountries: trip.enabledCountries,
                     foundRegionIDs: trip.foundRegionIDs,
                     foundRegions: trip.foundRegions,
+                    cameraPosition: $cameraPosition,
                     locationManager: locationManager,
                     namespace: mapNamespace,
                     isPresented: $showFullScreenMap
@@ -136,6 +142,35 @@ struct TripTrackerView: View {
             if !isTripActive && selectedTab == .voice {
                 selectedTab = .list
             }
+            
+            // Initialize camera position based on enabled countries (only once on appear)
+            let center: CLLocationCoordinate2D
+            let zoom: Float
+            
+            if trip.enabledCountries.contains(.unitedStates) && trip.enabledCountries.contains(.canada) && trip.enabledCountries.contains(.mexico) {
+                center = CLLocationCoordinate2D(latitude: 45.0, longitude: -100.0)
+                zoom = 3.5
+            } else if trip.enabledCountries.contains(.unitedStates) && trip.enabledCountries.contains(.canada) {
+                center = CLLocationCoordinate2D(latitude: 50.0, longitude: -100.0)
+                zoom = 3.8
+            } else if trip.enabledCountries.contains(.unitedStates) && trip.enabledCountries.contains(.mexico) {
+                center = CLLocationCoordinate2D(latitude: 32.0, longitude: -100.0)
+                zoom = 4.0
+            } else if trip.enabledCountries.contains(.unitedStates) {
+                center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
+                zoom = 4.0
+            } else if trip.enabledCountries.contains(.canada) {
+                center = CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468)
+                zoom = 4.5
+            } else if trip.enabledCountries.contains(.mexico) {
+                center = CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528)
+                zoom = 5.5
+            } else {
+                center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
+                zoom = 4.0
+            }
+            
+            cameraPosition = GMSCameraPosition.from(coordinate: center, zoom: zoom)
         }
         .onChange(of: trip.startedAt) { oldValue, newValue in
             // If trip just became inactive and we're on voice tab, switch to list
@@ -203,6 +238,7 @@ struct TripTrackerView: View {
               foundRegionIDs: trip.foundRegionIDs,
               foundRegions: trip.foundRegions,
               visibleCountry: visibleCountry,
+              cameraPosition: $cameraPosition,
               namespace: mapNamespace,
               showFullScreen: $showFullScreenMap,
               locationManager: locationManager
@@ -1621,54 +1657,21 @@ private struct FullScreenMapView: View {
     let enabledCountries: [PlateRegion.Country]
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
+    @Binding var cameraPosition: GMSCameraPosition
     @ObservedObject var locationManager: LocationManager
     let namespace: Namespace.ID
     @Binding var isPresented: Bool
     
-    @State private var cameraPosition: GMSCameraPosition
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     
-    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
+    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], cameraPosition: Binding<GMSCameraPosition>, locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
         self.enabledCountries = enabledCountries
         self.foundRegionIDs = foundRegionIDs
         self.foundRegions = foundRegions
+        ç= cameraPosition
         self.locationManager = locationManager
         self.namespace = namespace
         self._isPresented = isPresented
-        
-        // Initialize camera position to center on all enabled countries
-        let center: CLLocationCoordinate2D
-        let zoom: Float
-        
-        // Calculate center point based on enabled countries
-        if enabledCountries.contains(.unitedStates) && enabledCountries.contains(.canada) && enabledCountries.contains(.mexico) {
-            // All three countries - center on North America
-            center = CLLocationCoordinate2D(latitude: 45.0, longitude: -100.0)
-            zoom = 3.5
-        } else if enabledCountries.contains(.unitedStates) && enabledCountries.contains(.canada) {
-            // US and Canada
-            center = CLLocationCoordinate2D(latitude: 50.0, longitude: -100.0)
-            zoom = 3.8
-        } else if enabledCountries.contains(.unitedStates) && enabledCountries.contains(.mexico) {
-            // US and Mexico
-            center = CLLocationCoordinate2D(latitude: 32.0, longitude: -100.0)
-            zoom = 4.0
-        } else if enabledCountries.contains(.unitedStates) {
-            center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
-            zoom = 4.0
-        } else if enabledCountries.contains(.canada) {
-            center = CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468)
-            zoom = 4.5
-        } else if enabledCountries.contains(.mexico) {
-            center = CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528)
-            zoom = 5.5
-        } else {
-            // Default to US if no countries enabled
-            center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
-            zoom = 4.0
-        }
-        
-        _cameraPosition = State(initialValue: GMSCameraPosition.from(coordinate: center, zoom: zoom))
     }
     
     private var regions: [PlateRegion] {
@@ -1755,55 +1758,22 @@ private struct RegionMapView: View {
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
     let visibleCountry: PlateRegion.Country
+    @Binding var cameraPosition: GMSCameraPosition
     let namespace: Namespace.ID
     @Binding var showFullScreen: Bool
     @ObservedObject var locationManager: LocationManager
     
-    @State private var cameraPosition: GMSCameraPosition
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     
-    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], visibleCountry: PlateRegion.Country, namespace: Namespace.ID, showFullScreen: Binding<Bool>, locationManager: LocationManager) {
+    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], visibleCountry: PlateRegion.Country, cameraPosition: Binding<GMSCameraPosition>, namespace: Namespace.ID, showFullScreen: Binding<Bool>, locationManager: LocationManager) {
         self.enabledCountries = enabledCountries
         self.foundRegionIDs = foundRegionIDs
         self.foundRegions = foundRegions
         self.visibleCountry = visibleCountry
+        self._cameraPosition = cameraPosition
         self.namespace = namespace
         self._showFullScreen = showFullScreen
         self.locationManager = locationManager
-        
-        // Initialize camera position to center on all enabled countries
-        let center: CLLocationCoordinate2D
-        let zoom: Float
-        
-        // Calculate center point based on enabled countries
-        if enabledCountries.contains(.unitedStates) && enabledCountries.contains(.canada) && enabledCountries.contains(.mexico) {
-            // All three countries - center on North America
-            center = CLLocationCoordinate2D(latitude: 45.0, longitude: -100.0)
-            zoom = 3.5
-        } else if enabledCountries.contains(.unitedStates) && enabledCountries.contains(.canada) {
-            // US and Canada
-            center = CLLocationCoordinate2D(latitude: 50.0, longitude: -100.0)
-            zoom = 3.8
-        } else if enabledCountries.contains(.unitedStates) && enabledCountries.contains(.mexico) {
-            // US and Mexico
-            center = CLLocationCoordinate2D(latitude: 32.0, longitude: -100.0)
-            zoom = 4.0
-        } else if enabledCountries.contains(.unitedStates) {
-            center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
-            zoom = 4.0
-        } else if enabledCountries.contains(.canada) {
-            center = CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468)
-            zoom = 4.5
-        } else if enabledCountries.contains(.mexico) {
-            center = CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528)
-            zoom = 5.5
-        } else {
-            // Default to US if no countries enabled
-            center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
-            zoom = 4.0
-        }
-        
-        _cameraPosition = State(initialValue: GMSCameraPosition.from(coordinate: center, zoom: zoom))
     }
     
     private var regionsForCurrentCountry: [PlateRegion] {
@@ -1873,45 +1843,9 @@ private struct RegionMapView: View {
                 .accessibilityAddTraits(.isButton)
         }
         .onChange(of: visibleCountry) { oldValue, newValue in
-            // Update camera position when visible country changes (like old Apple Maps behavior)
+            // Update camera position when visible country changes (only for small map)
+            // This allows the small map to center on the country being viewed
             let (center, zoom) = calculateCameraPosition(for: newValue)
-            withAccessibleAnimation(.easeInOut(duration: 0.5)) {
-                cameraPosition = GMSCameraPosition.from(coordinate: center, zoom: zoom)
-            }
-        }
-        .onChange(of: enabledCountries) { oldValue, newValue in
-            // Update camera position when enabled countries change
-            let center: CLLocationCoordinate2D
-            let zoom: Float
-            
-            // Calculate center point based on enabled countries
-            if newValue.contains(.unitedStates) && newValue.contains(.canada) && newValue.contains(.mexico) {
-                // All three countries - center on North America
-                center = CLLocationCoordinate2D(latitude: 45.0, longitude: -100.0)
-                zoom = 3.5
-            } else if newValue.contains(.unitedStates) && newValue.contains(.canada) {
-                // US and Canada
-                center = CLLocationCoordinate2D(latitude: 50.0, longitude: -100.0)
-                zoom = 3.8
-            } else if newValue.contains(.unitedStates) && newValue.contains(.mexico) {
-                // US and Mexico
-                center = CLLocationCoordinate2D(latitude: 32.0, longitude: -100.0)
-                zoom = 4.0
-            } else if newValue.contains(.unitedStates) {
-                center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
-                zoom = 4.0
-            } else if newValue.contains(.canada) {
-                center = CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468)
-                zoom = 4.5
-            } else if newValue.contains(.mexico) {
-                center = CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528)
-                zoom = 5.5
-            } else {
-                // Default to US if no countries enabled
-                center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
-                zoom = 4.0
-            }
-            
             withAccessibleAnimation(.easeInOut(duration: 0.5)) {
                 cameraPosition = GMSCameraPosition.from(coordinate: center, zoom: zoom)
             }
