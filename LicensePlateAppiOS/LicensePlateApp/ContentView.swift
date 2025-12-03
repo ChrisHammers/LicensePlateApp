@@ -62,7 +62,8 @@ struct ContentView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ZStack {
-                Color.Theme.background
+                Image("background_app_basic_light")
+                .resizable()
                     .ignoresSafeArea()
 
                 List {
@@ -615,7 +616,7 @@ private struct TripRow: View {
 
                 Spacer()
 
-              Label("\(trip.foundRegionIDs.count)/\(PlateRegion.all.count)", systemImage: "scope")
+              Label("\(trip.foundRegionIDs.count)/\(PlateRegion.all.count)", systemImage: "licenseplate")//scope used before, works with Royale theme though.
                     .font(.system(.subheadline, design: .rounded))
                     .fontWeight(.medium)
                     .foregroundStyle(Color.Theme.accentYellow)
@@ -643,7 +644,13 @@ private struct TripRow: View {
             // Show "Ended on" date if trip has ended
             if trip.isTripEnded, let endedDate = trip.tripEndedAt {
                 HStack {
-                    Label("Ended", systemImage: "checkmark.circle")
+                  Label {
+                      Text("Ended")
+                              } icon: {
+                                      Image(systemName: "star.fill")
+                                          .font(.body) // Match font size for consistent sizing
+                                          .opacity(0)
+                              }
                         .font(.system(.footnote, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .accessibilityLabel("Ended")

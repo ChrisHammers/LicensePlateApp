@@ -972,7 +972,7 @@ private struct RegionCellView: View {
             }
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: "mappin.and.ellipse")
+                Image(systemName: "licenseplate")
                     .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(Color.Theme.primaryBlue)
                     .accessibilityHidden(true)
