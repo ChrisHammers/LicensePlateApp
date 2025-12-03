@@ -17,6 +17,7 @@ struct AppPreferencesView: View {
     @AppStorage("appDistanceUnit") private var appDistanceUnitRaw: String = AppDistanceUnit.miles.rawValue
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     @AppStorage("appShowRegionBorders") private var appShowRegionBorders = false
+    @AppStorage("appShowMapMarkers") private var appShowMapMarkers = true
     @AppStorage("appLanguage") private var appLanguageRaw: String = AppLanguage.english.rawValue
     @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
     @AppStorage("appUseVibrations") private var appUseVibrations = true
@@ -151,6 +152,14 @@ struct AppPreferencesView: View {
                                 title: "Show Region Borders",
                                 description: "Display colored region boundaries on the map (blue for unfound, yellow for found)",
                                 isOn: $appShowRegionBorders
+                            )
+                            
+                            Divider()
+                            
+                            SettingToggleRow(
+                                title: "Show Map Markers",
+                                description: "Display markers on the map showing where regions were found (requires location data)",
+                                isOn: $appShowMapMarkers
                             )
                           
                             Divider()

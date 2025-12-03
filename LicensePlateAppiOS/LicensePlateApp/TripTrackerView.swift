@@ -118,6 +118,7 @@ struct TripTrackerView: View {
                 FullScreenMapView(
                     enabledCountries: trip.enabledCountries,
                     foundRegionIDs: trip.foundRegionIDs,
+                    foundRegions: trip.foundRegions,
                     locationManager: locationManager,
                     namespace: mapNamespace,
                     isPresented: $showFullScreenMap
@@ -200,6 +201,7 @@ struct TripTrackerView: View {
           RegionMapView(
               enabledCountries: trip.enabledCountries,
               foundRegionIDs: trip.foundRegionIDs,
+              foundRegions: trip.foundRegions,
               namespace: mapNamespace,
               showFullScreen: $showFullScreenMap,
               locationManager: locationManager
@@ -1617,6 +1619,7 @@ private struct CountryCheckboxRow: View {
 private struct FullScreenMapView: View {
     let enabledCountries: [PlateRegion.Country]
     let foundRegionIDs: [String]
+    let foundRegions: [FoundRegion]
     @ObservedObject var locationManager: LocationManager
     let namespace: Namespace.ID
     @Binding var isPresented: Bool
@@ -1624,9 +1627,10 @@ private struct FullScreenMapView: View {
     @State private var cameraPosition: GMSCameraPosition
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     
-    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
+    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
         self.enabledCountries = enabledCountries
         self.foundRegionIDs = foundRegionIDs
+        self.foundRegions = foundRegions
         self.locationManager = locationManager
         self.namespace = namespace
         self._isPresented = isPresented
@@ -1685,6 +1689,7 @@ private struct FullScreenMapView: View {
             GoogleMapView(
                 cameraPosition: $cameraPosition,
                 foundRegionIDs: foundRegionIDs,
+                foundRegions: foundRegions,
                 showUserLocation: showUserLocation,
                 mapType: mapType,
                 regions: regions,
@@ -1746,6 +1751,7 @@ private struct FullScreenMapView: View {
 private struct RegionMapView: View {
     let enabledCountries: [PlateRegion.Country]
     let foundRegionIDs: [String]
+    let foundRegions: [FoundRegion]
     let namespace: Namespace.ID
     @Binding var showFullScreen: Bool
     @ObservedObject var locationManager: LocationManager
@@ -1753,9 +1759,10 @@ private struct RegionMapView: View {
     @State private var cameraPosition: GMSCameraPosition
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     
-    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], namespace: Namespace.ID, showFullScreen: Binding<Bool>, locationManager: LocationManager) {
+    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], namespace: Namespace.ID, showFullScreen: Binding<Bool>, locationManager: LocationManager) {
         self.enabledCountries = enabledCountries
         self.foundRegionIDs = foundRegionIDs
+        self.foundRegions = foundRegions
         self.namespace = namespace
         self._showFullScreen = showFullScreen
         self.locationManager = locationManager
@@ -1809,6 +1816,7 @@ private struct RegionMapView: View {
             GoogleMapView(
                 cameraPosition: $cameraPosition,
                 foundRegionIDs: foundRegionIDs,
+                foundRegions: foundRegions,
                 showUserLocation: false,
                 mapType: mapType,
                 regions: regionsForCurrentCountry,

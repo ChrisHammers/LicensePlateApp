@@ -14,6 +14,7 @@ import MapKit
 struct GoogleMapView: UIViewRepresentable {
     @Binding var cameraPosition: GMSCameraPosition
     let foundRegionIDs: [String]
+    let foundRegions: [FoundRegion] // Full found regions data for markers
     let showUserLocation: Bool
     let mapType: GMSMapViewType
     let regions: [PlateRegion]
@@ -25,6 +26,7 @@ struct GoogleMapView: UIViewRepresentable {
     init(
         cameraPosition: Binding<GMSCameraPosition>,
         foundRegionIDs: [String] = [],
+        foundRegions: [FoundRegion] = [],
         showUserLocation: Bool = false,
         mapType: GMSMapViewType = .normal,
         regions: [PlateRegion] = PlateRegion.all,
@@ -33,6 +35,7 @@ struct GoogleMapView: UIViewRepresentable {
     ) {
         self._cameraPosition = cameraPosition
         self.foundRegionIDs = foundRegionIDs
+        self.foundRegions = foundRegions
         self.showUserLocation = showUserLocation
         self.mapType = mapType
         self.regions = regions
@@ -48,6 +51,11 @@ struct GoogleMapView: UIViewRepresentable {
     /// Check if region borders should be shown based on user preference
     private var shouldShowRegionBorders: Bool {
         UserDefaults.standard.bool(forKey: "appShowRegionBorders")
+    }
+    
+    /// Check if markers should be shown based on user preference
+    private var shouldShowMarkers: Bool {
+        UserDefaults.standard.bool(forKey: "appShowMapMarkers")
     }
     
     func makeUIView(context: Context) -> GMSMapView {
@@ -68,6 +76,15 @@ struct GoogleMapView: UIViewRepresentable {
                 on: mapView,
                 regions: regions,
                 foundRegionIDs: foundRegionIDs
+            )
+        }
+        
+        // Render markers only if preference is enabled
+        if shouldShowMarkers {
+            context.coordinator.renderMarkers(
+                on: mapView,
+                foundRegions: foundRegions,
+                regions: regions
             )
         }
         
@@ -103,6 +120,18 @@ struct GoogleMapView: UIViewRepresentable {
             // Clear all polygons if preference is disabled
             context.coordinator.clearAllPolygons(on: mapView)
         }
+        
+        // Update markers only if preference is enabled
+        if shouldShowMarkers {
+            context.coordinator.renderMarkers(
+                on: mapView,
+                foundRegions: foundRegions,
+                regions: regions
+            )
+        } else {
+            // Clear all markers if preference is disabled
+            context.coordinator.clearAllMarkers(on: mapView)
+        }
     }
     
     func makeCoordinator() -> Coordinator {
@@ -113,6 +142,7 @@ struct GoogleMapView: UIViewRepresentable {
         var parent: GoogleMapView
         private var polygons: [String: GMSPolygon] = [:]
         private var countryPolygons: [String: GMSPolygon] = [:] // Separate storage for country boundaries (map context only)
+        private var markers: [String: GMSMarker] = [:] // Storage for region markers
         private var cachedPaths: [String: GMSMutablePath] = [:]
         private var lastFoundRegionIDs: Set<String> = []
         private var lastRegionIDs: Set<String> = []
@@ -222,6 +252,70 @@ struct GoogleMapView: UIViewRepresentable {
             }
             countryPolygons.removeAll()
             countriesRendered = false
+        }
+        
+        /// Render markers for found regions that have location data
+        func renderMarkers(
+            on mapView: GMSMapView,
+            foundRegions: [FoundRegion],
+            regions: [PlateRegion]
+        ) {
+            // Create a set of current found region IDs with locations
+            let currentFoundWithLocations = Set(foundRegions.compactMap { region in
+                region.foundAtLocation != nil ? region.regionID : nil
+            })
+            
+            // Remove markers for regions that are no longer found or no longer have locations
+            for (regionId, marker) in markers {
+                if !currentFoundWithLocations.contains(regionId) {
+                    marker.map = nil
+                    markers.removeValue(forKey: regionId)
+                }
+            }
+            
+            // Add or update markers for found regions with locations
+            for foundRegion in foundRegions {
+                guard let locationData = foundRegion.foundAtLocation else { continue }
+                guard regions.contains(where: { $0.id == foundRegion.regionID }) else { continue }
+                
+                let coordinate = CLLocationCoordinate2D(
+                    latitude: locationData.latitude,
+                    longitude: locationData.longitude
+                )
+                
+                // Get region name for marker title
+                let regionName = regions.first(where: { $0.id == foundRegion.regionID })?.name ?? foundRegion.regionID
+                
+                // Create or update marker
+                let marker: GMSMarker
+                if let existingMarker = markers[foundRegion.regionID] {
+                    marker = existingMarker
+                    marker.position = coordinate
+                } else {
+                    marker = GMSMarker(position: coordinate)
+                    marker.title = regionName
+                    marker.snippet = "Found on \(formatDate(foundRegion.foundAt))"
+                    marker.icon = GMSMarker.markerImage(with: UIColor(Color.Theme.accentYellow))
+                    marker.map = mapView
+                    markers[foundRegion.regionID] = marker
+                }
+            }
+        }
+        
+        /// Clear all markers from the map
+        func clearAllMarkers(on mapView: GMSMapView) {
+            for (_, marker) in markers {
+                marker.map = nil
+            }
+            markers.removeAll()
+        }
+        
+        /// Format date for marker snippet
+        private func formatDate(_ date: Date) -> String {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .short
+            formatter.timeStyle = .short
+            return formatter.string(from: date)
         }
         
         /// Render country boundaries from GeoJSON for map visual context only
