@@ -7,7 +7,6 @@
 
 import SwiftUI
 import SwiftData
-import MapKit
 import CoreLocation
 import AVFoundation
 import UserNotifications

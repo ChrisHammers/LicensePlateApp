@@ -19,7 +19,7 @@ struct GoogleMapView: UIViewRepresentable {
     let regions: [PlateRegion]
     let namespace: Namespace.ID?
     
-    // Optional: Custom map style
+    // Optional: Custom map style (if nil, will use preference-based style)
     let mapStyle: GMSMapStyle?
     
     init(
@@ -40,6 +40,11 @@ struct GoogleMapView: UIViewRepresentable {
         self.mapStyle = mapStyle
     }
     
+    private var effectiveMapStyle: GMSMapStyle? {
+        // Use provided style, or get from preference
+        return mapStyle ?? GoogleMapStyle.styleFromPreference()
+    }
+    
     func makeUIView(context: Context) -> GMSMapView {
         let mapView = GMSMapView(frame: .zero, camera: cameraPosition)
         mapView.delegate = context.coordinator
@@ -47,8 +52,8 @@ struct GoogleMapView: UIViewRepresentable {
         mapView.isMyLocationEnabled = showUserLocation
         mapView.settings.myLocationButton = showUserLocation
         
-        // Apply custom map style if provided
-        if let style = mapStyle {
+        // Apply custom map style if provided or from preference
+        if let style = effectiveMapStyle {
             mapView.mapStyle = style
         }
         
@@ -73,9 +78,11 @@ struct GoogleMapView: UIViewRepresentable {
         mapView.isMyLocationEnabled = showUserLocation
         mapView.settings.myLocationButton = showUserLocation
         
-        // Update map style
-        if let style = mapStyle {
+        // Update map style (check preference in case it changed)
+        if let style = effectiveMapStyle {
             mapView.mapStyle = style
+        } else {
+            mapView.mapStyle = nil // Reset to default
         }
         
         // Update region polygons
@@ -93,6 +100,9 @@ struct GoogleMapView: UIViewRepresentable {
     class Coordinator: NSObject, GMSMapViewDelegate {
         var parent: GoogleMapView
         private var polygons: [String: GMSPolygon] = [:]
+        private var cachedPaths: [String: GMSMutablePath] = [:]
+        private var lastFoundRegionIDs: Set<String> = []
+        private var lastRegionIDs: Set<String> = []
         
         init(_ parent: GoogleMapView) {
             self.parent = parent
@@ -103,36 +113,76 @@ struct GoogleMapView: UIViewRepresentable {
             regions: [PlateRegion],
             foundRegionIDs: [String]
         ) {
-            // Clear existing polygons
-            polygons.values.forEach { $0.map = nil }
-            polygons.removeAll()
+            let currentFoundSet = Set(foundRegionIDs)
+            let currentRegionSet = Set(regions.map { $0.id })
             
-            // Get color scheme
-            let unfoundColor = UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.3)
-            let foundColor = UIColor(Color.Theme.accentYellow).withAlphaComponent(0.5)
-            let strokeColor = UIColor.white.withAlphaComponent(0.8)
+            // Check if we need to rebuild polygons (regions changed)
+            let regionsChanged = currentRegionSet != lastRegionIDs
+            let foundStatusChanged = currentFoundSet != lastFoundRegionIDs
             
-            // Create polygon for each region
-            for region in regions {
-                let boundary = RegionBoundaries.boundary(for: region.id)
-                guard !boundary.isEmpty else { continue }
-                
-                let path = GMSMutablePath()
-                for coordinate in boundary {
-                    path.add(coordinate)
+            // If regions changed, rebuild everything
+            if regionsChanged {
+                // Remove old polygons that are no longer needed
+                for (regionId, polygon) in polygons {
+                    if !currentRegionSet.contains(regionId) {
+                        polygon.map = nil
+                        polygons.removeValue(forKey: regionId)
+                        cachedPaths.removeValue(forKey: regionId)
+                    }
                 }
-                // Close the path
-                path.add(boundary[0])
                 
-                let polygon = GMSPolygon(path: path)
-                polygon.fillColor = foundRegionIDs.contains(region.id) ? foundColor : unfoundColor
-                polygon.strokeColor = strokeColor
-                polygon.strokeWidth = 2.0
-                polygon.title = region.name
-                polygon.map = mapView
-                
-                polygons[region.id] = polygon
+                // Create or update polygons for current regions
+                for region in regions {
+                    let boundary = RegionBoundaries.boundary(for: region.id)
+                    guard !boundary.isEmpty else { continue }
+                    
+                    // Create or reuse cached path
+                    let path: GMSMutablePath
+                    if let cachedPath = cachedPaths[region.id] {
+                        path = cachedPath
+                    } else {
+                        path = GMSMutablePath()
+                        for coordinate in boundary {
+                            path.add(coordinate)
+                        }
+                        // Close the path
+                        path.add(boundary[0])
+                        cachedPaths[region.id] = path
+                    }
+                    
+                    // Create or update polygon
+                    let polygon: GMSPolygon
+                    if let existingPolygon = polygons[region.id] {
+                        polygon = existingPolygon
+                    } else {
+                        polygon = GMSPolygon(path: path)
+                        polygon.strokeColor = UIColor.white.withAlphaComponent(0.8)
+                        polygon.strokeWidth = 2.0
+                        polygon.title = region.name
+                        polygon.map = mapView
+                        polygons[region.id] = polygon
+                    }
+                    
+                    // Update color based on found status
+                    let isFound = foundRegionIDs.contains(region.id)
+                    polygon.fillColor = isFound ? 
+                        UIColor(Color.Theme.accentYellow).withAlphaComponent(0.5) : 
+                        UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.3)
+                }
+            } else if foundStatusChanged {
+                // Only update colors if found status changed
+                for region in regions {
+                    guard let polygon = polygons[region.id] else { continue }
+                    let isFound = foundRegionIDs.contains(region.id)
+                    polygon.fillColor = isFound ? 
+                        UIColor(Color.Theme.accentYellow).withAlphaComponent(0.5) : 
+                        UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.3)
+                }
             }
+            
+            // Update tracking sets
+            lastFoundRegionIDs = currentFoundSet
+            lastRegionIDs = currentRegionSet
         }
     }
 }

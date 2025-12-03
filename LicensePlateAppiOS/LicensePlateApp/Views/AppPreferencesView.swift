@@ -140,7 +140,7 @@ struct AppPreferencesView: View {
                             
                             SettingPickerRow(
                                 title: "Map Style",
-                                description: "Choose standard or satellite view",
+                                description: "Choose standard, satellite, or custom view optimized for region highlighting",
                                 selection: appMapStyle
                             )
                           
