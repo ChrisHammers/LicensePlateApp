@@ -65,8 +65,9 @@ struct GoogleMapView: UIViewRepresentable {
         let mapView = GMSMapView(frame: .zero, camera: cameraPosition)
         mapView.delegate = context.coordinator
         mapView.mapType = mapType
-        mapView.isMyLocationEnabled = showUserLocation
-        mapView.settings.myLocationButton = showUserLocation
+        // Disable built-in user location (we use custom green marker instead)
+        mapView.isMyLocationEnabled = false
+        mapView.settings.myLocationButton = false
         
         // Apply custom map style if provided or from preference
         if let style = effectiveMapStyle {
@@ -91,6 +92,14 @@ struct GoogleMapView: UIViewRepresentable {
             )
         }
         
+        // Render custom user location marker if enabled and location available
+        if showUserLocation, let location = userLocation {
+            context.coordinator.renderUserLocationMarker(
+                on: mapView,
+                coordinate: location
+            )
+        }
+        
         return mapView
     }
     
@@ -101,9 +110,9 @@ struct GoogleMapView: UIViewRepresentable {
         // Update map type
         mapView.mapType = mapType
         
-        // Update user location
-        mapView.isMyLocationEnabled = showUserLocation
-        mapView.settings.myLocationButton = showUserLocation
+        // Keep built-in user location disabled (we use custom green marker instead)
+        mapView.isMyLocationEnabled = false
+        mapView.settings.myLocationButton = false
         
         // Update map style (check preference in case it changed)
         if let style = effectiveMapStyle {
@@ -135,6 +144,17 @@ struct GoogleMapView: UIViewRepresentable {
             // Clear all markers if preference is disabled
             context.coordinator.clearAllMarkers(on: mapView)
         }
+        
+        // Update custom user location marker if enabled and location available
+        if showUserLocation, let location = userLocation {
+            context.coordinator.renderUserLocationMarker(
+                on: mapView,
+                coordinate: location
+            )
+        } else {
+            // Clear user location marker if disabled or no location
+            context.coordinator.clearUserLocationMarker(on: mapView)
+        }
     }
     
     func makeCoordinator() -> Coordinator {
@@ -146,6 +166,7 @@ struct GoogleMapView: UIViewRepresentable {
         private var polygons: [String: GMSPolygon] = [:]
         private var countryPolygons: [String: GMSPolygon] = [:] // Separate storage for country boundaries (map context only)
         private var markers: [String: GMSMarker] = [:] // Storage for region markers
+        private var userLocationMarker: GMSMarker? // Custom green user location marker
         private var cachedPaths: [String: GMSMutablePath] = [:]
         private var lastFoundRegionIDs: Set<String> = []
         private var lastRegionIDs: Set<String> = []
@@ -347,11 +368,83 @@ struct GoogleMapView: UIViewRepresentable {
                 
                 // Update marker color based on found status
                 // Orange/yellow for found, blue for unfound
+                // Create custom round circle icons instead of pin shape
                 if isFound {
-                    marker.icon = GMSMarker.markerImage(with: UIColor(Color.Theme.accentYellow))
+                    marker.icon = createRoundMarkerIcon(color: UIColor(Color.Theme.accentYellow), size: 16)
                 } else {
-                    marker.icon = GMSMarker.markerImage(with: UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.6))
+                    marker.icon = createRoundMarkerIcon(color: UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.6), size: 16)
                 }
+            }
+        }
+        
+        /// Create a custom round circle marker icon (not pin shape)
+        private func createRoundMarkerIcon(color: UIColor, size: CGFloat) -> UIImage {
+            let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+            return renderer.image { context in
+                // Draw white stroke circle
+                let strokeRect = CGRect(x: 1, y: 1, width: size - 2, height: size - 2)
+                context.cgContext.setStrokeColor(UIColor.white.cgColor)
+                context.cgContext.setLineWidth(2.0)
+                context.cgContext.addEllipse(in: strokeRect)
+                context.cgContext.strokePath()
+                
+                // Draw filled circle
+                let fillRect = CGRect(x: 2, y: 2, width: size - 4, height: size - 4)
+                context.cgContext.setFillColor(color.cgColor)
+                context.cgContext.fillEllipse(in: fillRect)
+            }
+        }
+        
+        /// Render custom green user location marker with extra circle (matches old Apple Maps behavior)
+        func renderUserLocationMarker(
+            on mapView: GMSMapView,
+            coordinate: CLLocationCoordinate2D
+        ) {
+            // Create or update user location marker
+            let marker: GMSMarker
+            if let existingMarker = userLocationMarker {
+                marker = existingMarker
+                marker.position = coordinate
+            } else {
+                marker = GMSMarker(position: coordinate)
+                marker.title = "Your Location"
+                marker.map = mapView
+                userLocationMarker = marker
+            }
+            
+            // Create custom green marker with extra circle overlay
+            // Inner circle: 20pt green with white stroke
+            // Outer circle: 32pt green with opacity 0.3
+            let size: CGFloat = 32
+            let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+            let icon = renderer.image { context in
+                // Draw outer circle (larger, semi-transparent)
+                let outerRect = CGRect(x: 0, y: 0, width: size, height: size)
+                context.cgContext.setFillColor(UIColor.green.withAlphaComponent(0.3).cgColor)
+                context.cgContext.fillEllipse(in: outerRect)
+                
+                // Draw inner circle (smaller, solid)
+                let innerSize: CGFloat = 20
+                let innerRect = CGRect(x: (size - innerSize) / 2, y: (size - innerSize) / 2, width: innerSize, height: innerSize)
+                context.cgContext.setFillColor(UIColor.green.cgColor)
+                context.cgContext.fillEllipse(in: innerRect)
+                
+                // Draw white stroke on inner circle
+                context.cgContext.setStrokeColor(UIColor.white.cgColor)
+                context.cgContext.setLineWidth(3.0)
+                context.cgContext.addEllipse(in: innerRect)
+                context.cgContext.strokePath()
+            }
+            
+            marker.icon = icon
+            marker.groundAnchor = CGPoint(x: 0.5, y: 0.5) // Center the icon on the coordinate
+        }
+        
+        /// Clear user location marker
+        func clearUserLocationMarker(on mapView: GMSMapView) {
+            if let marker = userLocationMarker {
+                marker.map = nil
+                userLocationMarker = nil
             }
         }
         

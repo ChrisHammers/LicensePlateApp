@@ -202,6 +202,7 @@ struct TripTrackerView: View {
               enabledCountries: trip.enabledCountries,
               foundRegionIDs: trip.foundRegionIDs,
               foundRegions: trip.foundRegions,
+              visibleCountry: visibleCountry,
               namespace: mapNamespace,
               showFullScreen: $showFullScreenMap,
               locationManager: locationManager
@@ -1691,6 +1692,7 @@ private struct FullScreenMapView: View {
                 foundRegionIDs: foundRegionIDs,
                 foundRegions: foundRegions,
                 showUserLocation: showUserLocation,
+                userLocation: locationManager.location?.coordinate,
                 mapType: mapType,
                 regions: regions,
                 namespace: namespace
@@ -1752,6 +1754,7 @@ private struct RegionMapView: View {
     let enabledCountries: [PlateRegion.Country]
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
+    let visibleCountry: PlateRegion.Country
     let namespace: Namespace.ID
     @Binding var showFullScreen: Bool
     @ObservedObject var locationManager: LocationManager
@@ -1759,10 +1762,11 @@ private struct RegionMapView: View {
     @State private var cameraPosition: GMSCameraPosition
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     
-    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], namespace: Namespace.ID, showFullScreen: Binding<Bool>, locationManager: LocationManager) {
+    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], visibleCountry: PlateRegion.Country, namespace: Namespace.ID, showFullScreen: Binding<Bool>, locationManager: LocationManager) {
         self.enabledCountries = enabledCountries
         self.foundRegionIDs = foundRegionIDs
         self.foundRegions = foundRegions
+        self.visibleCountry = visibleCountry
         self.namespace = namespace
         self._showFullScreen = showFullScreen
         self.locationManager = locationManager
@@ -1811,6 +1815,18 @@ private struct RegionMapView: View {
         return mapStyle.googleMapType
     }
     
+    /// Calculate camera position for a specific country
+    private func calculateCameraPosition(for country: PlateRegion.Country) -> (CLLocationCoordinate2D, Float) {
+        switch country {
+        case .unitedStates:
+            return (CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795), 4.0)
+        case .canada:
+            return (CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468), 4.5)
+        case .mexico:
+            return (CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528), 5.5)
+        }
+    }
+    
     var body: some View {
         ZStack {
             GoogleMapView(
@@ -1818,6 +1834,7 @@ private struct RegionMapView: View {
                 foundRegionIDs: foundRegionIDs,
                 foundRegions: foundRegions,
                 showUserLocation: false,
+                userLocation: locationManager.location?.coordinate,
                 mapType: mapType,
                 regions: regionsForCurrentCountry,
                 namespace: namespace
@@ -1836,6 +1853,13 @@ private struct RegionMapView: View {
                 .accessibilityLabel("Map showing regions")
                 .accessibilityHint("Double tap to open full screen map")
                 .accessibilityAddTraits(.isButton)
+        }
+        .onChange(of: visibleCountry) { oldValue, newValue in
+            // Update camera position when visible country changes (like old Apple Maps behavior)
+            let (center, zoom) = calculateCameraPosition(for: newValue)
+            withAccessibleAnimation(.easeInOut(duration: 0.5)) {
+                cameraPosition = GMSCameraPosition.from(coordinate: center, zoom: zoom)
+            }
         }
         .onChange(of: enabledCountries) { oldValue, newValue in
             // Update camera position when enabled countries change
