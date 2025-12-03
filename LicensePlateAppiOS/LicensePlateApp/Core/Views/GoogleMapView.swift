@@ -172,6 +172,24 @@ struct GoogleMapView: UIViewRepresentable {
         }
     }
     
+    // MARK: - Cleanup
+    
+    /// Clean up map resources when the view is removed from the hierarchy
+    /// This helps reduce the duration of multiple CCTClearcutUploader instances
+    func dismantleUIView(_ mapView: GMSMapView, coordinator: Coordinator) {
+        // Clear all polygons
+        coordinator.clearAllPolygons(on: mapView)
+        
+        // Clear all markers
+        coordinator.clearAllMarkers(on: mapView)
+        
+        // Clear user location marker
+        coordinator.clearUserLocationMarker(on: mapView)
+        
+        // Remove delegate to prevent any callbacks after view is dismantled
+        mapView.delegate = nil
+    }
+    
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
