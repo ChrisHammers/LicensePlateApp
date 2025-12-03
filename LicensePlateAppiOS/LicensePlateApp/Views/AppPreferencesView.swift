@@ -13,6 +13,7 @@ struct AppPreferencesView: View {
     
     // App Preferences
     @AppStorage("appDarkMode") private var appDarkModeRaw: String = AppDarkMode.system.rawValue
+    @AppStorage("appBackgroundStyle") private var appBackgroundStyleRaw: String = AppBackgroundStyle.none.rawValue
     @AppStorage("appDistanceUnit") private var appDistanceUnitRaw: String = AppDistanceUnit.miles.rawValue
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     @AppStorage("appLanguage") private var appLanguageRaw: String = AppLanguage.english.rawValue
@@ -38,6 +39,13 @@ struct AppPreferencesView: View {
         Binding(
             get: { AppDarkMode(rawValue: appDarkModeRaw) ?? .system },
             set: { appDarkModeRaw = $0.rawValue }
+        )
+    }
+    
+    private var appBackgroundStyle: Binding<AppBackgroundStyle> {
+        Binding(
+            get: { AppBackgroundStyle(rawValue: appBackgroundStyleRaw) ?? .none },
+            set: { appBackgroundStyleRaw = $0.rawValue }
         )
     }
     
@@ -112,6 +120,14 @@ struct AppPreferencesView: View {
                                 selection: appDarkMode
                             )
                           
+                            Divider()
+                            
+                            SettingPickerRow(
+                                title: "App Background",
+                                description: "Choose background style",
+                                selection: appBackgroundStyle
+                            )
+                            
                             Divider()
                             
                             SettingPickerRow(

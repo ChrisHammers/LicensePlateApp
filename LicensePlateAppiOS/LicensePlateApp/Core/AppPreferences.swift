@@ -7,6 +7,7 @@
 
 import SwiftUI
 import MapKit
+import UIKit
 
 // MARK: - App Preferences Enums
 
@@ -72,6 +73,12 @@ enum AppMapDefaultZoom: String, CaseIterable {
     case far = "Far"
 }
 
+enum AppBackgroundStyle: String, CaseIterable {
+    case none = "None"
+    case paths = "Paths"
+    case characters = "Characters"
+}
+
 // MARK: - App Preferences Utilities
 
 struct AppPreferences {
@@ -104,6 +111,27 @@ struct AppPreferences {
             return .dark
         case .system:
             return nil // nil means use system setting
+        }
+    }
+    
+    /// Get the background image name based on style and color scheme
+    static func backgroundImageName(style: AppBackgroundStyle, colorScheme: ColorScheme?) -> String? {
+        // Determine if we're in dark mode
+        let isDark: Bool
+        if let colorScheme = colorScheme {
+            isDark = colorScheme == .dark
+        } else {
+            // Use system color scheme
+            isDark = UITraitCollection.current.userInterfaceStyle == .dark
+        }
+        
+        switch style {
+        case .none:
+            return nil
+        case .paths:
+            return isDark ? "background_app_basic_dark" : "background_app_basic_light"
+        case .characters:
+            return isDark ? "background_app_cameo_dark" : "background_app_cameo_light"
         }
     }
 }

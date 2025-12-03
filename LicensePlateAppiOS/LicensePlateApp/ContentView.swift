@@ -61,11 +61,7 @@ struct ContentView: View {
      }
     var body: some View {
         NavigationStack(path: $path) {
-            ZStack {
-                Image("background_app_basic_light")
-                .resizable()
-                    .ignoresSafeArea()
-
+            AppBackgroundView {
                 List {
                     Section {
                         header
