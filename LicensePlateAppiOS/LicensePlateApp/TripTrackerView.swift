@@ -184,6 +184,15 @@ struct TripTrackerView: View {
                 selectedTab = .list
             }
         }
+        .onChange(of: showFullScreenMap) { oldValue, newValue in
+            // When closing full screen map, reset camera to current visible country
+            if oldValue == true && newValue == false {
+                let (center, zoom) = calculateCameraPositionForCountry(visibleCountry)
+                withAccessibleAnimation(.easeInOut(duration: 0.5)) {
+                    cameraPosition = GMSCameraPosition.from(coordinate: center, zoom: zoom)
+                }
+            }
+        }
         .onChange(of: selectedTab) { oldValue, newValue in
             if newValue == .voice {
                 Task {
@@ -565,6 +574,32 @@ struct TripTrackerView: View {
         } catch {
             FeedbackService.shared.actionError()
             assertionFailure("Failed to save trip update: \(error)")
+        }
+    }
+    
+    /// Calculate camera position for a specific country (using old Apple Maps span values)
+    private func calculateCameraPositionForCountry(_ country: PlateRegion.Country) -> (CLLocationCoordinate2D, Float) {
+        // Convert old MKCoordinateSpan values to Google Maps zoom levels
+        // Old values from RegionMapView in the attached file:
+        // US: span (50, 50) 
+        // Canada: span (30, 60)
+        // Mexico: span (15, 20)
+        switch country {
+        case .unitedStates:
+            let center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
+            let span = MKCoordinateSpan(latitudeDelta: 50, longitudeDelta: 50)
+            let camera = GMSCameraPosition.from(center: center, span: span)
+            return (center, camera.zoom)
+        case .canada:
+            let center = CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468)
+            let span = MKCoordinateSpan(latitudeDelta: 30, longitudeDelta: 60)
+            let camera = GMSCameraPosition.from(center: center, span: span)
+            return (center, camera.zoom)
+        case .mexico:
+            let center = CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528)
+            let span = MKCoordinateSpan(latitudeDelta: 15, longitudeDelta: 20)
+            let camera = GMSCameraPosition.from(center: center, span: span)
+            return (center, camera.zoom)
         }
     }
 
@@ -1786,7 +1821,7 @@ private struct RegionMapView: View {
     }
     
     /// Calculate camera position for a specific country (using old Apple Maps span values)
-    private func calculateCameraPosition(for country: PlateRegion.Country) -> (CLLocationCoordinate2D, Float) {
+    private func calculateCameraPositionForCountry(_ country: PlateRegion.Country) -> (CLLocationCoordinate2D, Float) {
         // Convert old MKCoordinateSpan values to Google Maps zoom levels
         // Formula: zoom = log2(360 / latitudeDelta)
         // Old values from RegionMapView in the attached file:
@@ -1845,7 +1880,7 @@ private struct RegionMapView: View {
         .onChange(of: visibleCountry) { oldValue, newValue in
             // Only update camera position for small map, not full screen map
             if !showFullScreen {
-                let (center, zoom) = calculateCameraPosition(for: newValue)
+                let (center, zoom) = calculateCameraPositionForCountry(newValue)
                 withAccessibleAnimation(.easeInOut(duration: 0.5)) {
                     cameraPosition = GMSCameraPosition.from(coordinate: center, zoom: zoom)
                 }
