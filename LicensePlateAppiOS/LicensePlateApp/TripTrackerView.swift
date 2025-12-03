@@ -76,11 +76,15 @@ struct TripTrackerView: View {
         VStack(spacing: 0) {
             header
 
-            switch selectedTab {
-            case .list:
+            // Keep both views in hierarchy to preserve scroll position
+            ZStack {
                 regionList
-            case .voice:
+                    .opacity(selectedTab == .list ? 1 : 0)
+                    .allowsHitTesting(selectedTab == .list)
+                
                 voiceCaptureView
+                    .opacity(selectedTab == .voice ? 1 : 0)
+                    .allowsHitTesting(selectedTab == .voice)
             }
 
             customTabBar
@@ -507,6 +511,7 @@ struct TripTrackerView: View {
                 }
             }
         }
+        .id("regionList") // Stable ID prevents list recreation and preserves scroll position
         .listStyle(.inset)
         .scrollContentBackground(.hidden)
         .background(Color.Theme.background)
