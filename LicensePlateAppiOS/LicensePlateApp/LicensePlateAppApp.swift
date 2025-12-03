@@ -10,47 +10,16 @@ import SwiftData
 import FirebaseCore
 
 class AppDelegate: NSObject, UIApplicationDelegate {
-  func application(_ application: UIApplication,
-                   didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
-    // Firebase initialization is handled in LicensePlateAppApp.init()
-    // to support environment-specific config files
-    return true
-  }
-}
-
-@main
-struct LicensePlateAppApp: App {
-  
-  @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
-  
-    var sharedModelContainer: ModelContainer = {
-        // Use versioned schema for future migration support
-        let schema = Schema(versionedSchema: CurrentSchema.self)
-        let modelConfiguration = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: false
-        )
-
-        do {
-            // Create ModelContainer with versioned schema and migration plan
-            return try ModelContainer(
-                for: schema,
-                migrationPlan: AppMigrationPlan.self,
-                configurations: [modelConfiguration]
-            )
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
-    
-    @StateObject private var authService = FirebaseAuthService()
-    
-    init() {
-        // Initialize Firebase if configured (optional - app works without it)
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        // Initialize Firebase here (after delegate is fully set up)
+        // This ensures Firebase's AppDelegateSwizzler can properly detect the delegate
         initializeFirebase()
         
-        // Initialize Google Maps
+        // Initialize Google Maps after Firebase
         GoogleMapsService.shared.initializeFromConfig()
+        
+        return true
     }
     
     private func initializeFirebase() {
@@ -83,6 +52,39 @@ struct LicensePlateAppApp: App {
         
         FirebaseApp.configure(options: options)
         print("✅ Firebase initialized successfully with config: \(configFileName).plist")
+    }
+}
+
+@main
+struct LicensePlateAppApp: App {
+  
+  @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+  
+    var sharedModelContainer: ModelContainer = {
+        // Use versioned schema for future migration support
+        let schema = Schema(versionedSchema: CurrentSchema.self)
+        let modelConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: false
+        )
+
+        do {
+            // Create ModelContainer with versioned schema and migration plan
+            return try ModelContainer(
+                for: schema,
+                migrationPlan: AppMigrationPlan.self,
+                configurations: [modelConfiguration]
+            )
+        } catch {
+            fatalError("Could not create ModelContainer: \(error)")
+        }
+    }()
+    
+    @StateObject private var authService = FirebaseAuthService()
+    
+    init() {
+        // Firebase and Google Maps initialization moved to AppDelegate.application(_:didFinishLaunchingWithOptions:)
+        // to ensure proper timing with delegate setup
     }
 
     var body: some Scene {
