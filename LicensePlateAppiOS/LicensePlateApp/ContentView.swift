@@ -639,6 +639,23 @@ private struct TripRow: View {
                     .foregroundStyle(Color.Theme.softBrown)
                     .accessibilityLabel("Date: \(dateFormatter.string(from: trip.startedAt != nil ? trip.startedAt! : trip.createdAt))")
             }
+            
+            // Show "Ended on" date if trip has ended
+            if trip.isTripEnded, let endedDate = trip.tripEndedAt {
+                HStack {
+                    Label("Ended", systemImage: "checkmark.circle")
+                        .font(.system(.footnote, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .accessibilityLabel("Ended")
+
+                    Spacer()
+
+                    Text(dateFormatter.string(from: endedDate))
+                        .font(.system(.footnote, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .accessibilityLabel("Date: \(dateFormatter.string(from: endedDate))")
+                }
+            }
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
