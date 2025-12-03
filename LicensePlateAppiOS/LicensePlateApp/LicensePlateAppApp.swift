@@ -48,6 +48,9 @@ struct LicensePlateAppApp: App {
     init() {
         // Initialize Firebase if configured (optional - app works without it)
         initializeFirebase()
+        
+        // Initialize Google Maps
+        GoogleMapsService.shared.initializeFromConfig()
     }
     
     private func initializeFirebase() {

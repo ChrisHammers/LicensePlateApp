@@ -7,6 +7,7 @@
 
 import SwiftUI
 import MapKit
+import GoogleMaps
 
 // MARK: - App Preferences Enums
 
@@ -24,14 +25,29 @@ enum AppDistanceUnit: String, CaseIterable {
 enum AppMapStyle: String, CaseIterable {
     case standard = "Standard"
     case satellite = "Satellite"
+    case custom = "Custom"
     
-    /// Returns the MapStyle based on the preference
+    /// Returns the MapStyle based on the preference (for MapKit compatibility)
     var mapStyle: MapStyle {
         switch self {
         case .standard:
             return .standard
         case .satellite:
             return .hybrid
+        case .custom:
+            return .standard
+        }
+    }
+    
+    /// Returns the GMSMapViewType for Google Maps
+    var googleMapType: GMSMapViewType {
+        switch self {
+        case .standard:
+            return .normal
+        case .satellite:
+            return .satellite
+        case .custom:
+            return .normal // With custom styling
         }
     }
 }
