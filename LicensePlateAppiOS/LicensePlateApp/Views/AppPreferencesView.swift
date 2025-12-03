@@ -13,6 +13,13 @@ struct AppPreferencesView: View {
     @EnvironmentObject var authService: FirebaseAuthService
     @EnvironmentObject var syncService: FirebaseTripSyncService
     
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
+    
     // App Preferences
     @AppStorage("appDarkMode") private var appDarkModeRaw: String = AppDarkMode.system.rawValue
     @AppStorage("appDistanceUnit") private var appDistanceUnitRaw: String = AppDistanceUnit.miles.rawValue
@@ -170,7 +177,7 @@ struct AppPreferencesView: View {
                                     }
                                     
                                     if let lastSync = syncService.lastSyncTime {
-                                        Text("Last synced: \(lastSync, style: .relative)")
+                                        Text("Last synced: \(dateFormatter.string(from: lastSync))")
                                             .font(.system(.caption, design: .rounded))
                                             .foregroundStyle(Color.Theme.softBrown)
                                     } else if syncService.isSyncEnabled {
