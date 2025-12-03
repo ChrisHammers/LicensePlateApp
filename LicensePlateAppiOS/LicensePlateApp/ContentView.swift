@@ -158,6 +158,7 @@ struct ContentView: View {
             .navigationDestination(for: UUID.self) { tripID in
                 if let trip = trips.first(where: { $0.id == tripID }) {
                     TripTrackerView(trip: trip)
+                        .environmentObject(syncService)
                 } else {
                     TripMissingView()
                 }
