@@ -13,11 +13,21 @@ struct GeoJSONLoader {
     /// Load region boundaries from GeoJSON file
     /// Returns a dictionary mapping region ID to polygon coordinates
     static func loadBoundaries(from filename: String) -> [String: [CLLocationCoordinate2D]] {
-        guard let url = Bundle.main.url(forResource: filename, withExtension: "geojson"),
-              let data = try? Data(contentsOf: url),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        guard let url = Bundle.main.url(forResource: filename, withExtension: "geojson") else {
+            print("⚠️ GeoJSON file not found in bundle: \(filename).geojson")
+            print("   Please add this file to your Xcode project and ensure it's included in the app bundle.")
+            return [:]
+        }
+        
+        guard let data = try? Data(contentsOf: url) else {
+            print("⚠️ Failed to read data from GeoJSON file: \(filename).geojson")
+            return [:]
+        }
+        
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let features = json["features"] as? [[String: Any]] else {
-            print("⚠️ Failed to load GeoJSON file: \(filename).geojson")
+            print("⚠️ Failed to parse GeoJSON file: \(filename).geojson")
+            print("   File exists but format is invalid. Expected FeatureCollection with features array.")
             return [:]
         }
         

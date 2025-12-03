@@ -116,7 +116,7 @@ struct TripTrackerView: View {
         .overlay {
             if showFullScreenMap {
                 FullScreenMapView(
-                    country: visibleCountry,
+                    enabledCountries: trip.enabledCountries,
                     foundRegionIDs: trip.foundRegionIDs,
                     locationManager: locationManager,
                     namespace: mapNamespace,
@@ -198,7 +198,7 @@ struct TripTrackerView: View {
 
           // Map view
           RegionMapView(
-              country: visibleCountry,
+              enabledCountries: trip.enabledCountries,
               foundRegionIDs: trip.foundRegionIDs,
               namespace: mapNamespace,
               showFullScreen: $showFullScreenMap,
@@ -1615,7 +1615,7 @@ private struct CountryCheckboxRow: View {
 
 // Full screen map view with location support
 private struct FullScreenMapView: View {
-    let country: PlateRegion.Country
+    let enabledCountries: [PlateRegion.Country]
     let foundRegionIDs: [String]
     @ObservedObject var locationManager: LocationManager
     let namespace: Namespace.ID
@@ -1624,34 +1624,50 @@ private struct FullScreenMapView: View {
     @State private var cameraPosition: GMSCameraPosition
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     
-    init(country: PlateRegion.Country, foundRegionIDs: [String], locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
-        self.country = country
+    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
+        self.enabledCountries = enabledCountries
         self.foundRegionIDs = foundRegionIDs
         self.locationManager = locationManager
         self.namespace = namespace
         self._isPresented = isPresented
         
-        // Initialize camera position based on country
+        // Initialize camera position to center on all enabled countries
         let center: CLLocationCoordinate2D
         let zoom: Float
         
-        switch country {
-        case .unitedStates:
+        // Calculate center point based on enabled countries
+        if enabledCountries.contains(.unitedStates) && enabledCountries.contains(.canada) && enabledCountries.contains(.mexico) {
+            // All three countries - center on North America
+            center = CLLocationCoordinate2D(latitude: 45.0, longitude: -100.0)
+            zoom = 3.5
+        } else if enabledCountries.contains(.unitedStates) && enabledCountries.contains(.canada) {
+            // US and Canada
+            center = CLLocationCoordinate2D(latitude: 50.0, longitude: -100.0)
+            zoom = 3.8
+        } else if enabledCountries.contains(.unitedStates) && enabledCountries.contains(.mexico) {
+            // US and Mexico
+            center = CLLocationCoordinate2D(latitude: 32.0, longitude: -100.0)
+            zoom = 4.0
+        } else if enabledCountries.contains(.unitedStates) {
             center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
             zoom = 4.0
-        case .canada:
+        } else if enabledCountries.contains(.canada) {
             center = CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468)
             zoom = 4.5
-        case .mexico:
+        } else if enabledCountries.contains(.mexico) {
             center = CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528)
             zoom = 5.5
+        } else {
+            // Default to US if no countries enabled
+            center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
+            zoom = 4.0
         }
         
         _cameraPosition = State(initialValue: GMSCameraPosition.from(coordinate: center, zoom: zoom))
     }
     
     private var regions: [PlateRegion] {
-        PlateRegion.all.filter { $0.country == country }
+        PlateRegion.all.filter { enabledCountries.contains($0.country) }
     }
     
     private var mapType: GMSMapViewType {
@@ -1726,9 +1742,9 @@ private struct FullScreenMapView: View {
     }
 }
 
-// Map view showing regions for a specific country
+// Map view showing regions for enabled countries
 private struct RegionMapView: View {
-    let country: PlateRegion.Country
+    let enabledCountries: [PlateRegion.Country]
     let foundRegionIDs: [String]
     let namespace: Namespace.ID
     @Binding var showFullScreen: Bool
@@ -1737,34 +1753,50 @@ private struct RegionMapView: View {
     @State private var cameraPosition: GMSCameraPosition
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     
-    init(country: PlateRegion.Country, foundRegionIDs: [String], namespace: Namespace.ID, showFullScreen: Binding<Bool>, locationManager: LocationManager) {
-        self.country = country
+    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], namespace: Namespace.ID, showFullScreen: Binding<Bool>, locationManager: LocationManager) {
+        self.enabledCountries = enabledCountries
         self.foundRegionIDs = foundRegionIDs
         self.namespace = namespace
         self._showFullScreen = showFullScreen
         self.locationManager = locationManager
         
-        // Initialize camera position based on country
+        // Initialize camera position to center on all enabled countries
         let center: CLLocationCoordinate2D
         let zoom: Float
         
-        switch country {
-        case .unitedStates:
+        // Calculate center point based on enabled countries
+        if enabledCountries.contains(.unitedStates) && enabledCountries.contains(.canada) && enabledCountries.contains(.mexico) {
+            // All three countries - center on North America
+            center = CLLocationCoordinate2D(latitude: 45.0, longitude: -100.0)
+            zoom = 3.5
+        } else if enabledCountries.contains(.unitedStates) && enabledCountries.contains(.canada) {
+            // US and Canada
+            center = CLLocationCoordinate2D(latitude: 50.0, longitude: -100.0)
+            zoom = 3.8
+        } else if enabledCountries.contains(.unitedStates) && enabledCountries.contains(.mexico) {
+            // US and Mexico
+            center = CLLocationCoordinate2D(latitude: 32.0, longitude: -100.0)
+            zoom = 4.0
+        } else if enabledCountries.contains(.unitedStates) {
             center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
             zoom = 4.0
-        case .canada:
+        } else if enabledCountries.contains(.canada) {
             center = CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468)
             zoom = 4.5
-        case .mexico:
+        } else if enabledCountries.contains(.mexico) {
             center = CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528)
             zoom = 5.5
+        } else {
+            // Default to US if no countries enabled
+            center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
+            zoom = 4.0
         }
         
         _cameraPosition = State(initialValue: GMSCameraPosition.from(coordinate: center, zoom: zoom))
     }
     
     private var regionsForCurrentCountry: [PlateRegion] {
-        PlateRegion.all.filter { $0.country == country }
+        PlateRegion.all.filter { enabledCountries.contains($0.country) }
     }
     
     private var mapType: GMSMapViewType {
@@ -1793,25 +1825,41 @@ private struct RegionMapView: View {
                         showFullScreen = true
                     }
                 }
-                .accessibilityLabel("Map showing \(country.rawValue) regions")
+                .accessibilityLabel("Map showing regions")
                 .accessibilityHint("Double tap to open full screen map")
                 .accessibilityAddTraits(.isButton)
         }
-        .onChange(of: country) { oldValue, newValue in
-            // Update camera position when country changes
+        .onChange(of: enabledCountries) { oldValue, newValue in
+            // Update camera position when enabled countries change
             let center: CLLocationCoordinate2D
             let zoom: Float
             
-            switch newValue {
-            case .unitedStates:
+            // Calculate center point based on enabled countries
+            if newValue.contains(.unitedStates) && newValue.contains(.canada) && newValue.contains(.mexico) {
+                // All three countries - center on North America
+                center = CLLocationCoordinate2D(latitude: 45.0, longitude: -100.0)
+                zoom = 3.5
+            } else if newValue.contains(.unitedStates) && newValue.contains(.canada) {
+                // US and Canada
+                center = CLLocationCoordinate2D(latitude: 50.0, longitude: -100.0)
+                zoom = 3.8
+            } else if newValue.contains(.unitedStates) && newValue.contains(.mexico) {
+                // US and Mexico
+                center = CLLocationCoordinate2D(latitude: 32.0, longitude: -100.0)
+                zoom = 4.0
+            } else if newValue.contains(.unitedStates) {
                 center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
                 zoom = 4.0
-            case .canada:
+            } else if newValue.contains(.canada) {
                 center = CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468)
                 zoom = 4.5
-            case .mexico:
+            } else if newValue.contains(.mexico) {
                 center = CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528)
                 zoom = 5.5
+            } else {
+                // Default to US if no countries enabled
+                center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
+                zoom = 4.0
             }
             
             withAccessibleAnimation(.easeInOut(duration: 0.5)) {
