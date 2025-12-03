@@ -104,8 +104,20 @@ struct GoogleMapView: UIViewRepresentable {
     }
     
     func updateUIView(_ mapView: GMSMapView, context: Context) {
-        // Update camera position
-        mapView.animate(to: cameraPosition)
+        // Only update camera position if it actually changed and user is not interacting
+        // This prevents the map from recentering while user is zooming/panning
+        if !context.coordinator.isUserInteracting {
+            let currentCamera = mapView.camera
+            let newCamera = cameraPosition
+            
+            // Only animate if camera position actually changed
+            if currentCamera.target.latitude != newCamera.target.latitude ||
+               currentCamera.target.longitude != newCamera.target.longitude ||
+               abs(currentCamera.zoom - newCamera.zoom) > 0.1 {
+                mapView.animate(to: cameraPosition)
+                context.coordinator.lastCameraPosition = cameraPosition
+            }
+        }
         
         // Update map type
         mapView.mapType = mapType
@@ -171,9 +183,30 @@ struct GoogleMapView: UIViewRepresentable {
         private var lastFoundRegionIDs: Set<String> = []
         private var lastRegionIDs: Set<String> = []
         private var countriesRendered = false // Track if country boundaries have been rendered
+        var lastCameraPosition: GMSCameraPosition? // Track last camera position to avoid unnecessary updates
+        var isUserInteracting = false // Track if user is interacting with the map
         
         init(_ parent: GoogleMapView) {
             self.parent = parent
+        }
+        
+        // MARK: - GMSMapViewDelegate
+        
+        func mapView(_ mapView: GMSMapView, willMove gesture: Bool) {
+            isUserInteracting = gesture
+        }
+        
+        func mapView(_ mapView: GMSMapView, didChange position: GMSCameraPosition) {
+            // Update last camera position when user moves the map
+            if isUserInteracting {
+                lastCameraPosition = position
+            }
+        }
+        
+        func mapView(_ mapView: GMSMapView, idleAt position: GMSCameraPosition) {
+            // User finished interacting
+            isUserInteracting = false
+            lastCameraPosition = position
         }
         
         func renderRegions(

@@ -1815,15 +1815,33 @@ private struct RegionMapView: View {
         return mapStyle.googleMapType
     }
     
-    /// Calculate camera position for a specific country
+    /// Calculate camera position for a specific country (using old Apple Maps span values)
     private func calculateCameraPosition(for country: PlateRegion.Country) -> (CLLocationCoordinate2D, Float) {
+        // Convert old MKCoordinateSpan values to Google Maps zoom levels
+        // Formula: zoom = log2(360 / latitudeDelta)
+        // Old values from RegionMapView in the attached file:
+        // US: span (50, 50) 
+        // Canada: span (30, 60)
+        // Mexico: span (15, 20)
         switch country {
         case .unitedStates:
-            return (CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795), 4.0)
+            // Old: span (50, 50) -> zoom = log2(360/50) ≈ 2.85, but use slightly higher for better view
+            let center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
+            let span = MKCoordinateSpan(latitudeDelta: 50, longitudeDelta: 50)
+            let camera = GMSCameraPosition.from(center: center, span: span)
+            return (center, camera.zoom)
         case .canada:
-            return (CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468), 4.5)
+            // Old: span (30, 60) -> zoom = log2(360/30) ≈ 3.58
+            let center = CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468)
+            let span = MKCoordinateSpan(latitudeDelta: 30, longitudeDelta: 60)
+            let camera = GMSCameraPosition.from(center: center, span: span)
+            return (center, camera.zoom)
         case .mexico:
-            return (CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528), 5.5)
+            // Old: span (15, 20) -> zoom = log2(360/15) ≈ 4.58
+            let center = CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528)
+            let span = MKCoordinateSpan(latitudeDelta: 15, longitudeDelta: 20)
+            let camera = GMSCameraPosition.from(center: center, span: span)
+            return (center, camera.zoom)
         }
     }
     
