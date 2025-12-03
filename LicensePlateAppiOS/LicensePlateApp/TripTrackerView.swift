@@ -1740,7 +1740,11 @@ private struct FullScreenMapView: View {
                 regions: regions,
                 namespace: namespace
             )
-            .matchedGeometryEffect(id: "map", in: namespace)
+            .modifier(ConditionalMatchedGeometryEffect(
+                id: "map",
+                namespace: namespace,
+                isActive: isPresented && !UIAccessibility.isReduceMotionEnabled
+            ))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ignoresSafeArea()
             .onAppear {
@@ -1868,7 +1872,11 @@ private struct RegionMapView: View {
                 namespace: namespace
             )
             .disabled(true)
-            .matchedGeometryEffect(id: "map", in: namespace)
+            .modifier(ConditionalMatchedGeometryEffect(
+                id: "map",
+                namespace: namespace,
+                isActive: !showFullScreen && !UIAccessibility.isReduceMotionEnabled
+            ))
             
             // Invisible tap area
             Color.clear
@@ -2004,6 +2012,24 @@ private struct RegionMapView: View {
         ]
         
         return coordinates[region.id] ?? CLLocationCoordinate2D(latitude: 0, longitude: 0)
+    }
+}
+
+// MARK: - Conditional Matched Geometry Effect
+
+/// View modifier that conditionally applies matched geometry effect
+/// Respects reduced motion settings for accessibility
+private struct ConditionalMatchedGeometryEffect: ViewModifier {
+    let id: String
+    let namespace: Namespace.ID
+    let isActive: Bool
+    
+    func body(content: Content) -> some View {
+        if isActive {
+            content.matchedGeometryEffect(id: id, in: namespace)
+        } else {
+            content
+        }
     }
 }
 
