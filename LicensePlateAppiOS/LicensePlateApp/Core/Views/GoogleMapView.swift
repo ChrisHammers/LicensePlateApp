@@ -156,27 +156,28 @@ struct GoogleMapView: UIViewRepresentable {
                         polygon = existingPolygon
                     } else {
                         polygon = GMSPolygon(path: path)
-                        polygon.strokeColor = UIColor.white.withAlphaComponent(0.8)
-                        polygon.strokeWidth = 2.0
+                        polygon.strokeColor = UIColor.white.withAlphaComponent(0.9)
+                        polygon.strokeWidth = 3.0
                         polygon.title = region.name
                         polygon.map = mapView
                         polygons[region.id] = polygon
                     }
                     
-                    // Update color based on found status
+                    // Update color based on found status - solid and playful (Waze-like)
                     let isFound = foundRegionIDs.contains(region.id)
                     polygon.fillColor = isFound ? 
-                        UIColor(Color.Theme.accentYellow).withAlphaComponent(0.5) : 
-                        UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.3)
+                        UIColor(Color.Theme.accentYellow).withAlphaComponent(0.9) : 
+                        UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.9)
+                    polygon.strokeWidth = 3.0
                 }
             } else if foundStatusChanged {
-                // Only update colors if found status changed
+                // Only update colors if found status changed - solid and playful (Waze-like)
                 for region in regions {
                     guard let polygon = polygons[region.id] else { continue }
                     let isFound = foundRegionIDs.contains(region.id)
                     polygon.fillColor = isFound ? 
-                        UIColor(Color.Theme.accentYellow).withAlphaComponent(0.5) : 
-                        UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.3)
+                        UIColor(Color.Theme.accentYellow).withAlphaComponent(0.9) : 
+                        UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.9)
                 }
             }
             

@@ -8,17 +8,28 @@
 import Foundation
 import CoreLocation
 
-/// Approximate boundary polygons for license plate regions
-/// Using simplified polygons (4-8 points) that roughly outline each state/province
+/// Region boundary polygons loaded from GeoJSON files
+/// Falls back to approximate boundaries if GeoJSON not available
 struct RegionBoundaries {
-    /// Get approximate boundary coordinates for a region
-    /// Returns an array of CLLocationCoordinate2D representing a polygon
+    /// Get boundary coordinates for a region
+    /// First tries to load from GeoJSON, falls back to approximate boundaries
     static func boundary(for regionId: String) -> [CLLocationCoordinate2D] {
-        return boundaries[regionId] ?? []
+        // Try GeoJSON first
+        if let geoJSONBoundary = geoJSONBoundaries[regionId.lowercased()], !geoJSONBoundary.isEmpty {
+            return geoJSONBoundary
+        }
+        
+        // Fallback to approximate boundaries
+        return approximateBoundaries[regionId.lowercased()] ?? []
     }
     
-    /// All region boundaries
-    static let boundaries: [String: [CLLocationCoordinate2D]] = {
+    /// GeoJSON boundaries loaded from bundled files
+    static let geoJSONBoundaries: [String: [CLLocationCoordinate2D]] = {
+        return GeoJSONLoader.loadAllBoundaries()
+    }()
+    
+    /// Approximate boundaries (fallback if GeoJSON not available)
+    static let approximateBoundaries: [String: [CLLocationCoordinate2D]] = {
         var bounds: [String: [CLLocationCoordinate2D]] = [:]
         
         // United States - Approximate rectangular boundaries for each state
