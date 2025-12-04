@@ -206,6 +206,8 @@ struct GoogleMapView: UIViewRepresentable {
         private var countriesRendered = false // Track if country boundaries have been rendered
         var lastCameraPosition: GMSCameraPosition? // Track last camera position to avoid unnecessary updates
         var isUserInteracting = false // Track if user is interacting with the map
+        private var lastViewportBounds: GMSVisibleRegion? // Cache viewport bounds for culling
+        private var lastZoomLevel: Float = 0 // Cache zoom level for LOD
         
         init(_ parent: GoogleMapView) {
             self.parent = parent
@@ -232,9 +234,86 @@ struct GoogleMapView: UIViewRepresentable {
             // User finished interacting - update binding to final position
             isUserInteracting = false
             lastCameraPosition = position
+            
+            // Check if viewport changed significantly and trigger re-render if needed
+            let currentViewport = mapView.projection.visibleRegion()
+            let currentZoom = position.zoom
+            let zoomChangedSignificantly = abs(currentZoom - (lastZoomLevel)) > 1.0
+            
+            if zoomChangedSignificantly {
+                lastViewportBounds = nil // Force viewport recalculation
+                lastZoomLevel = currentZoom
+            }
+            
             DispatchQueue.main.async {
               self.parent.$cameraPosition.wrappedValue = position
             }
+        }
+        
+        // Helper to trigger region re-render from coordinator
+        private func renderRegionsIfNeeded(on mapView: GMSMapView) {
+            // This will be called from the parent to trigger re-render
+            // The actual rendering happens in updateUIView
+        }
+        
+        /// Check if a region's boundary intersects with the visible viewport
+        private func regionIntersectsViewport(_ region: PlateRegion, viewport: GMSVisibleRegion) -> Bool {
+            let boundaries = RegionBoundaries.boundaries(for: region.id)
+            guard !boundaries.isEmpty else { return false }
+            
+            // Get bounding box of region (from first polygon)
+            let firstBoundary = boundaries[0]
+            guard !firstBoundary.isEmpty else { return false }
+            
+            var minLat = firstBoundary[0].latitude
+            var maxLat = firstBoundary[0].latitude
+            var minLon = firstBoundary[0].longitude
+            var maxLon = firstBoundary[0].longitude
+            
+            for coord in firstBoundary {
+                minLat = min(minLat, coord.latitude)
+                maxLat = max(maxLat, coord.latitude)
+                minLon = min(minLon, coord.longitude)
+                maxLon = max(maxLon, coord.longitude)
+            }
+            
+            // Check if bounding box intersects viewport
+            let viewportMinLat = min(viewport.nearLeft.latitude, viewport.nearRight.latitude, viewport.farLeft.latitude, viewport.farRight.latitude)
+            let viewportMaxLat = max(viewport.nearLeft.latitude, viewport.nearRight.latitude, viewport.farLeft.latitude, viewport.farRight.latitude)
+            let viewportMinLon = min(viewport.nearLeft.longitude, viewport.nearRight.longitude, viewport.farLeft.longitude, viewport.farRight.longitude)
+            let viewportMaxLon = max(viewport.nearLeft.longitude, viewport.nearRight.longitude, viewport.farLeft.longitude, viewport.farRight.longitude)
+            
+            return !(maxLat < viewportMinLat || minLat > viewportMaxLat || maxLon < viewportMinLon || minLon > viewportMaxLon)
+        }
+        
+        /// Get simplified boundary based on zoom level (Level of Detail)
+        private func getSimplifiedBoundary(_ boundary: [CLLocationCoordinate2D], zoom: Float) -> [CLLocationCoordinate2D] {
+            // At very low zoom (< 5), skip rendering or use very simplified
+            if zoom < 5 {
+                // Return empty to skip rendering at very low zoom
+                return []
+            }
+            
+            // At low zoom (5-8), use aggressive simplification
+            if zoom < 8 {
+                if boundary.count > 100 {
+                    let step = max(1, boundary.count / 100)
+                    return stride(from: 0, to: boundary.count, by: step).map { boundary[$0] }
+                }
+                return boundary
+            }
+            
+            // At medium zoom (8-10), use moderate simplification
+            if zoom < 10 {
+                if boundary.count > 500 {
+                    let step = max(1, boundary.count / 500)
+                    return stride(from: 0, to: boundary.count, by: step).map { boundary[$0] }
+                }
+                return boundary
+            }
+            
+            // At high zoom (>= 10), use full resolution
+            return boundary
         }
         
         func renderRegions(
@@ -244,16 +323,38 @@ struct GoogleMapView: UIViewRepresentable {
         ) {
             let currentFoundSet = Set(foundRegionIDs)
             let currentRegionSet = Set(regions.map { $0.id })
+            let currentZoom = mapView.camera.zoom
+            let currentViewport = mapView.projection.visibleRegion()
+            
+            // Check if viewport or zoom changed significantly (for viewport culling and LOD)
+            let zoomChangedSignificantly = abs(currentZoom - lastZoomLevel) > 1.0
+            let viewportChanged = lastViewportBounds == nil || zoomChangedSignificantly
             
             // Check if we need to rebuild polygons (regions changed)
             let regionsChanged = currentRegionSet != lastRegionIDs
             let foundStatusChanged = currentFoundSet != lastFoundRegionIDs
             
-            // If regions changed, rebuild everything
-            if regionsChanged {
-                // Remove old polygons that are no longer needed
+            // Filter regions to only those visible in viewport (viewport culling)
+            let visibleRegions: [PlateRegion]
+            if viewportChanged || regionsChanged {
+                visibleRegions = regions.filter { region in
+                    regionIntersectsViewport(region, viewport: currentViewport)
+                }
+                lastViewportBounds = currentViewport
+                lastZoomLevel = currentZoom
+            } else {
+                // Use cached visible regions if viewport hasn't changed
+                visibleRegions = regions.filter { region in
+                    regionIntersectsViewport(region, viewport: currentViewport)
+                }
+            }
+            
+            // If regions changed or viewport changed significantly, rebuild visible regions
+            if regionsChanged || viewportChanged {
+                // Remove old polygons that are no longer needed or not visible
                 for (regionId, regionPolygons) in polygons {
-                    if !currentRegionSet.contains(regionId) {
+                    if !currentRegionSet.contains(regionId) || 
+                       !visibleRegions.contains(where: { $0.id == regionId }) {
                         for polygon in regionPolygons {
                             polygon.map = nil
                         }
@@ -262,8 +363,12 @@ struct GoogleMapView: UIViewRepresentable {
                     }
                 }
                 
-                // Create or update polygons for current regions
-                for region in regions {
+                // Batch polygon updates using CATransaction
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                
+                // Create or update polygons for visible regions only
+                for region in visibleRegions {
                     let boundaries = RegionBoundaries.boundaries(for: region.id)
                     guard !boundaries.isEmpty else { continue }
                     
@@ -289,29 +394,41 @@ struct GoogleMapView: UIViewRepresentable {
                         UIColor(Color.Theme.accentYellow).withAlphaComponent(0.9) : 
                         UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.9)
                     
-                    // Create or update polygons for each boundary
+                    // Create or update polygons for each boundary with LOD
                     for (polyIndex, boundary) in boundaries.enumerated() {
+                        // Apply level-of-detail simplification based on zoom
+                        let simplifiedBoundary = getSimplifiedBoundary(boundary, zoom: currentZoom)
+                        
+                        // Skip rendering if boundary is empty (very low zoom)
+                        if simplifiedBoundary.isEmpty {
+                            // Hide polygon if it exists
+                            if polyIndex < regionPolygons.count {
+                                regionPolygons[polyIndex].map = nil
+                            }
+                            continue
+                        }
+                        
                         // Create or reuse cached path
                         let path: GMSMutablePath
                         if polyIndex < regionPaths.count {
                             path = regionPaths[polyIndex]
                             // Update path if boundary changed (clear and rebuild)
                             path.removeAllCoordinates()
-                            for coordinate in boundary {
+                            for coordinate in simplifiedBoundary {
                                 path.add(coordinate)
                             }
                             // Close the path
-                            if !boundary.isEmpty {
-                                path.add(boundary[0])
+                            if !simplifiedBoundary.isEmpty {
+                                path.add(simplifiedBoundary[0])
                             }
                         } else {
                             path = GMSMutablePath()
-                            for coordinate in boundary {
+                            for coordinate in simplifiedBoundary {
                                 path.add(coordinate)
                             }
                             // Close the path
-                            if !boundary.isEmpty {
-                                path.add(boundary[0])
+                            if !simplifiedBoundary.isEmpty {
+                                path.add(simplifiedBoundary[0])
                             }
                             regionPaths.append(path)
                         }
@@ -325,7 +442,7 @@ struct GoogleMapView: UIViewRepresentable {
                         } else {
                             polygon = GMSPolygon(path: path)
                             polygon.strokeColor = UIColor.white.withAlphaComponent(0.9)
-                            polygon.strokeWidth = 3.0
+                            polygon.strokeWidth = 2.0 // Reduced from 3.0 for better performance
                             polygon.title = region.name
                             polygon.map = mapView
                             regionPolygons.append(polygon)
@@ -333,7 +450,7 @@ struct GoogleMapView: UIViewRepresentable {
                         
                         // Update color based on found status
                         polygon.fillColor = fillColor
-                        polygon.strokeWidth = 3.0
+                        polygon.strokeWidth = 2.0 // Reduced from 3.0 for better performance
                         polygon.map = mapView // Ensure it's on the map
                     }
                     
@@ -350,18 +467,50 @@ struct GoogleMapView: UIViewRepresentable {
                     polygons[region.id] = regionPolygons
                     cachedPaths[region.id] = regionPaths
                 }
+                
+                // Commit batched updates
+                CATransaction.commit()
             } else if foundStatusChanged {
-                // Only update colors if found status changed
-                for region in regions {
-                    guard let regionPolygons = polygons[region.id] else { continue }
-                    let isFound = foundRegionIDs.contains(region.id)
-                    let fillColor = isFound ? 
-                        UIColor(Color.Theme.accentYellow).withAlphaComponent(0.9) : 
-                        UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.9)
+                // Only update colors if found status changed (defer if user is interacting)
+                if !isUserInteracting {
+                    // Batch color updates
+                    CATransaction.begin()
+                    CATransaction.setDisableActions(true)
                     
-                    // Update all polygons for this region
-                    for polygon in regionPolygons {
-                        polygon.fillColor = fillColor
+                    for region in visibleRegions {
+                        guard let regionPolygons = polygons[region.id] else { continue }
+                        let isFound = foundRegionIDs.contains(region.id)
+                        let fillColor = isFound ? 
+                            UIColor(Color.Theme.accentYellow).withAlphaComponent(0.9) : 
+                            UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.9)
+                        
+                        // Update all polygons for this region
+                        for polygon in regionPolygons {
+                            polygon.fillColor = fillColor
+                        }
+                    }
+                    
+                    CATransaction.commit()
+                } else {
+                    // Defer color updates until user stops interacting
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                        guard let self = self, !self.isUserInteracting else { return }
+                        CATransaction.begin()
+                        CATransaction.setDisableActions(true)
+                        
+                        for region in visibleRegions {
+                            guard let regionPolygons = self.polygons[region.id] else { continue }
+                            let isFound = foundRegionIDs.contains(region.id)
+                            let fillColor = isFound ? 
+                                UIColor(Color.Theme.accentYellow).withAlphaComponent(0.9) : 
+                                UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.9)
+                            
+                            for polygon in regionPolygons {
+                                polygon.fillColor = fillColor
+                            }
+                        }
+                        
+                        CATransaction.commit()
                     }
                 }
             }

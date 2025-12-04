@@ -19,6 +19,15 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Initialize Google Maps after Firebase
         GoogleMapsService.shared.initializeFromConfig()
         
+        // Pre-load boundaries synchronously to avoid delay when first opening map
+        let startTime = Date()
+        _ = RegionBoundaries.geoJSONBoundaries // Trigger lazy initialization
+        let loadTime = Date().timeIntervalSince(startTime)
+        print("✅ Pre-loaded boundaries in \(String(format: "%.2f", loadTime))s")
+        
+        // Mark loading complete
+        UserDefaults.standard.set(true, forKey: "boundariesLoaded")
+        
         return true
     }
     
