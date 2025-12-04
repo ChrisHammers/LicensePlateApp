@@ -11,20 +11,30 @@ import CoreLocation
 /// Region boundary polygons loaded from GeoJSON files
 /// Falls back to approximate boundaries if GeoJSON not available
 struct RegionBoundaries {
-    /// Get boundary coordinates for a region
+    /// Get all boundary polygons for a region (supports MultiPolygon)
     /// First tries to load from GeoJSON, falls back to approximate boundaries
-    static func boundary(for regionId: String) -> [CLLocationCoordinate2D] {
+    static func boundaries(for regionId: String) -> [[CLLocationCoordinate2D]] {
         // Try GeoJSON first
-        if let geoJSONBoundary = geoJSONBoundaries[regionId.lowercased()], !geoJSONBoundary.isEmpty {
-            return geoJSONBoundary
+        if let geoJSONBoundaries = geoJSONBoundaries[regionId.lowercased()], !geoJSONBoundaries.isEmpty {
+            return geoJSONBoundaries
         }
         
-        // Fallback to approximate boundaries
-        return approximateBoundaries[regionId.lowercased()] ?? []
+        // Fallback to approximate boundaries (wrap in array for consistency)
+        if let approximate = approximateBoundaries[regionId.lowercased()], !approximate.isEmpty {
+            return [approximate]
+        }
+        
+        return []
+    }
+    
+    /// Get boundary coordinates for a region (backward compatibility - returns first polygon)
+    /// First tries to load from GeoJSON, falls back to approximate boundaries
+    static func boundary(for regionId: String) -> [CLLocationCoordinate2D] {
+        return boundaries(for: regionId).first ?? []
     }
     
     /// GeoJSON boundaries loaded from bundled files
-    static let geoJSONBoundaries: [String: [CLLocationCoordinate2D]] = {
+    static let geoJSONBoundaries: [String: [[CLLocationCoordinate2D]]] = {
         return GeoJSONLoader.loadAllBoundaries()
     }()
     

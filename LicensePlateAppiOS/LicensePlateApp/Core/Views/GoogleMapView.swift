@@ -196,11 +196,11 @@ struct GoogleMapView: UIViewRepresentable {
     
     class Coordinator: NSObject, GMSMapViewDelegate {
         var parent: GoogleMapView
-        private var polygons: [String: GMSPolygon] = [:]
+        private var polygons: [String: [GMSPolygon]] = [:] // Array of polygons per region (for MultiPolygon support)
         private var countryPolygons: [String: GMSPolygon] = [:] // Separate storage for country boundaries (map context only)
         private var markers: [String: GMSMarker] = [:] // Storage for region markers
         private var userLocationMarker: GMSMarker? // Custom green user location marker
-        private var cachedPaths: [String: GMSMutablePath] = [:]
+        private var cachedPaths: [String: [GMSMutablePath]] = [:] // Array of paths per region (for MultiPolygon support)
         private var lastFoundRegionIDs: Set<String> = []
         private var lastRegionIDs: Set<String> = []
         private var countriesRendered = false // Track if country boundaries have been rendered
@@ -252,9 +252,11 @@ struct GoogleMapView: UIViewRepresentable {
             // If regions changed, rebuild everything
             if regionsChanged {
                 // Remove old polygons that are no longer needed
-                for (regionId, polygon) in polygons {
+                for (regionId, regionPolygons) in polygons {
                     if !currentRegionSet.contains(regionId) {
-                        polygon.map = nil
+                        for polygon in regionPolygons {
+                            polygon.map = nil
+                        }
                         polygons.removeValue(forKey: regionId)
                         cachedPaths.removeValue(forKey: regionId)
                     }
@@ -262,51 +264,105 @@ struct GoogleMapView: UIViewRepresentable {
                 
                 // Create or update polygons for current regions
                 for region in regions {
-                    let boundary = RegionBoundaries.boundary(for: region.id)
-                    guard !boundary.isEmpty else { continue }
+                    let boundaries = RegionBoundaries.boundaries(for: region.id)
+                    guard !boundaries.isEmpty else { continue }
                     
-                    // Create or reuse cached path
-                    let path: GMSMutablePath
-                    if let cachedPath = cachedPaths[region.id] {
-                        path = cachedPath
+                    // Get or create array of polygons for this region
+                    var regionPolygons: [GMSPolygon]
+                    if let existing = polygons[region.id] {
+                        regionPolygons = existing
                     } else {
-                        path = GMSMutablePath()
-                        for coordinate in boundary {
-                            path.add(coordinate)
-                        }
-                        // Close the path
-                        path.add(boundary[0])
-                        cachedPaths[region.id] = path
+                        regionPolygons = []
                     }
                     
-                    // Create or update polygon
-                    let polygon: GMSPolygon
-                    if let existingPolygon = polygons[region.id] {
-                        polygon = existingPolygon
+                    // Get or create cached paths for this region
+                    var regionPaths: [GMSMutablePath]
+                    if let cached = cachedPaths[region.id] {
+                        regionPaths = cached
                     } else {
-                        polygon = GMSPolygon(path: path)
-                        polygon.strokeColor = UIColor.white.withAlphaComponent(0.9)
-                        polygon.strokeWidth = 3.0
-                        polygon.title = region.name
-                        polygon.map = mapView
-                        polygons[region.id] = polygon
+                        regionPaths = []
                     }
                     
-                    // Update color based on found status - solid and playful (Waze-like)
+                    // Ensure we have enough polygons and paths for all boundaries
                     let isFound = foundRegionIDs.contains(region.id)
-                    polygon.fillColor = isFound ? 
+                    let fillColor = isFound ? 
                         UIColor(Color.Theme.accentYellow).withAlphaComponent(0.9) : 
                         UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.9)
-                    polygon.strokeWidth = 3.0
+                    
+                    // Create or update polygons for each boundary
+                    for (polyIndex, boundary) in boundaries.enumerated() {
+                        // Create or reuse cached path
+                        let path: GMSMutablePath
+                        if polyIndex < regionPaths.count {
+                            path = regionPaths[polyIndex]
+                            // Update path if boundary changed (clear and rebuild)
+                            path.removeAllCoordinates()
+                            for coordinate in boundary {
+                                path.add(coordinate)
+                            }
+                            // Close the path
+                            if !boundary.isEmpty {
+                                path.add(boundary[0])
+                            }
+                        } else {
+                            path = GMSMutablePath()
+                            for coordinate in boundary {
+                                path.add(coordinate)
+                            }
+                            // Close the path
+                            if !boundary.isEmpty {
+                                path.add(boundary[0])
+                            }
+                            regionPaths.append(path)
+                        }
+                        
+                        // Create or update polygon
+                        let polygon: GMSPolygon
+                        if polyIndex < regionPolygons.count {
+                            polygon = regionPolygons[polyIndex]
+                            // Update polygon path
+                            polygon.path = path
+                        } else {
+                            polygon = GMSPolygon(path: path)
+                            polygon.strokeColor = UIColor.white.withAlphaComponent(0.9)
+                            polygon.strokeWidth = 3.0
+                            polygon.title = region.name
+                            polygon.map = mapView
+                            regionPolygons.append(polygon)
+                        }
+                        
+                        // Update color based on found status
+                        polygon.fillColor = fillColor
+                        polygon.strokeWidth = 3.0
+                        polygon.map = mapView // Ensure it's on the map
+                    }
+                    
+                    // Remove any extra polygons/paths if boundaries count decreased
+                    if regionPolygons.count > boundaries.count {
+                        for i in boundaries.count..<regionPolygons.count {
+                            regionPolygons[i].map = nil
+                        }
+                        regionPolygons.removeSubrange(boundaries.count..<regionPolygons.count)
+                        regionPaths.removeSubrange(boundaries.count..<regionPaths.count)
+                    }
+                    
+                    // Store updated arrays
+                    polygons[region.id] = regionPolygons
+                    cachedPaths[region.id] = regionPaths
                 }
             } else if foundStatusChanged {
-                // Only update colors if found status changed - solid and playful (Waze-like)
+                // Only update colors if found status changed
                 for region in regions {
-                    guard let polygon = polygons[region.id] else { continue }
+                    guard let regionPolygons = polygons[region.id] else { continue }
                     let isFound = foundRegionIDs.contains(region.id)
-                    polygon.fillColor = isFound ? 
+                    let fillColor = isFound ? 
                         UIColor(Color.Theme.accentYellow).withAlphaComponent(0.9) : 
                         UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.9)
+                    
+                    // Update all polygons for this region
+                    for polygon in regionPolygons {
+                        polygon.fillColor = fillColor
+                    }
                 }
             }
             
@@ -322,9 +378,11 @@ struct GoogleMapView: UIViewRepresentable {
         
         /// Clear all polygons from the map (when region borders are disabled)
         func clearAllPolygons(on mapView: GMSMapView) {
-            // Remove all game region polygons
-            for (_, polygon) in polygons {
-                polygon.map = nil
+            // Remove all game region polygons (iterate through arrays)
+            for (_, regionPolygons) in polygons {
+                for polygon in regionPolygons {
+                    polygon.map = nil
+                }
             }
             polygons.removeAll()
             cachedPaths.removeAll()
@@ -647,11 +705,17 @@ struct GoogleMapView: UIViewRepresentable {
             // Load country boundaries from GeoJSON
             let countryBoundaries = GeoJSONLoader.loadBoundaries(from: "countries")
             
-            for (countryCode, coordinates) in countryBoundaries {
-                guard !coordinates.isEmpty else { continue }
+            for (countryCode, polygons) in countryBoundaries {
+                guard !polygons.isEmpty else { continue }
                 
                 // Skip if already rendered
                 if countryPolygons[countryCode] != nil { continue }
+                
+                // For countries, we'll render the first polygon (most countries are single polygons)
+                // If a country has multiple polygons (like islands), we could render all of them
+                // For now, we'll use the first one for simplicity
+                let coordinates = polygons[0]
+                guard !coordinates.isEmpty else { continue }
                 
                 let path = GMSMutablePath()
                 for coordinate in coordinates {
