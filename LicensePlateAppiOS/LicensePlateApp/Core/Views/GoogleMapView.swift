@@ -371,8 +371,9 @@ struct GoogleMapView: UIViewRepresentable {
             lastRegionIDs = currentRegionSet
             
             // Render country boundaries for map context (only if region borders are enabled)
+          // TODO: should this be a different toggle?
             if parent.shouldShowRegionBorders {
-                renderCountryBoundaries(on: mapView)
+           //     renderCountryBoundaries(on: mapView)
             }
         }
         

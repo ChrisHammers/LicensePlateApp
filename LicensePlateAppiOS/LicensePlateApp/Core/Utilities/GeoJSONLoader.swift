@@ -290,7 +290,7 @@ struct GeoJSONLoader {
         allBoundaries["mx"] = loadBoundaries(from: "mx-states")
         
         // Load all countries
-        allBoundaries["countries"] = loadBoundaries(from: "countries")
+        //allBoundaries["countries"] = loadBoundaries(from: "countries")
         
         // Merge all boundaries into single dictionary
         var merged: [String: [[CLLocationCoordinate2D]]] = [:]
