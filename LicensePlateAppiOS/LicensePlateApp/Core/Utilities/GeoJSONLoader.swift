@@ -448,9 +448,10 @@ struct GeoJSONLoader {
         
         // Simplify coordinates if there are too many (performance optimization)
         // Keep every Nth point if there are more than 500 points (reduced from 1000 for better performance)
+        // This just
         if simplify && parsedCoords.count > 500 {
             // For polygons with >2000 points, use more aggressive simplification
-            let targetPointCount = parsedCoords.count > 2000 ? 500 : 1000
+            let targetPointCount = parsedCoords.count > 2000 ? 1000 : 500
             let step = max(1, parsedCoords.count / targetPointCount)
             let simplified = stride(from: 0, to: parsedCoords.count, by: step).map { parsedCoords[$0] }
             // Always include first and last point if they're different

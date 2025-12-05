@@ -18,7 +18,7 @@ class RegionTileLayer: GMSTileLayer {
     private var foundRegionIDs: Set<String>
     private var tileCache: [String: UIImage] = [:]
     private var tileAccessOrder: [String] = [] // Track access order for LRU eviction
-    private let maxCacheSize = 500 // Increased cache size for better zoom level support
+    private let maxCacheSize = 2000 // Increased cache size for better zoom level support
     private let cacheQueue = DispatchQueue(label: "com.licenseplateapp.tilecache", attributes: .concurrent)
     
     init(regions: [PlateRegion], foundRegionIDs: [String]) {
@@ -30,10 +30,10 @@ class RegionTileLayer: GMSTileLayer {
     // GMSTileLayer requires overriding requestTileFor method
     // The receiver is a GMSTileReceiver object, not a closure
     override func requestTileFor(x: UInt, y: UInt, zoom: UInt, receiver: GMSTileReceiver) {
-        let tileKey = "\(zoom)_\(x)_\(y)"
+        let baseTileKey = "\(zoom)_\(x)_\(y)"
         
         #if DEBUG
-        print("🔵 Tile requested: \(tileKey)")
+        print("🔵 Tile requested: \(baseTileKey)")
         #endif
         
         // Check cache first
@@ -43,7 +43,17 @@ class RegionTileLayer: GMSTileLayer {
               return
             }
             
-            // Check in-memory cache first
+            // Get found region IDs that intersect with this tile (for cache key)
+            let bounds = self.tileBounds(x: x, y: y, zoom: zoom)
+            let intersectingFoundRegions = self.getFoundRegionsIntersectingTile(tileBounds: bounds)
+            
+            // Create cache key that includes found region state
+            let tileKey = self.createCacheKey(
+                baseKey: baseTileKey,
+                foundRegionIDs: intersectingFoundRegions
+            )
+            
+            // Check in-memory cache first (with found region state)
             if let cachedTile = self.tileCache[tileKey] {
                 // Move to end (most recently used) - LRU tracking
                 self.cacheQueue.async(flags: .barrier) {
@@ -63,11 +73,31 @@ class RegionTileLayer: GMSTileLayer {
                 // Load base tile and overlay found regions
                 DispatchQueue.global(qos: .userInitiated).async {
                     if let baseTile = TileCacheService.shared.loadCachedTile(zoom: zoom, x: x, y: y) {
-                        let tile = self.overlayFoundRegions(on: baseTile, x: x, y: y, zoom: zoom)
+                        // If no found regions intersect this tile, use base tile directly
+                        let tile: UIImage?
+                        if intersectingFoundRegions.isEmpty {
+                            tile = baseTile
+                        } else {
+                            // Overlay found regions on base tile
+                            tile = self.overlayFoundRegions(
+                                on: baseTile,
+                                x: x,
+                                y: y,
+                                zoom: zoom,
+                                intersectingFoundRegionIDs: intersectingFoundRegions
+                            )
+                        }
                         
-                        // Cache the final tile
+                        guard let finalTile = tile else {
+                            DispatchQueue.main.async {
+                                receiver.receiveTileWith(x: x, y: y, zoom: zoom, image: nil)
+                            }
+                            return
+                        }
+                        
+                        // Cache the final tile with found region state in key
                         self.cacheQueue.async(flags: .barrier) {
-                            self.tileCache[tileKey] = tile
+                            self.tileCache[tileKey] = finalTile
                             if let index = self.tileAccessOrder.firstIndex(of: tileKey) {
                                 self.tileAccessOrder.remove(at: index)
                             }
@@ -85,7 +115,7 @@ class RegionTileLayer: GMSTileLayer {
                         }
                         
                         DispatchQueue.main.async {
-                            receiver.receiveTileWith(x: x, y: y, zoom: zoom, image: tile)
+                            receiver.receiveTileWith(x: x, y: y, zoom: zoom, image: finalTile)
                         }
                         return
                     }
@@ -96,7 +126,7 @@ class RegionTileLayer: GMSTileLayer {
             DispatchQueue.global(qos: .userInitiated).async {
                 let tile = self.generateTile(x: x, y: y, zoom: zoom)
                 
-                // Cache the tile with LRU eviction
+                // Cache the tile with LRU eviction (use tileKey that includes found region state)
                 self.cacheQueue.async(flags: .barrier) {
                     self.tileCache[tileKey] = tile
                     // Add to access order (move to end if already exists)
@@ -121,6 +151,45 @@ class RegionTileLayer: GMSTileLayer {
                 }
             }
         }
+    }
+    
+    /// Get found region IDs that intersect with a tile
+    /// This is used to create a cache key that includes found region state
+    private func getFoundRegionsIntersectingTile(tileBounds: (minLat: Double, maxLat: Double, minLon: Double, maxLon: Double)) -> Set<String> {
+        var intersectingRegions: Set<String> = []
+        
+        for region in regions {
+            guard foundRegionIDs.contains(region.id) else { continue }
+            
+            let boundaries = RegionBoundaries.fullBoundaries(for: region.id)
+            guard !boundaries.isEmpty else { continue }
+            
+            for boundary in boundaries {
+                guard !boundary.isEmpty else { continue }
+                
+                if polygonIntersectsTile(boundary: boundary, tileBounds: tileBounds) {
+                    intersectingRegions.insert(region.id)
+                    break // Found intersection, no need to check other boundaries
+                }
+            }
+        }
+        
+        return intersectingRegions
+    }
+    
+    /// Create a cache key that includes found region state
+    /// This allows us to cache overlay tiles and reuse them when found regions haven't changed
+    private func createCacheKey(baseKey: String, foundRegionIDs: Set<String>) -> String {
+        if foundRegionIDs.isEmpty {
+            // No found regions in this tile - use base key (base tile is sufficient)
+            return baseKey
+        }
+        
+        // Create a hash from sorted found region IDs for consistent cache keys
+        let sortedIDs = foundRegionIDs.sorted().joined(separator: ",")
+        // Use a short hash to keep key length reasonable
+        let hash = sortedIDs.hashValue
+        return "\(baseKey)_found:\(hash)"
     }
     
     private func generateTile(x: UInt, y: UInt, zoom: UInt) -> UIImage? {
@@ -319,9 +388,16 @@ class RegionTileLayer: GMSTileLayer {
     
     /// Overlay found regions (yellow) on a base tile (blue)
     /// This is much faster than regenerating the entire tile
-    private func overlayFoundRegions(on baseTile: UIImage, x: UInt, y: UInt, zoom: UInt) -> UIImage? {
-        // If no regions are found, return base tile as-is
-        guard !foundRegionIDs.isEmpty else {
+    /// - Parameter intersectingFoundRegionIDs: Only found region IDs that intersect with this tile (optimization)
+    private func overlayFoundRegions(
+        on baseTile: UIImage,
+        x: UInt,
+        y: UInt,
+        zoom: UInt,
+        intersectingFoundRegionIDs: Set<String>
+    ) -> UIImage? {
+        // If no regions intersect this tile, return base tile as-is
+        guard !intersectingFoundRegionIDs.isEmpty else {
             return baseTile
         }
         
@@ -362,16 +438,17 @@ class RegionTileLayer: GMSTileLayer {
         let fillColor = UIColor(Color.Theme.accentYellow).withAlphaComponent(0.9)
         let strokeColor = UIColor.white.withAlphaComponent(0.9)
         
-            for region in regions {
-                // Only render found regions
-                guard foundRegionIDs.contains(region.id) else { continue }
-                
-                let boundaries = RegionBoundaries.fullBoundaries(for: region.id)
-                guard !boundaries.isEmpty else { continue }
+        // Only process regions that we know intersect with this tile (optimization)
+        for region in regions {
+            guard intersectingFoundRegionIDs.contains(region.id) else { continue }
+            
+            let boundaries = RegionBoundaries.fullBoundaries(for: region.id)
+            guard !boundaries.isEmpty else { continue }
             
             for boundary in boundaries {
                 guard !boundary.isEmpty else { continue }
                 
+                // Double-check intersection (should always be true, but safety check)
                 if polygonIntersectsTile(boundary: boundary, tileBounds: bounds) {
                     renderPolygon(
                         boundary: boundary,
