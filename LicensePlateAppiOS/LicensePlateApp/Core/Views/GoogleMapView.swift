@@ -7,6 +7,7 @@
 
 import SwiftUI
 import GoogleMaps
+import GoogleMapsUtils
 import CoreLocation
 import MapKit
 
@@ -23,6 +24,10 @@ struct GoogleMapView: UIViewRepresentable {
     
     // Optional: Custom map style (if nil, will use preference-based style)
     let mapStyle: GMSMapStyle?
+    
+    // Rendering mode toggle (for comparison testing)
+    @AppStorage("useGMURendering") private var useGMURendering = false
+    @AppStorage("useTileOverlayRendering") private var useTileOverlayRendering = false
     
     init(
         cameraPosition: Binding<GMSCameraPosition>,
@@ -209,6 +214,14 @@ struct GoogleMapView: UIViewRepresentable {
         private var lastViewportBounds: GMSVisibleRegion? // Cache viewport bounds for culling
         private var lastZoomLevel: Float = 0 // Cache zoom level for LOD
         
+        // GMU rendering components
+        private var gmuRenderer: GMUGeometryRenderer?
+        private var gmuFeatures: [GMUFeature] = []
+        private var gmuStyles: [String: GMUStyle] = [:] // Region ID -> Style mapping
+        
+        // Tile overlay rendering components
+        private var tileLayer: RegionTileLayer?
+        
         init(_ parent: GoogleMapView) {
             self.parent = parent
         }
@@ -287,11 +300,22 @@ struct GoogleMapView: UIViewRepresentable {
         }
         
         /// Get simplified boundary based on zoom level (Level of Detail)
+        /// Always returns boundaries (never empty) - boundaries should always be visible
         private func getSimplifiedBoundary(_ boundary: [CLLocationCoordinate2D], zoom: Float) -> [CLLocationCoordinate2D] {
-            // At very low zoom (< 5), skip rendering or use very simplified
+            // At very low zoom (< 5), use very aggressive simplification but still render
             if zoom < 5 {
-                // Return empty to skip rendering at very low zoom
-                return []
+                if boundary.count > 50 {
+                    let step = max(1, boundary.count / 50)
+                    let simplified = stride(from: 0, to: boundary.count, by: step).map { boundary[$0] }
+                    // Always include first and last point
+                    if let lastSimplified = simplified.last,
+                       let lastOriginal = boundary.last,
+                       (lastSimplified.latitude != lastOriginal.latitude || lastSimplified.longitude != lastOriginal.longitude) {
+                        return simplified + [lastOriginal]
+                    }
+                    return simplified
+                }
+                return boundary
             }
             
             // At low zoom (5-8), use aggressive simplification
@@ -321,12 +345,28 @@ struct GoogleMapView: UIViewRepresentable {
             regions: [PlateRegion],
             foundRegionIDs: [String]
         ) {
+            // Check which rendering mode to use
+            if parent.useTileOverlayRendering {
+                renderRegionsWithTileOverlay(on: mapView, regions: regions, foundRegionIDs: foundRegionIDs)
+                return
+            }
+            
+            if parent.useGMURendering {
+                renderRegionsWithGMU(on: mapView, regions: regions, foundRegionIDs: foundRegionIDs)
+                return
+            }
+            
+            // Use custom rendering (existing implementation)
+            #if DEBUG
+            let renderStartTime = CFAbsoluteTimeGetCurrent()
+            #endif
+            
             let currentFoundSet = Set(foundRegionIDs)
             let currentRegionSet = Set(regions.map { $0.id })
             let currentZoom = mapView.camera.zoom
             let currentViewport = mapView.projection.visibleRegion()
             
-            // Check if viewport or zoom changed significantly (for viewport culling and LOD)
+            // Check if viewport or zoom changed significantly (for LOD)
             let zoomChangedSignificantly = abs(currentZoom - lastZoomLevel) > 1.0
             let viewportChanged = lastViewportBounds == nil || zoomChangedSignificantly
             
@@ -334,27 +374,69 @@ struct GoogleMapView: UIViewRepresentable {
             let regionsChanged = currentRegionSet != lastRegionIDs
             let foundStatusChanged = currentFoundSet != lastFoundRegionIDs
             
-            // Filter regions to only those visible in viewport (viewport culling)
-            let visibleRegions: [PlateRegion]
-            if viewportChanged || regionsChanged {
-                visibleRegions = regions.filter { region in
-                    regionIntersectsViewport(region, viewport: currentViewport)
+            // Always render all enabled regions - boundaries should always be visible
+            // Viewport culling removed based on performance analysis showing:
+            // - Viewport filtering takes ~4ms even when filtering everything out
+            // - Performance is acceptable with all regions (37 regions in 57ms felt "snappy")
+            // - Viewport culling was causing boundaries to not appear
+            let visibleRegions = regions
+            
+            // Check what needs to be updated
+            // Create new polygons if: regions changed or polygons don't exist for all regions
+            let needsNewPolygons = regionsChanged || polygons.isEmpty || 
+                visibleRegions.contains { region in
+                    !polygons.keys.contains(region.id)
                 }
-                lastViewportBounds = currentViewport
-                lastZoomLevel = currentZoom
-            } else {
-                // Use cached visible regions if viewport hasn't changed
-                visibleRegions = regions.filter { region in
-                    regionIntersectsViewport(region, viewport: currentViewport)
-                }
+            
+            // Update paths if: zoom changed significantly (for LOD) or first render
+            // Check BEFORE updating lastZoomLevel
+            let needsPathUpdate = zoomChangedSignificantly || lastZoomLevel == 0
+            
+            // Clear GMU renderer and tile layer when using custom rendering (avoid conflicts)
+            if gmuRenderer != nil {
+                gmuRenderer?.clear()
+                gmuRenderer = nil
+                gmuFeatures.removeAll()
+                gmuStyles.removeAll()
             }
             
-            // If regions changed or viewport changed significantly, rebuild visible regions
-            if regionsChanged || viewportChanged {
-                // Remove old polygons that are no longer needed or not visible
+            if tileLayer != nil {
+                tileLayer?.map = nil
+                tileLayer = nil
+            }
+            
+            // Early exit if nothing needs to be done
+            if !needsNewPolygons && !needsPathUpdate && !foundStatusChanged {
+                #if DEBUG
+                let totalRenderTime = CFAbsoluteTimeGetCurrent() - renderStartTime
+                if totalRenderTime > 0.016 { // Only log if > 16ms (60fps threshold)
+                    print("📊 PERFORMANCE: No changes - \(String(format: "%.3f", totalRenderTime * 1000))ms")
+                }
+                #endif
+                // Update tracking sets for next time
+                lastFoundRegionIDs = currentFoundSet
+                lastRegionIDs = currentRegionSet
+                lastViewportBounds = currentViewport
+                lastZoomLevel = currentZoom
+                return // Exit early - nothing to do
+            }
+            
+            lastViewportBounds = currentViewport
+            lastZoomLevel = currentZoom
+            
+            #if DEBUG
+            let filterTime: Double = 0 // No filtering anymore
+            #endif
+            
+            // If we need to create new polygons or update paths, rebuild them
+            if needsNewPolygons || needsPathUpdate {
+                #if DEBUG
+                let cleanupStartTime = CFAbsoluteTimeGetCurrent()
+                #endif
+                
+                // Remove old polygons that are no longer in the enabled regions list
                 for (regionId, regionPolygons) in polygons {
-                    if !currentRegionSet.contains(regionId) || 
-                       !visibleRegions.contains(where: { $0.id == regionId }) {
+                    if !currentRegionSet.contains(regionId) {
                         for polygon in regionPolygons {
                             polygon.map = nil
                         }
@@ -363,14 +445,42 @@ struct GoogleMapView: UIViewRepresentable {
                     }
                 }
                 
+                #if DEBUG
+                let cleanupTime = CFAbsoluteTimeGetCurrent() - cleanupStartTime
+                let batchStartTime = CFAbsoluteTimeGetCurrent()
+                var totalBoundaryLookupTime: Double = 0
+                var totalPathCreationTime: Double = 0
+                var totalPolygonCreationTime: Double = 0
+                var totalCoordinates: Int = 0
+                var totalPolygons: Int = 0
+                var slowestRegion: (id: String, time: Double)? = nil
+                #endif
+                
                 // Batch polygon updates using CATransaction
                 CATransaction.begin()
                 CATransaction.setDisableActions(true)
                 
                 // Create or update polygons for visible regions only
                 for region in visibleRegions {
+                    #if DEBUG
+                    let regionStartTime = CFAbsoluteTimeGetCurrent()
+                    #endif
+                    
+                    #if DEBUG
+                    let boundaryLookupStart = CFAbsoluteTimeGetCurrent()
+                    #endif
                     let boundaries = RegionBoundaries.boundaries(for: region.id)
-                    guard !boundaries.isEmpty else { continue }
+                    #if DEBUG
+                    let boundaryLookupTime = CFAbsoluteTimeGetCurrent() - boundaryLookupStart
+                    totalBoundaryLookupTime += boundaryLookupTime
+                    #endif
+                    
+                    guard !boundaries.isEmpty else {
+                        #if DEBUG
+                        print("⚠️ DEBUG: Region \(region.id) has no boundaries")
+                        #endif
+                        continue
+                    }
                     
                     // Get or create array of polygons for this region
                     var regionPolygons: [GMSPolygon]
@@ -394,64 +504,127 @@ struct GoogleMapView: UIViewRepresentable {
                         UIColor(Color.Theme.accentYellow).withAlphaComponent(0.9) : 
                         UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.9)
                     
-                    // Create or update polygons for each boundary with LOD
-                    for (polyIndex, boundary) in boundaries.enumerated() {
-                        // Apply level-of-detail simplification based on zoom
-                        let simplifiedBoundary = getSimplifiedBoundary(boundary, zoom: currentZoom)
-                        
-                        // Skip rendering if boundary is empty (very low zoom)
-                        if simplifiedBoundary.isEmpty {
-                            // Hide polygon if it exists
-                            if polyIndex < regionPolygons.count {
-                                regionPolygons[polyIndex].map = nil
-                            }
-                            continue
-                        }
-                        
-                        // Create or reuse cached path
+                    // Try to use pre-cached paths first (Option 1 + Option 3)
+                    let cachedPathsForZoom = PolygonPathCache.shared.getCachedPaths(for: region.id, zoom: currentZoom)
+                    let useCachedPaths = cachedPathsForZoom != nil && !cachedPathsForZoom!.isEmpty
+                    
+                    // Determine how many boundaries we need to process
+                    let boundariesToProcess = useCachedPaths ? cachedPathsForZoom!.count : boundaries.count
+                    
+                    for polyIndex in 0..<boundariesToProcess {
                         let path: GMSMutablePath
-                        if polyIndex < regionPaths.count {
-                            path = regionPaths[polyIndex]
-                            // Update path if boundary changed (clear and rebuild)
-                            path.removeAllCoordinates()
-                            for coordinate in simplifiedBoundary {
-                                path.add(coordinate)
-                            }
-                            // Close the path
-                            if !simplifiedBoundary.isEmpty {
-                                path.add(simplifiedBoundary[0])
+                        let needsPathRebuild: Bool
+                        let simplifiedBoundary: [CLLocationCoordinate2D]
+                        
+                        #if DEBUG
+                        let pathStartTime = CFAbsoluteTimeGetCurrent()
+                        #endif
+                        
+                        if useCachedPaths {
+                            // Use pre-cached path (Option 1) - much faster!
+                            if polyIndex < cachedPathsForZoom!.count && !cachedPathsForZoom![polyIndex].isEmpty {
+                                path = cachedPathsForZoom![polyIndex][0] // Use first path from cached array
+                                needsPathRebuild = false // Path is already created and simplified
+                                // Get simplified boundary for coordinate counting
+                                if let simplified = PolygonPathCache.shared.getSimplifiedBoundaries(for: region.id, zoom: currentZoom),
+                                   polyIndex < simplified.count {
+                                    simplifiedBoundary = simplified[polyIndex]
+                                } else {
+                                    simplifiedBoundary = [] // Fallback
+                                }
+                            } else {
+                                continue // Skip if cached path not available
                             }
                         } else {
-                            path = GMSMutablePath()
-                            for coordinate in simplifiedBoundary {
-                                path.add(coordinate)
+                            // Fallback: create path on the fly (when cache isn't ready yet)
+                            let boundary = boundaries[polyIndex]
+                            simplifiedBoundary = getSimplifiedBoundary(boundary, zoom: currentZoom)
+                            
+                            // Skip rendering if boundary is empty (very low zoom)
+                            if simplifiedBoundary.isEmpty {
+                                #if DEBUG
+                                if polyIndex == 0 {
+                                    print("⚠️ DEBUG: Region \(region.id) boundary simplified to empty at zoom \(currentZoom)")
+                                }
+                                #endif
+                                // Hide polygon if it exists
+                                if polyIndex < regionPolygons.count {
+                                    regionPolygons[polyIndex].map = nil
+                                }
+                                continue
                             }
-                            // Close the path
-                            if !simplifiedBoundary.isEmpty {
-                                path.add(simplifiedBoundary[0])
+                            
+                            // Create or reuse cached path
+                            if polyIndex < regionPaths.count {
+                                path = regionPaths[polyIndex]
+                                // Only rebuild path if zoom changed significantly (for LOD) or polygon is new
+                                needsPathRebuild = needsPathUpdate || polyIndex >= regionPolygons.count
+                                if needsPathRebuild {
+                                    path.removeAllCoordinates()
+                                    for coordinate in simplifiedBoundary {
+                                        path.add(coordinate)
+                                    }
+                                    // Close the path
+                                    if !simplifiedBoundary.isEmpty {
+                                        path.add(simplifiedBoundary[0])
+                                    }
+                                }
+                            } else {
+                                path = GMSMutablePath()
+                                for coordinate in simplifiedBoundary {
+                                    path.add(coordinate)
+                                }
+                                // Close the path
+                                if !simplifiedBoundary.isEmpty {
+                                    path.add(simplifiedBoundary[0])
+                                }
+                                regionPaths.append(path)
+                                needsPathRebuild = true
                             }
-                            regionPaths.append(path)
                         }
+                        
+                        #if DEBUG
+                        totalCoordinates += simplifiedBoundary.count
+                        let pathTime = CFAbsoluteTimeGetCurrent() - pathStartTime
+                        totalPathCreationTime += pathTime
+                        #endif
+                        
+                        #if DEBUG
+                        let polygonStartTime = CFAbsoluteTimeGetCurrent()
+                        #endif
                         
                         // Create or update polygon
                         let polygon: GMSPolygon
+                        let isNewPolygon: Bool
                         if polyIndex < regionPolygons.count {
                             polygon = regionPolygons[polyIndex]
-                            // Update polygon path
-                            polygon.path = path
+                            isNewPolygon = false
+                            // Only update path if it was rebuilt
+                            if needsPathRebuild {
+                                polygon.path = path
+                            }
                         } else {
                             polygon = GMSPolygon(path: path)
+                            isNewPolygon = true
+                            // Set properties once for new polygons
                             polygon.strokeColor = UIColor.white.withAlphaComponent(0.9)
-                            polygon.strokeWidth = 2.0 // Reduced from 3.0 for better performance
+                            polygon.strokeWidth = 2.0
                             polygon.title = region.name
+                            polygon.fillColor = fillColor
                             polygon.map = mapView
                             regionPolygons.append(polygon)
                         }
                         
-                        // Update color based on found status
-                        polygon.fillColor = fillColor
-                        polygon.strokeWidth = 2.0 // Reduced from 3.0 for better performance
-                        polygon.map = mapView // Ensure it's on the map
+                        // Only update color for existing polygons if found status changed or during rebuilds
+                        if !isNewPolygon && (needsNewPolygons || needsPathUpdate || foundStatusChanged) {
+                            polygon.fillColor = fillColor
+                        }
+                        
+                        #if DEBUG
+                        let polygonTime = CFAbsoluteTimeGetCurrent() - polygonStartTime
+                        totalPolygonCreationTime += polygonTime
+                        totalPolygons += 1
+                        #endif
                     }
                     
                     // Remove any extra polygons/paths if boundaries count decreased
@@ -466,11 +639,44 @@ struct GoogleMapView: UIViewRepresentable {
                     // Store updated arrays
                     polygons[region.id] = regionPolygons
                     cachedPaths[region.id] = regionPaths
+                    
+                    #if DEBUG
+                    let regionTime = CFAbsoluteTimeGetCurrent() - regionStartTime
+                    if slowestRegion == nil || regionTime > slowestRegion!.time {
+                        slowestRegion = (region.id, regionTime)
+                    }
+                    #endif
                 }
+                
+                #if DEBUG
+                let batchTime = CFAbsoluteTimeGetCurrent() - batchStartTime
+                #endif
                 
                 // Commit batched updates
                 CATransaction.commit()
+                
+                #if DEBUG
+                let totalRenderTime = CFAbsoluteTimeGetCurrent() - renderStartTime
+                print("""
+                    📊 PERFORMANCE: renderRegions
+                    ├─ Total time: \(String(format: "%.3f", totalRenderTime * 1000))ms
+                    ├─ Viewport filtering: \(String(format: "%.3f", filterTime * 1000))ms
+                    ├─ Cleanup: \(String(format: "%.3f", cleanupTime * 1000))ms
+                    ├─ Batch operations: \(String(format: "%.3f", batchTime * 1000))ms
+                    ├─ Boundary lookups: \(String(format: "%.3f", totalBoundaryLookupTime * 1000))ms (avg: \(String(format: "%.3f", totalBoundaryLookupTime / Double(visibleRegions.count) * 1000))ms per region)
+                    ├─ Path creation: \(String(format: "%.3f", totalPathCreationTime * 1000))ms
+                    ├─ Polygon creation: \(String(format: "%.3f", totalPolygonCreationTime * 1000))ms
+                    ├─ Regions rendered: \(visibleRegions.count) / \(regions.count)
+                    ├─ Total polygons: \(totalPolygons)
+                    ├─ Total coordinates: \(totalCoordinates) (avg: \(totalPolygons > 0 ? totalCoordinates / totalPolygons : 0) per polygon)
+                    └─ Slowest region: \(slowestRegion?.id ?? "none") (\(String(format: "%.3f", (slowestRegion?.time ?? 0) * 1000))ms)
+                    """)
+                #endif
             } else if foundStatusChanged {
+                #if DEBUG
+                let colorUpdateStartTime = CFAbsoluteTimeGetCurrent()
+                #endif
+                
                 // Only update colors if found status changed (defer if user is interacting)
                 if !isUserInteracting {
                     // Batch color updates
@@ -513,6 +719,19 @@ struct GoogleMapView: UIViewRepresentable {
                         CATransaction.commit()
                     }
                 }
+                
+                #if DEBUG
+                let colorUpdateTime = CFAbsoluteTimeGetCurrent() - colorUpdateStartTime
+                let totalRenderTime = CFAbsoluteTimeGetCurrent() - renderStartTime
+                print("📊 PERFORMANCE: Color update only - \(String(format: "%.3f", colorUpdateTime * 1000))ms (total: \(String(format: "%.3f", totalRenderTime * 1000))ms)")
+                #endif
+            } else {
+                #if DEBUG
+                let totalRenderTime = CFAbsoluteTimeGetCurrent() - renderStartTime
+                if totalRenderTime > 0.016 { // Only log if > 16ms (60fps threshold)
+                    print("📊 PERFORMANCE: No changes - \(String(format: "%.3f", totalRenderTime * 1000))ms")
+                }
+                #endif
             }
             
             // Update tracking sets
@@ -884,6 +1103,289 @@ struct GoogleMapView: UIViewRepresentable {
             }
             
             countriesRendered = true
+        }
+        
+        // MARK: - Tile Overlay Rendering
+        
+        /// Render regions using TileOverlay for better performance
+        func renderRegionsWithTileOverlay(
+            on mapView: GMSMapView,
+            regions: [PlateRegion],
+            foundRegionIDs: [String]
+        ) {
+            // Clear custom polygons and GMU renderer when using tile overlay
+            if !polygons.isEmpty {
+                for (_, regionPolygons) in polygons {
+                    for polygon in regionPolygons {
+                        polygon.map = nil
+                    }
+                }
+                polygons.removeAll()
+            }
+            
+            if gmuRenderer != nil {
+                gmuRenderer?.clear()
+                gmuRenderer = nil
+                gmuFeatures.removeAll()
+                gmuStyles.removeAll()
+            }
+            
+            let currentFoundSet = Set(foundRegionIDs)
+            let currentRegionSet = Set(regions.map { $0.id })
+            let regionsChanged = currentRegionSet != lastRegionIDs
+            let foundStatusChanged = currentFoundSet != lastFoundRegionIDs
+            
+            // Create or update tile layer
+            if tileLayer == nil || regionsChanged {
+                // Remove old tile layer
+                tileLayer?.map = nil
+                
+                // Create new tile layer
+                tileLayer = RegionTileLayer(regions: regions, foundRegionIDs: foundRegionIDs)
+                tileLayer?.map = mapView
+                
+                #if DEBUG
+                print("📊 PERFORMANCE: renderRegions (TileOverlay) - Tile layer created")
+                #endif
+            } else if foundStatusChanged {
+                // Update found regions (colors will change)
+                tileLayer?.updateFoundRegions(foundRegionIDs)
+                
+                #if DEBUG
+                print("📊 PERFORMANCE: renderRegions (TileOverlay) - Colors updated")
+                #endif
+            }
+            
+            // Update tracking
+            lastFoundRegionIDs = currentFoundSet
+            lastRegionIDs = currentRegionSet
+        }
+        
+        // MARK: - GMU Rendering
+        
+        /// Render regions using Google Maps Utils (GMU) for comparison
+        /// NOTE: If you see compilation errors, please share them so we can fix the GMU 6.0.0 API usage
+        func renderRegionsWithGMU(
+            on mapView: GMSMapView,
+            regions: [PlateRegion],
+            foundRegionIDs: [String]
+        ) {
+            #if DEBUG
+            let renderStartTime = CFAbsoluteTimeGetCurrent()
+            #endif
+            
+            let currentFoundSet = Set(foundRegionIDs)
+            let currentRegionSet = Set(regions.map { $0.id })
+            let regionsChanged = currentRegionSet != lastRegionIDs
+            let foundStatusChanged = currentFoundSet != lastFoundRegionIDs
+            
+            // Clear custom polygons when using GMU (avoid conflicts)
+            if !polygons.isEmpty {
+                for (_, regionPolygons) in polygons {
+                    for polygon in regionPolygons {
+                        polygon.map = nil
+                    }
+                }
+                polygons.removeAll()
+                cachedPaths.removeAll()
+            }
+            
+            // Clear existing GMU renderer if regions changed
+            if regionsChanged {
+                gmuRenderer?.clear()
+                gmuRenderer = nil
+                gmuFeatures.removeAll()
+                gmuStyles.removeAll()
+            }
+            
+            // Create or update GMU renderer
+            if gmuRenderer == nil || regionsChanged {
+                // Build GeoJSON features from regions
+                var features: [GMUFeature] = []
+                
+                for region in regions {
+                    let boundaries = RegionBoundaries.boundaries(for: region.id)
+                    guard !boundaries.isEmpty else { continue }
+                    
+                    let isFound = foundRegionIDs.contains(region.id)
+                    let fillColor = isFound ? 
+                        UIColor(Color.Theme.accentYellow).withAlphaComponent(0.9) : 
+                        UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.9)
+                    
+                    // Create style for this region
+                    // GMUStyle in 6.0.0 requires styleID parameter
+                    let styleID = region.id
+                    let style = GMUStyle(
+                        styleID: styleID,
+                        stroke: UIColor.white, // Try without alpha first
+                        fill: fillColor,
+                        width: 3.0, // Increase stroke width for visibility
+                        scale: 1.0,
+                        heading: 0,
+                        anchor: CGPoint(x: 0.5, y: 0.5),
+                        iconUrl: nil,
+                        title: nil,
+                        hasFill: true,
+                        hasStroke: true
+                    )
+                    gmuStyles[region.id] = style
+                    
+                    // Create geometry for each boundary (MultiPolygon support)
+                    for boundary in boundaries {
+                        guard !boundary.isEmpty else { continue }
+                        
+                        // Create GMUPolygon using initWithPaths: (GMU 6.0.0 API)
+                        // GMUPolygon.initWithPaths: expects NSArray<GMSPath *>
+                        // Prepare coordinates and close polygon if needed
+                        var coords: [CLLocationCoordinate2D] = boundary
+                        if !boundary.isEmpty {
+                            let first = boundary[0]
+                            let last = boundary[boundary.count - 1]
+                            // Compare coordinates manually (CLLocationCoordinate2D is not Equatable)
+                            if abs(first.latitude - last.latitude) > 0.0001 || abs(first.longitude - last.longitude) > 0.0001 {
+                                coords.append(boundary[0])
+                            }
+                        }
+                        
+                        // Create GMSPath from coordinates
+                        // GMSPath can be created from a GMSMutablePath
+                        let mutablePath = GMSMutablePath()
+                        for coord in coords {
+                            mutablePath.add(coord)
+                        }
+                        // Create immutable GMSPath from mutable path
+                        let gmsPath = GMSPath(path: mutablePath)
+                        let pathsArray: [GMSPath] = [gmsPath]
+                        
+                        // Create GMUPolygon using initWithPaths:
+                        let polygon = GMUPolygon(paths: pathsArray)
+                        
+                        // Create feature with region ID as property
+                        // GMUFeature requires [String: NSObject] and boundingBox
+                        let properties: [String: NSObject] = [
+                            "id": region.id as NSString,
+                            "name": region.name as NSString,
+                            "found": NSNumber(value: isFound)
+                        ]
+                        
+                        // Calculate bounding box for the polygon
+                        var minLat = boundary[0].latitude
+                        var maxLat = boundary[0].latitude
+                        var minLon = boundary[0].longitude
+                        var maxLon = boundary[0].longitude
+                        
+                        for coord in boundary {
+                            minLat = min(minLat, coord.latitude)
+                            maxLat = max(maxLat, coord.latitude)
+                            minLon = min(minLon, coord.longitude)
+                            maxLon = max(maxLon, coord.longitude)
+                        }
+                        
+                        let boundingBox = GMSCoordinateBounds(
+                            coordinate: CLLocationCoordinate2D(latitude: minLat, longitude: minLon),
+                            coordinate: CLLocationCoordinate2D(latitude: maxLat, longitude: maxLon)
+                        )
+                        
+                        // GMUFeature initializer in 6.0.0
+                        let feature = GMUFeature(geometry: polygon, identifier: region.id, properties: properties, boundingBox: boundingBox)
+                        
+                        // Set style on feature - GMU 6.0.0 might require this
+                        // Or set styleID to match the style's styleID
+                        if let style = gmuStyles[region.id] {
+                            feature.style = style
+                            // Also try setting styleID if that property exists
+                            // feature.styleID = style.styleID
+                        }
+                        
+                        features.append(feature)
+                    }
+                }
+                
+                gmuFeatures = features
+                
+                // In GMU 6.0.0, ensure all features have their styles set
+                // Styles should already be set on features during creation
+                // Create unique style array for renderer
+                var uniqueStyles: [GMUStyle] = []
+                var seenStyleIDs = Set<String>()
+                for feature in features {
+                    if let style = feature.style,
+                       !seenStyleIDs.contains(style.styleID) {
+                        uniqueStyles.append(style)
+                        seenStyleIDs.insert(style.styleID)
+                    }
+                }
+                
+                // If no styles were set on features, fall back to using all styles
+                if uniqueStyles.isEmpty {
+                    uniqueStyles = Array(gmuStyles.values)
+                }
+                
+                // Create renderer with map, features, and styles array
+                // GMUGeometryRenderer in 6.0.0 uses styles array parameter
+                gmuRenderer = GMUGeometryRenderer(map: mapView, geometries: features, styles: uniqueStyles)
+                
+                // Render - GMUGeometryRenderer renders automatically when created
+                gmuRenderer?.render()
+                
+                #if DEBUG
+                let totalTime = CFAbsoluteTimeGetCurrent() - renderStartTime
+                let featuresWithStyles = features.filter { $0.style != nil }.count
+                print("""
+                    📊 PERFORMANCE: renderRegions (GMU)
+                    ├─ Total time: \(String(format: "%.3f", totalTime * 1000))ms
+                    ├─ Regions rendered: \(regions.count)
+                    ├─ Features created: \(features.count)
+                    ├─ Features with styles: \(featuresWithStyles) / \(features.count)
+                    ├─ Unique styles: \(uniqueStyles.count)
+                    └─ Renderer: GMUGeometryRenderer
+                    """)
+                #endif
+            } else if foundStatusChanged {
+                // Update styles for found status changes
+                // In GMU 6.0.0, we need to recreate the renderer with new styles
+                var updatedStyles: [GMUStyle] = []
+                
+                for feature in gmuFeatures {
+                    if let regionId = feature.identifier {
+                        let isFound = foundRegionIDs.contains(regionId)
+                        let fillColor = isFound ? 
+                            UIColor(Color.Theme.accentYellow).withAlphaComponent(0.9) : 
+                            UIColor(Color.Theme.primaryBlue).withAlphaComponent(0.9)
+                        
+                        // GMUStyle requires styleID
+                        let style = GMUStyle(
+                            styleID: regionId,
+                            stroke: UIColor.white.withAlphaComponent(0.9),
+                            fill: fillColor,
+                            width: 2.0,
+                            scale: 1.0,
+                            heading: 0,
+                            anchor: CGPoint(x: 0.5, y: 0.5),
+                            iconUrl: nil,
+                            title: nil,
+                            hasFill: true,
+                            hasStroke: true
+                        )
+                        updatedStyles.append(style)
+                        gmuStyles[regionId] = style
+                    }
+                }
+                
+                // Recreate renderer with updated styles array
+                gmuRenderer?.clear()
+                gmuRenderer = GMUGeometryRenderer(map: mapView, geometries: gmuFeatures, styles: updatedStyles)
+                gmuRenderer?.render()
+                
+                #if DEBUG
+                let totalTime = CFAbsoluteTimeGetCurrent() - renderStartTime
+                print("📊 PERFORMANCE: renderRegions (GMU) - Color update only - \(String(format: "%.3f", totalTime * 1000))ms")
+                #endif
+            }
+            
+            // Update tracking
+            lastFoundRegionIDs = currentFoundSet
+            lastRegionIDs = currentRegionSet
         }
     }
 }

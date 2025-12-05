@@ -18,6 +18,8 @@ struct AppPreferencesView: View {
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     @AppStorage("appShowRegionBorders") private var appShowRegionBorders = false
     @AppStorage("appShowMapMarkers") private var appShowMapMarkers = true
+    @AppStorage("useGMURendering") private var useGMURendering = false // For comparison testing
+    @AppStorage("useTileOverlayRendering") private var useTileOverlayRendering = false // For performance testing
     @AppStorage("appLanguage") private var appLanguageRaw: String = AppLanguage.english.rawValue
     @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
     @AppStorage("appUseVibrations") private var appUseVibrations = true
@@ -160,6 +162,22 @@ struct AppPreferencesView: View {
                                 title: "Show Map Markers",
                                 description: "Display markers on the map showing where regions were found (requires location data)",
                                 isOn: $appShowMapMarkers
+                            )
+                            
+                            Divider()
+                            
+                            SettingToggleRow(
+                                title: "Use GMU Rendering (Testing)",
+                                description: "Use Google Maps Utils for polygon rendering (for performance comparison)",
+                                isOn: $useGMURendering
+                            )
+                            
+                            Divider()
+                            
+                            SettingToggleRow(
+                                title: "Use Tile Overlay (Testing)",
+                                description: "Use TileOverlay for polygon rendering - best performance for many polygons",
+                                isOn: $useTileOverlayRendering
                             )
                           
                             Divider()

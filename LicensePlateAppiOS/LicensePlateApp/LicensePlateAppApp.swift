@@ -25,6 +25,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         let loadTime = Date().timeIntervalSince(startTime)
         print("✅ Pre-loaded boundaries in \(String(format: "%.2f", loadTime))s")
         
+        // Pre-load polygon paths asynchronously (Option 1 + Option 3)
+        DispatchQueue.main.async {
+            PolygonPathCache.shared.preloadPaths(for: PlateRegion.all)
+        }
+        
         // Mark loading complete
         UserDefaults.standard.set(true, forKey: "boundariesLoaded")
         
