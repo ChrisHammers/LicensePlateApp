@@ -158,6 +158,7 @@ struct AppPreferencesView: View {
                             )
                             
                             Divider()
+                          #endif
                           
                             
                             SettingToggleRow(
