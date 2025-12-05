@@ -139,7 +139,7 @@ struct GeoJSONLoader {
   
     /// Load region boundaries from GeoJSON file
     /// Returns a dictionary mapping region ID to array of polygon coordinates (for MultiPolygon support)
-    static func loadBoundaries(from filename: String) -> [String: [[CLLocationCoordinate2D]]] {
+    static func loadBoundaries(from filename: String, simplify: Bool = true) -> [String: [[CLLocationCoordinate2D]]] {
         // Try multiple lookup methods
         var url: URL?
         
@@ -291,7 +291,7 @@ struct GeoJSONLoader {
             if geometryType == "Polygon" {
                 // Polygon: coordinates is array of rings, first ring is exterior
                 if let rings = coordinates as? [[[Double]]], let exteriorRing = rings.first {
-                    let polygonCoordinates = parseCoordinateArray(exteriorRing, filename: filename, regionId: id, showWarning: !coordinateSystemWarningShown)
+                    let polygonCoordinates = parseCoordinateArray(exteriorRing, filename: filename, regionId: id, showWarning: !coordinateSystemWarningShown, simplify: simplify)
                     if !polygonCoordinates.isEmpty {
                         allPolygonCoordinates.append(polygonCoordinates)
                         #if DEBUG
@@ -320,7 +320,7 @@ struct GeoJSONLoader {
                     
                     for (polyIndex, polygon) in polygons.enumerated() {
                         if let exteriorRing = polygon.first {
-                            let polygonCoordinates = parseCoordinateArray(exteriorRing, filename: filename, regionId: "\(id)-poly\(polyIndex)", showWarning: !coordinateSystemWarningShown)
+                            let polygonCoordinates = parseCoordinateArray(exteriorRing, filename: filename, regionId: "\(id)-poly\(polyIndex)", showWarning: !coordinateSystemWarningShown, simplify: simplify)
                             if !polygonCoordinates.isEmpty {
                                 allPolygonCoordinates.append(polygonCoordinates)
                                 #if DEBUG
@@ -371,7 +371,7 @@ struct GeoJSONLoader {
     
     /// Parse coordinate array from GeoJSON format [lon, lat] to CLLocationCoordinate2D
     /// Validates coordinate ranges and detects coordinate system issues
-    private static func parseCoordinateArray(_ coords: [[Double]], filename: String, regionId: String, showWarning: Bool) -> [CLLocationCoordinate2D] {
+    private static func parseCoordinateArray(_ coords: [[Double]], filename: String, regionId: String, showWarning: Bool, simplify: Bool = true) -> [CLLocationCoordinate2D] {
         guard !coords.isEmpty else { return [] }
         
         // Sample first few coordinates to detect coordinate system
@@ -448,7 +448,7 @@ struct GeoJSONLoader {
         
         // Simplify coordinates if there are too many (performance optimization)
         // Keep every Nth point if there are more than 500 points (reduced from 1000 for better performance)
-        if parsedCoords.count > 500 {
+        if simplify && parsedCoords.count > 500 {
             // For polygons with >2000 points, use more aggressive simplification
             let targetPointCount = parsedCoords.count > 2000 ? 500 : 1000
             let step = max(1, parsedCoords.count / targetPointCount)
@@ -472,27 +472,27 @@ struct GeoJSONLoader {
     }
     
     /// Load all region boundaries from multiple GeoJSON files
-    static func loadAllBoundaries() -> [String: [[CLLocationCoordinate2D]]] {
+    static func loadAllBoundaries(simplify: Bool = true) -> [String: [[CLLocationCoordinate2D]]] {
         var allBoundaries: [String: [String: [[CLLocationCoordinate2D]]]] = [:]
         
         #if DEBUG
-        print("🔍 DEBUG: Starting to load all GeoJSON boundaries...")
+        print("🔍 DEBUG: Starting to load all GeoJSON boundaries (simplify: \(simplify))...")
         #endif
         
         // Load US states
-        allBoundaries["us"] = loadBoundaries(from: "us-states")
+        allBoundaries["us"] = loadBoundaries(from: "us-states", simplify: simplify)
         #if DEBUG
         print("🔍 DEBUG: Loaded \(allBoundaries["us"]?.count ?? 0) US regions")
         #endif
         
         // Load Canadian provinces
-        allBoundaries["ca"] = loadBoundaries(from: "ca-provinces")
+        allBoundaries["ca"] = loadBoundaries(from: "ca-provinces", simplify: simplify)
         #if DEBUG
         print("🔍 DEBUG: Loaded \(allBoundaries["ca"]?.count ?? 0) Canadian regions")
         #endif
         
         // Load Mexican states
-        allBoundaries["mx"] = loadBoundaries(from: "mx-states")
+        allBoundaries["mx"] = loadBoundaries(from: "mx-states", simplify: simplify)
         #if DEBUG
         print("🔍 DEBUG: Loaded \(allBoundaries["mx"]?.count ?? 0) Mexican regions")
         #endif

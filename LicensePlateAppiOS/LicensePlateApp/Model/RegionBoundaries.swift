@@ -33,9 +33,30 @@ struct RegionBoundaries {
         return boundaries(for: regionId).first ?? []
     }
     
-    /// GeoJSON boundaries loaded from bundled files
+    /// Get full boundary polygons for a region without simplification (for TileOverlay)
+    /// First tries to load from GeoJSON, falls back to approximate boundaries
+    static func fullBoundaries(for regionId: String) -> [[CLLocationCoordinate2D]] {
+        // Try GeoJSON first (without simplification)
+        if let geoJSONBoundaries = fullGeoJSONBoundaries[regionId.lowercased()], !geoJSONBoundaries.isEmpty {
+            return geoJSONBoundaries
+        }
+        
+        // Fallback to approximate boundaries (wrap in array for consistency)
+        if let approximate = approximateBoundaries[regionId.lowercased()], !approximate.isEmpty {
+            return [approximate]
+        }
+        
+        return []
+    }
+    
+    /// GeoJSON boundaries loaded from bundled files (with simplification for performance)
     static let geoJSONBoundaries: [String: [[CLLocationCoordinate2D]]] = {
-        return GeoJSONLoader.loadAllBoundaries()
+        return GeoJSONLoader.loadAllBoundaries(simplify: true)
+    }()
+    
+    /// Full GeoJSON boundaries loaded from bundled files (without simplification for TileOverlay)
+    static let fullGeoJSONBoundaries: [String: [[CLLocationCoordinate2D]]] = {
+        return GeoJSONLoader.loadAllBoundaries(simplify: false)
     }()
     
     /// Approximate boundaries (fallback if GeoJSON not available)

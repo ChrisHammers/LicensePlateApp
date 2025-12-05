@@ -30,6 +30,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             PolygonPathCache.shared.preloadPaths(for: PlateRegion.all)
         }
         
+        // Check if app version changed (indicating an update with potentially new GeoJSON files)
+        checkAndClearTileCacheIfNeeded()
+        
         // Pre-render base tiles asynchronously (after boundaries are loaded)
         DispatchQueue.global(qos: .userInitiated).async {
             TileCacheService.shared.preRenderBaseTiles(for: PlateRegion.all) { progress in
@@ -45,6 +48,25 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         UserDefaults.standard.set(true, forKey: "boundariesLoaded")
         
         return true
+    }
+    
+    /// Check if app version changed and clear tile cache if needed
+    /// This ensures tiles are regenerated when GeoJSON files are updated in a new app version
+    private func checkAndClearTileCacheIfNeeded() {
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ??
+                             Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1.0.0"
+        let lastVersion = UserDefaults.standard.string(forKey: "lastAppVersionForTileCache")
+        
+        if lastVersion != currentVersion {
+            if let lastVersion = lastVersion {
+                print("🔄 App version changed from \(lastVersion) to \(currentVersion)")
+            } else {
+                print("🔄 First launch or version tracking initialized: \(currentVersion)")
+            }
+            print("   Clearing tile cache to regenerate with updated boundaries if needed")
+            TileCacheService.shared.clearCache()
+            UserDefaults.standard.set(currentVersion, forKey: "lastAppVersionForTileCache")
+        }
     }
     
     private func initializeFirebase() {

@@ -181,7 +181,7 @@ class TileCacheService {
         let strokeColor = UIColor.white.withAlphaComponent(0.9)
         
         for region in regions {
-            let boundaries = RegionBoundaries.boundaries(for: region.id)
+            let boundaries = RegionBoundaries.fullBoundaries(for: region.id)
             guard !boundaries.isEmpty else { continue }
             
             for boundary in boundaries {
@@ -247,6 +247,10 @@ class TileCacheService {
     ) {
         guard !boundary.isEmpty else { return }
         
+        // Clip drawing to tile bounds to prevent rendering artifacts
+        context.saveGState()
+        context.clip(to: CGRect(x: 0, y: 0, width: tileSize, height: tileSize))
+        
         let path = CGMutablePath()
         var firstPoint = true
         
@@ -257,11 +261,18 @@ class TileCacheService {
                 tileSize: tileSize
             )
             
+            // Clamp point to tile bounds to prevent rendering artifacts
+            // Allow slight overflow for smooth edges at tile boundaries
+            let clampedPoint = CGPoint(
+                x: max(-tileSize * 0.1, min(tileSize * 1.1, point.x)),
+                y: max(-tileSize * 0.1, min(tileSize * 1.1, point.y))
+            )
+            
             if firstPoint {
-                path.move(to: point)
+                path.move(to: clampedPoint)
                 firstPoint = false
             } else {
-                path.addLine(to: point)
+                path.addLine(to: clampedPoint)
             }
         }
         
@@ -273,7 +284,11 @@ class TileCacheService {
                 tileBounds: tileBounds,
                 tileSize: tileSize
             )
-            path.addLine(to: firstPoint)
+            let clampedFirstPoint = CGPoint(
+                x: max(-tileSize * 0.1, min(tileSize * 1.1, firstPoint.x)),
+                y: max(-tileSize * 0.1, min(tileSize * 1.1, firstPoint.y))
+            )
+            path.addLine(to: clampedFirstPoint)
         }
         
         context.setFillColor(fillColor.cgColor)
@@ -283,6 +298,8 @@ class TileCacheService {
         context.setLineJoin(.round)
         context.addPath(path)
         context.drawPath(using: .fillStroke)
+        
+        context.restoreGState()
     }
     
     /// Convert coordinate to tile point
