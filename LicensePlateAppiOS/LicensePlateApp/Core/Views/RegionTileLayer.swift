@@ -55,6 +55,9 @@ class RegionTileLayer: GMSTileLayer {
             
             // Check in-memory cache first (with found region state)
             if let cachedTile = self.tileCache[tileKey] {
+                #if DEBUG
+                print("💨 Using cached tile \(baseTileKey) from memory")
+                #endif
                 // Move to end (most recently used) - LRU tracking
                 self.cacheQueue.async(flags: .barrier) {
                     if let index = self.tileAccessOrder.firstIndex(of: tileKey) {
@@ -72,13 +75,24 @@ class RegionTileLayer: GMSTileLayer {
             if TileCacheService.shared.hasCachedTile(zoom: zoom, x: x, y: y) {
                 // Load base tile and overlay found regions
                 DispatchQueue.global(qos: .userInitiated).async {
+                    let loadStartTime = Date()
                     if let baseTile = TileCacheService.shared.loadCachedTile(zoom: zoom, x: x, y: y) {
+                        let loadTime = Date().timeIntervalSince(loadStartTime) * 1000 // Convert to ms
+                        
+                        #if DEBUG
+                        print("💾 Loaded pre-rendered tile \(baseTileKey) from disk in \(String(format: "%.2f", loadTime))ms")
+                        #endif
+                        
                         // If no found regions intersect this tile, use base tile directly
                         let tile: UIImage?
                         if intersectingFoundRegions.isEmpty {
                             tile = baseTile
+                            #if DEBUG
+                            print("   ✅ Using pre-rendered tile directly (no found regions)")
+                            #endif
                         } else {
                             // Overlay found regions on base tile
+                            let overlayStartTime = Date()
                             tile = self.overlayFoundRegions(
                                 on: baseTile,
                                 x: x,
@@ -86,6 +100,10 @@ class RegionTileLayer: GMSTileLayer {
                                 zoom: zoom,
                                 intersectingFoundRegionIDs: intersectingFoundRegions
                             )
+                            let overlayTime = Date().timeIntervalSince(overlayStartTime) * 1000
+                            #if DEBUG
+                            print("   🎨 Overlaid \(intersectingFoundRegions.count) found regions in \(String(format: "%.2f", overlayTime))ms")
+                            #endif
                         }
                         
                         guard let finalTile = tile else {
@@ -124,21 +142,48 @@ class RegionTileLayer: GMSTileLayer {
             
             // Generate tile on background thread (fallback if no cached base tile)
             DispatchQueue.global(qos: .userInitiated).async {
+                let generateStartTime = Date()
+                
                 // Optimization: If no found regions intersect this tile, try to use pre-rendered base tile
                 let tile: UIImage?
                 if intersectingFoundRegions.isEmpty {
                     // No found regions - try to load pre-rendered base tile from disk
-                    if TileCacheService.shared.hasCachedTile(zoom: zoom, x: x, y: y),
-                       let baseTile = TileCacheService.shared.loadCachedTile(zoom: zoom, x: x, y: y) {
-                        tile = baseTile
+                    if TileCacheService.shared.hasCachedTile(zoom: zoom, x: x, y: y) {
+                        let loadStartTime = Date()
+                        if let baseTile = TileCacheService.shared.loadCachedTile(zoom: zoom, x: x, y: y) {
+                            let loadTime = Date().timeIntervalSince(loadStartTime) * 1000
+                            #if DEBUG
+                            print("💾 Loaded pre-rendered tile \(baseTileKey) from disk (fallback path) in \(String(format: "%.2f", loadTime))ms")
+                            #endif
+                            tile = baseTile
+                        } else {
+                            // Failed to load - generate base-only tile
+                            #if DEBUG
+                            print("⚠️ Failed to load pre-rendered tile \(baseTileKey) - generating instead")
+                            #endif
+                            tile = self.generateTile(x: x, y: y, zoom: zoom, skipFoundRegions: true)
+                        }
                     } else {
                         // No cached base tile available - generate base-only tile (skip found region rendering)
+                        #if DEBUG
+                        print("🔨 Generating tile \(baseTileKey) (no pre-rendered tile available, zoom level \(zoom))")
+                        #endif
                         tile = self.generateTile(x: x, y: y, zoom: zoom, skipFoundRegions: true)
                     }
                 } else {
                     // Found regions exist - generate full tile with overlays
+                    #if DEBUG
+                    print("🔨 Generating tile \(baseTileKey) with \(intersectingFoundRegions.count) found regions")
+                    #endif
                     tile = self.generateTile(x: x, y: y, zoom: zoom, skipFoundRegions: false)
                 }
+                
+                let generateTime = Date().timeIntervalSince(generateStartTime) * 1000
+                #if DEBUG
+                if tile != nil {
+                    print("   ✅ Tile generation completed in \(String(format: "%.2f", generateTime))ms")
+                }
+                #endif
                 
                 guard let finalTile = tile else {
                     DispatchQueue.main.async {
@@ -497,14 +542,105 @@ class RegionTileLayer: GMSTileLayer {
     }
     
     /// Update found regions (for color changes)
+    /// Optimized to only invalidate tiles that actually contain changed regions
     func updateFoundRegions(_ newFoundRegionIDs: [String]) {
-        self.foundRegionIDs = Set(newFoundRegionIDs)
-        // Clear cache to force regeneration with new colors
-        cacheQueue.async(flags: .barrier) {
-            self.tileCache.removeAll()
-            self.tileAccessOrder.removeAll()
+        let oldFoundSet = self.foundRegionIDs
+        let newFoundSet = Set(newFoundRegionIDs)
+        
+        // Find regions that changed status (found -> unfound or unfound -> found)
+        let newlyFound = newFoundSet.subtracting(oldFoundSet)
+        let newlyUnfound = oldFoundSet.subtracting(newFoundSet)
+        let changedRegions = newlyFound.union(newlyUnfound)
+        
+        #if DEBUG
+        if !changedRegions.isEmpty {
+            print("🔄 Found regions changed: \(changedRegions.count) regions")
+            print("   Newly found: \(newlyFound.count), Newly unfound: \(newlyUnfound.count)")
         }
-        // Request tile refresh
+        #endif
+        
+        // Update the found region set
+        self.foundRegionIDs = newFoundSet
+        
+        // If no regions changed, no need to invalidate anything
+        guard !changedRegions.isEmpty else {
+            #if DEBUG
+            print("✅ No region changes - cache remains valid")
+            #endif
+            return
+        }
+        
+        // Only invalidate tiles that contain changed regions
+        // Tiles that don't contain any changed regions can remain cached
+        cacheQueue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            
+            var tilesToRemove: [String] = []
+            
+            // Check each cached tile to see if it contains any changed regions
+            for (tileKey, _) in self.tileCache {
+                // Extract the base key (zoom_x_y) from the cache key
+                let baseKey: String
+                if tileKey.contains("_found:") {
+                    // Extract base key from "zoom_x_y_found:hash" format
+                    if let foundIndex = tileKey.range(of: "_found:") {
+                        baseKey = String(tileKey[..<foundIndex.lowerBound])
+                    } else {
+                        baseKey = tileKey
+                    }
+                } else {
+                    baseKey = tileKey
+                }
+                
+                // Parse zoom, x, y from base key
+                let components = baseKey.split(separator: "_")
+                guard components.count == 3,
+                      let zoom = UInt(components[0]),
+                      let x = UInt(components[1]),
+                      let y = UInt(components[2]) else {
+                    // Invalid key format - remove it
+                    tilesToRemove.append(tileKey)
+                    continue
+                }
+                
+                // Get tile bounds and check if any changed regions intersect
+                let bounds = self.tileBounds(x: x, y: y, zoom: zoom)
+                var tileContainsChangedRegion = false
+                
+                for region in self.regions {
+                    guard changedRegions.contains(region.id) else { continue }
+                    
+                    let boundaries = RegionBoundaries.fullBoundaries(for: region.id)
+                    for boundary in boundaries {
+                        if self.polygonIntersectsTile(boundary: boundary, tileBounds: bounds) {
+                            tileContainsChangedRegion = true
+                            break
+                        }
+                    }
+                    if tileContainsChangedRegion { break }
+                }
+                
+                // If tile contains a changed region, mark it for removal
+                if tileContainsChangedRegion {
+                    tilesToRemove.append(tileKey)
+                }
+            }
+            
+            // Remove only the affected tiles
+            for key in tilesToRemove {
+                self.tileCache.removeValue(forKey: key)
+                if let index = self.tileAccessOrder.firstIndex(of: key) {
+                    self.tileAccessOrder.remove(at: index)
+                }
+            }
+            
+            #if DEBUG
+            print("🗑️ Invalidated \(tilesToRemove.count) tiles (out of \(self.tileCache.count + tilesToRemove.count) total)")
+            print("   Kept \(self.tileCache.count) tiles that don't contain changed regions")
+            #endif
+        }
+        
+        // Request tile refresh for visible tiles
         clearTileCache()
     }
     
