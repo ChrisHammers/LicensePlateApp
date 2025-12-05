@@ -158,6 +158,7 @@ struct AppPreferencesView: View {
                             )
                             
                             Divider()
+                          #endif
                           
                             
                             SettingToggleRow(
@@ -177,7 +178,8 @@ struct AppPreferencesView: View {
                             
                             Divider()
                           #endif
-                #if DEBUG
+                          
+                          #if DEBUG
                             SettingToggleRow(
                                 title: "Use Tile Overlay (Testing)",
                                 description: "Use TileOverlay for polygon rendering - best performance for many polygons",
