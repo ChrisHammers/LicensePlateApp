@@ -12,6 +12,9 @@ import FirebaseCore
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+        // Reset boundariesLoaded to false on app launch to ensure splash screen shows
+        UserDefaults.standard.set(false, forKey: "boundariesLoaded")
+        
         // Initialize Firebase here (after delegate is fully set up)
         // This ensures Firebase's AppDelegateSwizzler can properly detect the delegate
         initializeFirebase()
@@ -30,22 +33,22 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             PolygonPathCache.shared.preloadPaths(for: PlateRegion.all)
         }
         
+        #if DEBUG
         // Check if app version changed (indicating an update with potentially new GeoJSON files)
+        // Only check and clear cache in DEBUG builds
         checkAndClearTileCacheIfNeeded()
         
-        // Pre-render base tiles asynchronously (after boundaries are loaded)
+        // Pre-render base tiles asynchronously (DEBUG only)
         DispatchQueue.global(qos: .userInitiated).async {
             TileCacheService.shared.preRenderBaseTiles(for: PlateRegion.all) { progress in
-                #if DEBUG
                 if progress == 1.0 || Int(progress * 100) % 10 == 0 {
                     print("📊 Tile pre-rendering progress: \(Int(progress * 100))%")
                 }
-                #endif
             }
         }
+        #endif
         
-        // Mark loading complete
-        UserDefaults.standard.set(true, forKey: "boundariesLoaded")
+        // DO NOT set boundariesLoaded here - let ContentView handle it after splash screen renders
         
         return true
     }

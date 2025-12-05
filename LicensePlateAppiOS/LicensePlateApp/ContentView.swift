@@ -148,6 +148,13 @@ struct ContentView: View {
         .preferredColorScheme(currentColorScheme)
         .onAppear {
             FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: appPlaySoundEffects)
+            
+            // Mark boundaries as loaded after splash screen has rendered
+            // This ensures the splash screen is visible before transitioning
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                // Boundaries are already loaded in AppDelegate, so we can safely mark as complete
+                boundariesLoaded = true
+            }
         }
         .onChange(of: appUseVibrations) { _, newValue in
             FeedbackService.shared.updatePreferences(hapticEnabled: newValue, soundEnabled: appPlaySoundEffects)
