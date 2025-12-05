@@ -43,7 +43,7 @@ class RegionTileLayer: GMSTileLayer {
               return
             }
             
-            // Check cache
+            // Check in-memory cache first
             if let cachedTile = self.tileCache[tileKey] {
                 // Move to end (most recently used) - LRU tracking
                 self.cacheQueue.async(flags: .barrier) {
@@ -58,7 +58,41 @@ class RegionTileLayer: GMSTileLayer {
                 return
             }
             
-            // Generate tile on background thread
+            // Check for pre-rendered base tile from disk cache
+            if TileCacheService.shared.hasCachedTile(zoom: zoom, x: x, y: y) {
+                // Load base tile and overlay found regions
+                DispatchQueue.global(qos: .userInitiated).async {
+                    if let baseTile = TileCacheService.shared.loadCachedTile(zoom: zoom, x: x, y: y) {
+                        let tile = self.overlayFoundRegions(on: baseTile, x: x, y: y, zoom: zoom)
+                        
+                        // Cache the final tile
+                        self.cacheQueue.async(flags: .barrier) {
+                            self.tileCache[tileKey] = tile
+                            if let index = self.tileAccessOrder.firstIndex(of: tileKey) {
+                                self.tileAccessOrder.remove(at: index)
+                            }
+                            self.tileAccessOrder.append(tileKey)
+                            
+                            // LRU eviction
+                            while self.tileCache.count > self.maxCacheSize {
+                                if let oldestKey = self.tileAccessOrder.first {
+                                    self.tileCache.removeValue(forKey: oldestKey)
+                                    self.tileAccessOrder.removeFirst()
+                                } else {
+                                    break
+                                }
+                            }
+                        }
+                        
+                        DispatchQueue.main.async {
+                            receiver.receiveTileWith(x: x, y: y, zoom: zoom, image: tile)
+                        }
+                        return
+                    }
+                }
+            }
+            
+            // Generate tile on background thread (fallback if no cached base tile)
             DispatchQueue.global(qos: .userInitiated).async {
                 let tile = self.generateTile(x: x, y: y, zoom: zoom)
                 
@@ -264,6 +298,81 @@ class RegionTileLayer: GMSTileLayer {
         let y = CGFloat((tileBounds.maxLat - coord.latitude) / latRange) * tileSize
         
         return CGPoint(x: x, y: y)
+    }
+    
+    /// Overlay found regions (yellow) on a base tile (blue)
+    /// This is much faster than regenerating the entire tile
+    private func overlayFoundRegions(on baseTile: UIImage, x: UInt, y: UInt, zoom: UInt) -> UIImage? {
+        // If no regions are found, return base tile as-is
+        guard !foundRegionIDs.isEmpty else {
+            return baseTile
+        }
+        
+        let tileSize: Int = 256
+        let bounds = tileBounds(x: x, y: y, zoom: zoom)
+        
+        // Use same approach as generateTile for consistency
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bytesPerPixel = 4
+        let bytesPerRow = bytesPerPixel * tileSize
+        let bitsPerComponent = 8
+        
+        guard let context = CGContext(
+            data: nil,
+            width: tileSize,
+            height: tileSize,
+            bitsPerComponent: bitsPerComponent,
+            bytesPerRow: bytesPerRow,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return baseTile
+        }
+        
+        // Draw base tile first in unflipped coordinate system
+        // The base tile UIImage is in top-left origin (correct visual orientation)
+        if let cgImage = baseTile.cgImage {
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: tileSize, height: tileSize))
+        }
+        
+        // Now flip coordinate system for polygon rendering
+        // This matches how the base tile was originally generated
+        // coordinateToTilePoint expects flipped context (y=0 at top)
+        context.translateBy(x: 0, y: CGFloat(tileSize))
+        context.scaleBy(x: 1.0, y: -1.0)
+        
+        // Overlay found regions with yellow (using flipped coordinate system, matching base tile generation)
+        let fillColor = UIColor(Color.Theme.accentYellow).withAlphaComponent(0.9)
+        let strokeColor = UIColor.white.withAlphaComponent(0.9)
+        
+        for region in regions {
+            // Only render found regions
+            guard foundRegionIDs.contains(region.id) else { continue }
+            
+            let boundaries = RegionBoundaries.boundaries(for: region.id)
+            guard !boundaries.isEmpty else { continue }
+            
+            for boundary in boundaries {
+                guard !boundary.isEmpty else { continue }
+                
+                if polygonIntersectsTile(boundary: boundary, tileBounds: bounds) {
+                    renderPolygon(
+                        boundary: boundary,
+                        tileBounds: bounds,
+                        tileSize: CGFloat(tileSize),
+                        fillColor: fillColor,
+                        strokeColor: strokeColor,
+                        context: context
+                    )
+                }
+            }
+        }
+        
+        guard let cgImage = context.makeImage() else {
+            return baseTile
+        }
+        
+        return UIImage(cgImage: cgImage)
     }
     
     /// Update found regions (for color changes)

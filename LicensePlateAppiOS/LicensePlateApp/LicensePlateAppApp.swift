@@ -30,6 +30,17 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             PolygonPathCache.shared.preloadPaths(for: PlateRegion.all)
         }
         
+        // Pre-render base tiles asynchronously (after boundaries are loaded)
+        DispatchQueue.global(qos: .userInitiated).async {
+            TileCacheService.shared.preRenderBaseTiles(for: PlateRegion.all) { progress in
+                #if DEBUG
+                if progress == 1.0 || Int(progress * 100) % 10 == 0 {
+                    print("📊 Tile pre-rendering progress: \(Int(progress * 100))%")
+                }
+                #endif
+            }
+        }
+        
         // Mark loading complete
         UserDefaults.standard.set(true, forKey: "boundariesLoaded")
         
