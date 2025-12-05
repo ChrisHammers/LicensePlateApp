@@ -9,7 +9,6 @@ import SwiftUI
 
 struct SplashScreenView: View {
     @State private var isAnimating = false
-    @AppStorage("tilePreRenderProgress") private var preRenderProgress: Double = 0.0
     
     var body: some View {
         ZStack {
@@ -34,26 +33,10 @@ struct SplashScreenView: View {
                     .font(.system(size: 32, weight: .bold))
                     .foregroundColor(.white)
                 
-                // Progress indicator with percentage
-                VStack(spacing: 12) {
-                    if preRenderProgress > 0 && preRenderProgress < 1.0 {
-                        // Show progress bar and percentage when pre-rendering
-                        VStack(spacing: 8) {
-                            ProgressView(value: preRenderProgress)
-                                .progressViewStyle(LinearProgressViewStyle(tint: .white))
-                                .frame(width: 200)
-                            
-                            Text("Loading map tiles: \(Int(preRenderProgress * 100))%")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.white.opacity(0.9))
-                        }
-                    } else {
-                        // Show spinner when not pre-rendering or when complete
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .scaleEffect(1.2)
-                    }
-                }
+                // Loading indicator
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    .scaleEffect(1.2)
             }
         }
         .onAppear {

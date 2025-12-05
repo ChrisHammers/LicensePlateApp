@@ -33,54 +33,18 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Check if app version changed (indicating an update with potentially new GeoJSON files)
         checkAndClearTileCacheIfNeeded()
         
-        // Check if pre-rendering is needed (only on first launch or after cache clear)
-        let needsPreRender = TileCacheService.shared.needsPreRendering()
-        
-        if needsPreRender {
-            // Pre-render base tiles SYNCHRONOUSLY during splash screen
-            // This blocks until all tiles are rendered, keeping splash screen visible
-            print("🔄 Starting synchronous tile pre-rendering during splash screen...")
-            let preRenderStartTime = Date()
-            
-            // Initialize progress to 0
-            UserDefaults.standard.set(0.0, forKey: "tilePreRenderProgress")
-            
-            // Use DispatchGroup to wait for completion
-            let group = DispatchGroup()
-            group.enter()
-            
-            // Pre-render on background queue but wait for completion
-            DispatchQueue.global(qos: .userInitiated).async {
-                TileCacheService.shared.preRenderBaseTiles(for: PlateRegion.all) { progress in
-                    // Update progress in UserDefaults for splash screen to read
-                    UserDefaults.standard.set(progress, forKey: "tilePreRenderProgress")
-                    
-                    #if DEBUG
-                    if progress == 1.0 || Int(progress * 100) % 10 == 0 {
-                        print("📊 Tile pre-rendering progress: \(Int(progress * 100))%")
-                    }
-                    #endif
-                    
-                    // Signal completion when done
-                    if progress >= 1.0 {
-                        let preRenderTime = Date().timeIntervalSince(preRenderStartTime)
-                        print("✅ Tile pre-rendering completed in \(String(format: "%.2f", preRenderTime))s")
-                        group.leave()
-                    }
+        // Pre-render base tiles asynchronously (after boundaries are loaded)
+        DispatchQueue.global(qos: .userInitiated).async {
+            TileCacheService.shared.preRenderBaseTiles(for: PlateRegion.all) { progress in
+                #if DEBUG
+                if progress == 1.0 || Int(progress * 100) % 10 == 0 {
+                    print("📊 Tile pre-rendering progress: \(Int(progress * 100))%")
                 }
+                #endif
             }
-            
-            // Wait for pre-rendering to complete (blocks this thread until done)
-            // This keeps the splash screen visible during pre-rendering
-            group.wait()
-        } else {
-            print("✅ Tile pre-rendering skipped - tiles already exist")
-            // Set progress to 100% immediately
-            UserDefaults.standard.set(1.0, forKey: "tilePreRenderProgress")
         }
         
-        // Mark loading complete ONLY after pre-rendering is done (or skipped)
-        // This will cause the splash screen to disappear
+        // Mark loading complete
         UserDefaults.standard.set(true, forKey: "boundariesLoaded")
         
         return true

@@ -120,9 +120,8 @@ class TileCacheService {
                         let progress = Double(tilesRendered) / Double(totalTiles)
                         progressLock.unlock()
                         
-                        // Update progress frequently for smoother UI updates during splash screen
-                        // Update every 5 tiles to balance smoothness with performance
-                        if tilesRendered % 5 == 0 || tilesRendered == totalTiles {
+                        // Update progress every 10 tiles
+                        if tilesRendered % 10 == 0 {
                             DispatchQueue.main.async {
                                 progressCallback?(progress)
                             }
@@ -325,34 +324,6 @@ class TileCacheService {
     /// Check if pre-rendering is complete
     var isPreRenderComplete: Bool {
         return preRenderComplete
-    }
-    
-    /// Check if pre-rendering is needed (i.e., if tiles are missing for any zoom level)
-    /// Returns true if pre-rendering is needed, false if all tiles already exist
-    func needsPreRendering() -> Bool {
-        // Sample a few tiles from each zoom level to check if they exist
-        // If any are missing, we need to pre-render
-        for zoom in preRenderZoomLevels {
-            let tilesPerSide = UInt(pow(2.0, Double(zoom)))
-            
-            // Sample tiles: check corners and center
-            let sampleTiles: [(UInt, UInt)] = [
-                (0, 0), // Top-left
-                (tilesPerSide - 1, 0), // Top-right
-                (0, tilesPerSide - 1), // Bottom-left
-                (tilesPerSide - 1, tilesPerSide - 1), // Bottom-right
-                (tilesPerSide / 2, tilesPerSide / 2) // Center
-            ]
-            
-            for (x, y) in sampleTiles {
-                if !hasCachedTile(zoom: zoom, x: x, y: y) {
-                    return true // Found missing tile, need to pre-render
-                }
-            }
-        }
-        
-        // All sample tiles exist - assume pre-rendering is complete
-        return false
     }
     
     /// Clear all cached tiles (useful for testing or when boundaries change)
