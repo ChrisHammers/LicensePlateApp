@@ -1,0 +1,133 @@
+/* 
+  Localizable.strings (French)
+  LicensePlateApp
+  
+  French localization strings
+*/
+
+// App Name
+"RoadTrip Royale" = "RoadTrip Royale";
+
+// Main Screen
+"No trips yet" = "Aucun voyage pour le moment";
+"Start your first adventure and begin collecting plates from across North America." = "Commencez votre première aventure et commencez à collectionner les plaques de toute l'Amérique du Nord.";
+"Track every plate you see across the United States, Canada, and Mexico." = "Suivez chaque plaque que vous voyez aux États-Unis, au Canada et au Mexique.";
+"Create Trip" = "Créer un Voyage";
+"Trip: %@" = "Voyage : %@";
+"Double tap to open trip" = "Appuyez deux fois pour ouvrir le voyage";
+
+// Trip Tracking
+"List" = "Liste";
+"Voice" = "Voix";
+"Found" = "Trouvées";
+"Remaining" = "Restantes";
+"START" = "DÉMARRER";
+"END" = "TERMINER";
+"ENDED" = "TERMINÉ";
+"Start Trip" = "Démarrer le Voyage";
+"Starts the trip and begins tracking" = "Démarre le voyage et commence le suivi";
+"Only the trip creator can start the trip" = "Seul le créateur du voyage peut le démarrer";
+"End Trip" = "Terminer le Voyage";
+"Ends the trip and stops tracking" = "Termine le voyage et arrête le suivi";
+"Only the trip creator can end the trip" = "Seul le créateur du voyage peut le terminer";
+"Trip Ended" = "Voyage Terminé";
+"This trip has been completed" = "Ce voyage a été complété";
+"This will stop the game. You won't be able to add states in this trip anymore." = "Cela arrêtera le jeu. Vous ne pourrez plus ajouter d'états dans ce voyage.";
+"Cancel" = "Annuler";
+
+// Voice Recognition
+"Speech Recognition Needed" = "Reconnaissance Vocale Nécessaire";
+"Please enable speech recognition in Settings to use voice input." = "Veuillez activer la reconnaissance vocale dans les Réglages pour utiliser la saisie vocale.";
+"Listening..." = "Écoute...";
+"Hold to Talk" = "Maintenez pour parler";
+"Heard:" = "Entendu :";
+"No speech detected yet..." = "Aucune voix détectée pour le moment...";
+"Requesting Permission..." = "Demande d'autorisation...";
+"Hey, we heard the following %@:" = "Hé, nous avons entendu le %@ suivant :";
+"Add this to the list of license plates found?" = "Ajouter ceci à la liste des plaques trouvées ?";
+"Don't show this again" = "Ne plus afficher";
+"Add" = "Ajouter";
+"Voice Coming Soon" = "Voix Bientôt Disponible";
+"Soon you will be able to log plates hands-free by simply saying the state or province you spot." = "Bientôt, vous pourrez enregistrer les plaques sans les mains en disant simplement l'état ou la province que vous repérez.";
+
+// Settings
+"App Preferences" = "Préférences de l'App";
+"Dark Mode" = "Mode Sombre";
+"Choose your preferred appearance" = "Choisissez votre apparence préférée";
+"App Background" = "Arrière-plan de l'App";
+"Choose background style" = "Choisissez le style d'arrière-plan";
+"Distance Unit" = "Unité de Distance";
+"Select miles or kilometers" = "Sélectionnez les miles ou les kilomètres";
+"Map Style" = "Style de Carte";
+"Choose standard or satellite view" = "Choisissez la vue standard ou satellite";
+"Play Sound Effects" = "Lire les Effets Sonores";
+"Enable audio feedback for app interactions" = "Activer la rétroaction audio pour les interactions de l'app";
+"Use Vibrations" = "Utiliser les Vibrations";
+"Enable haptic feedback" = "Activer la rétroaction haptique";
+"Trip Sort Order" = "Ordre de Tri des Voyages";
+"How to sort trips in the list" = "Comment trier les voyages dans la liste";
+"Show Confirmation Dialogs" = "Afficher les Dialogues de Confirmation";
+"Show confirmation prompts for destructive actions like deleting trips" = "Afficher les invites de confirmation pour les actions destructives comme la suppression de voyages";
+"Language" = "Langue";
+"Select your preferred language" = "Sélectionnez votre langue préférée";
+"Font Size" = "Taille de Police";
+"Adjust text size for better readability" = "Ajustez la taille du texte pour une meilleure lisibilité";
+"Reduce Motion" = "Réduire le Mouvement";
+"Respect iOS Reduce Motion setting" = "Respecter le réglage Réduire le Mouvement d'iOS";
+"Auto-Sync" = "Synchronisation Automatique";
+"Automatically sync data to cloud" = "Synchroniser automatiquement les données vers le cloud";
+"Default Tab" = "Onglet par Défaut";
+"Which tab to show when opening the app" = "Quel onglet afficher lors de l'ouverture de l'app";
+"Show Statistics" = "Afficher les Statistiques";
+"Display statistics on the main screen" = "Afficher les statistiques sur l'écran principal";
+"Plate Display Format" = "Format d'Affichage des Plaques";
+"How to display license plate regions" = "Comment afficher les régions de plaques";
+"Map Default Zoom" = "Zoom par Défaut de la Carte";
+"Default zoom level when opening maps" = "Niveau de zoom par défaut lors de l'ouverture des cartes";
+"Show Completed Regions" = "Afficher les Régions Complétées";
+"Display regions that are already found in lists" = "Afficher les régions déjà trouvées dans les listes";
+
+// Help & About
+"About" = "À Propos";
+"Learn about RoadTrip Royale and HammersTechLLC" = "En savoir plus sur RoadTrip Royale et HammersTechLLC";
+"Acknowledgements" = "Remerciements";
+"Open source libraries and SDKs we use" = "Bibliothèques et SDK open source que nous utilisons";
+"Frequently Asked Questions" = "Questions Fréquemment Posées";
+"How do I play RoadTrip Royale?" = "Comment jouer à RoadTrip Royale ?";
+"RoadTrip Royale is a license plate tracking game! During your road trips, keep an eye out for license plates from different states, provinces, or regions. When you spot one, use the app to mark it as found. You can use the List tab to manually select plates, or the Voice tab to speak the state/province name. Track your progress and see your collection grow on the interactive map!" = "RoadTrip Royale est un jeu de suivi de plaques ! Pendant vos voyages sur la route, gardez l'œil ouvert pour les plaques de différents états, provinces ou régions. Lorsque vous en repérez une, utilisez l'app pour la marquer comme trouvée. Vous pouvez utiliser l'onglet Liste pour sélectionner manuellement les plaques, ou l'onglet Voix pour dire le nom de l'état/province. Suivez votre progression et voyez votre collection grandir sur la carte interactive !";
+"How do I create a trip?" = "Comment créer un voyage ?";
+"On the main screen, tap the 'Create Trip' button. You can give your trip a custom name, or leave it blank to use the date and time automatically. Once created, tap on the trip to start tracking license plates!" = "Sur l'écran principal, appuyez sur le bouton 'Créer un Voyage'. Vous pouvez donner un nom personnalisé à votre voyage, ou le laisser vide pour utiliser automatiquement la date et l'heure. Une fois créé, appuyez sur le voyage pour commencer à suivre les plaques !";
+"How does the Voice feature work?" = "Comment fonctionne la fonction Voix ?";
+"Tap the Voice tab, then press the microphone button. Speak the name of the state or province you see (e.g., 'California' or 'Ontario'). The app will listen and try to match what you said to a valid license plate region. If a match is found, you'll be asked to confirm before adding it to your collection." = "Appuyez sur l'onglet Voix, puis appuyez sur le bouton du microphone. Dites le nom de l'état ou de la province que vous voyez (par exemple, 'California' ou 'Ontario'). L'app écoutera et essaiera de faire correspondre ce que vous avez dit à une région de plaque valide. Si une correspondance est trouvée, il vous sera demandé de confirmer avant de l'ajouter à votre collection.";
+"Can I track plates from multiple countries?" = "Puis-je suivre les plaques de plusieurs pays ?";
+"Yes! RoadTrip Royale supports license plates from the United States, Canada, and Mexico. The map will automatically switch to show the correct country as you scroll through the list of regions." = "Oui ! RoadTrip Royale prend en charge les plaques des États-Unis, du Canada et du Mexique. La carte basculera automatiquement pour afficher le bon pays lorsque vous faites défiler la liste des régions.";
+"How do I see my progress?" = "Comment voir ma progression ?";
+"On the trip screen, you'll see summary chips showing how many plates you've found and how many remain. The map at the top shows all found regions highlighted in yellow. You can tap the map to view it full-screen for a better look!" = "Sur l'écran du voyage, vous verrez des puces de résumé montrant combien de plaques vous avez trouvées et combien il en reste. La carte en haut montre toutes les régions trouvées surlignées en jaune. Vous pouvez appuyer sur la carte pour la voir en plein écran pour une meilleure vue !";
+"Can I share my trips with others?" = "Puis-je partager mes voyages avec d'autres ?";
+"Currently, trips are stored locally on your device. Future updates may include sharing and collaboration features. Stay tuned!" = "Actuellement, les voyages sont stockés localement sur votre appareil. Les mises à jour futures peuvent inclure des fonctionnalités de partage et de collaboration. Restez à l'écoute !";
+"Do I need an internet connection?" = "Ai-je besoin d'une connexion Internet ?";
+"RoadTrip Royale works offline! You can create trips and track license plates without an internet connection. If you sign in with an account, your data will sync to the cloud when you're online." = "RoadTrip Royale fonctionne hors ligne ! Vous pouvez créer des voyages et suivre les plaques sans connexion Internet. Si vous vous connectez avec un compte, vos données se synchroniseront vers le cloud lorsque vous serez en ligne.";
+
+// About
+"About the App" = "À Propos de l'App";
+"RoadTrip Royale is a fun and engaging license plate tracking game that lets you collect license plates from across the United States, Canada, and Mexico during your road trips. Spot plates, track your progress, and see your collection grow on an interactive map!" = "RoadTrip Royale est un jeu amusant et engageant de suivi de plaques qui vous permet de collectionner les plaques des États-Unis, du Canada et du Mexique pendant vos voyages sur la route. Repérez les plaques, suivez votre progression et voyez votre collection grandir sur une carte interactive !";
+"About HammersTechLLC" = "À Propos de HammersTechLLC";
+"RoadTrip Royale is developed by HammersTechLLC, a software development company dedicated to creating innovative and user-friendly mobile applications. We're passionate about building apps that make everyday activities more enjoyable and engaging." = "RoadTrip Royale est développé par HammersTechLLC, une entreprise de développement de logiciels dédiée à la création d'applications mobiles innovantes et conviviales. Nous sommes passionnés par la création d'apps qui rendent les activités quotidiennes plus agréables et engageantes.";
+"Contact" = "Contact";
+
+// Profile
+"Profile" = "Profil";
+"Edit username and manage account" = "Modifier le nom d'utilisateur et gérer le compte";
+"Signed In" = "Connecté";
+"Your account is synced to the cloud" = "Votre compte est synchronisé avec le cloud";
+"Signed Out" = "Déconnecté";
+"You are signed out. Sign in to sync your account and access all features" = "Vous êtes déconnecté. Connectez-vous pour synchroniser votre compte et accéder à toutes les fonctionnalités";
+"Anonymous Account" = "Compte Anonyme";
+"Sign up to sync your account and access more features" = "Inscrivez-vous pour synchroniser votre compte et accéder à plus de fonctionnalités";
+"Local Account" = "Compte Local";
+"Your account is stored locally only. Sign in to sync to the cloud" = "Votre compte est stocké localement uniquement. Connectez-vous pour synchroniser avec le cloud";
+
+// Common
+"state" = "état";
+"province" = "province";
+

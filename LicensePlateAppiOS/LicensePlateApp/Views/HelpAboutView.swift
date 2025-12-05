@@ -29,8 +29,8 @@ struct HelpAboutView: View {
                     Section {
                         VStack(spacing: 12) {
                             SettingNavigationRow(
-                                title: "About",
-                                description: "Learn about RoadTrip Royale and HammersTechLLC",
+                                title: "About".localized,
+                                description: "Learn about RoadTrip Royale and HammersTechLLC".localized,
                                 icon: "info.circle.fill"
                             ) {
                                 showAbout = true
@@ -39,8 +39,8 @@ struct HelpAboutView: View {
                             Divider()
                             
                             SettingNavigationRow(
-                                title: "Acknowledgements",
-                                description: "Open source libraries and SDKs we use",
+                                title: "Acknowledgements".localized,
+                                description: "Open source libraries and SDKs we use".localized,
                                 icon: "doc.text.fill"
                             ) {
                                 showAcknowledgements = true
@@ -283,31 +283,31 @@ struct AboutView: View {
         ZStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Text("RoadTrip Royale")
+                    Text("RoadTrip Royale".localized)
                         .font(.system(.largeTitle, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     
-                    Text("About the App")
+                    Text("About the App".localized)
                         .font(.system(.title2, design: .rounded))
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     
-                    Text("RoadTrip Royale is a fun and engaging license plate tracking game that lets you collect license plates from across the United States, Canada, and Mexico during your road trips. Spot plates, track your progress, and see your collection grow on an interactive map!")
+                    Text("RoadTrip Royale is a fun and engaging license plate tracking game that lets you collect license plates from across the United States, Canada, and Mexico during your road trips. Spot plates, track your progress, and see your collection grow on an interactive map!".localized)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                     
-                    Text("About HammersTechLLC")
+                    Text("About HammersTechLLC".localized)
                         .font(.system(.title2, design: .rounded))
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                         .padding(.top)
                     
-                    Text("RoadTrip Royale is developed by HammersTechLLC, a software development company dedicated to creating innovative and user-friendly mobile applications. We're passionate about building apps that make everyday activities more enjoyable and engaging.")
+                    Text("RoadTrip Royale is developed by HammersTechLLC, a software development company dedicated to creating innovative and user-friendly mobile applications. We're passionate about building apps that make everyday activities more enjoyable and engaging.".localized)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                     
-                    Text("Contact")
+                    Text("Contact".localized)
                         .font(.system(.title3, design: .rounded))
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Theme.primaryBlue)
@@ -321,7 +321,7 @@ struct AboutView: View {
             }
         }
         .background(Color.Theme.background)
-        .navigationTitle("About")
+        .navigationTitle("About".localized)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
@@ -446,44 +446,44 @@ struct FAQView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-                Text("Frequently Asked Questions")
+                Text("Frequently Asked Questions".localized)
                     .font(.system(.largeTitle, design: .rounded))
                     .fontWeight(.bold)
                     .foregroundStyle(Color.Theme.primaryBlue)
                 
                 FAQItem(
-                    question: "How do I play RoadTrip Royale?",
-                    answer: "RoadTrip Royale is a license plate tracking game! During your road trips, keep an eye out for license plates from different states, provinces, or regions. When you spot one, use the app to mark it as found. You can use the List tab to manually select plates, or the Voice tab to speak the state/province name. Track your progress and see your collection grow on the interactive map!"
+                    question: "How do I play RoadTrip Royale?".localized,
+                    answer: "RoadTrip Royale is a license plate tracking game! During your road trips, keep an eye out for license plates from different states, provinces, or regions. When you spot one, use the app to mark it as found. You can use the List tab to manually select plates, or the Voice tab to speak the state/province name. Track your progress and see your collection grow on the interactive map!".localized
                 )
                 
                 FAQItem(
-                    question: "How do I create a trip?",
-                    answer: "On the main screen, tap the 'Create Trip' button. You can give your trip a custom name, or leave it blank to use the date and time automatically. Once created, tap on the trip to start tracking license plates!"
+                    question: "How do I create a trip?".localized,
+                    answer: "On the main screen, tap the 'Create Trip' button. You can give your trip a custom name, or leave it blank to use the date and time automatically. Once created, tap on the trip to start tracking license plates!".localized
                 )
                 
                 FAQItem(
-                    question: "How does the Voice feature work?",
-                    answer: "Tap the Voice tab, then press the microphone button. Speak the name of the state or province you see (e.g., 'California' or 'Ontario'). The app will listen and try to match what you said to a valid license plate region. If a match is found, you'll be asked to confirm before adding it to your collection."
+                    question: "How does the Voice feature work?".localized,
+                    answer: "Tap the Voice tab, then press the microphone button. Speak the name of the state or province you see (e.g., 'California' or 'Ontario'). The app will listen and try to match what you said to a valid license plate region. If a match is found, you'll be asked to confirm before adding it to your collection.".localized
                 )
                 
                 FAQItem(
-                    question: "Can I track plates from multiple countries?",
-                    answer: "Yes! RoadTrip Royale supports license plates from the United States, Canada, and Mexico. The map will automatically switch to show the correct country as you scroll through the list of regions."
+                    question: "Can I track plates from multiple countries?".localized,
+                    answer: "Yes! RoadTrip Royale supports license plates from the United States, Canada, and Mexico. The map will automatically switch to show the correct country as you scroll through the list of regions.".localized
                 )
                 
                 FAQItem(
-                    question: "How do I see my progress?",
-                    answer: "On the trip screen, you'll see summary chips showing how many plates you've found and how many remain. The map at the top shows all found regions highlighted in yellow. You can tap the map to view it full-screen for a better look!"
+                    question: "How do I see my progress?".localized,
+                    answer: "On the trip screen, you'll see summary chips showing how many plates you've found and how many remain. The map at the top shows all found regions highlighted in yellow. You can tap the map to view it full-screen for a better look!".localized
                 )
                 
                 FAQItem(
-                    question: "Can I share my trips with others?",
-                    answer: "Currently, trips are stored locally on your device. Future updates may include sharing and collaboration features. Stay tuned!"
+                    question: "Can I share my trips with others?".localized,
+                    answer: "Currently, trips are stored locally on your device. Future updates may include sharing and collaboration features. Stay tuned!".localized
                 )
                 
                 FAQItem(
-                    question: "Do I need an internet connection?",
-                    answer: "RoadTrip Royale works offline! You can create trips and track license plates without an internet connection. If you sign in with an account, your data will sync to the cloud when you're online."
+                    question: "Do I need an internet connection?".localized,
+                    answer: "RoadTrip Royale works offline! You can create trips and track license plates without an internet connection. If you sign in with an account, your data will sync to the cloud when you're online.".localized
                 )
             }
             .padding()

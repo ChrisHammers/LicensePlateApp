@@ -31,8 +31,8 @@ struct TripTrackerView: View {
 
         var title: String {
             switch self {
-            case .list: return "List"
-            case .voice: return "Voice"
+            case .list: return "List".localized
+            case .voice: return "Voice".localized
             }
         }
 
@@ -213,12 +213,12 @@ struct TripTrackerView: View {
                 let foundValue = "\(trip.foundRegionIDs.count)"
                 let remainingValue = "\(enabledRegions.count - trip.foundRegionIDs.count)"
                 
-                summaryChip(title: "Found", value: foundValue, measuredWidth: $chipWidth, measuredHeight: $chipHeight)
+                summaryChip(title: "Found".localized, value: foundValue, measuredWidth: $chipWidth, measuredHeight: $chipHeight)
               
                 // Start/End Trip Button
                 startEndTripButton(height: chipHeight)
               
-                summaryChip(title: "Remaining", value: remainingValue, measuredWidth: $chipWidth, measuredHeight: $chipHeight)
+                summaryChip(title: "Remaining".localized, value: remainingValue, measuredWidth: $chipWidth, measuredHeight: $chipHeight)
             }
             .padding(.horizontal, 32)
             
@@ -307,7 +307,7 @@ struct TripTrackerView: View {
                             .font(.system(.title2, design: .rounded))
                             .foregroundStyle(.white)
                             .accessibilityHidden(true)
-                        Text("START")
+                        Text("START".localized)
                             .font(.system(.caption, design: .rounded))
                             .fontWeight(.semibold)
                             .foregroundStyle(.white)
@@ -324,8 +324,8 @@ struct TripTrackerView: View {
                 .disabled(!isTripCreator)
                 .opacity(isTripCreator ? 1.0 : 0.5)
                 .frame(height: height > 0 ? height : nil)
-                .accessibilityLabel("Start Trip")
-                .accessibilityHint(isTripCreator ? "Starts the trip and begins tracking" : "Only the trip creator can start the trip")
+                .accessibilityLabel("Start Trip".localized)
+                .accessibilityHint(isTripCreator ? "Starts the trip and begins tracking".localized : "Only the trip creator can start the trip".localized)
                 .accessibilityAddTraits(.isButton)
             } else if !trip.isTripEnded {
                 // End Trip Button
@@ -338,7 +338,7 @@ struct TripTrackerView: View {
                             .font(.system(.title2, design: .rounded))
                             .foregroundStyle(.white)
                             .accessibilityHidden(true)
-                        Text("END")
+                        Text("END".localized)
                             .font(.system(.caption, design: .rounded))
                             .fontWeight(.semibold)
                             .foregroundStyle(.white)
@@ -355,8 +355,8 @@ struct TripTrackerView: View {
                 .disabled(!isTripCreator)
                 .opacity(isTripCreator ? 1.0 : 0.5)
                 .frame(height: height > 0 ? height : nil)
-                .accessibilityLabel("End Trip")
-                .accessibilityHint(isTripCreator ? "Ends the trip and stops tracking" : "Only the trip creator can end the trip")
+                .accessibilityLabel("End Trip".localized)
+                .accessibilityHint(isTripCreator ? "Ends the trip and stops tracking".localized : "Only the trip creator can end the trip".localized)
                 .accessibilityAddTraits(.isButton)
             } else {
                 // Trip Ended - Show status
@@ -365,7 +365,7 @@ struct TripTrackerView: View {
                         .font(.system(.title2, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .accessibilityHidden(true)
-                    Text("ENDED")
+                    Text("ENDED".localized)
                         .font(.system(.caption, design: .rounded))
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Theme.softBrown)
@@ -378,8 +378,8 @@ struct TripTrackerView: View {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(Color.Theme.background)
                 )
-                .accessibilityLabel("Trip Ended")
-                .accessibilityValue("This trip has been completed")
+                .accessibilityLabel("Trip Ended".localized)
+                .accessibilityValue("This trip has been completed".localized)
                 .accessibilityAddTraits(.isStaticText)
             }
         }
@@ -578,12 +578,12 @@ struct TripTrackerView: View {
             // Status text
             VStack(spacing: 12) {
                 if speechRecognizer.authorizationStatus == .notDetermined || speechRecognizer.authorizationStatus == .denied {
-                    Text("Speech Recognition Needed")
+                    Text("Speech Recognition Needed".localized)
                         .font(.system(.title2, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     
-                    Text("Please enable speech recognition in Settings to use voice input.")
+                    Text("Please enable speech recognition in Settings to use voice input.".localized)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .multilineTextAlignment(.center)
@@ -603,19 +603,19 @@ struct TripTrackerView: View {
                     .foregroundStyle(Color.white)
                     .font(.system(.headline, design: .rounded))
                 } else if speechRecognizer.authorizationStatus == .authorized {
-                    Text(speechRecognizer.isListening ? "Listening..." : "Hold to Talk")
+                    Text(speechRecognizer.isListening ? "Listening...".localized : "Hold to Talk".localized)
                         .font(.system(.title2, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     
                     // Always show the recognized text
                     VStack(spacing: 8) {
-                        Text("Heard:")
+                        Text("Heard:".localized)
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
                         
                         ScrollView {
-                            Text(speechRecognizer.recognizedText.isEmpty ? "No speech detected yet..." : speechRecognizer.recognizedText)
+                            Text(speechRecognizer.recognizedText.isEmpty ? "No speech detected yet...".localized : speechRecognizer.recognizedText)
                                 .font(.system(.body, design: .rounded))
                                 .fontWeight(.medium)
                                 .foregroundStyle(speechRecognizer.recognizedText.isEmpty ? Color.Theme.softBrown.opacity(0.6) : Color.Theme.primaryBlue)
@@ -942,12 +942,12 @@ struct TripTrackerView: View {
             .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 8)
         )
       
-      Text("Voice Coming Soon")
+      Text("Voice Coming Soon".localized)
         .font(.system(.title2, design: .rounded))
         .fontWeight(.bold)
         .foregroundStyle(Color.Theme.primaryBlue)
       
-      Text("Soon you will be able to log plates hands-free by simply saying the state or province you spot.")
+      Text("Soon you will be able to log plates hands-free by simply saying the state or province you spot.".localized)
         .font(.system(.body, design: .rounded))
         .foregroundStyle(Color.Theme.softBrown)
         .multilineTextAlignment(.center)
@@ -1027,7 +1027,7 @@ private struct VoiceConfirmationDialog: View {
             // Dialog box
             VStack(spacing: 0) {
                 VStack(spacing: 20) {
-                    Text("Hey, we heard the following \(region.country == .canada ? "province" : "state"):")
+                    Text("Hey, we heard the following %@:".localized(region.country == .canada ? "province".localized : "state".localized))
                         .font(.system(.title3, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .multilineTextAlignment(.center)
@@ -1039,7 +1039,7 @@ private struct VoiceConfirmationDialog: View {
                         .multilineTextAlignment(.center)
                         .padding(.vertical, 4)
                     
-                    Text("Add this to the list of license plates found?")
+                    Text("Add this to the list of license plates found?".localized)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .multilineTextAlignment(.center)
@@ -1061,7 +1061,7 @@ private struct VoiceConfirmationDialog: View {
                                 .font(.system(size: 20))
                                 .foregroundStyle(skipConfirmation ? Color.Theme.primaryBlue : Color.Theme.softBrown)
                             
-                            Text("Don't show this again")
+                            Text("Don't show this again".localized)
                                 .font(.system(.body, design: .rounded))
                                 .foregroundStyle(Color.Theme.primaryBlue)
                         }
@@ -1074,7 +1074,7 @@ private struct VoiceConfirmationDialog: View {
                         Button {
                             onCancel()
                         } label: {
-                            Text("Cancel")
+                            Text("Cancel".localized)
                                 .font(.system(.headline, design: .rounded))
                                 .fontWeight(.semibold)
                                 .foregroundStyle(Color.Theme.primaryBlue)
@@ -1089,7 +1089,7 @@ private struct VoiceConfirmationDialog: View {
                         Button {
                             onAdd()
                         } label: {
-                            Text("Add")
+                            Text("Add".localized)
                                 .font(.system(.headline, design: .rounded))
                                 .fontWeight(.semibold)
                                 .foregroundStyle(Color.white)

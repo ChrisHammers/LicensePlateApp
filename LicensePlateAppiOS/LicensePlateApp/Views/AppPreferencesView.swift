@@ -115,46 +115,46 @@ struct AppPreferencesView: View {
                     Section {
                         VStack(spacing: 12) {
                             SettingPickerRow(
-                                title: "Dark Mode",
-                                description: "Choose your preferred appearance",
+                                title: "Dark Mode".localized,
+                                description: "Choose your preferred appearance".localized,
                                 selection: appDarkMode
                             )
                           
                             Divider()
                             
                             SettingPickerRow(
-                                title: "App Background",
-                                description: "Choose background style",
+                                title: "App Background".localized,
+                                description: "Choose background style".localized,
                                 selection: appBackgroundStyle
                             )
                             
                             Divider()
                             
                             SettingPickerRow(
-                                title: "Distance Unit",
-                                description: "Select miles or kilometers",
+                                title: "Distance Unit".localized,
+                                description: "Select miles or kilometers".localized,
                                 selection: appDistanceUnit
                             )
                             
                             Divider()
                             
                             SettingPickerRow(
-                                title: "Map Style",
-                                description: "Choose standard or satellite view",
+                                title: "Map Style".localized,
+                                description: "Choose standard or satellite view".localized,
                                 selection: appMapStyle
                             )
                           
                             Divider()
                             
                             SettingToggleRow(
-                                title: "Play Sound Effects",
-                                description: "Enable audio feedback for app interactions",
+                                title: "Play Sound Effects".localized,
+                                description: "Enable audio feedback for app interactions".localized,
                                 isOn: $appPlaySoundEffects
                             )
                             
                             SettingToggleRow(
-                                title: "Use Vibrations",
-                                description: "Enable haptic feedback",
+                                title: "Use Vibrations".localized,
+                                description: "Enable haptic feedback".localized,
                                 isOn: $appUseVibrations
                             )
                             
@@ -163,16 +163,16 @@ struct AppPreferencesView: View {
                                 Divider()
                                 
                                 SettingPickerRow(
-                                    title: "Trip Sort Order",
-                                    description: "How to sort trips in the list",
+                                    title: "Trip Sort Order".localized,
+                                    description: "How to sort trips in the list".localized,
                                     selection: appTripSortOrder
                                 )
                                 
                                 Divider()
                                 
                                 SettingToggleRow(
-                                    title: "Show Confirmation Dialogs",
-                                    description: "Show confirmation prompts for destructive actions like deleting trips",
+                                    title: "Show Confirmation Dialogs".localized,
+                                    description: "Show confirmation prompts for destructive actions like deleting trips".localized,
                                     isOn: $appShowConfirmationDialogs
                                 )
                                 
@@ -180,72 +180,72 @@ struct AppPreferencesView: View {
                                 Divider()
                                 
                                 SettingPickerRow(
-                                    title: "Language",
-                                    description: "Select your preferred language",
+                                    title: "Language".localized,
+                                    description: "Select your preferred language".localized,
                                     selection: appLanguage
                                 )
                               
                                 Divider()
                                 
                                 SettingPickerRow(
-                                    title: "Font Size",
-                                    description: "Adjust text size for better readability",
+                                    title: "Font Size".localized,
+                                    description: "Adjust text size for better readability".localized,
                                     selection: appFontSize
                                 )
                                 
                                 Divider()
                                 
                                 SettingToggleRow(
-                                    title: "Reduce Motion",
-                                    description: "Respect iOS Reduce Motion setting",
+                                    title: "Reduce Motion".localized,
+                                    description: "Respect iOS Reduce Motion setting".localized,
                                     isOn: $appReduceMotion
                                 )
                                 
                                 Divider()
                                 
                                 SettingToggleRow(
-                                    title: "Auto-Sync",
-                                    description: "Automatically sync data to cloud",
+                                    title: "Auto-Sync".localized,
+                                    description: "Automatically sync data to cloud".localized,
                                     isOn: $appAutoSync
                                 )
                                 
                                 Divider()
                                 
                                 SettingPickerRow(
-                                    title: "Default Tab",
-                                    description: "Which tab to show when opening the app",
+                                    title: "Default Tab".localized,
+                                    description: "Which tab to show when opening the app".localized,
                                     selection: appDefaultTab
                                 )
                                 
                                 Divider()
                                 
                                 SettingToggleRow(
-                                    title: "Show Statistics",
-                                    description: "Display statistics on the main screen",
+                                    title: "Show Statistics".localized,
+                                    description: "Display statistics on the main screen".localized,
                                     isOn: $appShowStatistics
                                 )
                                 
                                 Divider()
                                 
                                 SettingPickerRow(
-                                    title: "Plate Display Format",
-                                    description: "How to display license plate regions",
+                                    title: "Plate Display Format".localized,
+                                    description: "How to display license plate regions".localized,
                                     selection: appPlateDisplayFormat
                                 )
                                 
                                 Divider()
                                 
                                 SettingPickerRow(
-                                    title: "Map Default Zoom",
-                                    description: "Default zoom level when opening maps",
+                                    title: "Map Default Zoom".localized,
+                                    description: "Default zoom level when opening maps".localized,
                                     selection: appMapDefaultZoom
                                 )
                                 
                                 Divider()
                                 
                                 SettingToggleRow(
-                                    title: "Show Completed Regions",
-                                    description: "Display regions that are already found in lists",
+                                    title: "Show Completed Regions".localized,
+                                    description: "Display regions that are already found in lists".localized,
                                     isOn: $appShowCompletedRegions
                                 )
                             }
@@ -262,7 +262,7 @@ struct AppPreferencesView: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle("App Preferences")
+            .navigationTitle("App Preferences".localized)
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
             .toolbar {

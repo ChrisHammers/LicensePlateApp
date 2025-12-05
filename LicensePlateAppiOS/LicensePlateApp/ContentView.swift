@@ -150,7 +150,7 @@ struct ContentView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("RoadTrip Royale")
+            Text("RoadTrip Royale".localized)
                 .font(.system(.largeTitle, design: .rounded))
                 .fontWeight(.bold)
                 .foregroundStyle(Color.Theme.primaryBlue)
@@ -161,7 +161,7 @@ struct ContentView: View {
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue.opacity(0.8))
 
-            Text("Track every plate you see across the United States, Canada, and Mexico.")
+            Text("Track every plate you see across the United States, Canada, and Mexico.".localized)
                 .font(.system(.body, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
         }
@@ -173,12 +173,12 @@ struct ContentView: View {
                 .font(.system(size: 56))
                 .foregroundStyle(Color.Theme.accentYellow)
 
-            Text("No trips yet")
+            Text("No trips yet".localized)
                 .font(.system(.title2, design: .rounded))
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue)
 
-            Text("Start your first adventure and begin collecting plates from across North America.")
+            Text("Start your first adventure and begin collecting plates from across North America.".localized)
                 .multilineTextAlignment(.center)
                 .font(.system(.body, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
@@ -200,8 +200,8 @@ struct ContentView: View {
             }
             .listRowInsets(.init(top: 6, leading: 20, bottom: 6, trailing: 20))
             .listRowBackground(Color.clear)
-            .accessibilityLabel("Trip: \(trip.name)")
-            .accessibilityHint("Double tap to open trip")
+            .accessibilityLabel("Trip: %@".localized(trip.name))
+            .accessibilityHint("Double tap to open trip".localized)
         }
         .onDelete(perform: deleteTrips)
     }
@@ -215,7 +215,7 @@ struct ContentView: View {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 24, weight: .bold))
                     .accessibilityHidden(true)
-                Text("Create Trip")
+                Text("Create Trip".localized)
                     .font(.system(.headline, design: .rounded))
                     .fontWeight(.semibold)
             }
@@ -230,7 +230,7 @@ struct ContentView: View {
         }
         .padding(.trailing, 20)
         .padding(.bottom, 32)
-        .accessibilityLabel("Create Trip")
+        .accessibilityLabel("Create Trip".localized)
         .accessibilityHint("Opens a sheet to create a new trip")
         .accessibilityAddTraits(.isButton)
     }
@@ -785,8 +785,8 @@ struct DefaultSettingsView: View {
                             // Profile (from User section, but no section header)
                             if let _ = authService.currentUser {
                                 SettingNavigationRow(
-                                    title: "Profile",
-                                    description: "Edit username and manage account",
+                                    title: "Profile".localized,
+                                    description: "Edit username and manage account".localized,
                                     icon: "person.circle"
                                 ) {
                                     coordinator.navigateToProfile(path: $navigationPath)
@@ -808,7 +808,7 @@ struct DefaultSettingsView: View {
                             
                             // App Preferences
                             SettingNavigationRow(
-                                title: "App Preferences",
+                                title: "App Preferences".localized,
                                 description: "Customize dark mode, map style, and other app settings",
                                 icon: "slider.horizontal.3"
                             ) {
