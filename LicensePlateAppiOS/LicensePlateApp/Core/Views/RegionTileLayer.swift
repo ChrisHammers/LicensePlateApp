@@ -124,11 +124,32 @@ class RegionTileLayer: GMSTileLayer {
             
             // Generate tile on background thread (fallback if no cached base tile)
             DispatchQueue.global(qos: .userInitiated).async {
-                let tile = self.generateTile(x: x, y: y, zoom: zoom)
+                // Optimization: If no found regions intersect this tile, try to use pre-rendered base tile
+                let tile: UIImage?
+                if intersectingFoundRegions.isEmpty {
+                    // No found regions - try to load pre-rendered base tile from disk
+                    if TileCacheService.shared.hasCachedTile(zoom: zoom, x: x, y: y),
+                       let baseTile = TileCacheService.shared.loadCachedTile(zoom: zoom, x: x, y: y) {
+                        tile = baseTile
+                    } else {
+                        // No cached base tile available - generate base-only tile (skip found region rendering)
+                        tile = self.generateTile(x: x, y: y, zoom: zoom, skipFoundRegions: true)
+                    }
+                } else {
+                    // Found regions exist - generate full tile with overlays
+                    tile = self.generateTile(x: x, y: y, zoom: zoom, skipFoundRegions: false)
+                }
+                
+                guard let finalTile = tile else {
+                    DispatchQueue.main.async {
+                        receiver.receiveTileWith(x: x, y: y, zoom: zoom, image: nil)
+                    }
+                    return
+                }
                 
                 // Cache the tile with LRU eviction (use tileKey that includes found region state)
                 self.cacheQueue.async(flags: .barrier) {
-                    self.tileCache[tileKey] = tile
+                    self.tileCache[tileKey] = finalTile
                     // Add to access order (move to end if already exists)
                     if let index = self.tileAccessOrder.firstIndex(of: tileKey) {
                         self.tileAccessOrder.remove(at: index)
@@ -147,7 +168,7 @@ class RegionTileLayer: GMSTileLayer {
                 }
                 
                 DispatchQueue.main.async {
-                    receiver.receiveTileWith(x: x, y: y, zoom: zoom, image: tile)
+                    receiver.receiveTileWith(x: x, y: y, zoom: zoom, image: finalTile)
                 }
             }
         }
@@ -192,7 +213,7 @@ class RegionTileLayer: GMSTileLayer {
         return "\(baseKey)_found:\(hash)"
     }
     
-    private func generateTile(x: UInt, y: UInt, zoom: UInt) -> UIImage? {
+    private func generateTile(x: UInt, y: UInt, zoom: UInt, skipFoundRegions: Bool = false) -> UIImage? {
         // Tile size (Google Maps uses 256x256)
         let tileSize: Int = 256
         
@@ -230,6 +251,12 @@ class RegionTileLayer: GMSTileLayer {
         for region in regions {
             let boundaries = RegionBoundaries.fullBoundaries(for: region.id)
             guard !boundaries.isEmpty else { continue }
+            
+            // Optimization: Skip found regions if skipFoundRegions is true
+            // (This tile has no found regions, so we only need to render unfound regions)
+            if skipFoundRegions && foundRegionIDs.contains(region.id) {
+                continue
+            }
             
             #if DEBUG
             print("🟢 Rendering region \(region.id) for tile \(zoom)_\(x)_\(y)")
