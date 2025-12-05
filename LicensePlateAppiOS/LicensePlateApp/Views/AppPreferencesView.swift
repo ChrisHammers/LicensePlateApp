@@ -150,6 +150,7 @@ struct AppPreferencesView: View {
                             
                             Divider()
                             
+                          #if DEBUG
                             SettingToggleRow(
                                 title: "Show Region Borders",
                                 description: "Display colored region boundaries on the map (blue for unfound, yellow for found)",
@@ -157,6 +158,7 @@ struct AppPreferencesView: View {
                             )
                             
                             Divider()
+                          
                             
                             SettingToggleRow(
                                 title: "Show Map Markers",
@@ -166,6 +168,7 @@ struct AppPreferencesView: View {
                             
                             Divider()
                             
+                          #if DEBUG
                             SettingToggleRow(
                                 title: "Use GMU Rendering (Testing)",
                                 description: "Use Google Maps Utils for polygon rendering (for performance comparison)",
@@ -173,7 +176,8 @@ struct AppPreferencesView: View {
                             )
                             
                             Divider()
-                            
+                          #endif
+                #if DEBUG
                             SettingToggleRow(
                                 title: "Use Tile Overlay (Testing)",
                                 description: "Use TileOverlay for polygon rendering - best performance for many polygons",
@@ -181,6 +185,7 @@ struct AppPreferencesView: View {
                             )
                           
                             Divider()
+                          #endif
                             
                             SettingToggleRow(
                                 title: "Play Sound Effects",
