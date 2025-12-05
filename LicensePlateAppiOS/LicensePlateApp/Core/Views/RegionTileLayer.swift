@@ -21,6 +21,10 @@ class RegionTileLayer: GMSTileLayer {
     private let maxCacheSize = 2000 // Increased cache size for better zoom level support
     private let cacheQueue = DispatchQueue(label: "com.licenseplateapp.tilecache", attributes: .concurrent)
     
+    // Track active tile requests to prevent responding to cancelled requests
+    private var activeRequests: Set<String> = [] // Set of "zoom_x_y" keys
+    private let requestQueue = DispatchQueue(label: "com.licenseplateapp.tilerequests", attributes: .concurrent)
+    
     init(regions: [PlateRegion], foundRegionIDs: [String]) {
         self.regions = regions
         self.foundRegionIDs = Set(foundRegionIDs)
@@ -36,11 +40,49 @@ class RegionTileLayer: GMSTileLayer {
         print("🔵 Tile requested: \(baseTileKey)")
         #endif
         
+        // Capture requestQueue and other values for use in nested functions
+        let requestQueue = self.requestQueue
+        let capturedReceiver = receiver
+        let capturedX = x
+        let capturedY = y
+        let capturedZoom = zoom
+        let capturedBaseTileKey = baseTileKey
+        
+        // Mark request as active
+        requestQueue.async(flags: .barrier) { [weak self] in
+            self?.activeRequests.insert(capturedBaseTileKey)
+        }
+        
+        // Helper function to safely respond only if request is still active
+        func safeRespond(image: UIImage?) {
+            requestQueue.async(flags: .barrier) { [weak self] in
+                guard let self = self else { return }
+                
+                // Check if request is still active
+                guard self.activeRequests.contains(capturedBaseTileKey) else {
+                    #if DEBUG
+                    print("⚠️ Request \(capturedBaseTileKey) was cancelled - not responding")
+                    #endif
+                    return
+                }
+                
+                // Remove from active requests
+                self.activeRequests.remove(capturedBaseTileKey)
+                
+                // Respond on main thread
+                DispatchQueue.main.async {
+                    // Double-check map is still attached
+                    if self.map != nil {
+                        capturedReceiver.receiveTileWith(x: capturedX, y: capturedY, zoom: capturedZoom, image: image)
+                    }
+                }
+            }
+        }
+        
         // Check cache first
         cacheQueue.async { [weak self] in
             guard let self = self else {
-              receiver.receiveTileWith(x:x, y:y, zoom:zoom, image:nil)
-              return
+                return
             }
             
             // Get found region IDs that intersect with this tile (for cache key)
@@ -65,16 +107,22 @@ class RegionTileLayer: GMSTileLayer {
                     }
                     self.tileAccessOrder.append(tileKey)
                 }
-                DispatchQueue.main.async {
-                    receiver.receiveTileWith(x: x, y: y, zoom: zoom, image: cachedTile)
-                }
+                safeRespond(image: cachedTile)
                 return
             }
             
             // Check for pre-rendered base tile from disk cache
             if TileCacheService.shared.hasCachedTile(zoom: zoom, x: x, y: y) {
                 // Load base tile and overlay found regions
-                DispatchQueue.global(qos: .userInitiated).async {
+                DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                    guard let self = self, self.map != nil else {
+                        // Cancel request if tile layer is removed
+                        requestQueue.async(flags: .barrier) { [weak self] in
+                            self?.activeRequests.remove(capturedBaseTileKey)
+                        }
+                        return
+                    }
+                    
                     let loadStartTime = Date()
                     if let baseTile = TileCacheService.shared.loadCachedTile(zoom: zoom, x: x, y: y) {
                         let loadTime = Date().timeIntervalSince(loadStartTime) * 1000 // Convert to ms
@@ -107,9 +155,7 @@ class RegionTileLayer: GMSTileLayer {
                         }
                         
                         guard let finalTile = tile else {
-                            DispatchQueue.main.async {
-                                receiver.receiveTileWith(x: x, y: y, zoom: zoom, image: nil)
-                            }
+                            safeRespond(image: nil)
                             return
                         }
                         
@@ -132,16 +178,22 @@ class RegionTileLayer: GMSTileLayer {
                             }
                         }
                         
-                        DispatchQueue.main.async {
-                            receiver.receiveTileWith(x: x, y: y, zoom: zoom, image: finalTile)
-                        }
+                        safeRespond(image: finalTile)
                         return
                     }
                 }
             }
             
             // Generate tile on background thread (fallback if no cached base tile)
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                guard let self = self, self.map != nil else {
+                    // Cancel request if tile layer is removed
+                    requestQueue.async(flags: .barrier) { [weak self] in
+                        self?.activeRequests.remove(capturedBaseTileKey)
+                    }
+                    return
+                }
+                
                 let generateStartTime = Date()
                 
                 // Optimization: If no found regions intersect this tile, try to use pre-rendered base tile
@@ -185,10 +237,20 @@ class RegionTileLayer: GMSTileLayer {
                 }
                 #endif
                 
-                guard let finalTile = tile else {
-                    DispatchQueue.main.async {
-                        receiver.receiveTileWith(x: x, y: y, zoom: zoom, image: nil)
+                // Double-check map is still valid before generating final response
+                guard self.map != nil else {
+                    #if DEBUG
+                    print("⚠️ Tile layer removed during generation - discarding tile \(capturedBaseTileKey)")
+                    #endif
+                    // Cancel request
+                    requestQueue.async(flags: .barrier) { [weak self] in
+                        self?.activeRequests.remove(capturedBaseTileKey)
                     }
+                    return
+                }
+                
+                guard let finalTile = tile else {
+                    safeRespond(image: nil)
                     return
                 }
                 
@@ -212,9 +274,7 @@ class RegionTileLayer: GMSTileLayer {
                     }
                 }
                 
-                DispatchQueue.main.async {
-                    receiver.receiveTileWith(x: x, y: y, zoom: zoom, image: finalTile)
-                }
+                safeRespond(image: finalTile)
             }
         }
     }
@@ -644,11 +704,27 @@ class RegionTileLayer: GMSTileLayer {
         clearTileCache()
     }
     
-    /// Clear tile cache
+    /// Clear tile cache and cancel all active requests
     func clearCache() {
         cacheQueue.async(flags: .barrier) {
             self.tileCache.removeAll()
             self.tileAccessOrder.removeAll()
+        }
+        // Cancel all active requests
+        requestQueue.async(flags: .barrier) {
+            self.activeRequests.removeAll()
+        }
+    }
+    
+    // Override to cancel requests when tile layer is removed
+    override var map: GMSMapView? {
+        didSet {
+            if map == nil {
+                // Cancel all active requests when tile layer is removed
+                requestQueue.async(flags: .barrier) {
+                    self.activeRequests.removeAll()
+                }
+            }
         }
     }
 }
