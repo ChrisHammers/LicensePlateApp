@@ -28,7 +28,7 @@ struct VoiceDefaultsView: View {
                                     isOn: $defaultHoldToTalk
                                 )
                             } else {
-                                Text("No voice defaults available")
+                                Text("No voice defaults available".localized)
                                     .font(.system(.body, design: .rounded))
                                     .foregroundStyle(Color.Theme.softBrown)
                                     .frame(maxWidth: .infinity, alignment: .center)
@@ -47,19 +47,19 @@ struct VoiceDefaultsView: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle("Voice Defaults")
+            .navigationTitle("Voice Defaults".localized)
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
+                    Button("Done".localized) {
                         dismiss()
                     }
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
-                    .accessibilityLabel("Done")
-                    .accessibilityHint("Closes this view")
+                    .accessibilityLabel("Done".localized)
+                    .accessibilityHint("Closes this view".localized)
                 }
             }
         }

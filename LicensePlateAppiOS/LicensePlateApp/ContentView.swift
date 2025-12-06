@@ -797,8 +797,8 @@ struct DefaultSettingsView: View {
                             
                             // Privacy & Permissions
                             SettingNavigationRow(
-                                title: "Privacy & Permissions",
-                                description: "Manage location, microphone, notifications, and other permissions",
+                                title: "Privacy & Permissions".localized,
+                                description: "Manage location, microphone, notifications, and other permissions".localized,
                                 icon: "hand.raised.fill"
                             ) {
                                 coordinator.navigateToPrivacyPermissions(path: $navigationPath)
@@ -819,8 +819,8 @@ struct DefaultSettingsView: View {
                             
                             // New Trip Defaults
                             SettingNavigationRow(
-                                title: "New Trip Defaults",
-                                description: "Set default countries, tracking, and voice settings for new trips",
+                                title: "New Trip Defaults".localized,
+                                description: "Set default countries, tracking, and voice settings for new trips".localized,
                                 icon: "plus.circle.fill"
                             ) {
                                 coordinator.navigateToNewTripDefaults(path: $navigationPath)
@@ -863,11 +863,11 @@ struct DefaultSettingsView: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle("Settings")
+            .navigationTitle("Settings".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
+                    Button("Done".localized) {
                         dismiss()
                     }
                     .font(.system(.body, design: .rounded))

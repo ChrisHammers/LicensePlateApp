@@ -38,7 +38,7 @@ struct PrivacyPermissionsView: View {
                     Section {
                         VStack(spacing: 12) {
                             PermissionRow(
-                                title: "Location",
+                                title: "Location".localized,
                                 icon: "location.fill",
                                 status: locationPermissionStatus,
                                 statusColor: locationPermissionColor,
@@ -46,20 +46,20 @@ struct PrivacyPermissionsView: View {
                             )
                             
                             SettingToggleRow(
-                                title: "Save location when marking plates",
-                                description: "Store location data when you mark a plate as found",
+                                title: "Save location when marking plates".localized,
+                                description: "Store location data when you mark a plate as found".localized,
                                 isOn: $saveLocationWhenMarkingPlates
                             )
                             
                             SettingToggleRow(
-                                title: "Show my location on large map",
-                                description: "Display your current location on the full-screen map",
+                                title: "Show my location on large map".localized,
+                                description: "Display your current location on the full-screen map".localized,
                                 isOn: $showMyLocationOnLargeMap
                             )
                             
                             SettingToggleRow(
-                                title: "Track my location during trips",
-                                description: "Continuously track your location while a trip is active (Can be disabled at any time)",
+                                title: "Track my location during trips".localized,
+                                description: "Continuously track your location while a trip is active (Can be disabled at any time)".localized,
                                 isOn: $trackMyLocationDuringTrips
                             )
                         }
@@ -70,7 +70,7 @@ struct PrivacyPermissionsView: View {
                         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                         .listRowBackground(Color.clear)
                     } header: {
-                        Text("Location")
+                        Text("Location".localized)
                             .font(.system(.headline, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
@@ -80,7 +80,7 @@ struct PrivacyPermissionsView: View {
                     Section {
                         VStack(spacing: 12) {
                             PermissionRow(
-                                title: "Microphone",
+                                title: "Microphone".localized,
                                 icon: "mic.fill",
                                 status: microphonePermissionStatus,
                                 statusColor: microphonePermissionColor,
@@ -88,7 +88,7 @@ struct PrivacyPermissionsView: View {
                             )
                             
                             PermissionRow(
-                                title: "Speech Recognizer",
+                                title: "Speech Recognizer".localized,
                                 icon: "waveform",
                                 status: speechRecognitionPermissionStatus,
                                 statusColor: speechRecognitionPermissionColor,
@@ -98,7 +98,7 @@ struct PrivacyPermissionsView: View {
                             // Camera Permission (hidden for now)
                             if false {
                                 PermissionRow(
-                                    title: "Camera",
+                                    title: "Camera".localized,
                                     icon: "camera.fill",
                                     status: cameraPermissionStatus,
                                     statusColor: cameraPermissionColor,
@@ -113,7 +113,7 @@ struct PrivacyPermissionsView: View {
                         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                         .listRowBackground(Color.clear)
                     } header: {
-                        Text("Voice")
+                        Text("Voice".localized)
                             .font(.system(.headline, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
@@ -123,7 +123,7 @@ struct PrivacyPermissionsView: View {
                     Section {
                         VStack(spacing: 12) {
                             PermissionRow(
-                                title: "Notifications",
+                                title: "Notifications".localized,
                                 icon: "bell.fill",
                                 status: notificationPermissionStatus,
                                 statusColor: notificationPermissionColor,
@@ -131,20 +131,20 @@ struct PrivacyPermissionsView: View {
                             )
                             
                             SettingToggleRow(
-                                title: "Plate found by opponent",
-                                description: "Get notified when an opponent finds a plate",
+                                title: "Plate found by opponent".localized,
+                                description: "Get notified when an opponent finds a plate".localized,
                                 isOn: $notifyPlateFoundByOpponent
                             )
                             
                             SettingToggleRow(
-                                title: "Plate found by co-pilots",
-                                description: "Get notified when a co-pilot finds a plate",
+                                title: "Plate found by co-pilots".localized,
+                                description: "Get notified when a co-pilot finds a plate".localized,
                                 isOn: $notifyPlateFoundByCoPilots
                             )
                             
                             SettingToggleRow(
-                                title: "Promotion & News",
-                                description: "Receive promotional offers and app news",
+                                title: "Promotion & News".localized,
+                                description: "Receive promotional offers and app news".localized,
                                 isOn: $notifyPromotionsAndNews
                             )
                         }
@@ -155,7 +155,7 @@ struct PrivacyPermissionsView: View {
                         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                         .listRowBackground(Color.clear)
                     } header: {
-                        Text("Notifications")
+                        Text("Notifications".localized)
                             .font(.system(.headline, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
@@ -164,19 +164,19 @@ struct PrivacyPermissionsView: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle("Privacy & Permissions")
+            .navigationTitle("Privacy & Permissions".localized)
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
+                    Button("Done".localized) {
                         dismiss()
                     }
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
-                    .accessibilityLabel("Done")
-                    .accessibilityHint("Closes this view")
+                    .accessibilityLabel("Done".localized)
+                    .accessibilityHint("Closes this view".localized)
                 }
             }
             .onAppear {
@@ -191,15 +191,15 @@ struct PrivacyPermissionsView: View {
     private var locationPermissionStatus: String {
         switch locationManager.authorizationStatus {
         case .authorizedAlways:
-            return "Allowed"
+            return "Allowed".localized
         case .authorizedWhenInUse:
-            return "While App is Open"
+            return "While App is Open".localized
         case .denied, .restricted:
-            return "Disabled"
+            return "Disabled".localized
         case .notDetermined:
-            return "Not Set"
+            return "Not Set".localized
         @unknown default:
-            return "Unknown"
+            return "Unknown".localized
         }
     }
     
@@ -221,13 +221,13 @@ struct PrivacyPermissionsView: View {
     private var microphonePermissionStatus: String {
         switch microphonePermission {
         case .granted:
-            return "Allowed"
+            return "Allowed".localized
         case .denied:
-            return "Disabled"
+            return "Disabled".localized
         case .undetermined:
-            return "Not Set"
+            return "Not Set".localized
         @unknown default:
-            return "Unknown"
+            return "Unknown".localized
         }
     }
     
@@ -247,13 +247,13 @@ struct PrivacyPermissionsView: View {
     private var speechRecognitionPermissionStatus: String {
         switch speechRecognitionPermission {
         case .authorized:
-            return "Allowed"
+            return "Allowed".localized
         case .denied, .restricted:
-            return "Disabled"
+            return "Disabled".localized
         case .notDetermined:
-            return "Not Set"
+            return "Not Set".localized
         @unknown default:
-            return "Unknown"
+            return "Unknown".localized
         }
     }
     
@@ -273,13 +273,13 @@ struct PrivacyPermissionsView: View {
     private var cameraPermissionStatus: String {
         switch cameraPermission {
         case .authorized:
-            return "Allowed"
+            return "Allowed".localized
         case .denied, .restricted:
-            return "Disabled"
+            return "Disabled".localized
         case .notDetermined:
-            return "Not Set"
+            return "Not Set".localized
         @unknown default:
-            return "Unknown"
+            return "Unknown".localized
         }
     }
     
@@ -299,13 +299,13 @@ struct PrivacyPermissionsView: View {
     private var notificationPermissionStatus: String {
         switch notificationPermission {
         case .authorized, .provisional, .ephemeral:
-            return "Allowed"
+            return "Allowed".localized
         case .denied:
-            return "Disabled"
+            return "Disabled".localized
         case .notDetermined:
-            return "Not Set"
+            return "Not Set".localized
         @unknown default:
-            return "Unknown"
+            return "Unknown".localized
         }
     }
     

@@ -131,3 +131,109 @@
 "state" = "estado";
 "province" = "provincia";
 
+// Settings - Trip Settings View
+"Settings" = "Configuración";
+"Trip Info" = "Información del Viaje";
+"Game Settings" = "Configuración del Juego";
+"Tracking & Privacy" = "Seguimiento y Privacidad";
+"Trip Name" = "Nombre del Viaje";
+"Enter trip name" = "Ingresa el nombre del viaje";
+"Created" = "Creado";
+"Started" = "Iniciado";
+"Ended" = "Terminado";
+"Start Trip" = "Iniciar Viaje";
+"End Trip" = "Terminar Viaje";
+"Reset Trip" = "Restablecer Viaje";
+"Delete Trip" = "Eliminar Viaje";
+"Countries to Include" = "Países a Incluir";
+"United States" = "Estados Unidos";
+"Canada" = "Canadá";
+"Mexico" = "México";
+"Save location when marking plates" = "Guardar ubicación al marcar placas";
+"Store location data when you mark a plate as found" = "Almacenar datos de ubicación cuando marcas una placa como encontrada";
+"Show my location on large map" = "Mostrar mi ubicación en el mapa grande";
+"Display your current location on the full-screen map" = "Mostrar tu ubicación actual en el mapa de pantalla completa";
+"Track my location during trip" = "Rastrear mi ubicación durante el viaje";
+"Continuously track your location while a trip is active" = "Rastrear continuamente tu ubicación mientras un viaje está activo";
+"Show my active trip on the large map" = "Mostrar mi viaje activo en el mapa grande";
+"Display your active trip on the full-screen map" = "Mostrar tu viaje activo en el mapa de pantalla completa";
+"Show my active trip on the small map" = "Mostrar mi viaje activo en el mapa pequeño";
+"Display your active trip on the small map" = "Mostrar tu viaje activo en el mapa pequeño";
+"Skip Voice Confirmation" = "Omitir Confirmación de Voz";
+"Automatically add license plates without confirmation when using Voice" = "Agregar automáticamente placas sin confirmación al usar Voz";
+"Hold to Talk" = "Mantén Presionado para Hablar";
+"Press and hold the microphone button to record. If disabled the system will listen until you hit stop." = "Presiona y mantén presionado el botón del micrófono para grabar. Si está deshabilitado, el sistema escuchará hasta que presiones detener.";
+"Reset" = "Restablecer";
+"Delete" = "Eliminar";
+"This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset." = "Esto restablecerá toda la configuración del viaje excepto el nombre del viaje. Todo se restablecerá, incluida la Fecha de Inicio, que no se iniciará automáticamente. Cualquier registro se borrará, excepto un registro que indique que fue restablecido.";
+"This will delete the trip and all scores will be removed." = "Esto eliminará el viaje y se eliminarán todas las puntuaciones.";
+"Done" = "Hecho";
+
+// Settings - New Trip Defaults View
+"New Trip Defaults" = "Valores Predeterminados de Nuevo Viaje";
+"Start Trip right away" = "Iniciar viaje de inmediato";
+"Automatically start new trips when created" = "Iniciar automáticamente nuevos viajes cuando se crean";
+"Default Countries" = "Países Predeterminados";
+"Select which countries' license plates will be included by default when creating new trips" = "Selecciona qué placas de países se incluirán por defecto al crear nuevos viajes";
+"Store location data when marking plates (default for new trips)" = "Almacenar datos de ubicación al marcar placas (predeterminado para nuevos viajes)";
+"Display current location on full-screen map (default for new trips)" = "Mostrar ubicación actual en mapa de pantalla completa (predeterminado para nuevos viajes)";
+"Continuously track location while trip is active (default for new trips)" = "Rastrear continuamente la ubicación mientras el viaje está activo (predeterminado para nuevos viajes)";
+"Display active trip on full-screen map (default for new trips)" = "Mostrar viaje activo en mapa de pantalla completa (predeterminado para nuevos viajes)";
+"Display active trip on small map (default for new trips)" = "Mostrar viaje activo en mapa pequeño (predeterminado para nuevos viajes)";
+"Automatically add license plates heard by speech recognition without requiring user confirmation. This is the default for NEW trips created, this can be changed per trip as well." = "Agregar automáticamente placas escuchadas por reconocimiento de voz sin requerir confirmación del usuario. Este es el predeterminado para NUEVOS viajes creados, también se puede cambiar por viaje.";
+"Location Tracking" = "Seguimiento de Ubicación";
+
+// Settings - Voice Defaults View
+"Voice Defaults" = "Valores Predeterminados de Voz";
+"No voice defaults available" = "No hay valores predeterminados de voz disponibles";
+"This is the default for NEW trips created, this can be changed per trip as well." = "Este es el predeterminado para NUEVOS viajes creados, también se puede cambiar por viaje.";
+
+// Settings - Privacy & Permissions View
+"Privacy & Permissions" = "Privacidad y Permisos";
+"Location" = "Ubicación";
+"Voice" = "Voz";
+"Notifications" = "Notificaciones";
+"Microphone" = "Micrófono";
+"Speech Recognizer" = "Reconocedor de Voz";
+"Camera" = "Cámara";
+"Allowed" = "Permitido";
+"While App is Open" = "Mientras la App Está Abierta";
+"Disabled" = "Deshabilitado";
+"Not Set" = "No Establecido";
+"Unknown" = "Desconocido";
+"Track my location during trips" = "Rastrear mi ubicación durante los viajes";
+"Continuously track your location while a trip is active (Can be disabled at any time)" = "Rastrear continuamente tu ubicación mientras un viaje está activo (Se puede deshabilitar en cualquier momento)";
+"Plate found by opponent" = "Placa encontrada por oponente";
+"Get notified when an opponent finds a plate" = "Recibir notificación cuando un oponente encuentra una placa";
+"Plate found by co-pilots" = "Placa encontrada por copilotos";
+"Get notified when a co-pilot finds a plate" = "Recibir notificación cuando un copiloto encuentra una placa";
+"Promotion & News" = "Promoción y Noticias";
+"Receive promotional offers and app news" = "Recibir ofertas promocionales y noticias de la app";
+"Closes this view" = "Cierra esta vista";
+
+// Settings - ContentView Settings Navigation
+"Manage location, microphone, notifications, and other permissions" = "Administrar ubicación, micrófono, notificaciones y otros permisos";
+"Set default countries, tracking, and voice settings for new trips" = "Establecer países predeterminados, seguimiento y configuración de voz para nuevos viajes";
+"Configure default voice recognition settings for new trips" = "Configurar valores predeterminados de reconocimiento de voz para nuevos viajes";
+
+// Settings - Additional
+"Trip Settings" = "Configuración del Viaje";
+"Opens settings for this trip" = "Abre la configuración de este viaje";
+"Open Settings" = "Abrir Configuración";
+"Recording" = "Grabando";
+"Not recording" = "No grabando";
+"Voice Input" = "Entrada de Voz";
+"Trip must be started to use voice input" = "El viaje debe iniciarse para usar la entrada de voz";
+"Speech recognition permission required" = "Se requiere permiso de reconocimiento de voz";
+"Press and hold to record license plate" = "Presiona y mantén presionado para grabar placa";
+"Trip must be started to use this tab" = "El viaje debe iniciarse para usar esta pestaña";
+"Double tap to switch to %@ tab" = "Toca dos veces para cambiar a la pestaña %@";
+"Found" = "Encontrado";
+"Not found" = "No encontrado";
+"Trip must be started to mark regions" = "El viaje debe iniciarse para marcar regiones";
+"Double tap to %@ this region as found" = "Toca dos veces para %@ esta región como encontrada";
+"unmark" = "desmarcar";
+"mark" = "marcar";
+"Selected" = "Seleccionado";
+
+

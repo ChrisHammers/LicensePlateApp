@@ -33,8 +33,8 @@ struct NewTripDefaultsView: View {
                         VStack(spacing: 12) {
                             // Start Trip - First item
                             SettingToggleRow(
-                                title: "Start Trip right away",
-                                description: "Automatically start new trips when created",
+                                title: "Start Trip right away".localized,
+                                description: "Automatically start new trips when created".localized,
                                 isOn: $defaultStartTripRightAway
                             )
                             
@@ -42,26 +42,26 @@ struct NewTripDefaultsView: View {
                             
                             // Countries
                             VStack(alignment: .leading, spacing: 12) {
-                                Text("Default Countries")
+                                Text("Default Countries".localized)
                                     .font(.system(.headline, design: .rounded))
                                     .foregroundStyle(Color.Theme.primaryBlue)
                                 
-                                Text("Select which countries' license plates will be included by default when creating new trips")
+                                Text("Select which countries' license plates will be included by default when creating new trips".localized)
                                     .font(.system(.caption, design: .rounded))
                                     .foregroundStyle(Color.Theme.softBrown)
                                     .padding(.bottom, 4)
                                 
-                                CountryCheckboxRow(title: "United States", isOn: $defaultIncludeUS)
-                                CountryCheckboxRow(title: "Canada", isOn: $defaultIncludeCanada)
-                                CountryCheckboxRow(title: "Mexico", isOn: $defaultIncludeMexico)
+                                CountryCheckboxRow(title: "United States".localized, isOn: $defaultIncludeUS)
+                                CountryCheckboxRow(title: "Canada".localized, isOn: $defaultIncludeCanada)
+                                CountryCheckboxRow(title: "Mexico".localized, isOn: $defaultIncludeMexico)
                             }
                             
                             Divider()
                             
                             // Voice Settings
                             SettingToggleRow(
-                                title: "Skip Voice Confirmation",
-                                description: "Automatically add license plates heard by speech recognition without requiring user confirmation. This is the default for NEW trips created, this can be changed per trip as well.",
+                                title: "Skip Voice Confirmation".localized,
+                                description: "Automatically add license plates heard by speech recognition without requiring user confirmation. This is the default for NEW trips created, this can be changed per trip as well.".localized,
                                 isOn: $defaultSkipVoiceConfirmation
                             )
                             
@@ -69,40 +69,40 @@ struct NewTripDefaultsView: View {
                             
                             // Tracking Options
                             VStack(alignment: .leading, spacing: 12) {
-                                Text("Location Tracking")
+                                Text("Location Tracking".localized)
                                     .font(.system(.headline, design: .rounded))
                                     .foregroundStyle(Color.Theme.primaryBlue)
                                     .padding(.bottom, 4)
                                 
                                 SettingToggleRow(
-                                    title: "Save location when marking plates",
-                                    description: "Store location data when marking plates (default for new trips)",
+                                    title: "Save location when marking plates".localized,
+                                    description: "Store location data when marking plates (default for new trips)".localized,
                                     isOn: $defaultSaveLocationWhenMarkingPlates
                                 )
                                 
                                 SettingToggleRow(
-                                    title: "Show my location on large map",
-                                    description: "Display current location on full-screen map (default for new trips)",
+                                    title: "Show my location on large map".localized,
+                                    description: "Display current location on full-screen map (default for new trips)".localized,
                                     isOn: $defaultShowMyLocationOnLargeMap
                                 )
                                 
                                 SettingToggleRow(
-                                    title: "Track my location during trip",
-                                    description: "Continuously track location while trip is active (default for new trips)",
+                                    title: "Track my location during trip".localized,
+                                    description: "Continuously track location while trip is active (default for new trips)".localized,
                                     isOn: $defaultTrackMyLocationDuringTrip
                                 )
                                 
                                 SettingToggleRow(
-                                    title: "Show my active trip on the large map",
-                                    description: "Display active trip on full-screen map (default for new trips)",
+                                    title: "Show my active trip on the large map".localized,
+                                    description: "Display active trip on full-screen map (default for new trips)".localized,
                                     isOn: $defaultShowMyActiveTripOnLargeMap
                                 )
                                 .disabled(!defaultTrackMyLocationDuringTrip)
                                 .opacity(defaultTrackMyLocationDuringTrip ? 1.0 : 0.5)
                                 
                                 SettingToggleRow(
-                                    title: "Show my active trip on the small map",
-                                    description: "Display active trip on small map (default for new trips)",
+                                    title: "Show my active trip on the small map".localized,
+                                    description: "Display active trip on small map (default for new trips)".localized,
                                     isOn: $defaultShowMyActiveTripOnSmallMap
                                 )
                                 .disabled(!defaultTrackMyLocationDuringTrip)
@@ -121,19 +121,19 @@ struct NewTripDefaultsView: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle("New Trip Defaults")
+            .navigationTitle("New Trip Defaults".localized)
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
+                    Button("Done".localized) {
                         dismiss()
                     }
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
-                    .accessibilityLabel("Done")
-                    .accessibilityHint("Closes this view")
+                    .accessibilityLabel("Done".localized)
+                    .accessibilityHint("Closes this view".localized)
                 }
             }
     }

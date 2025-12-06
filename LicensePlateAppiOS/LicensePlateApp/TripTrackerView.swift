@@ -93,8 +93,8 @@ struct TripTrackerView: View {
                         Image(systemName: "gearshape")
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
-                    .accessibilityLabel("Trip Settings")
-                    .accessibilityHint("Opens settings for this trip")
+                    .accessibilityLabel("Trip Settings".localized)
+                    .accessibilityHint("Opens settings for this trip".localized)
                 }
             }
         }
@@ -566,12 +566,12 @@ struct TripTrackerView: View {
                     }
             )
             .disabled(!isTripActive || speechRecognizer.authorizationStatus != .authorized)
-            .accessibilityLabel("Voice Input")
-            .accessibilityValue(speechRecognizer.isListening ? "Recording" : "Not recording")
+            .accessibilityLabel("Voice Input".localized)
+            .accessibilityValue(speechRecognizer.isListening ? "Recording".localized : "Not recording".localized)
             .accessibilityHint(
-                !isTripActive ? "Trip must be started to use voice input" :
-                speechRecognizer.authorizationStatus != .authorized ? "Speech recognition permission required" :
-                "Press and hold to record license plate"
+                !isTripActive ? "Trip must be started to use voice input".localized :
+                speechRecognizer.authorizationStatus != .authorized ? "Speech recognition permission required".localized :
+                "Press and hold to record license plate".localized
             )
             .accessibilityAddTraits(.isButton)
             
@@ -589,7 +589,7 @@ struct TripTrackerView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                     
-                    Button("Open Settings") {
+                    Button("Open Settings".localized) {
                         if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
                             UIApplication.shared.open(settingsURL)
                         }
@@ -914,8 +914,8 @@ struct TripTrackerView: View {
                 .disabled(isTabDisabled)
                 .opacity(isTabDisabled ? 0.5 : 1.0)
                 .accessibilityLabel(tab.title)
-                .accessibilityValue(selectedTab == tab ? "Selected" : "")
-                .accessibilityHint(isTabDisabled ? "Trip must be started to use this tab" : "Double tap to switch to \(tab.title.lowercased()) tab")
+                .accessibilityValue(selectedTab == tab ? "Selected".localized : "")
+                .accessibilityHint(isTabDisabled ? "Trip must be started to use this tab".localized : "Double tap to switch to %@ tab".localized(tab.title.lowercased()))
                 .accessibilityAddTraits(selectedTab == tab ? [.isButton, .isSelected] : .isButton)
             }
         }
@@ -1002,8 +1002,8 @@ private struct RegionCellView: View {
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.5 : 1.0)
         .accessibilityLabel("\(region.name), \(region.country.rawValue)")
-        .accessibilityValue(isSelected ? "Found" : "Not found")
-        .accessibilityHint(isDisabled ? "Trip must be started to mark regions" : "Double tap to \(isSelected ? "unmark" : "mark") this region as found")
+        .accessibilityValue(isSelected ? "Found".localized : "Not found".localized)
+        .accessibilityHint(isDisabled ? "Trip must be started to mark regions".localized : "Double tap to %@ this region as found".localized(isSelected ? "unmark".localized : "mark".localized))
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -1129,6 +1129,15 @@ private struct SettingsView: View {
         case voice = "Voice"
         
         var id: String { rawValue }
+        
+        var localizedTitle: String {
+            switch self {
+            case .tripInfo: return "Trip Info".localized
+            case .gameSettings: return "Game Settings".localized
+            case .trackingPrivacy: return "Tracking & Privacy".localized
+            case .voice: return "Voice".localized
+            }
+        }
     }
     
     @EnvironmentObject var authService: FirebaseAuthService
@@ -1176,7 +1185,7 @@ private struct SettingsView: View {
                           .background(Color.Theme.cardBackground)
                           .cornerRadius(20)
                         } header: {
-                            Text(section.rawValue)
+                            Text(section.localizedTitle)
                                 .font(.system(.headline, design: .rounded))
                                 .foregroundStyle(Color.Theme.primaryBlue)
                         }
@@ -1187,11 +1196,11 @@ private struct SettingsView: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle("Settings")
+            .navigationTitle("Settings".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
+                    Button("Done".localized) {
                         dismiss()
                     }
                     .font(.system(.body, design: .rounded))
@@ -1207,7 +1216,7 @@ private struct SettingsView: View {
         Group {
             // Edit Trip Name
             SettingEditableTextRow(
-                title: "Trip Name",
+                title: "Trip Name".localized,
                 value: Binding(
                     get: { trip.name },
                     set: { newValue in
@@ -1216,7 +1225,7 @@ private struct SettingsView: View {
                         try? modelContext.save()
                     }
                 ),
-                placeholder: "Enter trip name",
+                placeholder: "Enter trip name".localized,
                 isDisabled: !isTripCreator,
                 onSave: {
                     try? modelContext.save()
@@ -1228,7 +1237,7 @@ private struct SettingsView: View {
             
             // Created At Date
             SettingInfoRow(
-                title: "Created",
+                title: "Created".localized,
                 value: dateFormatter.string(from: trip.createdAt)
             )
             
@@ -1237,7 +1246,7 @@ private struct SettingsView: View {
             // Start Date
             if let startedAt = trip.startedAt {
                 SettingInfoRow(
-                    title: "Started",
+                    title: "Started".localized,
                     value: dateFormatter.string(from: startedAt)
                 )
             } else {
@@ -1247,7 +1256,7 @@ private struct SettingsView: View {
                     try? modelContext.save()
                 } label: {
                     HStack {
-                        Text("Start Trip")
+                        Text("Start Trip".localized)
                             .font(.system(.body, design: .rounded))
                             .fontWeight(.semibold)
                             .foregroundStyle(.white)
@@ -1275,7 +1284,7 @@ private struct SettingsView: View {
                     showEndTripConfirmation = true
                 } label: {
                     HStack {
-                        Text("End Trip")
+                        Text("End Trip".localized)
                             .font(.system(.body, design: .rounded))
                             .fontWeight(.semibold)
                             .foregroundStyle(.white)
@@ -1296,7 +1305,7 @@ private struct SettingsView: View {
                 Divider()
             } else if let endedAt = trip.tripEndedAt {
               SettingInfoRow(
-                  title: "Ended",
+                  title: "Ended".localized,
                   value: dateFormatter.string(from: endedAt)
               )
             }
@@ -1306,7 +1315,7 @@ private struct SettingsView: View {
                 showResetConfirmation = true
             } label: {
                 HStack {
-                    Text("Reset Trip")
+                    Text("Reset Trip".localized)
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Theme.primaryBlue)
@@ -1325,7 +1334,7 @@ private struct SettingsView: View {
                 showDeleteConfirmation = true
             } label: {
                 HStack {
-                    Text("Delete Trip")
+                    Text("Delete Trip".localized)
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.semibold)
                         .foregroundStyle(.red)
@@ -1337,9 +1346,9 @@ private struct SettingsView: View {
             .buttonStyle(.plain)
             .disabled(!isTripCreator)
         }
-        .alert("End Trip", isPresented: $showEndTripConfirmation) {
-            Button("Cancel", role: .cancel) {}
-            Button("End Trip", role: .destructive) {
+        .alert("End Trip".localized, isPresented: $showEndTripConfirmation) {
+            Button("Cancel".localized, role: .cancel) {}
+            Button("End Trip".localized, role: .destructive) {
                 trip.isTripEnded = true
                 trip.tripEndedAt = Date.now
                 trip.tripEndedBy = authService.currentUser?.id
@@ -1347,11 +1356,11 @@ private struct SettingsView: View {
                 try? modelContext.save()
             }
         } message: {
-            Text("This will stop the game. You won't be able to add states in this trip anymore.")
+            Text("This will stop the game. You won't be able to add states in this trip anymore.".localized)
         }
-        .alert("Reset Trip", isPresented: $showResetConfirmation) {
-            Button("Cancel", role: .cancel) {}
-            Button("Reset", role: .destructive) {
+        .alert("Reset Trip".localized, isPresented: $showResetConfirmation) {
+            Button("Cancel".localized, role: .cancel) {}
+            Button("Reset".localized, role: .destructive) {
                 // Reset all trip settings except name
                 trip.startedAt = nil
                 trip.isTripEnded = false
@@ -1370,17 +1379,17 @@ private struct SettingsView: View {
                 try? modelContext.save()
             }
         } message: {
-            Text("This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset.")
+            Text("This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset.".localized)
         }
-        .alert("Delete Trip", isPresented: $showDeleteConfirmation) {
-            Button("Cancel", role: .cancel) {}
-            Button("Delete", role: .destructive) {
+        .alert("Delete Trip".localized, isPresented: $showDeleteConfirmation) {
+            Button("Cancel".localized, role: .cancel) {}
+            Button("Delete".localized, role: .destructive) {
                 modelContext.delete(trip)
                 try? modelContext.save()
                 dismiss()
             }
         } message: {
-            Text("This will delete the trip and all scores will be removed.")
+            Text("This will delete the trip and all scores will be removed.".localized)
         }
     }
     
@@ -1390,13 +1399,13 @@ private struct SettingsView: View {
             
             // Countries selection
             VStack(alignment: .leading, spacing: 12) {
-                Text("Countries to Include")
+                Text("Countries to Include".localized)
                     .font(.system(.headline, design: .rounded))
                     .foregroundStyle(Color.Theme.primaryBlue)
                     .padding(.bottom, 4)
                 
                 CountryCheckboxRow(
-                    title: "United States",
+                    title: "United States".localized,
                     isOn: Binding(
                         get: { trip.enabledCountries.contains(.unitedStates) },
                         set: { newValue in
@@ -1416,7 +1425,7 @@ private struct SettingsView: View {
                 .opacity(canEditCountries ? 1.0 : 0.5)
                 
                 CountryCheckboxRow(
-                    title: "Canada",
+                    title: "Canada".localized,
                     isOn: Binding(
                         get: { trip.enabledCountries.contains(.canada) },
                         set: { newValue in
@@ -1436,7 +1445,7 @@ private struct SettingsView: View {
                 .opacity(canEditCountries ? 1.0 : 0.5)
                 
                 CountryCheckboxRow(
-                    title: "Mexico",
+                    title: "Mexico".localized,
                     isOn: Binding(
                         get: { trip.enabledCountries.contains(.mexico) },
                         set: { newValue in
@@ -1464,8 +1473,8 @@ private struct SettingsView: View {
             let canEditTracking = !trip.isTripEnded // Tracking settings can be edited while active, but not after ended
             
             SettingToggleRow(
-                title: "Save location when marking plates",
-                description: "Store location data when you mark a plate as found",
+                title: "Save location when marking plates".localized,
+                description: "Store location data when you mark a plate as found".localized,
                 isOn: Binding(
                     get: { trip.saveLocationWhenMarkingPlates },
                     set: { newValue in
@@ -1481,8 +1490,8 @@ private struct SettingsView: View {
             Divider()
             
             SettingToggleRow(
-                title: "Show my location on large map",
-                description: "Display your current location on the full-screen map",
+                title: "Show my location on large map".localized,
+                description: "Display your current location on the full-screen map".localized,
                 isOn: Binding(
                     get: { trip.showMyLocationOnLargeMap },
                     set: { newValue in
@@ -1498,8 +1507,8 @@ private struct SettingsView: View {
             Divider()
             
             SettingToggleRow(
-                title: "Track my location during trip",
-                description: "Continuously track your location while a trip is active",
+                title: "Track my location during trip".localized,
+                description: "Continuously track your location while a trip is active".localized,
                 isOn: Binding(
                     get: { trip.trackMyLocationDuringTrip },
                     set: { newValue in
@@ -1515,8 +1524,8 @@ private struct SettingsView: View {
             Divider()
             
             SettingToggleRow(
-                title: "Show my active trip on the large map",
-                description: "Display your active trip on the full-screen map",
+                title: "Show my active trip on the large map".localized,
+                description: "Display your active trip on the full-screen map".localized,
                 isOn: Binding(
                     get: { trip.showMyActiveTripOnLargeMap },
                     set: { newValue in
@@ -1532,8 +1541,8 @@ private struct SettingsView: View {
             Divider()
             
             SettingToggleRow(
-                title: "Show my active trip on the small map",
-                description: "Display your active trip on the small map",
+                title: "Show my active trip on the small map".localized,
+                description: "Display your active trip on the small map".localized,
                 isOn: Binding(
                     get: { trip.showMyActiveTripOnSmallMap },
                     set: { newValue in
@@ -1553,8 +1562,8 @@ private struct SettingsView: View {
             let canEditSettings = trip.startedAt == nil // Can only edit if trip hasn't started
             
             SettingToggleRow(
-                title: "Skip Voice Confirmation",
-                description: "Automatically add license plates without confirmation when using Voice",
+                title: "Skip Voice Confirmation".localized,
+                description: "Automatically add license plates without confirmation when using Voice".localized,
                 isOn: Binding(
                     get: { trip.skipVoiceConfirmation },
                     set: { newValue in

@@ -131,3 +131,109 @@
 "state" = "state";
 "province" = "province";
 
+// Settings - Trip Settings View
+"Settings" = "Settings";
+"Trip Info" = "Trip Info";
+"Game Settings" = "Game Settings";
+"Tracking & Privacy" = "Tracking & Privacy";
+"Trip Name" = "Trip Name";
+"Enter trip name" = "Enter trip name";
+"Created" = "Created";
+"Started" = "Started";
+"Ended" = "Ended";
+"Start Trip" = "Start Trip";
+"End Trip" = "End Trip";
+"Reset Trip" = "Reset Trip";
+"Delete Trip" = "Delete Trip";
+"Countries to Include" = "Countries to Include";
+"United States" = "United States";
+"Canada" = "Canada";
+"Mexico" = "Mexico";
+"Save location when marking plates" = "Save location when marking plates";
+"Store location data when you mark a plate as found" = "Store location data when you mark a plate as found";
+"Show my location on large map" = "Show my location on large map";
+"Display your current location on the full-screen map" = "Display your current location on the full-screen map";
+"Track my location during trip" = "Track my location during trip";
+"Continuously track your location while a trip is active" = "Continuously track your location while a trip is active";
+"Show my active trip on the large map" = "Show my active trip on the large map";
+"Display your active trip on the full-screen map" = "Display your active trip on the full-screen map";
+"Show my active trip on the small map" = "Show my active trip on the small map";
+"Display your active trip on the small map" = "Display your active trip on the small map";
+"Skip Voice Confirmation" = "Skip Voice Confirmation";
+"Automatically add license plates without confirmation when using Voice" = "Automatically add license plates without confirmation when using Voice";
+"Hold to Talk" = "Hold to Talk";
+"Press and hold the microphone button to record. If disabled the system will listen until you hit stop." = "Press and hold the microphone button to record. If disabled the system will listen until you hit stop.";
+"Reset" = "Reset";
+"Delete" = "Delete";
+"This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset." = "This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset.";
+"This will delete the trip and all scores will be removed." = "This will delete the trip and all scores will be removed.";
+"Done" = "Done";
+
+// Settings - New Trip Defaults View
+"New Trip Defaults" = "New Trip Defaults";
+"Start Trip right away" = "Start Trip right away";
+"Automatically start new trips when created" = "Automatically start new trips when created";
+"Default Countries" = "Default Countries";
+"Select which countries' license plates will be included by default when creating new trips" = "Select which countries' license plates will be included by default when creating new trips";
+"Store location data when marking plates (default for new trips)" = "Store location data when marking plates (default for new trips)";
+"Display current location on full-screen map (default for new trips)" = "Display current location on full-screen map (default for new trips)";
+"Continuously track location while trip is active (default for new trips)" = "Continuously track location while trip is active (default for new trips)";
+"Display active trip on full-screen map (default for new trips)" = "Display active trip on full-screen map (default for new trips)";
+"Display active trip on small map (default for new trips)" = "Display active trip on small map (default for new trips)";
+"Automatically add license plates heard by speech recognition without requiring user confirmation. This is the default for NEW trips created, this can be changed per trip as well." = "Automatically add license plates heard by speech recognition without requiring user confirmation. This is the default for NEW trips created, this can be changed per trip as well.";
+"Location Tracking" = "Location Tracking";
+
+// Settings - Voice Defaults View
+"Voice Defaults" = "Voice Defaults";
+"No voice defaults available" = "No voice defaults available";
+"This is the default for NEW trips created, this can be changed per trip as well." = "This is the default for NEW trips created, this can be changed per trip as well.";
+
+// Settings - Privacy & Permissions View
+"Privacy & Permissions" = "Privacy & Permissions";
+"Location" = "Location";
+"Voice" = "Voice";
+"Notifications" = "Notifications";
+"Microphone" = "Microphone";
+"Speech Recognizer" = "Speech Recognizer";
+"Camera" = "Camera";
+"Allowed" = "Allowed";
+"While App is Open" = "While App is Open";
+"Disabled" = "Disabled";
+"Not Set" = "Not Set";
+"Unknown" = "Unknown";
+"Track my location during trips" = "Track my location during trips";
+"Continuously track your location while a trip is active (Can be disabled at any time)" = "Continuously track your location while a trip is active (Can be disabled at any time)";
+"Plate found by opponent" = "Plate found by opponent";
+"Get notified when an opponent finds a plate" = "Get notified when an opponent finds a plate";
+"Plate found by co-pilots" = "Plate found by co-pilots";
+"Get notified when a co-pilot finds a plate" = "Get notified when a co-pilot finds a plate";
+"Promotion & News" = "Promotion & News";
+"Receive promotional offers and app news" = "Receive promotional offers and app news";
+"Closes this view" = "Closes this view";
+
+// Settings - ContentView Settings Navigation
+"Manage location, microphone, notifications, and other permissions" = "Manage location, microphone, notifications, and other permissions";
+"Set default countries, tracking, and voice settings for new trips" = "Set default countries, tracking, and voice settings for new trips";
+"Configure default voice recognition settings for new trips" = "Configure default voice recognition settings for new trips";
+
+// Settings - Additional
+"Trip Settings" = "Trip Settings";
+"Opens settings for this trip" = "Opens settings for this trip";
+"Open Settings" = "Open Settings";
+"Recording" = "Recording";
+"Not recording" = "Not recording";
+"Voice Input" = "Voice Input";
+"Trip must be started to use voice input" = "Trip must be started to use voice input";
+"Speech recognition permission required" = "Speech recognition permission required";
+"Press and hold to record license plate" = "Press and hold to record license plate";
+"Trip must be started to use this tab" = "Trip must be started to use this tab";
+"Double tap to switch to %@ tab" = "Double tap to switch to %@ tab";
+"Found" = "Found";
+"Not found" = "Not found";
+"Trip must be started to mark regions" = "Trip must be started to mark regions";
+"Double tap to %@ this region as found" = "Double tap to %@ this region as found";
+"unmark" = "unmark";
+"mark" = "mark";
+"Selected" = "Selected";
+
+

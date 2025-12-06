@@ -9,3 +9,4 @@
 "NSMicrophoneUsageDescription" = "Cette app a besoin d'accéder à votre microphone pour écouter les noms d'états et de provinces lors de l'utilisation de la saisie vocale.";
 "NSSpeechRecognitionUsageDescription" = "Cette app utilise la reconnaissance vocale pour vous aider à enregistrer rapidement les plaques en disant le nom de l'état ou de la province à voix haute.";
 
+
