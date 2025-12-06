@@ -40,6 +40,50 @@ enum AppLanguage: String, CaseIterable {
     case english = "English"
     case spanish = "Spanish"
     case french = "French"
+    
+    /// Locale code for the language (e.g., "en", "es", "fr")
+    var localeCode: String {
+        switch self {
+        case .english: return "en"
+        case .spanish: return "es"
+        case .french: return "fr"
+        }
+    }
+    
+    /// Initialize from locale code
+    init?(localeCode: String) {
+        let code = localeCode.lowercased()
+        switch code {
+        case "en", "english":
+            self = .english
+        case "es", "spanish", "español":
+            self = .spanish
+        case "fr", "french", "français":
+            self = .french
+        default:
+            return nil
+        }
+    }
+    
+    /// Detect device language and return corresponding AppLanguage
+    static func detectDeviceLanguage() -> AppLanguage {
+        // Get preferred languages from device
+        let preferredLanguages = Locale.preferredLanguages
+        
+        // Check each preferred language
+        for languageCode in preferredLanguages {
+            // Extract base language code (e.g., "es" from "es-MX")
+            let baseLanguage = languageCode.components(separatedBy: "-").first?.lowercased() ?? languageCode.lowercased()
+            
+            // Map to AppLanguage
+            if let appLanguage = AppLanguage(localeCode: baseLanguage) {
+                return appLanguage
+            }
+        }
+        
+        // Default to English if no supported language found
+        return .english
+    }
 }
 
 enum AppTripSortOrder: String, CaseIterable {

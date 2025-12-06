@@ -1,0 +1,12 @@
+/* 
+  InfoPlist.strings (English)
+  LicensePlateApp
+  
+  English localization for Info.plist permission strings
+*/
+
+"NSLocationWhenInUseUsageDescription" = "This app uses your location to show where you are on the map while tracking license plates.";
+"NSMicrophoneUsageDescription" = "This app needs access to your microphone to listen for state and province names when using voice input.";
+"NSSpeechRecognitionUsageDescription" = "This app uses speech recognition to help you quickly log license plates by saying the state or province name out loud.";
+
+

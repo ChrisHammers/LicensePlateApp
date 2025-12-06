@@ -78,7 +78,7 @@ struct ContentView: View {
                         }
                         .textCase(nil)
                     } else {
-                        Section("Trips") {
+                        Section("Trips".localized) {
                             tripList
                         }
                         .textCase(nil)
@@ -98,8 +98,8 @@ struct ContentView: View {
                         Image(systemName: "gearshape")
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
-                    .accessibilityLabel("Settings")
-                    .accessibilityHint("Opens app settings")
+                    .accessibilityLabel("Settings".localized)
+                    .accessibilityHint("Opens app settings".localized)
                 }
             }
             .sheet(isPresented: $isShowingSettings) {
@@ -150,18 +150,18 @@ struct ContentView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("RoadTrip Royale")
+            Text("RoadTrip Royale".localized)
                 .font(.system(.largeTitle, design: .rounded))
                 .fontWeight(.bold)
                 .foregroundStyle(Color.Theme.primaryBlue)
                 .shadow(color: Color.Theme.primaryBlue.opacity(0.5), radius: 5)
             
-            Text("Spot license plates, conquer the map, and rule the open road!")
+            Text("Spot license plates, conquer the map, and rule the open road!".localized)
                 .font(.system(.title2, design: .rounded))
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue.opacity(0.8))
 
-            Text("Track every plate you see across the United States, Canada, and Mexico.")
+            Text("Track every plate you see across the United States, Canada, and Mexico.".localized)
                 .font(.system(.body, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
         }
@@ -173,12 +173,12 @@ struct ContentView: View {
                 .font(.system(size: 56))
                 .foregroundStyle(Color.Theme.accentYellow)
 
-            Text("No trips yet")
+            Text("No trips yet".localized)
                 .font(.system(.title2, design: .rounded))
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue)
 
-            Text("Start your first adventure and begin collecting plates from across North America.")
+            Text("Start your first adventure and begin collecting plates from across North America.".localized)
                 .multilineTextAlignment(.center)
                 .font(.system(.body, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
@@ -200,8 +200,8 @@ struct ContentView: View {
             }
             .listRowInsets(.init(top: 6, leading: 20, bottom: 6, trailing: 20))
             .listRowBackground(Color.clear)
-            .accessibilityLabel("Trip: \(trip.name)")
-            .accessibilityHint("Double tap to open trip")
+            .accessibilityLabel("Trip: %@".localized(trip.name))
+            .accessibilityHint("Double tap to open trip".localized)
         }
         .onDelete(perform: deleteTrips)
     }
@@ -215,7 +215,7 @@ struct ContentView: View {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 24, weight: .bold))
                     .accessibilityHidden(true)
-                Text("Create Trip")
+                Text("Create Trip".localized)
                     .font(.system(.headline, design: .rounded))
                     .fontWeight(.semibold)
             }
@@ -230,8 +230,8 @@ struct ContentView: View {
         }
         .padding(.trailing, 20)
         .padding(.bottom, 32)
-        .accessibilityLabel("Create Trip")
-        .accessibilityHint("Opens a sheet to create a new trip")
+        .accessibilityLabel("Create Trip".localized)
+        .accessibilityHint("Opens a sheet to create a new trip".localized)
         .accessibilityAddTraits(.isButton)
     }
 
@@ -376,11 +376,11 @@ private struct NewTripSheet: View {
                 List {
                     Section {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Trip Name")
+                            Text("Trip Name".localized)
                                 .font(.system(.headline, design: .rounded))
                                 .foregroundStyle(Color.Theme.primaryBlue)
                             
-                            TextField("Automatically use date & time", text: $tripName)
+                            TextField("Automatically use date & time".localized, text: $tripName)
                                 .textInputAutocapitalization(.words)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 10)
@@ -388,9 +388,9 @@ private struct NewTripSheet: View {
                                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                                         .fill(Color.Theme.background)
                                 )
-                                .accessibilityLabel("Trip Name")
-                                .accessibilityHint("Enter a name for your trip, or leave blank to use date and time")
-                                .accessibilityValue(tripName.isEmpty ? "Will use date and time" : tripName)
+                                .accessibilityLabel("Trip Name".localized)
+                                .accessibilityHint("Enter a name for your trip, or leave blank to use date and time".localized)
+                                .accessibilityValue(tripName.isEmpty ? "Will use date and time".localized : tripName)
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 16)
@@ -399,7 +399,7 @@ private struct NewTripSheet: View {
                         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                         .listRowBackground(Color.clear)
                     } header: {
-                        Text("Basic Info")
+                        Text("Basic Info".localized)
                             .font(.system(.headline, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
@@ -409,8 +409,8 @@ private struct NewTripSheet: View {
                         VStack(spacing: 12) {
                             // Start Trip
                             SettingToggleRow(
-                                title: "Start Trip right away",
-                                description: "Automatically start the trip when created",
+                                title: "Start Trip right away".localized,
+                                description: "Automatically start the trip when created".localized,
                                 isOn: $startTripRightAway
                             )
                             
@@ -418,13 +418,13 @@ private struct NewTripSheet: View {
                             
                             // Countries
                             VStack(alignment: .leading, spacing: 12) {
-                                Text("Countries to Include")
+                                Text("Countries to Include".localized)
                                     .font(.system(.headline, design: .rounded))
                                     .foregroundStyle(Color.Theme.primaryBlue)
                                 
-                                CountryCheckboxRow(title: "United States", isOn: $includeUS)
-                                CountryCheckboxRow(title: "Canada", isOn: $includeCanada)
-                                CountryCheckboxRow(title: "Mexico", isOn: $includeMexico)
+                                CountryCheckboxRow(title: "United States".localized, isOn: $includeUS)
+                                CountryCheckboxRow(title: "Canada".localized, isOn: $includeCanada)
+                                CountryCheckboxRow(title: "Mexico".localized, isOn: $includeMexico)
                             }
                         }
                         .padding(.horizontal, 16)
@@ -434,7 +434,7 @@ private struct NewTripSheet: View {
                         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                         .listRowBackground(Color.clear)
                     } header: {
-                        Text("Trip Options")
+                        Text("Trip Options".localized)
                             .font(.system(.headline, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
@@ -444,8 +444,8 @@ private struct NewTripSheet: View {
                         VStack(spacing: 12) {
                             // Voice Settings
                             SettingToggleRow(
-                                title: "Skip Voice Confirmation",
-                                description: "Automatically add license plates without confirmation when using Voice",
+                                title: "Skip Voice Confirmation".localized,
+                                description: "Automatically add license plates without confirmation when using Voice".localized,
                                 isOn: $skipVoiceConfirmation
                             )
                             
@@ -453,32 +453,32 @@ private struct NewTripSheet: View {
                             
                             // Location Settings
                             SettingToggleRow(
-                                title: "Save location when marking plates",
-                                description: "Store location data when you mark a plate as found",
+                                title: "Save location when marking plates".localized,
+                                description: "Store location data when you mark a plate as found".localized,
                                 isOn: $saveLocationWhenMarkingPlates
                             )
                             
                             Divider()
                             
                             SettingToggleRow(
-                                title: "Show my location on large map",
-                                description: "Display your current location on the full-screen map",
+                                title: "Show my location on large map".localized,
+                                description: "Display your current location on the full-screen map".localized,
                                 isOn: $showMyLocationOnLargeMap
                             )
                             
                             Divider()
                             
                             SettingToggleRow(
-                                title: "Track my location during trip",
-                                description: "Continuously track your location while a trip is active",
+                                title: "Track my location during trip".localized,
+                                description: "Continuously track your location while a trip is active".localized,
                                 isOn: $trackMyLocationDuringTrip
                             )
                             
                             Divider()
                             
                             SettingToggleRow(
-                                title: "Show my active trip on the large map",
-                                description: "Display your active trip on the full-screen map",
+                                title: "Show my active trip on the large map".localized,
+                                description: "Display your active trip on the full-screen map".localized,
                                 isOn: $showMyActiveTripOnLargeMap
                             )
                             .disabled(!trackMyLocationDuringTrip)
@@ -487,8 +487,8 @@ private struct NewTripSheet: View {
                             Divider()
                             
                             SettingToggleRow(
-                                title: "Show my active trip on the small map",
-                                description: "Display your active trip on the small map",
+                                title: "Show my active trip on the small map".localized,
+                                description: "Display your active trip on the small map".localized,
                                 isOn: $showMyActiveTripOnSmallMap
                             )
                             .disabled(!trackMyLocationDuringTrip)
@@ -501,7 +501,7 @@ private struct NewTripSheet: View {
                         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                         .listRowBackground(Color.clear)
                     } header: {
-                        Text("Trip Settings")
+                        Text("Trip Settings".localized)
                             .font(.system(.headline, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
@@ -510,7 +510,7 @@ private struct NewTripSheet: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle("New Trip")
+            .navigationTitle("New Trip".localized)
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: appPlaySoundEffects)
@@ -523,16 +523,16 @@ private struct NewTripSheet: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button("Cancel".localized) {
                         FeedbackService.shared.buttonTap()
                         dismiss()
                     }
                     .foregroundStyle(Color.Theme.primaryBlue)
-                    .accessibilityLabel("Cancel")
-                    .accessibilityHint("Cancels creating a new trip")
+                    .accessibilityLabel("Cancel".localized)
+                    .accessibilityHint("Cancels creating a new trip".localized)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") {
+                    Button("Create".localized) {
                         FeedbackService.shared.buttonTap()
                         var enabledCountries: [PlateRegion.Country] = []
                         if includeUS { enabledCountries.append(.unitedStates) }
@@ -624,10 +624,10 @@ private struct TripRow: View {
                 .accessibilityHidden(true)
 
             HStack {
-              Label(trip.startedAt != nil ? "Started" :"Created", systemImage: "calendar")
+              Label(trip.startedAt != nil ? "Started".localized :"Created".localized, systemImage: "calendar")
                     .font(.system(.footnote, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
-                    .accessibilityLabel(trip.startedAt != nil ? "Started" : "Created")
+                    .accessibilityLabel(trip.startedAt != nil ? "Started".localized : "Created".localized)
 
                 Spacer()
 
@@ -641,7 +641,7 @@ private struct TripRow: View {
             if trip.isTripEnded, let endedDate = trip.tripEndedAt {
                 HStack {
                   Label {
-                      Text("Ended")
+                      Text("Ended".localized)
                               } icon: {
                                       Image(systemName: "star.fill")
                                           .font(.body) // Match font size for consistent sizing
@@ -649,7 +649,7 @@ private struct TripRow: View {
                               }
                         .font(.system(.footnote, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
-                        .accessibilityLabel("Ended")
+                        .accessibilityLabel("Ended".localized)
 
                     Spacer()
 
@@ -785,8 +785,8 @@ struct DefaultSettingsView: View {
                             // Profile (from User section, but no section header)
                             if let _ = authService.currentUser {
                                 SettingNavigationRow(
-                                    title: "Profile",
-                                    description: "Edit username and manage account",
+                                    title: "Profile".localized,
+                                    description: "Edit username and manage account".localized,
                                     icon: "person.circle"
                                 ) {
                                     coordinator.navigateToProfile(path: $navigationPath)
@@ -797,8 +797,8 @@ struct DefaultSettingsView: View {
                             
                             // Privacy & Permissions
                             SettingNavigationRow(
-                                title: "Privacy & Permissions",
-                                description: "Manage location, microphone, notifications, and other permissions",
+                                title: "Privacy & Permissions".localized,
+                                description: "Manage location, microphone, notifications, and other permissions".localized,
                                 icon: "hand.raised.fill"
                             ) {
                                 coordinator.navigateToPrivacyPermissions(path: $navigationPath)
@@ -808,7 +808,7 @@ struct DefaultSettingsView: View {
                             
                             // App Preferences
                             SettingNavigationRow(
-                                title: "App Preferences",
+                                title: "App Preferences".localized,
                                 description: "Customize dark mode, map style, and other app settings",
                                 icon: "slider.horizontal.3"
                             ) {
@@ -819,8 +819,8 @@ struct DefaultSettingsView: View {
                             
                             // New Trip Defaults
                             SettingNavigationRow(
-                                title: "New Trip Defaults",
-                                description: "Set default countries, tracking, and voice settings for new trips",
+                                title: "New Trip Defaults".localized,
+                                description: "Set default countries, tracking, and voice settings for new trips".localized,
                                 icon: "plus.circle.fill"
                             ) {
                                 coordinator.navigateToNewTripDefaults(path: $navigationPath)
@@ -844,8 +844,8 @@ struct DefaultSettingsView: View {
                             
                             // Help & About
                             SettingNavigationRow(
-                                title: "Help & About",
-                                description: "Get help, report bugs, suggest features, and learn about the app",
+                                title: "Help & About".localized,
+                                description: "Get help, report bugs, suggest features, and learn about the app".localized,
                                 icon: "questionmark.circle.fill"
                             ) {
                                 coordinator.navigateToHelpAbout(path: $navigationPath)
@@ -863,11 +863,11 @@ struct DefaultSettingsView: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle("Settings")
+            .navigationTitle("Settings".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
+                    Button("Done".localized) {
                         dismiss()
                     }
                     .font(.system(.body, design: .rounded))

@@ -14,6 +14,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
     // Firebase initialization is handled in LicensePlateAppApp.init()
     // to support environment-specific config files
+    
+    // Initialize app language on first launch based on device language
+    LocalizationHelper.initializeAppLanguageIfNeeded()
+    
     return true
   }
 }

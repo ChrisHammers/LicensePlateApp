@@ -1,0 +1,416 @@
+/* 
+  Localizable.strings (English)
+  LicensePlateApp
+  
+  English localization strings
+*/
+
+// App Name
+"RoadTrip Royale" = "RoadTrip Royale";
+
+// Main Screen
+"No trips yet" = "No trips yet";
+"Start your first adventure and begin collecting plates from across North America." = "Start your first adventure and begin collecting plates from across North America.";
+"Track every plate you see across the United States, Canada, and Mexico." = "Track every plate you see across the United States, Canada, and Mexico.";
+"Create Trip" = "Create Trip";
+"Trip: %@" = "Trip: %@";
+"Double tap to open trip" = "Double tap to open trip";
+
+// Trip Tracking
+"List" = "List";
+"Voice" = "Voice";
+"Found" = "Found";
+"Remaining" = "Remaining";
+"START" = "START";
+"END" = "END";
+"ENDED" = "ENDED";
+"Start Trip" = "Start Trip";
+"Starts the trip and begins tracking" = "Starts the trip and begins tracking";
+"Only the trip creator can start the trip" = "Only the trip creator can start the trip";
+"End Trip" = "End Trip";
+"Ends the trip and stops tracking" = "Ends the trip and stops tracking";
+"Only the trip creator can end the trip" = "Only the trip creator can end the trip";
+"Trip Ended" = "Trip Ended";
+"This trip has been completed" = "This trip has been completed";
+"This will stop the game. You won't be able to add states in this trip anymore." = "This will stop the game. You won't be able to add states in this trip anymore.";
+"Cancel" = "Cancel";
+
+// Voice Recognition
+"Speech Recognition Needed" = "Speech Recognition Needed";
+"Please enable speech recognition in Settings to use voice input." = "Please enable speech recognition in Settings to use voice input.";
+"Listening..." = "Listening...";
+"Hold to Talk" = "Hold to Talk";
+"Heard:" = "Heard:";
+"No speech detected yet..." = "No speech detected yet...";
+"Requesting Permission..." = "Requesting Permission...";
+"Hey, we heard the following %@:" = "Hey, we heard the following %@:";
+"Add this to the list of license plates found?" = "Add this to the list of license plates found?";
+"Don't show this again" = "Don't show this again";
+"Add" = "Add";
+"Voice Coming Soon" = "Voice Coming Soon";
+"Soon you will be able to log plates hands-free by simply saying the state or province you spot." = "Soon you will be able to log plates hands-free by simply saying the state or province you spot.";
+
+// Settings
+"App Preferences" = "App Preferences";
+"Dark Mode" = "Dark Mode";
+"Choose your preferred appearance" = "Choose your preferred appearance";
+"App Background" = "App Background";
+"Choose background style" = "Choose background style";
+"Distance Unit" = "Distance Unit";
+"Select miles or kilometers" = "Select miles or kilometers";
+"Map Style" = "Map Style";
+"Choose standard or satellite view" = "Choose standard or satellite view";
+"Play Sound Effects" = "Play Sound Effects";
+"Enable audio feedback for app interactions" = "Enable audio feedback for app interactions";
+"Use Vibrations" = "Use Vibrations";
+"Enable haptic feedback" = "Enable haptic feedback";
+"Trip Sort Order" = "Trip Sort Order";
+"How to sort trips in the list" = "How to sort trips in the list";
+"Show Confirmation Dialogs" = "Show Confirmation Dialogs";
+"Show confirmation prompts for destructive actions like deleting trips" = "Show confirmation prompts for destructive actions like deleting trips";
+"Language" = "Language";
+"Select your preferred language" = "Select your preferred language";
+"Font Size" = "Font Size";
+"Adjust text size for better readability" = "Adjust text size for better readability";
+"Reduce Motion" = "Reduce Motion";
+"Respect iOS Reduce Motion setting" = "Respect iOS Reduce Motion setting";
+"Auto-Sync" = "Auto-Sync";
+"Automatically sync data to cloud" = "Automatically sync data to cloud";
+"Default Tab" = "Default Tab";
+"Which tab to show when opening the app" = "Which tab to show when opening the app";
+"Show Statistics" = "Show Statistics";
+"Display statistics on the main screen" = "Display statistics on the main screen";
+"Plate Display Format" = "Plate Display Format";
+"How to display license plate regions" = "How to display license plate regions";
+"Map Default Zoom" = "Map Default Zoom";
+"Default zoom level when opening maps" = "Default zoom level when opening maps";
+"Show Completed Regions" = "Show Completed Regions";
+"Display regions that are already found in lists" = "Display regions that are already found in lists";
+
+// Help & About
+"About" = "About";
+"Learn about RoadTrip Royale and HammersTechLLC" = "Learn about RoadTrip Royale and HammersTechLLC";
+"Acknowledgements" = "Acknowledgements";
+"Open source libraries and SDKs we use" = "Open source libraries and SDKs we use";
+"Frequently Asked Questions" = "Frequently Asked Questions";
+"How do I play RoadTrip Royale?" = "How do I play RoadTrip Royale?";
+"RoadTrip Royale is a license plate tracking game! During your road trips, keep an eye out for license plates from different states, provinces, or regions. When you spot one, use the app to mark it as found. You can use the List tab to manually select plates, or the Voice tab to speak the state/province name. Track your progress and see your collection grow on the interactive map!" = "RoadTrip Royale is a license plate tracking game! During your road trips, keep an eye out for license plates from different states, provinces, or regions. When you spot one, use the app to mark it as found. You can use the List tab to manually select plates, or the Voice tab to speak the state/province name. Track your progress and see your collection grow on the interactive map!";
+"How do I create a trip?" = "How do I create a trip?";
+"On the main screen, tap the 'Create Trip' button. You can give your trip a custom name, or leave it blank to use the date and time automatically. Once created, tap on the trip to start tracking license plates!" = "On the main screen, tap the 'Create Trip' button. You can give your trip a custom name, or leave it blank to use the date and time automatically. Once created, tap on the trip to start tracking license plates!";
+"How does the Voice feature work?" = "How does the Voice feature work?";
+"Tap the Voice tab, then press the microphone button. Speak the name of the state or province you see (e.g., 'California' or 'Ontario'). The app will listen and try to match what you said to a valid license plate region. If a match is found, you'll be asked to confirm before adding it to your collection." = "Tap the Voice tab, then press the microphone button. Speak the name of the state or province you see (e.g., 'California' or 'Ontario'). The app will listen and try to match what you said to a valid license plate region. If a match is found, you'll be asked to confirm before adding it to your collection.";
+"Can I track plates from multiple countries?" = "Can I track plates from multiple countries?";
+"Yes! RoadTrip Royale supports license plates from the United States, Canada, and Mexico. The map will automatically switch to show the correct country as you scroll through the list of regions." = "Yes! RoadTrip Royale supports license plates from the United States, Canada, and Mexico. The map will automatically switch to show the correct country as you scroll through the list of regions.";
+"How do I see my progress?" = "How do I see my progress?";
+"On the trip screen, you'll see summary chips showing how many plates you've found and how many remain. The map at the top shows all found regions highlighted in yellow. You can tap the map to view it full-screen for a better look!" = "On the trip screen, you'll see summary chips showing how many plates you've found and how many remain. The map at the top shows all found regions highlighted in yellow. You can tap the map to view it full-screen for a better look!";
+"Can I share my trips with others?" = "Can I share my trips with others?";
+"Currently, trips are stored locally on your device. Future updates may include sharing and collaboration features. Stay tuned!" = "Currently, trips are stored locally on your device. Future updates may include sharing and collaboration features. Stay tuned!";
+"Do I need an internet connection?" = "Do I need an internet connection?";
+"RoadTrip Royale works offline! You can create trips and track license plates without an internet connection. If you sign in with an account, your data will sync to the cloud when you're online." = "RoadTrip Royale works offline! You can create trips and track license plates without an internet connection. If you sign in with an account, your data will sync to the cloud when you're online.";
+
+// About
+"About the App" = "About the App";
+"RoadTrip Royale is a fun and engaging license plate tracking game that lets you collect license plates from across the United States, Canada, and Mexico during your road trips. Spot plates, track your progress, and see your collection grow on an interactive map!" = "RoadTrip Royale is a fun and engaging license plate tracking game that lets you collect license plates from across the United States, Canada, and Mexico during your road trips. Spot plates, track your progress, and see your collection grow on an interactive map!";
+"About HammersTechLLC" = "About HammersTechLLC";
+"RoadTrip Royale is developed by HammersTechLLC, a software development company dedicated to creating innovative and user-friendly mobile applications. We're passionate about building apps that make everyday activities more enjoyable and engaging." = "RoadTrip Royale is developed by HammersTechLLC, a software development company dedicated to creating innovative and user-friendly mobile applications. We're passionate about building apps that make everyday activities more enjoyable and engaging.";
+"Contact" = "Contact";
+
+// Profile
+"Profile" = "Profile";
+"Edit username and manage account" = "Edit username and manage account";
+"Signed In" = "Signed In";
+"Your account is synced to the cloud" = "Your account is synced to the cloud";
+"Signed Out" = "Signed Out";
+"You are signed out. Sign in to sync your account and access all features" = "You are signed out. Sign in to sync your account and access all features";
+"Anonymous Account" = "Anonymous Account";
+"Sign up to sync your account and access more features" = "Sign up to sync your account and access more features";
+"Local Account" = "Local Account";
+"Your account is stored locally only. Sign in to sync to the cloud" = "Your account is stored locally only. Sign in to sync to the cloud";
+
+// Common
+"state" = "state";
+"province" = "province";
+
+// Settings - Trip Settings View
+"Settings" = "Settings";
+"Trip Info" = "Trip Info";
+"Game Settings" = "Game Settings";
+"Tracking & Privacy" = "Tracking & Privacy";
+"Trip Name" = "Trip Name";
+"Enter trip name" = "Enter trip name";
+"Created" = "Created";
+"Started" = "Started";
+"Ended" = "Ended";
+"Start Trip" = "Start Trip";
+"End Trip" = "End Trip";
+"Reset Trip" = "Reset Trip";
+"Delete Trip" = "Delete Trip";
+"Countries to Include" = "Countries to Include";
+"United States" = "United States";
+"Canada" = "Canada";
+"Mexico" = "Mexico";
+"Save location when marking plates" = "Save location when marking plates";
+"Store location data when you mark a plate as found" = "Store location data when you mark a plate as found";
+"Show my location on large map" = "Show my location on large map";
+"Display your current location on the full-screen map" = "Display your current location on the full-screen map";
+"Track my location during trip" = "Track my location during trip";
+"Continuously track your location while a trip is active" = "Continuously track your location while a trip is active";
+"Show my active trip on the large map" = "Show my active trip on the large map";
+"Display your active trip on the full-screen map" = "Display your active trip on the full-screen map";
+"Show my active trip on the small map" = "Show my active trip on the small map";
+"Display your active trip on the small map" = "Display your active trip on the small map";
+"Skip Voice Confirmation" = "Skip Voice Confirmation";
+"Automatically add license plates without confirmation when using Voice" = "Automatically add license plates without confirmation when using Voice";
+"Hold to Talk" = "Hold to Talk";
+"Press and hold the microphone button to record. If disabled the system will listen until you hit stop." = "Press and hold the microphone button to record. If disabled the system will listen until you hit stop.";
+"Reset" = "Reset";
+"Delete" = "Delete";
+"This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset." = "This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset.";
+"This will delete the trip and all scores will be removed." = "This will delete the trip and all scores will be removed.";
+"Done" = "Done";
+
+// Settings - New Trip Defaults View
+"New Trip Defaults" = "New Trip Defaults";
+"Start Trip right away" = "Start Trip right away";
+"Automatically start the trip when created" = "Automatically start the trip when created";
+"Automatically start new trips when created" = "Automatically start new trips when created";
+"Default Countries" = "Default Countries";
+"Select which countries' license plates will be included by default when creating new trips" = "Select which countries' license plates will be included by default when creating new trips";
+"Store location data when marking plates (default for new trips)" = "Store location data when marking plates (default for new trips)";
+"Display current location on full-screen map (default for new trips)" = "Display current location on full-screen map (default for new trips)";
+"Continuously track location while trip is active (default for new trips)" = "Continuously track location while trip is active (default for new trips)";
+"Display active trip on full-screen map (default for new trips)" = "Display active trip on full-screen map (default for new trips)";
+"Display active trip on small map (default for new trips)" = "Display active trip on small map (default for new trips)";
+"Automatically add license plates heard by speech recognition without requiring user confirmation. This is the default for NEW trips created, this can be changed per trip as well." = "Automatically add license plates heard by speech recognition without requiring user confirmation. This is the default for NEW trips created, this can be changed per trip as well.";
+"Location Tracking" = "Location Tracking";
+
+// Settings - Voice Defaults View
+"Voice Defaults" = "Voice Defaults";
+"No voice defaults available" = "No voice defaults available";
+"This is the default for NEW trips created, this can be changed per trip as well." = "This is the default for NEW trips created, this can be changed per trip as well.";
+
+// Settings - Privacy & Permissions View
+"Privacy & Permissions" = "Privacy & Permissions";
+"Location" = "Location";
+"Voice" = "Voice";
+"Notifications" = "Notifications";
+"Microphone" = "Microphone";
+"Speech Recognizer" = "Speech Recognizer";
+"Camera" = "Camera";
+"Allowed" = "Allowed";
+"While App is Open" = "While App is Open";
+"Disabled" = "Disabled";
+"Not Set" = "Not Set";
+"Unknown" = "Unknown";
+"Track my location during trips" = "Track my location during trips";
+"Continuously track your location while a trip is active (Can be disabled at any time)" = "Continuously track your location while a trip is active (Can be disabled at any time)";
+"Plate found by opponent" = "Plate found by opponent";
+"Get notified when an opponent finds a plate" = "Get notified when an opponent finds a plate";
+"Plate found by co-pilots" = "Plate found by co-pilots";
+"Get notified when a co-pilot finds a plate" = "Get notified when a co-pilot finds a plate";
+"Promotion & News" = "Promotion & News";
+"Receive promotional offers and app news" = "Receive promotional offers and app news";
+"Closes this view" = "Closes this view";
+
+// Settings - ContentView Settings Navigation
+"Manage location, microphone, notifications, and other permissions" = "Manage location, microphone, notifications, and other permissions";
+"Set default countries, tracking, and voice settings for new trips" = "Set default countries, tracking, and voice settings for new trips";
+"Configure default voice recognition settings for new trips" = "Configure default voice recognition settings for new trips";
+
+// Settings - Additional
+"Trip Settings" = "Trip Settings";
+"Opens settings for this trip" = "Opens settings for this trip";
+"Open Settings" = "Open Settings";
+"Recording" = "Recording";
+"Not recording" = "Not recording";
+"Voice Input" = "Voice Input";
+"Trip must be started to use voice input" = "Trip must be started to use voice input";
+"Speech recognition permission required" = "Speech recognition permission required";
+"Press and hold to record license plate" = "Press and hold to record license plate";
+"Trip must be started to use this tab" = "Trip must be started to use this tab";
+"Double tap to switch to %@ tab" = "Double tap to switch to %@ tab";
+"Found" = "Found";
+"Not found" = "Not found";
+"Trip must be started to mark regions" = "Trip must be started to mark regions";
+"Double tap to %@ this region as found" = "Double tap to %@ this region as found";
+"unmark" = "unmark";
+"mark" = "mark";
+"Selected" = "Selected";
+
+// New Trip Sheet
+"New Trip" = "New Trip";
+"Basic Info" = "Basic Info";
+"Trip Options" = "Trip Options";
+"Automatically use date & time" = "Automatically use date & time";
+"Enter a name for your trip, or leave blank to use date and time" = "Enter a name for your trip, or leave blank to use date and time";
+"Will use date and time" = "Will use date and time";
+"Create" = "Create";
+"Cancels creating a new trip" = "Cancels creating a new trip";
+
+// Enum Values - AppDarkMode
+"Light" = "Light";
+"Dark" = "Dark";
+"System" = "System";
+
+// Enum Values - AppDistanceUnit
+"Miles" = "Miles";
+"Kilometers" = "Kilometers";
+
+// Enum Values - AppMapStyle
+"Standard" = "Standard";
+"Satellite" = "Satellite";
+
+// Enum Values - AppLanguage
+"English" = "English";
+"Spanish" = "Spanish";
+"French" = "French";
+
+// Enum Values - AppTripSortOrder
+"Date Created" = "Date Created";
+"Name" = "Name";
+"Progress" = "Progress";
+"Last Active" = "Last Active";
+
+// Enum Values - AppFontSize
+"Small" = "Small";
+"Medium" = "Medium";
+"Large" = "Large";
+
+// Enum Values - AppDefaultTab
+"Trips" = "Trips";
+"Map" = "Map";
+"Stats" = "Stats";
+
+// Enum Values - AppPlateDisplayFormat
+"Full Name" = "Full Name";
+"Abbreviation" = "Abbreviation";
+
+// Enum Values - AppMapDefaultZoom
+"Close" = "Close";
+"Far" = "Far";
+
+// Enum Values - AppBackgroundStyle
+"None" = "None";
+"Paths" = "Paths";
+"Characters" = "Characters";
+
+// Other Missed Strings
+"Opens app settings" = "Opens app settings";
+"Spot license plates, conquer the map, and rule the open road!" = "Spot license plates, conquer the map, and rule the open road!";
+"Opens a sheet to create a new trip" = "Opens a sheet to create a new trip";
+"Your Location" = "Your Location";
+"Map showing %@ regions" = "Map showing %@ regions";
+"Double tap to open full screen map" = "Double tap to open full screen map";
+
+// Help & About - Additional
+"Help & About" = "Help & About";
+"Get help, report bugs, suggest features, and learn about the app" = "Get help, report bugs, suggest features, and learn about the app";
+"FAQ" = "FAQ";
+"Frequently asked questions" = "Frequently asked questions";
+"Report a Bug" = "Report a Bug";
+"Help us improve by reporting issues" = "Help us improve by reporting issues";
+"Opens email to report a bug" = "Opens email to report a bug";
+"Suggest a Feature" = "Suggest a Feature";
+"Share your ideas for new features" = "Share your ideas for new features";
+"Opens email to suggest a new feature" = "Opens email to suggest a new feature";
+"Contact Support" = "Contact Support";
+"Get help with the app" = "Get help with the app";
+"Opens email to contact support" = "Opens email to contact support";
+"App Version %@" = "App Version %@";
+"Terms" = "Terms";
+"Terms of Use" = "Terms of Use";
+"Opens Terms of Use" = "Opens Terms of Use";
+"Privacy" = "Privacy";
+"Privacy Policy" = "Privacy Policy";
+"Opens Privacy Policy" = "Opens Privacy Policy";
+"Acknowledgements" = "Acknowledgements";
+"RoadTrip Royale uses the following open source libraries and SDKs:" = "RoadTrip Royale uses the following open source libraries and SDKs:";
+"Firebase" = "Firebase";
+"Backend services including Authentication, Firestore, and Storage" = "Backend services including Authentication, Firestore, and Storage";
+"Google Sign-In" = "Google Sign-In";
+"OAuth authentication for Google accounts" = "OAuth authentication for Google accounts";
+"Apple Authentication Services" = "Apple Authentication Services";
+"Sign in with Apple integration" = "Sign in with Apple integration";
+"SwiftUI" = "SwiftUI";
+"Apple's declarative UI framework" = "Apple's declarative UI framework";
+"SwiftData" = "SwiftData";
+"Apple's data persistence framework" = "Apple's data persistence framework";
+"MapKit" = "MapKit";
+"Apple's mapping and location services" = "Apple's mapping and location services";
+"Speech Framework" = "Speech Framework";
+"Apple's speech recognition framework" = "Apple's speech recognition framework";
+"Terms of Service" = "Terms of Service";
+"Last Updated: %@" = "Last Updated: %@";
+"1. Acceptance of Terms" = "1. Acceptance of Terms";
+"By downloading, installing, or using RoadTrip Royale, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the app." = "By downloading, installing, or using RoadTrip Royale, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the app.";
+"2. Use of the App" = "2. Use of the App";
+"RoadTrip Royale is provided for personal, non-commercial use. You may not use the app for any illegal or unauthorized purpose. You are responsible for maintaining the security of your account." = "RoadTrip Royale is provided for personal, non-commercial use. You may not use the app for any illegal or unauthorized purpose. You are responsible for maintaining the security of your account.";
+"3. User Content" = "3. User Content";
+"You retain ownership of any data you create using RoadTrip Royale. By using the app, you grant HammersTechLLC the right to store and process your data to provide the service." = "You retain ownership of any data you create using RoadTrip Royale. By using the app, you grant HammersTechLLC the right to store and process your data to provide the service.";
+"4. Limitation of Liability" = "4. Limitation of Liability";
+"HammersTechLLC shall not be liable for any indirect, incidental, special, or consequential damages arising from your use of RoadTrip Royale." = "HammersTechLLC shall not be liable for any indirect, incidental, special, or consequential damages arising from your use of RoadTrip Royale.";
+"5. Changes to Terms" = "5. Changes to Terms";
+"We reserve the right to modify these terms at any time. Continued use of the app after changes constitutes acceptance of the new terms." = "We reserve the right to modify these terms at any time. Continued use of the app after changes constitutes acceptance of the new terms.";
+"1. Information We Collect" = "1. Information We Collect";
+"RoadTrip Royale collects the following information:\n\n• Account information (username, email, phone) if you create an account\n• Trip data and license plate tracking information\n• Location data (optional, with your permission)\n• Device information for app functionality" = "RoadTrip Royale collects the following information:\n\n• Account information (username, email, phone) if you create an account\n• Trip data and license plate tracking information\n• Location data (optional, with your permission)\n• Device information for app functionality";
+"2. How We Use Your Information" = "2. How We Use Your Information";
+"We use your information to:\n\n• Provide and improve the app's functionality\n• Sync your data across devices (if you sign in)\n• Respond to support requests\n• Ensure app security and prevent fraud" = "We use your information to:\n\n• Provide and improve the app's functionality\n• Sync your data across devices (if you sign in)\n• Respond to support requests\n• Ensure app security and prevent fraud";
+"3. Data Storage" = "3. Data Storage";
+"Your data is stored locally on your device. If you sign in with an account, your data is also stored securely in Firebase (Google Cloud Platform) to enable syncing across devices." = "Your data is stored locally on your device. If you sign in with an account, your data is also stored securely in Firebase (Google Cloud Platform) to enable syncing across devices.";
+"4. Third-Party Services" = "4. Third-Party Services";
+"RoadTrip Royale uses Firebase (Google) for authentication and data storage. Your use of these services is subject to their respective privacy policies." = "RoadTrip Royale uses Firebase (Google) for authentication and data storage. Your use of these services is subject to their respective privacy policies.";
+"5. Your Rights" = "5. Your Rights";
+"You have the right to:\n\n• Access your personal data\n• Delete your account and data\n• Opt out of data collection (though this may limit app functionality)\n• Contact us with privacy concerns" = "You have the right to:\n\n• Access your personal data\n• Delete your account and data\n• Opt out of data collection (though this may limit app functionality)\n• Contact us with privacy concerns";
+"6. Contact Us" = "6. Contact Us";
+"For privacy-related questions, contact us at:\n\nEmail: hammerstechllc@gmail.com" = "For privacy-related questions, contact us at:\n\nEmail: hammerstechllc@gmail.com";
+"Email: hammerstechllc@gmail.com" = "Email: hammerstechllc@gmail.com";
+
+// User Profile
+"First Name" = "First Name";
+"Enter first name" = "Enter first name";
+"Last Name" = "Last Name";
+"Enter last name" = "Enter last name";
+"Username" = "Username";
+"Enter username" = "Enter username";
+"Email" = "Email";
+"Phone" = "Phone";
+"Account Information" = "Account Information";
+"Authentication Status" = "Authentication Status";
+"Linked Accounts" = "Linked Accounts";
+"No accounts linked" = "No accounts linked";
+"Linked" = "Linked";
+"Unlink %@ account" = "Unlink %@ account";
+"Removes the linked %@ account" = "Removes the linked %@ account";
+"Link Additional Accounts" = "Link Additional Accounts";
+"All available accounts are linked" = "All available accounts are linked";
+"Link %@" = "Link %@";
+"Link %@ account" = "Link %@ account";
+"Links your %@ account to this profile" = "Links your %@ account to this profile";
+"Sign in to link additional accounts" = "Sign in to link additional accounts";
+"Sign In or Create Account" = "Sign In or Create Account";
+"Sign Out" = "Sign Out";
+"Changes will sync when you're online" = "Changes will sync when you're online";
+"Uploading..." = "Uploading...";
+"Closes the profile view" = "Closes the profile view";
+"Error" = "Error";
+"OK" = "OK";
+"Username cannot be empty" = "Username cannot be empty";
+"This username is already taken. Please choose another." = "This username is already taken. Please choose another.";
+"You must be signed in to upload images. Please sign in first." = "You must be signed in to upload images. Please sign in first.";
+"You must be authenticated with Firebase to upload images. Please sign in first." = "You must be authenticated with Firebase to upload images. Please sign in first.";
+"Failed to upload image: %@" = "Failed to upload image: %@";
+"Unable to present sign in" = "Unable to present sign in";
+"%@ linking is not yet available" = "%@ linking is not yet available";
+"Email: %@" = "Email: %@";
+"Name: %@" = "Name: %@";
+"Profile" = "Profile";
+"Signed In" = "Signed In";
+"Your account is synced to the cloud" = "Your account is synced to the cloud";
+"Signed Out" = "Signed Out";
+"You are signed out. Sign in to sync your account and access all features" = "You are signed out. Sign in to sync your account and access all features";
+"Anonymous Account" = "Anonymous Account";
+"Sign up to sync your account and access more features" = "Sign up to sync your account and access more features";
+"Local Account" = "Local Account";
+"Your account is stored locally only. Sign in to sync to the cloud" = "Your account is stored locally only. Sign in to sync to the cloud";
+
+
