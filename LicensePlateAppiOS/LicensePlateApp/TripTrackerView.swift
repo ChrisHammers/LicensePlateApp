@@ -442,7 +442,7 @@ struct TripTrackerView: View {
                         }
                     }
                 } header: {
-                    Text(group.country.rawValue)
+                    Text(group.country.rawValue.localized)
                         .font(.headline)
                         .foregroundColor(Color.Theme.primaryBlue)
                         .frame(maxWidth: .infinity, alignment: .leading)

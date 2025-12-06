@@ -771,7 +771,7 @@ struct SettingPickerRow<T: Hashable & CaseIterable & RawRepresentable>: View whe
         
             Picker("", selection: $selection) {
                 ForEach(allCases, id: \.self) { option in
-                    Text(option.rawValue.capitalized)
+                    Text(option.rawValue.localized)
                         .tag(option)
                 }
             }

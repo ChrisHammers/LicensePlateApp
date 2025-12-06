@@ -236,4 +236,66 @@
 "mark" = "marcar";
 "Selected" = "Seleccionado";
 
+// New Trip Sheet
+"New Trip" = "Nuevo Viaje";
+"Basic Info" = "Información Básica";
+"Trip Options" = "Opciones del Viaje";
+"Automatically use date & time" = "Usar automáticamente fecha y hora";
+"Enter a name for your trip, or leave blank to use date and time" = "Ingresa un nombre para tu viaje, o déjalo en blanco para usar fecha y hora";
+"Will use date and time" = "Se usará fecha y hora";
+"Create" = "Crear";
+"Cancels creating a new trip" = "Cancela la creación de un nuevo viaje";
+
+// Enum Values - AppDarkMode
+"Light" = "Claro";
+"Dark" = "Oscuro";
+"System" = "Sistema";
+
+// Enum Values - AppDistanceUnit
+"Miles" = "Millas";
+"Kilometers" = "Kilómetros";
+
+// Enum Values - AppMapStyle
+"Standard" = "Estándar";
+"Satellite" = "Satelital";
+
+// Enum Values - AppLanguage
+"English" = "Inglés";
+"Spanish" = "Español";
+"French" = "Francés";
+
+// Enum Values - AppTripSortOrder
+"Date Created" = "Fecha de Creación";
+"Name" = "Nombre";
+"Progress" = "Progreso";
+"Last Active" = "Último Activo";
+
+// Enum Values - AppFontSize
+"Small" = "Pequeño";
+"Medium" = "Mediano";
+"Large" = "Grande";
+
+// Enum Values - AppDefaultTab
+"Trips" = "Viajes";
+"Map" = "Mapa";
+"Stats" = "Estadísticas";
+
+// Enum Values - AppPlateDisplayFormat
+"Full Name" = "Nombre Completo";
+"Abbreviation" = "Abreviatura";
+
+// Enum Values - AppMapDefaultZoom
+"Close" = "Cerca";
+"Far" = "Lejos";
+
+// Enum Values - AppBackgroundStyle
+"None" = "Ninguno";
+"Paths" = "Caminos";
+"Characters" = "Personajes";
+
+// Other Missed Strings
+"Opens app settings" = "Abre la configuración de la app";
+"Spot license plates, conquer the map, and rule the open road!" = "¡Encuentra placas, conquista el mapa y domina la carretera!";
+"Opens a sheet to create a new trip" = "Abre una hoja para crear un nuevo viaje";
+
 

@@ -267,14 +267,14 @@ struct AppPreferencesView: View {
             .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
+                    Button("Done".localized) {
                         dismiss()
                     }
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
-                    .accessibilityLabel("Done")
-                    .accessibilityHint("Closes this view")
+                    .accessibilityLabel("Done".localized)
+                    .accessibilityHint("Closes this view".localized)
                 }
             }
             .preferredColorScheme(currentColorScheme)
