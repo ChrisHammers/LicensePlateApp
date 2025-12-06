@@ -638,7 +638,7 @@ struct TripTrackerView: View {
                             .padding(.horizontal)
                     }
                 } else {
-                    Text("Requesting Permission...")
+                    Text("Requesting Permission...".localized)
                         .font(.system(.title2, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
@@ -983,7 +983,7 @@ private struct RegionCellView: View {
                         .fontWeight(.medium)
                         .foregroundStyle(Color.Theme.primaryBlue)
 
-                    Text(region.country.rawValue)
+                    Text(region.country.rawValue.localized)
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                 }
@@ -1001,7 +1001,7 @@ private struct RegionCellView: View {
         .buttonStyle(.plain)
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.5 : 1.0)
-        .accessibilityLabel("\(region.name), \(region.country.rawValue)")
+        .accessibilityLabel("\(region.name), \(region.country.rawValue.localized)")
         .accessibilityValue(isSelected ? "Found".localized : "Not found".localized)
         .accessibilityHint(isDisabled ? "Trip must be started to mark regions".localized : "Double tap to %@ this region as found".localized(isSelected ? "unmark".localized : "mark".localized))
         .accessibilityAddTraits(.isButton)
@@ -1798,7 +1798,7 @@ private struct FullScreenMapView: View {
                 // User location annotation
                 if let userLocation = locationManager.location,
                    locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways {
-                    Annotation("Your Location", coordinate: userLocation.coordinate) {
+                    Annotation("Your Location".localized, coordinate: userLocation.coordinate) {
                         ZStack {
                             Circle()
                                 .fill(Color.green)
@@ -1957,8 +1957,8 @@ private struct RegionMapView: View {
                         showFullScreen = true
                     }
                 }
-                .accessibilityLabel("Map showing \(country.rawValue) regions")
-                .accessibilityHint("Double tap to open full screen map")
+                .accessibilityLabel("Map showing %@ regions".localized(country.rawValue.localized))
+                .accessibilityHint("Double tap to open full screen map".localized)
                 .accessibilityAddTraits(.isButton)
         }
         .onChange(of: country) { oldValue, newValue in

@@ -844,8 +844,8 @@ struct DefaultSettingsView: View {
                             
                             // Help & About
                             SettingNavigationRow(
-                                title: "Help & About",
-                                description: "Get help, report bugs, suggest features, and learn about the app",
+                                title: "Help & About".localized,
+                                description: "Get help, report bugs, suggest features, and learn about the app".localized,
                                 icon: "questionmark.circle.fill"
                             ) {
                                 coordinator.navigateToHelpAbout(path: $navigationPath)

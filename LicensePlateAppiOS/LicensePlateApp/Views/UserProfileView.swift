@@ -69,7 +69,7 @@ struct UserProfileView: View {
                 
                 guard let presentingViewController = topViewController() else {
                     await MainActor.run {
-                        errorMessage = "Unable to present sign in"
+                        errorMessage = "Unable to present sign in".localized
                         showError = true
                         linkingPlatform = nil
                     }
@@ -95,7 +95,7 @@ struct UserProfileView: View {
                     // Not yet implemented
                     print("❌ \(platform.rawValue) linking not implemented")
                     await MainActor.run {
-                        errorMessage = "\(platform.rawValue) linking is not yet available"
+                        errorMessage = "%@ linking is not yet available".localized(platform.rawValue)
                         showError = true
                         linkingPlatform = nil
                     }
@@ -164,7 +164,7 @@ struct UserProfileView: View {
                             .disabled(isUploadingImage)
                             
                             if isUploadingImage {
-                                ProgressView("Uploading...")
+                                ProgressView("Uploading...".localized)
                                     .font(.system(.caption, design: .rounded))
                                     .foregroundStyle(Color.Theme.softBrown)
                             }
@@ -183,9 +183,9 @@ struct UserProfileView: View {
                     Section {
                         // First Name - Editable
                         SettingEditableTextRow(
-                            title: "First Name",
+                            title: "First Name".localized,
                             value: $currentFirstName,
-                            placeholder: "Enter first name",
+                            placeholder: "Enter first name".localized,
                             detail: nil,
                             isDisabled: false,
                             onSave: {
@@ -198,9 +198,9 @@ struct UserProfileView: View {
                         
                         // Last Name - Editable
                         SettingEditableTextRow(
-                            title: "Last Name",
+                            title: "Last Name".localized,
                             value: $currentLastName,
-                            placeholder: "Enter last name",
+                            placeholder: "Enter last name".localized,
                             detail: nil,
                             isDisabled: false,
                             onSave: {
@@ -213,9 +213,9 @@ struct UserProfileView: View {
                         
                         // Username - Editable
                         SettingEditableTextRow(
-                            title: "Username",
+                            title: "Username".localized,
                             value: $currentUserName,
-                            placeholder: "Enter username",
+                            placeholder: "Enter username".localized,
                             detail: nil,
                             isDisabled: isCheckingUsername,
                             onSave: {
@@ -228,7 +228,7 @@ struct UserProfileView: View {
                       
                         // Email - Share Data Toggle
                         SettingShareDataToggleRow3(
-                            title: "Email",
+                            title: "Email".localized,
                             value: Binding(
                                 get: { user.email },
                                 set: { newValue in
@@ -254,7 +254,7 @@ struct UserProfileView: View {
                         
                         // Phone - Share Data Toggle
                         SettingShareDataToggleRow3(
-                            title: "Phone",
+                            title: "Phone".localized,
                             value: Binding(
                                 get: { user.phoneNumber },
                                 set: { newValue in
@@ -279,7 +279,7 @@ struct UserProfileView: View {
                         )
                         
                     } header: {
-                        Text("Account Information")
+                        Text("Account Information".localized)
                             .font(.system(.headline, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
@@ -294,39 +294,39 @@ struct UserProfileView: View {
                           HStack {
                               VStack(alignment: .leading, spacing: 4) {
                                   if authService.isTrulyAuthenticated {
-                                      Text("Signed In")
+                                      Text("Signed In".localized)
                                           .font(.system(.body, design: .rounded))
                                           .fontWeight(.semibold)
                                           .foregroundStyle(Color.Theme.primaryBlue)
                                       
-                                      Text("Your account is synced to the cloud")
+                                      Text("Your account is synced to the cloud".localized)
                                           .font(.system(.caption, design: .rounded))
                                           .foregroundStyle(Color.Theme.softBrown)
                                   } else if authService.wasPreviouslySignedIn {
-                                      Text("Signed Out")
+                                      Text("Signed Out".localized)
                                           .font(.system(.body, design: .rounded))
                                           .fontWeight(.semibold)
                                           .foregroundStyle(Color.Theme.primaryBlue)
                                       
-                                      Text("You are signed out. Sign in to sync your account and access all features")
+                                      Text("You are signed out. Sign in to sync your account and access all features".localized)
                                           .font(.system(.caption, design: .rounded))
                                           .foregroundStyle(Color.Theme.softBrown)
                                   } else if authService.isAnonymousUser || user.firebaseUID != nil {
-                                      Text("Anonymous Account")
+                                      Text("Anonymous Account".localized)
                                           .font(.system(.body, design: .rounded))
                                           .fontWeight(.semibold)
                                           .foregroundStyle(Color.Theme.primaryBlue)
                                       
-                                      Text("Sign up to sync your account and access more features")
+                                      Text("Sign up to sync your account and access more features".localized)
                                           .font(.system(.caption, design: .rounded))
                                           .foregroundStyle(Color.Theme.softBrown)
                                   } else {
-                                      Text("Local Account")
+                                      Text("Local Account".localized)
                                           .font(.system(.body, design: .rounded))
                                           .fontWeight(.semibold)
                                           .foregroundStyle(Color.Theme.primaryBlue)
                                       
-                                      Text("Your account is stored locally only. Sign in to sync to the cloud")
+                                      Text("Your account is stored locally only. Sign in to sync to the cloud".localized)
                                           .font(.system(.caption, design: .rounded))
                                           .foregroundStyle(Color.Theme.softBrown)
                                   }
@@ -349,7 +349,7 @@ struct UserProfileView: View {
                                   authService.showSignInSheet = true
                               } label: {
                                   HStack {
-                                      Text("Sign In or Create Account")
+                                      Text("Sign In or Create Account".localized)
                                           .font(.system(.body, design: .rounded))
                                           .fontWeight(.semibold)
                                       
@@ -379,7 +379,7 @@ struct UserProfileView: View {
                                   }
                               } label: {
                                   HStack {
-                                      Text("Sign Out")
+                                      Text("Sign Out".localized)
                                           .font(.system(.body, design: .rounded))
                                           .fontWeight(.semibold)
                                       
@@ -403,7 +403,7 @@ struct UserProfileView: View {
                               HStack(spacing: 8) {
                                   Image(systemName: "arrow.clockwise")
                                       .font(.system(.caption, design: .rounded))
-                                  Text("Changes will sync when you're online")
+                                  Text("Changes will sync when you're online".localized)
                                       .font(.system(.caption, design: .rounded))
                               }
                               .foregroundStyle(Color.Theme.softBrown)
@@ -417,7 +417,7 @@ struct UserProfileView: View {
                               .fill(Color.Theme.cardBackground)
                       )
                   } header: {
-                      Text("Authentication Status")
+                      Text("Authentication Status".localized)
                           .font(.system(.headline, design: .rounded))
                           .foregroundStyle(Color.Theme.primaryBlue)
                   }
@@ -429,7 +429,7 @@ struct UserProfileView: View {
                     Section {
                         VStack(alignment: .leading, spacing: 16) {
                             if user.linkedPlatforms.isEmpty {
-                                Text("No accounts linked")
+                                Text("No accounts linked".localized)
                                     .font(.system(.body, design: .rounded))
                                     .foregroundStyle(Color.Theme.softBrown)
                             } else {
@@ -444,7 +444,7 @@ struct UserProfileView: View {
                                                 
                                                 Spacer()
                                                 
-                                                Text("Linked")
+                                                Text("Linked".localized)
                                                     .font(.system(.caption, design: .rounded))
                                                     .foregroundStyle(Color.green)
                                                     .padding(.horizontal, 8)
@@ -456,13 +456,13 @@ struct UserProfileView: View {
                                             }
                                             
                                             if let email = platform.email {
-                                                Text("Email: \(email)")
+                                                Text("Email: %@".localized(email))
                                                     .font(.system(.caption, design: .rounded))
                                                     .foregroundStyle(Color.Theme.softBrown.opacity(0.8))
                                             }
                                             
                                             if let displayName = platform.displayName {
-                                                Text("Name: \(displayName)")
+                                                Text("Name: %@".localized(displayName))
                                                     .font(.system(.caption, design: .rounded))
                                                     .foregroundStyle(Color.Theme.softBrown.opacity(0.8))
                                             }
@@ -483,8 +483,8 @@ struct UserProfileView: View {
                                                 .foregroundStyle(Color.red)
                                                 .font(.system(size: 20))
                                         }
-                                        .accessibilityLabel("Unlink \(platform.platform.rawValue) account")
-                                        .accessibilityHint("Removes the linked \(platform.platform.rawValue) account")
+                                        .accessibilityLabel("Unlink %@ account".localized(platform.platform.rawValue))
+                                        .accessibilityHint("Removes the linked %@ account".localized(platform.platform.rawValue))
                                     }
                                     .padding(.vertical, 8)
                                 }
@@ -495,7 +495,7 @@ struct UserProfileView: View {
                                 Divider()
                                     .padding(.vertical, 8)
                                 
-                                Text("Link Additional Accounts")
+                                Text("Link Additional Accounts".localized)
                                     .font(.system(.subheadline, design: .rounded))
                                     .fontWeight(.semibold)
                                     .foregroundStyle(Color.Theme.primaryBlue)
@@ -508,7 +508,7 @@ struct UserProfileView: View {
                                 }
                                 
                                 if availablePlatforms.isEmpty {
-                                    Text("All available accounts are linked")
+                                    Text("All available accounts are linked".localized)
                                         .font(.system(.caption, design: .rounded))
                                         .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
                                 } else {
@@ -518,7 +518,7 @@ struct UserProfileView: View {
                                                 handleLinkPlatform(platform)
                                             } label: {
                                                 HStack {
-                                                    Text("Link \(platform.rawValue)")
+                                                    Text("Link %@".localized(platform.rawValue))
                                                         .font(.system(.body, design: .rounded))
                                                         .fontWeight(.medium)
                                                     
@@ -537,14 +537,14 @@ struct UserProfileView: View {
                                                 )
                                             }
                                             .disabled(authService.isLoading || linkingPlatform != nil)
-                                            .accessibilityLabel("Link \(platform.rawValue) account")
-                                            .accessibilityHint("Links your \(platform.rawValue) account to this profile")
+                                            .accessibilityLabel("Link %@ account".localized(platform.rawValue))
+                                            .accessibilityHint("Links your %@ account to this profile".localized(platform.rawValue))
                                             .accessibilityAddTraits(.isButton)
                                         }
                                     }
                                 }
                             } else {
-                                Text("Sign in to link additional accounts")
+                                Text("Sign in to link additional accounts".localized)
                                     .font(.system(.caption, design: .rounded))
                                     .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
                                     .italic()
@@ -558,7 +558,7 @@ struct UserProfileView: View {
                                 .fill(Color.Theme.cardBackground)
                         )
                     } header: {
-                        Text("Linked Accounts")
+                        Text("Linked Accounts".localized)
                             .font(.system(.headline, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
@@ -569,23 +569,23 @@ struct UserProfileView: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle("Profile")
+            .navigationTitle("Profile".localized)
             .navigationBarTitleDisplayMode(.inline)
             .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Done") {
+                    Button("Done".localized) {
                         dismiss()
                     }
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
-                    .accessibilityLabel("Done")
-                    .accessibilityHint("Closes the profile view")
+                    .accessibilityLabel("Done".localized)
+                    .accessibilityHint("Closes the profile view".localized)
                 }
             }
-            .alert("Error", isPresented: $showError) {
-                Button("OK", role: .cancel) { }
+            .alert("Error".localized, isPresented: $showError) {
+                Button("OK".localized, role: .cancel) { }
             } message: {
                 Text(errorMessage)
             }
@@ -634,7 +634,7 @@ struct UserProfileView: View {
         let trimmedName = currentUserName.trimmingCharacters(in: .whitespacesAndNewlines)
         
         guard !trimmedName.isEmpty else {
-            errorMessage = "Username cannot be empty"
+            errorMessage = "Username cannot be empty".localized
             showError = true
             currentUserName = user.userName // Reset to original
             return
@@ -652,7 +652,7 @@ struct UserProfileView: View {
                 let isTaken = try await authService.isUsernameTaken(trimmedName)
                 
                 if isTaken {
-                    errorMessage = "This username is already taken. Please choose another."
+                    errorMessage = "This username is already taken. Please choose another.".localized
                     showError = true
                     currentUserName = user.userName // Reset to original
                     isCheckingUsername = false
@@ -753,14 +753,14 @@ struct UserProfileView: View {
     private func uploadUserImage(_ image: UIImage) {
         // Must use Firebase UID for Storage (not local ID)
         guard let firebaseUID = user.firebaseUID else {
-            errorMessage = "You must be signed in to upload images. Please sign in first."
+            errorMessage = "You must be signed in to upload images. Please sign in first.".localized
             showError = true
             return
         }
         
         // Verify user is authenticated with Firebase
         guard Auth.auth().currentUser != nil else {
-            errorMessage = "You must be authenticated with Firebase to upload images. Please sign in first."
+            errorMessage = "You must be authenticated with Firebase to upload images. Please sign in first.".localized
             showError = true
             return
         }
@@ -808,7 +808,7 @@ struct UserProfileView: View {
                         print("   Error code: \(nsError.code)")
                         print("   Error userInfo: \(nsError.userInfo)")
                     }
-                    errorMessage = "Failed to upload image: \(errorDesc)"
+                    errorMessage = "Failed to upload image: %@".localized(errorDesc)
                     showError = true
                     isUploadingImage = false
                 }
