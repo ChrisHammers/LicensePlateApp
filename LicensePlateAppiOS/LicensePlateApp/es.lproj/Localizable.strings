@@ -172,6 +172,7 @@
 // Settings - New Trip Defaults View
 "New Trip Defaults" = "Valores Predeterminados de Nuevo Viaje";
 "Start Trip right away" = "Iniciar viaje de inmediato";
+"Automatically start the trip when created" = "Iniciar automáticamente el viaje cuando se crea";
 "Automatically start new trips when created" = "Iniciar automáticamente nuevos viajes cuando se crean";
 "Default Countries" = "Países Predeterminados";
 "Select which countries' license plates will be included by default when creating new trips" = "Selecciona qué placas de países se incluirán por defecto al crear nuevos viajes";

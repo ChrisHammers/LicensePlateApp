@@ -172,6 +172,7 @@
 // Settings - New Trip Defaults View
 "New Trip Defaults" = "New Trip Defaults";
 "Start Trip right away" = "Start Trip right away";
+"Automatically start the trip when created" = "Automatically start the trip when created";
 "Automatically start new trips when created" = "Automatically start new trips when created";
 "Default Countries" = "Default Countries";
 "Select which countries' license plates will be included by default when creating new trips" = "Select which countries' license plates will be included by default when creating new trips";
