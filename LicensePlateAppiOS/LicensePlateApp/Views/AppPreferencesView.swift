@@ -16,6 +16,10 @@ struct AppPreferencesView: View {
     @AppStorage("appBackgroundStyle") private var appBackgroundStyleRaw: String = AppBackgroundStyle.none.rawValue
     @AppStorage("appDistanceUnit") private var appDistanceUnitRaw: String = AppDistanceUnit.miles.rawValue
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
+    @AppStorage("appShowRegionBorders") private var appShowRegionBorders = false
+    @AppStorage("appShowMapMarkers") private var appShowMapMarkers = true
+    @AppStorage("useGMURendering") private var useGMURendering = false // For comparison testing
+    @AppStorage("useTileOverlayRendering") private var useTileOverlayRendering = false // For performance testing
     @AppStorage("appLanguage") private var appLanguageRaw: String = AppLanguage.english.rawValue
     @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
     @AppStorage("appUseVibrations") private var appUseVibrations = true
@@ -31,6 +35,7 @@ struct AppPreferencesView: View {
     @AppStorage("appPlateDisplayFormat") private var appPlateDisplayFormatRaw: String = AppPlateDisplayFormat.fullName.rawValue
     @AppStorage("appMapDefaultZoom") private var appMapDefaultZoomRaw: String = AppMapDefaultZoom.medium.rawValue
     @AppStorage("appShowCompletedRegions") private var appShowCompletedRegions = true
+    @AppStorage("appMapProvider") private var appMapProviderRaw: String = AppPreferences.defaultMapProvider().rawValue
     
     @State private var currentColorScheme: ColorScheme?
     
@@ -106,6 +111,13 @@ struct AppPreferencesView: View {
         )
     }
     
+    private var appMapProvider: Binding<AppMapProvider> {
+        Binding(
+            get: { AppMapProvider(rawValue: appMapProviderRaw) ?? AppPreferences.defaultMapProvider() },
+            set: { appMapProviderRaw = $0.rawValue }
+        )
+    }
+    
     var body: some View {
             ZStack {
                 Color.Theme.background
@@ -143,8 +155,46 @@ struct AppPreferencesView: View {
                                 description: "Choose standard or satellite view".localized,
                                 selection: appMapStyle
                             )
+                            
+                            Divider()
+                            
+                          #if DEBUG
+                            SettingToggleRow(
+                                title: "Show Region Borders",
+                                description: "Display colored region boundaries on the map (blue for unfound, yellow for found)",
+                                isOn: $appShowRegionBorders
+                            )
+                            
+                            Divider()
+                          #endif
+                          
+                            
+                            SettingToggleRow(
+                                title: "Show Map Markers",
+                                description: "Display markers on the map showing where regions were found (requires location data)",
+                                isOn: $appShowMapMarkers
+                            )
+                            
+                            Divider()
+                            
+                          #if DEBUG
+                            SettingToggleRow(
+                                title: "Use GMU Rendering (Testing)",
+                                description: "Use Google Maps Utils for polygon rendering (for performance comparison)",
+                                isOn: $useGMURendering
+                            )
+                            
+                            Divider()
+                          #endif
+                #if DEBUG
+                            SettingToggleRow(
+                                title: "Use Tile Overlay (Testing)",
+                                description: "Use TileOverlay for polygon rendering - best performance for many polygons",
+                                isOn: $useTileOverlayRendering
+                            )
                           
                             Divider()
+                          #endif
                             
                             SettingToggleRow(
                                 title: "Play Sound Effects".localized,
@@ -258,6 +308,29 @@ struct AppPreferencesView: View {
                         .listRowBackground(Color.clear)
                     }
                     .textCase(nil)
+                    
+                    #if DEBUG
+                    Section {
+                        VStack(spacing: 12) {
+                            SettingPickerRow(
+                                title: "Map Provider",
+                                description: "Choose between Apple Maps and Google Maps (DEBUG only)",
+                                selection: appMapProvider
+                            )
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .background(Color.Theme.cardBackground)
+                        .cornerRadius(20)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                        .listRowBackground(Color.clear)
+                    } header: {
+                        Text("Debug Settings")
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    .textCase(nil)
+                    #endif
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)

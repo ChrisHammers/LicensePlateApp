@@ -5,3 +5,6 @@ LicensePlateAppiOS/LicensePlateApp/GoogleService-Info-Debug.plist
 LicensePlateAppiOS/LicensePlateApp/GoogleService-Info-Release.plist
 LicensePlateAppiOS/LicensePlateApp/GoogleService-Info.plist
 LicensePlateAppiOS/LicensePlateApp.xcodeproj/xcuserdata/christopherhammers.xcuserdatad/xcdebugger/Breakpoints_v2.xcbkptlist
+LicensePlateAppiOS/LicensePlateApp/GoogleMaps-Info-Debug.plist
+LicensePlateAppiOS/LicensePlateApp/GoogleMaps-Info-Release.plist
+LicensePlateAppiOS/LicensePlateApp/GoogleMaps-Info.plist

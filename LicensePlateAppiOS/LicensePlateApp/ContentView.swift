@@ -7,7 +7,6 @@
 
 import SwiftUI
 import SwiftData
-import MapKit
 import CoreLocation
 import AVFoundation
 import UserNotifications
@@ -20,6 +19,7 @@ struct ContentView: View {
     @State private var path: [UUID] = []
     @State private var isShowingCreateSheet = false
     @State private var isShowingSettings = false
+    @AppStorage("boundariesLoaded") private var boundariesLoaded = false
     
     // Custom detent for the new trip sheet - device-aware sizing
     // On iPad, use a larger fraction since 25% is too small to show the text field
@@ -60,9 +60,11 @@ struct ContentView: View {
 
      }
     var body: some View {
-        NavigationStack(path: $path) {
-            AppBackgroundView {
-                List {
+        ZStack {
+            if boundariesLoaded {
+              NavigationStack(path: $path) {
+                AppBackgroundView {
+                  List {
                     Section {
                         header
                             .listRowInsets(.init(top: 24, leading: 20, bottom: 24, trailing: 20))
@@ -82,63 +84,77 @@ struct ContentView: View {
                             tripList
                         }
                         .textCase(nil)
-                        .listRowBackground(Color.clear)
+                      .listRowBackground(Color.clear)
                     }
+                  }
+                  .scrollContentBackground(.hidden)
+                  .listStyle(.insetGrouped)
                 }
-                .scrollContentBackground(.hidden)
-                .listStyle(.insetGrouped)
-            }
-            .navigationTitle("RoadTrip Royale")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                .navigationTitle("RoadTrip Royale")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                  ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        isShowingSettings = true
+                      isShowingSettings = true
                     } label: {
-                        Image(systemName: "gearshape")
-                            .foregroundStyle(Color.Theme.primaryBlue)
+                      Image(systemName: "gearshape")
+                        .foregroundStyle(Color.Theme.primaryBlue)
                     }
                     .accessibilityLabel("Settings".localized)
                     .accessibilityHint("Opens app settings".localized)
+                  }
                 }
-            }
-            .sheet(isPresented: $isShowingSettings) {
-                DefaultSettingsView()
+                .sheet(isPresented: $isShowingSettings) {
+                  DefaultSettingsView()
                     .environmentObject(authService)
-            }
-            .task {
-                // Initialize authentication state (checks Firebase Auth first, then local)
-                await authService.initializeAuthState(modelContext: modelContext)
-            }
-            .overlay {
-                if authService.showUsernameConflictDialog {
+                }
+                .task {
+                  // Initialize authentication state (checks Firebase Auth first, then local)
+                  await authService.initializeAuthState(modelContext: modelContext)
+                }
+                .overlay {
+                  if authService.showUsernameConflictDialog {
                     UsernameConflictDialog(authService: authService)
+                  }
                 }
-            }
-            .overlay(alignment: .bottomTrailing) {
-                addTripButton
-            }
-            .sheet(isPresented: $isShowingCreateSheet) {
-                NewTripSheet { tripData in
+                .overlay(alignment: .bottomTrailing) {
+                  addTripButton
+                }
+                .sheet(isPresented: $isShowingCreateSheet) {
+                  NewTripSheet { tripData in
                     createTrip(with: tripData)
-                }
-                .presentationDetents([smallDetent, .medium, .large], selection: $sheetDetent)
-                .presentationDragIndicator(.visible)
-                .onAppear {
+                  }
+                  .presentationDetents([smallDetent, .medium, .large], selection: $sheetDetent)
+                  .presentationDragIndicator(.visible)
+                  .onAppear {
                     sheetDetent = smallDetent
+                  }
                 }
-            }
-            .navigationDestination(for: UUID.self) { tripID in
-                if let trip = trips.first(where: { $0.id == tripID }) {
+                .navigationDestination(for: UUID.self) { tripID in
+                  if let trip = trips.first(where: { $0.id == tripID }) {
                     TripTrackerView(trip: trip)
-                } else {
+                  } else {
                     TripMissingView()
+                  }
                 }
+              }
+                .transition(.opacity)
+            } else {
+                SplashScreenView()
+                    .transition(.opacity)
             }
         }
+        .animation(.easeInOut(duration: 0.3), value: boundariesLoaded)
         .preferredColorScheme(currentColorScheme)
         .onAppear {
             FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: appPlaySoundEffects)
+            
+            // Mark boundaries as loaded after splash screen has rendered
+            // This ensures the splash screen is visible before transitioning
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                // Boundaries are already loaded in AppDelegate, so we can safely mark as complete
+                boundariesLoaded = true
+            }
         }
         .onChange(of: appUseVibrations) { _, newValue in
             FeedbackService.shared.updatePreferences(hapticEnabled: newValue, soundEnabled: appPlaySoundEffects)
@@ -301,7 +317,7 @@ struct ContentView: View {
 
     private func deleteTrips(at offsets: IndexSet) {
         FeedbackService.shared.buttonTap()
-        for index in offsets {
+            for index in offsets {
             modelContext.delete(trips[index])
         }
         do {
