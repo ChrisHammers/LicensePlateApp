@@ -130,8 +130,10 @@ struct GoogleMapStyle {
         let mapStyle = AppMapStyle(rawValue: appMapStyleRaw) ?? .standard
         
         switch mapStyle {
+          #if DEBUG
         case .custom:
             return regionHighlightStyle()
+          #endif
         case .standard, .satellite:
             return nil // Use default Google Maps styling
         }

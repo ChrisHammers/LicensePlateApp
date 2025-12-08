@@ -25,7 +25,9 @@ enum AppDistanceUnit: String, CaseIterable {
 enum AppMapStyle: String, CaseIterable {
     case standard = "Standard"
     case satellite = "Satellite"
+  #if DEBUG
     case custom = "Custom"
+#endif
     
     /// Returns the MapStyle based on the preference (for MapKit compatibility)
     var mapStyle: MapStyle {
@@ -34,8 +36,10 @@ enum AppMapStyle: String, CaseIterable {
             return .standard
         case .satellite:
             return .hybrid
+        #if DEBUG
         case .custom:
             return .standard
+        #endif
         }
     }
     
@@ -46,8 +50,10 @@ enum AppMapStyle: String, CaseIterable {
             return .normal
         case .satellite:
             return .satellite
+          #if DEBUG
         case .custom:
             return .normal // With custom styling
+          #endif
         }
     }
 }

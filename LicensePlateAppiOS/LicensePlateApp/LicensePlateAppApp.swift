@@ -23,6 +23,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // This ensures Firebase's AppDelegateSwizzler can properly detect the delegate
         initializeFirebase()
         
+        #if DEBUG
         // Initialize Google Maps after Firebase
         GoogleMapsService.shared.initializeFromConfig()
         
@@ -37,7 +38,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             PolygonPathCache.shared.preloadPaths(for: PlateRegion.all)
         }
         
-        #if DEBUG
         // Check if app version changed (indicating an update with potentially new GeoJSON files)
         // Only check and clear cache in DEBUG builds
         checkAndClearTileCacheIfNeeded()
