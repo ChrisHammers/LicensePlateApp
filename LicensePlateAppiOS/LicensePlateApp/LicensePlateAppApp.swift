@@ -12,6 +12,10 @@ import FirebaseCore
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
+                         
+        // Initialize app language on first launch based on device language
+        LocalizationHelper.initializeAppLanguageIfNeeded()
+
         // Reset boundariesLoaded to false on app launch to ensure splash screen shows
         UserDefaults.standard.set(false, forKey: "boundariesLoaded")
         

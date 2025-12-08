@@ -1,0 +1,408 @@
+/* 
+  Localizable.strings (French)
+  LicensePlateApp
+  
+  French localization strings
+*/
+
+// App Name
+"RoadTrip Royale" = "RoadTrip Royale";
+
+// Main Screen
+"No trips yet" = "Aucun voyage pour le moment";
+"Start your first adventure and begin collecting plates from across North America." = "Commencez votre première aventure et commencez à collectionner les plaques de toute l'Amérique du Nord.";
+"Track every plate you see across the United States, Canada, and Mexico." = "Suivez chaque plaque que vous voyez aux États-Unis, au Canada et au Mexique.";
+"Create Trip" = "Créer un Voyage";
+"Trip: %@" = "Voyage : %@";
+"Double tap to open trip" = "Appuyez deux fois pour ouvrir le voyage";
+
+// Trip Tracking
+"List" = "Liste";
+"Voice" = "Voix";
+"Found" = "Trouvées";
+"Remaining" = "Restantes";
+"START" = "DÉMARRER";
+"END" = "TERMINER";
+"ENDED" = "TERMINÉ";
+"Start Trip" = "Démarrer le Voyage";
+"Starts the trip and begins tracking" = "Démarre le voyage et commence le suivi";
+"Only the trip creator can start the trip" = "Seul le créateur du voyage peut le démarrer";
+"End Trip" = "Terminer le Voyage";
+"Ends the trip and stops tracking" = "Termine le voyage et arrête le suivi";
+"Only the trip creator can end the trip" = "Seul le créateur du voyage peut le terminer";
+"Trip Ended" = "Voyage Terminé";
+"This trip has been completed" = "Ce voyage a été complété";
+"This will stop the game. You won't be able to add states in this trip anymore." = "Cela arrêtera le jeu. Vous ne pourrez plus ajouter d'états dans ce voyage.";
+"Cancel" = "Annuler";
+
+// Voice Recognition
+"Speech Recognition Needed" = "Reconnaissance Vocale Nécessaire";
+"Please enable speech recognition in Settings to use voice input." = "Veuillez activer la reconnaissance vocale dans les Réglages pour utiliser la saisie vocale.";
+"Listening..." = "Écoute...";
+"Hold to Talk" = "Maintenez pour parler";
+"Heard:" = "Entendu :";
+"No speech detected yet..." = "Aucune voix détectée pour le moment...";
+"Requesting Permission..." = "Demande d'autorisation...";
+"Hey, we heard the following %@:" = "Hé, nous avons entendu le %@ suivant :";
+"Add this to the list of license plates found?" = "Ajouter ceci à la liste des plaques trouvées ?";
+"Don't show this again" = "Ne plus afficher";
+"Add" = "Ajouter";
+"Voice Coming Soon" = "Voix Bientôt Disponible";
+"Soon you will be able to log plates hands-free by simply saying the state or province you spot." = "Bientôt, vous pourrez enregistrer les plaques sans les mains en disant simplement l'état ou la province que vous repérez.";
+
+// Settings
+"App Preferences" = "Préférences de l'App";
+"Dark Mode" = "Mode Sombre";
+"Choose your preferred appearance" = "Choisissez votre apparence préférée";
+"App Background" = "Arrière-plan de l'App";
+"Choose background style" = "Choisissez le style d'arrière-plan";
+"Distance Unit" = "Unité de Distance";
+"Select miles or kilometers" = "Sélectionnez les miles ou les kilomètres";
+"Map Style" = "Style de Carte";
+"Choose standard or satellite view" = "Choisissez la vue standard ou satellite";
+"Play Sound Effects" = "Lire les Effets Sonores";
+"Enable audio feedback for app interactions" = "Activer la rétroaction audio pour les interactions de l'app";
+"Use Vibrations" = "Utiliser les Vibrations";
+"Enable haptic feedback" = "Activer la rétroaction haptique";
+"Trip Sort Order" = "Ordre de Tri des Voyages";
+"How to sort trips in the list" = "Comment trier les voyages dans la liste";
+"Show Confirmation Dialogs" = "Afficher les Dialogues de Confirmation";
+"Show confirmation prompts for destructive actions like deleting trips" = "Afficher les invites de confirmation pour les actions destructives comme la suppression de voyages";
+"Language" = "Langue";
+"Select your preferred language" = "Sélectionnez votre langue préférée";
+"Font Size" = "Taille de Police";
+"Adjust text size for better readability" = "Ajustez la taille du texte pour une meilleure lisibilité";
+"Reduce Motion" = "Réduire le Mouvement";
+"Respect iOS Reduce Motion setting" = "Respecter le réglage Réduire le Mouvement d'iOS";
+"Auto-Sync" = "Synchronisation Automatique";
+"Automatically sync data to cloud" = "Synchroniser automatiquement les données vers le cloud";
+"Default Tab" = "Onglet par Défaut";
+"Which tab to show when opening the app" = "Quel onglet afficher lors de l'ouverture de l'app";
+"Show Statistics" = "Afficher les Statistiques";
+"Display statistics on the main screen" = "Afficher les statistiques sur l'écran principal";
+"Plate Display Format" = "Format d'Affichage des Plaques";
+"How to display license plate regions" = "Comment afficher les régions de plaques";
+"Map Default Zoom" = "Zoom par Défaut de la Carte";
+"Default zoom level when opening maps" = "Niveau de zoom par défaut lors de l'ouverture des cartes";
+"Show Completed Regions" = "Afficher les Régions Complétées";
+"Display regions that are already found in lists" = "Afficher les régions déjà trouvées dans les listes";
+
+// Help & About
+"About" = "À Propos";
+"Learn about RoadTrip Royale and HammersTechLLC" = "En savoir plus sur RoadTrip Royale et HammersTechLLC";
+"Acknowledgements" = "Remerciements";
+"Open source libraries and SDKs we use" = "Bibliothèques et SDK open source que nous utilisons";
+"Frequently Asked Questions" = "Questions Fréquemment Posées";
+"How do I play RoadTrip Royale?" = "Comment jouer à RoadTrip Royale ?";
+"RoadTrip Royale is a license plate tracking game! During your road trips, keep an eye out for license plates from different states, provinces, or regions. When you spot one, use the app to mark it as found. You can use the List tab to manually select plates, or the Voice tab to speak the state/province name. Track your progress and see your collection grow on the interactive map!" = "RoadTrip Royale est un jeu de suivi de plaques ! Pendant vos voyages sur la route, gardez l'œil ouvert pour les plaques de différents états, provinces ou régions. Lorsque vous en repérez une, utilisez l'app pour la marquer comme trouvée. Vous pouvez utiliser l'onglet Liste pour sélectionner manuellement les plaques, ou l'onglet Voix pour dire le nom de l'état/province. Suivez votre progression et voyez votre collection grandir sur la carte interactive !";
+"How do I create a trip?" = "Comment créer un voyage ?";
+"On the main screen, tap the 'Create Trip' button. You can give your trip a custom name, or leave it blank to use the date and time automatically. Once created, tap on the trip to start tracking license plates!" = "Sur l'écran principal, appuyez sur le bouton 'Créer un Voyage'. Vous pouvez donner un nom personnalisé à votre voyage, ou le laisser vide pour utiliser automatiquement la date et l'heure. Une fois créé, appuyez sur le voyage pour commencer à suivre les plaques !";
+"How does the Voice feature work?" = "Comment fonctionne la fonction Voix ?";
+"Tap the Voice tab, then press the microphone button. Speak the name of the state or province you see (e.g., 'California' or 'Ontario'). The app will listen and try to match what you said to a valid license plate region. If a match is found, you'll be asked to confirm before adding it to your collection." = "Appuyez sur l'onglet Voix, puis appuyez sur le bouton du microphone. Dites le nom de l'état ou de la province que vous voyez (par exemple, 'California' ou 'Ontario'). L'app écoutera et essaiera de faire correspondre ce que vous avez dit à une région de plaque valide. Si une correspondance est trouvée, il vous sera demandé de confirmer avant de l'ajouter à votre collection.";
+"Can I track plates from multiple countries?" = "Puis-je suivre les plaques de plusieurs pays ?";
+"Yes! RoadTrip Royale supports license plates from the United States, Canada, and Mexico. The map will automatically switch to show the correct country as you scroll through the list of regions." = "Oui ! RoadTrip Royale prend en charge les plaques des États-Unis, du Canada et du Mexique. La carte basculera automatiquement pour afficher le bon pays lorsque vous faites défiler la liste des régions.";
+"How do I see my progress?" = "Comment voir ma progression ?";
+"On the trip screen, you'll see summary chips showing how many plates you've found and how many remain. The map at the top shows all found regions highlighted in yellow. You can tap the map to view it full-screen for a better look!" = "Sur l'écran du voyage, vous verrez des puces de résumé montrant combien de plaques vous avez trouvées et combien il en reste. La carte en haut montre toutes les régions trouvées surlignées en jaune. Vous pouvez appuyer sur la carte pour la voir en plein écran pour une meilleure vue !";
+"Can I share my trips with others?" = "Puis-je partager mes voyages avec d'autres ?";
+"Currently, trips are stored locally on your device. Future updates may include sharing and collaboration features. Stay tuned!" = "Actuellement, les voyages sont stockés localement sur votre appareil. Les mises à jour futures peuvent inclure des fonctionnalités de partage et de collaboration. Restez à l'écoute !";
+"Do I need an internet connection?" = "Ai-je besoin d'une connexion Internet ?";
+"RoadTrip Royale works offline! You can create trips and track license plates without an internet connection. If you sign in with an account, your data will sync to the cloud when you're online." = "RoadTrip Royale fonctionne hors ligne ! Vous pouvez créer des voyages et suivre les plaques sans connexion Internet. Si vous vous connectez avec un compte, vos données se synchroniseront vers le cloud lorsque vous serez en ligne.";
+
+// About
+"About the App" = "À Propos de l'App";
+"RoadTrip Royale is a fun and engaging license plate tracking game that lets you collect license plates from across the United States, Canada, and Mexico during your road trips. Spot plates, track your progress, and see your collection grow on an interactive map!" = "RoadTrip Royale est un jeu amusant et engageant de suivi de plaques qui vous permet de collectionner les plaques des États-Unis, du Canada et du Mexique pendant vos voyages sur la route. Repérez les plaques, suivez votre progression et voyez votre collection grandir sur une carte interactive !";
+"About HammersTechLLC" = "À Propos de HammersTechLLC";
+"RoadTrip Royale is developed by HammersTechLLC, a software development company dedicated to creating innovative and user-friendly mobile applications. We're passionate about building apps that make everyday activities more enjoyable and engaging." = "RoadTrip Royale est développé par HammersTechLLC, une entreprise de développement de logiciels dédiée à la création d'applications mobiles innovantes et conviviales. Nous sommes passionnés par la création d'apps qui rendent les activités quotidiennes plus agréables et engageantes.";
+"Contact" = "Contact";
+
+// Profile
+"Profile" = "Profil";
+"Edit username and manage account" = "Modifier le nom d'utilisateur et gérer le compte";
+"Signed In" = "Connecté";
+"Your account is synced to the cloud" = "Votre compte est synchronisé avec le cloud";
+"Signed Out" = "Déconnecté";
+"You are signed out. Sign in to sync your account and access all features" = "Vous êtes déconnecté. Connectez-vous pour synchroniser votre compte et accéder à toutes les fonctionnalités";
+"Anonymous Account" = "Compte Anonyme";
+"Sign up to sync your account and access more features" = "Inscrivez-vous pour synchroniser votre compte et accéder à plus de fonctionnalités";
+"Local Account" = "Compte Local";
+"Your account is stored locally only. Sign in to sync to the cloud" = "Votre compte est stocké localement uniquement. Connectez-vous pour synchroniser avec le cloud";
+
+// Common
+"state" = "état";
+"province" = "province";
+
+// Settings - Trip Settings View
+"Settings" = "Réglages";
+"Trip Info" = "Informations du Voyage";
+"Game Settings" = "Réglages du Jeu";
+"Tracking & Privacy" = "Suivi et Confidentialité";
+"Trip Name" = "Nom du Voyage";
+"Enter trip name" = "Entrez le nom du voyage";
+"Created" = "Créé";
+"Started" = "Démarré";
+"Ended" = "Terminé";
+"Start Trip" = "Démarrer le Voyage";
+"End Trip" = "Terminer le Voyage";
+"Reset Trip" = "Réinitialiser le Voyage";
+"Delete Trip" = "Supprimer le Voyage";
+"Countries to Include" = "Pays à Inclure";
+"United States" = "États-Unis";
+"Canada" = "Canada";
+"Mexico" = "Mexique";
+"Save location when marking plates" = "Enregistrer l'emplacement lors du marquage des plaques";
+"Store location data when you mark a plate as found" = "Stocker les données d'emplacement lorsque vous marquez une plaque comme trouvée";
+"Show my location on large map" = "Afficher mon emplacement sur la grande carte";
+"Display your current location on the full-screen map" = "Afficher votre emplacement actuel sur la carte plein écran";
+"Track my location during trip" = "Suivre mon emplacement pendant le voyage";
+"Continuously track your location while a trip is active" = "Suivre en continu votre emplacement pendant qu'un voyage est actif";
+"Show my active trip on the large map" = "Afficher mon voyage actif sur la grande carte";
+"Display your active trip on the full-screen map" = "Afficher votre voyage actif sur la carte plein écran";
+"Show my active trip on the small map" = "Afficher mon voyage actif sur la petite carte";
+"Display your active trip on the small map" = "Afficher votre voyage actif sur la petite carte";
+"Skip Voice Confirmation" = "Ignorer la Confirmation Vocale";
+"Automatically add license plates without confirmation when using Voice" = "Ajouter automatiquement les plaques sans confirmation lors de l'utilisation de la Voix";
+"Hold to Talk" = "Maintenez pour Parler";
+"Press and hold the microphone button to record. If disabled the system will listen until you hit stop." = "Appuyez et maintenez le bouton du microphone pour enregistrer. Si désactivé, le système écoutera jusqu'à ce que vous appuyiez sur arrêter.";
+"Reset" = "Réinitialiser";
+"Delete" = "Supprimer";
+"This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset." = "Cela réinitialisera tous les paramètres du voyage sauf le nom du voyage. Tout sera réinitialisé, y compris la Date de Démarrage, qui ne démarrera pas automatiquement. Tous les journaux seront effacés, sauf un journal indiquant qu'il a été réinitialisé.";
+"This will delete the trip and all scores will be removed." = "Cela supprimera le voyage et tous les scores seront supprimés.";
+"Done" = "Terminé";
+
+// Settings - New Trip Defaults View
+"New Trip Defaults" = "Valeurs par Défaut des Nouveaux Voyages";
+"Start Trip right away" = "Démarrer le voyage immédiatement";
+"Automatically start the trip when created" = "Démarrer automatiquement le voyage lors de sa création";
+"Automatically start new trips when created" = "Démarrer automatiquement les nouveaux voyages lors de leur création";
+"Default Countries" = "Pays par Défaut";
+"Select which countries' license plates will be included by default when creating new trips" = "Sélectionnez les plaques de quels pays seront incluses par défaut lors de la création de nouveaux voyages";
+"Store location data when marking plates (default for new trips)" = "Stocker les données d'emplacement lors du marquage des plaques (par défaut pour les nouveaux voyages)";
+"Display current location on full-screen map (default for new trips)" = "Afficher l'emplacement actuel sur la carte plein écran (par défaut pour les nouveaux voyages)";
+"Continuously track location while trip is active (default for new trips)" = "Suivre en continu l'emplacement pendant que le voyage est actif (par défaut pour les nouveaux voyages)";
+"Display active trip on full-screen map (default for new trips)" = "Afficher le voyage actif sur la carte plein écran (par défaut pour les nouveaux voyages)";
+"Display active trip on small map (default for new trips)" = "Afficher le voyage actif sur la petite carte (par défaut pour les nouveaux voyages)";
+"Automatically add license plates heard by speech recognition without requiring user confirmation. This is the default for NEW trips created, this can be changed per trip as well." = "Ajouter automatiquement les plaques entendues par reconnaissance vocale sans exiger de confirmation de l'utilisateur. C'est la valeur par défaut pour les NOUVEAUX voyages créés, cela peut également être modifié par voyage.";
+"Location Tracking" = "Suivi de l'Emplacement";
+
+// Settings - Voice Defaults View
+"Voice Defaults" = "Valeurs par Défaut de la Voix";
+"No voice defaults available" = "Aucune valeur par défaut de voix disponible";
+"This is the default for NEW trips created, this can be changed per trip as well." = "C'est la valeur par défaut pour les NOUVEAUX voyages créés, cela peut également être modifié par voyage.";
+
+// Settings - Privacy & Permissions View
+"Privacy & Permissions" = "Confidentialité et Autorisations";
+"Location" = "Emplacement";
+"Voice" = "Voix";
+"Notifications" = "Notifications";
+"Microphone" = "Microphone";
+"Speech Recognizer" = "Reconnaissance Vocale";
+"Camera" = "Caméra";
+"Allowed" = "Autorisé";
+"While App is Open" = "Pendant que l'App est Ouverte";
+"Disabled" = "Désactivé";
+"Not Set" = "Non Défini";
+"Unknown" = "Inconnu";
+"Track my location during trips" = "Suivre mon emplacement pendant les voyages";
+"Continuously track your location while a trip is active (Can be disabled at any time)" = "Suivre en continu votre emplacement pendant qu'un voyage est actif (Peut être désactivé à tout moment)";
+"Plate found by opponent" = "Plaque trouvée par un adversaire";
+"Get notified when an opponent finds a plate" = "Être notifié lorsqu'un adversaire trouve une plaque";
+"Plate found by co-pilots" = "Plaque trouvée par des copilotes";
+"Get notified when a co-pilot finds a plate" = "Être notifié lorsqu'un copilote trouve une plaque";
+"Promotion & News" = "Promotion et Actualités";
+"Receive promotional offers and app news" = "Recevoir des offres promotionnelles et des actualités de l'app";
+"Closes this view" = "Ferme cette vue";
+
+// Settings - ContentView Settings Navigation
+"Manage location, microphone, notifications, and other permissions" = "Gérer l'emplacement, le microphone, les notifications et autres autorisations";
+"Set default countries, tracking, and voice settings for new trips" = "Définir les pays par défaut, le suivi et les paramètres vocaux pour les nouveaux voyages";
+"Configure default voice recognition settings for new trips" = "Configurer les paramètres de reconnaissance vocale par défaut pour les nouveaux voyages";
+
+// Settings - Additional
+"Trip Settings" = "Réglages du Voyage";
+"Opens settings for this trip" = "Ouvre les réglages de ce voyage";
+"Open Settings" = "Ouvrir les Réglages";
+"Recording" = "Enregistrement";
+"Not recording" = "Pas d'enregistrement";
+"Voice Input" = "Entrée Vocale";
+"Trip must be started to use voice input" = "Le voyage doit être démarré pour utiliser l'entrée vocale";
+"Speech recognition permission required" = "Autorisation de reconnaissance vocale requise";
+"Press and hold to record license plate" = "Appuyez et maintenez pour enregistrer la plaque";
+"Trip must be started to use this tab" = "Le voyage doit être démarré pour utiliser cet onglet";
+"Double tap to switch to %@ tab" = "Appuyez deux fois pour passer à l'onglet %@";
+"Found" = "Trouvé";
+"Not found" = "Non trouvé";
+"Trip must be started to mark regions" = "Le voyage doit être démarré pour marquer les régions";
+"Double tap to %@ this region as found" = "Appuyez deux fois pour %@ cette région comme trouvée";
+"unmark" = "démarquer";
+"mark" = "marquer";
+"Selected" = "Sélectionné";
+
+// New Trip Sheet
+"New Trip" = "Nouveau Voyage";
+"Basic Info" = "Informations de Base";
+"Trip Options" = "Options du Voyage";
+"Automatically use date & time" = "Utiliser automatiquement la date et l'heure";
+"Enter a name for your trip, or leave blank to use date and time" = "Entrez un nom pour votre voyage, ou laissez vide pour utiliser la date et l'heure";
+"Will use date and time" = "Utilisera la date et l'heure";
+"Create" = "Créer";
+"Cancels creating a new trip" = "Annule la création d'un nouveau voyage";
+
+// Enum Values - AppDarkMode
+"Light" = "Clair";
+"Dark" = "Sombre";
+"System" = "Système";
+
+// Enum Values - AppDistanceUnit
+"Miles" = "Miles";
+"Kilometers" = "Kilomètres";
+
+// Enum Values - AppMapStyle
+"Standard" = "Standard";
+"Satellite" = "Satellite";
+
+// Enum Values - AppLanguage
+"English" = "Anglais";
+"Spanish" = "Espagnol";
+"French" = "Français";
+
+// Enum Values - AppTripSortOrder
+"Date Created" = "Date de Création";
+"Name" = "Nom";
+"Progress" = "Progression";
+"Last Active" = "Dernière Activité";
+
+// Enum Values - AppFontSize
+"Small" = "Petit";
+"Medium" = "Moyen";
+"Large" = "Grand";
+
+// Enum Values - AppDefaultTab
+"Trips" = "Voyages";
+"Map" = "Carte";
+"Stats" = "Statistiques";
+
+// Enum Values - AppPlateDisplayFormat
+"Full Name" = "Nom Complet";
+"Abbreviation" = "Abréviation";
+
+// Enum Values - AppMapDefaultZoom
+"Close" = "Près";
+"Far" = "Loin";
+
+// Enum Values - AppBackgroundStyle
+"None" = "Aucun";
+"Paths" = "Chemins";
+"Characters" = "Personnages";
+
+// Other Missed Strings
+"Opens app settings" = "Ouvre les réglages de l'app";
+"Spot license plates, conquer the map, and rule the open road!" = "Repérez les plaques, conquérez la carte et dominez la route !";
+"Opens a sheet to create a new trip" = "Ouvre une feuille pour créer un nouveau voyage";
+"Your Location" = "Votre Emplacement";
+"Map showing %@ regions" = "Carte montrant les régions de %@";
+"Double tap to open full screen map" = "Appuyez deux fois pour ouvrir la carte en plein écran";
+
+// Help & About - Additional
+"Help & About" = "Aide et À Propos";
+"Get help, report bugs, suggest features, and learn about the app" = "Obtenez de l'aide, signalez des bugs, suggérez des fonctionnalités et apprenez-en plus sur l'app";
+"FAQ" = "FAQ";
+"Frequently asked questions" = "Questions fréquemment posées";
+"Report a Bug" = "Signaler un Bug";
+"Help us improve by reporting issues" = "Aidez-nous à nous améliorer en signalant des problèmes";
+"Opens email to report a bug" = "Ouvre un email pour signaler un bug";
+"Suggest a Feature" = "Suggérer une Fonctionnalité";
+"Share your ideas for new features" = "Partagez vos idées pour de nouvelles fonctionnalités";
+"Opens email to suggest a new feature" = "Ouvre un email pour suggérer une nouvelle fonctionnalité";
+"Contact Support" = "Contacter le Support";
+"Get help with the app" = "Obtenez de l'aide avec l'app";
+"Opens email to contact support" = "Ouvre un email pour contacter le support";
+"App Version %@" = "Version de l'App %@";
+"Terms" = "Conditions";
+"Terms of Use" = "Conditions d'Utilisation";
+"Opens Terms of Use" = "Ouvre les Conditions d'Utilisation";
+"Privacy" = "Confidentialité";
+"Privacy Policy" = "Politique de Confidentialité";
+"Opens Privacy Policy" = "Ouvre la Politique de Confidentialité";
+"RoadTrip Royale uses the following open source libraries and SDKs:" = "RoadTrip Royale utilise les bibliothèques et SDK open source suivants :";
+"Backend services including Authentication, Firestore, and Storage" = "Services backend incluant l'authentification, Firestore et le stockage";
+"OAuth authentication for Google accounts" = "Authentification OAuth pour les comptes Google";
+"Sign in with Apple integration" = "Intégration de la connexion avec Apple";
+"Apple's declarative UI framework" = "Framework d'interface utilisateur déclaratif d'Apple";
+"Apple's data persistence framework" = "Framework de persistance de données d'Apple";
+"Apple's mapping and location services" = "Services de cartographie et de localisation d'Apple";
+"Apple's speech recognition framework" = "Framework de reconnaissance vocale d'Apple";
+"Terms of Service" = "Conditions de Service";
+"Last Updated: %@" = "Dernière Mise à Jour : %@";
+"1. Acceptance of Terms" = "1. Acceptation des Conditions";
+"By downloading, installing, or using RoadTrip Royale, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the app." = "En téléchargeant, installant ou utilisant RoadTrip Royale, vous acceptez d'être lié par ces Conditions de Service. Si vous n'acceptez pas ces conditions, veuillez ne pas utiliser l'app.";
+"2. Use of the App" = "2. Utilisation de l'App";
+"RoadTrip Royale is provided for personal, non-commercial use. You may not use the app for any illegal or unauthorized purpose. You are responsible for maintaining the security of your account." = "RoadTrip Royale est fourni pour un usage personnel et non commercial. Vous ne pouvez pas utiliser l'app à des fins illégales ou non autorisées. Vous êtes responsable de maintenir la sécurité de votre compte.";
+"3. User Content" = "3. Contenu Utilisateur";
+"You retain ownership of any data you create using RoadTrip Royale. By using the app, you grant HammersTechLLC the right to store and process your data to provide the service." = "Vous conservez la propriété de toutes les données que vous créez en utilisant RoadTrip Royale. En utilisant l'app, vous accordez à HammersTechLLC le droit de stocker et de traiter vos données pour fournir le service.";
+"4. Limitation of Liability" = "4. Limitation de Responsabilité";
+"HammersTechLLC shall not be liable for any indirect, incidental, special, or consequential damages arising from your use of RoadTrip Royale." = "HammersTechLLC ne sera pas responsable de tout dommage indirect, accessoire, spécial ou consécutif résultant de votre utilisation de RoadTrip Royale.";
+"5. Changes to Terms" = "5. Modifications des Conditions";
+"We reserve the right to modify these terms at any time. Continued use of the app after changes constitutes acceptance of the new terms." = "Nous nous réservons le droit de modifier ces conditions à tout moment. L'utilisation continue de l'app après les modifications constitue l'acceptation des nouvelles conditions.";
+"1. Information We Collect" = "1. Informations que Nous Collectons";
+"RoadTrip Royale collects the following information:\n\n• Account information (username, email, phone) if you create an account\n• Trip data and license plate tracking information\n• Location data (optional, with your permission)\n• Device information for app functionality" = "RoadTrip Royale collecte les informations suivantes :\n\n• Informations de compte (nom d'utilisateur, email, téléphone) si vous créez un compte\n• Données de voyage et informations de suivi des plaques\n• Données de localisation (optionnel, avec votre permission)\n• Informations sur l'appareil pour la fonctionnalité de l'app";
+"2. How We Use Your Information" = "2. Comment Nous Utilisons Vos Informations";
+"We use your information to:\n\n• Provide and improve the app's functionality\n• Sync your data across devices (if you sign in)\n• Respond to support requests\n• Ensure app security and prevent fraud" = "Nous utilisons vos informations pour :\n\n• Fournir et améliorer la fonctionnalité de l'app\n• Synchroniser vos données entre appareils (si vous vous connectez)\n• Répondre aux demandes de support\n• Assurer la sécurité de l'app et prévenir la fraude";
+"3. Data Storage" = "3. Stockage des Données";
+"Your data is stored locally on your device. If you sign in with an account, your data is also stored securely in Firebase (Google Cloud Platform) to enable syncing across devices." = "Vos données sont stockées localement sur votre appareil. Si vous vous connectez avec un compte, vos données sont également stockées en toute sécurité dans Firebase (Google Cloud Platform) pour permettre la synchronisation entre appareils.";
+"4. Third-Party Services" = "4. Services Tiers";
+"RoadTrip Royale uses Firebase (Google) for authentication and data storage. Your use of these services is subject to their respective privacy policies." = "RoadTrip Royale utilise Firebase (Google) pour l'authentification et le stockage de données. Votre utilisation de ces services est soumise à leurs politiques de confidentialité respectives.";
+"5. Your Rights" = "5. Vos Droits";
+"You have the right to:\n\n• Access your personal data\n• Delete your account and data\n• Opt out of data collection (though this may limit app functionality)\n• Contact us with privacy concerns" = "Vous avez le droit de :\n\n• Accéder à vos données personnelles\n• Supprimer votre compte et vos données\n• Refuser la collecte de données (bien que cela puisse limiter la fonctionnalité de l'app)\n• Nous contacter avec des préoccupations de confidentialité";
+"6. Contact Us" = "6. Contactez-Nous";
+"For privacy-related questions, contact us at:\n\nEmail: hammerstechllc@gmail.com" = "Pour les questions liées à la confidentialité, contactez-nous à :\n\nEmail : hammerstechllc@gmail.com";
+"Email: hammerstechllc@gmail.com" = "Email : hammerstechllc@gmail.com";
+
+// User Profile
+"First Name" = "Prénom";
+"Enter first name" = "Entrez le prénom";
+"Last Name" = "Nom de Famille";
+"Enter last name" = "Entrez le nom de famille";
+"Username" = "Nom d'Utilisateur";
+"Enter username" = "Entrez le nom d'utilisateur";
+"Email" = "Email";
+"Phone" = "Téléphone";
+"Account Information" = "Informations du Compte";
+"Authentication Status" = "Statut d'Authentification";
+"Linked Accounts" = "Comptes Liés";
+"No accounts linked" = "Aucun compte lié";
+"Linked" = "Lié";
+"Unlink %@ account" = "Délier le compte %@";
+"Removes the linked %@ account" = "Supprime le compte lié %@";
+"Link Additional Accounts" = "Lier des Comptes Supplémentaires";
+"All available accounts are linked" = "Tous les comptes disponibles sont liés";
+"Link %@" = "Lier %@";
+"Link %@ account" = "Lier le compte %@";
+"Links your %@ account to this profile" = "Lie votre compte %@ à ce profil";
+"Sign in to link additional accounts" = "Connectez-vous pour lier des comptes supplémentaires";
+"Sign In or Create Account" = "Se Connecter ou Créer un Compte";
+"Sign Out" = "Se Déconnecter";
+"Changes will sync when you're online" = "Les modifications seront synchronisées lorsque vous serez en ligne";
+"Uploading..." = "Téléchargement...";
+"Closes the profile view" = "Ferme la vue du profil";
+"Error" = "Erreur";
+"OK" = "OK";
+"Username cannot be empty" = "Le nom d'utilisateur ne peut pas être vide";
+"This username is already taken. Please choose another." = "Ce nom d'utilisateur est déjà pris. Veuillez en choisir un autre.";
+"You must be signed in to upload images. Please sign in first." = "Vous devez être connecté pour télécharger des images. Veuillez d'abord vous connecter.";
+"You must be authenticated with Firebase to upload images. Please sign in first." = "Vous devez être authentifié avec Firebase pour télécharger des images. Veuillez d'abord vous connecter.";
+"Failed to upload image: %@" = "Échec du téléchargement de l'image : %@";
+"Unable to present sign in" = "Impossible de présenter la connexion";
+"%@ linking is not yet available" = "La liaison %@ n'est pas encore disponible";
+"Email: %@" = "Email : %@";
+"Name: %@" = "Nom : %@";
+"Profile" = "Profil";
+"Signed In" = "Connecté";
+"Your account is synced to the cloud" = "Votre compte est synchronisé avec le cloud";
+"Signed Out" = "Déconnecté";
+"You are signed out. Sign in to sync your account and access all features" = "Vous êtes déconnecté. Connectez-vous pour synchroniser votre compte et accéder à toutes les fonctionnalités";
+"Anonymous Account" = "Compte Anonyme";
+"Sign up to sync your account and access more features" = "Inscrivez-vous pour synchroniser votre compte et accéder à plus de fonctionnalités";
+"Local Account" = "Compte Local";
+"Your account is stored locally only. Sign in to sync to the cloud" = "Votre compte est stocké localement uniquement. Connectez-vous pour synchroniser avec le cloud";
+
+
