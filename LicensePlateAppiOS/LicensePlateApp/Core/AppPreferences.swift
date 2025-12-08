@@ -138,6 +138,11 @@ enum AppBackgroundStyle: String, CaseIterable {
     case characters = "Characters"
 }
 
+enum AppMapProvider: String, CaseIterable {
+    case apple = "Apple"
+    case google = "Google"
+}
+
 // MARK: - App Preferences Utilities
 
 struct AppPreferences {
@@ -192,6 +197,11 @@ struct AppPreferences {
         case .characters:
             return isDark ? "background_app_cameo_dark" : "background_app_cameo_light"
         }
+    }
+    
+    /// Get the default map provider (Google Maps)
+    static func defaultMapProvider() -> AppMapProvider {
+        return .google
     }
 }
 

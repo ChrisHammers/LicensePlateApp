@@ -35,6 +35,7 @@ struct AppPreferencesView: View {
     @AppStorage("appPlateDisplayFormat") private var appPlateDisplayFormatRaw: String = AppPlateDisplayFormat.fullName.rawValue
     @AppStorage("appMapDefaultZoom") private var appMapDefaultZoomRaw: String = AppMapDefaultZoom.medium.rawValue
     @AppStorage("appShowCompletedRegions") private var appShowCompletedRegions = true
+    @AppStorage("appMapProvider") private var appMapProviderRaw: String = AppPreferences.defaultMapProvider().rawValue
     
     @State private var currentColorScheme: ColorScheme?
     
@@ -107,6 +108,13 @@ struct AppPreferencesView: View {
         Binding(
             get: { AppMapDefaultZoom(rawValue: appMapDefaultZoomRaw) ?? .medium },
             set: { appMapDefaultZoomRaw = $0.rawValue }
+        )
+    }
+    
+    private var appMapProvider: Binding<AppMapProvider> {
+        Binding(
+            get: { AppMapProvider(rawValue: appMapProviderRaw) ?? AppPreferences.defaultMapProvider() },
+            set: { appMapProviderRaw = $0.rawValue }
         )
     }
     
@@ -300,6 +308,29 @@ struct AppPreferencesView: View {
                         .listRowBackground(Color.clear)
                     }
                     .textCase(nil)
+                    
+                    #if DEBUG
+                    Section {
+                        VStack(spacing: 12) {
+                            SettingPickerRow(
+                                title: "Map Provider",
+                                description: "Choose between Apple Maps and Google Maps (DEBUG only)",
+                                selection: appMapProvider
+                            )
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .background(Color.Theme.cardBackground)
+                        .cornerRadius(20)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                        .listRowBackground(Color.clear)
+                    } header: {
+                        Text("Debug Settings")
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    .textCase(nil)
+                    #endif
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
