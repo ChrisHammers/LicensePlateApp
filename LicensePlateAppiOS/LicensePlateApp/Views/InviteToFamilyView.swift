@@ -63,15 +63,48 @@ struct InviteToFamilyView: View {
                         .textCase(nil)
                     }
                     
-                    // Invitation Method
-                    Section("Invitation Method".localized) {
-                        Picker("Method".localized, selection: $invitationMethod) {
-                            Text("Share Code".localized).tag(InvitationMethod.shareCode)
-                            Text("Search User".localized).tag(InvitationMethod.inAppSearch)
+                    // Create Family Button (only when creating new family)
+                    if isCreatingNewFamily {
+                        Section {
+                            Button {
+                                createNewFamily()
+                            } label: {
+                                HStack {
+                                    Image(systemName: "plus.circle.fill")
+                                    Text("Create New Family".localized)
+                                        .fontWeight(.semibold)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.Theme.primaryBlue)
+                                .foregroundStyle(.white)
+                                .cornerRadius(12)
+                            }
                         }
-                        .pickerStyle(.segmented)
+                        .textCase(nil)
                     }
-                    .textCase(nil)
+                    
+                    // Invitation Method (only show when joining or inviting to existing family)
+                    if !isCreatingNewFamily {
+                        Section("Invitation Method".localized) {
+                            Picker("Method".localized, selection: $invitationMethod) {
+                                Text("Share Code".localized).tag(InvitationMethod.shareCode)
+                                Text("Search User".localized).tag(InvitationMethod.inAppSearch)
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                        .textCase(nil)
+                    } else {
+                        // When creating, show join options
+                        Section("Or Join Existing Family".localized) {
+                            Picker("Method".localized, selection: $invitationMethod) {
+                                Text("Share Code".localized).tag(InvitationMethod.shareCode)
+                                Text("Search User".localized).tag(InvitationMethod.inAppSearch)
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                        .textCase(nil)
+                    }
                     
                     // Share Code Method
                     if invitationMethod == .shareCode {
@@ -189,6 +222,47 @@ struct InviteToFamilyView: View {
         // In a real implementation, this would search for users and send invitations
         // For now, just dismiss
         dismiss()
+    }
+    
+    private func createNewFamily() {
+        guard let userID = currentUser?.id else {
+            dismiss()
+            return
+        }
+        
+        // Create new family
+        let newFamily = Family(
+            name: nil, // Can be set later
+            createdAt: .now,
+            lastUpdated: .now
+        )
+        
+        // Add current user as Captain
+        let captainMember = FamilyMember(
+            userID: userID,
+            familyID: newFamily.id,
+            role: .captain,
+            joinedAt: .now,
+            invitedBy: nil,
+            isActive: true
+        )
+        
+        newFamily.members.append(captainMember)
+        
+        // Update user's familyID
+        currentUser?.familyID = newFamily.id
+        
+        // Save to model context
+        modelContext.insert(newFamily)
+        modelContext.insert(captainMember)
+        
+        do {
+            try modelContext.save()
+            dismiss()
+        } catch {
+            print("Error creating family: \(error)")
+            dismiss()
+        }
     }
 }
 

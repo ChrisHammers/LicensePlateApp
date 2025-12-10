@@ -163,28 +163,6 @@ struct FamilyHubView: View {
                     }
                 }
             }
-            .navigationDestination(for: NavigationDestination.self) { destination in
-                Group {
-                    switch destination {
-                    case .trip(let tripID):
-                        if let trip = allTrips.first(where: { $0.id == tripID }) {
-                            TripTrackerView(trip: trip)
-                        } else {
-                            Text("Trip not found".localized)
-                        }
-                    case .game(let gameID):
-                        if let game = allGames.first(where: { $0.id == gameID }) {
-                            if game.isActive {
-                                ActiveGameView(game: game)
-                            } else {
-                                GameLobbyView(game: game)
-                            }
-                        } else {
-                            Text("Game not found".localized)
-                        }
-                    }
-                }
-            }
         }
     
     

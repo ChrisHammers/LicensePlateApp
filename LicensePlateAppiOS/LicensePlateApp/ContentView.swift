@@ -15,11 +15,17 @@ import Speech
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Trip.createdAt, order: .reverse) private var trips: [Trip]
+    @Query(sort: \Game.createdAt, order: .reverse) private var allGames: [Game]
     @EnvironmentObject var authService: FirebaseAuthService
-    @State private var path: [UUID] = []
+    @State private var path = NavigationPath()
     @State private var isShowingCreateSheet = false
     @State private var isShowingSettings = false
     @AppStorage("boundariesLoaded") private var boundariesLoaded = false
+    
+    enum ContentViewDestination: Hashable {
+        case trip(UUID)
+        case family
+    }
     
     // Custom detent for the new trip sheet - device-aware sizing
     // On iPad, use a larger fraction since 25% is too small to show the text field
@@ -74,8 +80,8 @@ struct ContentView: View {
 
                     // Family Section
                     Section {
-                        NavigationLink {
-                            FamilyHubView()
+                        Button {
+                            path.append(ContentViewDestination.family)
                         } label: {
                             HStack {
                                 Image(systemName: "person.3.fill")
@@ -83,6 +89,11 @@ struct ContentView: View {
                                     .frame(width: 24)
                                 Text("Family".localized)
                                     .font(.headline)
+                                    .foregroundStyle(Color.Theme.primaryBlue)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -146,12 +157,41 @@ struct ContentView: View {
                     sheetDetent = smallDetent
                   }
                 }
-                .navigationDestination(for: UUID.self) { tripID in
-                  if let trip = trips.first(where: { $0.id == tripID }) {
-                    TripTrackerView(trip: trip)
-                  } else {
-                    TripMissingView()
-                  }
+                .navigationDestination(for: ContentViewDestination.self) { destination in
+                    Group {
+                        switch destination {
+                        case .trip(let tripID):
+                            if let trip = trips.first(where: { $0.id == tripID }) {
+                                TripTrackerView(trip: trip)
+                            } else {
+                                TripMissingView()
+                            }
+                        case .family:
+                            FamilyHubView()
+                        }
+                    }
+                }
+                .navigationDestination(for: FamilyHubView.NavigationDestination.self) { destination in
+                    Group {
+                        switch destination {
+                        case .trip(let tripID):
+                            if let trip = trips.first(where: { $0.id == tripID }) {
+                                TripTrackerView(trip: trip)
+                            } else {
+                                TripMissingView()
+                            }
+                        case .game(let gameID):
+                            if let game = allGames.first(where: { $0.id == gameID }) {
+                                if game.isActive {
+                                    ActiveGameView(game: game)
+                                } else {
+                                    GameLobbyView(game: game)
+                                }
+                            } else {
+                                Text("Game not found".localized)
+                            }
+                        }
+                    }
                 }
               }
                 .transition(.opacity)
@@ -226,7 +266,9 @@ struct ContentView: View {
 
     private var tripList: some View {
         ForEach(trips) { trip in
-            NavigationLink(value: trip.id) {
+            Button {
+                path.append(ContentViewDestination.trip(trip.id))
+            } label: {
                 TripRow(trip: trip)
                     .padding(.vertical, 8)
             }
@@ -328,7 +370,7 @@ struct ContentView: View {
             assertionFailure("Failed to save new trip: \(error)")
         }
 
-        path.append(newTrip.id)
+        path.append(ContentViewDestination.trip(newTrip.id))
     }
 
     private func deleteTrips(at offsets: IndexSet) {
