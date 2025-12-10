@@ -138,6 +138,9 @@ struct ContentView: View {
                 .task {
                   // Initialize authentication state (checks Firebase Auth first, then local)
                   await authService.initializeAuthState(modelContext: modelContext)
+                  
+                  // Initialize Family Sync Service
+                  FirebaseFamilySyncService.shared.initialize(modelContext: modelContext)
                 }
                 .overlay {
                   if authService.showUsernameConflictDialog {

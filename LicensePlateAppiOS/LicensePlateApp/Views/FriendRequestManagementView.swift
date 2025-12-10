@@ -113,9 +113,22 @@ struct FriendRequestManagementView: View {
         })).first {
             if !fromUser.friendIDs.contains(toUserID) {
                 fromUser.friendIDs.append(toUserID)
+                fromUser.needsSync = true
             }
             if !toUser.friendIDs.contains(fromUserID) {
                 toUser.friendIDs.append(fromUserID)
+                toUser.needsSync = true
+            }
+            
+            // Sync to Firebase
+            Task {
+                do {
+                    try await FirebaseFamilySyncService.shared.saveFriendRequestToFirestore(request)
+                    try await authService.saveUserDataToFirestore(fromUser)
+                    try await authService.saveUserDataToFirestore(toUser)
+                } catch {
+                    print("Error syncing friend request approval: \(error)")
+                }
             }
         }
         

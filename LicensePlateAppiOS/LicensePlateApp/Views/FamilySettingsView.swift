@@ -41,6 +41,16 @@ struct FamilySettingsView: View {
                             Button {
                                 family.name = familyName.isEmpty ? nil : familyName
                                 family.lastUpdated = .now
+                                family.needsSync = true
+                                
+                                // Sync to Firebase
+                                Task {
+                                    do {
+                                        try await FirebaseFamilySyncService.shared.saveFamilyToFirestore(family)
+                                    } catch {
+                                        print("Error syncing family name: \(error)")
+                                    }
+                                }
                             } label: {
                                 Text("Save Name".localized)
                             }
@@ -159,6 +169,7 @@ struct FamilySettingsView: View {
     private func removeMember(_ member: FamilyMember) {
         member.isActive = false
         family.lastUpdated = .now
+        family.needsSync = true
         
         // Update user's familyID if they were removed
         let memberUserID = member.userID
@@ -166,6 +177,21 @@ struct FamilySettingsView: View {
             $0.id == memberUserID
         })).first {
             user.familyID = nil
+            user.needsSync = true
+        }
+        
+        // Sync to Firebase
+        Task {
+            do {
+                try await FirebaseFamilySyncService.shared.saveFamilyToFirestore(family)
+                if let user = try? modelContext.fetch(FetchDescriptor<AppUser>(predicate: #Predicate<AppUser> {
+                    $0.id == memberUserID
+                })).first {
+                    try await authService.saveUserDataToFirestore(user)
+                }
+            } catch {
+                print("Error syncing family member removal: \(error)")
+            }
         }
         
         showRemoveMemberConfirmation = nil
@@ -179,7 +205,21 @@ struct FamilySettingsView: View {
         }
         
         currentUser?.familyID = nil
+        currentUser?.needsSync = true
         family.lastUpdated = .now
+        family.needsSync = true
+        
+        // Sync to Firebase
+        Task {
+            do {
+                try await FirebaseFamilySyncService.shared.saveFamilyToFirestore(family)
+                if let user = currentUser {
+                    try await authService.saveUserDataToFirestore(user)
+                }
+            } catch {
+                print("Error syncing family leave: \(error)")
+            }
+        }
         
         dismiss()
     }

@@ -1144,7 +1144,21 @@ class FirebaseAuthService: ObservableObject {
                     existingUser.phoneNumber = firestoreUser.phoneNumber
                     existingUser.userImageURL = firestoreUser.userImageURL
                     existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
+                    existingUser.familyID = firestoreUser.familyID
+                    existingUser.birthdate = firestoreUser.birthdate
+                    existingUser.friendIDs = firestoreUser.friendIDs
+                    existingUser.pendingFriendRequestIDs = firestoreUser.pendingFriendRequestIDs
                     try? modelContext.save()
+                    
+                    // Load family data if user has a familyID
+                    if let familyID = firestoreUser.familyID {
+                        Task {
+                            // Try to load family from Firestore
+                            if let firebaseFamilyID = try? await findFamilyFirebaseID(localID: familyID) {
+                                _ = try? await FirebaseFamilySyncService.shared.loadFamilyFromFirestore(familyID: firebaseFamilyID)
+                            }
+                        }
+                    }
                 }
             }
         } else {
@@ -1159,6 +1173,16 @@ class FirebaseAuthService: ObservableObject {
                 try? modelContext.save()
                 currentUser = firestoreUser
                 isAuthenticated = true
+                
+                // Load family data if user has a familyID
+                if let familyID = firestoreUser.familyID {
+                    Task {
+                        // Try to load family from Firestore
+                        if let firebaseFamilyID = try? await findFamilyFirebaseID(localID: familyID) {
+                            _ = try? await FirebaseFamilySyncService.shared.loadFamilyFromFirestore(familyID: firebaseFamilyID)
+                        }
+                    }
+                }
                 
                 // Update login tracking
                 await updateLoginTracking()
@@ -1325,6 +1349,20 @@ class FirebaseAuthService: ObservableObject {
             }
         }
         
+        // Family and Friends
+        if let familyID = user.familyID {
+            data["familyID"] = familyID.uuidString
+        }
+        if let birthdate = user.birthdate {
+            data["birthdate"] = Timestamp(date: birthdate)
+        }
+        if !user.friendIDs.isEmpty {
+            data["friendIDs"] = user.friendIDs
+        }
+        if !user.pendingFriendRequestIDs.isEmpty {
+            data["pendingFriendRequestIDs"] = user.pendingFriendRequestIDs.map { $0.uuidString }
+        }
+        
         return data
     }
     
@@ -1429,6 +1467,30 @@ class FirebaseAuthService: ObservableObject {
             }
         }
         
+        // Family and Friends
+        let familyID: UUID?
+        if let familyIDString = data["familyID"] as? String, let uuid = UUID(uuidString: familyIDString) {
+            familyID = uuid
+        } else {
+            familyID = nil
+        }
+        
+        let birthdate: Date?
+        if let timestamp = data["birthdate"] as? Timestamp {
+            birthdate = timestamp.dateValue()
+        } else {
+            birthdate = nil
+        }
+        
+        let friendIDs: [String] = data["friendIDs"] as? [String] ?? []
+        
+        let pendingFriendRequestIDs: [UUID] = {
+            if let idsArray = data["pendingFriendRequestIDs"] as? [String] {
+                return idsArray.compactMap { UUID(uuidString: $0) }
+            }
+            return []
+        }()
+        
         return AppUser(
             id: id,
             userName: userName,
@@ -1450,8 +1512,21 @@ class FirebaseAuthService: ObservableObject {
             lastSyncedToFirebase: .now,
             needsSync: false,
             lastDateLoggedIn: lastDateLoggedIn,
-            lastLoginLocation: lastLoginLocation
+            lastLoginLocation: lastLoginLocation,
+            familyID: familyID,
+            birthdate: birthdate,
+            friendIDs: friendIDs,
+            pendingFriendRequestIDs: pendingFriendRequestIDs
         )
+    }
+    
+    // MARK: - Family Helper Methods
+    
+    /// Find Firebase ID for a family by its local UUID
+    private func findFamilyFirebaseID(localID: UUID) async throws -> String? {
+        let query = db.collection("families").whereField("localID", isEqualTo: localID.uuidString).limit(to: 1)
+        let snapshot = try await query.getDocuments()
+        return snapshot.documents.first?.documentID
     }
     
     // MARK: - Apple Nonce Helpers

@@ -251,6 +251,10 @@ struct InviteToFamilyView: View {
         
         // Update user's familyID
         currentUser?.familyID = newFamily.id
+        currentUser?.needsSync = true
+        
+        // Mark family for sync
+        newFamily.needsSync = true
         
         // Save to model context
         modelContext.insert(newFamily)
@@ -258,6 +262,20 @@ struct InviteToFamilyView: View {
         
         do {
             try modelContext.save()
+            
+            // Sync to Firebase if online
+            Task {
+                do {
+                    try await FirebaseFamilySyncService.shared.saveFamilyToFirestore(newFamily)
+                    try await FirebaseFamilySyncService.shared.saveFamilyMemberToFirestore(captainMember, familyFirebaseID: newFamily.firebaseFamilyID ?? "")
+                    if let user = currentUser {
+                        try await authService.saveUserDataToFirestore(user)
+                    }
+                } catch {
+                    print("Error syncing family to Firebase: \(error)")
+                }
+            }
+            
             dismiss()
         } catch {
             print("Error creating family: \(error)")

@@ -168,10 +168,21 @@ struct CreateGameView: View {
             newGame.generateShareCodeIfNeeded()
         }
         
+        newGame.needsSync = true
         modelContext.insert(newGame)
         
         do {
             try modelContext.save()
+            
+            // Sync to Firebase
+            Task {
+                do {
+                    try await FirebaseFamilySyncService.shared.saveGameToFirestore(newGame)
+                } catch {
+                    print("Error syncing game to Firebase: \(error)")
+                }
+            }
+            
             dismiss()
         } catch {
             print("Error creating game: \(error)")
