@@ -72,6 +72,22 @@ struct ContentView: View {
                     }
                     .textCase(nil)
 
+                    // Family Section
+                    Section {
+                        NavigationLink {
+                            FamilyHubView()
+                        } label: {
+                            HStack {
+                                Image(systemName: "person.3.fill")
+                                    .foregroundStyle(Color.Theme.primaryBlue)
+                                    .frame(width: 24)
+                                Text("Family".localized)
+                                    .font(.headline)
+                            }
+                        }
+                    }
+                    .textCase(nil)
+                    
                     if trips.isEmpty {
                         Section {
                             emptyState
@@ -844,6 +860,17 @@ struct DefaultSettingsView: View {
                             
                             Divider()
                             
+                            // Family
+                            SettingNavigationRow(
+                                title: "Family".localized,
+                                description: "Manage family members and shared trips".localized,
+                                icon: "person.3.fill"
+                            ) {
+                                coordinator.navigateToFamily(path: $navigationPath)
+                            }
+                            
+                            Divider()
+                            
                           if false {
                             // Voice Defaults
                             SettingNavigationRow(
@@ -926,6 +953,8 @@ struct DefaultSettingsView: View {
                         VoiceDefaultsView()
                     case .helpAbout:
                         HelpAboutView()
+                    case .family:
+                        FamilyHubView()
                     }
                 }
             }

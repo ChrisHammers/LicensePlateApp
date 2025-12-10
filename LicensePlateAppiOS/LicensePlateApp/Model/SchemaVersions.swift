@@ -18,7 +18,16 @@ enum SchemaVersion1: VersionedSchema {
     }
     
     static var models: [any PersistentModel.Type] {
-        [Trip.self, AppUser.self]
+        [
+            Trip.self,
+            AppUser.self,
+            Family.self,
+            FamilyMember.self,
+            Game.self,
+            GameTeam.self,
+            FriendRequest.self,
+            AppCompetition.self
+        ]
     }
 }
 

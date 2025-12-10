@@ -116,6 +116,31 @@ final class Trip {
     // Enabled countries for this trip (stored as comma-separated string for SwiftData compatibility)
     var enabledCountryStrings: String = "United States,Canada,Mexico"
     
+    // Family and Game integration
+    var gameID: UUID? // If trip is part of a Game
+    var teamID: UUID? // If trip is part of a GameTeam
+    var isShared: Bool = false // Is this a shared/collaborative trip?
+    var sharedWithUserIDs: [String] = [] // User IDs who can access this trip
+    var sharedWithFamilyID: UUID? // Family ID if shared with entire family
+    var shareCode: String? // For public sharing
+    var privacyLevel: TripPrivacy = TripPrivacy.closedToAll
+    
+    enum TripPrivacy: String, Codable, CaseIterable {
+        case closedToAll // Only creator
+        case family // Shared with family
+        case friends // Shared with friends
+        case openToPublic // Public with share code
+        
+        var displayName: String {
+            switch self {
+            case .closedToAll: return "Private"
+            case .family: return "Family"
+            case .friends: return "Friends"
+            case .openToPublic: return "Public"
+            }
+        }
+    }
+    
     // Computed property to get countries as enum array
     var enabledCountries: [PlateRegion.Country] {
         get {
@@ -147,7 +172,14 @@ final class Trip {
         trackMyLocationDuringTrip: Bool = true,
         showMyActiveTripOnLargeMap: Bool = true,
         showMyActiveTripOnSmallMap: Bool = true,
-        enabledCountries: [PlateRegion.Country] = [.unitedStates, .canada, .mexico]
+        enabledCountries: [PlateRegion.Country] = [.unitedStates, .canada, .mexico],
+        gameID: UUID? = nil,
+        teamID: UUID? = nil,
+        isShared: Bool = false,
+        sharedWithUserIDs: [String] = [],
+        sharedWithFamilyID: UUID? = nil,
+        shareCode: String? = nil,
+        privacyLevel: TripPrivacy = .closedToAll
     ) {
         self.id = id
         self.createdAt = createdAt
@@ -167,6 +199,13 @@ final class Trip {
         self.showMyActiveTripOnLargeMap = showMyActiveTripOnLargeMap
         self.showMyActiveTripOnSmallMap = showMyActiveTripOnSmallMap
         self.enabledCountryStrings = enabledCountries.map { $0.rawValue }.joined(separator: ",")
+        self.gameID = gameID
+        self.teamID = teamID
+        self.isShared = isShared
+        self.sharedWithUserIDs = sharedWithUserIDs
+        self.sharedWithFamilyID = sharedWithFamilyID
+        self.shareCode = shareCode
+        self.privacyLevel = privacyLevel
     }
     
     // MARK: - Computed Properties for Backward Compatibility

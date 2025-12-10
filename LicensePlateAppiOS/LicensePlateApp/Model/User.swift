@@ -91,6 +91,12 @@ final class AppUser {
     var lastDateLoggedIn: Date?
     var lastLoginLocation: [LoginLocation] // Array of last 5 login locations
     
+    // Family and Friends
+    var familyID: UUID? // Current family membership
+    var birthdate: Date? // For age verification (optional)
+    var friendIDs: [String] = [] // List of friend User IDs
+    var pendingFriendRequestIDs: [UUID] = [] // FriendRequest IDs
+    
     init(
         id: String = UUID().uuidString,
         userName: String = "User",
@@ -113,7 +119,11 @@ final class AppUser {
         needsSync: Bool = false,
         localIDBeforeFirebase: String? = nil,
         lastDateLoggedIn: Date? = nil,
-        lastLoginLocation: [LoginLocation] = []
+        lastLoginLocation: [LoginLocation] = [],
+        familyID: UUID? = nil,
+        birthdate: Date? = nil,
+        friendIDs: [String] = [],
+        pendingFriendRequestIDs: [UUID] = []
     ) {
         self.id = id
         self.userName = userName
@@ -137,6 +147,10 @@ final class AppUser {
         self.localIDBeforeFirebase = localIDBeforeFirebase
         self.lastDateLoggedIn = lastDateLoggedIn
         self.lastLoginLocation = lastLoginLocation
+        self.familyID = familyID
+        self.birthdate = birthdate
+        self.friendIDs = friendIDs
+        self.pendingFriendRequestIDs = pendingFriendRequestIDs
     }
     
     func updateUserName(_ newName: String, isManual: Bool = true) {
