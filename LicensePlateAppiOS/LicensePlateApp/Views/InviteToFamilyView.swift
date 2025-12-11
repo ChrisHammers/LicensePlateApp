@@ -11,8 +11,9 @@ import SwiftData
 struct UserSearchResult: Identifiable, Hashable {
     let id: String // userID
     let userName: String
-    let email: String?
-    let matchedField: String // "username" or "email"
+    let email: String? // Only set if isEmailPublic == true
+    let phoneNumber: String? // Only set if isPhonePublic == true
+    let matchedField: String // "username", "email", or "phone"
 }
 
 struct InviteToFamilyView: View {
@@ -194,7 +195,7 @@ struct InviteToFamilyView: View {
                     // In-App Search Method
                     if invitationMethod == .inAppSearch {
                         Section {
-                            TextField("Search by username or email".localized, text: $searchText)
+                            TextField("Search by username, email, or phone".localized, text: $searchText)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
                                 .onChange(of: searchText) { oldValue, newValue in
@@ -240,6 +241,12 @@ struct InviteToFamilyView: View {
                                             
                                             if let email = result.email {
                                                 Text(email)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            
+                                            if let phoneNumber = result.phoneNumber {
+                                                Text(phoneNumber)
                                                     .font(.caption)
                                                     .foregroundStyle(.secondary)
                                             }

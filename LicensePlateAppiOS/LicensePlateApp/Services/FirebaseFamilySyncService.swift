@@ -568,10 +568,10 @@ class FirebaseFamilySyncService: ObservableObject {
         let firstCharLower = queryLower.prefix(1)
         let firstCharUpper = firstCharLower.uppercased()
         
-        // Search by username prefix - case-insensitive
-        // Firestore queries are case-sensitive. To catch both "UserC" and "userc",
-        // we need to search from uppercase first char to lowercase first char + 1.
-        // This range covers all case variations of the first character.
+        // Search by username - substring matching (not just prefix)
+        // Firestore queries are case-sensitive and only support prefix matching.
+        // To find usernames containing the query anywhere, we search from the first
+        // character and filter client-side for substring matches.
         
         // Calculate the upper bound: lowercase first char + 1
         let upperBound: String
@@ -600,14 +600,18 @@ class FirebaseFamilySyncService: ObservableObject {
                 if seenUserIDs.contains(userID) { continue }
                 
                 let userName = data["userName"] as? String ?? ""
-                let email = data["email"] as? String
+                let isEmailPublic = data["isEmailPublic"] as? Bool ?? false
+                let isPhonePublic = data["isPhonePublic"] as? Bool ?? false
+                let email = isEmailPublic ? (data["email"] as? String) : nil
+                let phoneNumber = isPhonePublic ? (data["phoneNumber"] as? String) : nil
                 
-                // Case-insensitive filter: only include if username actually starts with query
-                if userName.lowercased().hasPrefix(queryLower) {
+                // Case-insensitive substring filter: check if query appears anywhere in username
+                if userName.lowercased().contains(queryLower) {
                     results.append(UserSearchResult(
                         id: userID,
                         userName: userName,
                         email: email,
+                        phoneNumber: phoneNumber,
                         matchedField: "username"
                     ))
                     seenUserIDs.insert(userID)
@@ -629,21 +633,77 @@ class FirebaseFamilySyncService: ObservableObject {
             for document in emailSnapshot.documents {
                 let data = document.data()
                 let userID = document.documentID
-                let userName = data["userName"] as? String ?? ""
-                let email = data["email"] as? String
                 
                 // Check if we already have this user from username search
-                if !results.contains(where: { $0.id == userID }) {
-                    results.append(UserSearchResult(
-                        id: userID,
-                        userName: userName,
-                        email: email,
-                        matchedField: "email"
-                    ))
+                if seenUserIDs.contains(userID) {
+                    continue
                 }
+                
+                // Only match by email if email is public
+                let isEmailPublic = data["isEmailPublic"] as? Bool ?? false
+                if !isEmailPublic {
+                    continue // Skip this user - email is private, don't match by email
+                }
+                
+                let userName = data["userName"] as? String ?? ""
+                let isPhonePublic = data["isPhonePublic"] as? Bool ?? false
+                let email = data["email"] as? String
+                let phoneNumber = isPhonePublic ? (data["phoneNumber"] as? String) : nil
+                
+                results.append(UserSearchResult(
+                    id: userID,
+                    userName: userName,
+                    email: email,
+                    phoneNumber: phoneNumber,
+                    matchedField: "email"
+                ))
+                seenUserIDs.insert(userID)
+                if results.count >= 20 { break }
             }
         } catch {
             print("Error searching users by email: \(error)")
+        }
+        
+        // Search by phone number prefix
+        let phoneQuery = db.collection("users")
+            .whereField("phoneNumber", isGreaterThanOrEqualTo: queryLower)
+            .whereField("phoneNumber", isLessThan: queryLower + "\u{f8ff}")
+            .limit(to: 20)
+        
+        do {
+            let phoneSnapshot = try await phoneQuery.getDocuments()
+            for document in phoneSnapshot.documents {
+                let data = document.data()
+                let userID = document.documentID
+                
+                // Check if we already have this user from previous searches
+                if seenUserIDs.contains(userID) {
+                    continue
+                }
+                
+                // Only match by phone if phone is public
+                let isPhonePublic = data["isPhonePublic"] as? Bool ?? false
+                if !isPhonePublic {
+                    continue // Skip this user - phone is private, don't match by phone
+                }
+                
+                let userName = data["userName"] as? String ?? ""
+                let isEmailPublic = data["isEmailPublic"] as? Bool ?? false
+                let email = isEmailPublic ? (data["email"] as? String) : nil
+                let phoneNumber = data["phoneNumber"] as? String
+                
+                results.append(UserSearchResult(
+                    id: userID,
+                    userName: userName,
+                    email: email,
+                    phoneNumber: phoneNumber,
+                    matchedField: "phone"
+                ))
+                seenUserIDs.insert(userID)
+                if results.count >= 20 { break }
+            }
+        } catch {
+            print("Error searching users by phone: \(error)")
         }
         
         // Remove duplicates and limit to 20 total
