@@ -8,6 +8,13 @@
 import SwiftUI
 import SwiftData
 
+struct UserSearchResult: Identifiable, Hashable {
+    let id: String // userID
+    let userName: String
+    let email: String?
+    let matchedField: String // "username" or "email"
+}
+
 struct InviteToFamilyView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -19,6 +26,13 @@ struct InviteToFamilyView: View {
     @State private var shareCode: String = ""
     @State private var searchText: String = ""
     @State private var showRoleSelection = true
+    
+    // Search state
+    @State private var searchResults: [UserSearchResult] = []
+    @State private var selectedUserIDs: Set<String> = []
+    @State private var isSearching: Bool = false
+    @State private var searchError: String?
+    @State private var searchTask: Task<Void, Never>?
     
     enum InvitationMethod {
         case shareCode
@@ -183,13 +197,92 @@ struct InviteToFamilyView: View {
                             TextField("Search by username or email".localized, text: $searchText)
                                 .textInputAutocapitalization(.never)
                                 .autocorrectionDisabled()
-                            
-                            if !searchText.isEmpty {
-                                Button {
-                                    searchAndInviteUser()
-                                } label: {
-                                    Text("Search and Invite".localized)
+                                .onChange(of: searchText) { oldValue, newValue in
+                                    // Debounce search
+                                    searchTask?.cancel()
+                                    searchTask = Task {
+                                        try? await Task.sleep(nanoseconds: 500_000_000) // 500ms
+                                        if !Task.isCancelled {
+                                            performSearch()
+                                        }
+                                    }
                                 }
+                            
+                            // Search Results
+                            if isSearching {
+                                HStack {
+                                    ProgressView()
+                                    Text("Searching...".localized)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            } else if let error = searchError {
+                                Text(error)
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                            } else if !searchResults.isEmpty {
+                                ForEach(searchResults) { result in
+                                    HStack {
+                                        Button {
+                                            if selectedUserIDs.contains(result.id) {
+                                                selectedUserIDs.remove(result.id)
+                                            } else {
+                                                selectedUserIDs.insert(result.id)
+                                            }
+                                        } label: {
+                                            Image(systemName: selectedUserIDs.contains(result.id) ? "checkmark.square.fill" : "square")
+                                                .foregroundStyle(selectedUserIDs.contains(result.id) ? .blue : .secondary)
+                                        }
+                                        
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(result.userName)
+                                                .font(.headline)
+                                            
+                                            if let email = result.email {
+                                                Text(email)
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            
+                                            Text("Matched: \(result.matchedField)".localized)
+                                                .font(.caption2)
+                                                .foregroundStyle(.blue)
+                                        }
+                                        
+                                        Spacer()
+                                    }
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        if selectedUserIDs.contains(result.id) {
+                                            selectedUserIDs.remove(result.id)
+                                        } else {
+                                            selectedUserIDs.insert(result.id)
+                                        }
+                                    }
+                                }
+                            } else if searchText.count >= 3 && !isSearching {
+                                Text("No users found".localized)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else if searchText.count > 0 && searchText.count < 3 {
+                                Text("Enter at least 3 characters to search".localized)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            
+                            // Send Invites Button
+                            if !selectedUserIDs.isEmpty {
+                                Button {
+                                    sendInvites()
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "paperplane.fill")
+                                        Text("Send Invites (\(selectedUserIDs.count))".localized)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .padding(.top, 8)
                             }
                         }
                         .textCase(nil)
@@ -212,6 +305,19 @@ struct InviteToFamilyView: View {
                     if let family = family, let code = family.shareCode {
                         shareCode = code
                     }
+                }
+                .onChange(of: invitationMethod) { oldValue, newValue in
+                    // Clear search when switching methods
+                    if newValue != .inAppSearch {
+                        searchText = ""
+                        searchResults = []
+                        selectedUserIDs.removeAll()
+                        searchTask?.cancel()
+                    }
+                }
+                .onDisappear {
+                    // Cancel any pending searches
+                    searchTask?.cancel()
                 }
             }
         }
@@ -358,10 +464,126 @@ struct InviteToFamilyView: View {
         }
     }
     
-    private func searchAndInviteUser() {
-        // In a real implementation, this would search for users and send invitations
-        // For now, just dismiss
-        dismiss()
+    private func performSearch() {
+        // Cancel previous search task
+        searchTask?.cancel()
+        
+        // Clear results if query is too short
+        guard searchText.count >= 3 else {
+            searchResults = []
+            searchError = nil
+            return
+        }
+        
+        isSearching = true
+        searchError = nil
+        
+        searchTask = Task {
+            do {
+                let results = try await FirebaseFamilySyncService.shared.searchUsers(query: searchText)
+                
+                // Filter out current user and existing members
+                let filteredResults = results.filter { result in
+                    result.id != currentUser?.id && !isUserAlreadyMember(result.id)
+                }
+                
+                await MainActor.run {
+                    if !Task.isCancelled {
+                        searchResults = filteredResults
+                        isSearching = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    if !Task.isCancelled {
+                        searchError = "Failed to search users: \(error.localizedDescription)"
+                        searchResults = []
+                        isSearching = false
+                    }
+                }
+            }
+        }
+    }
+    
+    private func isUserAlreadyMember(_ userID: String) -> Bool {
+        guard let family = family else { return false }
+        return family.members.contains { $0.userID == userID && $0.isActive }
+    }
+    
+    private func sendInvites() {
+        guard let family = family,
+              let currentUserID = currentUser?.id,
+              !selectedUserIDs.isEmpty else {
+            return
+        }
+        
+        // Check family limits
+        let roleCount = family.membersWithRole(selectedRole).count
+        let maxAllowed: Int
+        switch selectedRole {
+        case .captain:
+            maxAllowed = family.maxCaptains
+        case .scout:
+            maxAllowed = family.maxScouts
+        case .sergeant, .retiredGeneral:
+            maxAllowed = Int.max // No limits
+        }
+        
+        if roleCount + selectedUserIDs.count > maxAllowed {
+            searchError = "Cannot add \(selectedUserIDs.count) \(selectedRole.displayName.lowercased())(s). Family limit is \(maxAllowed)."
+            return
+        }
+        
+        var newMembers: [FamilyMember] = []
+        
+        for userID in selectedUserIDs {
+            // Double-check user is not already a member
+            if isUserAlreadyMember(userID) {
+                continue
+            }
+            
+            let newMember = FamilyMember(
+                userID: userID,
+                familyID: family.id,
+                role: selectedRole,
+                joinedAt: .now,
+                invitedBy: currentUserID,
+                isActive: true
+            )
+            
+            family.members.append(newMember)
+            newMembers.append(newMember)
+            modelContext.insert(newMember)
+        }
+        
+        family.lastUpdated = .now
+        family.needsSync = true
+        
+        do {
+            try modelContext.save()
+            
+            // Sync to Firebase
+            Task {
+                do {
+                    try await FirebaseFamilySyncService.shared.saveFamilyToFirestore(family)
+                    for member in newMembers {
+                        if let firebaseID = family.firebaseFamilyID {
+                            try await FirebaseFamilySyncService.shared.saveFamilyMemberToFirestore(member, familyFirebaseID: firebaseID)
+                        }
+                    }
+                } catch {
+                    print("Error syncing family invites: \(error)")
+                }
+            }
+            
+            // Clear selections and search
+            selectedUserIDs.removeAll()
+            searchResults = []
+            searchText = ""
+            dismiss()
+        } catch {
+            searchError = "Failed to send invites: \(error.localizedDescription)"
+        }
     }
     
     private func createNewFamily() {

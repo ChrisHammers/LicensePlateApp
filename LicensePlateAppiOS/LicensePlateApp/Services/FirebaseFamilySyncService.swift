@@ -551,6 +551,115 @@ class FirebaseFamilySyncService: ObservableObject {
         try? modelContext.save()
     }
     
+    // MARK: - User Search
+    
+    /// Search for users by username or email prefix
+    func searchUsers(query: String) async throws -> [UserSearchResult] {
+        guard isOnline else {
+            throw SyncError.offline
+        }
+        
+        guard query.count >= 3 else {
+            return []
+        }
+        
+        var results: [UserSearchResult] = []
+        let queryLower = query.lowercased()
+        let firstCharLower = queryLower.prefix(1)
+        let firstCharUpper = firstCharLower.uppercased()
+        
+        // Search by username prefix - case-insensitive
+        // Firestore queries are case-sensitive. To catch both "UserC" and "userc",
+        // we need to search from uppercase first char to lowercase first char + 1.
+        // This range covers all case variations of the first character.
+        
+        // Calculate the upper bound: lowercase first char + 1
+        let upperBound: String
+        if let firstCharLowerUnicode = firstCharLower.unicodeScalars.first,
+           let nextUnicode = UnicodeScalar(firstCharLowerUnicode.value + 1) {
+            upperBound = String(nextUnicode)
+        } else {
+            // Fallback
+            upperBound = String(firstCharLower) + "\u{f8ff}"
+        }
+        
+        // Search from uppercase first char to lowercase first char + 1
+        // This catches all usernames starting with that letter in any case
+        let usernameQuery = db.collection("users")
+            .whereField("userName", isGreaterThanOrEqualTo: String(firstCharUpper))
+            .whereField("userName", isLessThan: upperBound)
+            .limit(to: 100) // Get more results to filter from
+        
+        var seenUserIDs = Set<String>()
+        
+        do {
+            let usernameSnapshot = try await usernameQuery.getDocuments()
+            for document in usernameSnapshot.documents {
+                let data = document.data()
+                let userID = document.documentID
+                if seenUserIDs.contains(userID) { continue }
+                
+                let userName = data["userName"] as? String ?? ""
+                let email = data["email"] as? String
+                
+                // Case-insensitive filter: only include if username actually starts with query
+                if userName.lowercased().hasPrefix(queryLower) {
+                    results.append(UserSearchResult(
+                        id: userID,
+                        userName: userName,
+                        email: email,
+                        matchedField: "username"
+                    ))
+                    seenUserIDs.insert(userID)
+                    if results.count >= 20 { break }
+                }
+            }
+        } catch {
+            print("Error searching users by username: \(error)")
+        }
+        
+        // Search by email prefix
+        let emailQuery = db.collection("users")
+            .whereField("email", isGreaterThanOrEqualTo: queryLower)
+            .whereField("email", isLessThan: queryLower + "\u{f8ff}")
+            .limit(to: 20)
+        
+        do {
+            let emailSnapshot = try await emailQuery.getDocuments()
+            for document in emailSnapshot.documents {
+                let data = document.data()
+                let userID = document.documentID
+                let userName = data["userName"] as? String ?? ""
+                let email = data["email"] as? String
+                
+                // Check if we already have this user from username search
+                if !results.contains(where: { $0.id == userID }) {
+                    results.append(UserSearchResult(
+                        id: userID,
+                        userName: userName,
+                        email: email,
+                        matchedField: "email"
+                    ))
+                }
+            }
+        } catch {
+            print("Error searching users by email: \(error)")
+        }
+        
+        // Remove duplicates and limit to 20 total
+        var uniqueResults: [UserSearchResult] = []
+        var seenIDs: Set<String> = []
+        
+        for result in results {
+            if !seenIDs.contains(result.id) && seenIDs.count < 20 {
+                uniqueResults.append(result)
+                seenIDs.insert(result.id)
+            }
+        }
+        
+        return uniqueResults
+    }
+    
     enum SyncError: Error {
         case noModelContext
         case offline
