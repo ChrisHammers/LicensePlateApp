@@ -235,6 +235,11 @@ struct StatCard: View {
 
 struct FamilyMemberRow: View {
     let member: FamilyMember
+    @Environment(\.modelContext) private var modelContext
+    
+    private var userName: String {
+        UserLookupHelper.getUserName(for: member.userID, in: modelContext) ?? "Unknown User".localized
+    }
     
     var body: some View {
         HStack {
@@ -243,7 +248,7 @@ struct FamilyMemberRow: View {
                 .foregroundStyle(Color.Theme.primaryBlue)
             
             VStack(alignment: .leading, spacing: 4) {
-                Text("User \(member.userID.prefix(8))")
+                Text(userName)
                     .font(.headline)
                 
                 Text(member.role.displayName)

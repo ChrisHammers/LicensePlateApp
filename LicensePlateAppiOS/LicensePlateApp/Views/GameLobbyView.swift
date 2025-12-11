@@ -171,6 +171,7 @@ struct TeamRow: View {
     let isUserTeam: Bool
     let isPilot: Bool
     let onInvite: () -> Void
+    @Environment(\.modelContext) private var modelContext
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -197,7 +198,7 @@ struct TeamRow: View {
             }
             
             HStack {
-                Label("Pilot: User \(team.pilotID.prefix(8))".localized, systemImage: "person.fill.checkmark")
+                Label("Pilot: \(UserLookupHelper.getUserName(for: team.pilotID, in: modelContext) ?? "Unknown User".localized)".localized, systemImage: "person.fill.checkmark")
                 Spacer()
                 Text("\(team.allMemberIDs.count) members".localized)
             }

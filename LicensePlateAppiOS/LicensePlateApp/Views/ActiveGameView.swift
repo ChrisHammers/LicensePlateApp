@@ -69,7 +69,7 @@ struct ActiveGameView: View {
                                     Image(systemName: "person.circle.fill")
                                         .foregroundStyle(Color.Theme.primaryBlue)
                                     
-                                    Text("User \(memberID.prefix(8))")
+                                    Text(UserLookupHelper.getUserName(for: memberID, in: modelContext) ?? "Unknown User".localized)
                                     
                                     Spacer()
                                     
@@ -142,7 +142,7 @@ struct LeaderboardRow: View {
                         .font(.headline)
                 }
                 
-                Text("Pilot: User \(team.pilotID.prefix(8))".localized)
+                Text("Pilot: \(UserLookupHelper.getUserName(for: team.pilotID, in: modelContext) ?? "Unknown User".localized)".localized)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

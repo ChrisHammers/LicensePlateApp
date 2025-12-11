@@ -80,7 +80,8 @@ struct FriendRequestManagementView: View {
                 }
             } message: {
                 if let request = selectedRequest {
-                    Text("Approve friend request from User \(request.fromUserID.prefix(8))?".localized)
+                    let userName = UserLookupHelper.getUserName(for: request.fromUserID, in: modelContext) ?? "Unknown User".localized
+                    Text("Approve friend request from \(userName)?".localized)
                 }
             }
             .alert("Deny Friend Request".localized, isPresented: $showDenyConfirmation) {
@@ -92,7 +93,8 @@ struct FriendRequestManagementView: View {
                 }
             } message: {
                 if let request = selectedRequest {
-                    Text("Deny friend request from User \(request.fromUserID.prefix(8))?".localized)
+                    let userName = UserLookupHelper.getUserName(for: request.fromUserID, in: modelContext) ?? "Unknown User".localized
+                    Text("Deny friend request from \(userName)?".localized)
                 }
             }
         }
@@ -145,6 +147,11 @@ struct FriendRequestRow: View {
     let request: FriendRequest
     let onApprove: () -> Void
     let onDeny: () -> Void
+    @Environment(\.modelContext) private var modelContext
+    
+    private var userName: String {
+        UserLookupHelper.getUserName(for: request.fromUserID, in: modelContext) ?? "Unknown User".localized
+    }
     
     var body: some View {
         HStack {
@@ -153,7 +160,7 @@ struct FriendRequestRow: View {
                 .foregroundStyle(Color.Theme.primaryBlue)
             
             VStack(alignment: .leading, spacing: 4) {
-                Text("User \(request.fromUserID.prefix(8))")
+                Text(userName)
                     .font(.headline)
                 
                 Text("Wants to be friends with a Scout".localized)

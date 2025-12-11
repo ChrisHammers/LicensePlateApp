@@ -88,7 +88,7 @@ struct FamilySettingsView: View {
                         ForEach(family.members.filter { $0.isActive }) { member in
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("User \(member.userID.prefix(8))")
+                                    Text(UserLookupHelper.getUserName(for: member.userID, in: modelContext) ?? "Unknown User".localized)
                                         .font(.headline)
                                     Text(member.role.displayName)
                                         .font(.subheadline)
