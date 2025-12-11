@@ -110,6 +110,32 @@ class FirebaseFamilySyncService: ObservableObject {
         return familyFromFirestoreData(data, firebaseID: document.documentID)
     }
     
+    /// Load Family by share code
+    func loadFamilyByShareCode(_ code: String) async throws -> Family? {
+        guard let modelContext = modelContext else {
+            throw SyncError.noModelContext
+        }
+        
+        // First try to find locally
+        let descriptor = FetchDescriptor<Family>(predicate: #Predicate<Family> {
+            $0.shareCode == code
+        })
+        if let localFamily = try? modelContext.fetch(descriptor).first {
+            return localFamily
+        }
+        
+        // If not found locally, search Firestore by share code
+        let query = db.collection("families").whereField("shareCode", isEqualTo: code).limit(to: 1)
+        let snapshot = try await query.getDocuments()
+        
+        guard let document = snapshot.documents.first,
+              let data = document.data() as? [String: Any] else {
+            return nil
+        }
+        
+        return familyFromFirestoreData(data, firebaseID: document.documentID)
+    }
+    
     // MARK: - FamilyMember Sync
     
     /// Save FamilyMember to Firestore
@@ -237,6 +263,9 @@ class FirebaseFamilySyncService: ObservableObject {
         if !family.linkedFamilyIDs.isEmpty {
             data["linkedFamilyIDs"] = family.linkedFamilyIDs.map { $0.uuidString }
         }
+        if let shareCode = family.shareCode {
+            data["shareCode"] = shareCode
+        }
         
         return data
     }
@@ -254,6 +283,7 @@ class FirebaseFamilySyncService: ObservableObject {
         let name = data["name"] as? String
         let maxCaptains = data["maxCaptains"] as? Int ?? 2
         let maxScouts = data["maxScouts"] as? Int ?? 3
+        let shareCode = data["shareCode"] as? String
         
         let createdAt: Date
         if let timestamp = data["createdAt"] as? Timestamp {
@@ -287,6 +317,7 @@ class FirebaseFamilySyncService: ObservableObject {
             existingFamily.maxScouts = maxScouts
             existingFamily.linkedFamilyIDs = linkedFamilyIDs
             existingFamily.lastUpdated = lastUpdated
+            existingFamily.shareCode = shareCode
             existingFamily.needsSync = false
             return existingFamily
         }
@@ -301,7 +332,8 @@ class FirebaseFamilySyncService: ObservableObject {
             maxCaptains: maxCaptains,
             maxScouts: maxScouts,
             firebaseFamilyID: firebaseID,
-            needsSync: false
+            needsSync: false,
+            shareCode: shareCode
         )
         
         modelContext.insert(family)

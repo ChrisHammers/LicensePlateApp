@@ -117,7 +117,7 @@ struct FamilyHubView: View {
                                 Image(systemName: "person.badge.plus")
                                     .foregroundStyle(Color.Theme.primaryBlue)
                             }
-                            .accessibilityLabel("Invite to Family".localized)
+                            .accessibilityLabel("Invite a Family Member".localized)
                         }
                     }
                     .sheet(isPresented: $showFamilySettings) {

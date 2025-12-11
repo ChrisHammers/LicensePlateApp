@@ -30,6 +30,9 @@ final class Family {
     var firebaseFamilyID: String?
     var needsSync: Bool = false
     
+    // Share code for inviting members
+    var shareCode: String? // For inviting members via share code
+    
     init(
         id: UUID = UUID(),
         name: String? = nil,
@@ -40,7 +43,8 @@ final class Family {
         maxCaptains: Int = 2,
         maxScouts: Int = 3,
         firebaseFamilyID: String? = nil,
-        needsSync: Bool = false
+        needsSync: Bool = false,
+        shareCode: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -52,6 +56,19 @@ final class Family {
         self.maxScouts = maxScouts
         self.firebaseFamilyID = firebaseFamilyID
         self.needsSync = needsSync
+        self.shareCode = shareCode
+    }
+    
+    /// Generate a share code if one doesn't exist
+    func generateShareCodeIfNeeded() {
+        if shareCode == nil {
+            shareCode = UUID().uuidString.prefix(8).uppercased()
+        }
+    }
+    
+    /// Regenerate the share code (overwrites existing code)
+    func regenerateShareCode() {
+        shareCode = UUID().uuidString.prefix(8).uppercased()
     }
     
     /// Get all members with a specific role

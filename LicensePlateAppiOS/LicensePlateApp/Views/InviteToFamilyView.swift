@@ -132,11 +132,28 @@ struct InviteToFamilyView: View {
                                             } label: {
                                                 Image(systemName: "doc.on.doc")
                                             }
+                                            
+                                            Button {
+                                                regenerateShareCode()
+                                            } label: {
+                                                Image(systemName: "arrow.clockwise")
+                                            }
                                         }
                                         
                                         Text("Share this code with others to invite them to your family.".localized)
                                             .font(.caption)
                                             .foregroundStyle(.secondary)
+                                        
+                                        Button {
+                                            regenerateShareCode()
+                                        } label: {
+                                            HStack {
+                                                Image(systemName: "arrow.clockwise")
+                                                Text("Regenerate Code".localized)
+                                            }
+                                            .font(.subheadline)
+                                        }
+                                        .foregroundStyle(.blue)
                                     }
                                 }
                             } else {
@@ -179,7 +196,7 @@ struct InviteToFamilyView: View {
                     }
                 }
                 .scrollContentBackground(.hidden)
-                .navigationTitle(isCreatingNewFamily ? "Create or Join Family".localized : "Invite to Family".localized)
+                .navigationTitle(isCreatingNewFamily ? "Create or Join Family".localized : "Invite a Family Member".localized)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .topBarTrailing) {
@@ -188,6 +205,12 @@ struct InviteToFamilyView: View {
                         } label: {
                             Text("Cancel".localized)
                         }
+                    }
+                }
+                .onAppear {
+                    // Load share code from family if it exists
+                    if let family = family, let code = family.shareCode {
+                        shareCode = code
                     }
                 }
             }
@@ -208,14 +231,131 @@ struct InviteToFamilyView: View {
     }
     
     private func generateShareCode() {
-        shareCode = UUID().uuidString.prefix(8).uppercased()
-        // In a real implementation, this would be stored in the family model
+        guard let family = family else { return }
+        
+        family.generateShareCodeIfNeeded()
+        shareCode = family.shareCode ?? ""
+        family.lastUpdated = .now
+        family.needsSync = true
+        
+        // Save and sync to Firebase
+        do {
+            try modelContext.save()
+            
+            Task {
+                do {
+                    try await FirebaseFamilySyncService.shared.saveFamilyToFirestore(family)
+                } catch {
+                    print("Error syncing family share code: \(error)")
+                }
+            }
+        } catch {
+            print("Error saving family share code: \(error)")
+        }
+    }
+    
+    private func regenerateShareCode() {
+        guard let family = family else { return }
+        
+        family.regenerateShareCode()
+        shareCode = family.shareCode ?? ""
+        family.lastUpdated = .now
+        family.needsSync = true
+        
+        // Save and sync to Firebase
+        do {
+            try modelContext.save()
+            
+            Task {
+                do {
+                    try await FirebaseFamilySyncService.shared.saveFamilyToFirestore(family)
+                } catch {
+                    print("Error syncing regenerated family share code: \(error)")
+                }
+            }
+        } catch {
+            print("Error saving regenerated family share code: \(error)")
+        }
     }
     
     private func joinFamilyWithCode() {
-        // In a real implementation, this would search for a family with this share code
-        // For now, just dismiss
-        dismiss()
+        guard let userID = currentUser?.id,
+              !shareCode.isEmpty else {
+            return
+        }
+        
+        Task {
+            do {
+                // Search for family by share code
+                guard let foundFamily = try await FirebaseFamilySyncService.shared.loadFamilyByShareCode(shareCode) else {
+                    // Show error - family not found
+                    await MainActor.run {
+                        // TODO: Show error alert
+                        print("Family not found with share code: \(shareCode)")
+                    }
+                    return
+                }
+                
+                // Check if user is already a member
+                if foundFamily.members.contains(where: { $0.userID == userID && $0.isActive }) {
+                    await MainActor.run {
+                        // TODO: Show error - already a member
+                        print("User is already a member of this family")
+                        dismiss()
+                    }
+                    return
+                }
+                
+                // Add user as a member with selected role
+                await MainActor.run {
+                    let newMember = FamilyMember(
+                        userID: userID,
+                        familyID: foundFamily.id,
+                        role: selectedRole,
+                        joinedAt: .now,
+                        invitedBy: nil,
+                        isActive: true
+                    )
+                    
+                    foundFamily.members.append(newMember)
+                    foundFamily.lastUpdated = .now
+                    foundFamily.needsSync = true
+                    
+                    // Update user's familyID
+                    currentUser?.familyID = foundFamily.id
+                    currentUser?.needsSync = true
+                    
+                    // Save to model context
+                    modelContext.insert(newMember)
+                    
+                    do {
+                        try modelContext.save()
+                        
+                        // Sync to Firebase
+                        Task {
+                            do {
+                                try await FirebaseFamilySyncService.shared.saveFamilyToFirestore(foundFamily)
+                                try await FirebaseFamilySyncService.shared.saveFamilyMemberToFirestore(newMember, familyFirebaseID: foundFamily.firebaseFamilyID ?? "")
+                                if let user = currentUser {
+                                    try await authService.saveUserDataToFirestore(user)
+                                }
+                            } catch {
+                                print("Error syncing family join: \(error)")
+                            }
+                        }
+                        
+                        dismiss()
+                    } catch {
+                        print("Error joining family: \(error)")
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    // TODO: Show error alert
+                    print("Error loading family by share code: \(error)")
+                }
+            }
+        }
     }
     
     private func searchAndInviteUser() {
@@ -236,6 +376,9 @@ struct InviteToFamilyView: View {
             createdAt: .now,
             lastUpdated: .now
         )
+        
+        // Generate share code for the new family
+        newFamily.generateShareCodeIfNeeded()
         
         // Add current user as Captain
         let captainMember = FamilyMember(
