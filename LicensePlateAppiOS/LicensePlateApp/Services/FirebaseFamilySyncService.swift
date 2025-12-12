@@ -21,6 +21,9 @@ class FirebaseFamilySyncService: ObservableObject {
     private let monitorQueue = DispatchQueue(label: "FamilySyncNetworkMonitor")
     @Published private(set) var isOnline = true
     
+    // Real-time listeners for family members
+    private var familyListeners: [UUID: ListenerRegistration] = [:]
+    
     private init() {
         networkMonitor.pathUpdateHandler = { [weak self] path in
             Task { @MainActor in
@@ -906,6 +909,125 @@ class FirebaseFamilySyncService: ObservableObject {
         }
         
         return uniqueResults
+    }
+    
+    // MARK: - Real-Time Listeners
+    
+    /// Start listening to family member changes in real-time
+    /// - Parameters:
+    ///   - familyID: The local UUID of the family
+    ///   - firebaseFamilyID: The Firebase document ID of the family
+    ///   - onUpdate: Callback called when members change
+    func startListeningToFamily(familyID: UUID, firebaseFamilyID: String, onUpdate: @escaping () -> Void) {
+        guard let modelContext = modelContext else {
+            print("⚠️ Cannot start listener: no model context")
+            return
+        }
+        
+        // Stop existing listener if any
+        stopListeningToFamily(familyID: familyID)
+        
+        guard isOnline else {
+            print("⚠️ Cannot start listener: offline")
+            return
+        }
+        
+        let membersRef = db.collection("families").document(firebaseFamilyID).collection("members")
+        
+        let listener = membersRef.addSnapshotListener { [weak self] snapshot, error in
+            guard let self = self else { return }
+            
+            if let error = error {
+                print("⚠️ Error listening to family members: \(error)")
+                return
+            }
+            
+            guard let snapshot = snapshot else { return }
+            
+            Task { @MainActor in
+                // Process document changes
+                for change in snapshot.documentChanges {
+                    let memberData = change.document.data()
+                    let userID = change.document.documentID
+                    
+                    switch change.type {
+                    case .added, .modified:
+                        // Create or update FamilyMember
+                        if let member = try? await self.familyMemberFromFirestoreData(memberData, familyID: familyID, userID: userID, modelContext: modelContext) {
+                            // Check if member already exists
+                            let userIDValue = userID
+                            let familyIDValue = familyID
+                            let descriptor = FetchDescriptor<FamilyMember>(predicate: #Predicate<FamilyMember> {
+                                $0.userID == userIDValue && $0.familyID == familyIDValue
+                            })
+                            
+                            if let existingMember = try? modelContext.fetch(descriptor).first {
+                                // Update existing member
+                                existingMember.role = member.role
+                                existingMember.joinedAt = member.joinedAt
+                                existingMember.invitedBy = member.invitedBy
+                                existingMember.isActive = member.isActive
+                                existingMember.invitationStatus = member.invitationStatus
+                                existingMember.invitedAt = member.invitedAt
+                            } else {
+                                // Insert new member
+                                modelContext.insert(member)
+                                // Associate with family
+                                if let family = try? modelContext.fetch(FetchDescriptor<Family>(predicate: #Predicate<Family> {
+                                    $0.id == familyID
+                                })).first {
+                                    family.members.append(member)
+                                }
+                            }
+                            
+                            try? modelContext.save()
+                        }
+                        
+                    case .removed:
+                        // Remove member from local data
+                        let userIDValue = userID
+                        let familyIDValue = familyID
+                        let descriptor = FetchDescriptor<FamilyMember>(predicate: #Predicate<FamilyMember> {
+                            $0.userID == userIDValue && $0.familyID == familyIDValue
+                        })
+                        
+                        if let memberToRemove = try? modelContext.fetch(descriptor).first {
+                            memberToRemove.isActive = false
+                            // Optionally remove from family relationship
+                            if let family = try? modelContext.fetch(FetchDescriptor<Family>(predicate: #Predicate<Family> {
+                                $0.id == familyID
+                            })).first {
+                                family.members.removeAll { $0.id == memberToRemove.id }
+                            }
+                            try? modelContext.save()
+                        }
+                    }
+                }
+                
+                // Notify that updates are complete
+                onUpdate()
+            }
+        }
+        
+        // Store listener reference
+        familyListeners[familyID] = listener
+    }
+    
+    /// Stop listening to family member changes
+    /// - Parameter familyID: The local UUID of the family
+    func stopListeningToFamily(familyID: UUID) {
+        if let listener = familyListeners[familyID] {
+            listener.remove()
+            familyListeners.removeValue(forKey: familyID)
+        }
+    }
+    
+    /// Stop all family listeners
+    func stopAllFamilyListeners() {
+        for (_, listener) in familyListeners {
+            listener.remove()
+        }
+        familyListeners.removeAll()
     }
     
     enum SyncError: Error {

@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import FirebaseFirestore
 
 struct FamilyHubView: View {
     @Environment(\.modelContext) private var modelContext
@@ -25,6 +26,7 @@ struct FamilyHubView: View {
     @State private var navigationPath: [NavigationDestination] = []
     @State private var memberUserNames: [String: String] = [:] // [userID: userName] - pre-fetched for cache population
     @State private var hasMigrationError = false
+    @State private var familyListener: ListenerRegistration?
     
     enum NavigationDestination: Hashable {
         case trip(UUID)
@@ -155,7 +157,10 @@ struct FamilyHubView: View {
                         
                         // Pending Invitations Section (only show if there are pending invitations)
                         // Safely access family.members to avoid crashes from corrupted data
-                        let pendingMembers = safeFamilyMembers(family).filter { safeInvitationStatus(for: $0) == .pending }
+                        // Explicitly filter by familyID to ensure only current family's invitations are shown
+                        let pendingMembers = safeFamilyMembers(family).filter { member in
+                            member.familyID == family.id && safeInvitationStatus(for: member) == .pending
+                        }
                         if !pendingMembers.isEmpty {
                             Section("Pending Invitations".localized) {
                                 ForEach(pendingMembers) { member in
@@ -184,11 +189,30 @@ struct FamilyHubView: View {
                         // Then load family members manually to handle any remaining errors
                         await loadFamilyMembers()
                         
+                        // Start listening to family member changes in real-time
+                        if let firebaseFamilyID = family.firebaseFamilyID {
+                            FirebaseFamilySyncService.shared.startListeningToFamily(
+                                familyID: family.id,
+                                firebaseFamilyID: firebaseFamilyID
+                            ) {
+                                // Reload family members when updates occur
+                                Task {
+                                    await loadFamilyMembers()
+                                }
+                            }
+                        }
+                        
                         // Pre-fetch all family member userNames to populate cache
                         let safeMembers = safeFamilyMembers(family)
                         let memberIDs = safeMembers.filter { $0.isActive }.map { $0.userID }
                         if !memberIDs.isEmpty {
                             memberUserNames = await UserLookupHelper.getUserNames(for: memberIDs, in: modelContext)
+                        }
+                    }
+                    .onDisappear {
+                        // Stop listening when view disappears
+                        if let family = currentFamily {
+                            FirebaseFamilySyncService.shared.stopListeningToFamily(familyID: family.id)
                         }
                     }
                     .toolbar {

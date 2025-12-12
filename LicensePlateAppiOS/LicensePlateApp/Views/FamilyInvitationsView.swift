@@ -12,21 +12,15 @@ struct FamilyInvitationsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    @Query(sort: \FamilyMember.invitedAt, order: .reverse) private var allFamilyMembers: [FamilyMember]
     @Query(sort: \Family.createdAt, order: .reverse) private var allFamilies: [Family]
     
+    @State private var pendingInvitations: [FamilyMember] = []
+    @State private var isLoading = true
     @State private var memberUserNames: [String: String] = [:] // [userID: userName]
     @State private var familyNames: [UUID: String] = [:] // [familyID: familyName]
     
     var currentUser: AppUser? {
         authService.currentUser
-    }
-    
-    var pendingInvitations: [FamilyMember] {
-        guard let userID = currentUser?.id else { return [] }
-        return allFamilyMembers.filter { member in
-            member.userID == userID && member.invitationStatus == .pending
-        }
     }
     
     var body: some View {
@@ -78,15 +72,25 @@ struct FamilyInvitationsView: View {
                 }
             }
             .task {
-                // Load pending invitations from Firestore if online
+                // Load pending invitations from Firestore FIRST
                 if let userID = currentUser?.id {
                     do {
                         let firestoreInvitations = try await FirebaseFamilySyncService.shared.loadPendingInvitationsForUser(userID: userID)
-                        // The method already saves to local SwiftData, so pendingInvitations computed property will pick them up
+                        // Store results in @State variable
+                        pendingInvitations = firestoreInvitations.sorted { member1, member2 in
+                            let date1 = member1.invitedAt ?? member1.joinedAt
+                            let date2 = member2.invitedAt ?? member2.joinedAt
+                            return date1 > date2
+                        }
                     } catch {
                         print("Error loading pending invitations: \(error)")
+                        pendingInvitations = []
                     }
+                } else {
+                    pendingInvitations = []
                 }
+                
+                isLoading = false
                 
                 // Pre-fetch userNames and family names
                 let inviterIDs = pendingInvitations.compactMap { $0.invitedBy }
@@ -117,6 +121,9 @@ struct FamilyInvitationsView: View {
         currentUser.familyID = invitation.familyID
         currentUser.needsSync = true
         
+        // Remove from pending invitations list
+        pendingInvitations.removeAll { $0.id == invitation.id }
+        
         do {
             try modelContext.save()
             
@@ -140,6 +147,9 @@ struct FamilyInvitationsView: View {
     private func declineInvitation(_ invitation: FamilyMember) {
         // Decline the invitation
         invitation.decline()
+        
+        // Remove from pending invitations list
+        pendingInvitations.removeAll { $0.id == invitation.id }
         
         do {
             try modelContext.save()

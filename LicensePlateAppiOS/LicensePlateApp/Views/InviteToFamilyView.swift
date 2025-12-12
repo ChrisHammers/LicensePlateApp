@@ -514,7 +514,15 @@ struct InviteToFamilyView: View {
     
     private func isUserAlreadyMember(_ userID: String) -> Bool {
         guard let family = family else { return false }
-        return family.members.contains { $0.userID == userID && $0.isActive }
+        // Check if user is an active member
+        if family.members.contains(where: { $0.userID == userID && $0.isActive }) {
+            return true
+        }
+        // Check if user has a pending invitation
+        if family.members.contains(where: { $0.userID == userID && $0.invitationStatus == .pending }) {
+            return true
+        }
+        return false
     }
     
     private func sendInvites() {
