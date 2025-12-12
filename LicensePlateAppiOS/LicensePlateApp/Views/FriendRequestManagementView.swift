@@ -20,6 +20,7 @@ struct FriendRequestManagementView: View {
     @State private var selectedRequest: FriendRequest?
     @State private var showApproveConfirmation = false
     @State private var showDenyConfirmation = false
+    @State private var selectedRequestUserName: String = "Unknown User".localized
     
     var currentUser: AppUser? {
         authService.currentUser
@@ -55,11 +56,21 @@ struct FriendRequestManagementView: View {
                         Section("Pending Approvals".localized) {
                             ForEach(scoutRequests) { request in
                                 FriendRequestRow(request: request) {
-                                    selectedRequest = request
-                                    showApproveConfirmation = true
+                                    Task {
+                                        selectedRequest = request
+                                        if let userName = await UserLookupHelper.getUserName(for: request.fromUserID, in: modelContext) {
+                                            selectedRequestUserName = userName
+                                        }
+                                        showApproveConfirmation = true
+                                    }
                                 } onDeny: {
-                                    selectedRequest = request
-                                    showDenyConfirmation = true
+                                    Task {
+                                        selectedRequest = request
+                                        if let userName = await UserLookupHelper.getUserName(for: request.fromUserID, in: modelContext) {
+                                            selectedRequestUserName = userName
+                                        }
+                                        showDenyConfirmation = true
+                                    }
                                 }
                             }
                         }
@@ -79,10 +90,7 @@ struct FriendRequestManagementView: View {
                     }
                 }
             } message: {
-                if let request = selectedRequest {
-                    let userName = UserLookupHelper.getUserName(for: request.fromUserID, in: modelContext) ?? "Unknown User".localized
-                    Text("Approve friend request from \(userName)?".localized)
-                }
+                Text("Approve friend request from \(selectedRequestUserName)?".localized)
             }
             .alert("Deny Friend Request".localized, isPresented: $showDenyConfirmation) {
                 Button("Cancel".localized, role: .cancel) { }
@@ -92,10 +100,7 @@ struct FriendRequestManagementView: View {
                     }
                 }
             } message: {
-                if let request = selectedRequest {
-                    let userName = UserLookupHelper.getUserName(for: request.fromUserID, in: modelContext) ?? "Unknown User".localized
-                    Text("Deny friend request from \(userName)?".localized)
-                }
+                Text("Deny friend request from \(selectedRequestUserName)?".localized)
             }
         }
     }
@@ -148,10 +153,7 @@ struct FriendRequestRow: View {
     let onApprove: () -> Void
     let onDeny: () -> Void
     @Environment(\.modelContext) private var modelContext
-    
-    private var userName: String {
-        UserLookupHelper.getUserName(for: request.fromUserID, in: modelContext) ?? "Unknown User".localized
-    }
+    @State private var userName: String = "Unknown User".localized
     
     var body: some View {
         HStack {
@@ -195,6 +197,11 @@ struct FriendRequestRow: View {
             }
         }
         .padding(.vertical, 4)
+        .task {
+            if let fetchedUserName = await UserLookupHelper.getUserName(for: request.fromUserID, in: modelContext) {
+                userName = fetchedUserName
+            }
+        }
     }
 }
 

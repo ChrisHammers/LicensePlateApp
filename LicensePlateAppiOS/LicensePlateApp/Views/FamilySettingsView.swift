@@ -17,6 +17,7 @@ struct FamilySettingsView: View {
     @State private var familyName: String = ""
     @State private var showRemoveMemberConfirmation: FamilyMember?
     @State private var showLeaveFamilyConfirmation = false
+    @State private var memberUserNames: [String: String] = [:] // [userID: userName]
     
     var currentUser: AppUser? {
         authService.currentUser
@@ -88,7 +89,7 @@ struct FamilySettingsView: View {
                         ForEach(family.members.filter { $0.isActive }) { member in
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text(UserLookupHelper.getUserName(for: member.userID, in: modelContext) ?? "Unknown User".localized)
+                                    Text(memberUserNames[member.userID] ?? "Unknown User".localized)
                                         .font(.headline)
                                     Text(member.role.displayName)
                                         .font(.subheadline)
@@ -109,6 +110,11 @@ struct FamilySettingsView: View {
                         }
                     }
                     .textCase(nil)
+                    .task {
+                        // Batch lookup all member userNames
+                        let memberIDs = family.members.filter { $0.isActive }.map { $0.userID }
+                        memberUserNames = await UserLookupHelper.getUserNames(for: memberIDs, in: modelContext)
+                    }
                     
                     // Linked Families (for Retired Generals)
                     if !family.linkedFamilyIDs.isEmpty {

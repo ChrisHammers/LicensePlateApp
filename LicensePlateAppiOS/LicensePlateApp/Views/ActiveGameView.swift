@@ -14,6 +14,8 @@ struct ActiveGameView: View {
     @Bindable var game: Game
     
     @State private var selectedTeam: GameTeam?
+    @State private var teamMemberUserNames: [String: String] = [:] // [userID: userName]
+    @State private var pilotUserNames: [String: String] = [:] // [teamID: userName]
     
     var currentUser: AppUser? {
         authService.currentUser
@@ -69,7 +71,7 @@ struct ActiveGameView: View {
                                     Image(systemName: "person.circle.fill")
                                         .foregroundStyle(Color.Theme.primaryBlue)
                                     
-                                    Text(UserLookupHelper.getUserName(for: memberID, in: modelContext) ?? "Unknown User".localized)
+                                    Text(teamMemberUserNames[memberID] ?? "Unknown User".localized)
                                     
                                     Spacer()
                                     
@@ -85,6 +87,10 @@ struct ActiveGameView: View {
                             }
                         }
                         .textCase(nil)
+                        .task {
+                            // Batch lookup team member userNames
+                            teamMemberUserNames = await UserLookupHelper.getUserNames(for: userTeam.allMemberIDs, in: modelContext)
+                        }
                     }
                     
                     // End Game (for creator or pilot)
@@ -102,6 +108,17 @@ struct ActiveGameView: View {
                 .listStyle(.insetGrouped)
                 .navigationTitle("Active Game".localized)
                 .navigationBarTitleDisplayMode(.inline)
+                .task {
+                    // Batch lookup pilot userNames for all teams
+                    let pilotIDs = game.teams.map { $0.pilotID }
+                    let pilotNames = await UserLookupHelper.getUserNames(for: pilotIDs, in: modelContext)
+                    // Map to team IDs for easy lookup
+                    for (index, team) in game.teams.enumerated() {
+                        if index < pilotIDs.count {
+                            pilotUserNames[team.id.uuidString] = pilotNames[pilotIDs[index]]
+                        }
+                    }
+                }
             }
         }
     }
@@ -122,6 +139,8 @@ struct LeaderboardRow: View {
     let team: GameTeam
     let rank: Int
     let isUserTeam: Bool
+    @Environment(\.modelContext) private var modelContext
+    @State private var pilotUserName: String = "Unknown User".localized
     
     var body: some View {
         HStack {
@@ -142,12 +161,18 @@ struct LeaderboardRow: View {
                         .font(.headline)
                 }
                 
-                Text("Pilot: \(UserLookupHelper.getUserName(for: team.pilotID, in: modelContext) ?? "Unknown User".localized)".localized)
+                Text("Pilot: \(pilotUserName)".localized)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             
             Spacer()
+        }
+        .task {
+            if let userName = await UserLookupHelper.getUserName(for: team.pilotID, in: modelContext) {
+                pilotUserName = userName
+            }
+        }
             
             // Score
             VStack(alignment: .trailing, spacing: 4) {
@@ -161,7 +186,7 @@ struct LeaderboardRow: View {
                         .foregroundStyle(Color.Theme.primaryBlue)
                 }
             }
-        }
+        
         .padding(.vertical, 4)
         .background(isUserTeam ? Color.Theme.primaryBlue.opacity(0.1) : Color.clear)
         .cornerRadius(8)

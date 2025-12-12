@@ -549,6 +549,11 @@ struct InviteToFamilyView: View {
                 continue
             }
             
+            // Cache userName from search results if available
+            if let searchResult = searchResults.first(where: { $0.id == userID }) {
+                UserLookupHelper.cacheUserInSwiftData(userID: userID, userName: searchResult.userName, modelContext: modelContext)
+            }
+            
             let newMember = FamilyMember(
                 userID: userID,
                 familyID: family.id,
@@ -567,7 +572,18 @@ struct InviteToFamilyView: View {
         family.needsSync = true
         
         do {
+            // Save context to ensure cached userNames are persisted
             try modelContext.save()
+            
+            // Also fetch any missing userNames from Firestore in background
+            Task {
+                for userID in selectedUserIDs {
+                    // Only fetch if we didn't cache from search results
+                    if searchResults.first(where: { $0.id == userID }) == nil {
+                        _ = await UserLookupHelper.getUserName(for: userID, in: modelContext)
+                    }
+                }
+            }
             
             // Sync to Firebase
             Task {

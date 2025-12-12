@@ -19,6 +19,7 @@ struct FamilyHubView: View {
     @State private var showFamilySettings = false
     @State private var showInviteFamily = false
     @State private var navigationPath: [NavigationDestination] = []
+    @State private var memberUserNames: [String: String] = [:] // [userID: userName] - pre-fetched for cache population
     
     enum NavigationDestination: Hashable {
         case trip(UUID)
@@ -99,6 +100,13 @@ struct FamilyHubView: View {
                     .listStyle(.insetGrouped)
                     .navigationTitle(family.name ?? "Family".localized)
                     .navigationBarTitleDisplayMode(.large)
+                    .task {
+                        // Pre-fetch all family member userNames to populate cache
+                        let memberIDs = family.members.filter { $0.isActive }.map { $0.userID }
+                        if !memberIDs.isEmpty {
+                            memberUserNames = await UserLookupHelper.getUserNames(for: memberIDs, in: modelContext)
+                        }
+                    }
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
                             Button {
@@ -236,9 +244,14 @@ struct StatCard: View {
 struct FamilyMemberRow: View {
     let member: FamilyMember
     @Environment(\.modelContext) private var modelContext
+    @State private var userName: String
     
-    private var userName: String {
-        UserLookupHelper.getUserName(for: member.userID, in: modelContext) ?? "Unknown User".localized
+    init(member: FamilyMember) {
+        self.member = member
+        // Initialize with local cache if available, otherwise "Unknown User"
+        // We'll use a temporary modelContext to check, but this won't work in init
+        // So we'll start with "Unknown User" and update immediately
+        _userName = State(initialValue: "Unknown User".localized)
     }
     
     var body: some View {
@@ -259,6 +272,17 @@ struct FamilyMemberRow: View {
             Spacer()
         }
         .padding(.vertical, 4)
+        .task {
+            // First check local cache synchronously
+            if let cachedUserName = UserLookupHelper.getUserNameSync(for: member.userID, in: modelContext) {
+                userName = cachedUserName
+            }
+            
+            // Then try async lookup (Firestore + cache)
+            if let fetchedUserName = await UserLookupHelper.getUserName(for: member.userID, in: modelContext) {
+                userName = fetchedUserName
+            }
+        }
     }
 }
 
