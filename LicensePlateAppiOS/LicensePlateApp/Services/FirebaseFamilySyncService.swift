@@ -81,7 +81,7 @@ class FirebaseFamilySyncService: ObservableObject {
             return nil
         }
         
-        return familyFromFirestoreData(data, firebaseID: familyID)
+        return try await familyFromFirestoreData(data, firebaseID: familyID)
     }
     
     /// Load Family by local UUID
@@ -107,7 +107,7 @@ class FirebaseFamilySyncService: ObservableObject {
             return nil
         }
         
-        return familyFromFirestoreData(data, firebaseID: document.documentID)
+        return try await familyFromFirestoreData(data, firebaseID: document.documentID)
     }
     
     /// Load Family by share code
@@ -133,7 +133,7 @@ class FirebaseFamilySyncService: ObservableObject {
             return nil
         }
         
-        return familyFromFirestoreData(data, firebaseID: document.documentID)
+        return try await familyFromFirestoreData(data, firebaseID: document.documentID)
     }
     
     // MARK: - FamilyMember Sync
@@ -153,8 +153,9 @@ class FirebaseFamilySyncService: ObservableObject {
             return
         }
         
+        // Use userID as document ID for easier querying and security rules
         let docRef = db.collection("families").document(familyFirebaseID)
-            .collection("members").document(member.id.uuidString)
+            .collection("members").document(member.userID)
         
       var data: [String: Any] = [
             "id": member.id.uuidString,
@@ -162,11 +163,16 @@ class FirebaseFamilySyncService: ObservableObject {
             "familyID": member.familyID.uuidString,
             "role": member.role.rawValue,
             "joinedAt": Timestamp(date: member.joinedAt),
-            "isActive": member.isActive
+            "isActive": member.isActive,
+            "invitationStatus": member.invitationStatus.rawValue
         ]
         
         if let invitedBy = member.invitedBy {
             data["invitedBy"] = invitedBy
+        }
+        
+        if let invitedAt = member.invitedAt {
+            data["invitedAt"] = Timestamp(date: invitedAt)
         }
         
         try await docRef.setData(data, merge: true)
@@ -270,7 +276,7 @@ class FirebaseFamilySyncService: ObservableObject {
         return data
     }
     
-    private func familyFromFirestoreData(_ data: [String: Any], firebaseID: String) -> Family? {
+    private func familyFromFirestoreData(_ data: [String: Any], firebaseID: String) async throws -> Family? {
         guard let modelContext = modelContext else { return nil }
         
         let localID: UUID
@@ -337,7 +343,189 @@ class FirebaseFamilySyncService: ObservableObject {
         )
         
         modelContext.insert(family)
+        
+        // Load members from Firestore subcollection
+        let membersRef = db.collection("families").document(firebaseID).collection("members")
+        let membersSnapshot = try? await membersRef.getDocuments()
+        
+        if let membersSnapshot = membersSnapshot {
+            for memberDoc in membersSnapshot.documents {
+                let memberData = memberDoc.data()
+                // Document ID is now the userID
+                let userID = memberDoc.documentID
+                if let member = familyMemberFromFirestoreData(memberData, familyID: localID, userID: userID, modelContext: modelContext) {
+                    // Check if member already exists
+                    let memberID = member.id
+                    let memberDescriptor = FetchDescriptor<FamilyMember>(predicate: #Predicate<FamilyMember> {
+                        $0.id == memberID
+                    })
+                    let existingMember = try? modelContext.fetch(memberDescriptor).first
+                    if existingMember == nil {
+                        family.members.append(member)
+                        modelContext.insert(member)
+                    }
+                }
+            }
+        }
+        
         return family
+    }
+    
+    /// Create FamilyMember from Firestore data
+    /// - Parameters:
+    ///   - data: Firestore document data
+    ///   - familyID: The family's local UUID
+    ///   - userID: The userID (now used as document ID, but also in data for backward compatibility)
+    ///   - modelContext: SwiftData model context
+    private func familyMemberFromFirestoreData(_ data: [String: Any], familyID: UUID, userID: String, modelContext: ModelContext) -> FamilyMember? {
+        // userID is passed as parameter (from document ID) but also check data for backward compatibility
+        let memberUserID = data["userID"] as? String ?? userID
+        
+        // Generate a UUID for the member.id (or use existing if present)
+        let memberID: UUID
+        if let idString = data["id"] as? String, let uuid = UUID(uuidString: idString) {
+            memberID = uuid
+        } else {
+            memberID = UUID() // Generate new ID if not present
+        }
+        
+        guard let roleString = data["role"] as? String,
+              let role = FamilyMember.FamilyRole(rawValue: roleString) else {
+            return nil
+        }
+        
+        let joinedAt: Date
+        if let timestamp = data["joinedAt"] as? Timestamp {
+            joinedAt = timestamp.dateValue()
+        } else {
+            joinedAt = .now
+        }
+        
+        let invitedBy = data["invitedBy"] as? String
+        let isActive = data["isActive"] as? Bool ?? true
+        
+        // Handle invitation status (backward compatibility: if nil, treat as accepted)
+        let invitationStatus: FamilyMember.InvitationStatus
+        if let statusString = data["invitationStatus"] as? String,
+           let status = FamilyMember.InvitationStatus(rawValue: statusString) {
+            invitationStatus = status
+        } else {
+            // Backward compatibility: if isActive is true and no status, treat as accepted
+            invitationStatus = isActive ? .accepted : .pending
+        }
+        
+        let invitedAt: Date?
+        if let timestamp = data["invitedAt"] as? Timestamp {
+            invitedAt = timestamp.dateValue()
+        } else {
+            invitedAt = nil
+        }
+        
+        // Check if member already exists by userID and familyID (not by member.id)
+        let userIDValue = memberUserID
+        let familyIDValue = familyID
+        let descriptor = FetchDescriptor<FamilyMember>(predicate: #Predicate<FamilyMember> {
+            $0.userID == userIDValue && $0.familyID == familyIDValue
+        })
+        
+        if let existingMember = try? modelContext.fetch(descriptor).first {
+            // Update existing member
+            existingMember.role = role
+            existingMember.joinedAt = joinedAt
+            existingMember.invitedBy = invitedBy
+            existingMember.isActive = isActive
+            existingMember.invitationStatus = invitationStatus
+            existingMember.invitedAt = invitedAt
+            return existingMember
+        }
+        
+        // Create new member
+        let member = FamilyMember(
+            id: memberID,
+            userID: memberUserID,
+            familyID: familyID,
+            role: role,
+            joinedAt: joinedAt,
+            invitedBy: invitedBy,
+            isActive: isActive,
+            invitationStatus: invitationStatus,
+            invitedAt: invitedAt
+        )
+        
+        return member
+    }
+    
+    /// Query pending family invitations for a user from Firestore
+    /// Uses collection group query to find all member documents where userID matches
+    func loadPendingInvitationsForUser(userID: String) async throws -> [FamilyMember] {
+        guard let modelContext = modelContext else {
+            throw SyncError.noModelContext
+        }
+        
+        guard isOnline else {
+            // Return local pending invitations if offline
+            let userIDValue = userID
+            let descriptor = FetchDescriptor<FamilyMember>(predicate: #Predicate<FamilyMember> {
+                $0.userID == userIDValue
+            })
+            let allUserMembers = (try? modelContext.fetch(descriptor)) ?? [FamilyMember]()
+            return allUserMembers.filter { $0.invitationStatus == .pending }
+        }
+        
+        // Use collection group query to find all member documents for this user
+        // This searches across all families/families/{familyId}/members/{userID}
+        let membersQuery = db.collectionGroup("members")
+            .whereField("userID", isEqualTo: userID)
+            .whereField("invitationStatus", isEqualTo: "pending")
+        
+        let snapshot = try await membersQuery.getDocuments()
+        var pendingMembers: [FamilyMember] = []
+        
+        for document in snapshot.documents {
+            let memberData = document.data()
+            
+            // Extract familyID from the document path: families/{familyID}/members/{userID}
+            let pathParts = document.reference.path.split(separator: "/")
+            guard pathParts.count >= 4, pathParts[0] == "families", pathParts[2] == "members" else {
+                continue
+            }
+            let familyFirebaseID = String(pathParts[1])
+            
+            // Get family localID from Firestore
+            let familyDoc = try? await db.collection("families").document(familyFirebaseID).getDocument()
+            guard let familyData = familyDoc?.data(),
+                  let localIDString = familyData["localID"] as? String,
+                  let familyLocalID = UUID(uuidString: localIDString) else {
+                continue
+            }
+            
+            // Create FamilyMember from Firestore data
+            // Document ID is now the userID
+            let documentUserID = document.documentID
+            if let member = familyMemberFromFirestoreData(memberData, familyID: familyLocalID, userID: documentUserID, modelContext: modelContext) {
+                pendingMembers.append(member)
+                
+                // Ensure it's saved locally
+                let userIDValue = documentUserID
+                let familyIDValue = familyLocalID
+                let descriptor = FetchDescriptor<FamilyMember>(predicate: #Predicate<FamilyMember> {
+                    $0.userID == userIDValue && $0.familyID == familyIDValue
+                })
+                let existingMember = try? modelContext.fetch(descriptor).first
+                if existingMember == nil {
+                    modelContext.insert(member)
+                    // Also need to associate with family
+                    if let family = try? modelContext.fetch(FetchDescriptor<Family>(predicate: #Predicate<Family> {
+                        $0.id == familyLocalID
+                    })).first {
+                        family.members.append(member)
+                    }
+                }
+            }
+        }
+        
+        try? modelContext.save()
+        return pendingMembers
     }
     
     private func firestoreDataFromGame(_ game: Game) -> [String: Any] {

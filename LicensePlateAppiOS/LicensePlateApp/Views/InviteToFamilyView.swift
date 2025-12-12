@@ -560,7 +560,9 @@ struct InviteToFamilyView: View {
                 role: selectedRole,
                 joinedAt: .now,
                 invitedBy: currentUserID,
-                isActive: true
+                isActive: false, // Not active until accepted
+                invitationStatus: .pending,
+                invitedAt: .now
             )
             
             family.members.append(newMember)
@@ -592,6 +594,17 @@ struct InviteToFamilyView: View {
                     for member in newMembers {
                         if let firebaseID = family.firebaseFamilyID {
                             try await FirebaseFamilySyncService.shared.saveFamilyMemberToFirestore(member, familyFirebaseID: firebaseID)
+                            
+                            // Send email notification (stub for now)
+                            if let searchResult = searchResults.first(where: { $0.id == member.userID }) {
+                                await FamilyNotificationService.shared.sendFamilyInvitationEmail(
+                                    to: member.userID,
+                                    email: searchResult.email,
+                                    familyName: family.name,
+                                    inviterName: currentUser?.userName ?? "Someone",
+                                    role: member.role
+                                )
+                            }
                         }
                     }
                 } catch {

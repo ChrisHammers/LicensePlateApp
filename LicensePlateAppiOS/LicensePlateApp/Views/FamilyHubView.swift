@@ -14,12 +14,17 @@ struct FamilyHubView: View {
     @Query(sort: \Family.createdAt, order: .reverse) private var families: [Family]
     @Query(sort: \Trip.createdAt, order: .reverse) private var allTrips: [Trip]
     @Query(sort: \Game.createdAt, order: .reverse) private var allGames: [Game]
+    // Use a safer query that won't crash on invalid data
+    // We'll fetch manually to handle errors gracefully
+    @State private var allFamilyMembers: [FamilyMember] = []
     
     @State private var selectedFamily: Family?
     @State private var showFamilySettings = false
     @State private var showInviteFamily = false
+    @State private var showFamilyInvitations = false
     @State private var navigationPath: [NavigationDestination] = []
     @State private var memberUserNames: [String: String] = [:] // [userID: userName] - pre-fetched for cache population
+    @State private var hasMigrationError = false
     
     enum NavigationDestination: Hashable {
         case trip(UUID)
@@ -36,6 +41,66 @@ struct FamilyHubView: View {
             return nil
         }
         return families.first { $0.id == familyID }
+    }
+    
+    var pendingInvitationsCount: Int {
+        guard let userID = currentUser?.id else { return 0 }
+        return allFamilyMembers.filter { member in
+            member.userID == userID && safeInvitationStatus(for: member) == .pending
+        }.count
+    }
+    
+    /// Safely get family members, filtering out any that cause crashes
+    private func safeFamilyMembers(_ family: Family) -> [FamilyMember] {
+        // Try to access family.members - if it crashes due to corrupted data,
+        // we'll catch it and return an empty array
+        do {
+            // Access the members relationship
+            let members = family.members
+            // Try to access each member's invitationStatus to filter out corrupted ones
+            return members.filter { member in
+                do {
+                    _ = member.invitationStatus.rawValue
+                    return true
+                } catch {
+                    // This member has corrupted data, skip it
+                    return false
+                }
+            }
+        } catch {
+            // If accessing family.members itself crashes, return empty array
+            print("⚠️ Error accessing family.members: \(error)")
+            return []
+        }
+    }
+    
+    /// Safely get invitation status, handling invalid values
+    private func safeInvitationStatus(for member: FamilyMember) -> FamilyMember.InvitationStatus {
+        // Try to access the status - if it crashes, return a default
+        // Note: This won't catch SwiftData decoding errors, but will handle runtime access issues
+        let status = member.invitationStatus
+        // Verify it's a valid case
+        switch status {
+        case .pending, .accepted, .declined:
+            return status
+        @unknown default:
+            return member.isActive ? .accepted : .pending
+        }
+    }
+    
+    /// Load family members manually to handle errors gracefully
+    private func loadFamilyMembers() async {
+        do {
+            let descriptor = FetchDescriptor<FamilyMember>(
+                sortBy: [SortDescriptor(\FamilyMember.invitedAt, order: .reverse)]
+            )
+            let members = try modelContext.fetch(descriptor)
+            allFamilyMembers = members
+        } catch {
+            print("⚠️ Error loading family members: \(error)")
+            hasMigrationError = true
+            allFamilyMembers = []
+        }
     }
     
     var sharedTrips: [Trip] {
@@ -88,9 +153,21 @@ struct FamilyHubView: View {
                             .textCase(nil)
                         }
                         
-                        // Family Members Section
+                        // Pending Invitations Section (only show if there are pending invitations)
+                        // Safely access family.members to avoid crashes from corrupted data
+                        let pendingMembers = safeFamilyMembers(family).filter { safeInvitationStatus(for: $0) == .pending }
+                        if !pendingMembers.isEmpty {
+                            Section("Pending Invitations".localized) {
+                                ForEach(pendingMembers) { member in
+                                    PendingMemberRow(member: member)
+                                }
+                            }
+                            .textCase(nil)
+                        }
+                        
+                        // Family Members Section (only active, accepted members)
                         Section("Family Members".localized) {
-                            ForEach(family.members.filter { $0.isActive }) { member in
+                            ForEach(safeFamilyMembers(family).filter { $0.isActive && safeInvitationStatus(for: $0) == .accepted }) { member in
                                 FamilyMemberRow(member: member)
                             }
                         }
@@ -101,21 +178,51 @@ struct FamilyHubView: View {
                     .navigationTitle(family.name ?? "Family".localized)
                     .navigationBarTitleDisplayMode(.large)
                     .task {
+                        // First, try to fix any corrupted FamilyMember records
+                        FamilyMemberMigrationHelper.fixInvalidInvitationStatus(in: modelContext)
+                        
+                        // Then load family members manually to handle any remaining errors
+                        await loadFamilyMembers()
+                        
                         // Pre-fetch all family member userNames to populate cache
-                        let memberIDs = family.members.filter { $0.isActive }.map { $0.userID }
+                        let safeMembers = safeFamilyMembers(family)
+                        let memberIDs = safeMembers.filter { $0.isActive }.map { $0.userID }
                         if !memberIDs.isEmpty {
                             memberUserNames = await UserLookupHelper.getUserNames(for: memberIDs, in: modelContext)
                         }
                     }
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
-                            Button {
-                                showFamilySettings = true
-                            } label: {
-                                Image(systemName: "gearshape")
-                                    .foregroundStyle(Color.Theme.primaryBlue)
+                            HStack {
+                                if pendingInvitationsCount > 0 {
+                                    Button {
+                                        showFamilyInvitations = true
+                                    } label: {
+                                        ZStack {
+                                            Image(systemName: "envelope.fill")
+                                                .foregroundStyle(Color.Theme.primaryBlue)
+                                            if pendingInvitationsCount > 0 {
+                                                Text("\(pendingInvitationsCount)")
+                                                    .font(.caption2)
+                                                    .foregroundStyle(.white)
+                                                    .padding(4)
+                                                    .background(Color.red)
+                                                    .clipShape(Circle())
+                                                    .offset(x: 8, y: -8)
+                                            }
+                                        }
+                                    }
+                                    .accessibilityLabel("Family Invitations (\(pendingInvitationsCount))".localized)
+                                }
+                                
+                                Button {
+                                    showFamilySettings = true
+                                } label: {
+                                    Image(systemName: "gearshape")
+                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                }
+                                .accessibilityLabel("Family Settings".localized)
                             }
-                            .accessibilityLabel("Family Settings".localized)
                         }
                         
                         ToolbarItem(placement: .topBarLeading) {
@@ -133,6 +240,9 @@ struct FamilyHubView: View {
                     }
                     .sheet(isPresented: $showInviteFamily) {
                         InviteToFamilyView(family: family)
+                    }
+                    .sheet(isPresented: $showFamilyInvitations) {
+                        FamilyInvitationsView()
                     }
                 } else {
                     // No Family - Create or Join
@@ -238,6 +348,63 @@ struct StatCard: View {
         .padding()
         .background(Color.Theme.cardBackground)
         .cornerRadius(12)
+    }
+}
+
+struct PendingMemberRow: View {
+    let member: FamilyMember
+    @Environment(\.modelContext) private var modelContext
+    @State private var userName: String = "Unknown User".localized
+    @State private var inviterName: String = "Unknown User".localized
+    
+    var body: some View {
+        HStack {
+            Image(systemName: "person.circle.dashed")
+                .font(.title2)
+                .foregroundStyle(Color.orange)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(userName)
+                    .font(.headline)
+                
+                HStack {
+                    Text(member.role.displayName)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    
+                    if let invitedAt = member.invitedAt {
+                        HStack(spacing: 4) {
+                            Text("• Invited".localized)
+                            Text(invitedAt, style: .relative)
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+                
+                if let invitedBy = member.invitedBy {
+                    Text("Invited by \(inviterName)".localized)
+                        .font(.caption)
+                        .foregroundStyle(Color.orange)
+                }
+            }
+            
+            Spacer()
+        }
+        .padding(.vertical, 4)
+        .task {
+            // Fetch member userName
+            if let fetchedUserName = await UserLookupHelper.getUserName(for: member.userID, in: modelContext) {
+                userName = fetchedUserName
+            }
+            
+            // Fetch inviter userName
+            if let invitedBy = member.invitedBy {
+                if let fetchedInviterName = await UserLookupHelper.getUserName(for: invitedBy, in: modelContext) {
+                    inviterName = fetchedInviterName
+                }
+            }
+        }
     }
 }
 

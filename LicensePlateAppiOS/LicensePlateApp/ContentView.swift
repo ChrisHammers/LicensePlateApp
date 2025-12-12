@@ -141,6 +141,10 @@ struct ContentView: View {
                   
                   // Initialize Family Sync Service
                   FirebaseFamilySyncService.shared.initialize(modelContext: modelContext)
+                  
+                  // Fix any corrupted FamilyMember records before any views try to access them
+                  // This must run before FamilyHubView is presented to prevent crashes
+                  FamilyMemberMigrationHelper.fixInvalidInvitationStatus(in: modelContext)
                 }
                 .overlay {
                   if authService.showUsernameConflictDialog {

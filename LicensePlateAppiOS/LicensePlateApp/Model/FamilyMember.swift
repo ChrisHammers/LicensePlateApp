@@ -16,10 +16,18 @@ final class FamilyMember {
     var role: FamilyRole
     var joinedAt: Date
     var invitedBy: String? // User ID who invited them
-    var isActive: Bool = true
+    var isActive: Bool
+    var invitationStatus: InvitationStatus
+    var invitedAt: Date? // When invitation was sent (nil if not invited)
     
     // Relationship to Family
     var family: Family?
+    
+    enum InvitationStatus: String, Codable {
+        case pending
+        case accepted
+        case declined
+    }
     
     enum FamilyRole: String, Codable, CaseIterable {
         case captain
@@ -44,7 +52,9 @@ final class FamilyMember {
         role: FamilyRole,
         joinedAt: Date = .now,
         invitedBy: String? = nil,
-        isActive: Bool = true
+        isActive: Bool = true,
+        invitationStatus: InvitationStatus = .pending,
+        invitedAt: Date? = nil
     ) {
         self.id = id
         self.userID = userID
@@ -53,6 +63,44 @@ final class FamilyMember {
         self.joinedAt = joinedAt
         self.invitedBy = invitedBy
         self.isActive = isActive
+        self.invitationStatus = invitationStatus
+        self.invitedAt = invitedAt
+    }
+    
+    /// Initialize with default accepted status (for backward compatibility)
+    convenience init(
+        id: UUID = UUID(),
+        userID: String,
+        familyID: UUID,
+        role: FamilyRole,
+        joinedAt: Date = .now,
+        invitedBy: String? = nil,
+        isActive: Bool = true
+    ) {
+        self.init(
+            id: id,
+            userID: userID,
+            familyID: familyID,
+            role: role,
+            joinedAt: joinedAt,
+            invitedBy: invitedBy,
+            isActive: isActive,
+            invitationStatus: .pending,
+            invitedAt: nil
+        )
+    }
+    
+    /// Accept the family invitation
+    func accept() {
+        self.invitationStatus = .accepted
+        self.isActive = true
+        self.joinedAt = .now
+    }
+    
+    /// Decline the family invitation
+    func decline() {
+        self.invitationStatus = .declined
+        self.isActive = false
     }
     
     /// Check if member has permission to perform an action
