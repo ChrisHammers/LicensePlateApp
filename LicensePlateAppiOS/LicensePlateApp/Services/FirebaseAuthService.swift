@@ -102,8 +102,29 @@ class FirebaseAuthService: ObservableObject {
         
         // Check if Firebase Auth already has a user (persisted session)
         if let firebaseUser = auth.currentUser {
-            // Firebase has a user, load it
-            await loadUserFromFirebase(firebaseUser)
+            // Verify user still exists before loading
+            do {
+                try await firebaseUser.reload()
+                // User exists, load it
+                await loadUserFromFirebase(firebaseUser)
+            } catch {
+                print("⚠️ WARNING - Cached Firebase user no longer exists: \(error)")
+                // User was deleted, sign out and clear state
+                try? auth.signOut()
+                currentUser = nil
+                isAuthenticated = false
+                // Continue with local user or create default
+                let deviceId = DeviceIdentifier.getDeviceIdentifier()
+                let descriptor = FetchDescriptor<AppUser>(
+                    predicate: #Predicate<AppUser> { $0.deviceIdentifier == deviceId }
+                )
+                if let existingUser = try? modelContext.fetch(descriptor).first {
+                    currentUser = existingUser
+                    isAuthenticated = false // Not authenticated with Firebase
+                } else {
+                    try? await createDefaultUser()
+                }
+            }
         } else {
             // No Firebase user, check for local user by device
             let deviceId = DeviceIdentifier.getDeviceIdentifier()
@@ -201,11 +222,11 @@ class FirebaseAuthService: ObservableObject {
             // Link local user to Firebase anonymous account
             localUser.firebaseUID = firebaseUID
             localUser.id = firebaseUID // Update ID to Firebase UID
-            localUser.needsSync = false
+            localUser.needsSync = true // Mark for initial sync to Firestore
             
             try modelContext.save()
             
-            // Save to Firestore
+            // Save to Firestore (initial creation)
             try await saveUserDataToFirestore(localUser)
             
             currentUser = localUser
@@ -364,6 +385,7 @@ class FirebaseAuthService: ObservableObject {
                     currentUser.lastName = lastName
                     currentUser.phoneNumber = phoneNumber
                     currentUser.isUsernameManuallyChanged = true
+                    currentUser.needsSync = true
                     
                     try modelContext.save()
                     try await saveUserDataToFirestore(currentUser)
@@ -940,6 +962,7 @@ class FirebaseAuthService: ObservableObject {
                  user.phoneNumber = phone
              }
              
+             user.needsSync = true
              try modelContext.save()
              try await saveUserDataToFirestore(user)
          } catch {
@@ -1101,7 +1124,8 @@ class FirebaseAuthService: ObservableObject {
         if let firebaseUser = user {
             await loadUserFromFirebase(firebaseUser)
         } else {
-            // Firebase signed out
+            // Firebase signed out or user deleted
+            currentUser = nil
             isAuthenticated = false
         }
     }
@@ -1110,6 +1134,18 @@ class FirebaseAuthService: ObservableObject {
         guard let modelContext = modelContext else { return }
         
         let firebaseUID = firebaseUser.uid
+        
+        // Verify the user account still exists in Firebase Auth
+        do {
+            try await firebaseUser.reload()
+        } catch {
+            print("⚠️ WARNING - User account no longer exists in Firebase Auth: \(error)")
+            // User was deleted, sign out and clear state
+            try? auth.signOut()
+            currentUser = nil
+            isAuthenticated = false
+            return
+        }
         
         // Check if user exists locally
         let descriptor = FetchDescriptor<AppUser>(
@@ -1223,7 +1259,8 @@ class FirebaseAuthService: ObservableObject {
         currentUser = newUser
         isAuthenticated = true
         
-        // Save to Firestore
+        // Save to Firestore (new user, needsSync should already be true from creation)
+        newUser.needsSync = true
         Task {
             try? await saveUserDataToFirestore(newUser)
         }
@@ -1248,6 +1285,7 @@ class FirebaseAuthService: ObservableObject {
             }
         }
         
+        user.needsSync = true
         try? modelContext.save()
         try? await saveUserDataToFirestore(user)
     }
@@ -1275,6 +1313,31 @@ class FirebaseAuthService: ObservableObject {
         guard let firebaseUID = user.firebaseUID else {
             user.needsSync = true
             return
+        }
+        
+        // Only write to Firestore if needsSync is true (user has pending changes)
+        // Users should only be written from the app when they have pending changes
+        guard user.needsSync else {
+            print("🔍 DEBUG - Skipping saveUserDataToFirestore: user.needsSync = false (no pending changes)")
+            return
+        }
+        
+        // Verify user still exists in Firebase Auth before writing
+        guard let currentAuthUser = auth.currentUser, currentAuthUser.uid == firebaseUID else {
+            print("⚠️ WARNING - Cannot save user to Firestore: User no longer authenticated in Firebase Auth")
+            // Clear authentication state
+            await handleAuthStateChange(nil)
+            throw AuthError.noUser
+        }
+        
+        // Verify the user account still exists by trying to reload
+        do {
+            try await currentAuthUser.reload()
+        } catch {
+            print("⚠️ WARNING - User account no longer exists in Firebase Auth: \(error)")
+            // Clear authentication state
+            await handleAuthStateChange(nil)
+            throw AuthError.noUser
         }
         
         let docRef = db.collection("users").document(firebaseUID)

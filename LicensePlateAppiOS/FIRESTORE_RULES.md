@@ -17,6 +17,10 @@ service cloud.firestore {
       // Allow users to read their own document
       allow read: if request.auth != null && request.auth.uid == userId;
       
+      // Allow authenticated users to read other users' documents (for search and lookup)
+      // This is needed for user search and userName lookup
+      allow read: if request.auth != null;
+      
       // Allow users to write their own document (includes create, update, delete)
       allow write: if request.auth != null && request.auth.uid == userId;
       
@@ -27,12 +31,26 @@ service cloud.firestore {
     
     // Families collection
     match /families/{familyId} {
-      // Allow read if user is a member of this family (check members subcollection)
+      // Allow read if user has a member document (active or pending) - needed for pending invitations
       allow read: if request.auth != null && 
         exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
       
-      // Allow write if user is a captain of this family
-      allow write: if request.auth != null && 
+      // Allow write operations
+      // CREATE: Any authenticated user can create a family
+      allow create: if request.auth != null;
+      
+      // UPDATE: Allow if user is authenticated AND either:
+      // 1. Member document doesn't exist yet (user is creator syncing for first time), OR
+      // 2. User is a captain
+      // This handles the case where setData(merge: true) is used but member doc doesn't exist yet
+      allow update: if request.auth != null && (
+        !exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role == 'captain')
+      );
+      
+      // DELETE: Only captains can delete
+      allow delete: if request.auth != null && 
         exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role == 'captain';
       
@@ -41,20 +59,39 @@ service cloud.firestore {
       
       // Members subcollection - document ID is the userID
       match /members/{userID} {
-        // Allow read if this is the user's own member record OR user is a captain of the family
-        allow read: if request.auth != null && (
+        // Allow read if user has a member document (active or pending) - needed for pending invitations
+        // This allows users to read their own member document and see other members if they're in the family
+        allow read: if request.auth != null && 
+          exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
+        
+        // Allow write operations separately for better control
+        // CREATE: Allow if:
+        // 1. Creating your own member document (userID == request.auth.uid), OR
+        // 2. You're a captain (can invite others)
+        allow create: if request.auth != null && (
           userID == request.auth.uid ||
           (exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)) &&
            get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role == 'captain')
         );
-        
-        // Allow write if this is the user's own member record (to accept/decline) OR user is a captain
-        allow write: if request.auth != null && (
+        allow update: if request.auth != null && (
+          userID == request.auth.uid ||
+          (exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role == 'captain')
+        );
+        allow delete: if request.auth != null && (
           userID == request.auth.uid ||
           (exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)) &&
            get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role == 'captain')
         );
       }
+    }
+    
+    // Collection group query for members (to find pending invitations across all families)
+    // This allows users to query all members subcollections where userID matches
+    match /{path=**}/members/{userID} {
+      // Allow read if this is the user's own member record
+      // This enables collection group queries like: db.collectionGroup("members").whereField("userID", isEqualTo: userID)
+      allow read: if request.auth != null && userID == request.auth.uid;
     }
     
     // Games collection
@@ -104,10 +141,18 @@ service cloud.firestore {
       // Allow users to read their own document
       allow read: if request.auth != null && request.auth.uid == userId;
       
+      // Allow authenticated users to read other users' documents (for search and lookup)
+      // This is needed for user search and userName lookup
+      allow read: if request.auth != null;
+      
       // Allow users to write their own document with validation
-      allow write: if request.auth != null 
-                   && request.auth.uid == userId
-                   && request.resource.data.id == userId;
+      allow create: if request.auth != null 
+                    && request.auth.uid == userId
+                    && request.resource.data.id == userId;
+      
+      // Allow users to update their own document
+      // Cloud Functions handle pendingFamilyInvitations updates (more secure)
+      allow update: if request.auth != null && request.auth.uid == userId;
       
       // Allow authenticated users to query the collection (for username uniqueness checks)
       allow list: if request.auth != null;
@@ -115,12 +160,26 @@ service cloud.firestore {
     
     // Families collection
     match /families/{familyId} {
-      // Allow read if user is a member of this family
+      // Allow read if user has a member document (active or pending) - needed for pending invitations
       allow read: if request.auth != null && 
         exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
       
-      // Allow write if user is a captain of this family
-      allow write: if request.auth != null && 
+      // Allow write operations
+      // CREATE: Any authenticated user can create a family
+      allow create: if request.auth != null;
+      
+      // UPDATE: Allow if user is authenticated AND either:
+      // 1. Member document doesn't exist yet (user is creator syncing for first time), OR
+      // 2. User is a captain
+      // This handles the case where setData(merge: true) is used but member doc doesn't exist yet
+      allow update: if request.auth != null && (
+        !exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role == 'captain')
+      );
+      
+      // DELETE: Only captains can delete
+      allow delete: if request.auth != null && 
         exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role == 'captain';
       
@@ -129,18 +188,39 @@ service cloud.firestore {
       
       // Members subcollection
       match /members/{userID} {
-        allow read: if request.auth != null && (
+        // Allow read if user has a member document (active or pending) - needed for pending invitations
+        // This allows users to read their own member document and see other members if they're in the family
+        allow read: if request.auth != null && 
+          exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid));
+        
+        // Allow write operations separately for better control
+        // CREATE: Allow if:
+        // 1. Creating your own member document (userID == request.auth.uid), OR
+        // 2. You're a captain (can invite others)
+        allow create: if request.auth != null && (
           userID == request.auth.uid ||
           (exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)) &&
            get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role == 'captain')
         );
-        
-        allow write: if request.auth != null && (
+        allow update: if request.auth != null && (
+          userID == request.auth.uid ||
+          (exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)) &&
+           get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role == 'captain')
+        );
+        allow delete: if request.auth != null && (
           userID == request.auth.uid ||
           (exists(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)) &&
            get(/databases/$(database)/documents/families/$(familyId)/members/$(request.auth.uid)).data.role == 'captain')
         );
       }
+    }
+    
+    // Collection group query for members (to find pending invitations across all families)
+    // This allows users to query all members subcollections where userID matches
+    match /{path=**}/members/{userID} {
+      // Allow read if this is the user's own member record
+      // This enables collection group queries like: db.collectionGroup("members").whereField("userID", isEqualTo: userID)
+      allow read: if request.auth != null && userID == request.auth.uid;
     }
     
     // Games collection

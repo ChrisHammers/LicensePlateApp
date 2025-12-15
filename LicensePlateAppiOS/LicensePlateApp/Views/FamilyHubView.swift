@@ -38,15 +38,52 @@ struct FamilyHubView: View {
     }
     
     var currentFamily: Family? {
+        print("🔍 DEBUG - currentFamily: Checking...")
+        print("   currentUser: \(currentUser != nil ? "exists" : "nil")")
+        print("   currentUser?.id: \(currentUser?.id ?? "nil")")
+        print("   currentUser?.familyID: \(currentUser?.familyID?.uuidString ?? "nil")")
+        
         guard let userID = currentUser?.id,
               let familyID = currentUser?.familyID else {
+            print("🔍 DEBUG - currentFamily: No userID or familyID")
+            if currentUser == nil {
+                print("   Reason: currentUser is nil")
+            } else if currentUser?.id == nil {
+                print("   Reason: currentUser.id is nil")
+            } else if currentUser?.familyID == nil {
+                print("   Reason: currentUser.familyID is nil")
+            }
             return nil
         }
-        return families.first { $0.id == familyID }
+        print("🔍 DEBUG - currentFamily: Looking for familyID: \(familyID)")
+        print("🔍 DEBUG - currentFamily: Available families: \(families.map { $0.id })")
+        
+        guard let family = families.first(where: { $0.id == familyID }) else {
+            print("⚠️ DEBUG - currentFamily: Family not found locally with id: \(familyID)")
+            return nil
+        }
+        
+        // Validate user is actually an active, accepted member
+        let isMember = family.members.contains { member in
+            member.userID == userID && 
+            member.isActive && 
+            member.invitationStatus == .accepted
+        }
+        
+        print("🔍 DEBUG - currentFamily: isMember: \(isMember), family.members.count: \(family.members.count)")
+        if !isMember {
+            print("🔍 DEBUG - currentFamily: Member details:")
+            for member in family.members {
+                print("   - userID: \(member.userID), isActive: \(member.isActive), invitationStatus: \(member.invitationStatus.rawValue)")
+            }
+        }
+        
+        return isMember ? family : nil
     }
     
     var pendingInvitationsCount: Int {
         guard let userID = currentUser?.id else { return 0 }
+        print ("Found USerID: \(userID), ")
         return allFamilyMembers.filter { member in
             member.userID == userID && safeInvitationStatus(for: member) == .pending
         }.count
@@ -102,6 +139,23 @@ struct FamilyHubView: View {
             print("⚠️ Error loading family members: \(error)")
             hasMigrationError = true
             allFamilyMembers = []
+        }
+    }
+    
+    private func removePendingInvitation(_ member: FamilyMember) {
+        guard let firebaseFamilyID = currentFamily?.firebaseFamilyID else { return }
+        
+        Task {
+            do {
+                try await FirebaseFamilySyncService.shared.removePendingInvitation(
+                    userID: member.userID,
+                    familyFirebaseID: firebaseFamilyID
+                )
+                // Reload family members
+                await loadFamilyMembers()
+            } catch {
+                print("Error removing pending invitation: \(error)")
+            }
         }
     }
     
@@ -164,7 +218,9 @@ struct FamilyHubView: View {
                         if !pendingMembers.isEmpty {
                             Section("Pending Invitations".localized) {
                                 ForEach(pendingMembers) { member in
-                                    PendingMemberRow(member: member)
+                                    PendingMemberRow(member: member, onRemove: {
+                                        removePendingInvitation(member)
+                                    })
                                 }
                             }
                             .textCase(nil)
@@ -186,6 +242,83 @@ struct FamilyHubView: View {
                         // First, try to fix any corrupted FamilyMember records
                         FamilyMemberMigrationHelper.fixInvalidInvitationStatus(in: modelContext)
                         
+                        // Stop all listeners except for the user's current family
+                        FirebaseFamilySyncService.shared.stopAllFamilyListenersExcept(userFamilyID: currentUser?.familyID)
+                        
+                        // Clean up orphaned families (families that don't exist in Firestore)
+                        await FirebaseFamilySyncService.shared.cleanupOrphanedFamilies()
+                        
+                        // Load user's family from Firestore if they have a familyID
+                        if let userID = currentUser?.id, let familyID = currentUser?.familyID {
+                            if let loadedFamily = try? await FirebaseFamilySyncService.shared.loadUserFamilyFromFirestore(
+                                userID: userID,
+                                familyID: familyID
+                            ) {
+                                // Family loaded successfully, continue with setup
+                                print("✅ User's family loaded from Firestore: \(loadedFamily.id)")
+                            }
+                        }
+                        
+                        // Validate user is actually a member in Firestore before showing family
+                        // Only validate if family is already synced to Firestore (not in the process of being created)
+                        if let firebaseFamilyID = family.firebaseFamilyID,
+                           let userID = currentUser?.id,
+                           !family.needsSync { // Only validate if family is already synced
+                            // Check if user is a member in Firestore
+                            let db = Firestore.firestore()
+                            let memberDocRef = db.collection("families")
+                                .document(firebaseFamilyID)
+                                .collection("members")
+                                .document(userID)
+                            
+                            do {
+                                let memberDoc = try await memberDocRef.getDocument()
+                                
+                                if memberDoc.exists, let memberData = memberDoc.data() {
+                                    let isActive = memberData["isActive"] as? Bool ?? false
+                                    let invitationStatus = memberData["invitationStatus"] as? String ?? "pending"
+                                    
+                                    // If not an active, accepted member, clear familyID
+                                    if !isActive || invitationStatus != "accepted" {
+                                        print("⚠️ User is not an active, accepted member in Firestore. Clearing familyID.")
+                                        print("   isActive: \(isActive), invitationStatus: \(invitationStatus)")
+                                        currentUser?.familyID = nil
+                                        currentUser?.needsSync = true
+                                        try? modelContext.save()
+                                        return // Don't continue loading family data
+                                    }
+                                } else {
+                                    // Member doesn't exist in Firestore, but only clear if family is fully synced
+                                    // (not in the process of being created)
+                                    print("⚠️ User member document doesn't exist in Firestore.")
+                                    print("   Family needsSync: \(family.needsSync)")
+                                    print("   Family firebaseFamilyID: \(firebaseFamilyID)")
+                                    print("   User familyID: \(currentUser?.familyID?.uuidString ?? "nil")")
+                                    
+                                    // Only clear if family is already synced (not being created)
+                                    if !family.needsSync {
+                                        print("   Clearing familyID because family is synced but member doesn't exist")
+                                        currentUser?.familyID = nil
+                                        currentUser?.needsSync = true
+                                        try? modelContext.save()
+                                        return // Don't continue loading family data
+                                    } else {
+                                        print("   Family is still syncing, keeping familyID")
+                                    }
+                                }
+                            } catch {
+                                print("⚠️ Error validating membership in Firestore: \(error)")
+                                // If we can't validate (e.g., offline), allow cached data but log warning
+                            }
+                        } else if family.needsSync {
+                            print("🔍 DEBUG - Skipping Firestore validation: family.needsSync = true (family is being created/synced)")
+                        }
+                        
+                        // Sync from Firebase if needsSync is false (Firebase is source of truth)
+                        if let firebaseFamilyID = family.firebaseFamilyID, !family.needsSync {
+                            _ = try? await FirebaseFamilySyncService.shared.loadFamilyFromFirestore(familyID: firebaseFamilyID)
+                        }
+                        
                         // Then load family members manually to handle any remaining errors
                         await loadFamilyMembers()
                         
@@ -198,6 +331,10 @@ struct FamilyHubView: View {
                                 // Reload family members when updates occur
                                 Task {
                                     await loadFamilyMembers()
+                                    // Also reload the family from Firestore to get latest data
+                                    if let firebaseID = family.firebaseFamilyID {
+                                        _ = try? await FirebaseFamilySyncService.shared.loadFamilyFromFirestore(familyID: firebaseID)
+                                    }
                                 }
                             }
                         }
@@ -214,59 +351,6 @@ struct FamilyHubView: View {
                         if let family = currentFamily {
                             FirebaseFamilySyncService.shared.stopListeningToFamily(familyID: family.id)
                         }
-                    }
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            HStack {
-                                if pendingInvitationsCount > 0 {
-                                    Button {
-                                        showFamilyInvitations = true
-                                    } label: {
-                                        ZStack {
-                                            Image(systemName: "envelope.fill")
-                                                .foregroundStyle(Color.Theme.primaryBlue)
-                                            if pendingInvitationsCount > 0 {
-                                                Text("\(pendingInvitationsCount)")
-                                                    .font(.caption2)
-                                                    .foregroundStyle(.white)
-                                                    .padding(4)
-                                                    .background(Color.red)
-                                                    .clipShape(Circle())
-                                                    .offset(x: 8, y: -8)
-                                            }
-                                        }
-                                    }
-                                    .accessibilityLabel("Family Invitations (\(pendingInvitationsCount))".localized)
-                                }
-                                
-                                Button {
-                                    showFamilySettings = true
-                                } label: {
-                                    Image(systemName: "gearshape")
-                                        .foregroundStyle(Color.Theme.primaryBlue)
-                                }
-                                .accessibilityLabel("Family Settings".localized)
-                            }
-                        }
-                        
-                        ToolbarItem(placement: .topBarLeading) {
-                            Button {
-                                showInviteFamily = true
-                            } label: {
-                                Image(systemName: "person.badge.plus")
-                                    .foregroundStyle(Color.Theme.primaryBlue)
-                            }
-                            .accessibilityLabel("Invite a Family Member".localized)
-                        }
-                    }
-                    .sheet(isPresented: $showFamilySettings) {
-                        FamilySettingsView(family: family)
-                    }
-                    .sheet(isPresented: $showInviteFamily) {
-                        InviteToFamilyView(family: family)
-                    }
-                    .sheet(isPresented: $showFamilyInvitations) {
-                        FamilyInvitationsView()
                     }
                 } else {
                     // No Family - Create or Join
@@ -300,10 +384,81 @@ struct FamilyHubView: View {
                     }
                     .padding()
                     .navigationTitle("Family".localized)
-                    .sheet(isPresented: $showInviteFamily) {
-                        InviteToFamilyView(family: nil)
+                }
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    HStack {
+                    
+                            Button {
+                                showFamilyInvitations = true
+                            } label: {
+                                ZStack {
+                                    Image(systemName: "envelope.fill")
+                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                    if pendingInvitationsCount > 0 {
+                                        Text("\(pendingInvitationsCount)")
+                                            .font(.caption2)
+                                            .foregroundStyle(.white)
+                                            .padding(4)
+                                            .background(Color.red)
+                                            .clipShape(Circle())
+                                            .offset(x: 8, y: -8)
+                                    }
+                                }
+                            }
+                            .accessibilityLabel("Family Invitations (\(pendingInvitationsCount))".localized)
+                      
+                        
+                        if currentFamily != nil {
+                            Button {
+                                showFamilySettings = true
+                            } label: {
+                                Image(systemName: "gearshape")
+                                    .foregroundStyle(Color.Theme.primaryBlue)
+                            }
+                            .accessibilityLabel("Family Settings".localized)
+                        }
                     }
                 }
+                
+                ToolbarItem(placement: .topBarLeading) {
+                    if currentFamily != nil {
+                        Button {
+                            showInviteFamily = true
+                        } label: {
+                            Image(systemName: "person.badge.plus")
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                        }
+                        .accessibilityLabel("Invite a Family Member".localized)
+                    }
+                }
+            }
+            .sheet(isPresented: $showFamilyInvitations) {
+                FamilyInvitationsView()
+                    .onDisappear {
+                        // Refresh when sheet closes to update family view
+                        Task {
+                            // Reload family members
+                            await loadFamilyMembers()
+                            
+                            // If user now has a familyID, load the family from Firestore
+                            if let userID = currentUser?.id,
+                               let familyID = currentUser?.familyID,
+                               let family = families.first(where: { $0.id == familyID }),
+                               let firebaseID = family.firebaseFamilyID {
+                                _ = try? await FirebaseFamilySyncService.shared.loadFamilyFromFirestore(familyID: firebaseID)
+                            }
+                        }
+                    }
+            }
+            .sheet(isPresented: $showFamilySettings) {
+                if let family = currentFamily {
+                    FamilySettingsView(family: family)
+                }
+            }
+            .sheet(isPresented: $showInviteFamily) {
+                InviteToFamilyView(family: currentFamily)
             }
         }
     
@@ -377,13 +532,27 @@ struct StatCard: View {
 
 struct PendingMemberRow: View {
     let member: FamilyMember
+    let onRemove: (() -> Void)?
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var authService: FirebaseAuthService
     @State private var userName: String = "Unknown User".localized
     @State private var inviterName: String = "Unknown User".localized
+    @State private var showRemoveConfirmation = false
+    
+    init(member: FamilyMember, onRemove: (() -> Void)? = nil) {
+        self.member = member
+        self.onRemove = onRemove
+    }
+    
+    var isCaptain: Bool {
+        guard let userID = authService.currentUser?.id,
+              let family = member.family else { return false }
+        return family.members.contains { $0.userID == userID && $0.role == .captain && $0.isActive }
+    }
     
     var body: some View {
         HStack {
-            Image(systemName: "person.circle.dashed")
+            Image(systemName: "person.crop.circle")
                 .font(.title2)
                 .foregroundStyle(Color.orange)
             
@@ -414,8 +583,25 @@ struct PendingMemberRow: View {
             }
             
             Spacer()
+            
+            if isCaptain && onRemove != nil {
+                Button(role: .destructive) {
+                    showRemoveConfirmation = true
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.red)
+                }
+            }
         }
         .padding(.vertical, 4)
+        .alert("Remove Invitation".localized, isPresented: $showRemoveConfirmation) {
+            Button("Cancel".localized, role: .cancel) { }
+            Button("Remove".localized, role: .destructive) {
+                onRemove?()
+            }
+        } message: {
+            Text("Are you sure you want to cancel this invitation?".localized)
+        }
         .task {
             // Fetch member userName
             if let fetchedUserName = await UserLookupHelper.getUserName(for: member.userID, in: modelContext) {
@@ -436,6 +622,8 @@ struct FamilyMemberRow: View {
     let member: FamilyMember
     @Environment(\.modelContext) private var modelContext
     @State private var userName: String
+    @State private var firstName: String?
+    @State private var lastName: String?
     
     init(member: FamilyMember) {
         self.member = member
@@ -445,6 +633,17 @@ struct FamilyMemberRow: View {
         _userName = State(initialValue: "Unknown User".localized)
     }
     
+    var fullName: String {
+        if let firstName = firstName, let lastName = lastName, !firstName.isEmpty, !lastName.isEmpty {
+            return "\(firstName) \(lastName)"
+        } else if let firstName = firstName, !firstName.isEmpty {
+            return firstName
+        } else if let lastName = lastName, !lastName.isEmpty {
+            return lastName
+        }
+        return ""
+    }
+    
     var body: some View {
         HStack {
             Image(systemName: "person.circle.fill")
@@ -452,11 +651,19 @@ struct FamilyMemberRow: View {
                 .foregroundStyle(Color.Theme.primaryBlue)
             
             VStack(alignment: .leading, spacing: 4) {
+                // Show userName as primary
                 Text(userName)
                     .font(.headline)
                 
+                // Show first/last name if available
+                if !fullName.isEmpty {
+                    Text(fullName)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                
                 Text(member.role.displayName)
-                    .font(.subheadline)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
             
@@ -465,12 +672,20 @@ struct FamilyMemberRow: View {
         .padding(.vertical, 4)
         .task {
             // First check local cache synchronously
-            if let cachedUserName = UserLookupHelper.getUserNameSync(for: member.userID, in: modelContext) {
+            if let cachedUser = await UserLookupHelper.getUser(for: member.userID, in: modelContext) {
+                userName = cachedUser.userName
+                firstName = cachedUser.firstName
+                lastName = cachedUser.lastName
+            } else if let cachedUserName = UserLookupHelper.getUserNameSync(for: member.userID, in: modelContext) {
                 userName = cachedUserName
             }
             
             // Then try async lookup (Firestore + cache)
-            if let fetchedUserName = await UserLookupHelper.getUserName(for: member.userID, in: modelContext) {
+            if let fetchedUser = await UserLookupHelper.getUser(for: member.userID, in: modelContext) {
+                userName = fetchedUser.userName
+                firstName = fetchedUser.firstName
+                lastName = fetchedUser.lastName
+            } else if let fetchedUserName = await UserLookupHelper.getUserName(for: member.userID, in: modelContext) {
                 userName = fetchedUserName
             }
         }

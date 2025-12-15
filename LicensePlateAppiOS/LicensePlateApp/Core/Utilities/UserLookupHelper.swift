@@ -74,6 +74,66 @@ enum UserLookupHelper {
         return try? modelContext.fetch(descriptor).first
     }
     
+    /// Get AppUser for a given userID, checking Firestore first (if online), then local cache
+    /// Returns nil if user not found anywhere
+    static func getUser(for userID: String, in modelContext: ModelContext) async -> AppUser? {
+        // Check if online
+        if FirebaseFamilySyncService.shared.isOnline {
+            // Try Firestore first
+            if let user = await fetchUserFromFirestore(userID: userID, modelContext: modelContext) {
+                return user
+            }
+        }
+        
+        // Fall back to local SwiftData
+      return await getUser(for: userID, in: modelContext)
+    }
+    
+    /// Fetch user from Firestore and cache it in SwiftData
+    private static func fetchUserFromFirestore(userID: String, modelContext: ModelContext) async -> AppUser? {
+        do {
+            let docRef = db.collection("users").document(userID)
+            let document = try await docRef.getDocument()
+            
+            guard document.exists, let data = document.data() else {
+                return nil
+            }
+            
+            let userName = data["userName"] as? String ?? ""
+            let firstName = data["firstName"] as? String
+            let lastName = data["lastName"] as? String
+            
+            // Cache in SwiftData
+            let descriptor = FetchDescriptor<AppUser>(predicate: #Predicate<AppUser> {
+                $0.id == userID
+            })
+            
+            if let existingUser = try? modelContext.fetch(descriptor).first {
+                existingUser.userName = userName
+                existingUser.firstName = firstName
+                existingUser.lastName = lastName
+                existingUser.lastUpdated = .now
+            } else {
+                let cachedUser = AppUser(
+                    id: userID,
+                    userName: userName,
+                    firstName: firstName,
+                    lastName: lastName,
+                    createdAt: .now,
+                    lastUpdated: .now
+                )
+                modelContext.insert(cachedUser)
+            }
+            
+            try? modelContext.save()
+            
+          return await getUser(for: userID, in: modelContext)
+        } catch {
+            print("⚠️ Error fetching user from Firestore: \(error)")
+            return nil
+        }
+    }
+    
     // MARK: - Private Firestore Methods
     
     /// Fetch userName from Firestore and cache it in SwiftData

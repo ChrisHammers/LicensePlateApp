@@ -32,6 +32,7 @@ final class Family {
     
     // Share code for inviting members
     var shareCode: String? // For inviting members via share code
+    var showShareCode: Bool = false // Only captains can enable/disable share code visibility
     
     init(
         id: UUID = UUID(),
@@ -44,7 +45,8 @@ final class Family {
         maxScouts: Int = 3,
         firebaseFamilyID: String? = nil,
         needsSync: Bool = false,
-        shareCode: String? = nil
+        shareCode: String? = nil,
+        showShareCode: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -57,6 +59,7 @@ final class Family {
         self.firebaseFamilyID = firebaseFamilyID
         self.needsSync = needsSync
         self.shareCode = shareCode
+        self.showShareCode = showShareCode
     }
     
     /// Generate a share code if one doesn't exist

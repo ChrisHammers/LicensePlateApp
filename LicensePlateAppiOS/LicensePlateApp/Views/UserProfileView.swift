@@ -683,6 +683,7 @@ struct UserProfileView: View {
         let trimmed = currentFirstName.trimmingCharacters(in: .whitespacesAndNewlines)
         user.firstName = trimmed.isEmpty ? nil : trimmed
         user.lastUpdated = .now
+        user.needsSync = true
         try? modelContext.save()
         
         // Sync to Firestore if authenticated
@@ -701,6 +702,7 @@ struct UserProfileView: View {
         let trimmed = currentLastName.trimmingCharacters(in: .whitespacesAndNewlines)
         user.lastName = trimmed.isEmpty ? nil : trimmed
         user.lastUpdated = .now
+        user.needsSync = true
         try? modelContext.save()
         
         // Sync to Firestore if authenticated
@@ -792,6 +794,7 @@ struct UserProfileView: View {
                     // Save to cache
                     UserImageCache.shared.saveImage(imageData, for: firebaseUID)
                     
+                    user.needsSync = true
                     try? modelContext.save()
                     isUploadingImage = false
                 }

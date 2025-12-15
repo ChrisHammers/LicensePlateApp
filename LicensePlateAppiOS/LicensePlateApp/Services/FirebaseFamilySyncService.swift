@@ -7,6 +7,8 @@
 
 import Foundation
 import FirebaseFirestore
+import FirebaseAuth
+import FirebaseFunctions
 import SwiftData
 import Network
 import Combine
@@ -29,7 +31,8 @@ class FirebaseFamilySyncService: ObservableObject {
             Task { @MainActor in
                 self?.isOnline = path.status == .satisfied
                 if path.status == .satisfied {
-                    // Network came back online, sync pending changes
+                    // Network came back online, cleanup orphaned families and sync pending changes
+                    await self?.cleanupOrphanedFamilies()
                     await self?.syncPendingChanges()
                 }
             }
@@ -48,6 +51,36 @@ class FirebaseFamilySyncService: ObservableObject {
     func saveFamilyToFirestore(_ family: Family) async throws {
         guard let modelContext = modelContext else {
             throw SyncError.noModelContext
+        }
+        
+        // DEBUG: Check auth state
+        let authUser = FirebaseAuth.Auth.auth().currentUser
+        if let authUser = authUser {
+            print("🔍 DEBUG - Saving family:")
+            print("   Firebase Auth UID: \(authUser.uid)")
+            print("   Family Firebase ID: \(family.firebaseFamilyID ?? "nil")")
+            print("   Family local ID: \(family.id)")
+            
+            // Check if family exists in Firestore
+            if let firebaseID = family.firebaseFamilyID {
+                let docRef = db.collection("families").document(firebaseID)
+                let doc = try? await docRef.getDocument()
+                print("   Family exists in Firestore: \(doc?.exists ?? false)")
+                
+                // Check if user is a member
+                let memberRef = docRef.collection("members").document(authUser.uid)
+                let memberDoc = try? await memberRef.getDocument()
+                if let memberDoc = memberDoc, memberDoc.exists, let memberData = memberDoc.data() {
+                    let role = memberData["role"] as? String ?? "unknown"
+                    print("   User is member with role: \(role)")
+                } else {
+                    print("   User is NOT a member in Firestore")
+                    print("   This is OK if creating a new family")
+                }
+            }
+        } else {
+            print("❌ ERROR - No authenticated user when saving family!")
+            throw SyncError.offline
         }
         
         // Check if online
@@ -69,7 +102,24 @@ class FirebaseFamilySyncService: ObservableObject {
         
         let docRef = db.collection("families").document(firebaseID)
         let data = firestoreDataFromFamily(family)
-        try await docRef.setData(data, merge: true)
+        
+        // Check if document exists to determine operation type
+        let existingDoc = try? await docRef.getDocument()
+        let documentExists = existingDoc?.exists ?? false
+        
+        print("🔍 DEBUG - Attempting to write family document:")
+        print("   Path: families/\(firebaseID)")
+        print("   Document exists: \(documentExists)")
+        
+        if documentExists {
+            // Document exists - use merge for update
+            print("   Operation: setData with merge: true (UPDATE)")
+            try await docRef.setData(data, merge: true)
+        } else {
+            // Document doesn't exist - use setData without merge for create
+            print("   Operation: setData without merge (CREATE)")
+            try await docRef.setData(data)
+        }
         
         family.needsSync = false
         try? modelContext.save()
@@ -85,6 +135,125 @@ class FirebaseFamilySyncService: ObservableObject {
         }
         
         return try await familyFromFirestoreData(data, firebaseID: familyID)
+    }
+    
+    /// Load only the user's family from Firestore (if they have a familyID)
+    func loadUserFamilyFromFirestore(userID: String, familyID: UUID) async throws -> Family? {
+        guard let modelContext = modelContext else {
+            throw SyncError.noModelContext
+        }
+        
+        // First, try to find the family locally
+        let descriptor = FetchDescriptor<Family>(predicate: #Predicate<Family> {
+            $0.id == familyID
+        })
+        if let localFamily = try? modelContext.fetch(descriptor).first {
+            // If family has a firebaseFamilyID and doesn't need sync, load from Firestore
+            if let firebaseID = localFamily.firebaseFamilyID, !localFamily.needsSync {
+                return try? await loadFamilyFromFirestore(familyID: firebaseID)
+            }
+            return localFamily
+        }
+        
+        // If not found locally, search Firestore by local ID
+        let query = db.collection("families").whereField("localID", isEqualTo: familyID.uuidString).limit(to: 1)
+        let snapshot = try await query.getDocuments()
+        
+        guard let document = snapshot.documents.first else {
+            return nil
+        }
+        
+        let firebaseID = document.documentID
+        return try? await loadFamilyFromFirestore(familyID: firebaseID)
+    }
+    
+    /// Clean up families that don't exist in Firestore
+    func cleanupOrphanedFamilies() async {
+        guard let modelContext = modelContext else { return }
+        guard isOnline else { return }
+        
+        // Get current user's familyID to preserve it
+        let currentUserID = FirebaseAuth.Auth.auth().currentUser?.uid
+        let currentUserDescriptor = FetchDescriptor<AppUser>(predicate: #Predicate<AppUser> {
+            $0.id == currentUserID ?? ""
+        })
+        let currentUser = try? modelContext.fetch(currentUserDescriptor).first
+        let userFamilyID = currentUser?.familyID
+        
+        // Get all families that are synced (don't need sync)
+        let descriptor = FetchDescriptor<Family>(predicate: #Predicate<Family> {
+            $0.needsSync == false
+        })
+        
+        guard let families = try? modelContext.fetch(descriptor) else { return }
+        
+        var deletedCount = 0
+        for family in families {
+            // Only check families that have a firebaseFamilyID
+            guard let firebaseID = family.firebaseFamilyID else { continue }
+            
+            // Skip if this is the user's current family
+            if family.id == userFamilyID {
+                continue
+            }
+            
+            // Check if family exists in Firestore
+            let docRef = db.collection("families").document(firebaseID)
+            if let doc = try? await docRef.getDocument(), !doc.exists {
+                // Family doesn't exist in Firestore, remove it locally
+                print("🗑️ Removing orphaned family: \(family.id) (firebaseID: \(firebaseID))")
+                
+                // Stop listener for this family first
+                stopListeningToFamily(familyID: family.id)
+                
+                // Clear familyID from all users who had this family
+                let familyIDValue = family.id
+                let membersDescriptor = FetchDescriptor<FamilyMember>(predicate: #Predicate<FamilyMember> {
+                    $0.familyID == familyIDValue
+                })
+                if let members = try? modelContext.fetch(membersDescriptor) {
+                    for member in members {
+                        let memberIDValue = member.userID
+                        let userDescriptor = FetchDescriptor<AppUser>(predicate: #Predicate<AppUser> {
+                            $0.id == memberIDValue
+                        })
+                        if let user = try? modelContext.fetch(userDescriptor).first {
+                            user.familyID = nil
+                            user.needsSync = true
+                        }
+                    }
+                }
+                
+                // Delete all members
+                if let members = try? modelContext.fetch(membersDescriptor) {
+                    for member in members {
+                        modelContext.delete(member)
+                    }
+                }
+                
+                // Delete the family
+                modelContext.delete(family)
+                deletedCount += 1
+            }
+        }
+        
+        if deletedCount > 0 {
+            do {
+                try modelContext.save()
+                print("✅ Cleaned up \(deletedCount) orphaned families")
+            } catch {
+                print("❌ Error saving after cleanup: \(error)")
+            }
+        }
+    }
+    
+    /// Stop all family listeners except for the user's current family
+    func stopAllFamilyListenersExcept(userFamilyID: UUID?) {
+        let listenersToStop = familyListeners.keys.filter { $0 != userFamilyID }
+        for familyID in listenersToStop {
+            stopListeningToFamily(familyID: familyID)
+            print("🛑 Stopped listener for family: \(familyID)")
+        }
     }
     
     /// Load Family by local UUID
@@ -147,6 +316,25 @@ class FirebaseFamilySyncService: ObservableObject {
             throw SyncError.noModelContext
         }
         
+        // DEBUG: Check auth state and userID match
+        let authUser = FirebaseAuth.Auth.auth().currentUser
+        if let authUser = authUser {
+            print("🔍 DEBUG - Saving member:")
+            print("   Firebase Auth UID: \(authUser.uid)")
+            print("   Member userID: \(member.userID)")
+            print("   Match: \(member.userID == authUser.uid)")
+            print("   Path: families/\(familyFirebaseID)/members/\(member.userID)")
+            print("   Role: \(member.role.rawValue)")
+            print("   Invitation Status: \(member.invitationStatus.rawValue)")
+            
+            if member.userID != authUser.uid {
+                print("⚠️ WARNING - Member userID doesn't match Firebase Auth UID!")
+                print("   This will cause permission errors in Firestore rules!")
+            }
+        } else {
+            print("❌ ERROR - No authenticated user when saving member!")
+        }
+        
         guard isOnline else {
             // Mark family for sync instead
             if let family = member.family {
@@ -160,6 +348,11 @@ class FirebaseFamilySyncService: ObservableObject {
         let docRef = db.collection("families").document(familyFirebaseID)
             .collection("members").document(member.userID)
         
+        // Check if member document already exists
+        let existingDoc = try? await docRef.getDocument()
+        let documentExists = existingDoc?.exists ?? false
+        print("🔍 DEBUG - Member document exists: \(documentExists)")
+        
       var data: [String: Any] = [
             "id": member.id.uuidString,
             "userID": member.userID,
@@ -170,6 +363,9 @@ class FirebaseFamilySyncService: ObservableObject {
             "invitationStatus": member.invitationStatus.rawValue
         ]
         
+        print("🔍 DEBUG - Saving member with status: \(member.invitationStatus.rawValue), isActive: \(member.isActive)")
+        print("🔍 DEBUG - Member data being saved: invitationStatus=\(data["invitationStatus"] as? String ?? "nil"), isActive=\(data["isActive"] as? Bool ?? false)")
+        
         if let invitedBy = member.invitedBy {
             data["invitedBy"] = invitedBy
         }
@@ -178,7 +374,117 @@ class FirebaseFamilySyncService: ObservableObject {
             data["invitedAt"] = Timestamp(date: invitedAt)
         }
         
-        try await docRef.setData(data, merge: true)
+        print("🔍 DEBUG - Attempting to write member document:")
+        print("   Path: families/\(familyFirebaseID)/members/\(member.userID)")
+        print("   Document exists: \(documentExists)")
+        print("   Final data: invitationStatus=\(data["invitationStatus"] as? String ?? "nil"), isActive=\(data["isActive"] as? Bool ?? false)")
+        
+        if documentExists {
+            // Document exists - use merge for update
+            print("   Operation: setData with merge: true (UPDATE)")
+            try await docRef.setData(data, merge: true)
+        } else {
+            // Document doesn't exist - use setData without merge for create
+            print("   Operation: setData without merge (CREATE)")
+            try await docRef.setData(data)
+        }
+        
+        // Verify what was actually saved
+        if let savedDoc = try? await docRef.getDocument(), let savedData = savedDoc.data() {
+            print("🔍 DEBUG - Verification after save: invitationStatus=\(savedData["invitationStatus"] as? String ?? "nil"), isActive=\(savedData["isActive"] as? Bool ?? false)")
+        }
+        
+        // If this is a pending invitation, add it to the user's document
+        if member.invitationStatus == .pending {
+            await addPendingInvitationToUserDocument(
+                userID: member.userID,
+                familyFirebaseID: familyFirebaseID,
+                role: member.role.rawValue,
+                invitedBy: member.invitedBy,
+                invitedAt: member.invitedAt ?? member.joinedAt
+            )
+        } else if member.invitationStatus == .accepted || member.invitationStatus == .declined {
+            // Remove from user's pending invitations if accepted or declined
+            await removePendingInvitationFromUserDocument(
+                userID: member.userID,
+                familyFirebaseID: familyFirebaseID
+            )
+        }
+    }
+    
+    /// Add a pending invitation to the user's document via Cloud Function
+    private func addPendingInvitationToUserDocument(
+        userID: String,
+        familyFirebaseID: String,
+        role: String,
+        invitedBy: String?,
+        invitedAt: Date
+    ) async {
+        guard isOnline else { return }
+        
+        let functions = Functions.functions()
+        let addInvitation = functions.httpsCallable("addPendingInvitation")
+        
+        // Get current user ID for invitedBy if not provided
+        let invitedByUID = invitedBy ?? FirebaseAuth.Auth.auth().currentUser?.uid ?? ""
+        
+        do {
+            // Convert Date to ISO 8601 string for Cloud Function
+            let dateFormatter = ISO8601DateFormatter()
+            dateFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let invitedAtString = dateFormatter.string(from: invitedAt)
+            
+            let data: [String: Any] = [
+                "invitedUserID": userID,
+                "familyFirebaseID": familyFirebaseID,
+                "role": role,
+                "invitedBy": invitedByUID,
+                "invitedAt": invitedAtString
+            ]
+            
+            let result = try await addInvitation.call(data)
+            print("✅ Added pending invitation via Cloud Function: \(userID)")
+            
+            if let resultData = result.data as? [String: Any],
+               let message = resultData["message"] as? String {
+                print("   Cloud Function response: \(message)")
+            }
+        } catch {
+            print("⚠️ Error adding pending invitation via Cloud Function: \(error)")
+            // Note: The member document is still created, but the user's pendingFamilyInvitations
+            // won't be updated. This is acceptable - the invitation will still work via the
+            // member document, and can be synced later.
+        }
+    }
+    
+    /// Remove a pending invitation from the user's document via Cloud Function
+    func removePendingInvitationFromUserDocument(
+        userID: String,
+        familyFirebaseID: String
+    ) async {
+        guard isOnline else { return }
+        
+        let functions = Functions.functions()
+        let removeInvitation = functions.httpsCallable("removePendingInvitation")
+        
+        do {
+            let data: [String: Any] = [
+                "userID": userID,
+                "familyFirebaseID": familyFirebaseID
+            ]
+            
+            let result = try await removeInvitation.call(data)
+            print("✅ Removed pending invitation via Cloud Function: \(userID)")
+            
+            if let resultData = result.data as? [String: Any],
+               let message = resultData["message"] as? String {
+                print("   Cloud Function response: \(message)")
+            }
+        } catch {
+            print("⚠️ Error removing pending invitation via Cloud Function: \(error)")
+            // Note: The member document is still updated/deleted, but the user's
+            // pendingFamilyInvitations won't be updated. This can be synced later.
+        }
     }
     
     // MARK: - Game Sync
@@ -293,6 +599,7 @@ class FirebaseFamilySyncService: ObservableObject {
         let maxCaptains = data["maxCaptains"] as? Int ?? 2
         let maxScouts = data["maxScouts"] as? Int ?? 3
         let shareCode = data["shareCode"] as? String
+        let showShareCode = data["showShareCode"] as? Bool ?? false
         
         let createdAt: Date
         if let timestamp = data["createdAt"] as? Timestamp {
@@ -319,51 +626,73 @@ class FirebaseFamilySyncService: ObservableObject {
         let descriptor = FetchDescriptor<Family>(predicate: #Predicate<Family> {
             $0.id == localID
         })
-        if let existingFamily = try? modelContext.fetch(descriptor).first {
-            existingFamily.firebaseFamilyID = firebaseID
-            existingFamily.name = name
-            existingFamily.maxCaptains = maxCaptains
-            existingFamily.maxScouts = maxScouts
-            existingFamily.linkedFamilyIDs = linkedFamilyIDs
-            existingFamily.lastUpdated = lastUpdated
-            existingFamily.shareCode = shareCode
-            existingFamily.needsSync = false
-            return existingFamily
+        let existingFamily = try? modelContext.fetch(descriptor).first
+        let family: Family
+        
+        if let existing = existingFamily {
+            // Update existing family properties
+            existing.firebaseFamilyID = firebaseID
+            existing.name = name
+            existing.maxCaptains = maxCaptains
+            existing.maxScouts = maxScouts
+            existing.linkedFamilyIDs = linkedFamilyIDs
+            existing.lastUpdated = lastUpdated
+            existing.shareCode = shareCode
+            existing.showShareCode = showShareCode
+            existing.needsSync = false
+            family = existing
+        } else {
+            // Create new family
+            family = Family(
+                id: localID,
+                name: name,
+                createdAt: createdAt,
+                lastUpdated: lastUpdated,
+                linkedFamilyIDs: linkedFamilyIDs,
+                maxCaptains: maxCaptains,
+                maxScouts: maxScouts,
+                firebaseFamilyID: firebaseID,
+                needsSync: false,
+                shareCode: shareCode,
+                showShareCode: showShareCode
+            )
+            modelContext.insert(family)
         }
-        
-        // Create new family
-        let family = Family(
-            id: localID,
-            name: name,
-            createdAt: createdAt,
-            lastUpdated: lastUpdated,
-            linkedFamilyIDs: linkedFamilyIDs,
-            maxCaptains: maxCaptains,
-            maxScouts: maxScouts,
-            firebaseFamilyID: firebaseID,
-            needsSync: false,
-            shareCode: shareCode
-        )
-        
-        modelContext.insert(family)
         
         // Load members from Firestore subcollection
         let membersRef = db.collection("families").document(firebaseID).collection("members")
         let membersSnapshot = try? await membersRef.getDocuments()
+        
+        // Track all userIDs from Firestore
+        var firestoreMemberUserIDs = Set<String>()
         
         if let membersSnapshot = membersSnapshot {
             for memberDoc in membersSnapshot.documents {
                 let memberData = memberDoc.data()
                 // Document ID is now the userID
                 let userID = memberDoc.documentID
+                firestoreMemberUserIDs.insert(userID)
+                
                 if let member = familyMemberFromFirestoreData(memberData, familyID: localID, userID: userID, modelContext: modelContext) {
-                    // Check if member already exists
-                    let memberID = member.id
+                    // Check if member already exists by userID and familyID (not by id)
+                    let userIDValue = userID
+                    let familyIDValue = localID
                     let memberDescriptor = FetchDescriptor<FamilyMember>(predicate: #Predicate<FamilyMember> {
-                        $0.id == memberID
+                        $0.userID == userIDValue && $0.familyID == familyIDValue
                     })
-                    let existingMember = try? modelContext.fetch(memberDescriptor).first
-                    if existingMember == nil {
+                    
+                    if let existingMember = try? modelContext.fetch(memberDescriptor).first {
+                        // Update existing member with Firestore data (only if needsSync is false)
+                        if !family.needsSync {
+                            existingMember.role = member.role
+                            existingMember.joinedAt = member.joinedAt
+                            existingMember.invitedBy = member.invitedBy
+                            existingMember.isActive = member.isActive
+                            existingMember.invitationStatus = member.invitationStatus
+                            existingMember.invitedAt = member.invitedAt
+                        }
+                    } else {
+                        // Create new member
                         family.members.append(member)
                         modelContext.insert(member)
                     }
@@ -371,6 +700,34 @@ class FirebaseFamilySyncService: ObservableObject {
             }
         }
         
+        // Remove members that no longer exist in Firestore (only when needsSync is false)
+        if !family.needsSync {
+            let familyIDValue = localID
+            let allLocalMembersDescriptor = FetchDescriptor<FamilyMember>(predicate: #Predicate<FamilyMember> {
+                $0.familyID == familyIDValue
+            })
+            if let allLocalMembers = try? modelContext.fetch(allLocalMembersDescriptor) {
+                for localMember in allLocalMembers {
+                    if !firestoreMemberUserIDs.contains(localMember.userID) {
+                        // Member no longer exists in Firestore, remove it
+                        let memberUserID = localMember.userID
+                        family.members.removeAll { $0.id == localMember.id }
+                        modelContext.delete(localMember)
+                        
+                        // Clear the user's familyID
+                        let userDescriptor = FetchDescriptor<AppUser>(predicate: #Predicate<AppUser> {
+                            $0.id == memberUserID
+                        })
+                        if let user = try? modelContext.fetch(userDescriptor).first {
+                            user.familyID = nil
+                            user.needsSync = true
+                        }
+                    }
+                }
+            }
+        }
+        
+        try? modelContext.save()
         return family
     }
     
@@ -459,7 +816,7 @@ class FirebaseFamilySyncService: ObservableObject {
     }
     
     /// Query pending family invitations for a user from Firestore
-    /// Uses collection group query to find all member documents where userID matches
+    /// Load pending invitations from the user's document
     func loadPendingInvitationsForUser(userID: String) async throws -> [FamilyMember] {
         guard let modelContext = modelContext else {
             throw SyncError.noModelContext
@@ -475,24 +832,25 @@ class FirebaseFamilySyncService: ObservableObject {
             return allUserMembers.filter { $0.invitationStatus == .pending }
         }
         
-        // Use collection group query to find all member documents for this user
-        // This searches across all families/families/{familyId}/members/{userID}
-        let membersQuery = db.collectionGroup("members")
-            .whereField("userID", isEqualTo: userID)
-            .whereField("invitationStatus", isEqualTo: "pending")
+        // Read pending invitations from user document
+        let userRef = db.collection("users").document(userID)
+        let userDoc = try await userRef.getDocument()
         
-        let snapshot = try await membersQuery.getDocuments()
+        guard let data = userDoc.data(),
+              let pendingInvitationsData = data["pendingFamilyInvitations"] as? [[String: Any]] else {
+            // No pending invitations
+            return []
+        }
+        
         var pendingMembers: [FamilyMember] = []
         
-        for document in snapshot.documents {
-            let memberData = document.data()
-            
-            // Extract familyID from the document path: families/{familyID}/members/{userID}
-            let pathParts = document.reference.path.split(separator: "/")
-            guard pathParts.count >= 4, pathParts[0] == "families", pathParts[2] == "members" else {
+        // Process each pending invitation
+        for invitationData in pendingInvitationsData {
+            guard let familyFirebaseID = invitationData["familyFirebaseID"] as? String,
+                  let roleString = invitationData["role"] as? String,
+                  let role = FamilyMember.FamilyRole(rawValue: roleString) else {
                 continue
             }
-            let familyFirebaseID = String(pathParts[1])
             
             // Get family localID from Firestore
             let familyDoc = try? await db.collection("families").document(familyFirebaseID).getDocument()
@@ -502,28 +860,55 @@ class FirebaseFamilySyncService: ObservableObject {
                 continue
             }
             
-            // Create FamilyMember from Firestore data
-            // Document ID is now the userID
-            let documentUserID = document.documentID
-            if let member = familyMemberFromFirestoreData(memberData, familyID: familyLocalID, userID: documentUserID, modelContext: modelContext) {
-                pendingMembers.append(member)
-                
-                // Ensure it's saved locally
-                let userIDValue = documentUserID
-                let familyIDValue = familyLocalID
-                let descriptor = FetchDescriptor<FamilyMember>(predicate: #Predicate<FamilyMember> {
-                    $0.userID == userIDValue && $0.familyID == familyIDValue
-                })
-                let existingMember = try? modelContext.fetch(descriptor).first
-                if existingMember == nil {
-                    modelContext.insert(member)
-                    // Also need to associate with family
-                    if let family = try? modelContext.fetch(FetchDescriptor<Family>(predicate: #Predicate<Family> {
-                        $0.id == familyLocalID
-                    })).first {
-                        family.members.append(member)
-                    }
+            // Get invitedAt date
+            let invitedAt: Date
+            if let timestamp = invitationData["invitedAt"] as? Timestamp {
+                invitedAt = timestamp.dateValue()
+            } else {
+                invitedAt = .now
+            }
+            
+            let invitedBy = invitationData["invitedBy"] as? String
+            
+            // Check if member already exists locally
+            let userIDValue = userID
+            let familyIDValue = familyLocalID
+            let descriptor = FetchDescriptor<FamilyMember>(predicate: #Predicate<FamilyMember> {
+                $0.userID == userIDValue && $0.familyID == familyIDValue
+            })
+            
+            if let existingMember = try? modelContext.fetch(descriptor).first {
+                // Update existing member if needed
+                if existingMember.invitationStatus != .pending {
+                    existingMember.invitationStatus = .pending
+                    existingMember.invitedAt = invitedAt
+                    existingMember.invitedBy = invitedBy
+                    existingMember.isActive = false
                 }
+                pendingMembers.append(existingMember)
+            } else {
+                // Create new member
+                let member = FamilyMember(
+                    userID: userID,
+                    familyID: familyLocalID,
+                    role: role,
+                    joinedAt: invitedAt,
+                    invitedBy: invitedBy,
+                    isActive: false,
+                    invitationStatus: .pending,
+                    invitedAt: invitedAt
+                )
+                
+                modelContext.insert(member)
+                
+                // Associate with family
+                if let family = try? modelContext.fetch(FetchDescriptor<Family>(predicate: #Predicate<Family> {
+                    $0.id == familyLocalID
+                })).first {
+                    family.members.append(member)
+                }
+                
+                pendingMembers.append(member)
             }
         }
         
@@ -655,6 +1040,9 @@ class FirebaseFamilySyncService: ObservableObject {
         guard let modelContext = modelContext else { return }
         guard isOnline else { return }
         
+        // Clean up orphaned families first (families that don't exist in Firestore)
+        await cleanupOrphanedFamilies()
+        
         // Sync families that need sync
         let familyDescriptor = FetchDescriptor<Family>(predicate: #Predicate<Family> {
             $0.needsSync == true
@@ -662,7 +1050,26 @@ class FirebaseFamilySyncService: ObservableObject {
         if let families = try? modelContext.fetch(familyDescriptor) {
             for family in families {
                 do {
-                    try await saveFamilyToFirestore(family)
+                    // If family already exists in Firestore, load it instead of writing
+                    if let firebaseID = family.firebaseFamilyID {
+                        let docRef = db.collection("families").document(firebaseID)
+                        let doc = try? await docRef.getDocument()
+                        
+                        if doc?.exists == true {
+                            // Family exists in Firestore - load it instead of writing
+                            print("🔍 Family \(family.id) exists in Firestore, loading instead of writing")
+                            _ = try? await loadFamilyFromFirestore(familyID: firebaseID)
+                            // After loading, needsSync should be set to false by loadFamilyFromFirestore
+                        } else {
+                            // Family doesn't exist - write it (will create new)
+                            print("🔍 Family \(family.id) doesn't exist in Firestore, creating it")
+                            try await saveFamilyToFirestore(family)
+                        }
+                    } else {
+                        // No Firebase ID yet - write it (will create new and assign Firebase ID)
+                        print("🔍 Family \(family.id) has no Firebase ID, creating it")
+                        try await saveFamilyToFirestore(family)
+                    }
                 } catch {
                     print("Error syncing pending family \(family.id): \(error)")
                 }
@@ -969,6 +1376,7 @@ class FirebaseFamilySyncService: ObservableObject {
                                 existingMember.isActive = member.isActive
                                 existingMember.invitationStatus = member.invitationStatus
                                 existingMember.invitedAt = member.invitedAt
+                                print("🔄 Updated member \(userID) in family \(familyID) via real-time listener")
                             } else {
                                 // Insert new member
                                 modelContext.insert(member)
@@ -978,6 +1386,7 @@ class FirebaseFamilySyncService: ObservableObject {
                                 })).first {
                                     family.members.append(member)
                                 }
+                                print("➕ Added member \(userID) to family \(familyID) via real-time listener")
                             }
                             
                             try? modelContext.save()
@@ -992,14 +1401,27 @@ class FirebaseFamilySyncService: ObservableObject {
                         })
                         
                         if let memberToRemove = try? modelContext.fetch(descriptor).first {
-                            memberToRemove.isActive = false
-                            // Optionally remove from family relationship
+                            // Remove from family relationship
                             if let family = try? modelContext.fetch(FetchDescriptor<Family>(predicate: #Predicate<Family> {
                                 $0.id == familyID
                             })).first {
                                 family.members.removeAll { $0.id == memberToRemove.id }
                             }
+                            
+                            // Delete the member from local data
+                            modelContext.delete(memberToRemove)
+                            
+                            // Clear the user's familyID if this is the current user's member record
+                            let userDescriptor = FetchDescriptor<AppUser>(predicate: #Predicate<AppUser> {
+                                $0.id == userIDValue
+                            })
+                            if let user = try? modelContext.fetch(userDescriptor).first {
+                                user.familyID = nil
+                                user.needsSync = true
+                            }
+                            
                             try? modelContext.save()
+                            print("🗑️ Removed member \(userID) from family \(familyID) via real-time listener")
                         }
                     }
                 }
@@ -1020,6 +1442,68 @@ class FirebaseFamilySyncService: ObservableObject {
             listener.remove()
             familyListeners.removeValue(forKey: familyID)
         }
+    }
+    
+    /// Delete a family from Firestore
+    func deleteFamilyFromFirestore(familyFirebaseID: String) async throws {
+        guard isOnline else {
+            throw SyncError.offline
+        }
+        
+        let familyRef = db.collection("families").document(familyFirebaseID)
+        
+        // Delete all members first
+        let membersRef = familyRef.collection("members")
+        let membersSnapshot = try await membersRef.getDocuments()
+        
+        for document in membersSnapshot.documents {
+            try await document.reference.delete()
+        }
+        
+        // Delete the family document
+        try await familyRef.delete()
+        
+        print("✅ Deleted family from Firestore: \(familyFirebaseID)")
+    }
+    
+    /// Remove a pending invitation (cancel invitation)
+    func removePendingInvitation(userID: String, familyFirebaseID: String) async throws {
+        guard let modelContext = modelContext else {
+            throw SyncError.noModelContext
+        }
+        
+        guard isOnline else {
+            throw SyncError.offline
+        }
+        
+        // Remove from user's pendingFamilyInvitations
+        await removePendingInvitationFromUserDocument(userID: userID, familyFirebaseID: familyFirebaseID)
+        
+        // Delete the member document from Firestore
+        let memberRef = db.collection("families").document(familyFirebaseID)
+            .collection("members").document(userID)
+        try await memberRef.delete()
+        
+        // Remove from local data
+        let userIDValue = userID
+        let familyFirebaseIDValue = familyFirebaseID
+        let familyDescriptor = FetchDescriptor<Family>(predicate: #Predicate<Family> {
+            $0.firebaseFamilyID == familyFirebaseIDValue
+        })
+        if let family = try? modelContext.fetch(familyDescriptor).first {
+            // Capture family.id in a local constant for use in predicate
+            let familyIDValue = family.id
+            let memberDescriptor = FetchDescriptor<FamilyMember>(predicate: #Predicate<FamilyMember> {
+                $0.userID == userIDValue && $0.familyID == familyIDValue
+            })
+            if let member = try? modelContext.fetch(memberDescriptor).first {
+                family.members.removeAll { $0.id == member.id }
+                modelContext.delete(member)
+                try? modelContext.save()
+            }
+        }
+        
+        print("✅ Removed pending invitation for user: \(userID) from family: \(familyFirebaseID)")
     }
     
     /// Stop all family listeners

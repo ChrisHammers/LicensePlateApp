@@ -131,6 +131,8 @@ struct FriendRequestManagementView: View {
             Task {
                 do {
                     try await FirebaseFamilySyncService.shared.saveFriendRequestToFirestore(request)
+                    fromUser.needsSync = true
+                    toUser.needsSync = true
                     try await authService.saveUserDataToFirestore(fromUser)
                     try await authService.saveUserDataToFirestore(toUser)
                 } catch {

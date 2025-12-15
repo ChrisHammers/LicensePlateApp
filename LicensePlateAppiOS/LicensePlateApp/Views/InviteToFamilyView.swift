@@ -7,6 +7,8 @@
 
 import SwiftUI
 import SwiftData
+import FirebaseFirestore
+import FirebaseAuth
 
 struct UserSearchResult: Identifiable, Hashable {
     let id: String // userID
@@ -24,7 +26,7 @@ struct InviteToFamilyView: View {
     
     @State private var selectedRole: FamilyMember.FamilyRole = .sergeant
     @State private var invitationMethod: InvitationMethod = .shareCode
-    @State private var shareCode: String = ""
+    @State private var enteredShareCode: String = "" // For joining with share code
     @State private var searchText: String = ""
     @State private var showRoleSelection = true
     
@@ -46,6 +48,21 @@ struct InviteToFamilyView: View {
     
     var isCreatingNewFamily: Bool {
         family == nil
+    }
+    
+    /// Check if current user is a captain of the family
+    var isCaptain: Bool {
+        guard let userID = currentUser?.id,
+              let family = family else {
+            // If creating new family, user will be captain
+            return isCreatingNewFamily
+        }
+        return family.members.contains { member in
+            member.userID == userID && 
+            member.role == .captain && 
+            member.isActive &&
+            member.invitationStatus == .accepted
+        }
     }
     
     var body: some View {
@@ -101,14 +118,24 @@ struct InviteToFamilyView: View {
                     
                     // Invitation Method (only show when joining or inviting to existing family)
                     if !isCreatingNewFamily {
-                        Section("Invitation Method".localized) {
-                            Picker("Method".localized, selection: $invitationMethod) {
-                                Text("Share Code".localized).tag(InvitationMethod.shareCode)
-                                Text("Search User".localized).tag(InvitationMethod.inAppSearch)
+                        if isCaptain {
+                            Section("Invitation Method".localized) {
+                                Picker("Method".localized, selection: $invitationMethod) {
+                                    Text("Share Code".localized).tag(InvitationMethod.shareCode)
+                                    Text("Search User".localized).tag(InvitationMethod.inAppSearch)
+                                }
+                                .pickerStyle(.segmented)
                             }
-                            .pickerStyle(.segmented)
+                            .textCase(nil)
+                        } else {
+                            // Show message if not captain
+                            Section {
+                                Text("Only captains can invite members to the family.".localized)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .textCase(nil)
                         }
-                        .textCase(nil)
                     } else {
                         // When creating, show join options
                         Section("Or Join Existing Family".localized) {
@@ -121,62 +148,84 @@ struct InviteToFamilyView: View {
                         .textCase(nil)
                     }
                     
-                    // Share Code Method
+                    // Share Code Method (only show if captain has enabled it)
                     if invitationMethod == .shareCode {
                         Section {
                             if let family = family {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Family Share Code".localized)
-                                        .font(.headline)
-                                    
-                                    if shareCode.isEmpty {
-                                        Button {
-                                            generateShareCode()
-                                        } label: {
-                                            Text("Generate Share Code".localized)
-                                        }
-                                    } else {
-                                        HStack {
-                                            Text(shareCode)
-                                                .font(.title2)
-                                                .fontWeight(.bold)
-                                                .fontDesign(.monospaced)
-                                            
-                                            Button {
-                                                UIPasteboard.general.string = shareCode
-                                            } label: {
-                                                Image(systemName: "doc.on.doc")
+                                if family.showShareCode && isCaptain {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Family Share Code".localized)
+                                            .font(.headline)
+                                        
+                                        if let familyShareCode = family.shareCode, !familyShareCode.isEmpty {
+                                            HStack {
+                                                Text(familyShareCode)
+                                                    .font(.title2)
+                                                    .fontWeight(.bold)
+                                                    .fontDesign(.monospaced)
+                                                
+                                                Button {
+                                                    UIPasteboard.general.string = familyShareCode
+                                                } label: {
+                                                    Image(systemName: "doc.on.doc")
+                                                }
+                                                
+                                                Button {
+                                                    regenerateShareCode()
+                                                } label: {
+                                                    Image(systemName: "arrow.clockwise")
+                                                }
                                             }
+                                            
+                                            Text("Share this code with others to invite them to your family.".localized)
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
                                             
                                             Button {
                                                 regenerateShareCode()
                                             } label: {
-                                                Image(systemName: "arrow.clockwise")
+                                                HStack {
+                                                    Image(systemName: "arrow.clockwise")
+                                                    Text("Regenerate Code".localized)
+                                                }
+                                                .font(.subheadline)
+                                            }
+                                            .foregroundStyle(.blue)
+                                        } else {
+                                            Button {
+                                                family.generateShareCodeIfNeeded()
+                                                family.showShareCode = true
+                                                family.lastUpdated = .now
+                                                family.needsSync = true
+                                                
+                                                // Sync to Firebase
+                                                Task {
+                                                    do {
+                                                        try await FirebaseFamilySyncService.shared.saveFamilyToFirestore(family)
+                                                    } catch {
+                                                        print("Error syncing share code: \(error)")
+                                                    }
+                                                }
+                                            } label: {
+                                                Text("Generate Share Code".localized)
                                             }
                                         }
-                                        
-                                        Text("Share this code with others to invite them to your family.".localized)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                        
-                                        Button {
-                                            regenerateShareCode()
-                                        } label: {
-                                            HStack {
-                                                Image(systemName: "arrow.clockwise")
-                                                Text("Regenerate Code".localized)
-                                            }
-                                            .font(.subheadline)
-                                        }
-                                        .foregroundStyle(.blue)
                                     }
+                                } else if !isCaptain {
+                                    Text("Only captains can view and manage the share code.".localized)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    Text("Share code is currently disabled. Enable it in family settings.".localized)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
                                 }
                             } else {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("Enter Share Code".localized)
                                         .font(.headline)
                                     
-                                    TextField("Enter code".localized, text: $shareCode)
+                                    TextField("Enter code".localized, text: $enteredShareCode)
                                         .textInputAutocapitalization(.never)
                                         .autocorrectionDisabled()
                                     
@@ -185,15 +234,15 @@ struct InviteToFamilyView: View {
                                     } label: {
                                         Text("Join Family".localized)
                                     }
-                                    .disabled(shareCode.isEmpty)
+                                    .disabled(enteredShareCode.isEmpty)
                                 }
                             }
                         }
                         .textCase(nil)
                     }
                     
-                    // In-App Search Method
-                    if invitationMethod == .inAppSearch {
+                    // In-App Search Method (only show if captain or creating new family)
+                    if invitationMethod == .inAppSearch && (isCaptain || isCreatingNewFamily) {
                         Section {
                             TextField("Search by username, email, or phone".localized, text: $searchText)
                                 .textInputAutocapitalization(.never)
@@ -289,6 +338,7 @@ struct InviteToFamilyView: View {
                                     .frame(maxWidth: .infinity)
                                 }
                                 .buttonStyle(.borderedProminent)
+                                .disabled(!isCaptain)
                                 .padding(.top, 8)
                             }
                         }
@@ -310,7 +360,7 @@ struct InviteToFamilyView: View {
                 .onAppear {
                     // Load share code from family if it exists
                     if let family = family, let code = family.shareCode {
-                        shareCode = code
+                      enteredShareCode = code
                     }
                 }
                 .onChange(of: invitationMethod) { oldValue, newValue in
@@ -347,7 +397,7 @@ struct InviteToFamilyView: View {
         guard let family = family else { return }
         
         family.generateShareCodeIfNeeded()
-        shareCode = family.shareCode ?? ""
+      enteredShareCode = family.shareCode ?? ""
         family.lastUpdated = .now
         family.needsSync = true
         
@@ -371,7 +421,7 @@ struct InviteToFamilyView: View {
         guard let family = family else { return }
         
         family.regenerateShareCode()
-        shareCode = family.shareCode ?? ""
+      enteredShareCoded = family.shareCode ?? ""
         family.lastUpdated = .now
         family.needsSync = true
         
@@ -393,18 +443,18 @@ struct InviteToFamilyView: View {
     
     private func joinFamilyWithCode() {
         guard let userID = currentUser?.id,
-              !shareCode.isEmpty else {
+              !enteredShareCode.isEmpty else {
             return
         }
         
         Task {
             do {
                 // Search for family by share code
-                guard let foundFamily = try await FirebaseFamilySyncService.shared.loadFamilyByShareCode(shareCode) else {
+                guard let foundFamily = try await FirebaseFamilySyncService.shared.loadFamilyByShareCode(enteredShareCode) else {
                     // Show error - family not found
                     await MainActor.run {
                         // TODO: Show error alert
-                        print("Family not found with share code: \(shareCode)")
+                        print("Family not found with share code: \(enteredShareCode)")
                     }
                     return
                 }
@@ -427,7 +477,9 @@ struct InviteToFamilyView: View {
                         role: selectedRole,
                         joinedAt: .now,
                         invitedBy: nil,
-                        isActive: true
+                        isActive: true,
+                        invitationStatus: .accepted, // Joining via share code is automatically accepted
+                        invitedAt: nil
                     )
                     
                     foundFamily.members.append(newMember)
@@ -450,6 +502,7 @@ struct InviteToFamilyView: View {
                                 try await FirebaseFamilySyncService.shared.saveFamilyToFirestore(foundFamily)
                                 try await FirebaseFamilySyncService.shared.saveFamilyMemberToFirestore(newMember, familyFirebaseID: foundFamily.firebaseFamilyID ?? "")
                                 if let user = currentUser {
+                                    user.needsSync = true
                                     try await authService.saveUserDataToFirestore(user)
                                 }
                             } catch {
@@ -489,9 +542,34 @@ struct InviteToFamilyView: View {
             do {
                 let results = try await FirebaseFamilySyncService.shared.searchUsers(query: searchText)
                 
-                // Filter out current user and existing members
-                let filteredResults = results.filter { result in
+                // Filter out current user and existing members (local check)
+                var filteredResults = results.filter { result in
                     result.id != currentUser?.id && !isUserAlreadyMember(result.id)
+                }
+                
+                // Also check Firestore for pending invitations if we have a family
+                if let family = family, let firebaseFamilyID = family.firebaseFamilyID {
+                    var resultsToRemove: [String] = []
+                    await withTaskGroup(of: (String, Bool).self) { group in
+                        for result in filteredResults {
+                            group.addTask {
+                                let hasPending = await self.hasPendingInvitationInFirestore(
+                                    userID: result.id,
+                                    familyFirebaseID: firebaseFamilyID
+                                )
+                                return (result.id, hasPending)
+                            }
+                        }
+                        
+                        for await (userID, hasPending) in group {
+                            if hasPending {
+                                resultsToRemove.append(userID)
+                            }
+                        }
+                    }
+                    
+                    // Remove users with pending invitations
+                    filteredResults.removeAll { resultsToRemove.contains($0.id) }
                 }
                 
                 await MainActor.run {
@@ -525,10 +603,38 @@ struct InviteToFamilyView: View {
         return false
     }
     
+    /// Check if user has pending invitation in Firestore (async)
+    private func hasPendingInvitationInFirestore(userID: String, familyFirebaseID: String) async -> Bool {
+        do {
+            let db = Firestore.firestore()
+            let memberRef = db.collection("families")
+                .document(familyFirebaseID)
+                .collection("members")
+                .document(userID)
+            
+            let document = try await memberRef.getDocument()
+            if document.exists,
+               let data = document.data(),
+               let statusString = data["invitationStatus"] as? String,
+               statusString == "pending" {
+                return true
+            }
+        } catch {
+            print("Error checking Firestore for pending invitation: \(error)")
+        }
+        return false
+    }
+    
     private func sendInvites() {
         guard let family = family,
               let currentUserID = currentUser?.id,
               !selectedUserIDs.isEmpty else {
+            return
+        }
+        
+        // Only captains can send invites
+        guard isCaptain else {
+            searchError = "Only captains can invite members to the family.".localized
             return
         }
         
@@ -636,6 +742,15 @@ struct InviteToFamilyView: View {
             return
         }
         
+        // DEBUG: Print user ID values
+        let firebaseAuthUID = FirebaseAuth.Auth.auth().currentUser?.uid
+        let idsMatch = firebaseAuthUID != nil && userID == firebaseAuthUID
+        print("🔍 DEBUG - Creating family:")
+        print("   AppUser.id: \(userID)")
+        print("   AppUser.firebaseUID: \(currentUser?.firebaseUID ?? "nil")")
+        print("   Firebase Auth UID: \(firebaseAuthUID ?? "nil")")
+        print("   Match: \(idsMatch)")
+        
         // Create new family
         let newFamily = Family(
             name: nil, // Can be set later
@@ -653,7 +768,9 @@ struct InviteToFamilyView: View {
             role: .captain,
             joinedAt: .now,
             invitedBy: nil,
-            isActive: true
+            isActive: true,
+            invitationStatus: .accepted, // Creator is automatically accepted
+            invitedAt: nil
         )
         
         newFamily.members.append(captainMember)
@@ -678,6 +795,7 @@ struct InviteToFamilyView: View {
                     try await FirebaseFamilySyncService.shared.saveFamilyToFirestore(newFamily)
                     try await FirebaseFamilySyncService.shared.saveFamilyMemberToFirestore(captainMember, familyFirebaseID: newFamily.firebaseFamilyID ?? "")
                     if let user = currentUser {
+                        user.needsSync = true
                         try await authService.saveUserDataToFirestore(user)
                     }
                 } catch {

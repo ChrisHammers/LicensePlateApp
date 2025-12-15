@@ -145,6 +145,16 @@ struct ContentView: View {
                   // Fix any corrupted FamilyMember records before any views try to access them
                   // This must run before FamilyHubView is presented to prevent crashes
                   FamilyMemberMigrationHelper.fixInvalidInvitationStatus(in: modelContext)
+                  
+                  // Stop all family listeners first (will restart only user's family in FamilyHubView)
+                  if let userFamilyID = authService.currentUser?.familyID {
+                    FirebaseFamilySyncService.shared.stopAllFamilyListenersExcept(userFamilyID: userFamilyID)
+                  } else {
+                    FirebaseFamilySyncService.shared.stopAllFamilyListenersExcept(userFamilyID: nil)
+                  }
+                  
+                  // Clean up orphaned families (families that don't exist in Firestore)
+                  await FirebaseFamilySyncService.shared.cleanupOrphanedFamilies()
                 }
                 .overlay {
                   if authService.showUsernameConflictDialog {
