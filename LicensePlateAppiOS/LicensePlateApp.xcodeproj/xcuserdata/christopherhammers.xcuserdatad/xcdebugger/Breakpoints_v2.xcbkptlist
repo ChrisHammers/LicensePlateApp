@@ -64,7 +64,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "223"
             endingLineNumber = "223"
-            landmarkName = "signIn(email:password:)"
+            landmarkName = "isUsernameTakenLocally(_:excludingUserId:)"
             landmarkType = "7">
             <Locations>
                <Location
@@ -138,7 +138,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "871"
             endingLineNumber = "871"
-            landmarkName = "linkAppleAccount()"
+            landmarkName = "linkPlatformCredential(_:platform:email:displayName:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -154,7 +154,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "809"
             endingLineNumber = "809"
-            landmarkName = "signInWithApple()"
+            landmarkName = "unlinkPlatform(_:)"
             landmarkType = "7">
             <Locations>
                <Location
@@ -214,7 +214,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "806"
             endingLineNumber = "806"
-            landmarkName = "signInWithApple()"
+            landmarkName = "unlinkPlatform(_:)"
             landmarkType = "7">
             <Locations>
                <Location
@@ -316,7 +316,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "804"
             endingLineNumber = "804"
-            landmarkName = "signInWithApple()"
+            landmarkName = "unlinkPlatform(_:)"
             landmarkType = "7">
             <Locations>
                <Location
@@ -376,7 +376,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "724"
             endingLineNumber = "724"
-            landmarkName = "linkGoogleAccount(presentingViewController:)"
+            landmarkName = "linkMicrosoftAccount(presentingViewController:)"
             landmarkType = "7">
             <Locations>
                <Location
@@ -450,7 +450,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "711"
             endingLineNumber = "711"
-            landmarkName = "linkGoogleAccount(presentingViewController:)"
+            landmarkName = "linkMicrosoftAccount(presentingViewController:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -466,8 +466,8 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "700"
             endingLineNumber = "700"
-            landmarkName = "FirebaseAuthService"
-            landmarkType = "3">
+            landmarkName = "linkMicrosoftAccount(presentingViewController:)"
+            landmarkType = "7">
             <Locations>
                <Location
                   uuid = "8EB086BD-1B96-40F8-92A6-6783F488B75A - 1967def926b4cebe"
@@ -554,7 +554,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "687"
             endingLineNumber = "687"
-            landmarkName = "signInWithGoogle(presentingViewController:)"
+            landmarkName = "linkMicrosoftAccount(presentingViewController:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -570,7 +570,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "676"
             endingLineNumber = "676"
-            landmarkName = "signInWithGoogle(presentingViewController:)"
+            landmarkName = "linkAppleAccount()"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -586,7 +586,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "660"
             endingLineNumber = "660"
-            landmarkName = "signInWithGoogle(presentingViewController:)"
+            landmarkName = "linkAppleAccount()"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -602,7 +602,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "636"
             endingLineNumber = "636"
-            landmarkName = "signInWithGoogle(presentingViewController:)"
+            landmarkName = "linkAppleAccount()"
             landmarkType = "7">
             <Locations>
                <Location
@@ -676,8 +676,8 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "625"
             endingLineNumber = "625"
-            landmarkName = "FirebaseAuthService"
-            landmarkType = "3">
+            landmarkName = "linkAppleAccount()"
+            landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
@@ -692,7 +692,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "618"
             endingLineNumber = "618"
-            landmarkName = "randomNonceString(length:)"
+            landmarkName = "linkAppleAccount()"
             landmarkType = "7">
             <Locations>
                <Location
@@ -766,7 +766,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "601"
             endingLineNumber = "601"
-            landmarkName = "randomNonceString(length:)"
+            landmarkName = "linkGoogleAccount(presentingViewController:)"
             landmarkType = "7">
             <Locations>
                <Location
@@ -812,7 +812,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "320"
             endingLineNumber = "320"
-            landmarkName = "createAccount(email:password:userName:)"
+            landmarkName = "signIn(email:password:)"
             landmarkType = "7">
             <Locations>
                <Location
@@ -942,7 +942,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "317"
             endingLineNumber = "317"
-            landmarkName = "createAccount(email:password:userName:)"
+            landmarkName = "signIn(email:password:)"
             landmarkType = "7">
             <Locations>
                <Location
@@ -1016,7 +1016,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "240"
             endingLineNumber = "240"
-            landmarkName = "signIn(email:password:)"
+            landmarkName = "isUsernameTakenLocally(_:excludingUserId:)"
             landmarkType = "7">
             <Locations>
                <Location
@@ -1104,7 +1104,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "237"
             endingLineNumber = "237"
-            landmarkName = "signIn(email:password:)"
+            landmarkName = "isUsernameTakenLocally(_:excludingUserId:)"
             landmarkType = "7">
             <Locations>
                <Location
@@ -1150,7 +1150,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "216"
             endingLineNumber = "216"
-            landmarkName = "signIn(email:password:)"
+            landmarkName = "signInAnonymously()"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -1166,8 +1166,8 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "175"
             endingLineNumber = "175"
-            landmarkName = "isUsernameTaken(_:)"
-            landmarkType = "7">
+            landmarkName = "FirebaseAuthService"
+            landmarkType = "3">
             <Locations>
                <Location
                   uuid = "18EE0C57-2391-4A89-AD0A-21EED93868DF - 6bff93dbb3684bce"
@@ -1240,7 +1240,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "256"
             endingLineNumber = "256"
-            landmarkName = "createAccount(email:password:userName:)"
+            landmarkName = "isUsernameTaken(_:excludingUserId:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -1256,7 +1256,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "176"
             endingLineNumber = "176"
-            landmarkName = "isUsernameTaken(_:)"
+            landmarkName = "signInAnonymously()"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -1272,7 +1272,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "251"
             endingLineNumber = "251"
-            landmarkName = "createAccount(email:password:userName:)"
+            landmarkName = "isUsernameTaken(_:excludingUserId:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -1288,7 +1288,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "261"
             endingLineNumber = "261"
-            landmarkName = "createAccount(email:password:userName:)"
+            landmarkName = "isUsernameTaken(_:excludingUserId:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -1304,7 +1304,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "254"
             endingLineNumber = "254"
-            landmarkName = "createAccount(email:password:userName:)"
+            landmarkName = "isUsernameTaken(_:excludingUserId:)"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
@@ -1320,8 +1320,8 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "283"
             endingLineNumber = "283"
-            landmarkName = "createAccount(email:password:userName:)"
-            landmarkType = "7">
+            landmarkName = "isTrulyAuthenticated"
+            landmarkType = "24">
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
@@ -1336,7 +1336,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "313"
             endingLineNumber = "313"
-            landmarkName = "createAccount(email:password:userName:)"
+            landmarkName = "signIn(email:password:)"
             landmarkType = "7">
             <Locations>
                <Location
@@ -1410,7 +1410,7 @@
             endingColumnNumber = "9223372036854775807"
             startingLineNumber = "315"
             endingLineNumber = "315"
-            landmarkName = "createAccount(email:password:userName:)"
+            landmarkName = "signIn(email:password:)"
             landmarkType = "7">
             <Locations>
                <Location

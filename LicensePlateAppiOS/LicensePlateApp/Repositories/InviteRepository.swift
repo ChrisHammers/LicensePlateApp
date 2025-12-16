@@ -14,7 +14,7 @@ import Combine
 class InviteRepository: ObservableObject {
     private let db = Firestore.firestore()
     private var modelContext: ModelContext?
-    private var listeners: [ListenerRegistration] = []
+    nonisolated(unsafe) private var listeners: [ListenerRegistration] = []
     
     @Published var invites: [Invite] = []
     @Published var isLoading = false
@@ -76,8 +76,11 @@ class InviteRepository: ObservableObject {
                 updatedInvites.append(invite)
                 
                 // Sync to SwiftData
+                let searchInviteId = invite.inviteId
                 let descriptor = FetchDescriptor<Invite>(
-                    predicate: #Predicate<Invite> { $0.inviteId == invite.inviteId }
+                    predicate: #Predicate<Invite> { i in
+                        i.inviteId == searchInviteId
+                    }
                 )
                 
                 if let existing = try? modelContext.fetch(descriptor).first {
@@ -100,8 +103,11 @@ class InviteRepository: ObservableObject {
         }
         
         // Merge all invites
+        let searchUserId = userId
         let descriptor = FetchDescriptor<Invite>(
-            predicate: #Predicate<Invite> { $0.fromUserId == userId || $0.toUserId == userId }
+            predicate: #Predicate<Invite> { invite in
+                invite.fromUserId == searchUserId || invite.toUserId == searchUserId
+            }
         )
         
         if let allInvites = try? modelContext.fetch(descriptor) {
@@ -112,8 +118,10 @@ class InviteRepository: ObservableObject {
     }
     
     /// Stop listening to Firestore updates
-    func stopListening() {
-        listeners.forEach { $0.remove() }
+    nonisolated func stopListening() {
+        for listener in listeners {
+            listener.remove()
+        }
         listeners.removeAll()
     }
     
@@ -134,8 +142,12 @@ class InviteRepository: ObservableObject {
     func getIncomingInvites(for userId: String) -> [Invite] {
         guard let modelContext = modelContext else { return [] }
         
+        let searchUserId = userId
+        let pendingStatus = "pending"
         let descriptor = FetchDescriptor<Invite>(
-            predicate: #Predicate<Invite> { $0.toUserId == userId && $0.status == "pending" }
+            predicate: #Predicate<Invite> { invite in
+                invite.toUserId == searchUserId && invite.status == pendingStatus
+            }
         )
         
         return (try? modelContext.fetch(descriptor)) ?? []
@@ -145,8 +157,12 @@ class InviteRepository: ObservableObject {
     func getOutgoingInvites(for userId: String) -> [Invite] {
         guard let modelContext = modelContext else { return [] }
         
+        let searchUserId = userId
+        let pendingStatus = "pending"
         let descriptor = FetchDescriptor<Invite>(
-            predicate: #Predicate<Invite> { $0.fromUserId == userId && $0.status == "pending" }
+            predicate: #Predicate<Invite> { invite in
+                invite.fromUserId == searchUserId && invite.status == pendingStatus
+            }
         )
         
         return (try? modelContext.fetch(descriptor)) ?? []

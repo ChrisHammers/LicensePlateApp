@@ -14,7 +14,7 @@ import Combine
 class FamilyRepository: ObservableObject {
     private let db = Firestore.firestore()
     private var modelContext: ModelContext?
-    private var listeners: [ListenerRegistration] = []
+    nonisolated(unsafe) private var listeners: [ListenerRegistration] = []
     
     @Published var families: [Family] = []
     @Published var familyMembers: [String: [FamilyMember]] = [:] // familyId -> members
@@ -94,8 +94,11 @@ class FamilyRepository: ObservableObject {
               let family = Family(from: snapshot) else { return }
         
         // Sync to SwiftData
+        let searchFamilyId = family.familyId
         let descriptor = FetchDescriptor<Family>(
-            predicate: #Predicate<Family> { $0.familyId == family.familyId }
+            predicate: #Predicate<Family> { f in
+                f.familyId == searchFamilyId
+            }
         )
         
         if let existing = try? modelContext.fetch(descriptor).first {
@@ -139,11 +142,14 @@ class FamilyRepository: ObservableObject {
         // This is critical for offline access to full user profiles
         fetchAndCacheUsers(userIds: userIdsToFetch, familyId: familyId)
         
-        // Sync members to SwiftData
-        for member in members {
-            let descriptor = FetchDescriptor<FamilyMember>(
-                predicate: #Predicate<FamilyMember> { $0.id == member.id }
-            )
+            // Sync members to SwiftData
+            for member in members {
+                let searchMemberId = member.id
+                let descriptor = FetchDescriptor<FamilyMember>(
+                    predicate: #Predicate<FamilyMember> { m in
+                        m.id == searchMemberId
+                    }
+                )
             
             if let existing = try? modelContext.fetch(descriptor).first {
                 existing.familyId = member.familyId
@@ -187,8 +193,11 @@ class FamilyRepository: ObservableObject {
         
         // Sync requests to SwiftData
         for request in requests {
+            let searchRequestId = request.requestId
             let descriptor = FetchDescriptor<PendingJoinRequest>(
-                predicate: #Predicate<PendingJoinRequest> { $0.requestId == request.requestId }
+                predicate: #Predicate<PendingJoinRequest> { r in
+                    r.requestId == searchRequestId
+                }
             )
             
             if let existing = try? modelContext.fetch(descriptor).first {
@@ -218,8 +227,11 @@ class FamilyRepository: ObservableObject {
         Task {
             for userId in userIds {
                 // Check if user already cached
+                let searchUserId = userId
                 let userDescriptor = FetchDescriptor<AppUser>(
-                    predicate: #Predicate<AppUser> { $0.id == userId }
+                    predicate: #Predicate<AppUser> { user in
+                        user.id == searchUserId
+                    }
                 )
                 
                 if let existingUser = try? modelContext.fetch(userDescriptor).first {
@@ -284,8 +296,12 @@ class FamilyRepository: ObservableObject {
         guard let user = try? modelContext.fetch(userDescriptor).first else { return }
         
         // Link to FamilyMember
+        let searchFamilyId = familyId
+        let searchUserId = userId
         let memberDescriptor = FetchDescriptor<FamilyMember>(
-            predicate: #Predicate<FamilyMember> { $0.familyId == familyId && $0.userId == userId }
+            predicate: #Predicate<FamilyMember> { member in
+                member.familyId == searchFamilyId && member.userId == searchUserId
+            }
         )
         
         if let member = try? modelContext.fetch(memberDescriptor).first {
@@ -294,7 +310,9 @@ class FamilyRepository: ObservableObject {
         
         // Link to PendingJoinRequest
         let requestDescriptor = FetchDescriptor<PendingJoinRequest>(
-            predicate: #Predicate<PendingJoinRequest> { $0.familyId == familyId && $0.userId == userId }
+            predicate: #Predicate<PendingJoinRequest> { request in
+                request.familyId == searchFamilyId && request.userId == searchUserId
+            }
         )
         
         if let request = try? modelContext.fetch(requestDescriptor).first {
@@ -305,8 +323,10 @@ class FamilyRepository: ObservableObject {
     }
     
     /// Stop listening to Firestore updates
-    func stopListening() {
-        listeners.forEach { $0.remove() }
+    nonisolated func stopListening() {
+        for listener in listeners {
+            listener.remove()
+        }
         listeners.removeAll()
     }
     
@@ -316,8 +336,11 @@ class FamilyRepository: ObservableObject {
     func getFamily(familyId: String) -> Family? {
         guard let modelContext = modelContext else { return nil }
         
+        let searchFamilyId = familyId
         let descriptor = FetchDescriptor<Family>(
-            predicate: #Predicate<Family> { $0.familyId == familyId }
+            predicate: #Predicate<Family> { family in
+                family.familyId == searchFamilyId
+            }
         )
         
         return try? modelContext.fetch(descriptor).first
@@ -327,8 +350,11 @@ class FamilyRepository: ObservableObject {
     func getMembers(familyId: String) -> [FamilyMember] {
         guard let modelContext = modelContext else { return [] }
         
+        let searchFamilyId = familyId
         let descriptor = FetchDescriptor<FamilyMember>(
-            predicate: #Predicate<FamilyMember> { $0.familyId == familyId }
+            predicate: #Predicate<FamilyMember> { member in
+                member.familyId == searchFamilyId
+            }
         )
         
         return (try? modelContext.fetch(descriptor)) ?? []
@@ -338,8 +364,12 @@ class FamilyRepository: ObservableObject {
     func getPendingRequests(familyId: String) -> [PendingJoinRequest] {
         guard let modelContext = modelContext else { return [] }
         
+        let searchFamilyId = familyId
+        let pendingStatus = "pending"
         let descriptor = FetchDescriptor<PendingJoinRequest>(
-            predicate: #Predicate<PendingJoinRequest> { $0.familyId == familyId && $0.status == "pending" }
+            predicate: #Predicate<PendingJoinRequest> { request in
+                request.familyId == searchFamilyId && request.status == pendingStatus
+            }
         )
         
         return (try? modelContext.fetch(descriptor)) ?? []

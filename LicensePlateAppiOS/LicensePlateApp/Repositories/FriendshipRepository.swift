@@ -14,7 +14,7 @@ import Combine
 class FriendshipRepository: ObservableObject {
     private let db = Firestore.firestore()
     private var modelContext: ModelContext?
-    private var listeners: [ListenerRegistration] = []
+    nonisolated(unsafe) private var listeners: [ListenerRegistration] = []
     
     @Published var friendships: [Friendship] = []
     @Published var isLoading = false
@@ -72,8 +72,11 @@ class FriendshipRepository: ObservableObject {
                 updatedFriendships.append(friendship)
                 
                 // Sync to SwiftData
+                let searchFriendshipId = friendship.friendshipId
                 let descriptor = FetchDescriptor<Friendship>(
-                    predicate: #Predicate<Friendship> { $0.friendshipId == friendship.friendshipId }
+                    predicate: #Predicate<Friendship> { f in
+                        f.friendshipId == searchFriendshipId
+                    }
                 )
                 
                 if let existing = try? modelContext.fetch(descriptor).first {
@@ -104,8 +107,10 @@ class FriendshipRepository: ObservableObject {
     }
     
     /// Stop listening to Firestore updates
-    func stopListening() {
-        listeners.forEach { $0.remove() }
+    nonisolated func stopListening() {
+        for listener in listeners {
+            listener.remove()
+        }
         listeners.removeAll()
     }
     
@@ -115,8 +120,13 @@ class FriendshipRepository: ObservableObject {
     func getFriendships(for userId: String) -> [Friendship] {
         guard let modelContext = modelContext else { return [] }
         
+        // Extract to local constant for predicate
+        let searchUserId = userId
+        
         let descriptor = FetchDescriptor<Friendship>(
-            predicate: #Predicate<Friendship> { $0.userA == userId || $0.userB == userId }
+            predicate: #Predicate<Friendship> { friendship in
+                friendship.userA == searchUserId || friendship.userB == searchUserId
+            }
         )
         
         return (try? modelContext.fetch(descriptor)) ?? []

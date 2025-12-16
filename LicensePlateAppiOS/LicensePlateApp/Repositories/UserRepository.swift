@@ -8,6 +8,7 @@
 import Foundation
 import SwiftData
 import FirebaseFirestore
+import Combine
 
 @MainActor
 class UserRepository: ObservableObject {
@@ -191,8 +192,11 @@ class UserRepository: ObservableObject {
         guard let modelContext = modelContext else { return }
         
         for user in users {
+            let searchUserId = user.id
             let descriptor = FetchDescriptor<AppUser>(
-                predicate: #Predicate<AppUser> { $0.id == user.id }
+                predicate: #Predicate<AppUser> { u in
+                    u.id == searchUserId
+                }
             )
             
             if let existing = try? modelContext.fetch(descriptor).first {
@@ -222,8 +226,11 @@ class UserRepository: ObservableObject {
     func getUser(userId: String) async throws -> AppUser? {
         // First check SwiftData cache
         if let modelContext = modelContext {
+            let searchUserId = userId
             let descriptor = FetchDescriptor<AppUser>(
-                predicate: #Predicate<AppUser> { $0.id == userId }
+                predicate: #Predicate<AppUser> { user in
+                    user.id == searchUserId
+                }
             )
             
             if let cached = try? modelContext.fetch(descriptor).first {
