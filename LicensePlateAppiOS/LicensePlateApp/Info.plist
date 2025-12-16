@@ -73,6 +73,14 @@
 				<string>com.googleusercontent.apps.900272218936-98bor8m03sgo6plfeov826o0btomvspc</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>roadtrip-royale</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>

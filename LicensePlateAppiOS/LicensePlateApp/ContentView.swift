@@ -926,6 +926,12 @@ struct DefaultSettingsView: View {
                         VoiceDefaultsView()
                     case .helpAbout:
                         HelpAboutView()
+                    case .friends:
+                        FriendsHub()
+                            .environmentObject(authService)
+                    case .family:
+                        FamilyDashboard()
+                            .environmentObject(authService)
                     }
                 }
             }

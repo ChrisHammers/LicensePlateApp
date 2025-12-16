@@ -18,6 +18,8 @@ final class MainSettingsCoordinator: ObservableObject {
         case newTripDefaults
         case voiceDefaults
         case helpAbout
+        case friends
+        case family
     }
     
     // MARK: - Navigation Methods
@@ -50,6 +52,16 @@ final class MainSettingsCoordinator: ObservableObject {
     /// Navigate to the Help & About view
     func navigateToHelpAbout(path: Binding<NavigationPath>) {
         path.wrappedValue.append(SettingsDestination.helpAbout)
+    }
+    
+    /// Navigate to the Friends view
+    func navigateToFriends(path: Binding<NavigationPath>) {
+        path.wrappedValue.append(SettingsDestination.friends)
+    }
+    
+    /// Navigate to the Family view
+    func navigateToFamily(path: Binding<NavigationPath>) {
+        path.wrappedValue.append(SettingsDestination.family)
     }
     
     /// Navigate to a specific destination

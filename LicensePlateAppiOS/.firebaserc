@@ -1,0 +1,35 @@
+{
+  "projects": {
+    "default": "roadtrip-royale-dev-d2652"
+  }
+}
+
+
+
+
+I am looking to build a Friends and Family feature into the app.  This does not change anything about a Trip or any other feature of the app. We are focussed purely on this Friends and Family feature.
+
+I want you to work through with me, by going back and forth until you feel you understand my requirements. Afterwards you will create a PRD of must haves and schema/analytic requirements, and a prompt that can be executed by Cursor. This will be MVP level, all required documents such as wire frames, Firebase Rules or any other documents created will be included.
+
+
+Here are my initial thoughts: 
+
+We are using Firebase for all back end requirements, unless you think a different service is better suited.  However, everything done should work offline when possible (ie: we know who is in our family, ).  But it's ok to make some things, removing someone from the Family to require internet.
+
+Family and Friends are just Users that you can interact with later (a whole other feature we will do later). 
+
+We should be logging everything, from how you got to the Friends or Family page and when you sent the invite, to who declined or accepted and how, to who kicked out the family member.
+
+Friends are simply people you know who you want to play with. To find a friend you can either search for the User by their UserName, email or phone number (always always username, but email and phone number could be set to Private in the User's settings and then shouldn't show up in the search). We also should have either a QR code, Friend Code and/or deep linking support, so it can be sent from the friend.  However, both sides have to confirm so a Friend Requests will be required to show the person that a request was sent. So even if they have my QR code, I need to accept them.  Share Codes and QR codes perhaps should have a time limit of working then be set to nil, so an code can't be posted online and that person get 1000's of friends they don't want.
+
+Family is unique though. It is marked by a separate Family object that points to the Users in the family, and has a Family Name along with some other information.  One person creates a Family, and that person is the only one who can delete the family itself.  The Parents will be called Captains and only they can add/remove family members or change the family name. The Kids will either be Scouts (Kids, limited what they can do - Captains have a UI they can change these settings) or Sergeants (Older Kids/Teens, less limited by default - same options on Captains UI).  Grand Parents will be Retired Generals and are the only ones who are allowed to be in more than 1 family.  They will have all options to begin with, other than adding a family member, but again the UI will allow the Captain to limit that.  By default there should be 2 Captains allowed, 4 Scouts/Sergeants and 4 Retired Generals allowed per team (we can allow expansion later but this should be the default)
+We also want the captain to be able to create a Scout User so the Child doesn't need their own device or have to log out to create to the user.  Similarly to the Friends, we want Messages and notifications with Deep Links to accept the Family invite or to accept someone asking to join the family.
+
+The Family Dashboard should be very similar for any type of user, Scout vs Captain, etc.  They would see the list of Family members, the Pending Users, and Family stats.  Except the Captain gets a settings page where they can add and remove (so they get the messages about accepting family invites) as well as change family name, change roles and the mentioned screen to limit Kids and Grandparents features. 
+
+The UI to find Family members will be similar to the Friends one, just named Family and its for setting the Family.  The QR/Share Code would be a family one, and again should most likely be active for a short amount of time, unless you think always on is a better approach. They can still search by UserName, email or phone number (always username, but email and phone number could be set to Private and then won't work in the search)
+
+We want to send emails when invited to a family or friend, and potentially do App Notifications with Deep Links to a screen to accept or decline the invitation.  
+
+
+The family structure does need to follow the Payment tier structure.  

@@ -16,6 +16,10 @@ struct UserProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     
+    // Navigation
+    @StateObject private var coordinator = MainSettingsCoordinator()
+    @State private var navigationPath = NavigationPath()
+    
     // Keep local copies for editing
     @State private var currentUserName: String
     @State private var currentFirstName: String
@@ -128,6 +132,7 @@ struct UserProfileView: View {
     }
     
     var body: some View {
+        NavigationStack(path: $navigationPath) {
             ZStack {
                 Color.Theme.background
                     .ignoresSafeArea()
@@ -280,6 +285,34 @@ struct UserProfileView: View {
                         
                     } header: {
                         Text("Account Information".localized)
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    .textCase(nil)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
+                    
+                    // Friends & Family Section
+                    Section {
+                        SettingNavigationRow(
+                            title: "Friends".localized,
+                            description: "Manage your friends and friend requests".localized,
+                            icon: "person.2"
+                        ) {
+                            coordinator.navigateToFriends(path: $navigationPath)
+                        }
+                        
+                        Divider()
+                        
+                        SettingNavigationRow(
+                            title: "Family".localized,
+                            description: "View and manage your family".localized,
+                            icon: "house"
+                        ) {
+                            coordinator.navigateToFamily(path: $navigationPath)
+                        }
+                    } header: {
+                        Text("Friends & Family".localized)
                             .font(.system(.headline, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
@@ -615,6 +648,21 @@ struct UserProfileView: View {
                     }
                 )
             }
+            .navigationDestination(for: MainSettingsCoordinator.SettingsDestination.self) { destination in
+                Group {
+                    switch destination {
+                    case .friends:
+                        FriendsHub()
+                            .environmentObject(authService)
+                    case .family:
+                        FamilyDashboard()
+                            .environmentObject(authService)
+                    default:
+                        EmptyView()
+                    }
+                }
+            }
+        }
             .onChange(of: selectedImage) { oldValue, newValue in
                 if let newImage = newValue {
                     // Show confirmation instead of immediately uploading
