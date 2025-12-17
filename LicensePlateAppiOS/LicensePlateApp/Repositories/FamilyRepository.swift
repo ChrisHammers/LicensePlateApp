@@ -575,6 +575,29 @@ class FamilyRepository: ObservableObject {
         return inviteId
     }
     
+    /// Send a family invite to a user
+    func sendFamilyInvite(toUserId: String, familyId: String, method: String = "search") async throws -> String {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
+        }
+        
+        let functions = Functions.functions()
+        let sendInviteFunction = functions.httpsCallable("sendFamilyInvite")
+        
+        let result = try await sendInviteFunction.call([
+            "toUserId": toUserId,
+            "familyId": familyId,
+            "method": method
+        ])
+        
+        guard let data = result.data as? [String: Any],
+              let inviteId = data["inviteId"] as? String else {
+            throw NSError(domain: "FamilyRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response from sendFamilyInvite"])
+        }
+        
+        return inviteId
+    }
+    
     /// Respond to a family invite (user step)
     func respondToFamilyInvite(inviteId: String, accept: Bool) async throws {
         guard Auth.auth().currentUser != nil else {

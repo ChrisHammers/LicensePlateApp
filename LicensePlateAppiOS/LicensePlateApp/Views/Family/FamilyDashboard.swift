@@ -15,6 +15,7 @@ struct FamilyDashboard: View {
     @State private var showSettings = false
     @State private var showCreateFamilySheet = false
     @State private var showJoinFamilySheet = false
+    @State private var showAddMemberSheet = false
     
     init() {
         let familyRepo = FamilyRepository()
@@ -55,6 +56,21 @@ struct FamilyDashboard: View {
                         Section("Members".localized) {
                             ForEach(viewModel.members) { member in
                                 FamilyMemberRow(member: member)
+                            }
+                            
+                            // Invite button for creators/captains
+                            if viewModel.canManageFamily {
+                                Button {
+                                    showAddMemberSheet = true
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "person.badge.plus")
+                                        Text("Invite Member".localized)
+                                    }
+                                    .font(.system(.body, design: .rounded))
+                                    .foregroundStyle(Color.Theme.primaryBlue)
+                                }
+                                .disabled(!authService.isOnline)
                             }
                         }
                         
@@ -184,6 +200,16 @@ struct FamilyDashboard: View {
                 if let family = viewModel.family {
                     FamilySettings(familyId: family.familyId)
                         .environmentObject(authService)
+                }
+            }
+            .sheet(isPresented: $showAddMemberSheet) {
+                if let family = viewModel.family {
+                    AddFamilyMemberSheet(familyId: family.familyId)
+                        .environmentObject(authService)
+                        .onDisappear {
+                            // Reload data after inviting member
+                            viewModel.loadData()
+                        }
                 }
             }
             .onAppear {
