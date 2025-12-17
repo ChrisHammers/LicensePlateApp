@@ -124,12 +124,4 @@ exports.redeemShareCode = functions.https.onCall(async (data, context) => {
         familyId: codeData.familyId,
     };
 });
-function generateRandomCode() {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Exclude ambiguous chars
-    let code = "";
-    for (let i = 0; i < 8; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-}
 //# sourceMappingURL=shareCodes.js.map
