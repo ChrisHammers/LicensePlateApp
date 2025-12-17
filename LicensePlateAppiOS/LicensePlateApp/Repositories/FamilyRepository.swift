@@ -377,6 +377,160 @@ class FamilyRepository: ObservableObject {
         return (try? modelContext.fetch(descriptor)) ?? []
     }
     
+    // MARK: - Firestore Fetch (Online Priority)
+    
+    /// Fetch family directly from Firestore (prioritizes online data)
+    func fetchFamily(familyId: String) async throws -> Family? {
+        guard let modelContext = modelContext else {
+            throw NSError(domain: "FamilyRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Model context not set"])
+        }
+        
+        let doc = try await db.collection("families").document(familyId).getDocument()
+        
+        guard doc.exists else {
+            return nil
+        }
+        
+        guard let family = Family(from: doc) else {
+            return nil
+        }
+        
+        // Sync to SwiftData
+        let searchFamilyId = family.familyId
+        let descriptor = FetchDescriptor<Family>(
+            predicate: #Predicate<Family> { f in
+                f.familyId == searchFamilyId
+            }
+        )
+        
+        if let existing = try? modelContext.fetch(descriptor).first {
+            existing.name = family.name
+            existing.creatorId = family.creatorId
+            existing.status = family.status
+            existing.createdAt = family.createdAt
+            existing.updatedAt = family.updatedAt
+        } else {
+            modelContext.insert(family)
+        }
+        
+        try? modelContext.save()
+        
+        // Update published array
+        let allDescriptor = FetchDescriptor<Family>()
+        if let allFamilies = try? modelContext.fetch(allDescriptor) {
+            families = allFamilies
+        }
+        
+        return family
+    }
+    
+    /// Fetch members directly from Firestore (prioritizes online data)
+    func fetchMembers(familyId: String) async throws -> [FamilyMember] {
+        guard let modelContext = modelContext else {
+            throw NSError(domain: "FamilyRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Model context not set"])
+        }
+        
+        let snapshot = try await db.collection("families").document(familyId)
+            .collection("members")
+            .getDocuments()
+        
+        var members: [FamilyMember] = []
+        var userIdsToFetch: [String] = []
+        
+        for document in snapshot.documents {
+            if let member = FamilyMember(from: document, familyId: familyId) {
+                members.append(member)
+                userIdsToFetch.append(member.userId)
+            }
+        }
+        
+        // Cache complete AppUser data for all family members
+        fetchAndCacheUsers(userIds: userIdsToFetch, familyId: familyId)
+        
+        // Sync members to SwiftData
+        for member in members {
+            let searchMemberId = member.id
+            let descriptor = FetchDescriptor<FamilyMember>(
+                predicate: #Predicate<FamilyMember> { m in
+                    m.id == searchMemberId
+                }
+            )
+            
+            if let existing = try? modelContext.fetch(descriptor).first {
+                existing.familyId = member.familyId
+                existing.userId = member.userId
+                existing.role = member.role
+                existing.canInvite = member.canInvite
+                existing.canEditSettings = member.canEditSettings
+                existing.joinedAt = member.joinedAt
+                existing.updatedAt = member.updatedAt
+            } else {
+                modelContext.insert(member)
+            }
+        }
+        
+        try? modelContext.save()
+        
+        // Update published dictionary
+        familyMembers[familyId] = members
+        
+        return members
+    }
+    
+    /// Fetch pending requests directly from Firestore (prioritizes online data)
+    func fetchPendingRequests(familyId: String) async throws -> [PendingJoinRequest] {
+        guard let modelContext = modelContext else {
+            throw NSError(domain: "FamilyRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Model context not set"])
+        }
+        
+        let snapshot = try await db.collection("families").document(familyId)
+            .collection("pending")
+            .whereField("status", isEqualTo: "pending")
+            .getDocuments()
+        
+        var requests: [PendingJoinRequest] = []
+        var userIdsToFetch: [String] = []
+        
+        for document in snapshot.documents {
+            if let request = PendingJoinRequest(from: document, familyId: familyId) {
+                requests.append(request)
+                userIdsToFetch.append(request.userId)
+            }
+        }
+        
+        // Cache complete AppUser data for pending users
+        fetchAndCacheUsers(userIds: userIdsToFetch, familyId: familyId)
+        
+        // Sync requests to SwiftData
+        for request in requests {
+            let searchRequestId = request.requestId
+            let descriptor = FetchDescriptor<PendingJoinRequest>(
+                predicate: #Predicate<PendingJoinRequest> { r in
+                    r.requestId == searchRequestId
+                }
+            )
+            
+            if let existing = try? modelContext.fetch(descriptor).first {
+                existing.familyId = request.familyId
+                existing.userId = request.userId
+                existing.requestedBy = request.requestedBy
+                existing.method = request.method
+                existing.status = request.status
+                existing.createdAt = request.createdAt
+                existing.resolvedAt = request.resolvedAt
+            } else {
+                modelContext.insert(request)
+            }
+        }
+        
+        try? modelContext.save()
+        
+        // Update published dictionary
+        pendingRequests[familyId] = requests
+        
+        return requests
+    }
+    
     // MARK: - Cloud Functions
     
     /// Create a new family

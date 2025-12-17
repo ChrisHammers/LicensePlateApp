@@ -1144,6 +1144,10 @@ class FirebaseAuthService: ObservableObject {
                     existingUser.phoneNumber = firestoreUser.phoneNumber
                     existingUser.userImageURL = firestoreUser.userImageURL
                     existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
+                    // Friends & Family fields
+                    existingUser.activeFamilyId = firestoreUser.activeFamilyId
+                    existingUser.friendCount = firestoreUser.friendCount
+                    existingUser.isRetiredGeneral = firestoreUser.isRetiredGeneral
                     try? modelContext.save()
                 }
             }
@@ -1262,6 +1266,54 @@ class FirebaseAuthService: ObservableObject {
         try? modelContext?.save()
     }
     
+    /// Refresh current user data from Firestore (useful after Cloud Function updates)
+    func refreshCurrentUserFromFirestore() async throws {
+        guard let firebaseUID = currentUser?.firebaseUID ?? Auth.auth().currentUser?.uid else {
+            throw NSError(domain: "FirebaseAuthService", code: 401, userInfo: [NSLocalizedDescriptionKey: "No authenticated user"])
+        }
+        
+        guard let modelContext = modelContext else {
+            throw NSError(domain: "FirebaseAuthService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Model context not set"])
+        }
+        
+        // Load latest data from Firestore
+        guard let firestoreUser = try await loadUserDataFromFirestore(userId: firebaseUID) else {
+            return
+        }
+        
+        // Find existing user in SwiftData
+        let descriptor = FetchDescriptor<AppUser>(
+            predicate: #Predicate<AppUser> { $0.firebaseUID == firebaseUID || $0.id == firebaseUID }
+        )
+        
+        if let existingUser = try? modelContext.fetch(descriptor).first {
+            // Merge all fields from Firestore
+            existingUser.userName = firestoreUser.userName
+            existingUser.firstName = firestoreUser.firstName
+            existingUser.lastName = firestoreUser.lastName
+            existingUser.email = firestoreUser.email
+            existingUser.phoneNumber = firestoreUser.phoneNumber
+            existingUser.userImageURL = firestoreUser.userImageURL
+            existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
+            // Friends & Family fields
+            existingUser.activeFamilyId = firestoreUser.activeFamilyId
+            existingUser.friendCount = firestoreUser.friendCount
+            existingUser.isRetiredGeneral = firestoreUser.isRetiredGeneral
+            existingUser.lastSyncedToFirebase = .now
+            existingUser.needsSync = false
+            
+            try? modelContext.save()
+            
+            // Update published property
+            currentUser = existingUser
+        } else {
+            // User doesn't exist locally, insert it
+            modelContext.insert(firestoreUser)
+            try? modelContext.save()
+            currentUser = firestoreUser
+        }
+    }
+    
     private func firestoreDataFromAppUser(_ user: AppUser) -> [String: Any] {
         var data: [String: Any] = [
             "userName": user.userName,
@@ -1304,6 +1356,13 @@ class FirebaseAuthService: ObservableObject {
                 ]
             }
         }
+        
+        // Friends & Family fields
+        if let activeFamilyId = user.activeFamilyId {
+            data["activeFamilyId"] = activeFamilyId
+        }
+        data["friendCount"] = user.friendCount
+        data["isRetiredGeneral"] = user.isRetiredGeneral
         
         if !user.linkedPlatforms.isEmpty {
             data["linkedPlatforms"] = user.linkedPlatforms.map { platform in
@@ -1429,6 +1488,11 @@ class FirebaseAuthService: ObservableObject {
             }
         }
         
+        // Friends & Family fields
+        let activeFamilyId = data["activeFamilyId"] as? String
+        let friendCount = data["friendCount"] as? Int ?? 0
+        let isRetiredGeneral = data["isRetiredGeneral"] as? Bool ?? false
+        
         return AppUser(
             id: id,
             userName: userName,
@@ -1445,6 +1509,9 @@ class FirebaseAuthService: ObservableObject {
             isUsernameManuallyChanged: isUsernameManuallyChanged,
             isEmailPublic: isEmailPublic,
             isPhonePublic: isPhonePublic,
+            isRetiredGeneral: isRetiredGeneral,
+            activeFamilyId: activeFamilyId,
+            friendCount: friendCount,
             linkedPlatforms: linkedPlatforms,
             firebaseUID: id,
             lastSyncedToFirebase: .now,

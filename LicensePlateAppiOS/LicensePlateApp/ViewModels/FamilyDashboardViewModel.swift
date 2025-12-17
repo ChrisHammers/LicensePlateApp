@@ -18,13 +18,33 @@ class FamilyDashboardViewModel: ObservableObject {
     @Published var errorMessage: String?
     
     private let familyRepository: FamilyRepository
-    private let authService: FirebaseAuthService
+    private var authService: FirebaseAuthService
     private var cancellables = Set<AnyCancellable>()
     
     init(familyRepository: FamilyRepository, authService: FirebaseAuthService) {
         self.familyRepository = familyRepository
         self.authService = authService
         
+        // Setup observers
+        setupObservers()
+    }
+    
+    func setModelContext(_ context: ModelContext) {
+        familyRepository.setModelContext(context)
+    }
+    
+    func setAuthService(_ service: FirebaseAuthService) {
+        // Cancel old subscriptions
+        cancellables.removeAll()
+        
+        // Update authService
+        authService = service
+        
+        // Re-setup observers with new authService
+        setupObservers()
+    }
+    
+    private func setupObservers() {
         // Observe repository changes
         familyRepository.$families
             .sink { [weak self] families in
@@ -34,10 +54,27 @@ class FamilyDashboardViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
-    }
-    
-    func setModelContext(_ context: ModelContext) {
-        familyRepository.setModelContext(context)
+        
+        // Observe user changes to reload when activeFamilyId changes
+        authService.$currentUser
+            .sink { [weak self] user in
+                guard let self = self,
+                      let activeFamilyId = user?.activeFamilyId else {
+                    // If user no longer has activeFamilyId, clear family
+                    if user?.activeFamilyId == nil {
+                        self?.family = nil
+                        self?.members = []
+                        self?.pendingRequests = []
+                    }
+                    return
+                }
+                
+                // If activeFamilyId changed, reload data
+                if self.family?.familyId != activeFamilyId {
+                    self.loadData()
+                }
+            }
+            .store(in: &cancellables)
     }
     
     func loadData() {
@@ -48,14 +85,50 @@ class FamilyDashboardViewModel: ObservableObject {
         
         isLoading = true
         
-        // Start listening to Firestore updates
+        // Start listening to Firestore updates for real-time sync
         familyRepository.startListening(familyId: activeFamilyId)
         
-        // Load from SwiftData cache
-        family = familyRepository.getFamily(familyId: activeFamilyId)
-        loadFamilyData(familyId: activeFamilyId)
-        
-        isLoading = false
+        // Always fetch from Firestore first (online priority)
+        Task {
+            do {
+                // Fetch family from Firestore
+                if let fetchedFamily = try await familyRepository.fetchFamily(familyId: activeFamilyId) {
+                    // Fetch members and pending requests
+                    let fetchedMembers = try await familyRepository.fetchMembers(familyId: activeFamilyId)
+                    let fetchedPending = try await familyRepository.fetchPendingRequests(familyId: activeFamilyId)
+                    
+                    await MainActor.run {
+                        self.family = fetchedFamily
+                        self.members = fetchedMembers
+                        self.pendingRequests = fetchedPending
+                        self.isLoading = false
+                    }
+                } else {
+                    // Family doesn't exist in Firestore - might be data inconsistency
+                    // Fall back to SwiftData cache in case of offline changes
+                    await MainActor.run {
+                        self.family = self.familyRepository.getFamily(familyId: activeFamilyId)
+                        self.loadFamilyData(familyId: activeFamilyId)
+                        self.isLoading = false
+                        
+                        if self.family == nil {
+                            self.errorMessage = "Family not found"
+                        }
+                    }
+                }
+            } catch {
+                // Network error or permission issue - fall back to SwiftData cache
+                await MainActor.run {
+                    self.family = self.familyRepository.getFamily(familyId: activeFamilyId)
+                    self.loadFamilyData(familyId: activeFamilyId)
+                    self.isLoading = false
+                    
+                    if self.family == nil {
+                        self.errorMessage = "Unable to load family. Please check your connection."
+                    }
+                }
+            }
+        }
     }
     
     private func loadFamilyData(familyId: String) {

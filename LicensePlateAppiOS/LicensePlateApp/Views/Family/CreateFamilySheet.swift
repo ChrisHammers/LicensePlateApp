@@ -28,6 +28,7 @@ struct CreateFamilySheet: View {
                     Section {
                         TextField("Family Name".localized, text: $familyName)
                             .textInputAutocapitalization(.words)
+                            .disabled(isCreating)
                     } header: {
                         Text("Family Name".localized)
                             .font(.system(.headline, design: .rounded))
@@ -47,6 +48,27 @@ struct CreateFamilySheet: View {
                     }
                 }
                 .formStyle(.grouped)
+                .disabled(isCreating)
+                
+                // Loading overlay
+                if isCreating {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                    
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .tint(Color.Theme.primaryBlue)
+                        
+                        Text("Creating family...".localized)
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    .padding(24)
+                    .background(Color.Theme.background)
+                    .cornerRadius(12)
+                    .shadow(radius: 10)
+                }
             }
             .navigationTitle("Create Family".localized)
             .navigationBarTitleDisplayMode(.inline)
@@ -96,7 +118,11 @@ struct CreateFamilySheet: View {
         
         Task {
             do {
+                // Create family via Cloud Function
                 let familyId = try await familyRepository.createFamily(name: trimmedName)
+                
+                // Refresh user data from Firestore to get updated activeFamilyId
+                try await authService.refreshCurrentUserFromFirestore()
                 
                 await MainActor.run {
                     isCreating = false

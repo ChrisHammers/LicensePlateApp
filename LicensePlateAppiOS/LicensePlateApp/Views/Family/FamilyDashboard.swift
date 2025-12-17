@@ -18,9 +18,11 @@ struct FamilyDashboard: View {
     
     init() {
         let familyRepo = FamilyRepository()
+        // Create a temporary authService for initialization - will be replaced in onAppear
+        let tempAuthService = FirebaseAuthService()
         _viewModel = StateObject(wrappedValue: FamilyDashboardViewModel(
             familyRepository: familyRepo,
-            authService: FirebaseAuthService()
+            authService: tempAuthService
         ))
     }
     
@@ -185,6 +187,8 @@ struct FamilyDashboard: View {
                 }
             }
             .onAppear {
+                // Update ViewModel with the correct authService from environment
+                viewModel.setAuthService(authService)
                 viewModel.setModelContext(modelContext)
                 viewModel.loadData()
                 AnalyticsService.shared.log(.familyScreenOpened)
