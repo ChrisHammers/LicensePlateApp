@@ -1,0 +1,179 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.respondToFriendInvite = exports.sendFriendInvite = void 0;
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
+const validation_1 = require("./utils/validation");
+const audit_1 = require("./audit");
+const notifications_1 = require("./utils/notifications");
+const db = admin.firestore();
+/**
+ * Send a friend invite
+ */
+exports.sendFriendInvite = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
+    }
+    const { toUserId, method } = data;
+    const fromUserId = context.auth.uid;
+    if (!toUserId) {
+        throw new functions.https.HttpsError("invalid-argument", "toUserId is required");
+    }
+    // Check friend cap for sender
+    const senderCap = await (0, validation_1.checkFriendCap)(fromUserId);
+    if (!senderCap.canAdd) {
+        throw new functions.https.HttpsError("resource-exhausted", "Friend cap reached (100)");
+    }
+    // Check friend cap for recipient
+    const recipientCap = await (0, validation_1.checkFriendCap)(toUserId);
+    if (!recipientCap.canAdd) {
+        throw new functions.https.HttpsError("failed-precondition", "Recipient has reached friend cap");
+    }
+    // Check privacy if searching by email/phone
+    if (method === "email" || method === "phone") {
+        const searchable = await (0, validation_1.isUserSearchable)(toUserId, method === "email" ? "email" : "phone");
+        if (!searchable) {
+            await (0, audit_1.writeAuditLog)({
+                eventType: "invite_auto_rejected_not_searchable",
+                actorId: fromUserId,
+                subjectType: "user",
+                subjectId: toUserId,
+                metadata: { method },
+            });
+            throw new functions.https.HttpsError("permission-denied", "User is not searchable by this method");
+        }
+    }
+    // Check if friendship already exists
+    const friendshipId = generateFriendshipId(fromUserId, toUserId);
+    const friendshipDoc = await db
+        .collection("friends")
+        .doc(friendshipId)
+        .get();
+    if (friendshipDoc.exists) {
+        throw new functions.https.HttpsError("already-exists", "Friendship already exists");
+    }
+    // Check if pending invite exists
+    const existingInvite = await db
+        .collection("invites")
+        .where("fromUserId", "==", fromUserId)
+        .where("toUserId", "==", toUserId)
+        .where("type", "==", "friend")
+        .where("status", "==", "pending")
+        .limit(1)
+        .get();
+    if (!existingInvite.empty) {
+        throw new functions.https.HttpsError("already-exists", "Pending invite already exists");
+    }
+    // Create invite
+    const expiresAt = new Date();
+    expiresAt.setMinutes(expiresAt.getMinutes() + 15);
+    const inviteData = {
+        type: "friend",
+        fromUserId,
+        toUserId,
+        status: "pending",
+        method: method || "search",
+        expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    const inviteRef = await db.collection("invites").add(inviteData);
+    // Send push notification
+    const fcmToken = await (0, notifications_1.getFCMToken)(toUserId);
+    if (fcmToken) {
+        await (0, notifications_1.sendPushNotification)(fcmToken, "New Friend Request", "You have a new friend request", {
+            type: "friend_invite",
+            inviteId: inviteRef.id,
+            deepLink: `roadtrip-royale://invite/friend?inviteId=${inviteRef.id}`,
+        });
+    }
+    await (0, audit_1.writeAuditLog)({
+        eventType: "AUDIT_FRIEND_REQUEST_SENT",
+        actorId: fromUserId,
+        subjectType: "invite",
+        subjectId: inviteRef.id,
+        metadata: { toUserId, method },
+    });
+    return { inviteId: inviteRef.id };
+});
+/**
+ * Respond to a friend invite (accept or decline)
+ */
+exports.respondToFriendInvite = functions.https.onCall(async (data, context) => {
+    var _a, _b;
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
+    }
+    const { inviteId, response } = data;
+    const userId = context.auth.uid;
+    if (!inviteId || !response) {
+        throw new functions.https.HttpsError("invalid-argument", "inviteId and response are required");
+    }
+    if (response !== "accept" && response !== "decline") {
+        throw new functions.https.HttpsError("invalid-argument", "Response must be 'accept' or 'decline'");
+    }
+    // Get invite
+    const inviteDoc = await db.collection("invites").doc(inviteId).get();
+    if (!inviteDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "Invite not found");
+    }
+    const inviteData = inviteDoc.data();
+    // Verify user is the recipient
+    if (inviteData.toUserId !== userId) {
+        throw new functions.https.HttpsError("permission-denied", "Not authorized to respond to this invite");
+    }
+    // Check if already responded
+    if (inviteData.status !== "pending") {
+        throw new functions.https.HttpsError("failed-precondition", "Invite already responded to");
+    }
+    const batch = db.batch();
+    // Update invite status
+    batch.update(inviteDoc.ref, {
+        status: response === "accept" ? "accepted" : "declined",
+        respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    if (response === "accept") {
+        // Create friendship
+        const friendshipId = generateFriendshipId(inviteData.fromUserId, inviteData.toUserId);
+        const friendshipData = {
+            userA: inviteData.fromUserId,
+            userB: inviteData.toUserId,
+            status: "accepted",
+            initiatedBy: inviteData.fromUserId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+        batch.set(db.collection("friends").doc(friendshipId), friendshipData);
+        // Increment friendCount for both users (transaction)
+        const fromUserRef = db.collection("users").doc(inviteData.fromUserId);
+        const toUserRef = db.collection("users").doc(inviteData.toUserId);
+        const fromUserDoc = await fromUserRef.get();
+        const toUserDoc = await toUserRef.get();
+        const fromFriendCount = (((_a = fromUserDoc.data()) === null || _a === void 0 ? void 0 : _a.friendCount) || 0) + 1;
+        const toFriendCount = (((_b = toUserDoc.data()) === null || _b === void 0 ? void 0 : _b.friendCount) || 0) + 1;
+        batch.update(fromUserRef, { friendCount: fromFriendCount });
+        batch.update(toUserRef, { friendCount: toFriendCount });
+        await (0, audit_1.writeAuditLog)({
+            eventType: "AUDIT_FRIENDSHIP_ACCEPTED",
+            actorId: userId,
+            subjectType: "friendship",
+            subjectId: friendshipId,
+            metadata: { fromUserId: inviteData.fromUserId },
+        });
+    }
+    else {
+        await (0, audit_1.writeAuditLog)({
+            eventType: "friend_request_declined",
+            actorId: userId,
+            subjectType: "invite",
+            subjectId: inviteId,
+            metadata: { fromUserId: inviteData.fromUserId },
+        });
+    }
+    await batch.commit();
+    return { success: true };
+});
+function generateFriendshipId(userA, userB) {
+    const sorted = [userA, userB].sort();
+    return `${sorted[0]}_${sorted[1]}`;
+}
+//# sourceMappingURL=friends.js.map

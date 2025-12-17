@@ -7,6 +7,84 @@ import { getFCMToken, sendPushNotification } from "./utils/notifications";
 const db = admin.firestore();
 
 /**
+ * Create a new family
+ */
+export const createFamily = functions.https.onCall(
+  async (data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError(
+        "unauthenticated",
+        "User must be authenticated"
+      );
+    }
+
+    const { name } = data;
+    const userId = context.auth.uid;
+
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Family name is required"
+      );
+    }
+
+    // Check if user already has an active family (unless retired general)
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (!userDoc.exists) {
+      throw new functions.https.HttpsError("not-found", "User not found");
+    }
+
+    const userData = userDoc.data()!;
+    
+    if (!userData.isRetiredGeneral && userData.activeFamilyId) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "User already has an active family"
+      );
+    }
+
+    // Create family
+    const familyData = {
+      name: name.trim(),
+      creatorId: userId,
+      status: "active",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    const familyRef = await db.collection("families").add(familyData);
+
+    // Add creator as member with creator role
+    await familyRef.collection("members").doc(userId).set({
+      role: "creator",
+      permissions: {
+        canInvite: true,
+        canEditSettings: true,
+      },
+      joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Update user's activeFamilyId (if not retired general)
+    if (!userData.isRetiredGeneral) {
+      await db.collection("users").doc(userId).update({
+        activeFamilyId: familyRef.id,
+      });
+    }
+
+    await writeAuditLog({
+      eventType: "AUDIT_FAMILY_CREATED",
+      actorId: userId,
+      subjectType: "family",
+      subjectId: familyRef.id,
+      metadata: { name: name.trim() },
+    });
+
+    return { familyId: familyRef.id };
+  }
+);
+
+/**
  * Send a family invite
  */
 export const sendFamilyInvite = functions.https.onCall(

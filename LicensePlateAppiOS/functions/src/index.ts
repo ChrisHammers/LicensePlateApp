@@ -10,6 +10,7 @@ export {
   respondToFriendInvite,
 } from "./friends";
 export {
+  createFamily,
   sendFamilyInvite,
   respondToFamilyInvite_UserStep,
   approveFamilyJoinRequest_CaptainStep,
