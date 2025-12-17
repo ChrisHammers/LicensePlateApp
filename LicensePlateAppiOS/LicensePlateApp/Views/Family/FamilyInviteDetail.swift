@@ -6,14 +6,19 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct FamilyInviteDetail: View {
     let inviteId: String
     let familyId: String
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
+    @StateObject private var familyRepository = FamilyRepository()
     @State private var isProcessing = false
     @State private var hasAccepted = false
+    @State private var errorMessage: String?
+    @State private var showError = false
     
     var body: some View {
         NavigationStack {
@@ -69,27 +74,64 @@ struct FamilyInviteDetail: View {
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
                     }
+                    
+                    if let error = errorMessage {
+                        Text(error)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.red)
+                            .padding(.top, 8)
+                    }
                 }
                 .padding()
             }
             .navigationTitle("Family Invite".localized)
             .navigationBarTitleDisplayMode(.inline)
+            .alert("Error".localized, isPresented: $showError) {
+                Button("OK".localized, role: .cancel) { }
+            } message: {
+                if let error = errorMessage {
+                    Text(error)
+                }
+            }
+            .onAppear {
+                familyRepository.setModelContext(modelContext)
+            }
         }
     }
     
     private func respondToInvite(accept: Bool) {
+        guard authService.isOnline else {
+            errorMessage = "Requires network connection".localized
+            showError = true
+            return
+        }
+        
         isProcessing = true
+        errorMessage = nil
         
         Task {
-            // TODO: Call Cloud Function
-            await MainActor.run {
-                isProcessing = false
-                if accept {
-                    hasAccepted = true
-                    AnalyticsService.shared.log(.familyInviteUserAccepted)
-                } else {
-                    AnalyticsService.shared.log(.familyInviteUserDeclined)
-                    dismiss()
+            do {
+                try await familyRepository.respondToFamilyInvite(inviteId: inviteId, accept: accept)
+                
+                await MainActor.run {
+                    isProcessing = false
+                    if accept {
+                        hasAccepted = true
+                        AnalyticsService.shared.log(.familyInviteUserAccepted)
+                    } else {
+                        AnalyticsService.shared.log(.familyInviteUserDeclined)
+                        dismiss()
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    isProcessing = false
+                    errorMessage = error.localizedDescription
+                    showError = true
+                    if !accept {
+                        // If declining failed, still dismiss
+                        dismiss()
+                    }
                 }
             }
         }

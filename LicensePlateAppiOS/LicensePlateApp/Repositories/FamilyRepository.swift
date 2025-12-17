@@ -8,6 +8,8 @@
 import Foundation
 import SwiftData
 import FirebaseFirestore
+import FirebaseFunctions
+import FirebaseAuth
 import Combine
 
 @MainActor
@@ -373,6 +375,72 @@ class FamilyRepository: ObservableObject {
         )
         
         return (try? modelContext.fetch(descriptor)) ?? []
+    }
+    
+    // MARK: - Cloud Functions
+    
+    /// Create a new family
+    func createFamily(name: String) async throws -> String {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
+        }
+        
+        let functions = Functions.functions()
+        let createFamilyFunction = functions.httpsCallable("createFamily")
+        
+        let result = try await createFamilyFunction.call([
+            "name": name
+        ])
+        
+        guard let data = result.data as? [String: Any],
+              let familyId = data["familyId"] as? String else {
+            throw NSError(domain: "FamilyRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response from createFamily"])
+        }
+        
+        return familyId
+    }
+    
+    /// Redeem a share code to join a family
+    func redeemShareCode(code: String) async throws -> String {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
+        }
+        
+        let functions = Functions.functions()
+        let redeemCodeFunction = functions.httpsCallable("redeemShareCode")
+        
+        let result = try await redeemCodeFunction.call([
+            "code": code
+        ])
+        
+        guard let data = result.data as? [String: Any],
+              let inviteId = data["inviteId"] as? String else {
+            throw NSError(domain: "FamilyRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response from redeemShareCode"])
+        }
+        
+        return inviteId
+    }
+    
+    /// Respond to a family invite (user step)
+    func respondToFamilyInvite(inviteId: String, accept: Bool) async throws {
+        guard Auth.auth().currentUser != nil else {
+            throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
+        }
+        
+        let functions = Functions.functions()
+        let respondFunction = functions.httpsCallable("respondToFamilyInvite_UserStep")
+        
+        _ = try await respondFunction.call([
+            "inviteId": inviteId,
+            "response": accept ? "accept" : "decline"
+        ])
+    }
+    
+    /// Get familyId from an invite
+    func getFamilyIdFromInvite(inviteId: String) async throws -> String? {
+        let inviteDoc = try await db.collection("invites").document(inviteId).getDocument()
+        guard let data = inviteDoc.data() else { return nil }
+        return data["familyId"] as? String
     }
     
     deinit {

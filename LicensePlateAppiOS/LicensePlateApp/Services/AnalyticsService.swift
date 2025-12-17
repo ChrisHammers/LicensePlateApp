@@ -39,7 +39,12 @@ class AnalyticsService {
         case friendCapReached
         
         // Family
+        case familyCreateCTATapped
+        case familyJoinCTATapped
         case familyCreated
+        case familyCreateFailed(error: String)
+        case familyJoinCodeRedeemed
+        case familyJoinFailed(error: String)
         case familyInviteSent
         case familyInviteUserAccepted
         case familyInviteUserDeclined
@@ -79,7 +84,12 @@ class AnalyticsService {
             case .friendRequestDeclined: return "friend_request_declined"
             case .friendRemoved: return "friend_removed"
             case .friendCapReached: return "friend_cap_reached"
+            case .familyCreateCTATapped: return "family_create_cta_tapped"
+            case .familyJoinCTATapped: return "family_join_cta_tapped"
             case .familyCreated: return "family_created"
+            case .familyCreateFailed: return "family_create_failed"
+            case .familyJoinCodeRedeemed: return "family_join_code_redeemed"
+            case .familyJoinFailed: return "family_join_failed"
             case .familyInviteSent: return "family_invite_sent"
             case .familyInviteUserAccepted: return "family_invite_user_accepted"
             case .familyInviteUserDeclined: return "family_invite_user_declined"
@@ -113,6 +123,10 @@ class AnalyticsService {
                 return ["queryType": queryType]
             case .shareCodeGenerated(let type), .shareCodeUsed(let type):
                 return ["type": type]
+            case .familyCreateFailed(let error):
+                return ["error": error]
+            case .familyJoinFailed(let error):
+                return ["error": error]
             default:
                 return nil
             }

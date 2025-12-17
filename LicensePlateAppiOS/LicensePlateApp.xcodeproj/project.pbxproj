@@ -20,6 +20,8 @@
 		76381CD72EE2499D00D7B216 /* GoogleMapsUtils in Frameworks */ = {isa = PBXBuildFile; productRef = 76381CD62EE2499D00D7B216 /* GoogleMapsUtils */; };
 		767F814D2EF2056C00D11D3F /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 767F814C2EF2056C00D11D3F /* FirebaseAnalytics */; };
 		767F814F2EF2057000D11D3F /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 767F814E2EF2057000D11D3F /* FirebaseAnalyticsCore */; };
+		767F82E52EF3239800D11D3F /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = 767F82E42EF3239800D11D3F /* FirebaseFunctions */; };
+		767F82E72EF3239C00D11D3F /* FirebaseFunctionsCombine-Community in Frameworks */ = {isa = PBXBuildFile; productRef = 767F82E62EF3239C00D11D3F /* FirebaseFunctionsCombine-Community */; };
 		769546CA2EE0BA1000B0498F /* GoogleMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 769546C92EE0BA1000B0498F /* GoogleMaps */; };
 /* End PBXBuildFile section */
 
@@ -89,11 +91,13 @@
 				767F814D2EF2056C00D11D3F /* FirebaseAnalytics in Frameworks */,
 				767F814F2EF2057000D11D3F /* FirebaseAnalyticsCore in Frameworks */,
 				7613125C2ECBB27900F19D3A /* FirebaseFirestoreCombine-Community in Frameworks */,
+				767F82E72EF3239C00D11D3F /* FirebaseFunctionsCombine-Community in Frameworks */,
 				769546CA2EE0BA1000B0498F /* GoogleMaps in Frameworks */,
 				76381CD72EE2499D00D7B216 /* GoogleMapsUtils in Frameworks */,
 				761312652ECBB31A00F19D3A /* GoogleSignInSwift in Frameworks */,
 				7613125E2ECBB27900F19D3A /* FirebaseStorage in Frameworks */,
 				7613125A2ECBB27900F19D3A /* FirebaseFirestore in Frameworks */,
+				767F82E52EF3239800D11D3F /* FirebaseFunctions in Frameworks */,
 				761312542ECBB27900F19D3A /* FirebaseAuthCombine-Community in Frameworks */,
 				761312632ECBB31A00F19D3A /* GoogleSignIn in Frameworks */,
 			);
@@ -178,6 +182,8 @@
 				76381CD62EE2499D00D7B216 /* GoogleMapsUtils */,
 				767F814C2EF2056C00D11D3F /* FirebaseAnalytics */,
 				767F814E2EF2057000D11D3F /* FirebaseAnalyticsCore */,
+				767F82E42EF3239800D11D3F /* FirebaseFunctions */,
+				767F82E62EF3239C00D11D3F /* FirebaseFunctionsCombine-Community */,
 			);
 			productName = LicensePlateApp;
 			productReference = 765D54122EC391DA00D4FED1 /* LicensePlateApp.app */;
@@ -757,6 +763,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 761312502ECBB27900F19D3A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAnalyticsCore;
+		};
+		767F82E42EF3239800D11D3F /* FirebaseFunctions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 761312502ECBB27900F19D3A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFunctions;
+		};
+		767F82E62EF3239C00D11D3F /* FirebaseFunctionsCombine-Community */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 761312502ECBB27900F19D3A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = "FirebaseFunctionsCombine-Community";
 		};
 		769546C92EE0BA1000B0498F /* GoogleMaps */ = {
 			isa = XCSwiftPackageProductDependency;
