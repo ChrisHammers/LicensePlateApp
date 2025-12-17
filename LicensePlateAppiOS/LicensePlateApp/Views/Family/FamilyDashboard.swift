@@ -16,6 +16,7 @@ struct FamilyDashboard: View {
     @State private var showCreateFamilySheet = false
     @State private var showJoinFamilySheet = false
     @State private var showAddMemberSheet = false
+    @State private var showCreateShareCodeSheet = false
     
     init() {
         let familyRepo = FamilyRepository()
@@ -58,7 +59,7 @@ struct FamilyDashboard: View {
                                 FamilyMemberRow(member: member)
                             }
                             
-                            // Invite button for creators/captains
+                            // Invite buttons for creators/captains
                             if viewModel.canManageFamily {
                                 Button {
                                     showAddMemberSheet = true
@@ -66,6 +67,18 @@ struct FamilyDashboard: View {
                                     HStack {
                                         Image(systemName: "person.badge.plus")
                                         Text("Invite Member".localized)
+                                    }
+                                    .font(.system(.body, design: .rounded))
+                                    .foregroundStyle(Color.Theme.primaryBlue)
+                                }
+                                .disabled(!authService.isOnline)
+                                
+                                Button {
+                                    showCreateShareCodeSheet = true
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "qrcode")
+                                        Text("Create Share Code".localized)
                                     }
                                     .font(.system(.body, design: .rounded))
                                     .foregroundStyle(Color.Theme.primaryBlue)
@@ -210,6 +223,12 @@ struct FamilyDashboard: View {
                             // Reload data after inviting member
                             viewModel.loadData()
                         }
+                }
+            }
+            .sheet(isPresented: $showCreateShareCodeSheet) {
+                if let family = viewModel.family {
+                    CreateFamilyShareCodeSheet(familyId: family.familyId)
+                        .environmentObject(authService)
                 }
             }
             .onAppear {

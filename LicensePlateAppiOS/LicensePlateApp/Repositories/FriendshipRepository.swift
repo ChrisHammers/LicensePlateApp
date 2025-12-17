@@ -8,6 +8,8 @@
 import Foundation
 import SwiftData
 import FirebaseFirestore
+import FirebaseFunctions
+import FirebaseAuth
 import Combine
 
 @MainActor
@@ -150,6 +152,45 @@ class FriendshipRepository: ObservableObject {
     /// Get outgoing friend requests
     func getOutgoingRequests(for userId: String) -> [Friendship] {
         getPendingFriendships(for: userId).filter { $0.initiatedBy == userId }
+    }
+    
+    // MARK: - Cloud Functions
+    
+    /// Send a friend invite to a user
+    func sendFriendInvite(toUserId: String, method: String = "search") async throws -> String {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            throw NSError(domain: "FriendshipRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
+        }
+        
+        let functions = Functions.functions()
+        let sendInviteFunction = functions.httpsCallable("sendFriendInvite")
+        
+        let result = try await sendInviteFunction.call([
+            "toUserId": toUserId,
+            "method": method
+        ])
+        
+        guard let data = result.data as? [String: Any],
+              let inviteId = data["inviteId"] as? String else {
+            throw NSError(domain: "FriendshipRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response from sendFriendInvite"])
+        }
+        
+        return inviteId
+    }
+    
+    /// Respond to a friend invite (accept or decline)
+    func respondToFriendInvite(inviteId: String, accept: Bool) async throws {
+        guard Auth.auth().currentUser != nil else {
+            throw NSError(domain: "FriendshipRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
+        }
+        
+        let functions = Functions.functions()
+        let respondFunction = functions.httpsCallable("respondToFriendInvite")
+        
+        _ = try await respondFunction.call([
+            "inviteId": inviteId,
+            "response": accept ? "accept" : "decline"
+        ])
     }
     
     deinit {

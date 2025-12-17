@@ -234,16 +234,25 @@ struct FamilyMemberSearchResultRow: View {
         // Use firebaseUID if available, otherwise fall back to id
         let toUserId = user.firebaseUID ?? user.id
         
+        print("📤 Sending family invite:")
+        print("   - To User ID: \(toUserId)")
+        print("   - Family ID: \(familyId)")
+        print("   - Method: search")
+        
         isInviting = true
         errorMessage = nil
         
         Task {
             do {
-                _ = try await familyRepository.sendFamilyInvite(
+                let inviteId = try await familyRepository.sendFamilyInvite(
                     toUserId: toUserId,
                     familyId: familyId,
                     method: "search"
                 )
+                
+                print("✅ Family invite sent successfully:")
+                print("   - Invite ID: \(inviteId)")
+                print("   - Check Firebase 'invites' collection for document ID: \(inviteId)")
                 
                 await MainActor.run {
                     isInviting = false
@@ -251,9 +260,34 @@ struct FamilyMemberSearchResultRow: View {
                     showSuccessAlert = true
                 }
             } catch {
+                let nsError = error as NSError
+                let errorCode = nsError.code
+                let errorDomain = nsError.domain
+                let errorDescription = error.localizedDescription
+                
+                print("❌ Family invite failed:")
+                print("   - Error Domain: \(errorDomain)")
+                print("   - Error Code: \(errorCode)")
+                print("   - Error Description: \(errorDescription)")
+                print("   - Full Error: \(error)")
+                
+                // Provide more user-friendly error messages
+                let userFriendlyMessage: String
+                if errorDescription.contains("permission-denied") {
+                    userFriendlyMessage = "You don't have permission to invite members to this family.".localized
+                } else if errorDescription.contains("failed-precondition") {
+                    userFriendlyMessage = "Unable to invite this user. They may already be in a family or have reached the limit.".localized
+                } else if errorDescription.contains("not-found") {
+                    userFriendlyMessage = "User not found.".localized
+                } else if errorDescription.contains("unauthenticated") {
+                    userFriendlyMessage = "Please sign in to send invites.".localized
+                } else {
+                    userFriendlyMessage = "Failed to send invite: \(errorDescription)".localized
+                }
+                
                 await MainActor.run {
                     isInviting = false
-                    errorMessage = error.localizedDescription
+                    errorMessage = userFriendlyMessage
                     showError = true
                 }
             }

@@ -13,6 +13,8 @@ struct FriendsHub: View {
     @EnvironmentObject var authService: FirebaseAuthService
     @StateObject private var viewModel: FriendsHubViewModel
     @State private var showAddFriendSheet = false
+    @State private var showCreateShareCodeSheet = false
+    @State private var showJoinByCodeSheet = false
     
     init() {
         // ViewModel will be initialized with authService from environment
@@ -58,16 +60,40 @@ struct FriendsHub: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showAddFriendSheet = true
+                    Menu {
+                        Button {
+                            showAddFriendSheet = true
+                        } label: {
+                            Label("Search for Friend".localized, systemImage: "person.badge.plus")
+                        }
+                        
+                        Button {
+                            showCreateShareCodeSheet = true
+                        } label: {
+                            Label("Create Share Code".localized, systemImage: "qrcode")
+                        }
+                        
+                        Button {
+                            showJoinByCodeSheet = true
+                        } label: {
+                            Label("Enter Share Code".localized, systemImage: "text.magnifyingglass")
+                        }
                     } label: {
-                        Image(systemName: "person.badge.plus")
+                        Image(systemName: "plus")
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
                 }
             }
             .sheet(isPresented: $showAddFriendSheet) {
                 AddFriendSheet()
+                    .environmentObject(authService)
+            }
+            .sheet(isPresented: $showCreateShareCodeSheet) {
+                CreateFriendShareCodeSheet()
+                    .environmentObject(authService)
+            }
+            .sheet(isPresented: $showJoinByCodeSheet) {
+                JoinFriendByCodeSheet()
                     .environmentObject(authService)
             }
             .onAppear {
@@ -81,10 +107,43 @@ struct FriendsHub: View {
     private var friendsList: some View {
         Group {
             if viewModel.friends.isEmpty {
-                Text("No friends yet".localized)
-                    .foregroundStyle(Color.Theme.softBrown)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
+                VStack(spacing: 16) {
+                    Text("No friends yet".localized)
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding()
+                    
+                    VStack(spacing: 12) {
+                        Button {
+                            showCreateShareCodeSheet = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "qrcode")
+                                Text("Create Share Code".localized)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.Theme.primaryBlue)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                        }
+                        
+                        Button {
+                            showJoinByCodeSheet = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "text.magnifyingglass")
+                                Text("Enter Share Code".localized)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.Theme.cardBackground)
+                            .foregroundColor(Color.Theme.primaryBlue)
+                            .cornerRadius(12)
+                        }
+                    }
+                    .padding(.horizontal)
+                }
             } else {
                 ForEach(viewModel.friends) { friendship in
                     FriendRow(friendship: friendship)

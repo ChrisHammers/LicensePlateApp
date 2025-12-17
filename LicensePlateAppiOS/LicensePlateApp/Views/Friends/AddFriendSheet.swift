@@ -13,6 +13,7 @@ struct AddFriendSheet: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
     @StateObject private var userRepository = UserRepository()
+    @StateObject private var friendshipRepository = FriendshipRepository()
     @State private var searchQuery = ""
     @State private var searchType: UserRepository.SearchType = .all
     @State private var searchResults: [AppUser] = []
@@ -20,6 +21,7 @@ struct AddFriendSheet: View {
     @State private var searchTask: Task<Void, Never>?
     @State private var errorMessage: String?
     @State private var showError = false
+    @State private var showSuccessAlert = false
     
     var body: some View {
         NavigationStack {
@@ -57,7 +59,13 @@ struct AddFriendSheet: View {
                     if !searchResults.isEmpty {
                         Section("Results".localized) {
                             ForEach(searchResults) { user in
-                                UserSearchResultRow(user: user)
+                                UserSearchResultRow(
+                                    user: user,
+                                    friendshipRepository: friendshipRepository,
+                                    errorMessage: $errorMessage,
+                                    showError: $showError,
+                                    showSuccessAlert: $showSuccessAlert
+                                )
                             }
                         }
                     }
@@ -76,6 +84,7 @@ struct AddFriendSheet: View {
             }
             .onAppear {
                 userRepository.setModelContext(modelContext)
+                friendshipRepository.setModelContext(modelContext)
                 AnalyticsService.shared.log(.addFriendCTATapped)
             }
             .onChange(of: searchQuery) { oldValue, newValue in
@@ -110,6 +119,13 @@ struct AddFriendSheet: View {
                 if let errorMessage = errorMessage {
                     Text(errorMessage)
                 }
+            }
+            .alert("Invite Sent".localized, isPresented: $showSuccessAlert) {
+                Button("OK".localized) {
+                    dismiss()
+                }
+            } message: {
+                Text("Friend invitation has been sent successfully.".localized)
             }
             .onDisappear {
                 searchTask?.cancel()
@@ -157,7 +173,12 @@ struct AddFriendSheet: View {
 
 struct UserSearchResultRow: View {
     let user: AppUser
+    let friendshipRepository: FriendshipRepository
+    @Binding var errorMessage: String?
+    @Binding var showError: Bool
+    @Binding var showSuccessAlert: Bool
     @EnvironmentObject var authService: FirebaseAuthService
+    @State private var isInviting = false
     
     var body: some View {
         HStack {
@@ -179,13 +200,50 @@ struct UserSearchResultRow: View {
             Spacer()
             
             Button("Add".localized) {
-                // Send friend invite via Cloud Function
-                AnalyticsService.shared.log(.userSearchResultSelected)
+                sendInvite()
             }
             .buttonStyle(.borderedProminent)
             .tint(Color.Theme.primaryBlue)
+            .disabled(isInviting || !authService.isOnline)
         }
         .padding(.vertical, 8)
+    }
+    
+    private func sendInvite() {
+        guard authService.isOnline else {
+            errorMessage = "Requires network connection".localized
+            showError = true
+            return
+        }
+        
+        // Use firebaseUID if available, otherwise fall back to id
+        let toUserId = user.firebaseUID ?? user.id
+        
+        isInviting = true
+        errorMessage = nil
+        
+        Task {
+            do {
+                _ = try await friendshipRepository.sendFriendInvite(
+                    toUserId: toUserId,
+                    method: "search"
+                )
+                
+                await MainActor.run {
+                    isInviting = false
+                    AnalyticsService.shared.log(.userSearchResultSelected)
+                    AnalyticsService.shared.log(.friendRequestSent)
+                    showSuccessAlert = true
+                }
+            } catch {
+                await MainActor.run {
+                    isInviting = false
+                    errorMessage = error.localizedDescription
+                    showError = true
+                    print("❌ Friend invite error: \(error.localizedDescription)")
+                }
+            }
+        }
     }
 }
 

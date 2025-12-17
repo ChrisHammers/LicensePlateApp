@@ -620,6 +620,35 @@ class FamilyRepository: ObservableObject {
         return data["familyId"] as? String
     }
     
+    /// Create a share code (friend or family type)
+    func createShareCode(type: String, familyId: String? = nil) async throws -> (codeId: String, code: String, expiresAt: Date) {
+        guard Auth.auth().currentUser != nil else {
+            throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
+        }
+        
+        let functions = Functions.functions()
+        let createCodeFunction = functions.httpsCallable("createShareCode")
+        
+        var data: [String: Any] = ["type": type]
+        if let familyId = familyId {
+            data["familyId"] = familyId
+        }
+        
+        let result = try await createCodeFunction.call(data)
+        
+        guard let resultData = result.data as? [String: Any],
+              let codeId = resultData["codeId"] as? String,
+              let code = resultData["code"] as? String,
+              let expiresAtString = resultData["expiresAt"] as? String else {
+            throw NSError(domain: "FamilyRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response from createShareCode"])
+        }
+        
+        let formatter = ISO8601DateFormatter()
+        let expiresAt = formatter.date(from: expiresAtString) ?? Date().addingTimeInterval(15 * 60)
+        
+        return (codeId: codeId, code: code, expiresAt: expiresAt)
+    }
+    
     deinit {
         stopListening()
     }
