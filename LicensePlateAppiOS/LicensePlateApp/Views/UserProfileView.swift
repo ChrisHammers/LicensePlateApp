@@ -15,10 +15,9 @@ struct UserProfileView: View {
     @ObservedObject var authService: FirebaseAuthService
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var coordinator: MainSettingsCoordinator
     
     // Navigation
-    @StateObject private var coordinator = MainSettingsCoordinator()
-    @State private var navigationPath = NavigationPath()
     
     // Keep local copies for editing
     @State private var currentUserName: String
@@ -132,7 +131,6 @@ struct UserProfileView: View {
     }
     
     var body: some View {
-        NavigationStack(path: $navigationPath) {
             ZStack {
                 Color.Theme.background
                     .ignoresSafeArea()
@@ -299,18 +297,16 @@ struct UserProfileView: View {
                             description: "Manage your friends and friend requests".localized,
                             icon: "person.2"
                         ) {
-                            coordinator.navigateToFriends(path: $navigationPath)
+                            coordinator.navigateToFriends()
                         }
-                        
-                        Divider()
-                        
-                        SettingNavigationRow(
-                            title: "Family".localized,
-                            description: "View and manage your family".localized,
-                            icon: "house"
-                        ) {
-                            coordinator.navigateToFamily(path: $navigationPath)
-                        }
+                      
+                      SettingNavigationRow(
+                          title: "Family".localized,
+                          description: "View and manage your family".localized,
+                          icon: "house"
+                      ) {
+                          coordinator.navigateToFamily()
+                      }
                     } header: {
                         Text("Friends & Family".localized)
                             .font(.system(.headline, design: .rounded))
@@ -648,21 +644,6 @@ struct UserProfileView: View {
                     }
                 )
             }
-            .navigationDestination(for: MainSettingsCoordinator.SettingsDestination.self) { destination in
-                Group {
-                    switch destination {
-                    case .friends:
-                        FriendsHub()
-                            .environmentObject(authService)
-                    case .family:
-                        FamilyDashboard()
-                            .environmentObject(authService)
-                    default:
-                        EmptyView()
-                    }
-                }
-            }
-        }
             .onChange(of: selectedImage) { oldValue, newValue in
                 if let newImage = newValue {
                     // Show confirmation instead of immediately uploading

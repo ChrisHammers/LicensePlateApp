@@ -715,7 +715,6 @@ private struct TripMissingView: View {
 // Default Settings View for new trips
 struct DefaultSettingsView: View {
     @StateObject private var coordinator = MainSettingsCoordinator()
-    @State private var navigationPath = NavigationPath()
     
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var systemColorScheme
@@ -790,7 +789,7 @@ struct DefaultSettingsView: View {
     }
     
     var body: some View {
-        NavigationStack(path: $navigationPath) {
+      NavigationStack(path: $coordinator.path) { //NavigationStack(path: Binding(get: { coordinator.path }, set: { coordinator.path = $0 })) {
             ZStack {
                 Color.Theme.background
                     .ignoresSafeArea()
@@ -805,7 +804,7 @@ struct DefaultSettingsView: View {
                                     description: "Edit username and manage account".localized,
                                     icon: "person.circle"
                                 ) {
-                                    coordinator.navigateToProfile(path: $navigationPath)
+                                    coordinator.navigateToProfile()
                                 }
                                 
                                 Divider()
@@ -817,7 +816,7 @@ struct DefaultSettingsView: View {
                                 description: "Manage location, microphone, notifications, and other permissions".localized,
                                 icon: "hand.raised.fill"
                             ) {
-                                coordinator.navigateToPrivacyPermissions(path: $navigationPath)
+                                coordinator.navigateToPrivacyPermissions()
                             }
                             
                             Divider()
@@ -828,7 +827,7 @@ struct DefaultSettingsView: View {
                                 description: "Customize dark mode, map style, and other app settings",
                                 icon: "slider.horizontal.3"
                             ) {
-                                coordinator.navigateToAppPreferences(path: $navigationPath)
+                                coordinator.navigateToAppPreferences()
                             }
                             
                             Divider()
@@ -839,7 +838,7 @@ struct DefaultSettingsView: View {
                                 description: "Set default countries, tracking, and voice settings for new trips".localized,
                                 icon: "plus.circle.fill"
                             ) {
-                                coordinator.navigateToNewTripDefaults(path: $navigationPath)
+                                coordinator.navigateToNewTripDefaults()
                             }
                             
                             Divider()
@@ -851,7 +850,7 @@ struct DefaultSettingsView: View {
                               description: "Configure default voice recognition settings for new trips",
                               icon: "mic.fill"
                             ) {
-                              coordinator.navigateToVoiceDefaults(path: $navigationPath)
+                              coordinator.navigateToVoiceDefaults()
                             }
                             
                             Divider()
@@ -864,7 +863,7 @@ struct DefaultSettingsView: View {
                                 description: "Get help, report bugs, suggest features, and learn about the app".localized,
                                 icon: "questionmark.circle.fill"
                             ) {
-                                coordinator.navigateToHelpAbout(path: $navigationPath)
+                                coordinator.navigateToHelpAbout()
                             }
                         }
                         .padding(.horizontal, 16)
@@ -936,6 +935,7 @@ struct DefaultSettingsView: View {
                 }
             }
         }
+      .environmentObject(coordinator)
         .background(Color.Theme.background)
     }
     

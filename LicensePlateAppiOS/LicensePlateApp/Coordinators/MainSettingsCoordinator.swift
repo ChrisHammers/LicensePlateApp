@@ -21,72 +21,80 @@ final class MainSettingsCoordinator: ObservableObject {
         case friends
         case family
     }
-    
+  
+    @Published var path = NavigationPath()
+  
     // MARK: - Navigation Methods
     
     /// Navigate to the Profile view
-    func navigateToProfile(path: Binding<NavigationPath>) {
-        path.wrappedValue.append(SettingsDestination.profile)
+    func navigateToProfile() {
+        path.append(SettingsDestination.profile)
+      
+    print("pathProfile: \(path.count)")
+    
     }
     
     /// Navigate to the Privacy & Permissions view
-    func navigateToPrivacyPermissions(path: Binding<NavigationPath>) {
-        path.wrappedValue.append(SettingsDestination.privacyPermissions)
+    func navigateToPrivacyPermissions() {
+        path.append(SettingsDestination.privacyPermissions)
     }
     
     /// Navigate to the App Preferences view
-    func navigateToAppPreferences(path: Binding<NavigationPath>) {
-        path.wrappedValue.append(SettingsDestination.appPreferences)
+    func navigateToAppPreferences() {
+        path.append(SettingsDestination.appPreferences)
     }
     
     /// Navigate to the New Trip Defaults view
-    func navigateToNewTripDefaults(path: Binding<NavigationPath>) {
-        path.wrappedValue.append(SettingsDestination.newTripDefaults)
+    func navigateToNewTripDefaults() {
+        path.append(SettingsDestination.newTripDefaults)
     }
     
     /// Navigate to the Voice Defaults view
-    func navigateToVoiceDefaults(path: Binding<NavigationPath>) {
-        path.wrappedValue.append(SettingsDestination.voiceDefaults)
+    func navigateToVoiceDefaults() {
+        path.append(SettingsDestination.voiceDefaults)
     }
     
     /// Navigate to the Help & About view
-    func navigateToHelpAbout(path: Binding<NavigationPath>) {
-        path.wrappedValue.append(SettingsDestination.helpAbout)
+    func navigateToHelpAbout() {
+        path.append(SettingsDestination.helpAbout)
     }
     
     /// Navigate to the Friends view
-    func navigateToFriends(path: Binding<NavigationPath>) {
-        path.wrappedValue.append(SettingsDestination.friends)
-    }
+    func navigateToFriends() {
+        path.append(SettingsDestination.friends)
+      print("pathFriends: \(path.count)")
+        }
     
     /// Navigate to the Family view
-    func navigateToFamily(path: Binding<NavigationPath>) {
-        path.wrappedValue.append(SettingsDestination.family)
+    func navigateToFamily() {
+        path.append(SettingsDestination.family)
     }
     
     /// Navigate to a specific destination
-    func navigate(to destination: SettingsDestination, path: Binding<NavigationPath>) {
-        path.wrappedValue.append(destination)
+    func navigate(to destination: SettingsDestination) {
+        path.append(destination)
     }
     
     /// Pop the current view from the navigation stack
-    func pop(path: Binding<NavigationPath>) {
-        if !path.wrappedValue.isEmpty {
-            path.wrappedValue.removeLast()
+    func pop() {
+      
+    print("pathPop: \(path.count)")
+        if !path.isEmpty {
+            path.removeLast()
         }
     }
     
     /// Pop to the root of the navigation stack
-    func popToRoot(path: Binding<NavigationPath>) {
-        path.wrappedValue.removeLast(path.wrappedValue.count)
+    func popToRoot() {
+        path.removeLast(path.count)
     }
     
     /// Pop to a specific destination
     /// Note: NavigationPath doesn't provide direct access to its contents,
     /// so this implementation pops to root and navigates to the destination
-    func popTo(_ destination: SettingsDestination, path: Binding<NavigationPath>) {
-        popToRoot(path: path)
-        navigate(to: destination, path: path)
+    func popTo(_ destination: SettingsDestination) {
+        popToRoot()
+        navigate(to: destination)
     }
 }
 

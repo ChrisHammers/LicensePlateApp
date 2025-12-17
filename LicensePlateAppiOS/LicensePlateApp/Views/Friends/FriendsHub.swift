@@ -23,7 +23,7 @@ struct FriendsHub: View {
     }
     
     var body: some View {
-        NavigationStack {
+      //  NavigationStack {
             ZStack {
                 Color.Theme.background
                     .ignoresSafeArea()
@@ -75,7 +75,7 @@ struct FriendsHub: View {
                 viewModel.loadData()
                 AnalyticsService.shared.log(.friendsScreenOpened)
             }
-        }
+      //  }
     }
     
     private var friendsList: some View {

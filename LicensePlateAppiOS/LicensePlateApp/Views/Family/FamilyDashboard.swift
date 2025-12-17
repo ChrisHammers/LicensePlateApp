@@ -23,7 +23,7 @@ struct FamilyDashboard: View {
     }
     
     var body: some View {
-        NavigationStack {
+     //   NavigationStack {
             ZStack {
                 Color.Theme.background
                     .ignoresSafeArea()
@@ -108,7 +108,7 @@ struct FamilyDashboard: View {
                 viewModel.loadData()
                 AnalyticsService.shared.log(.familyScreenOpened)
             }
-        }
+       // }
     }
 }
 
