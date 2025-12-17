@@ -30,28 +30,149 @@ class UserRepository: ObservableObject {
     // MARK: - User Search
     
     /// Search users by username (always searchable)
+    /// Supports exact match, prefix matching, and contains matching
     func searchByUsername(_ username: String) async throws -> [AppUser] {
         isLoading = true
         defer { isLoading = false }
         
-        // Search in usernames index collection (lowercase)
         let usernameLower = username.lowercased()
-        let usernameDoc = try await db.collection("usernames").document(usernameLower).getDocument()
+        print("🔍 Searching for username: '\(usernameLower)'")
         
-        guard usernameDoc.exists,
-              let data = usernameDoc.data(),
-              let uid = data["uid"] as? String else {
-            return []
+        var results: [AppUser] = []
+        
+        // First try exact match in users collection (case-insensitive)
+        // Try both lowercase and original case
+        let searchVariants = [usernameLower, username] // Try lowercase and original
+        
+        for searchTerm in searchVariants {
+            do {
+                print("🔍 Trying exact match search for: '\(searchTerm)'")
+                let exactQuery = db.collection("users")
+                    .whereField("userName", isEqualTo: searchTerm)
+                    .limit(to: 1)
+                
+                let exactSnapshot = try await exactQuery.getDocuments()
+                print("📊 Exact match found \(exactSnapshot.documents.count) documents")
+                
+                for document in exactSnapshot.documents {
+                    let data = document.data()
+                    if let foundUsername = data["userName"] as? String {
+                        let user = try await userFromFirestoreData(data, id: document.documentID)
+                        // Avoid duplicates
+                        if !results.contains(where: { $0.id == user.id }) {
+                            results.append(user)
+                            print("✅ Added exact match user: \(user.userName)")
+                        }
+                    }
+                }
+            } catch {
+                print("⚠️ Exact match search failed for '\(searchTerm)': \(error.localizedDescription)")
+            }
         }
         
-        // Fetch user document
-        let userDoc = try await db.collection("users").document(uid).getDocument()
-        
-        guard let userData = userDoc.data() else {
-            return []
+        // If we found exact matches, return them
+        if !results.isEmpty {
+            return results
         }
         
-        return [try await userFromFirestoreData(userData, id: uid)]
+        // Try prefix search in users collection
+        // Since usernames may be stored with mixed case, we need to search a broader range
+        // We'll search from the lowercase query to cover both cases
+        let queryStart = usernameLower
+        let queryEnd = usernameLower + "\u{f8ff}" // Unicode character for range query
+        
+        // Also try uppercase variant for case-insensitive search
+        let queryStartUpper = username.prefix(1).uppercased() + usernameLower.dropFirst()
+        let queryEndUpper = queryStartUpper + "\u{f8ff}"
+        
+        let searchRanges = [(queryStart, queryEnd), (queryStartUpper, queryEndUpper)]
+        
+        for (start, end) in searchRanges {
+            do {
+                print("🔍 Trying prefix search: '\(start)' to '\(end)'")
+                // Firestore field is "userName" (camelCase)
+                let query = db.collection("users")
+                    .whereField("userName", isGreaterThanOrEqualTo: start)
+                    .whereField("userName", isLessThan: end)
+                    .limit(to: 50) // Get more results for contains filtering
+                
+                let snapshot = try await query.getDocuments()
+                print("📊 Found \(snapshot.documents.count) documents in prefix range")
+                
+                for document in snapshot.documents {
+                    let data = document.data()
+                    // Firestore field is "userName" (camelCase)
+                    if let foundUsername = data["userName"] as? String {
+                        let foundUsernameLower = foundUsername.lowercased()
+                        print("  - Checking username: '\(foundUsername)' (lowercase: '\(foundUsernameLower)') contains '\(usernameLower)'? \(foundUsernameLower.contains(usernameLower))")
+                        // Check if username contains the search query (case-insensitive)
+                        if foundUsernameLower.contains(usernameLower) {
+                            let user = try await userFromFirestoreData(data, id: document.documentID)
+                            // Avoid duplicates
+                            if !results.contains(where: { $0.id == user.id }) {
+                                results.append(user)
+                                print("  ✅ Added user: \(user.userName)")
+                            }
+                        }
+                    } else {
+                        print("  ⚠️ Document \(document.documentID) has no userName field. Available fields: \(data.keys.joined(separator: ", "))")
+                    }
+                }
+                
+                print("📊 Total results after filtering: \(results.count)")
+                // If we found results, return them (limit to 10)
+                if results.count >= 10 {
+                    return Array(results.prefix(10))
+                }
+            } catch {
+                // If index doesn't exist, log the error
+                print("❌ Username prefix search failed for range '\(start)'-'\(end)': \(error.localizedDescription)")
+                if let nsError = error as NSError? {
+                    print("   Domain: \(nsError.domain), Code: \(nsError.code)")
+                }
+            }
+        }
+        
+        // If prefix search didn't work (possibly due to case sensitivity),
+        // try a fallback: fetch a limited set and filter client-side
+        // This is less efficient but works when usernames have mixed case
+        if results.isEmpty && usernameLower.count >= 3 {
+            do {
+                print("🔍 Fallback: Fetching users for client-side filtering")
+                // Fetch a reasonable number of users (limit to avoid performance issues)
+                // Note: This is a workaround for case-sensitivity issues
+                let fallbackQuery = db.collection("users")
+                    .limit(to: 100) // Limit to 100 for performance
+                
+                let fallbackSnapshot = try await fallbackQuery.getDocuments()
+                print("📊 Fetched \(fallbackSnapshot.documents.count) users for filtering")
+                
+                for document in fallbackSnapshot.documents {
+                    let data = document.data()
+                    if let foundUsername = data["userName"] as? String {
+                        let foundUsernameLower = foundUsername.lowercased()
+                        // Case-insensitive contains check
+                        if foundUsernameLower.contains(usernameLower) {
+                            let user = try await userFromFirestoreData(data, id: document.documentID)
+                            results.append(user)
+                            print("  ✅ Added user via fallback: \(user.userName)")
+                            
+                            // Limit to 10 results
+                            if results.count >= 10 {
+                                break
+                            }
+                        }
+                    }
+                }
+                
+                print("📊 Fallback search found \(results.count) results")
+            } catch {
+                print("❌ Fallback search failed: \(error.localizedDescription)")
+            }
+        }
+        
+        print("⚠️ Final result count: \(results.count) for username: '\(usernameLower)'")
+        return results
     }
     
     /// Search users by email (only if emailSearchable is true)
@@ -151,8 +272,10 @@ class UserRepository: ObservableObject {
     // MARK: - User Data Conversion
     
     private func userFromFirestoreData(_ data: [String: Any], id: String) async throws -> AppUser {
-        guard let userName = data["username"] as? String else {
-            throw NSError(domain: "UserRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid user data"])
+        // Firestore field is "userName" (camelCase), not "username"
+        guard let userName = data["userName"] as? String else {
+            print("⚠️ User document \(id) missing userName field. Available fields: \(data.keys.joined(separator: ", "))")
+            throw NSError(domain: "UserRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid user data: missing userName"])
         }
         
         let privacy = data["privacy"] as? [String: Any] ?? [:]

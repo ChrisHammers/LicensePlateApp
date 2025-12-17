@@ -17,6 +17,9 @@ struct AddFriendSheet: View {
     @State private var searchType: UserRepository.SearchType = .all
     @State private var searchResults: [AppUser] = []
     @State private var isSearching = false
+    @State private var searchTask: Task<Void, Never>?
+    @State private var errorMessage: String?
+    @State private var showError = false
     
     var body: some View {
         NavigationStack {
@@ -29,13 +32,26 @@ struct AddFriendSheet: View {
                         TextField("Username, email, or phone".localized, text: $searchQuery)
                             .textFieldStyle(.roundedBorder)
                             .onSubmit {
-                                performSearch()
+                                Task {
+                                    await performSearch()
+                                }
                             }
                         
-                        Button("Search".localized) {
-                            performSearch()
+                        if searchQuery.count < 3 && !searchQuery.isEmpty {
+                            Text("Enter at least 3 characters to search".localized)
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
                         }
-                        .disabled(searchQuery.isEmpty || isSearching)
+                        
+                        if isSearching {
+                            HStack {
+                                ProgressView()
+                                    .scaleEffect(0.8)
+                                Text("Searching...".localized)
+                                    .font(.system(.caption, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown)
+                            }
+                        }
                     }
                     
                     if !searchResults.isEmpty {
@@ -62,25 +78,78 @@ struct AddFriendSheet: View {
                 userRepository.setModelContext(modelContext)
                 AnalyticsService.shared.log(.addFriendCTATapped)
             }
+            .onChange(of: searchQuery) { oldValue, newValue in
+                // Cancel previous search task
+                searchTask?.cancel()
+                
+                // Clear results if query is too short
+                if newValue.count < 3 {
+                    searchResults = []
+                    isSearching = false
+                    return
+                }
+                
+                // Debounce search - wait 500ms after user stops typing
+                searchTask = Task {
+                    do {
+                        try await Task.sleep(nanoseconds: 500_000_000) // 500ms
+                        
+                        // Check if task was cancelled
+                        try Task.checkCancellation()
+                        
+                        // Perform search
+                        await performSearch()
+                    } catch {
+                        // Task was cancelled or failed - ignore
+                    }
+                }
+            }
+            .alert("Error".localized, isPresented: $showError) {
+                Button("OK".localized) {}
+            } message: {
+                if let errorMessage = errorMessage {
+                    Text(errorMessage)
+                }
+            }
+            .onDisappear {
+                searchTask?.cancel()
+            }
         }
     }
     
-    private func performSearch() {
-        guard !searchQuery.isEmpty else { return }
+    private func performSearch() async {
+        // Minimum 3 characters required
+        guard searchQuery.count >= 3 else {
+            await MainActor.run {
+                searchResults = []
+                isSearching = false
+            }
+            return
+        }
         
-        isSearching = true
-        Task {
-            do {
-                let results = try await userRepository.searchUsers(query: searchQuery, searchType: searchType)
-                await MainActor.run {
-                    searchResults = results
-                    isSearching = false
-                    AnalyticsService.shared.log(.userSearchPerformed(queryType: searchType == .all ? "all" : searchType == .username ? "username" : searchType == .email ? "email" : "phone"))
+        await MainActor.run {
+            isSearching = true
+            errorMessage = nil
+        }
+        
+        do {
+            let results = try await userRepository.searchUsers(query: searchQuery, searchType: searchType)
+            await MainActor.run {
+                searchResults = results
+                isSearching = false
+                AnalyticsService.shared.log(.userSearchPerformed(queryType: searchType == .all ? "all" : searchType == .username ? "username" : searchType == .email ? "email" : "phone"))
+                
+                // Log if no results found for debugging
+                if results.isEmpty {
+                    print("🔍 Search for '\(searchQuery)' returned no results")
                 }
-            } catch {
-                await MainActor.run {
-                    isSearching = false
-                }
+            }
+        } catch {
+            await MainActor.run {
+                isSearching = false
+                errorMessage = error.localizedDescription
+                showError = true
+                print("❌ Search error: \(error.localizedDescription)")
             }
         }
     }

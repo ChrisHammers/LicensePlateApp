@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function uid() {
+      return request.auth.uid;
+    }
+
+    function userDoc(userId) {
+      return get(/databases/$(database)/documents/users/$(userId));
+    }
+
+    function isRetiredGeneral(userId) {
+      return userDoc(userId).data.isRetiredGeneral == true;
+    }
+
+    function isFamilyMember(familyId) {
+      return exists(/databases/$(database)/documents/families/$(familyId)/members/$(uid()));
+    }
+
+    function familyMemberRole(familyId, userId) {
+      return get(/databases/$(database)/documents/families/$(familyId)/members/$(userId)).data.role;
+    }
+
+    function isCreator(familyId) {
+      return isFamilyMember(familyId) && familyMemberRole(familyId, uid()) == "creator";
+    }
+
+    function isCaptain(familyId) {
+      return isFamilyMember(familyId) && familyMemberRole(familyId, uid()) == "captain";
+    }
+
+    // USERS
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && uid() == userId;
+      allow update: if isSignedIn() && uid() == userId;
+      allow delete: if false; // handle via backend flows if needed
+    }
+
+    // USERNAME INDEX (write via Cloud Function / transaction)
+    match /usernames/{usernameLower} {
+      allow read: if isSignedIn();
+      allow write: if false; // server-only to preserve uniqueness
+    }
+
+    // FRIENDSHIPS
+    match /friends/{friendshipId} {
+      allow read: if isSignedIn() &&
+        (uid() == resource.data.userA || uid() == resource.data.userB);
+
+      allow create: if isSignedIn() &&
+        request.resource.data.status == "pending" &&
+        (uid() == request.resource.data.userA || uid() == request.resource.data.userB);
+
+      allow update: if isSignedIn() &&
+        (uid() == resource.data.userA || uid() == resource.data.userB);
+
+      allow delete: if isSignedIn() &&
+        (uid() == resource.data.userA || uid() == resource.data.userB);
+    }
+
+    // INVITES
+    match /invites/{inviteId} {
+      allow read: if isSignedIn() &&
+        (uid() == resource.data.fromUserId || uid() == resource.data.toUserId);
+
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() &&
+        (uid() == resource.data.fromUserId || uid() == resource.data.toUserId);
+
+      allow delete: if false;
+    }
+
+    // SHARE CODES
+    match /share_codes/{codeId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.createdBy == uid();
+      allow update: if isSignedIn() && resource.data.createdBy == uid();
+      allow delete: if false;
+    }
+
+    // FAMILIES
+    match /families/{familyId} {
+      allow read: if isSignedIn() && isFamilyMember(familyId);
+
+      // create family allowed for signed-in user; membership enforced via backend
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (isCreator(familyId) || isCaptain(familyId));
+      allow delete: if false; // never delete; mark inactive via backend
+    }
+
+    match /families/{familyId}/members/{memberId} {
+      allow read: if isSignedIn() && isFamilyMember(familyId);
+
+      // Writes are limited; detailed role/limit enforcement should be in Cloud Functions
+      allow create, update, delete: if isSignedIn() && (isCreator(familyId) || isCaptain(familyId));
+    }
+
+    match /families/{familyId}/pending/{requestId} {
+      allow read: if isSignedIn() && isFamilyMember(familyId);
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (isCreator(familyId) || isCaptain(familyId));
+      allow delete: if false;
+    }
+
+    // STATS
+    match /families/{familyId}/stats/{docId} {
+      allow read: if isSignedIn() && isFamilyMember(familyId);
+      allow write: if false; // server-only updates
+    }
+
+    // AUDIT LOGS
+    match /audit_logs/{eventId} {
+      allow read: if false; // restrict to admins via custom claims in future
+      allow create: if false; // server-only
+      allow update, delete: if false;
+    }
+  }
+}
+
