@@ -18,6 +18,7 @@ class FamilyDashboardViewModel: ObservableObject {
     @Published var errorMessage: String?
     
     private let familyRepository: FamilyRepository
+    private var inviteRepository: InviteRepository?
     private var authService: FirebaseAuthService
     private var cancellables = Set<AnyCancellable>()
     
@@ -31,6 +32,24 @@ class FamilyDashboardViewModel: ObservableObject {
     
     func setModelContext(_ context: ModelContext) {
         familyRepository.setModelContext(context)
+        if inviteRepository == nil {
+            inviteRepository = InviteRepository(modelContext: context)
+        } else {
+            inviteRepository?.setModelContext(context)
+        }
+        
+        // Start listening to invites for badge counts
+        if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {
+            inviteRepository?.startListening(userId: userId)
+            
+            // Observe invite changes for real-time badge updates
+            inviteRepository?.$invites
+                .sink { [weak self] _ in
+                    // Trigger view update by accessing the count property
+                    self?.objectWillChange.send()
+                }
+                .store(in: &cancellables)
+        }
     }
     
     func setAuthService(_ service: FirebaseAuthService) {
@@ -147,6 +166,24 @@ class FamilyDashboardViewModel: ObservableObject {
     var canManageFamily: Bool {
         guard let role = currentUserRole else { return false }
         return role == .creator || role == .captain
+    }
+    
+    /// Count of pending family invites received by the current user
+    var pendingFamilyInvitesCount: Int {
+        guard let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id,
+              let inviteRepository = inviteRepository else {
+            return 0
+        }
+        let familyInvites = inviteRepository.getFamilyInvites(for: userId)
+        return familyInvites.filter { 
+            $0.toUserId == userId && $0.statusEnum == .pending 
+        }.count
+    }
+    
+    /// Count of pending member requests (for creators/captains to approve)
+    var pendingMemberRequestsCount: Int {
+        guard canManageFamily else { return 0 }
+        return pendingRequests.filter { $0.statusEnum == .pending }.count
     }
 }
 

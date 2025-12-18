@@ -78,5 +78,10 @@ class FriendsHubViewModel: ObservableObject {
         // For now, just log analytics
         AnalyticsService.shared.log(.friendRemoved)
     }
+    
+    /// Count of pending friend requests (incoming)
+    var pendingFriendRequestsCount: Int {
+        return incomingRequests.count
+    }
 }
 

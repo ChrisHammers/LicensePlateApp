@@ -17,7 +17,7 @@ struct AddFamilyMemberSheet: View {
     @StateObject private var familyRepository = FamilyRepository()
     @State private var searchQuery = ""
     @State private var searchType: UserRepository.SearchType = .all
-    @State private var searchResults: [AppUser] = []
+    @State private var searchResults: [UserRepository.UserSearchResult] = []
     @State private var isSearching = false
     @State private var isInviting = false
     @State private var errorMessage: String?
@@ -60,9 +60,9 @@ struct AddFamilyMemberSheet: View {
                     
                     if !searchResults.isEmpty {
                         Section("Results".localized) {
-                            ForEach(searchResults) { user in
+                            ForEach(Array(searchResults.enumerated()), id: \.element.user.id) { index, result in
                                 FamilyMemberSearchResultRow(
-                                    user: user,
+                                    result: result,
                                     familyId: familyId,
                                     familyRepository: familyRepository,
                                     isInviting: $isInviting,
@@ -186,7 +186,7 @@ struct AddFamilyMemberSheet: View {
 }
 
 struct FamilyMemberSearchResultRow: View {
-    let user: AppUser
+    let result: UserRepository.UserSearchResult
     let familyId: String
     let familyRepository: FamilyRepository
     @Binding var isInviting: Bool
@@ -195,13 +195,15 @@ struct FamilyMemberSearchResultRow: View {
     @Binding var showSuccessAlert: Bool
     @EnvironmentObject var authService: FirebaseAuthService
     
+    var user: AppUser { result.user }
+    
     var body: some View {
         HStack {
             Circle()
                 .fill(Color.Theme.primaryBlue.opacity(0.3))
                 .frame(width: 50, height: 50)
             
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(user.displayName)
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
@@ -210,6 +212,10 @@ struct FamilyMemberSearchResultRow: View {
                 Text("@\(user.userName)")
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
+                
+                Text("Found by \(result.matchedField.displayName)".localized)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
             }
             
             Spacer()

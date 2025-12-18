@@ -16,7 +16,7 @@ struct AddFriendSheet: View {
     @StateObject private var friendshipRepository = FriendshipRepository()
     @State private var searchQuery = ""
     @State private var searchType: UserRepository.SearchType = .all
-    @State private var searchResults: [AppUser] = []
+    @State private var searchResults: [UserRepository.UserSearchResult] = []
     @State private var isSearching = false
     @State private var searchTask: Task<Void, Never>?
     @State private var errorMessage: String?
@@ -58,9 +58,9 @@ struct AddFriendSheet: View {
                     
                     if !searchResults.isEmpty {
                         Section("Results".localized) {
-                            ForEach(searchResults) { user in
+                            ForEach(Array(searchResults.enumerated()), id: \.element.user.id) { index, result in
                                 UserSearchResultRow(
-                                    user: user,
+                                    result: result,
                                     friendshipRepository: friendshipRepository,
                                     errorMessage: $errorMessage,
                                     showError: $showError,
@@ -172,7 +172,7 @@ struct AddFriendSheet: View {
 }
 
 struct UserSearchResultRow: View {
-    let user: AppUser
+    let result: UserRepository.UserSearchResult
     let friendshipRepository: FriendshipRepository
     @Binding var errorMessage: String?
     @Binding var showError: Bool
@@ -180,13 +180,15 @@ struct UserSearchResultRow: View {
     @EnvironmentObject var authService: FirebaseAuthService
     @State private var isInviting = false
     
+    var user: AppUser { result.user }
+    
     var body: some View {
         HStack {
             Circle()
                 .fill(Color.Theme.primaryBlue.opacity(0.3))
                 .frame(width: 50, height: 50)
             
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(user.displayName)
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
@@ -195,6 +197,10 @@ struct UserSearchResultRow: View {
                 Text("@\(user.userName)")
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
+                
+                Text("Found by \(result.matchedField.displayName)".localized)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
             }
             
             Spacer()

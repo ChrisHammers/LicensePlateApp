@@ -17,6 +17,7 @@ struct FamilyDashboard: View {
     @State private var showJoinFamilySheet = false
     @State private var showAddMemberSheet = false
     @State private var showCreateShareCodeSheet = false
+    @State private var showFamilyInvitesView = false
     
     init() {
         let familyRepo = FamilyRepository()
@@ -87,8 +88,40 @@ struct FamilyDashboard: View {
                             }
                         }
                         
-                        // Pending
-                        if !viewModel.pendingRequests.isEmpty {
+                        // Pending Invites Section
+                        if viewModel.pendingFamilyInvitesCount > 0 {
+                            Section {
+                                Button {
+                                    showFamilyInvitesView = true
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "envelope.fill")
+                                            .foregroundStyle(Color.Theme.primaryBlue)
+                                        Text("Pending Invites".localized)
+                                            .font(.system(.body, design: .rounded))
+                                            .foregroundStyle(Color.Theme.primaryBlue)
+                                        Spacer()
+                                        BadgeView(count: viewModel.pendingFamilyInvitesCount)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Pending Member Requests (for creators/captains)
+                        if viewModel.canManageFamily && viewModel.pendingMemberRequestsCount > 0 {
+                            Section("Pending Approvals".localized) {
+                                ForEach(viewModel.pendingRequests) { request in
+                                    PendingRequestRow(request: request)
+                                }
+                                
+                                // Show badge count in section header if needed
+                                if viewModel.pendingMemberRequestsCount > 0 {
+                                    Text("\(viewModel.pendingMemberRequestsCount) request\(viewModel.pendingMemberRequestsCount == 1 ? "" : "s") pending")
+                                        .font(.system(.caption, design: .rounded))
+                                        .foregroundStyle(Color.Theme.softBrown)
+                                }
+                            }
+                        } else if !viewModel.pendingRequests.isEmpty {
                             Section("Pending".localized) {
                                 ForEach(viewModel.pendingRequests) { request in
                                     PendingRequestRow(request: request)
@@ -198,13 +231,37 @@ struct FamilyDashboard: View {
             .navigationTitle("Family".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if viewModel.pendingFamilyInvitesCount > 0 {
+                        Button {
+                            showFamilyInvitesView = true
+                        } label: {
+                            Image(systemName: "envelope.fill")
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                                .badge(count: viewModel.pendingFamilyInvitesCount)
+                        }
+                    }
+                }
+                
                 if viewModel.canManageFamily {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            showSettings = true
-                        } label: {
-                            Image(systemName: "gearshape")
-                                .foregroundStyle(Color.Theme.primaryBlue)
+                        HStack(spacing: 16) {
+                            if viewModel.pendingMemberRequestsCount > 0 {
+                                Button {
+                                    // Scroll to pending section or show detail
+                                } label: {
+                                    Image(systemName: "person.badge.clock")
+                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                        .badge(count: viewModel.pendingMemberRequestsCount)
+                                }
+                            }
+                            
+                            Button {
+                                showSettings = true
+                            } label: {
+                                Image(systemName: "gearshape")
+                                    .foregroundStyle(Color.Theme.primaryBlue)
+                            }
                         }
                     }
                 }
@@ -231,12 +288,25 @@ struct FamilyDashboard: View {
                         .environmentObject(authService)
                 }
             }
+            .sheet(isPresented: $showFamilyInvitesView) {
+                FamilyInvitesView()
+                    .environmentObject(authService)
+                    .onDisappear {
+                        // Reload data after responding to invites
+                        viewModel.loadData()
+                    }
+            }
             .onAppear {
                 // Update ViewModel with the correct authService from environment
                 viewModel.setAuthService(authService)
                 viewModel.setModelContext(modelContext)
                 viewModel.loadData()
                 AnalyticsService.shared.log(.familyScreenOpened)
+                
+                // Start listening to invites for badge counts
+                if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {
+                    // InviteRepository will be set up in ViewModel
+                }
             }
        // }
     }

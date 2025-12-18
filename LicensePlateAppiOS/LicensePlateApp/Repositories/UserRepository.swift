@@ -229,37 +229,206 @@ class UserRepository: ObservableObject {
         return results
     }
     
-    /// Combined search: username (always), email/phone (if searchable)
-    func searchUsers(query: String, searchType: SearchType) async throws -> [AppUser] {
+    // MARK: - Contains Search Methods
+    
+    /// Search users by username with contains matching (case-insensitive)
+    func searchByUsernameContains(_ query: String) async throws -> [AppUser] {
+        isLoading = true
+        defer { isLoading = false }
+        
+        let queryLower = query.lowercased()
         var results: [AppUser] = []
+        
+        // Fetch a reasonable number of users and filter client-side
+        // This is necessary for true "contains" matching
+        do {
+            let snapshot = try await db.collection("users")
+                .limit(to: 100)
+                .getDocuments()
+            
+            for document in snapshot.documents {
+                let data = document.data()
+                if let userName = data["userName"] as? String {
+                    let userNameLower = userName.lowercased()
+                    // Case-insensitive contains check
+                    if userNameLower.contains(queryLower) {
+                        let user = try await userFromFirestoreData(data, id: document.documentID)
+                        if !results.contains(where: { $0.id == user.id }) {
+                            results.append(user)
+                        }
+                        
+                        // Limit to 20 results for performance
+                        if results.count >= 20 {
+                            break
+                        }
+                    }
+                }
+            }
+        } catch {
+            print("❌ Username contains search failed: \(error.localizedDescription)")
+            throw error
+        }
+        
+        return results
+    }
+    
+    /// Search users by email with contains matching (only if emailSearchable is true)
+    func searchByEmailContains(_ query: String) async throws -> [AppUser] {
+        isLoading = true
+        defer { isLoading = false }
+        
+        let queryLower = query.lowercased()
+        var results: [AppUser] = []
+        
+        // Fetch users and filter for public email and contains match
+        do {
+            let snapshot = try await db.collection("users")
+                .limit(to: 100)
+                .getDocuments()
+            
+            for document in snapshot.documents {
+                let data = document.data()
+                
+                // Check privacy setting
+                let privacy = data["privacy"] as? [String: Any] ?? [:]
+                let emailSearchable = privacy["emailSearchable"] as? Bool ?? false
+                
+                if emailSearchable, let email = data["email"] as? String {
+                    let emailLower = email.lowercased()
+                    // Case-insensitive contains check
+                    if emailLower.contains(queryLower) {
+                        let user = try await userFromFirestoreData(data, id: document.documentID)
+                        if !results.contains(where: { $0.id == user.id }) {
+                            results.append(user)
+                        }
+                        
+                        // Limit to 20 results for performance
+                        if results.count >= 20 {
+                            break
+                        }
+                    }
+                }
+            }
+        } catch {
+            print("❌ Email contains search failed: \(error.localizedDescription)")
+            throw error
+        }
+        
+        return results
+    }
+    
+    /// Search users by phone with contains matching (only if phoneSearchable is true)
+    func searchByPhoneContains(_ query: String) async throws -> [AppUser] {
+        isLoading = true
+        defer { isLoading = false }
+        
+        // Remove non-numeric characters for phone search
+        let phoneQuery = query.filter { $0.isNumber }
+        var results: [AppUser] = []
+        
+        if phoneQuery.isEmpty {
+            return results
+        }
+        
+        // Fetch users and filter for public phone and contains match
+        do {
+            let snapshot = try await db.collection("users")
+                .limit(to: 100)
+                .getDocuments()
+            
+            for document in snapshot.documents {
+                let data = document.data()
+                
+                // Check privacy setting
+                let privacy = data["privacy"] as? [String: Any] ?? [:]
+                let phoneSearchable = privacy["phoneSearchable"] as? Bool ?? false
+                
+                if phoneSearchable, let phone = data["phone"] as? String {
+                    let phoneNumbers = phone.filter { $0.isNumber }
+                    // Contains check on numeric characters only
+                    if phoneNumbers.contains(phoneQuery) {
+                        let user = try await userFromFirestoreData(data, id: document.documentID)
+                        if !results.contains(where: { $0.id == user.id }) {
+                            results.append(user)
+                        }
+                        
+                        // Limit to 20 results for performance
+                        if results.count >= 20 {
+                            break
+                        }
+                    }
+                }
+            }
+        } catch {
+            print("❌ Phone contains search failed: \(error.localizedDescription)")
+            throw error
+        }
+        
+        return results
+    }
+    
+    /// Combined search: username (always), email/phone (if searchable)
+    /// Returns search results with match type information
+    func searchUsers(query: String, searchType: SearchType) async throws -> [UserSearchResult] {
+        var results: [UserSearchResult] = []
+        let queryLower = query.lowercased()
         
         switch searchType {
         case .username:
-            results = try await searchByUsername(query)
+            let users = try await searchByUsernameContains(query)
+            results = users.map { UserSearchResult(user: $0, matchedField: .username) }
         case .email:
-            results = try await searchByEmail(query)
+            let users = try await searchByEmailContains(query)
+            results = users.map { UserSearchResult(user: $0, matchedField: .email) }
         case .phone:
-            results = try await searchByPhone(query)
+            let users = try await searchByPhoneContains(query)
+            results = users.map { UserSearchResult(user: $0, matchedField: .phone) }
         case .all:
-            // Try username first (always searchable)
-            results = try await searchByUsername(query)
+            // Try all fields and combine results
+            var foundUsers: Set<String> = [] // Track user IDs to avoid duplicates
             
-            // Try email if no results
-            if results.isEmpty {
-                results = try await searchByEmail(query)
+            // Search username (always searchable)
+            let usernameResults = try await searchByUsernameContains(query)
+            for user in usernameResults {
+                if !foundUsers.contains(user.id) {
+                    results.append(UserSearchResult(user: user, matchedField: .username))
+                    foundUsers.insert(user.id)
+                }
             }
             
-            // Try phone if still no results
-            if results.isEmpty {
-                results = try await searchByPhone(query)
+            // Search email (if public)
+            let emailResults = try await searchByEmailContains(query)
+            for user in emailResults {
+                if !foundUsers.contains(user.id) {
+                    results.append(UserSearchResult(user: user, matchedField: .email))
+                    foundUsers.insert(user.id)
+                }
+            }
+            
+            // Search phone (if public)
+            let phoneResults = try await searchByPhoneContains(query)
+            for user in phoneResults {
+                if !foundUsers.contains(user.id) {
+                    results.append(UserSearchResult(user: user, matchedField: .phone))
+                    foundUsers.insert(user.id)
+                }
             }
         }
         
-        // Cache results in SwiftData
-        cacheUsers(results)
+        // Cache users in SwiftData
+        let users = results.map { $0.user }
+        cacheUsers(users)
         
-        searchResults = results
+        // Update searchResults for backward compatibility
+        searchResults = users
+        
         return results
+    }
+    
+    /// Legacy method for backward compatibility - returns just users
+    func searchUsersLegacy(query: String, searchType: SearchType) async throws -> [AppUser] {
+        let results = try await searchUsers(query: query, searchType: searchType)
+        return results.map { $0.user }
     }
     
     enum SearchType {
@@ -267,6 +436,27 @@ class UserRepository: ObservableObject {
         case email
         case phone
         case all
+    }
+    
+    // MARK: - Search Result Model
+    
+    struct UserSearchResult {
+        let user: AppUser
+        let matchedField: MatchField
+        
+        enum MatchField {
+            case username
+            case email
+            case phone
+            
+            var displayName: String {
+                switch self {
+                case .username: return "Username".localized
+                case .email: return "Email".localized
+                case .phone: return "Phone".localized
+                }
+            }
+        }
     }
     
     // MARK: - User Data Conversion

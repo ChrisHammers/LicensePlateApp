@@ -34,7 +34,14 @@ struct FriendsHub: View {
                     // Segmented control
                     Picker("", selection: $viewModel.selectedTab) {
                         Text("Friends".localized).tag(FriendsHubViewModel.FriendsTab.friends)
-                        Text("Requests".localized).tag(FriendsHubViewModel.FriendsTab.requests)
+                        
+                        HStack(spacing: 4) {
+                            Text("Requests".localized)
+                            if viewModel.pendingFriendRequestsCount > 0 {
+                                BadgeView(count: viewModel.pendingFriendRequestsCount, size: 16)
+                            }
+                        }
+                        .tag(FriendsHubViewModel.FriendsTab.requests)
                     }
                     .pickerStyle(.segmented)
                     .padding()
