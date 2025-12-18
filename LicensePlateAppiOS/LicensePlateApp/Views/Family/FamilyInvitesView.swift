@@ -115,7 +115,7 @@ struct FamilyInviteRow: View {
     @EnvironmentObject var authService: FirebaseAuthService
     @StateObject private var familyRepository = FamilyRepository()
     @State private var showInviteDetail = false
-    @State private var familyName: String?
+    @State private var family: Family?
     
     var body: some View {
         Button {
@@ -127,7 +127,7 @@ struct FamilyInviteRow: View {
                     .frame(width: 50, height: 50)
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(familyName ?? "Family Invitation".localized)
+                    Text(family?.name ?? "Family Invitation".localized)
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Theme.primaryBlue)
@@ -148,28 +148,32 @@ struct FamilyInviteRow: View {
         .buttonStyle(.plain)
         .sheet(isPresented: $showInviteDetail) {
             if let familyId = invite.familyId {
-                FamilyInviteDetail(inviteId: invite.inviteId, familyId: familyId)
-                    .environmentObject(authService)
+                FamilyInviteDetail(
+                    inviteId: invite.inviteId,
+                    familyId: familyId,
+                    family: family
+                )
+                .environmentObject(authService)
             }
         }
         .task {
-            await loadFamilyName()
+            await loadFamily()
         }
     }
     
-    private func loadFamilyName() async {
+    private func loadFamily() async {
         guard let familyId = invite.familyId else { return }
         
         familyRepository.setModelContext(modelContext)
         
         do {
-            if let family = try await familyRepository.fetchFamily(familyId: familyId) {
+            if let fetchedFamily = try await familyRepository.fetchFamily(familyId: familyId) {
                 await MainActor.run {
-                    familyName = family.name
+                    family = fetchedFamily
                 }
             }
         } catch {
-            print("❌ Failed to load family name: \(error.localizedDescription)")
+            print("❌ Failed to load family: \(error.localizedDescription)")
         }
     }
 }

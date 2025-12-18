@@ -105,7 +105,7 @@ struct JoinFamilySheet: View {
             }
             .sheet(isPresented: $showInviteDetail) {
                 if let inviteId = redeemedInviteId {
-                    FamilyInviteDetail(inviteId: inviteId, familyId: redeemedFamilyId ?? "")
+                    FamilyInviteDetail(inviteId: inviteId, familyId: redeemedFamilyId ?? "", family: nil)
                         .environmentObject(authService)
                 }
             }
