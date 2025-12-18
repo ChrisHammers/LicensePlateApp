@@ -369,20 +369,30 @@ class UserRepository: ObservableObject {
     
     /// Combined search: username (always), email/phone (if searchable)
     /// Returns search results with match type information
-    func searchUsers(query: String, searchType: SearchType) async throws -> [UserSearchResult] {
+    /// - Parameters:
+    ///   - query: Search query string
+    ///   - searchType: Type of search to perform
+    ///   - excludeUserId: Optional user ID to exclude from results (typically current user)
+    func searchUsers(query: String, searchType: SearchType, excludeUserId: String? = nil) async throws -> [UserSearchResult] {
         var results: [UserSearchResult] = []
         let queryLower = query.lowercased()
         
         switch searchType {
         case .username:
             let users = try await searchByUsernameContains(query)
-            results = users.map { UserSearchResult(user: $0, matchedField: .username) }
+            results = users
+                .filter { excludeUserId == nil || $0.id != excludeUserId }
+                .map { UserSearchResult(user: $0, matchedField: .username) }
         case .email:
             let users = try await searchByEmailContains(query)
-            results = users.map { UserSearchResult(user: $0, matchedField: .email) }
+            results = users
+                .filter { excludeUserId == nil || $0.id != excludeUserId }
+                .map { UserSearchResult(user: $0, matchedField: .email) }
         case .phone:
             let users = try await searchByPhoneContains(query)
-            results = users.map { UserSearchResult(user: $0, matchedField: .phone) }
+            results = users
+                .filter { excludeUserId == nil || $0.id != excludeUserId }
+                .map { UserSearchResult(user: $0, matchedField: .phone) }
         case .all:
             // Try all fields and combine results
             var foundUsers: Set<String> = [] // Track user IDs to avoid duplicates
@@ -390,7 +400,7 @@ class UserRepository: ObservableObject {
             // Search username (always searchable)
             let usernameResults = try await searchByUsernameContains(query)
             for user in usernameResults {
-                if !foundUsers.contains(user.id) {
+                if (excludeUserId == nil || user.id != excludeUserId) && !foundUsers.contains(user.id) {
                     results.append(UserSearchResult(user: user, matchedField: .username))
                     foundUsers.insert(user.id)
                 }
@@ -399,7 +409,7 @@ class UserRepository: ObservableObject {
             // Search email (if public)
             let emailResults = try await searchByEmailContains(query)
             for user in emailResults {
-                if !foundUsers.contains(user.id) {
+                if (excludeUserId == nil || user.id != excludeUserId) && !foundUsers.contains(user.id) {
                     results.append(UserSearchResult(user: user, matchedField: .email))
                     foundUsers.insert(user.id)
                 }
@@ -408,7 +418,7 @@ class UserRepository: ObservableObject {
             // Search phone (if public)
             let phoneResults = try await searchByPhoneContains(query)
             for user in phoneResults {
-                if !foundUsers.contains(user.id) {
+                if (excludeUserId == nil || user.id != excludeUserId) && !foundUsers.contains(user.id) {
                     results.append(UserSearchResult(user: user, matchedField: .phone))
                     foundUsers.insert(user.id)
                 }

@@ -163,7 +163,9 @@ struct AddFamilyMemberSheet: View {
         }
         
         do {
-            let results = try await userRepository.searchUsers(query: searchQuery, searchType: searchType)
+            // Get current user ID to exclude from results
+            let currentUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+            let results = try await userRepository.searchUsers(query: searchQuery, searchType: searchType, excludeUserId: currentUserId)
             await MainActor.run {
                 searchResults = results
                 isSearching = false
