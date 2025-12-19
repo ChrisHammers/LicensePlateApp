@@ -266,6 +266,11 @@ struct FriendInviteDetail: View {
             do {
                 try await friendshipRepository.respondToFriendInvite(inviteId: inviteId, accept: accept)
                 
+                // Refresh the invite to get the latest status from Firestore
+                if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {
+                    await InviteRepository.shared.refreshInvite(inviteId: inviteId, userId: userId)
+                }
+                
                 await MainActor.run {
                     isProcessing = false
                     if accept {
