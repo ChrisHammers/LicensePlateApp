@@ -150,9 +150,52 @@ struct AddFriendSheet: View {
         
         do {
             // Get current user ID to exclude from results
-            let currentUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
-            let results = try await userRepository.searchUsers(query: searchQuery, searchType: searchType, excludeUserId: currentUserId)
+            guard let currentUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else {
+                await MainActor.run {
+                    isSearching = false
+                    errorMessage = "User not authenticated".localized
+                    showError = true
+                }
+                return
+            }
+            
+            // Get all search results
+            var results = try await userRepository.searchUsers(query: searchQuery, searchType: searchType, excludeUserId: currentUserId)
+            
+            // Filter out users who are already friends or have pending invites
             await MainActor.run {
+                // Get all accepted friendships
+                let acceptedFriendships = friendshipRepository.getAcceptedFriendships(for: currentUserId)
+                let friendUserIds = Set(acceptedFriendships.compactMap { friendship in
+                    friendship.otherUser(than: currentUserId)
+                })
+                
+                // Get all pending invites (both incoming and outgoing)
+                let pendingInvites = InviteRepository.shared.getFriendInvites(for: currentUserId)
+                    .filter { $0.statusEnum == .pending }
+                let inviteUserIds = Set(pendingInvites.compactMap { invite in
+                    if invite.fromUserId == currentUserId {
+                        return invite.toUserId
+                    } else {
+                        return invite.fromUserId
+                    }
+                })
+                
+                // Get all pending friendships (legacy)
+                let pendingFriendships = friendshipRepository.getPendingFriendships(for: currentUserId)
+                let pendingFriendshipUserIds = Set(pendingFriendships.compactMap { friendship in
+                    friendship.otherUser(than: currentUserId)
+                })
+                
+                // Combine all user IDs to exclude
+                let excludedUserIds = friendUserIds.union(inviteUserIds).union(pendingFriendshipUserIds)
+                
+                // Filter out users who are already friends or have pending invites
+                results = results.filter { result in
+                    let userId = result.user.firebaseUID ?? result.user.id
+                    return !excludedUserIds.contains(userId)
+                }
+                
                 searchResults = results
                 isSearching = false
                 AnalyticsService.shared.log(.userSearchPerformed(queryType: searchType == .all ? "all" : searchType == .username ? "username" : searchType == .email ? "email" : "phone"))

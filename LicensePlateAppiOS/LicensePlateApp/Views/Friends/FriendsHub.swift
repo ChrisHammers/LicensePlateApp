@@ -40,6 +40,7 @@ struct FriendsHub: View {
                         HStack(spacing: 4) {
                             Text("Requests".localized)
                             if viewModel.pendingFriendRequestsCount > 0 {
+                              // This doesn't work on a Picker
                                 BadgeView(count: viewModel.pendingFriendRequestsCount, size: 16)
                             }
                         }
