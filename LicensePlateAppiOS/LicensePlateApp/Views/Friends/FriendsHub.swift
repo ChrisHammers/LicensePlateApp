@@ -203,55 +203,254 @@ struct FriendRow: View {
     let friendship: Friendship
     @EnvironmentObject var authService: FirebaseAuthService
     @Environment(\.modelContext) private var modelContext
+    @State private var user: AppUser?
+    
+    // Get the other user's ID
+    private var otherUserId: String? {
+        guard let currentUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else {
+            return nil
+        }
+        return friendship.otherUser(than: currentUserId)
+    }
     
     var body: some View {
         HStack {
-            // Avatar placeholder
-            Circle()
-                .fill(Color.Theme.primaryBlue.opacity(0.3))
-                .frame(width: 50, height: 50)
+            if let user = user {
+                // User Avatar
+                UserImageView(user: user, size: 50)
+            } else {
+                // Avatar placeholder
+                Circle()
+                    .fill(Color.Theme.primaryBlue.opacity(0.3))
+                    .frame(width: 50, height: 50)
+            }
             
-            VStack(alignment: .leading) {
-                Text("Friend") // TODO: Get actual user name
-                    .font(.system(.body, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                
-                Text(friendship.otherUser(than: authService.currentUser?.id ?? "") ?? "")
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
+            VStack(alignment: .leading, spacing: 4) {
+                if let user = user {
+                    Text(user.displayName)
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    
+                    Text("@\(user.userName)")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                } else {
+                    Text("Friend".localized)
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    
+                    if let userId = otherUserId {
+                        Text(userId)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                }
             }
             
             Spacer()
         }
         .padding(.vertical, 8)
+        .task {
+            await loadUser()
+        }
+    }
+    
+    private func loadUser() async {
+        guard let userId = otherUserId else { return }
+        
+        // First try to get from SwiftData cache
+        let searchUserId = userId
+        let descriptor = FetchDescriptor<AppUser>(
+            predicate: #Predicate<AppUser> { user in
+                user.id == searchUserId || user.firebaseUID == searchUserId
+            }
+        )
+        
+        if let cachedUser = try? modelContext.fetch(descriptor).first {
+            await MainActor.run {
+                self.user = cachedUser
+            }
+            return
+        }
+        
+        // If not in cache, fetch from Firestore
+        let db = Firestore.firestore()
+        do {
+            let userDoc = try await db.collection("users").document(userId).getDocument()
+            
+            guard let data = userDoc.data(),
+                  let userName = data["userName"] as? String else {
+                return
+            }
+            
+            let privacy = data["privacy"] as? [String: Any] ?? [:]
+            
+            let fetchedUser = AppUser(
+                id: userId,
+                userName: userName,
+                firstName: data["firstName"] as? String,
+                lastName: data["lastName"] as? String,
+                email: data["email"] as? String,
+                phoneNumber: data["phone"] as? String,
+                createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? .now,
+                lastUpdated: (data["updatedAt"] as? Timestamp)?.dateValue() ?? .now,
+                isEmailPublic: privacy["emailSearchable"] as? Bool ?? false,
+                isPhonePublic: privacy["phoneSearchable"] as? Bool ?? false,
+                isRetiredGeneral: data["isRetiredGeneral"] as? Bool ?? false,
+                activeFamilyId: data["activeFamilyId"] as? String,
+                friendCount: data["friendCount"] as? Int ?? 0,
+                firebaseUID: userId
+            )
+            
+            // Set avatar if available
+            if let avatarColorString = data["avatarColor"] as? String,
+               let avatarColor = AvatarColor(rawValue: avatarColorString) {
+                fetchedUser.avatarColor = avatarColor
+            }
+            if let avatarTypeString = data["avatarType"] as? String,
+               let avatarType = AvatarType(rawValue: avatarTypeString) {
+                fetchedUser.avatarType = avatarType
+            }
+            
+            // Cache in SwiftData
+            modelContext.insert(fetchedUser)
+            try? modelContext.save()
+            
+            await MainActor.run {
+                self.user = fetchedUser
+            }
+        } catch {
+            print("⚠️ Failed to fetch user \(userId): \(error.localizedDescription)")
+        }
     }
 }
 
 struct FriendRequestRow: View {
     let friendship: Friendship
     var isOutgoing: Bool = false
+    @EnvironmentObject var authService: FirebaseAuthService
+    @Environment(\.modelContext) private var modelContext
+    @State private var user: AppUser?
+    
+    // Get the other user's ID
+    private var otherUserId: String? {
+        guard let currentUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else {
+            return nil
+        }
+        return friendship.otherUser(than: currentUserId)
+    }
     
     var body: some View {
         HStack {
-            Circle()
-                .fill(Color.Theme.primaryBlue.opacity(0.3))
-                .frame(width: 50, height: 50)
+            if let user = user {
+                // User Avatar
+                UserImageView(user: user, size: 50)
+            } else {
+                // Avatar placeholder
+                Circle()
+                    .fill(Color.Theme.primaryBlue.opacity(0.3))
+                    .frame(width: 50, height: 50)
+            }
             
-            VStack(alignment: .leading) {
-                Text("Friend Request")
-                    .font(.system(.body, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                
-                Text(isOutgoing ? "Waiting for response" : "Tap to respond")
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
+            VStack(alignment: .leading, spacing: 4) {
+                if let user = user {
+                    Text(user.displayName)
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    
+                    Text("@\(user.userName)")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                } else {
+                    Text("Friend Request".localized)
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    
+                    Text(isOutgoing ? "Waiting for response".localized : "Tap to respond".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                }
             }
             
             Spacer()
         }
         .padding(.vertical, 8)
+        .task {
+            await loadUser()
+        }
+    }
+    
+    private func loadUser() async {
+        guard let userId = otherUserId else { return }
+        
+        // First try to get from SwiftData cache
+        let searchUserId = userId
+        let descriptor = FetchDescriptor<AppUser>(
+            predicate: #Predicate<AppUser> { user in
+                user.id == searchUserId || user.firebaseUID == searchUserId
+            }
+        )
+        
+        if let cachedUser = try? modelContext.fetch(descriptor).first {
+            await MainActor.run {
+                self.user = cachedUser
+            }
+            return
+        }
+        
+        // If not in cache, fetch from Firestore
+        let db = Firestore.firestore()
+        do {
+            let userDoc = try await db.collection("users").document(userId).getDocument()
+            
+            guard let data = userDoc.data(),
+                  let userName = data["userName"] as? String else {
+                return
+            }
+            
+            let privacy = data["privacy"] as? [String: Any] ?? [:]
+            
+            let fetchedUser = AppUser(
+                id: userId,
+                userName: userName,
+                firstName: data["firstName"] as? String,
+                lastName: data["lastName"] as? String,
+                email: data["email"] as? String,
+                phoneNumber: data["phone"] as? String,
+                createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? .now,
+                lastUpdated: (data["updatedAt"] as? Timestamp)?.dateValue() ?? .now,
+                isEmailPublic: privacy["emailSearchable"] as? Bool ?? false,
+                isPhonePublic: privacy["phoneSearchable"] as? Bool ?? false,
+                isRetiredGeneral: data["isRetiredGeneral"] as? Bool ?? false,
+                activeFamilyId: data["activeFamilyId"] as? String,
+                friendCount: data["friendCount"] as? Int ?? 0,
+                firebaseUID: userId
+            )
+            
+            // Set avatar if available
+            if let avatarColorString = data["avatarColor"] as? String,
+               let avatarColor = AvatarColor(rawValue: avatarColorString) {
+                fetchedUser.avatarColor = avatarColor
+            }
+            if let avatarTypeString = data["avatarType"] as? String,
+               let avatarType = AvatarType(rawValue: avatarTypeString) {
+                fetchedUser.avatarType = avatarType
+            }
+            
+            // Cache in SwiftData
+            modelContext.insert(fetchedUser)
+            try? modelContext.save()
+            
+            await MainActor.run {
+                self.user = fetchedUser
+            }
+        } catch {
+            print("⚠️ Failed to fetch user \(userId): \(error.localizedDescription)")
+        }
     }
 }
 
