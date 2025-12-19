@@ -12,8 +12,8 @@ struct AddFriendSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    @StateObject private var userRepository = UserRepository()
-    @StateObject private var friendshipRepository = FriendshipRepository()
+    private let userRepository = UserRepository.shared
+    private let friendshipRepository = FriendshipRepository.shared
     @State private var searchQuery = ""
     @State private var searchType: UserRepository.SearchType = .all
     @State private var searchResults: [UserRepository.UserSearchResult] = []

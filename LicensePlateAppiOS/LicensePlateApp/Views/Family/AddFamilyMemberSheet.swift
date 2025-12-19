@@ -13,8 +13,8 @@ struct AddFamilyMemberSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    @StateObject private var userRepository = UserRepository()
-    @StateObject private var familyRepository = FamilyRepository()
+    private let userRepository = UserRepository.shared
+    private let familyRepository = FamilyRepository.shared
     @State private var searchQuery = ""
     @State private var searchType: UserRepository.SearchType = .all
     @State private var searchResults: [UserRepository.UserSearchResult] = []

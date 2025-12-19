@@ -111,6 +111,18 @@ struct ContentView: View {
                 .task {
                   // Initialize authentication state (checks Firebase Auth first, then local)
                   await authService.initializeAuthState(modelContext: modelContext)
+                  
+                  // Initialize repositories after authentication
+                  FriendshipRepository.shared.setModelContext(modelContext)
+                  InviteRepository.shared.setModelContext(modelContext)
+                  FamilyRepository.shared.setModelContext(modelContext)
+                  UserRepository.shared.setModelContext(modelContext)
+                  
+                  // Start listening if user is authenticated
+                  if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {
+                      FriendshipRepository.shared.startListening(userId: userId)
+                      InviteRepository.shared.startListening(userId: userId)
+                  }
                 }
                 .overlay {
                   if authService.showUsernameConflictDialog {

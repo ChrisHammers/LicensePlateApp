@@ -12,10 +12,11 @@ export const expireInvitesAndCodes = functions.pubsub
   .onRun(async (context) => {
     const now = admin.firestore.Timestamp.now();
 
-    // Expire invites
+    // Expire invites (only family invites - friend invites don't expire)
     const invitesSnapshot = await db
       .collection("invites")
       .where("status", "==", "pending")
+      .where("type", "==", "family") // Only expire family invites
       .where("expiresAt", "<", now)
       .get();
 

@@ -12,6 +12,8 @@ import Combine
 
 @MainActor
 class InviteRepository: ObservableObject {
+    static let shared = InviteRepository()
+    
     private let db = Firestore.firestore()
     private var modelContext: ModelContext?
     nonisolated(unsafe) private var listeners: [ListenerRegistration] = []
@@ -20,8 +22,8 @@ class InviteRepository: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    init(modelContext: ModelContext? = nil) {
-        self.modelContext = modelContext
+    private init() {
+        // Private initializer prevents external instantiation
     }
     
     func setModelContext(_ context: ModelContext) {
@@ -31,6 +33,7 @@ class InviteRepository: ObservableObject {
     // MARK: - Sync from Firestore
     
     /// Start listening to invites for a user (both sent and received)
+  // TODO: do we want this to not just use WHO you are?
     func startListening(userId: String) {
         stopListening()
         

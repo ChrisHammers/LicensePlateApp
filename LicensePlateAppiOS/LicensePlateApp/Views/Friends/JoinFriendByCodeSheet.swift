@@ -12,8 +12,8 @@ struct JoinFriendByCodeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    @StateObject private var familyRepository = FamilyRepository()
-    @StateObject private var inviteRepository = InviteRepository()
+    private let familyRepository = FamilyRepository.shared
+    private let inviteRepository = InviteRepository.shared
     @State private var shareCode = ""
     @State private var isRedeeming = false
     @State private var showQRScanner = false

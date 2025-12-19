@@ -14,6 +14,8 @@ import Combine
 
 @MainActor
 class FriendshipRepository: ObservableObject {
+    static let shared = FriendshipRepository()
+    
     private let db = Firestore.firestore()
     private var modelContext: ModelContext?
     nonisolated(unsafe) private var listeners: [ListenerRegistration] = []
@@ -22,8 +24,8 @@ class FriendshipRepository: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    init(modelContext: ModelContext? = nil) {
-        self.modelContext = modelContext
+    private init() {
+        // Private initializer prevents external instantiation
     }
     
     func setModelContext(_ context: ModelContext) {

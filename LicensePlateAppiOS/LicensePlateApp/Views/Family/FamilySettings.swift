@@ -17,7 +17,7 @@ struct FamilySettings: View {
     
     init(familyId: String) {
         self.familyId = familyId
-        let familyRepo = FamilyRepository()
+        let familyRepo = FamilyRepository.shared
         _viewModel = StateObject(wrappedValue: FamilySettingsViewModel(
             familyRepository: familyRepo,
             authService: FirebaseAuthService()

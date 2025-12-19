@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import FirebaseFirestore
 
 struct FriendsHub: View {
     @Environment(\.modelContext) private var modelContext
@@ -17,9 +18,10 @@ struct FriendsHub: View {
     @State private var showJoinByCodeSheet = false
     
     init() {
-        // ViewModel will be initialized with authService from environment
+        // ViewModel will be initialized with singleton repositories and authService from environment
         _viewModel = StateObject(wrappedValue: FriendsHubViewModel(
-            friendshipRepository: FriendshipRepository(),
+            friendshipRepository: .shared,
+            inviteRepository: .shared,
             authService: FirebaseAuthService()
         ))
     }
@@ -105,6 +107,7 @@ struct FriendsHub: View {
             }
             .onAppear {
                 viewModel.setModelContext(modelContext)
+                viewModel.setAuthService(authService) // Use the environment authService
                 viewModel.loadData()
                 AnalyticsService.shared.log(.friendsScreenOpened)
             }
@@ -162,10 +165,15 @@ struct FriendsHub: View {
     private var requestsList: some View {
         Group {
             Section("Incoming".localized) {
-                if viewModel.incomingRequests.isEmpty {
+                if viewModel.incomingRequests.isEmpty && viewModel.incomingFriendInvites.isEmpty {
                     Text("No incoming requests".localized)
                         .foregroundStyle(Color.Theme.softBrown)
                 } else {
+                    // Show friend invites first
+                    ForEach(viewModel.incomingFriendInvites) { invite in
+                        FriendInviteRow(invite: invite)
+                    }
+                    // Then show legacy friendship requests
                     ForEach(viewModel.incomingRequests) { friendship in
                         FriendRequestRow(friendship: friendship)
                     }
@@ -173,10 +181,15 @@ struct FriendsHub: View {
             }
             
             Section("Outgoing".localized) {
-                if viewModel.outgoingRequests.isEmpty {
+                if viewModel.outgoingRequests.isEmpty && viewModel.outgoingFriendInvites.isEmpty {
                     Text("No outgoing requests".localized)
                         .foregroundStyle(Color.Theme.softBrown)
                 } else {
+                    // Show friend invites first
+                    ForEach(viewModel.outgoingFriendInvites) { invite in
+                        FriendInviteRow(invite: invite, isOutgoing: true)
+                    }
+                    // Then show legacy friendship requests
                     ForEach(viewModel.outgoingRequests) { friendship in
                         FriendRequestRow(friendship: friendship, isOutgoing: true)
                     }
@@ -239,6 +252,146 @@ struct FriendRequestRow: View {
             Spacer()
         }
         .padding(.vertical, 8)
+    }
+}
+
+struct FriendInviteRow: View {
+    let invite: Invite
+    var isOutgoing: Bool = false
+    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject var authService: FirebaseAuthService
+    @State private var showInviteDetail = false
+    @State private var user: AppUser?
+    
+    // Determine which userId to fetch
+    private var targetUserId: String? {
+        if isOutgoing {
+            return invite.toUserId
+        } else {
+            return invite.fromUserId
+        }
+    }
+    
+    var body: some View {
+        Button {
+            if !isOutgoing {
+                showInviteDetail = true
+            }
+        } label: {
+            HStack {
+                Circle()
+                    .fill(Color.Theme.primaryBlue.opacity(0.3))
+                    .frame(width: 50, height: 50)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    if let user = user {
+                        Text(user.displayName)
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                        
+                        Text("@\(user.userName)")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    } else {
+                        Text("Friend Request".localized)
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                        
+                        Text(isOutgoing ? "Waiting for response".localized : "Tap to respond".localized)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                }
+                
+                Spacer()
+                
+                if !isOutgoing {
+                    Image(systemName: "chevron.right")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                }
+            }
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showInviteDetail) {
+            FriendInviteDetail(inviteId: invite.inviteId)
+                .environmentObject(authService)
+        }
+        .task {
+            await loadUser()
+        }
+    }
+    
+    private func loadUser() async {
+        guard let userId = targetUserId else { return }
+        
+        // First try to get from SwiftData cache
+        let searchUserId = userId
+        let descriptor = FetchDescriptor<AppUser>(
+            predicate: #Predicate<AppUser> { user in
+                user.id == searchUserId || user.firebaseUID == searchUserId
+            }
+        )
+        
+        if let cachedUser = try? modelContext.fetch(descriptor).first {
+            await MainActor.run {
+                self.user = cachedUser
+            }
+            return
+        }
+        
+        // If not in cache, fetch from Firestore
+        let db = Firestore.firestore()
+        do {
+            let userDoc = try await db.collection("users").document(userId).getDocument()
+            
+            guard let data = userDoc.data(),
+                  let userName = data["userName"] as? String else {
+                return
+            }
+            
+            let privacy = data["privacy"] as? [String: Any] ?? [:]
+            
+            let fetchedUser = AppUser(
+                id: userId,
+                userName: userName,
+                firstName: data["firstName"] as? String,
+                lastName: data["lastName"] as? String,
+                email: data["email"] as? String,
+                phoneNumber: data["phone"] as? String,
+                createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? .now,
+                lastUpdated: (data["updatedAt"] as? Timestamp)?.dateValue() ?? .now,
+                isEmailPublic: privacy["emailSearchable"] as? Bool ?? false,
+                isPhonePublic: privacy["phoneSearchable"] as? Bool ?? false,
+                isRetiredGeneral: data["isRetiredGeneral"] as? Bool ?? false,
+                activeFamilyId: data["activeFamilyId"] as? String,
+                friendCount: data["friendCount"] as? Int ?? 0,
+                firebaseUID: userId
+            )
+            
+            // Set avatar if available
+            if let avatarColorString = data["avatarColor"] as? String,
+               let avatarColor = AvatarColor(rawValue: avatarColorString) {
+                fetchedUser.avatarColor = avatarColor
+            }
+            if let avatarTypeString = data["avatarType"] as? String,
+               let avatarType = AvatarType(rawValue: avatarTypeString) {
+                fetchedUser.avatarType = avatarType
+            }
+            
+            // Cache in SwiftData
+            modelContext.insert(fetchedUser)
+            try? modelContext.save()
+            
+            await MainActor.run {
+                self.user = fetchedUser
+            }
+        } catch {
+            print("⚠️ Failed to fetch user \(userId): \(error.localizedDescription)")
+        }
     }
 }
 

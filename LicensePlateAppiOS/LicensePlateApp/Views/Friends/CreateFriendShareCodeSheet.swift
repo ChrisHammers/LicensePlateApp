@@ -12,7 +12,7 @@ struct CreateFriendShareCodeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    @StateObject private var familyRepository = FamilyRepository()
+    private let familyRepository = FamilyRepository.shared
     @State private var shareCode: String?
     @State private var expiresAt: Date?
     @State private var isGenerating = false

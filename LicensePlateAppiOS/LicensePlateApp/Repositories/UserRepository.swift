@@ -12,6 +12,8 @@ import Combine
 
 @MainActor
 class UserRepository: ObservableObject {
+    static let shared = UserRepository()
+    
     private let db = Firestore.firestore()
     private var modelContext: ModelContext?
     
@@ -19,8 +21,8 @@ class UserRepository: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    init(modelContext: ModelContext? = nil) {
-        self.modelContext = modelContext
+    private init() {
+        // Private initializer prevents external instantiation
     }
     
     func setModelContext(_ context: ModelContext) {
@@ -546,7 +548,7 @@ class UserRepository: ObservableObject {
     }
     
     /// Get user by ID (from SwiftData cache or Firestore)
-    func getUser(userId: String) async throws -> AppUser? {
+    private func getUser(userId: String) async throws -> AppUser? {
         // First check SwiftData cache
         if let modelContext = modelContext {
             let searchUserId = userId

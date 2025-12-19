@@ -70,7 +70,11 @@ final class Invite {
     }
     
     var isExpired: Bool {
-        expiresAt < Date()
+        // Friend invites don't expire - only check expiration for family invites
+        if typeEnum == .friend {
+            return false
+        }
+        return expiresAt < Date()
     }
     
     /// Get type enum

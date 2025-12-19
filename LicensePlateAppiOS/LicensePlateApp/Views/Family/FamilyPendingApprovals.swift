@@ -12,7 +12,7 @@ struct FamilyPendingApprovals: View {
     let familyId: String
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    @StateObject private var familyRepository = FamilyRepository()
+    private let familyRepository = FamilyRepository.shared
     @State private var pendingRequests: [PendingJoinRequest] = []
     
     var body: some View {

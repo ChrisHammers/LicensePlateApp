@@ -12,7 +12,7 @@ struct CreateFamilySheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    @StateObject private var familyRepository = FamilyRepository()
+    private let familyRepository = FamilyRepository.shared
     @State private var familyName = ""
     @State private var isCreating = false
     @State private var errorMessage: String?

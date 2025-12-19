@@ -13,7 +13,7 @@ struct FamilyInvitesView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var authService: FirebaseAuthService
-    @StateObject private var inviteRepository = InviteRepository()
+    private let inviteRepository = InviteRepository.shared
     @State private var pendingInvites: [Invite] = []
     @State private var isLoading = false
     @State private var cancellables = Set<AnyCancellable>()
@@ -113,7 +113,7 @@ struct FamilyInviteRow: View {
     let invite: Invite
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    @StateObject private var familyRepository = FamilyRepository()
+    private let familyRepository = FamilyRepository.shared
     @State private var showInviteDetail = false
     @State private var family: Family?
     

@@ -33,10 +33,9 @@ class FamilyDashboardViewModel: ObservableObject {
     func setModelContext(_ context: ModelContext) {
         familyRepository.setModelContext(context)
         if inviteRepository == nil {
-            inviteRepository = InviteRepository(modelContext: context)
-        } else {
-            inviteRepository?.setModelContext(context)
+            inviteRepository = InviteRepository.shared
         }
+        inviteRepository?.setModelContext(context)
         
         // Start listening to invites for badge counts
         if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {

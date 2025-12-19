@@ -14,6 +14,8 @@ import Combine
 
 @MainActor
 class FamilyRepository: ObservableObject {
+    static let shared = FamilyRepository()
+    
     private let db = Firestore.firestore()
     private var modelContext: ModelContext?
     nonisolated(unsafe) private var listeners: [ListenerRegistration] = []
@@ -24,8 +26,8 @@ class FamilyRepository: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    init(modelContext: ModelContext? = nil) {
-        self.modelContext = modelContext
+    private init() {
+        // Private initializer prevents external instantiation
     }
     
     func setModelContext(_ context: ModelContext) {

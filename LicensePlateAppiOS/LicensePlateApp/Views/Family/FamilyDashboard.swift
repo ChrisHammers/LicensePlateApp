@@ -20,11 +20,10 @@ struct FamilyDashboard: View {
     @State private var showFamilyInvitesView = false
     
     init() {
-        let familyRepo = FamilyRepository()
         // Create a temporary authService for initialization - will be replaced in onAppear
         let tempAuthService = FirebaseAuthService()
         _viewModel = StateObject(wrappedValue: FamilyDashboardViewModel(
-            familyRepository: familyRepo,
+            familyRepository: .shared,
             authService: tempAuthService
         ))
     }
