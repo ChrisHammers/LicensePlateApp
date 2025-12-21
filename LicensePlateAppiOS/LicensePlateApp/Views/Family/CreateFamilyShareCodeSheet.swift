@@ -8,6 +8,7 @@
 import SwiftUI
 import SwiftData
 import Combine
+import UIKit
 
 struct CreateFamilyShareCodeSheet: View {
     let familyId: String
@@ -24,6 +25,8 @@ struct CreateFamilyShareCodeSheet: View {
     @State private var qrCodeImage: UIImage?
     @State private var currentTime = Date()
     @State private var currentShareCodeId: String? // Track the current share code ID for revocation
+    @State private var showShareSheet = false
+    @State private var copiedToClipboard = false
     
     init(familyId: String, existingShareCode: ShareCode? = nil) {
         self.familyId = familyId
@@ -48,13 +51,30 @@ struct CreateFamilyShareCodeSheet: View {
                                     .font(.system(.headline, design: .rounded))
                                     .foregroundStyle(Color.Theme.primaryBlue)
                                 
-                                Text(code)
-                                    .font(.system(.largeTitle, design: .monospaced))
-                                    .fontWeight(.bold)
-                                    .foregroundStyle(Color.Theme.primaryBlue)
-                                    .padding()
-                                    .background(Color.Theme.cardBackground)
-                                    .cornerRadius(12)
+                                HStack {
+                                    Text(code)
+                                        .font(.system(.largeTitle, design: .monospaced))
+                                        .fontWeight(.bold)
+                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                    
+                                    Button {
+                                        copyShareCode(code)
+                                    } label: {
+                                        Image(systemName: copiedToClipboard ? "checkmark.circle.fill" : "doc.on.doc")
+                                            .foregroundStyle(Color.Theme.primaryBlue)
+                                            .font(.title2)
+                                    }
+                                }
+                                .padding()
+                                .background(Color.Theme.cardBackground)
+                                .cornerRadius(12)
+                                
+                                if copiedToClipboard {
+                                    Text("Copied to clipboard".localized)
+                                        .font(.system(.caption, design: .rounded))
+                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                        .transition(.opacity)
+                                }
                                 
                                 if let expiresAt = expiresAt {
                                     let expirationText = timeUntilExpiration(expiresAt, currentTime: currentTime)
@@ -102,6 +122,18 @@ struct CreateFamilyShareCodeSheet: View {
                                         .frame(width: 200, height: 200)
                                         .background(Color.white)
                                         .cornerRadius(12)
+                                    
+                                    Button {
+                                        showShareSheet = true
+                                    } label: {
+                                        HStack {
+                                            Image(systemName: "square.and.arrow.up")
+                                            Text("Share QR Code".localized)
+                                        }
+                                        .font(.system(.body, design: .rounded))
+                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                    }
+                                    .buttonStyle(.bordered)
                                 }
                                 .padding()
                                 .frame(maxWidth: .infinity)
@@ -182,6 +214,21 @@ struct CreateFamilyShareCodeSheet: View {
                 // Timer updates the expiration display, but doesn't clear the code
                 // User can refresh to get a new code
             }
+            .sheet(isPresented: $showShareSheet) {
+                if let qrImage = qrCodeImage {
+                    ShareSheet(activityItems: [qrImage])
+                }
+            }
+        }
+    }
+    
+    private func copyShareCode(_ code: String) {
+        UIPasteboard.general.string = code
+        copiedToClipboard = true
+        
+        // Reset the checkmark after 2 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            copiedToClipboard = false
         }
     }
     
@@ -279,6 +326,24 @@ struct CreateFamilyShareCodeSheet: View {
         } else {
             return "\(seconds) second\(seconds == 1 ? "" : "s")".localized
         }
+    }
+}
+
+// MARK: - Share Sheet
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    let applicationActivities: [UIActivity]? = nil
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(
+            activityItems: activityItems,
+            applicationActivities: applicationActivities
+        )
+        return controller
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {
+        // No updates needed
     }
 }
 
