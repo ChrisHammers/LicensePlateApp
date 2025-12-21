@@ -14,6 +14,7 @@ class FamilyDashboardViewModel: ObservableObject {
     @Published var family: Family?
     @Published var members: [FamilyMember] = []
     @Published var pendingRequests: [PendingJoinRequest] = []
+    @Published var activeShareCode: ShareCode?
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -83,6 +84,7 @@ class FamilyDashboardViewModel: ObservableObject {
                         self?.family = nil
                         self?.members = []
                         self?.pendingRequests = []
+                        self?.activeShareCode = nil
                     }
                     return
                 }
@@ -115,35 +117,59 @@ class FamilyDashboardViewModel: ObservableObject {
                     let fetchedMembers = try await familyRepository.fetchMembers(familyId: activeFamilyId)
                     let fetchedPending = try await familyRepository.fetchPendingRequests(familyId: activeFamilyId)
                     
-                    await MainActor.run {
+                    let canManage = await MainActor.run {
                         self.family = fetchedFamily
                         self.members = fetchedMembers
                         self.pendingRequests = fetchedPending
                         self.isLoading = false
+                        
+                        // Check if user can manage family (needs members to be set first)
+                        return self.canManageFamily
+                    }
+                    
+                    // Load active share code if user can manage family
+                    if canManage {
+                        await loadActiveShareCode(familyId: activeFamilyId)
                     }
                 } else {
                     // Family doesn't exist in Firestore - might be data inconsistency
                     // Fall back to SwiftData cache in case of offline changes
-                    await MainActor.run {
+                    let canManage = await MainActor.run {
                         self.family = self.familyRepository.getFamily(familyId: activeFamilyId)
                         self.loadFamilyData(familyId: activeFamilyId)
                         self.isLoading = false
                         
                         if self.family == nil {
                             self.errorMessage = "Family not found"
+                            self.activeShareCode = nil
                         }
+                        
+                        return self.canManageFamily
+                    }
+                    
+                    // Load active share code if user can manage family
+                    if canManage {
+                        await loadActiveShareCode(familyId: activeFamilyId)
                     }
                 }
             } catch {
                 // Network error or permission issue - fall back to SwiftData cache
-                await MainActor.run {
+                let canManage = await MainActor.run {
                     self.family = self.familyRepository.getFamily(familyId: activeFamilyId)
                     self.loadFamilyData(familyId: activeFamilyId)
                     self.isLoading = false
                     
                     if self.family == nil {
                         self.errorMessage = "Unable to load family. Please check your connection."
+                        self.activeShareCode = nil
                     }
+                    
+                    return self.canManageFamily
+                }
+                
+                // Load active share code if user can manage family
+                if canManage {
+                    await loadActiveShareCode(familyId: activeFamilyId)
                 }
             }
         }
@@ -152,6 +178,21 @@ class FamilyDashboardViewModel: ObservableObject {
     private func loadFamilyData(familyId: String) {
         members = familyRepository.getMembers(familyId: familyId)
         pendingRequests = familyRepository.getPendingRequests(familyId: familyId)
+    }
+    
+    /// Load active share code for the family
+    func loadActiveShareCode(familyId: String) async {
+        do {
+            let shareCode = try await familyRepository.getActiveShareCode(familyId: familyId)
+            await MainActor.run {
+                self.activeShareCode = shareCode
+            }
+        } catch {
+            // If no active share code exists or error occurs, set to nil
+            await MainActor.run {
+                self.activeShareCode = nil
+            }
+        }
     }
     
     var currentUserRole: FamilyMember.FamilyRole? {

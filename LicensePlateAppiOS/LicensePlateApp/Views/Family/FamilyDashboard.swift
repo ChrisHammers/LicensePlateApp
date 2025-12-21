@@ -78,7 +78,7 @@ struct FamilyDashboard: View {
                                 } label: {
                                     HStack {
                                         Image(systemName: "qrcode")
-                                        Text("Create Share Code".localized)
+                                        Text(viewModel.activeShareCode != nil && !viewModel.activeShareCode!.isExpired ? "View Active Share Code".localized : "Create Share Code".localized)
                                     }
                                     .font(.system(.body, design: .rounded))
                                     .foregroundStyle(Color.Theme.primaryBlue)
@@ -283,8 +283,19 @@ struct FamilyDashboard: View {
             }
             .sheet(isPresented: $showCreateShareCodeSheet) {
                 if let family = viewModel.family {
-                    CreateFamilyShareCodeSheet(familyId: family.familyId)
-                        .environmentObject(authService)
+                    CreateFamilyShareCodeSheet(
+                        familyId: family.familyId,
+                        existingShareCode: viewModel.activeShareCode
+                    )
+                    .environmentObject(authService)
+                    .onDisappear {
+                        // Reload active share code after sheet closes (in case a new one was created)
+                        if let familyId = viewModel.family?.familyId {
+                            Task {
+                                await viewModel.loadActiveShareCode(familyId: familyId)
+                            }
+                        }
+                    }
                 }
             }
             .sheet(isPresented: $showFamilyInvitesView) {

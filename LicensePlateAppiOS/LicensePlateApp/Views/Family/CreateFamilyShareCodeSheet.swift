@@ -10,6 +10,7 @@ import SwiftData
 
 struct CreateFamilyShareCodeSheet: View {
     let familyId: String
+    let existingShareCode: ShareCode? // Optional existing share code to display
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
@@ -20,6 +21,11 @@ struct CreateFamilyShareCodeSheet: View {
     @State private var errorMessage: String?
     @State private var showError = false
     @State private var qrCodeImage: UIImage?
+    
+    init(familyId: String, existingShareCode: ShareCode? = nil) {
+        self.familyId = familyId
+        self.existingShareCode = existingShareCode
+    }
     
     var body: some View {
         NavigationStack {
@@ -114,7 +120,7 @@ struct CreateFamilyShareCodeSheet: View {
                     .padding()
                 }
             }
-            .navigationTitle("Create Share Code".localized)
+            .navigationTitle(existingShareCode != nil ? "Share Code".localized : "Create Share Code".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -132,7 +138,15 @@ struct CreateFamilyShareCodeSheet: View {
             }
             .onAppear {
                 familyRepository.setModelContext(modelContext)
-                if shareCode == nil {
+                
+                // If existing share code provided, display it
+                if let existing = existingShareCode, !existing.isExpired {
+                    shareCode = existing.code
+                    expiresAt = existing.expiresAt
+                    // Generate QR code for existing code
+                    qrCodeImage = QRCodeService.shared.generateQRCode(from: existing.code)
+                } else if shareCode == nil {
+                    // Only generate new code if no existing code provided
                     generateCode()
                 }
             }
@@ -183,7 +197,7 @@ struct CreateFamilyShareCodeSheet: View {
 }
 
 #Preview {
-    CreateFamilyShareCodeSheet(familyId: "test")
+    CreateFamilyShareCodeSheet(familyId: "test", existingShareCode: nil)
         .environmentObject(FirebaseAuthService())
 }
 

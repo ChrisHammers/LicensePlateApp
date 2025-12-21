@@ -651,6 +651,31 @@ class FamilyRepository: ObservableObject {
         return (codeId: codeId, code: code, expiresAt: expiresAt)
     }
     
+    /// Get active share code for a family (non-expired, non-revoked)
+    func getActiveShareCode(familyId: String) async throws -> ShareCode? {
+        guard Auth.auth().currentUser != nil else {
+            throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
+        }
+        
+        let now = Date()
+        
+        // Query only by familyId to avoid composite index requirement
+        // Filter isRevoked and expiresAt client-side
+        let query = db.collection("share_codes")
+            .whereField("familyId", isEqualTo: familyId)
+            .limit(to: 50) // Get recent codes (shouldn't be many active at once)
+        
+        let snapshot = try await query.getDocuments()
+        
+        // Filter client-side: not revoked, not expired, then sort by createdAt descending
+        let activeCodes = snapshot.documents
+            .compactMap { ShareCode(from: $0) }
+            .filter { !$0.isRevoked && $0.expiresAt > now }
+            .sorted { $0.createdAt > $1.createdAt }
+        
+        return activeCodes.first
+    }
+    
     deinit {
         stopListening()
     }
