@@ -46,7 +46,7 @@ struct FamilyDashboard: View {
                                     .fontWeight(.bold)
                                     .foregroundStyle(Color.Theme.primaryBlue)
                                 
-                                Text("Your crew".localized)
+                                Text("Your family".localized)
                                     .font(.system(.subheadline, design: .rounded))
                                     .foregroundStyle(Color.Theme.softBrown)
                             }
