@@ -66,7 +66,7 @@ struct FamilyDashboard: View {
                                 } label: {
                                     HStack {
                                         Image(systemName: "person.badge.plus")
-                                        Text("Invite Member".localized)
+                                        Text("Invite a Family Member".localized)
                                     }
                                     .font(.system(.body, design: .rounded))
                                     .foregroundStyle(Color.Theme.primaryBlue)
