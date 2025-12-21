@@ -74,6 +74,24 @@ class FamilyDashboardViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         
+        // Observe repository familyMembers to get updates with user relationships
+        familyRepository.$familyMembers
+            .sink { [weak self] familyMembers in
+                guard let self = self,
+                      let familyId = self.family?.familyId,
+                      let repositoryMembers = familyMembers[familyId] else {
+                    return
+                }
+                
+                // Reload members from SwiftData to get user relationships
+                // This ensures we have the linked user data
+                let membersWithUsers = self.familyRepository.getMembers(familyId: familyId)
+                if !membersWithUsers.isEmpty {
+                    self.members = membersWithUsers
+                }
+            }
+            .store(in: &cancellables)
+        
         // Observe user changes to reload when activeFamilyId changes
         authService.$currentUser
             .sink { [weak self] user in
@@ -117,9 +135,15 @@ class FamilyDashboardViewModel: ObservableObject {
                     let fetchedMembers = try await familyRepository.fetchMembers(familyId: activeFamilyId)
                     let fetchedPending = try await familyRepository.fetchPendingRequests(familyId: activeFamilyId)
                     
+                    // Wait a bit for user linking to complete (fetchAndCacheUsers runs asynchronously)
+                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                    
+                    // Reload members from SwiftData to get user relationships
+                    let membersWithUsers = familyRepository.getMembers(familyId: activeFamilyId)
+                    
                     let canManage = await MainActor.run {
                         self.family = fetchedFamily
-                        self.members = fetchedMembers
+                        self.members = membersWithUsers // Use members with user relationships
                         self.pendingRequests = fetchedPending
                         self.isLoading = false
                         

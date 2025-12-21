@@ -331,15 +331,21 @@ struct FamilyMemberRow: View {
                 .fill(Color.Theme.primaryBlue.opacity(0.3))
                 .frame(width: 50, height: 50)
             
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(member.user?.displayName ?? "Member")
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
                 
+                if let userName = member.user?.userName {
+                    Text("@\(userName)")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                }
+                
                 Text(member.roleEnum.displayName)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
             }
             
             Spacer()
