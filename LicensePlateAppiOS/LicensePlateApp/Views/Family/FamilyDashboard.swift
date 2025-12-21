@@ -289,7 +289,7 @@ struct FamilyDashboard: View {
                     )
                     .environmentObject(authService)
                     .onDisappear {
-                        // Reload active share code after sheet closes (in case a new one was created)
+                        // Reload active share code after sheet closes (in case a new one was created or refreshed)
                         if let familyId = viewModel.family?.familyId {
                             Task {
                                 await viewModel.loadActiveShareCode(familyId: familyId)

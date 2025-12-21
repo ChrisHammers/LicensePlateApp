@@ -23,6 +23,7 @@ struct CreateFamilyShareCodeSheet: View {
     @State private var showError = false
     @State private var qrCodeImage: UIImage?
     @State private var currentTime = Date()
+    @State private var currentShareCodeId: String? // Track the current share code ID for revocation
     
     init(familyId: String, existingShareCode: ShareCode? = nil) {
         self.familyId = familyId
@@ -56,10 +57,31 @@ struct CreateFamilyShareCodeSheet: View {
                                     .cornerRadius(12)
                                 
                                 if let expiresAt = expiresAt {
-                                    Text("Expires in \(timeUntilExpiration(expiresAt, currentTime: currentTime))".localized)
-                                        .font(.system(.caption, design: .rounded))
-                                        .foregroundStyle(Color.Theme.softBrown)
+                                    let expirationText = timeUntilExpiration(expiresAt, currentTime: currentTime)
+                                    if expirationText == "Expired".localized {
+                                        Text("Refresh Share Code".localized)
+                                            .font(.system(.caption, design: .rounded))
+                                            .foregroundStyle(Color.Theme.primaryBlue)
+                                    } else {
+                                        Text("Expires in \(expirationText)".localized)
+                                            .font(.system(.caption, design: .rounded))
+                                            .foregroundStyle(Color.Theme.softBrown)
+                                    }
                                 }
+                                
+                                // Refresh Share Code Button
+                                Button {
+                                    refreshShareCode()
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "arrow.clockwise")
+                                        Text("Refresh Share Code".localized)
+                                    }
+                                    .font(.system(.body, design: .rounded))
+                                    .foregroundStyle(Color.Theme.primaryBlue)
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(isGenerating || !authService.isOnline)
                             }
                             .padding()
                             .frame(maxWidth: .infinity)
@@ -122,7 +144,7 @@ struct CreateFamilyShareCodeSheet: View {
                     .padding()
                 }
             }
-            .navigationTitle(existingShareCode != nil ? "Share Code".localized : "Create Share Code".localized)
+            .navigationTitle("Share Code".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -146,6 +168,7 @@ struct CreateFamilyShareCodeSheet: View {
                 if let existing = existingShareCode, !existing.isExpired {
                     shareCode = existing.code
                     expiresAt = existing.expiresAt
+                    currentShareCodeId = existing.codeId
                     // Generate QR code for existing code
                     qrCodeImage = QRCodeService.shared.generateQRCode(from: existing.code)
                 } else if shareCode == nil {
@@ -156,14 +179,8 @@ struct CreateFamilyShareCodeSheet: View {
             }
             .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
                 currentTime = Date()
-                
-                // Check if share code has expired
-                if let expirationDate = expiresAt, expirationDate <= currentTime {
-                    // Code expired, clear it
-                    shareCode = nil
-                    expiresAt = nil
-                    qrCodeImage = nil
-                }
+                // Timer updates the expiration display, but doesn't clear the code
+                // User can refresh to get a new code
             }
         }
     }
@@ -189,6 +206,7 @@ struct CreateFamilyShareCodeSheet: View {
                 await MainActor.run {
                     shareCode = result.code
                     expiresAt = result.expiresAt
+                    currentShareCodeId = result.codeId
                     qrCodeImage = qrImage
                     isGenerating = false
                     AnalyticsService.shared.log(.shareCodeGenerated(type: "family"))
@@ -199,6 +217,50 @@ struct CreateFamilyShareCodeSheet: View {
                     errorMessage = error.localizedDescription
                     showError = true
                     print("❌ Family share code generation error: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    private func refreshShareCode() {
+        guard authService.isOnline else {
+            errorMessage = "Requires network connection".localized
+            showError = true
+            return
+        }
+        
+        isGenerating = true
+        errorMessage = nil
+        
+        Task {
+            do {
+                // First, revoke the current share code if it exists
+                if let codeId = currentShareCodeId {
+                    try? await familyRepository.revokeShareCode(codeId: codeId)
+                }
+                
+                // Then create a new share code
+                let result = try await familyRepository.createShareCode(type: "family", familyId: familyId)
+                
+                // Generate QR code
+                let qrString = result.code
+                let qrImage = QRCodeService.shared.generateQRCode(from: qrString)
+                
+                await MainActor.run {
+                    shareCode = result.code
+                    expiresAt = result.expiresAt
+                    currentShareCodeId = result.codeId
+                    qrCodeImage = qrImage
+                    isGenerating = false
+                    currentTime = Date() // Reset timer
+                    AnalyticsService.shared.log(.shareCodeGenerated(type: "family"))
+                }
+            } catch {
+                await MainActor.run {
+                    isGenerating = false
+                    errorMessage = error.localizedDescription
+                    showError = true
+                    print("❌ Family share code refresh error: \(error.localizedDescription)")
                 }
             }
         }

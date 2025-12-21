@@ -651,6 +651,17 @@ class FamilyRepository: ObservableObject {
         return (codeId: codeId, code: code, expiresAt: expiresAt)
     }
     
+    /// Revoke a share code
+    func revokeShareCode(codeId: String) async throws {
+        guard Auth.auth().currentUser != nil else {
+            throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
+        }
+        
+        try await db.collection("share_codes").document(codeId).updateData([
+            "isRevoked": true
+        ])
+    }
+    
     /// Get active share code for a family (non-expired, non-revoked)
     func getActiveShareCode(familyId: String) async throws -> ShareCode? {
         guard Auth.auth().currentUser != nil else {
