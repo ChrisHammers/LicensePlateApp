@@ -78,7 +78,7 @@ struct FamilyDashboard: View {
                                 } label: {
                                     HStack {
                                         Image(systemName: "qrcode")
-                                        Text(viewModel.activeShareCode != nil && !viewModel.activeShareCode!.isExpired ? "View Active Share Code".localized : "Create Share Code".localized)
+                                        Text(viewModel.shareCodeButtonText)
                                     }
                                     .font(.system(.body, design: .rounded))
                                     .foregroundStyle(Color.Theme.primaryBlue)

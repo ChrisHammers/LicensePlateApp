@@ -29,6 +29,9 @@ class FamilyDashboardViewModel: ObservableObject {
         
         // Setup observers
         setupObservers()
+        
+        // Start expiration timer
+        startExpirationTimer()
     }
     
     func setModelContext(_ context: ModelContext) {
@@ -52,6 +55,37 @@ class FamilyDashboardViewModel: ObservableObject {
         }
     }
     
+    private func startExpirationTimer() {
+        // Timer that fires every 5 seconds to check for share code expiration
+        Timer.publish(every: 5.0, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+                    
+                    // Check if current share code has expired
+                    if let shareCode = self.activeShareCode {
+                        // Check expiration by comparing dates directly
+                        if shareCode.expiresAt <= Date() || shareCode.isRevoked {
+                            // Share code expired, clear it
+                            self.activeShareCode = nil
+                            
+                            // Optionally reload to check for a new active code
+                            if let familyId = self.family?.familyId, self.canManageFamily {
+                                await self.loadActiveShareCode(familyId: familyId)
+                            }
+                        }
+                    } else {
+                        // If no active code, check if one exists now
+                        if let familyId = self.family?.familyId, self.canManageFamily {
+                            await self.loadActiveShareCode(familyId: familyId)
+                        }
+                    }
+                }
+            }
+            .store(in: &cancellables)
+    }
+    
     func setAuthService(_ service: FirebaseAuthService) {
         // Cancel old subscriptions
         cancellables.removeAll()
@@ -61,6 +95,9 @@ class FamilyDashboardViewModel: ObservableObject {
         
         // Re-setup observers with new authService
         setupObservers()
+        
+        // Restart expiration timer
+        startExpirationTimer()
     }
     
     private func setupObservers() {
@@ -219,6 +256,7 @@ class FamilyDashboardViewModel: ObservableObject {
         }
     }
     
+    
     var currentUserRole: FamilyMember.FamilyRole? {
         guard let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id,
               let member = members.first(where: { $0.userId == userId }) else {
@@ -248,6 +286,15 @@ class FamilyDashboardViewModel: ObservableObject {
     var pendingMemberRequestsCount: Int {
         guard canManageFamily else { return 0 }
         return pendingRequests.filter { $0.statusEnum == .pending }.count
+    }
+    
+    /// Computed property for share code button text
+    var shareCodeButtonText: String {
+        if let shareCode = activeShareCode, !shareCode.isExpired {
+            return "View Active Share Code".localized
+        } else {
+            return "Create Share Code".localized
+        }
     }
 }
 

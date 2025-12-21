@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import Combine
 
 struct CreateFamilyShareCodeSheet: View {
     let familyId: String
@@ -21,6 +22,7 @@ struct CreateFamilyShareCodeSheet: View {
     @State private var errorMessage: String?
     @State private var showError = false
     @State private var qrCodeImage: UIImage?
+    @State private var currentTime = Date()
     
     init(familyId: String, existingShareCode: ShareCode? = nil) {
         self.familyId = familyId
@@ -54,7 +56,7 @@ struct CreateFamilyShareCodeSheet: View {
                                     .cornerRadius(12)
                                 
                                 if let expiresAt = expiresAt {
-                                    Text("Expires in \(timeUntilExpiration(expiresAt))".localized)
+                                    Text("Expires in \(timeUntilExpiration(expiresAt, currentTime: currentTime))".localized)
                                         .font(.system(.caption, design: .rounded))
                                         .foregroundStyle(Color.Theme.softBrown)
                                 }
@@ -138,6 +140,7 @@ struct CreateFamilyShareCodeSheet: View {
             }
             .onAppear {
                 familyRepository.setModelContext(modelContext)
+                currentTime = Date()
                 
                 // If existing share code provided, display it
                 if let existing = existingShareCode, !existing.isExpired {
@@ -148,6 +151,18 @@ struct CreateFamilyShareCodeSheet: View {
                 } else if shareCode == nil {
                     // Only generate new code if no existing code provided
                     generateCode()
+                }
+                
+            }
+            .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
+                currentTime = Date()
+                
+                // Check if share code has expired
+                if let expirationDate = expiresAt, expirationDate <= currentTime {
+                    // Code expired, clear it
+                    shareCode = nil
+                    expiresAt = nil
+                    qrCodeImage = nil
                 }
             }
         }
@@ -189,10 +204,19 @@ struct CreateFamilyShareCodeSheet: View {
         }
     }
     
-    private func timeUntilExpiration(_ date: Date) -> String {
-        let timeInterval = date.timeIntervalSinceNow
+    private func timeUntilExpiration(_ date: Date, currentTime: Date) -> String {
+        let timeInterval = date.timeIntervalSince(currentTime)
+        guard timeInterval > 0 else {
+            return "Expired".localized
+        }
         let minutes = Int(timeInterval / 60)
-        return "\(minutes) minutes".localized
+        let seconds = Int(timeInterval.truncatingRemainder(dividingBy: 60))
+        
+        if minutes > 0 {
+            return "\(minutes) minute\(minutes == 1 ? "" : "s")".localized
+        } else {
+            return "\(seconds) second\(seconds == 1 ? "" : "s")".localized
+        }
     }
 }
 
