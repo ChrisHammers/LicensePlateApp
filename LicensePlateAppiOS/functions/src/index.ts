@@ -15,6 +15,7 @@ export {
   approveFamilyJoinRequest_CaptainStep,
   removeFamilyMember,
   changeFamilyMemberRole,
+  inactivateFamily,
 } from "./family";
 export { expireInvitesAndCodes } from "./expiration";
 export { onAuthUserDeleted } from "./auth";

@@ -102,11 +102,15 @@ class FamilyDashboardViewModel: ObservableObject {
     
     private func setupObservers() {
         // Observe repository changes
+        // Note: This observer may trigger with stale SwiftData, but loadData() will fetch fresh from Firestore
         familyRepository.$families
             .sink { [weak self] families in
-                if let activeFamily = families.first(where: { $0.statusEnum == .active }) {
+                // Only use SwiftData cache if we don't have family loaded yet
+                // Otherwise, wait for loadData() to fetch from Firestore
+                if self?.family == nil,
+                   let activeFamily = families.first(where: { $0.statusEnum == .active }) {
+                    // This is just initial state - loadData() will fetch fresh from Firestore
                     self?.family = activeFamily
-                    self?.loadFamilyData(familyId: activeFamily.familyId)
                 }
             }
             .store(in: &cancellables)
@@ -153,21 +157,55 @@ class FamilyDashboardViewModel: ObservableObject {
     }
     
     func loadData() {
-        guard let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id,
-              let activeFamilyId = authService.currentUser?.activeFamilyId else {
+        guard let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else {
             return
         }
         
-        isLoading = true
-        
-        // Start listening to Firestore updates for real-time sync
-        familyRepository.startListening(familyId: activeFamilyId)
-        
-        // Always fetch from Firestore first (online priority)
+        // First, refresh user from Firestore to get latest activeFamilyId (source of truth)
         Task {
+            // Refresh user to ensure we have latest activeFamilyId
+            try? await authService.refreshCurrentUserFromFirestore()
+            
+            let activeFamilyId: String? = await MainActor.run {
+                guard let activeFamilyId = self.authService.currentUser?.activeFamilyId else {
+                    // No active family - clear everything
+                    self.family = nil
+                    self.members = []
+                    self.pendingRequests = []
+                    self.activeShareCode = nil
+                    self.isLoading = false
+                    return nil
+                }
+                
+                self.isLoading = true
+                
+                // Start listening to Firestore updates for real-time sync
+                self.familyRepository.startListening(familyId: activeFamilyId)
+                
+                return activeFamilyId
+            }
+            
+            guard let activeFamilyId = activeFamilyId else {
+                return
+            }
+            
+            // Always fetch from Firestore first (source of truth)
             do {
-                // Fetch family from Firestore
+                // Fetch family from Firestore (source of truth)
                 if let fetchedFamily = try await familyRepository.fetchFamily(familyId: activeFamilyId) {
+                    // Check if family is inactive - if so, clear everything
+                    if fetchedFamily.statusEnum == .inactive {
+                        await MainActor.run {
+                            self.familyRepository.clearFamilyFromCache(familyId: activeFamilyId)
+                            self.family = nil
+                            self.members = []
+                            self.pendingRequests = []
+                            self.activeShareCode = nil
+                            self.isLoading = false
+                        }
+                        return
+                    }
+                    
                     // Fetch members and pending requests
                     let fetchedMembers = try await familyRepository.fetchMembers(familyId: activeFamilyId)
                     let fetchedPending = try await familyRepository.fetchPendingRequests(familyId: activeFamilyId)
@@ -193,15 +231,43 @@ class FamilyDashboardViewModel: ObservableObject {
                         await loadActiveShareCode(familyId: activeFamilyId)
                     }
                 } else {
-                    // Family doesn't exist in Firestore - might be data inconsistency
-                    // Fall back to SwiftData cache in case of offline changes
+                    // Family doesn't exist in Firestore - clear local cache
+                    await MainActor.run {
+                        // Clear SwiftData cache for this family
+                        self.familyRepository.clearFamilyFromCache(familyId: activeFamilyId)
+                        
+                        self.family = nil
+                        self.members = []
+                        self.pendingRequests = []
+                        self.activeShareCode = nil
+                        self.isLoading = false
+                    }
+                }
+            } catch {
+                // Network error or permission issue - check if family exists and is active
+                let cachedFamily = await MainActor.run {
+                    self.familyRepository.getFamily(familyId: activeFamilyId)
+                }
+                
+                // If cached family is inactive, clear it
+                if let cached = cachedFamily, cached.statusEnum == .inactive {
+                    await MainActor.run {
+                        self.familyRepository.clearFamilyFromCache(familyId: activeFamilyId)
+                        self.family = nil
+                        self.members = []
+                        self.pendingRequests = []
+                        self.activeShareCode = nil
+                        self.isLoading = false
+                    }
+                } else {
+                    // Fall back to SwiftData cache only if online fetch failed
                     let canManage = await MainActor.run {
-                        self.family = self.familyRepository.getFamily(familyId: activeFamilyId)
+                        self.family = cachedFamily
                         self.loadFamilyData(familyId: activeFamilyId)
                         self.isLoading = false
                         
                         if self.family == nil {
-                            self.errorMessage = "Family not found"
+                            self.errorMessage = "Unable to load family. Please check your connection."
                             self.activeShareCode = nil
                         }
                         
@@ -213,28 +279,10 @@ class FamilyDashboardViewModel: ObservableObject {
                         await loadActiveShareCode(familyId: activeFamilyId)
                     }
                 }
-            } catch {
-                // Network error or permission issue - fall back to SwiftData cache
-                let canManage = await MainActor.run {
-                    self.family = self.familyRepository.getFamily(familyId: activeFamilyId)
-                    self.loadFamilyData(familyId: activeFamilyId)
-                    self.isLoading = false
-                    
-                    if self.family == nil {
-                        self.errorMessage = "Unable to load family. Please check your connection."
-                        self.activeShareCode = nil
-                    }
-                    
-                    return self.canManageFamily
-                }
-                
-                // Load active share code if user can manage family
-                if canManage {
-                    await loadActiveShareCode(familyId: activeFamilyId)
-                }
             }
         }
     }
+    
     
     private func loadFamilyData(familyId: String) {
         members = familyRepository.getMembers(familyId: familyId)

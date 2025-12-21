@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.writeAuditLog = exports.onAuthUserDeleted = exports.expireInvitesAndCodes = exports.changeFamilyMemberRole = exports.removeFamilyMember = exports.approveFamilyJoinRequest_CaptainStep = exports.respondToFamilyInvite_UserStep = exports.sendFamilyInvite = exports.createFamily = exports.respondToFriendInvite = exports.sendFriendInvite = exports.redeemShareCode = exports.createShareCode = void 0;
+exports.writeAuditLog = exports.onAuthUserDeleted = exports.expireInvitesAndCodes = exports.inactivateFamily = exports.changeFamilyMemberRole = exports.removeFamilyMember = exports.approveFamilyJoinRequest_CaptainStep = exports.respondToFamilyInvite_UserStep = exports.sendFamilyInvite = exports.createFamily = exports.respondToFriendInvite = exports.sendFriendInvite = exports.redeemShareCode = exports.createShareCode = void 0;
 const admin = require("firebase-admin");
 admin.initializeApp();
 // Export all functions
@@ -17,6 +17,7 @@ Object.defineProperty(exports, "respondToFamilyInvite_UserStep", { enumerable: t
 Object.defineProperty(exports, "approveFamilyJoinRequest_CaptainStep", { enumerable: true, get: function () { return family_1.approveFamilyJoinRequest_CaptainStep; } });
 Object.defineProperty(exports, "removeFamilyMember", { enumerable: true, get: function () { return family_1.removeFamilyMember; } });
 Object.defineProperty(exports, "changeFamilyMemberRole", { enumerable: true, get: function () { return family_1.changeFamilyMemberRole; } });
+Object.defineProperty(exports, "inactivateFamily", { enumerable: true, get: function () { return family_1.inactivateFamily; } });
 var expiration_1 = require("./expiration");
 Object.defineProperty(exports, "expireInvitesAndCodes", { enumerable: true, get: function () { return expiration_1.expireInvitesAndCodes; } });
 var auth_1 = require("./auth");

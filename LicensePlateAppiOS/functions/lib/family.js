@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.changeFamilyMemberRole = exports.removeFamilyMember = exports.approveFamilyJoinRequest_CaptainStep = exports.respondToFamilyInvite_UserStep = exports.sendFamilyInvite = exports.createFamily = void 0;
+exports.inactivateFamily = exports.changeFamilyMemberRole = exports.removeFamilyMember = exports.approveFamilyJoinRequest_CaptainStep = exports.respondToFamilyInvite_UserStep = exports.sendFamilyInvite = exports.createFamily = void 0;
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const validation_1 = require("./utils/validation");
@@ -426,6 +426,69 @@ exports.changeFamilyMemberRole = functions.https.onCall(async (data, context) =>
         subjectType: "family",
         subjectId: familyId,
         metadata: { memberId, oldRole: currentRole, newRole },
+    });
+    return { success: true };
+});
+/**
+ * Inactivate a family (creator only)
+ * Marks family as inactive, removes all members, and clears activeFamilyId
+ */
+exports.inactivateFamily = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
+    }
+    const { familyId } = data;
+    const userId = context.auth.uid;
+    if (!familyId) {
+        throw new functions.https.HttpsError("invalid-argument", "familyId is required");
+    }
+    // Verify user is the creator
+    const familyDoc = await db.collection("families").doc(familyId).get();
+    if (!familyDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "Family not found");
+    }
+    const familyData = familyDoc.data();
+    if (familyData.creatorId !== userId) {
+        throw new functions.https.HttpsError("permission-denied", "Only the creator can inactivate the family");
+    }
+    // Verify family is active
+    if (familyData.status !== "active") {
+        throw new functions.https.HttpsError("failed-precondition", "Family is already inactive");
+    }
+    const batch = db.batch();
+    // Mark family as inactive
+    batch.update(familyDoc.ref, {
+        status: "inactive",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    // Get all members
+    const membersSnapshot = await db
+        .collection(`families/${familyId}/members`)
+        .get();
+    // Remove all members and clear activeFamilyId
+    for (const memberDoc of membersSnapshot.docs) {
+        const memberId = memberDoc.id;
+        // Remove member
+        batch.delete(memberDoc.ref);
+        // Clear activeFamilyId if not retired general
+        const userDoc = await db.collection("users").doc(memberId).get();
+        const userData = userDoc.data();
+        if (userData && !userData.isRetiredGeneral) {
+            batch.update(db.collection("users").doc(memberId), {
+                activeFamilyId: admin.firestore.FieldValue.delete(),
+            });
+        }
+    }
+    await batch.commit();
+    await (0, audit_1.writeAuditLog)({
+        eventType: "AUDIT_FAMILY_INACTIVATED",
+        actorId: userId,
+        subjectType: "family",
+        subjectId: familyId,
+        metadata: {
+            reason: "creator_inactivated",
+            familyName: familyData.name,
+        },
     });
     return { success: true };
 });

@@ -662,6 +662,81 @@ class FamilyRepository: ObservableObject {
         ])
     }
     
+    /// Leave family (remove current user from family)
+    func leaveFamily(familyId: String) async throws {
+        guard let userId = Auth.auth().currentUser?.uid else {
+            throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
+        }
+        
+        // Use removeFamilyMember function, but allow users to remove themselves
+        // The cloud function will need to allow this case
+        let functions = Functions.functions()
+        let removeFunction = functions.httpsCallable("removeFamilyMember")
+        
+        _ = try await removeFunction.call([
+            "familyId": familyId,
+            "memberId": userId
+        ])
+    }
+    
+    /// Delete/Inactivate family (creator only) - uses Cloud Function
+    func deleteFamily(familyId: String) async throws {
+        guard let userId = Auth.auth().currentUser?.uid,
+              let modelContext = modelContext else {
+            throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
+        }
+        
+        // Stop listening BEFORE deletion to prevent permission errors
+        // Once family is inactive, user loses access and listeners will fail
+        stopListening()
+        
+        // Use Cloud Function to delete family (handles permissions server-side)
+        let functions = Functions.functions()
+        let deleteFunction = functions.httpsCallable("inactivateFamily")
+        
+        _ = try await deleteFunction.call([
+            "familyId": familyId
+        ])
+        
+        // Manually update local SwiftData cache since listeners are stopped
+        // Mark family as inactive
+        let familyDescriptor = FetchDescriptor<Family>(
+            predicate: #Predicate<Family> { $0.familyId == familyId }
+        )
+        if let family = try? modelContext.fetch(familyDescriptor).first {
+            family.status = "inactive"
+        }
+        
+        // Remove all members for this family
+        let membersDescriptor = FetchDescriptor<FamilyMember>(
+            predicate: #Predicate<FamilyMember> { $0.familyId == familyId }
+        )
+        if let members = try? modelContext.fetch(membersDescriptor) {
+            for member in members {
+                modelContext.delete(member)
+            }
+        }
+        
+        // Clear activeFamilyId for current user if not retired general
+        let userDescriptor = FetchDescriptor<AppUser>(
+            predicate: #Predicate<AppUser> { $0.firebaseUID == userId || $0.id == userId }
+        )
+        if let user = try? modelContext.fetch(userDescriptor).first,
+           !user.isRetiredGeneral {
+            user.activeFamilyId = nil
+        }
+        
+        // Update published arrays
+        let allFamiliesDescriptor = FetchDescriptor<Family>()
+        if let allFamilies = try? modelContext.fetch(allFamiliesDescriptor) {
+            families = allFamilies
+        }
+        familyMembers[familyId] = []
+        pendingRequests[familyId] = []
+        
+        try? modelContext.save()
+    }
+    
     /// Get active share code for a family (non-expired, non-revoked)
     func getActiveShareCode(familyId: String) async throws -> ShareCode? {
         guard Auth.auth().currentUser != nil else {
@@ -685,6 +760,49 @@ class FamilyRepository: ObservableObject {
             .sorted { $0.createdAt > $1.createdAt }
         
         return activeCodes.first
+    }
+    
+    /// Clear family data from SwiftData cache (marks as inactive, removes members)
+    func clearFamilyFromCache(familyId: String) {
+        guard let modelContext = modelContext else { return }
+        
+        // Mark family as inactive in cache
+        let familyDescriptor = FetchDescriptor<Family>(
+            predicate: #Predicate<Family> { $0.familyId == familyId }
+        )
+        if let family = try? modelContext.fetch(familyDescriptor).first {
+            family.status = "inactive"
+        }
+        
+        // Remove all members
+        let membersDescriptor = FetchDescriptor<FamilyMember>(
+            predicate: #Predicate<FamilyMember> { $0.familyId == familyId }
+        )
+        if let members = try? modelContext.fetch(membersDescriptor) {
+            for member in members {
+                modelContext.delete(member)
+            }
+        }
+        
+        // Remove pending requests
+        let pendingDescriptor = FetchDescriptor<PendingJoinRequest>(
+            predicate: #Predicate<PendingJoinRequest> { $0.familyId == familyId }
+        )
+        if let pending = try? modelContext.fetch(pendingDescriptor) {
+            for request in pending {
+                modelContext.delete(request)
+            }
+        }
+        
+        try? modelContext.save()
+        
+        // Update published arrays
+        let allFamiliesDescriptor = FetchDescriptor<Family>()
+        if let allFamilies = try? modelContext.fetch(allFamiliesDescriptor) {
+            families = allFamilies
+        }
+        familyMembers[familyId] = []
+        pendingRequests[familyId] = []
     }
     
     deinit {

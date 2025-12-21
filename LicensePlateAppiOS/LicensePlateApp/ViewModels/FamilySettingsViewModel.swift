@@ -17,7 +17,7 @@ class FamilySettingsViewModel: ObservableObject {
     @Published var errorMessage: String?
     
     private let familyRepository: FamilyRepository
-    private let authService: FirebaseAuthService
+    private var authService: FirebaseAuthService
     
     init(familyRepository: FamilyRepository, authService: FirebaseAuthService) {
         self.familyRepository = familyRepository
@@ -26,6 +26,10 @@ class FamilySettingsViewModel: ObservableObject {
     
     func setModelContext(_ context: ModelContext) {
         familyRepository.setModelContext(context)
+    }
+    
+    func setAuthService(_ service: FirebaseAuthService) {
+        authService = service
     }
     
     func loadData(familyId: String) {

@@ -65,8 +65,9 @@ exports.sendFriendInvite = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError("already-exists", "Pending invite already exists");
     }
     // Create invite
+    // Friend invites don't expire - set to far future date (100 years from now)
     const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + 15);
+    expiresAt.setFullYear(expiresAt.getFullYear() + 100);
     const inviteData = {
         type: "friend",
         fromUserId,
