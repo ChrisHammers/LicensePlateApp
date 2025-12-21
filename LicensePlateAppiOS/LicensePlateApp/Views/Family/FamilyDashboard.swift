@@ -318,6 +318,10 @@ struct FamilyDashboard: View {
                     // InviteRepository will be set up in ViewModel
                 }
             }
+            .onDisappear {
+                // Stop listening when view disappears to prevent permission errors
+                FamilyRepository.shared.stopListening()
+            }
        // }
     }
 }

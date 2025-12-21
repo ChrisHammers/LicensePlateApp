@@ -19,6 +19,8 @@ class FamilyRepository: ObservableObject {
     private let db = Firestore.firestore()
     private var modelContext: ModelContext?
     nonisolated(unsafe) private var listeners: [ListenerRegistration] = []
+    nonisolated(unsafe) private var isListening = false
+    nonisolated(unsafe) private var currentFamilyId: String?
     
     @Published var families: [Family] = []
     @Published var familyMembers: [String: [FamilyMember]] = [:] // familyId -> members
@@ -38,7 +40,15 @@ class FamilyRepository: ObservableObject {
     
     /// Start listening to a family and its members
     func startListening(familyId: String) {
+        // Don't restart if already listening to the same family
+        if isListening && currentFamilyId == familyId {
+            return
+        }
+        
         stopListening()
+        
+        currentFamilyId = familyId
+        isListening = true
         
         // Listen to family document
         let familyListener = db.collection("families").document(familyId)
@@ -89,13 +99,36 @@ class FamilyRepository: ObservableObject {
     
     private func handleFamilySnapshot(snapshot: DocumentSnapshot?, error: Error?) {
         if let error = error {
-            errorMessage = "Error fetching family: \(error.localizedDescription)"
+            // Check if it's a permission error - if so, stop listening
+            let nsError = error as NSError
+            if nsError.domain == "FIRFirestoreErrorDomain" && (nsError.code == 7 || nsError.code == 3) {
+                // Permission denied or not found - stop listening
+                Task { @MainActor in
+                    self.stopListening()
+                }
+                return
+            }
+            // Don't set error message for permission errors to avoid UI flashing
             return
         }
         
         guard let snapshot = snapshot, snapshot.exists,
               let modelContext = modelContext,
-              let family = Family(from: snapshot) else { return }
+              let family = Family(from: snapshot) else {
+            // Family doesn't exist - stop listening
+            Task { @MainActor in
+                self.stopListening()
+            }
+            return
+        }
+        
+        // Check if family is inactive - if so, stop listening
+        if family.statusEnum == .inactive {
+            Task { @MainActor in
+                self.stopListening()
+            }
+            return
+        }
         
         // Sync to SwiftData
         let searchFamilyId = family.familyId
@@ -126,7 +159,16 @@ class FamilyRepository: ObservableObject {
     
     private func handleMembersSnapshot(snapshot: QuerySnapshot?, error: Error?, familyId: String) {
         if let error = error {
-            errorMessage = "Error fetching members: \(error.localizedDescription)"
+            // Check if it's a permission error - if so, stop listening
+            let nsError = error as NSError
+            if nsError.domain == "FIRFirestoreErrorDomain" && (nsError.code == 7 || nsError.code == 3) {
+                // Permission denied or not found - stop listening
+                Task { @MainActor in
+                    self.stopListening()
+                }
+                return
+            }
+            // Don't set error message for permission errors to avoid UI flashing
             return
         }
         
@@ -176,7 +218,16 @@ class FamilyRepository: ObservableObject {
     
     private func handlePendingSnapshot(snapshot: QuerySnapshot?, error: Error?, familyId: String) {
         if let error = error {
-            errorMessage = "Error fetching pending requests: \(error.localizedDescription)"
+            // Check if it's a permission error - if so, stop listening
+            let nsError = error as NSError
+            if nsError.domain == "FIRFirestoreErrorDomain" && (nsError.code == 7 || nsError.code == 3) {
+                // Permission denied or not found - stop listening
+                Task { @MainActor in
+                    self.stopListening()
+                }
+                return
+            }
+            // Don't set error message for permission errors to avoid UI flashing
             return
         }
         
@@ -332,6 +383,8 @@ class FamilyRepository: ObservableObject {
             listener.remove()
         }
         listeners.removeAll()
+        isListening = false
+        currentFamilyId = nil
     }
     
     // MARK: - Local Queries

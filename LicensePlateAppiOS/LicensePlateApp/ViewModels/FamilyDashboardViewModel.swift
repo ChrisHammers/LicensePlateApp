@@ -8,6 +8,8 @@
 import Foundation
 import SwiftData
 import Combine
+import FirebaseFirestore
+import FirebaseAuth
 
 @MainActor
 class FamilyDashboardViewModel: ObservableObject {
@@ -22,6 +24,7 @@ class FamilyDashboardViewModel: ObservableObject {
     private var inviteRepository: InviteRepository?
     private var authService: FirebaseAuthService
     private var cancellables = Set<AnyCancellable>()
+    private var isLoadingData = false
     
     init(familyRepository: FamilyRepository, authService: FirebaseAuthService) {
         self.familyRepository = familyRepository
@@ -161,14 +164,24 @@ class FamilyDashboardViewModel: ObservableObject {
             return
         }
         
+        // Prevent multiple simultaneous loads
+        guard !isLoadingData else { return }
+        isLoadingData = true
+        
         // First, refresh user from Firestore to get latest activeFamilyId (source of truth)
         Task {
+            defer {
+                Task { @MainActor in
+                    self.isLoadingData = false
+                }
+            }
             // Refresh user to ensure we have latest activeFamilyId
             try? await authService.refreshCurrentUserFromFirestore()
             
             let activeFamilyId: String? = await MainActor.run {
                 guard let activeFamilyId = self.authService.currentUser?.activeFamilyId else {
-                    // No active family - clear everything
+                    // No active family - clear everything and stop any existing listeners
+                    self.familyRepository.stopListening()
                     self.family = nil
                     self.members = []
                     self.pendingRequests = []
@@ -178,9 +191,6 @@ class FamilyDashboardViewModel: ObservableObject {
                 }
                 
                 self.isLoading = true
-                
-                // Start listening to Firestore updates for real-time sync
-                self.familyRepository.startListening(familyId: activeFamilyId)
                 
                 return activeFamilyId
             }
@@ -193,9 +203,10 @@ class FamilyDashboardViewModel: ObservableObject {
             do {
                 // Fetch family from Firestore (source of truth)
                 if let fetchedFamily = try await familyRepository.fetchFamily(familyId: activeFamilyId) {
-                    // Check if family is inactive - if so, clear everything
+                    // Check if family is inactive - if so, clear everything and stop listeners
                     if fetchedFamily.statusEnum == .inactive {
                         await MainActor.run {
+                            self.familyRepository.stopListening()
                             self.familyRepository.clearFamilyFromCache(familyId: activeFamilyId)
                             self.family = nil
                             self.members = []
@@ -203,12 +214,19 @@ class FamilyDashboardViewModel: ObservableObject {
                             self.activeShareCode = nil
                             self.isLoading = false
                         }
+                        // Clear activeFamilyId from user document
+                        await self.clearActiveFamilyId()
                         return
                     }
                     
-                    // Fetch members and pending requests
+                    // Fetch members and pending requests FIRST to verify we have permissions
                     let fetchedMembers = try await familyRepository.fetchMembers(familyId: activeFamilyId)
                     let fetchedPending = try await familyRepository.fetchPendingRequests(familyId: activeFamilyId)
+                    
+                    // Only start listening if we successfully fetched members (have permissions)
+                    await MainActor.run {
+                        self.familyRepository.startListening(familyId: activeFamilyId)
+                    }
                     
                     // Wait a bit for user linking to complete (fetchAndCacheUsers runs asynchronously)
                     try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
@@ -231,8 +249,9 @@ class FamilyDashboardViewModel: ObservableObject {
                         await loadActiveShareCode(familyId: activeFamilyId)
                     }
                 } else {
-                    // Family doesn't exist in Firestore - clear local cache
+                    // Family doesn't exist in Firestore - stop listeners and clear local cache
                     await MainActor.run {
+                        self.familyRepository.stopListening()
                         // Clear SwiftData cache for this family
                         self.familyRepository.clearFamilyFromCache(familyId: activeFamilyId)
                         
@@ -242,6 +261,8 @@ class FamilyDashboardViewModel: ObservableObject {
                         self.activeShareCode = nil
                         self.isLoading = false
                     }
+                    // Clear activeFamilyId from user document
+                    await self.clearActiveFamilyId()
                 }
             } catch {
                 // Network error or permission issue - check if family exists and is active
@@ -249,9 +270,10 @@ class FamilyDashboardViewModel: ObservableObject {
                     self.familyRepository.getFamily(familyId: activeFamilyId)
                 }
                 
-                // If cached family is inactive, clear it
+                // If cached family is inactive, clear it and stop listeners
                 if let cached = cachedFamily, cached.statusEnum == .inactive {
                     await MainActor.run {
+                        self.familyRepository.stopListening()
                         self.familyRepository.clearFamilyFromCache(familyId: activeFamilyId)
                         self.family = nil
                         self.members = []
@@ -261,6 +283,7 @@ class FamilyDashboardViewModel: ObservableObject {
                     }
                 } else {
                     // Fall back to SwiftData cache only if online fetch failed
+                    // Don't start listeners if we're offline - wait for next successful fetch
                     let canManage = await MainActor.run {
                         self.family = cachedFamily
                         self.loadFamilyData(familyId: activeFamilyId)
@@ -301,6 +324,44 @@ class FamilyDashboardViewModel: ObservableObject {
             await MainActor.run {
                 self.activeShareCode = nil
             }
+        }
+    }
+    
+    /// Clear activeFamilyId from user document (both SwiftData and Firestore)
+    private func clearActiveFamilyId() async {
+        guard let user = authService.currentUser,
+              let firebaseUID = user.firebaseUID ?? Auth.auth().currentUser?.uid else {
+            return
+        }
+        
+        // Clear from SwiftData
+        await MainActor.run {
+            user.activeFamilyId = nil
+        }
+        
+        // Clear from Firestore directly (delete the field)
+        if authService.isOnline {
+            do {
+                let db = Firestore.firestore()
+                try await db.collection("users").document(firebaseUID).updateData([
+                    "activeFamilyId": FieldValue.delete()
+                ])
+                
+                // Save SwiftData changes after successful Firestore update
+                try? await authService.saveUserDataToFirestore(user)
+            } catch {
+                // If update fails, mark for sync
+                await MainActor.run {
+                    user.needsSync = true
+                }
+                try? await authService.saveUserDataToFirestore(user)
+            }
+        } else {
+            // Mark for sync when online
+            await MainActor.run {
+                user.needsSync = true
+            }
+            try? await authService.saveUserDataToFirestore(user)
         }
     }
     
