@@ -18,6 +18,7 @@ struct FamilyDashboard: View {
     @State private var showAddMemberSheet = false
     @State private var showCreateShareCodeSheet = false
     @State private var showFamilyInvitesView = false
+    @State private var showPendingApprovalsView = false
     
     init() {
         // Create a temporary authService for initialization - will be replaced in onAppear
@@ -247,7 +248,7 @@ struct FamilyDashboard: View {
                         HStack(spacing: 16) {
                             if viewModel.pendingMemberRequestsCount > 0 {
                                 Button {
-                                    // Scroll to pending section or show detail
+                                    showPendingApprovalsView = true
                                 } label: {
                                     Image(systemName: "person.badge.clock")
                                         .foregroundStyle(Color.Theme.primaryBlue)
@@ -305,6 +306,16 @@ struct FamilyDashboard: View {
                         // Reload data after responding to invites
                         viewModel.loadData()
                     }
+            }
+            .sheet(isPresented: $showPendingApprovalsView) {
+                if let family = viewModel.family {
+                    FamilyPendingApprovals(familyId: family.familyId)
+                        .environmentObject(authService)
+                        .onDisappear {
+                            // Reload data after responding to approvals
+                            viewModel.loadData()
+                        }
+                }
             }
             .onAppear {
                 // Update ViewModel with the correct authService from environment

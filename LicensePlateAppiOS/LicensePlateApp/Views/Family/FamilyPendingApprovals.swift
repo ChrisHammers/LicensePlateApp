@@ -29,7 +29,17 @@ struct FamilyPendingApprovals: View {
                             .padding()
                     } else {
                         ForEach(pendingRequests) { request in
-                            PendingApprovalRow(request: request, familyId: familyId)
+                            PendingApprovalRow(
+                                request: request,
+                                familyId: familyId,
+                                onRequestProcessed: {
+                                    // Refresh list after approval/decline
+                                    Task {
+                                        await refreshPendingRequests()
+                                    }
+                                }
+                            )
+                            .environmentObject(authService)
                         }
                     }
                 }
@@ -40,8 +50,27 @@ struct FamilyPendingApprovals: View {
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 familyRepository.setModelContext(modelContext)
-                pendingRequests = familyRepository.getPendingRequests(familyId: familyId)
+                loadPendingRequests()
             }
+            .refreshable {
+                await refreshPendingRequests()
+            }
+        }
+    }
+    
+    private func loadPendingRequests() {
+        pendingRequests = familyRepository.getPendingRequests(familyId: familyId)
+            .filter { $0.statusEnum == .pending }
+    }
+    
+    private func refreshPendingRequests() async {
+        do {
+            _ = try await familyRepository.fetchPendingRequests(familyId: familyId)
+            await MainActor.run {
+                loadPendingRequests()
+            }
+        } catch {
+            // Error fetching - use cached data
         }
     }
 }
@@ -49,7 +78,12 @@ struct FamilyPendingApprovals: View {
 struct PendingApprovalRow: View {
     let request: PendingJoinRequest
     let familyId: String
+    let onRequestProcessed: () -> Void
+    @EnvironmentObject var authService: FirebaseAuthService
     @State private var isProcessing = false
+    @State private var errorMessage: String?
+    @State private var showError = false
+    @State private var hasProcessed = false
     
     var body: some View {
         HStack {
@@ -57,43 +91,120 @@ struct PendingApprovalRow: View {
                 .fill(Color.Theme.primaryBlue.opacity(0.3))
                 .frame(width: 50, height: 50)
             
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(request.user?.displayName ?? "User")
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
+                
+                if let userName = request.user?.userName {
+                    Text("@\(userName)")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                }
             }
             
             Spacer()
             
             HStack(spacing: 12) {
                 Button("Approve".localized) {
-                    approveRequest()
+                    Task {
+                        await approveRequest()
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.Theme.primaryBlue)
-                .disabled(isProcessing)
+                .disabled(isProcessing || hasProcessed)
                 
                 Button("Decline".localized) {
-                    declineRequest()
+                    Task {
+                        await declineRequest()
+                    }
                 }
                 .buttonStyle(.bordered)
-                .disabled(isProcessing)
+                .disabled(isProcessing || hasProcessed)
             }
         }
         .padding(.vertical, 8)
+        .alert("Error".localized, isPresented: $showError) {
+            Button("OK".localized, role: .cancel) { }
+        } message: {
+            Text(errorMessage ?? "Unknown error".localized)
+        }
     }
     
-    private func approveRequest() {
+    private func approveRequest() async {
+        // Prevent duplicate calls
+        guard !isProcessing && !hasProcessed else { return }
+        
+        guard authService.isOnline else {
+            errorMessage = "Requires network connection".localized
+            showError = true
+            return
+        }
+        
         isProcessing = true
-        // TODO: Call Cloud Function
-        AnalyticsService.shared.log(.familyJoinRequestApproved)
+        errorMessage = nil
+        
+        do {
+            try await FamilyRepository.shared.respondToPendingRequest(
+                familyId: familyId,
+                requestId: request.requestId,
+                approve: true
+            )
+            AnalyticsService.shared.log(.familyJoinRequestApproved)
+            
+            await MainActor.run {
+                hasProcessed = true
+                isProcessing = false
+            }
+            
+            // Notify parent to refresh list
+            onRequestProcessed()
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                showError = true
+                isProcessing = false
+            }
+        }
     }
     
-    private func declineRequest() {
+    private func declineRequest() async {
+        // Prevent duplicate calls
+        guard !isProcessing && !hasProcessed else { return }
+        
+        guard authService.isOnline else {
+            errorMessage = "Requires network connection".localized
+            showError = true
+            return
+        }
+        
         isProcessing = true
-        // TODO: Call Cloud Function
-        AnalyticsService.shared.log(.familyJoinRequestDeclined)
+        errorMessage = nil
+        
+        do {
+            try await FamilyRepository.shared.respondToPendingRequest(
+                familyId: familyId,
+                requestId: request.requestId,
+                approve: false
+            )
+            AnalyticsService.shared.log(.familyJoinRequestDeclined)
+            
+            await MainActor.run {
+                hasProcessed = true
+                isProcessing = false
+            }
+            
+            // Notify parent to refresh list
+            onRequestProcessed()
+        } catch {
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+                showError = true
+                isProcessing = false
+            }
+        }
     }
 }
 

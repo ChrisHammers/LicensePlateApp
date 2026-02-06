@@ -715,6 +715,22 @@ class FamilyRepository: ObservableObject {
         ])
     }
     
+    /// Approve or decline a pending join request
+    func respondToPendingRequest(familyId: String, requestId: String, approve: Bool) async throws {
+        guard Auth.auth().currentUser != nil else {
+            throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
+        }
+        
+        let functions = Functions.functions()
+        let respondFunction = functions.httpsCallable("approveFamilyJoinRequest_CaptainStep")
+        
+        _ = try await respondFunction.call([
+            "familyId": familyId,
+            "requestId": requestId,
+            "response": approve ? "approve" : "decline"
+        ])
+    }
+    
     /// Leave family (remove current user from family)
     func leaveFamily(familyId: String) async throws {
         guard let userId = Auth.auth().currentUser?.uid else {
