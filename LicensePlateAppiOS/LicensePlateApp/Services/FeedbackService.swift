@@ -144,11 +144,12 @@ class FeedbackService {
         AudioServicesPlaySystemSound(1053) // Error/alert sound
     }
     
-    /// Play a recording start sound
+    /// Play a recording start sound (uses Alert for louder volume)
     @MainActor
     func recordingStart() {
         guard shouldProvideSounds else { return }
-        AudioServicesPlaySystemSound(1057) // Recording start sound
+        // AudioServicesPlayAlertSound is louder than PlaySystemSound
+      AudioServicesPlayAlertSoundWithCompletion(1113, nil)
     }
     
     // MARK: - Combined Feedback
