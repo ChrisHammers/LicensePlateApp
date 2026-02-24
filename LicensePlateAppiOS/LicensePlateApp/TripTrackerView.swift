@@ -67,6 +67,7 @@ struct TripTrackerView: View {
     @State private var showEndTripConfirmation = false
     @State private var chipWidth: CGFloat = 0
     @State private var chipHeight: CGFloat = 0
+    @State private var micListeningPulseScale: CGFloat = 1.0
     @State private var cameraPosition: GMSCameraPosition = {
         // Initialize with default US position, will be updated on appear
         let center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
@@ -210,6 +211,7 @@ struct TripTrackerView: View {
         }
         .onChange(of: speechRecognizer.isListening) { oldValue, newValue in
             if oldValue == true && newValue == false {
+                micListeningPulseScale = 1.0
                 // When listening stops, process the final recognized text
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     processRecognizedText(speechRecognizer.recognizedText)
@@ -618,14 +620,13 @@ struct TripTrackerView: View {
                     .frame(width: 100, height: 100)
                     .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 8)
                 
-                if speechRecognizer.isListening {
-                    Circle()
-                        .stroke(Color.Theme.accentYellow, lineWidth: 4)
-                        .frame(width: 120, height: 120)
-                        .opacity(0.6)
-                        .scaleEffect(speechRecognizer.isListening ? 1.1 : 1.0)
-                        .accessibleAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: speechRecognizer.isListening)
-                }
+                Circle()
+                    .stroke(speechRecognizer.isListening ? Color.Theme.accentYellow : Color.clear, lineWidth: 4)
+                    .frame(width: 120, height: 120)
+                    .opacity(0.6)
+                    .scaleEffect(micListeningPulseScale)
+                    .accessibleAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true), value: micListeningPulseScale)
+                    .onAppear { micListeningPulseScale = 1.15 }
                 
                 Image(systemName: (speechRecognizer.isListening || speechRecognizer.isPreparing || speechRecognizer.isStarting) ? "mic.fill" : "mic.slash.fill")
                     .font(.system(size: 44, weight: .semibold))
