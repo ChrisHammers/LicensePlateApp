@@ -614,40 +614,40 @@ struct TripTrackerView: View {
             // Microphone button - push and hold
             ZStack {
                 Circle()
-                    .fill((speechRecognizer.isListening || speechRecognizer.isPreparing) ? Color.Theme.primaryBlue : Color.Theme.cardBackground)
+                    .fill((speechRecognizer.isListening || speechRecognizer.isPreparing || speechRecognizer.isStarting) ? Color.Theme.primaryBlue : Color.Theme.cardBackground)
                     .frame(width: 100, height: 100)
                     .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 8)
                 
-                if speechRecognizer.isListening || speechRecognizer.isPreparing {
+                if speechRecognizer.isListening {
                     Circle()
                         .stroke(Color.Theme.accentYellow, lineWidth: 4)
                         .frame(width: 120, height: 120)
                         .opacity(0.6)
-                        .scaleEffect((speechRecognizer.isListening || speechRecognizer.isPreparing) ? 1.1 : 1.0)
-                        .accessibleAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: speechRecognizer.isListening || speechRecognizer.isPreparing)
+                        .scaleEffect(speechRecognizer.isListening ? 1.1 : 1.0)
+                        .accessibleAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: speechRecognizer.isListening)
                 }
                 
-                Image(systemName: (speechRecognizer.isListening || speechRecognizer.isPreparing) ? "mic.fill" : "mic.slash.fill")
+                Image(systemName: (speechRecognizer.isListening || speechRecognizer.isPreparing || speechRecognizer.isStarting) ? "mic.fill" : "mic.slash.fill")
                     .font(.system(size: 44, weight: .semibold))
-                    .foregroundStyle((speechRecognizer.isListening || speechRecognizer.isPreparing) ? Color.white : Color.Theme.primaryBlue)
+                    .foregroundStyle((speechRecognizer.isListening || speechRecognizer.isPreparing || speechRecognizer.isStarting) ? Color.white : Color.Theme.primaryBlue)
                     .accessibilityHidden(true)
             }
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
-                        if isTripActive && !speechRecognizer.isListening && !speechRecognizer.isPreparing && speechRecognizer.authorizationStatus == .authorized {
+                        if isTripActive && !speechRecognizer.isListening && !speechRecognizer.isPreparing && !speechRecognizer.isStarting && speechRecognizer.authorizationStatus == .authorized {
                             speechRecognizer.startListening()
                         }
                     }
                     .onEnded { _ in
-                        if speechRecognizer.isListening || speechRecognizer.isPreparing {
+                        if speechRecognizer.isListening || speechRecognizer.isPreparing || speechRecognizer.isStarting {
                             speechRecognizer.stopListening()
                         }
                     }
             )
             .disabled(!isTripActive || speechRecognizer.authorizationStatus != .authorized)
             .accessibilityLabel("Voice Input".localized)
-            .accessibilityValue((speechRecognizer.isListening || speechRecognizer.isPreparing) ? "Recording".localized : "Not recording".localized)
+            .accessibilityValue((speechRecognizer.isListening || speechRecognizer.isPreparing || speechRecognizer.isStarting) ? "Recording".localized : "Not recording".localized)
             .accessibilityHint(
                 !isTripActive ? "Trip must be started to use voice input".localized :
                 speechRecognizer.authorizationStatus != .authorized ? "Speech recognition permission required".localized :
@@ -683,7 +683,7 @@ struct TripTrackerView: View {
                     .foregroundStyle(Color.white)
                     .font(.system(.headline, design: .rounded))
                 } else if speechRecognizer.authorizationStatus == .authorized {
-                    Text(speechRecognizer.isListening ? "Listening...".localized : (speechRecognizer.isPreparing ? "Preparing...".localized : "Hold to Talk".localized))
+                    Text(speechRecognizer.isListening ? "Listening...".localized : (speechRecognizer.isPreparing ? "Preparing...".localized : (speechRecognizer.isStarting ? "Starting...".localized : "Hold to Talk".localized)))
                         .font(.system(.title2, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
