@@ -125,7 +125,6 @@ struct LicensePlateAppApp: App {
   @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
   
     var sharedModelContainer: ModelContainer = {
-        // Use versioned schema for future migration support
         let schema = Schema(versionedSchema: CurrentSchema.self)
         let modelConfiguration = ModelConfiguration(
             schema: schema,
@@ -133,7 +132,6 @@ struct LicensePlateAppApp: App {
         )
 
         do {
-            // Create ModelContainer with versioned schema and migration plan
             return try ModelContainer(
                 for: schema,
                 migrationPlan: AppMigrationPlan.self,
@@ -153,7 +151,7 @@ struct LicensePlateAppApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
                 .environmentObject(authService)
         }
         .modelContainer(sharedModelContainer)
