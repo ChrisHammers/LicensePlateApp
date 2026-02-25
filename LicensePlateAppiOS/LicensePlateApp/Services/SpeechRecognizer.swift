@@ -102,7 +102,7 @@ class SpeechRecognizer: ObservableObject {
         // Set up audio session FIRST—inputNode format is undefined until session is active
         let audioSession = AVAudioSession.sharedInstance()
         do {
-            try audioSession.setCategory(.record, options: [.duckOthers, .allowBluetoothHFP])
+          try audioSession.setCategory(.playAndRecord, options: [.defaultToSpeaker, .duckOthers, .allowBluetoothHFP])
           try audioSession.setAllowHapticsAndSystemSoundsDuringRecording(true)  // Allow haptics + sounds while mic is active
           try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
         } catch {
