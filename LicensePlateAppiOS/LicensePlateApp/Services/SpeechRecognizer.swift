@@ -141,12 +141,16 @@ class SpeechRecognizer: ObservableObject {
                 guard let self = self else { return }
                 
                 if let error = error {
-                    if error.localizedDescription.contains("kAFAssistantErrorDomain") {
-                        // Ignore cancellation errors
+                    let errDesc = error.localizedDescription.lowercased()
+                    // Ignore "no speech detected" when we got results—spurious final error after successful transcription
+                    if errDesc.contains("no speech detected") && !self.recognizedText.isEmpty {
                         return
                     }
-                  print(error.localizedDescription)
-                  
+                    // Ignore kAFAssistantErrorDomain (1101, 1107)—framework logs these even when transcription succeeds
+                    if (error as NSError).domain.contains("kAFAssistantErrorDomain") {
+                        return
+                    }
+                    print(error.localizedDescription)
                     self.errorMessage = "Recognition error: \(error.localizedDescription)"
                     self.stopListening()
                     return
