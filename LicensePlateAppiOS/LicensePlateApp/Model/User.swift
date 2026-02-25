@@ -78,6 +78,11 @@ final class AppUser {
     var isEmailPublic: Bool = false
     var isPhonePublic: Bool = false
     
+    // Friends & Family fields
+    var isRetiredGeneral: Bool = false // Global constraint - can be in multiple families
+    var activeFamilyId: String? // Only for non-retired users (0 or 1 active family)
+    var friendCount: Int = 0 // Denormalized count for cap enforcement
+    
     // Platform linking
     var linkedPlatforms: [LinkedPlatform]
     
@@ -107,6 +112,9 @@ final class AppUser {
         isUsernameManuallyChanged: Bool = false,
         isEmailPublic: Bool = false,
         isPhonePublic: Bool = false,
+        isRetiredGeneral: Bool = false,
+        activeFamilyId: String? = nil,
+        friendCount: Int = 0,
         linkedPlatforms: [LinkedPlatform] = [],
         firebaseUID: String? = nil,
         lastSyncedToFirebase: Date? = nil,
@@ -130,6 +138,9 @@ final class AppUser {
         self.isUsernameManuallyChanged = isUsernameManuallyChanged
         self.isEmailPublic = isEmailPublic
         self.isPhonePublic = isPhonePublic
+        self.isRetiredGeneral = isRetiredGeneral
+        self.activeFamilyId = activeFamilyId
+        self.friendCount = friendCount
         self.linkedPlatforms = linkedPlatforms
         self.firebaseUID = firebaseUID
         self.lastSyncedToFirebase = lastSyncedToFirebase

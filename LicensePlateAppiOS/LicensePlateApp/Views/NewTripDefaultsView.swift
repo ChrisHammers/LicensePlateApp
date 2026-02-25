@@ -50,6 +50,7 @@ struct NewTripDefaultsView: View {
                                     .font(.system(.caption, design: .rounded))
                                     .foregroundStyle(Color.Theme.softBrown)
                                     .padding(.bottom, 4)
+                                    .padding(.horizontal, 16)
                                 
                                 CountryCheckboxRow(title: "United States".localized, isOn: $defaultIncludeUS)
                                 CountryCheckboxRow(title: "Canada".localized, isOn: $defaultIncludeCanada)
@@ -69,6 +70,7 @@ struct NewTripDefaultsView: View {
                             
                             // Tracking Options
                             VStack(alignment: .leading, spacing: 12) {
+                              
                                 Text("Location Tracking".localized)
                                     .font(.system(.headline, design: .rounded))
                                     .foregroundStyle(Color.Theme.primaryBlue)

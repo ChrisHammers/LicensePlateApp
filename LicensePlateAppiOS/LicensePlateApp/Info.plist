@@ -4,12 +4,6 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
-	<key>CFBundleLocalizations</key>
-	<array>
-		<string>en</string>
-		<string>es</string>
-		<string>fr</string>
-	</array>
 	<key>CFBundleDisplayName</key>
 	<string>RoadTrip Royale</string>
 	<key>CFBundleExecutable</key>
@@ -18,16 +12,45 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>es</string>
+		<string>fr</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>app-1-900272218936-ios-768843a9368c11f8f1d7cd</string>
+				<string>app-1-638927851172-ios-4c8f606f82c6dac4b3a031</string>
+				<string>com.googleusercontent.apps.900272218936-98bor8m03sgo6plfeov826o0btomvspc</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>roadtrip-royale</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.family-games</string>
+	<key>NSCameraUsageDescription</key>
+	<string>This app uses your camera to scan QR codes for Family and Friends.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app uses your location to show where you are on the map while tracking license plates.</string>
 	<key>NSMicrophoneUsageDescription</key>
@@ -61,19 +84,5 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
-	<key>CFBundleURLTypes</key>
-	<array>
-		<dict>
-			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
-			<key>CFBundleURLSchemes</key>
-			<array>
-				<string>app-1-900272218936-ios-768843a9368c11f8f1d7cd</string>
-				<string>app-1-638927851172-ios-4c8f606f82c6dac4b3a031</string>
-				<string>com.googleusercontent.apps.900272218936-98bor8m03sgo6plfeov826o0btomvspc</string>
-			</array>
-		</dict>
-	</array>
 </dict>
 </plist>
-

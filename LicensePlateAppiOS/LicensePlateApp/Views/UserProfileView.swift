@@ -15,6 +15,9 @@ struct UserProfileView: View {
     @ObservedObject var authService: FirebaseAuthService
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var coordinator: MainSettingsCoordinator
+    
+    // Navigation
     
     // Keep local copies for editing
     @State private var currentUserName: String
@@ -280,6 +283,32 @@ struct UserProfileView: View {
                         
                     } header: {
                         Text("Account Information".localized)
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    .textCase(nil)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
+                    
+                    // Friends & Family Section
+                    Section {
+                        SettingNavigationRow(
+                            title: "Friends".localized,
+                            description: "Manage your friends and friend requests".localized,
+                            icon: "person.2"
+                        ) {
+                            coordinator.navigateToFriends()
+                        }
+                      
+                      SettingNavigationRow(
+                          title: "Family".localized,
+                          description: "View and manage your family".localized,
+                          icon: "house"
+                      ) {
+                          coordinator.navigateToFamily()
+                      }
+                    } header: {
+                        Text("Friends & Family".localized)
                             .font(.system(.headline, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }

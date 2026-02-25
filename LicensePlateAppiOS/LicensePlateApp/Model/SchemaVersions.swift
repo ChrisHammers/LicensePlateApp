@@ -8,9 +8,8 @@
 import Foundation
 import SwiftData
 
-// MARK: - Schema Version 1 (Current)
-// This is the initial schema version
-// When you need to migrate, create Version 2 and add migration logic
+// MARK: - Schema Version 1 (Initial)
+// Initial schema with Trip and AppUser
 
 enum SchemaVersion1: VersionedSchema {
     static var versionIdentifier: Schema.Version {
@@ -22,19 +21,37 @@ enum SchemaVersion1: VersionedSchema {
     }
 }
 
+// MARK: - Schema Version 2 (Friends & Family)
+// Added Friends & Family models: Friendship, Invite, Family, FamilyMember, PendingJoinRequest, ShareCode
+// Added fields to AppUser: isRetiredGeneral, activeFamilyId, friendCount
+
+enum SchemaVersion2: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(2, 0, 0)
+    }
+    
+    static var models: [any PersistentModel.Type] {
+        [
+            Trip.self,
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self
+        ]
+    }
+}
+
 // MARK: - Migration Plan
-// When you create Version 2, add it to schemas and define migration stages
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaVersion1.self]
-        // Add future versions here, e.g.:
-        // [SchemaVersion1.self, SchemaVersion2.self]
+        [SchemaVersion1.self, SchemaVersion2.self]
     }
     
     static var stages: [MigrationStage] {
-        []
-        // Add migration stages when creating Version 2, e.g.:
-        // [.lightweight(fromVersion: SchemaVersion1.self, toVersion: SchemaVersion2.self)]
+        [.lightweight(fromVersion: SchemaVersion1.self, toVersion: SchemaVersion2.self)]
     }
 }
 
@@ -42,5 +59,5 @@ enum AppMigrationPlan: SchemaMigrationPlan {
 // This points to the latest schema version
 // When creating a new version, update this to point to the latest
 
-typealias CurrentSchema = SchemaVersion1
+typealias CurrentSchema = SchemaVersion2
 

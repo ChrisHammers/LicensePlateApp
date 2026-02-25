@@ -107,6 +107,16 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         FirebaseApp.configure(options: options)
         print("✅ Firebase initialized successfully with config: \(configFileName).plist")
     }
+    
+    // Handle deep links
+    func application(_ app: UIApplication,
+                     open url: URL,
+                     options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
+        Task { @MainActor in
+            DeepLinkHandler.shared.destination = DeepLinkHandler.shared.handleURL(url)
+        }
+        return true
+    }
 }
 
 @main

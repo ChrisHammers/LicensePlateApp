@@ -1,54 +1,135 @@
 # Firestore Security Rules
 
-The app requires Firestore security rules to allow authenticated users to read and write their own user data.
+The app requires Firestore security rules for users, friends, invites, families, share codes, and audit logs.
 
 ## Required Security Rules
 
 Add these rules to your Firestore database in the Firebase Console:
 
-### For Development (roadtrip-royale-dev)
+### Complete Rules (Development & Production)
 
 ```javascript
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users collection
-    match /users/{userId} {
-      // Allow users to read their own document
-      allow read: if request.auth != null && request.auth.uid == userId;
-      
-      // Allow users to write their own document (includes create, update, delete)
-      allow write: if request.auth != null && request.auth.uid == userId;
-      
-      // Allow authenticated users to query the collection (for username uniqueness checks)
-      // This is needed for the whereField("userName", isEqualTo: username) query
-      allow list: if request.auth != null;
+
+    function isSignedIn() {
+      return request.auth != null;
     }
-  }
-}
-```
 
-### For Production (roadtrip-royale-release)
+    function uid() {
+      return request.auth.uid;
+    }
 
-Use the same rules as above, but you may want to add additional restrictions:
+    function userDoc(userId) {
+      return get(/databases/$(database)/documents/users/$(userId));
+    }
 
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Users collection
+    function isRetiredGeneral(userId) {
+      return userDoc(userId).data.isRetiredGeneral == true;
+    }
+
+    function isFamilyMember(familyId) {
+      return exists(/databases/$(database)/documents/families/$(familyId)/members/$(uid()));
+    }
+
+    function familyMemberRole(familyId, userId) {
+      return get(/databases/$(database)/documents/families/$(familyId)/members/$(userId)).data.role;
+    }
+
+    function isCreator(familyId) {
+      return isFamilyMember(familyId) && familyMemberRole(familyId, uid()) == "creator";
+    }
+
+    function isCaptain(familyId) {
+      return isFamilyMember(familyId) && familyMemberRole(familyId, uid()) == "captain";
+    }
+
+    // USERS
     match /users/{userId} {
-      // Allow users to read their own document
-      allow read: if request.auth != null && request.auth.uid == userId;
-      
-      // Allow users to write their own document with validation
-      allow write: if request.auth != null 
-                   && request.auth.uid == userId
-                   && request.resource.data.id == userId;
-      
-      // Allow authenticated users to query the collection (for username uniqueness checks)
-      // This is needed for the whereField("userName", isEqualTo: username) query
-      allow list: if request.auth != null;
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && uid() == userId;
+      allow update: if isSignedIn() && uid() == userId;
+      allow delete: if false; // handle via backend flows if needed
+    }
+
+    // USERNAME INDEX (write via Cloud Function / transaction)
+    match /usernames/{usernameLower} {
+      allow read: if isSignedIn();
+      allow write: if false; // server-only to preserve uniqueness
+    }
+
+    // FRIENDSHIPS
+    match /friends/{friendshipId} {
+      allow read: if isSignedIn() &&
+        (uid() == resource.data.userA || uid() == resource.data.userB);
+
+      allow create: if isSignedIn() &&
+        request.resource.data.status == "pending" &&
+        (uid() == request.resource.data.userA || uid() == request.resource.data.userB);
+
+      allow update: if isSignedIn() &&
+        (uid() == resource.data.userA || uid() == resource.data.userB);
+
+      allow delete: if isSignedIn() &&
+        (uid() == resource.data.userA || uid() == resource.data.userB);
+    }
+
+    // INVITES
+    match /invites/{inviteId} {
+      allow read: if isSignedIn() &&
+        (uid() == resource.data.fromUserId || uid() == resource.data.toUserId);
+
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() &&
+        (uid() == resource.data.fromUserId || uid() == resource.data.toUserId);
+
+      allow delete: if false;
+    }
+
+    // SHARE CODES
+    match /share_codes/{codeId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.createdBy == uid();
+      allow update: if isSignedIn() && resource.data.createdBy == uid();
+      allow delete: if false;
+    }
+
+    // FAMILIES
+    match /families/{familyId} {
+      allow read: if isSignedIn() && isFamilyMember(familyId);
+
+      // create family allowed for signed-in user; membership enforced via backend
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (isCreator(familyId) || isCaptain(familyId));
+      allow delete: if false; // never delete; mark inactive via backend
+    }
+
+    match /families/{familyId}/members/{memberId} {
+      allow read: if isSignedIn() && isFamilyMember(familyId);
+
+      // Writes are limited; detailed role/limit enforcement should be in Cloud Functions
+      allow create, update, delete: if isSignedIn() && (isCreator(familyId) || isCaptain(familyId));
+    }
+
+    match /families/{familyId}/pending/{requestId} {
+      allow read: if isSignedIn() && isFamilyMember(familyId);
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (isCreator(familyId) || isCaptain(familyId));
+      allow delete: if false;
+    }
+
+    // STATS
+    match /families/{familyId}/stats/{docId} {
+      allow read: if isSignedIn() && isFamilyMember(familyId);
+      allow write: if false; // server-only updates
+    }
+
+    // AUDIT LOGS
+    match /audit_logs/{eventId} {
+      allow read: if false; // restrict to admins via custom claims in future
+      allow create: if false; // server-only
+      allow update, delete: if false;
     }
   }
 }
