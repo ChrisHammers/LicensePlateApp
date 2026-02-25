@@ -2,10 +2,11 @@ import Foundation
 import UIKit
 import AudioToolbox
 import SwiftUI
+import AVFoundation
 
 /// Service for providing haptic and sound feedback throughout the app
 class FeedbackService {
-    nonisolated(unsafe) static let shared = FeedbackService()
+    static let shared = FeedbackService()
     
     // User preferences (will be injected from views)
     var hapticEnabled: Bool = true
@@ -144,11 +145,38 @@ class FeedbackService {
         AudioServicesPlaySystemSound(1053) // Error/alert sound
     }
     
-    /// Play a recording start sound
+    /// Play a recording start sound (iMessage-style mic open)
+    /// - Parameter completion: Called when sound finishes; call on main thread to continue setup
     @MainActor
-    func recordingStart() {
-        guard shouldProvideSounds else { return }
-        AudioServicesPlaySystemSound(1057) // Recording start sound
+    func recordingStart(completion: (() -> Void)? = nil) {
+        AudioServicesPlayAlertSoundWithCompletion(1113) { // begin_record
+            if let completion {
+                DispatchQueue.main.async { completion() }
+            }
+        }
+    }
+    
+    /// Play a recording stop sound (iMessage-style mic off)
+    @MainActor
+    func recordingStop(completion: (() -> Void)? = nil) {
+      AudioServicesPlayAlertSoundWithCompletion(1114) { // end_record
+          if let completion {
+            DispatchQueue.main.async { completion() }
+          }
+        }
+    }
+  
+    /// Play a sound file from the app bundle using AVAudioPlayer
+    private func playBundledSound(named name: String, in subdirectory: String?) {
+      guard let url = Bundle.main.url(forResource: name, withExtension: "caf", subdirectory: subdirectory) else { return }
+      do {
+        let player = try AVAudioPlayer(contentsOf: url)
+        //player.volume = 1.0
+        player.prepareToPlay()
+        player.play()
+      } catch {
+        
+      }
     }
     
     // MARK: - Combined Feedback
@@ -189,10 +217,18 @@ class FeedbackService {
     }
     
     /// Combined feedback for starting recording
+    /// - Parameter completion: Called when sound finishes; pass nil for fire-and-forget
     @MainActor
-    func startRecording() {
+    func startRecording(completion: (() -> Void)? = nil) {
         mediumImpact()
-        recordingStart()
+        recordingStart(completion: completion)
+    }
+    
+    /// - Parameter completion: Called when sound finishes; pass nil for fire-and-forget
+    @MainActor
+    func stopRecording(completion: (() -> Void)? = nil) {
+        mediumImpact()
+        recordingStop(completion: completion)
     }
 }
 
