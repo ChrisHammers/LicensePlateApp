@@ -329,7 +329,8 @@ class FirebaseAuthService: ObservableObject {
         userName: String,
         firstName: String? = nil,
         lastName: String? = nil,
-        phoneNumber: String? = nil
+        phoneNumber: String? = nil,
+        birthYear: Int? = nil
     ) async throws {
         isLoading = true
         defer { isLoading = false }
@@ -363,6 +364,7 @@ class FirebaseAuthService: ObservableObject {
                     currentUser.firstName = firstName
                     currentUser.lastName = lastName
                     currentUser.phoneNumber = phoneNumber
+                    currentUser.birthYear = birthYear
                     currentUser.isUsernameManuallyChanged = true
                     
                     try modelContext.save()
@@ -376,7 +378,7 @@ class FirebaseAuthService: ObservableObject {
                     // If linking fails (email already in use), create new account
                     try auth.signOut()
                     let result = try await auth.createUser(withEmail: email, password: password)
-                    await createNewUserFromFirebase(result.user, email: email, userName: userName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber)
+                    await createNewUserFromFirebase(result.user, email: email, userName: userName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber, birthYear: birthYear)
                     
                     // Update login tracking
                     await updateLoginTracking()
@@ -384,7 +386,7 @@ class FirebaseAuthService: ObservableObject {
             } else {
                 // Not anonymous, create new account
                 let result = try await auth.createUser(withEmail: email, password: password)
-                await createNewUserFromFirebase(result.user, email: email, userName: userName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber)
+                await createNewUserFromFirebase(result.user, email: email, userName: userName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber, birthYear: birthYear)
                 
                 // Update login tracking
                 await updateLoginTracking()
@@ -1178,7 +1180,7 @@ class FirebaseAuthService: ObservableObject {
         }
     }
     
-    private func createNewUserFromFirebase(_ firebaseUser: User, email: String?, userName: String?, firstName: String?, lastName: String?, phoneNumber: String?) async {
+    private func createNewUserFromFirebase(_ firebaseUser: User, email: String?, userName: String?, firstName: String?, lastName: String?, phoneNumber: String?, birthYear: Int? = nil) async {
         guard let modelContext = modelContext else { return }
         
         let firebaseUID = firebaseUser.uid
@@ -1192,6 +1194,7 @@ class FirebaseAuthService: ObservableObject {
             lastName: lastName,
             email: email,
             phoneNumber: phoneNumber,
+            birthYear: birthYear,
             deviceIdentifier: deviceId,
             isUsernameManuallyChanged: userName != nil,
             firebaseUID: firebaseUID
@@ -1293,6 +1296,7 @@ class FirebaseAuthService: ObservableObject {
             existingUser.lastName = firestoreUser.lastName
             existingUser.email = firestoreUser.email
             existingUser.phoneNumber = firestoreUser.phoneNumber
+            existingUser.birthYear = firestoreUser.birthYear
             existingUser.userImageURL = firestoreUser.userImageURL
             existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
             // Friends & Family fields
@@ -1337,6 +1341,9 @@ class FirebaseAuthService: ObservableObject {
         }
         if let phoneNumber = user.phoneNumber {
             data["phoneNumber"] = phoneNumber
+        }
+        if let birthYear = user.birthYear {
+            data["birthYear"] = birthYear
         }
         if let userImageURL = user.userImageURL {
             data["userImageURL"] = userImageURL
@@ -1393,6 +1400,7 @@ class FirebaseAuthService: ObservableObject {
         let lastName = data["lastName"] as? String
         let email = data["email"] as? String
         let phoneNumber = data["phoneNumber"] as? String
+        let birthYear = data["birthYear"] as? Int
         let userImageURL = data["userImageURL"] as? String
         let deviceIdentifier = data["deviceIdentifier"] as? String
         let isUsernameManuallyChanged = data["isUsernameManuallyChanged"] as? Bool ?? false
@@ -1500,6 +1508,7 @@ class FirebaseAuthService: ObservableObject {
             lastName: lastName,
             email: email,
             phoneNumber: phoneNumber,
+            birthYear: birthYear,
             createdAt: createdAt,
             lastUpdated: lastUpdated,
             avatarColor: avatarColor,

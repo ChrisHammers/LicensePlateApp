@@ -13,6 +13,7 @@ struct OnboardingAccountCreationView: View {
     let onNext: () -> Void
     
     @State private var showSignInSheet = false
+    @State private var signInInitialMode: SignInInitialMode = .signIn
     
     var body: some View {
         ScrollView {
@@ -31,6 +32,7 @@ struct OnboardingAccountCreationView: View {
                 VStack(spacing: 12) {
                     Button("Sign In") {
                         coordinator.isExistingAccount = true
+                        signInInitialMode = .signIn
                         showSignInSheet = true
                     }
                     .font(.system(.body, design: .rounded))
@@ -42,6 +44,7 @@ struct OnboardingAccountCreationView: View {
                     
                     Button("Create Account") {
                         coordinator.isExistingAccount = false
+                        signInInitialMode = .createAccount
                         showSignInSheet = true
                     }
                     .font(.system(.body, design: .rounded))
@@ -68,7 +71,11 @@ struct OnboardingAccountCreationView: View {
             .padding(.vertical, 48)
         }
         .sheet(isPresented: $showSignInSheet) {
-            SignInView(authService: authService)
+            SignInView(
+                authService: authService,
+                initialMode: signInInitialMode,
+                initialBirthYear: signInInitialMode == .createAccount && coordinator.birthYear > 0 ? coordinator.birthYear : nil
+            )
                 .onDisappear {
                     if authService.isAuthenticated {
                         coordinator.didLogIn = true
