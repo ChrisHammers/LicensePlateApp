@@ -9,6 +9,8 @@ import SwiftUI
 
 struct OnboardingDisclaimerView: View {
     let onAgree: () -> Void
+    @State private var showTerms = false
+    @State private var showPrivacy = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -33,9 +35,27 @@ struct OnboardingDisclaimerView: View {
                             .font(.system(.body, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
                         
-                        Text("By continuing, you agree to our Terms of Service and Privacy Policy.")
+                        HStack(spacing: 0) {
+                            Text("By continuing, you agree to our ")
+                            Button("Terms of Service") {
+                                showTerms = true
+                            }
+                            .buttonStyle(.plain)
                             .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                            .underline()
+                            Text(" and ")
+                            Button("Privacy Policy") {
+                                showPrivacy = true
+                            }
+                            .buttonStyle(.plain)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                            .underline()
+                            Text(".")
+                        }
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
                     }
                     .padding()
                     .background(Color.Theme.cardBackground, in: RoundedRectangle(cornerRadius: 16))
@@ -57,6 +77,16 @@ struct OnboardingDisclaimerView: View {
             .padding(.horizontal, 24)
             .padding(.top, 16)
             .padding(.bottom, 32)
+        }
+        .sheet(isPresented: $showTerms) {
+            NavigationStack {
+                TermsView()
+            }
+        }
+        .sheet(isPresented: $showPrivacy) {
+            NavigationStack {
+                PrivacyView()
+            }
         }
     }
 }
