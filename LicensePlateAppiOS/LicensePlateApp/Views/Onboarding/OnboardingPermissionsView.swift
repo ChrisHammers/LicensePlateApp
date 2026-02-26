@@ -15,7 +15,7 @@ struct OnboardingPermissionsView: View {
     let onNext: () -> Void
     
     @StateObject private var locationManager = LocationManager()
-    @State private var microphonePermission: AVAudioSession.RecordPermission = .undetermined
+    @State private var microphonePermission: AVAudioSession.RecordPermission = .AVAudioApplication.recordPermission.undetermined
     @State private var speechPermission: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     
     var body: some View {
