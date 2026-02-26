@@ -364,11 +364,14 @@ class FirebaseAuthService: ObservableObject {
                     currentUser.firstName = firstName
                     currentUser.lastName = lastName
                     currentUser.phoneNumber = phoneNumber
-                    currentUser.birthYear = birthYear
                     currentUser.isUsernameManuallyChanged = true
                     
                     try modelContext.save()
-                    try await saveUserDataToFirestore(currentUser)
+                    var extraFields: [String: Any] = [:]
+                    if let birthYear = birthYear {
+                        extraFields["birthYear"] = birthYear
+                    }
+                    try await saveUserDataToFirestore(currentUser, extraFields: extraFields)
                     
                     isAuthenticated = true
                     
@@ -1194,7 +1197,6 @@ class FirebaseAuthService: ObservableObject {
             lastName: lastName,
             email: email,
             phoneNumber: phoneNumber,
-            birthYear: birthYear,
             deviceIdentifier: deviceId,
             isUsernameManuallyChanged: userName != nil,
             firebaseUID: firebaseUID
@@ -1206,9 +1208,13 @@ class FirebaseAuthService: ObservableObject {
         currentUser = newUser
         isAuthenticated = true
         
-        // Save to Firestore
+        // Save to Firestore (birthYear stored in Firestore only, not SwiftData)
+        var extraFields: [String: Any] = [:]
+        if let birthYear = birthYear {
+            extraFields["birthYear"] = birthYear
+        }
         Task {
-            try? await saveUserDataToFirestore(newUser)
+            try? await saveUserDataToFirestore(newUser, extraFields: extraFields)
         }
     }
     
@@ -1248,7 +1254,7 @@ class FirebaseAuthService: ObservableObject {
         return appUserFromFirestoreData(data, id: userId)
     }
     
-    func saveUserDataToFirestore(_ user: AppUser) async throws {
+    func saveUserDataToFirestore(_ user: AppUser, extraFields: [String: Any] = [:]) async throws {
         guard isOnline else {
             user.needsSync = true
             try? modelContext?.save()
@@ -1261,7 +1267,10 @@ class FirebaseAuthService: ObservableObject {
         }
         
         let docRef = db.collection("users").document(firebaseUID)
-        let data = firestoreDataFromAppUser(user)
+        var data = firestoreDataFromAppUser(user)
+        for (key, value) in extraFields {
+            data[key] = value
+        }
         try await docRef.setData(data, merge: true)
         
         user.lastSyncedToFirebase = .now
@@ -1296,7 +1305,6 @@ class FirebaseAuthService: ObservableObject {
             existingUser.lastName = firestoreUser.lastName
             existingUser.email = firestoreUser.email
             existingUser.phoneNumber = firestoreUser.phoneNumber
-            existingUser.birthYear = firestoreUser.birthYear
             existingUser.userImageURL = firestoreUser.userImageURL
             existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
             // Friends & Family fields
@@ -1341,9 +1349,6 @@ class FirebaseAuthService: ObservableObject {
         }
         if let phoneNumber = user.phoneNumber {
             data["phoneNumber"] = phoneNumber
-        }
-        if let birthYear = user.birthYear {
-            data["birthYear"] = birthYear
         }
         if let userImageURL = user.userImageURL {
             data["userImageURL"] = userImageURL
@@ -1400,7 +1405,6 @@ class FirebaseAuthService: ObservableObject {
         let lastName = data["lastName"] as? String
         let email = data["email"] as? String
         let phoneNumber = data["phoneNumber"] as? String
-        let birthYear = data["birthYear"] as? Int
         let userImageURL = data["userImageURL"] as? String
         let deviceIdentifier = data["deviceIdentifier"] as? String
         let isUsernameManuallyChanged = data["isUsernameManuallyChanged"] as? Bool ?? false
@@ -1508,7 +1512,6 @@ class FirebaseAuthService: ObservableObject {
             lastName: lastName,
             email: email,
             phoneNumber: phoneNumber,
-            birthYear: birthYear,
             createdAt: createdAt,
             lastUpdated: lastUpdated,
             avatarColor: avatarColor,

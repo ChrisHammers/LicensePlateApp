@@ -32,6 +32,7 @@ final class OnboardingCoordinator: ObservableObject {
     }
     
     @Published var currentStep: Step = .welcome
+    @Published var isGoingForward = true
     @Published var userType: OnboardingUserType?
     @Published var didLogIn = false
     @Published var isExistingAccount = false
@@ -56,8 +57,15 @@ final class OnboardingCoordinator: ObservableObject {
     
     // MARK: - Navigation
     
-    /// Advance to next step; handles branching
+    /// Advance to next step (defer step change so view updates direction first, ensuring both views use same transition)
     func nextStep() {
+        isGoingForward = true
+        DispatchQueue.main.async { [weak self] in
+            self?.performNextStep()
+        }
+    }
+    
+    private func performNextStep() {
         switch currentStep {
         case .welcome:
             currentStep = .howItWorks
@@ -84,8 +92,15 @@ final class OnboardingCoordinator: ObservableObject {
         }
     }
     
-    /// Go back one step
+    /// Go back one step (defer step change so view updates direction first, ensuring both views use same transition)
     func previousStep() {
+        isGoingForward = false
+        DispatchQueue.main.async { [weak self] in
+            self?.performPreviousStep()
+        }
+    }
+    
+    private func performPreviousStep() {
         switch currentStep {
         case .welcome:
             break
@@ -168,6 +183,9 @@ final class OnboardingCoordinator: ObservableObject {
     
     /// Skip premium upsell and go to permissions
     func skipPremiumUpsell() {
-        currentStep = .permissions
+        isGoingForward = true
+        DispatchQueue.main.async { [weak self] in
+            self?.currentStep = .permissions
+        }
     }
 }

@@ -14,6 +14,20 @@ struct OnboardingContainerView: View {
     @ObservedObject var coordinator: OnboardingCoordinator
     let appCoordinator: AppCoordinator
     
+    private var stepTransition: AnyTransition {
+        if coordinator.isGoingForward {
+            .asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .move(edge: .leading).combined(with: .opacity)
+            )
+        } else {
+            .asymmetric(
+                insertion: .move(edge: .leading).combined(with: .opacity),
+                removal: .move(edge: .trailing).combined(with: .opacity)
+            )
+        }
+    }
+    
     init(coordinator: OnboardingCoordinator, appCoordinator: AppCoordinator) {
         self.coordinator = coordinator
         self.appCoordinator = appCoordinator
@@ -21,7 +35,7 @@ struct OnboardingContainerView: View {
     }
     
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             Color.Theme.background
                 .ignoresSafeArea()
             
@@ -74,14 +88,30 @@ struct OnboardingContainerView: View {
                         })
                     }
                 }
-                .transition(.asymmetric(
-                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                    removal: .move(edge: .leading).combined(with: .opacity)
-                ))
+                .transition(stepTransition)
                 
                 Spacer(minLength: 0)
+                }
+            
+            
+            // Back button overlay (visible on all screens except Welcome)
+            if !coordinator.isFirstStep {
+                Button {
+                    coordinator.previousStep()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                        Text("Back")
+                    }
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                }
+                .padding(.top, 8)
+                .padding(.leading, 8)
             }
         }
-        .animation(.easeInOut(duration: 0.3), value: coordinator.currentStep)
+        .animation(.easeInOut(duration: 0.3), value: "\(coordinator.currentStep.rawValue)-\(coordinator.isGoingForward)")
     }
 }

@@ -44,44 +44,20 @@ enum SchemaVersion2: VersionedSchema {
     }
 }
 
-// MARK: - Schema Version 3 (Birth Year)
-// Added birthYear to AppUser
-
-enum SchemaVersion3: VersionedSchema {
-    static var versionIdentifier: Schema.Version {
-        Schema.Version(3, 0, 0)
-    }
-    
-    static var models: [any PersistentModel.Type] {
-        [
-            Trip.self,
-            AppUser.self,
-            Friendship.self,
-            Invite.self,
-            Family.self,
-            FamilyMember.self,
-            PendingJoinRequest.self,
-            ShareCode.self
-        ]
-    }
-}
-
 // MARK: - Migration Plan
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self]
+        [SchemaVersion1.self, SchemaVersion2.self]
     }
     
     static var stages: [MigrationStage] {
-        [
-            .lightweight(fromVersion: SchemaVersion1.self, toVersion: SchemaVersion2.self),
-            .lightweight(fromVersion: SchemaVersion2.self, toVersion: SchemaVersion3.self)
-        ]
+        [.lightweight(fromVersion: SchemaVersion1.self, toVersion: SchemaVersion2.self)]
     }
 }
 
 // MARK: - Current Schema
 // This points to the latest schema version
 // When creating a new version, update this to point to the latest
-typealias CurrentSchema = SchemaVersion3
+// birthYear is stored in Firestore only (not SwiftData) to avoid schema migration
+typealias CurrentSchema = SchemaVersion2
 

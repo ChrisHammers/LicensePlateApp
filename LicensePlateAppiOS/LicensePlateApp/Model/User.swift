@@ -60,7 +60,6 @@ final class AppUser {
     var lastName: String?
     var email: String?
     var phoneNumber: String?
-    var birthYear: Int?
     var createdAt: Date
     var lastUpdated: Date
     var avatarColor: AvatarColor
@@ -104,7 +103,6 @@ final class AppUser {
         lastName: String? = nil,
         email: String? = nil,
         phoneNumber: String? = nil,
-        birthYear: Int? = nil,
         createdAt: Date = .now,
         lastUpdated: Date = .now,
         avatarColor: AvatarColor? = nil,
@@ -131,7 +129,6 @@ final class AppUser {
         self.lastName = lastName
         self.email = email
         self.phoneNumber = phoneNumber
-        self.birthYear = birthYear
         self.createdAt = createdAt
         self.lastUpdated = lastUpdated
         self.avatarColor = avatarColor ?? AvatarColor.random()

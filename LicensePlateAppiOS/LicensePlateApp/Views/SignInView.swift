@@ -297,16 +297,14 @@ struct SignInView: View {
                                         password = ""
                                         confirmPassword = ""
                                         email = ""
-                                        // Autofill from current user
+                                        // Autofill from current user (birthYear stored in Firestore only, not available for autofill)
                                         if let currentUser = authService.currentUser {
                                             userName = currentUser.userName
                                             firstName = currentUser.firstName ?? ""
                                             lastName = currentUser.lastName ?? ""
                                             phoneNumber = currentUser.phoneNumber ?? ""
-                                            birthYear = currentUser.birthYear ?? (Calendar.current.component(.year, from: .now) - 25)
-                                        } else {
-                                            birthYear = Calendar.current.component(.year, from: .now) - 25
                                         }
+                                        birthYear = Calendar.current.component(.year, from: .now) - 25
                                     } else {
                                         // Switching to sign in - clear all fields
                                         password = ""
