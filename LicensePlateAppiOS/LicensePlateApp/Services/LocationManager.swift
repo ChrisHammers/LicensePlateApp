@@ -16,6 +16,7 @@ class LocationManager: NSObject, ObservableObject {
     @Published var errorMessage: String?
     
     private let locationManager = CLLocationManager()
+    private var hasRequestedAlwaysUpgrade = false
     
     override init() {
         super.init()
@@ -24,8 +25,9 @@ class LocationManager: NSObject, ObservableObject {
         authorizationStatus = locationManager.authorizationStatus
     }
     
+    /// Always requests "Always" authorization — iOS shows When In Use first, then we auto-prompt for Always when we get access
     func requestAuthorization() {
-        locationManager.requestWhenInUseAuthorization()
+        locationManager.requestAlwaysAuthorization()
     }
     
     func startUpdatingLocation() {
@@ -55,9 +57,15 @@ extension LocationManager: CLLocationManagerDelegate {
     
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         Task { @MainActor in
-            authorizationStatus = manager.authorizationStatus
-            if authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways {
+            let newStatus = manager.authorizationStatus
+            authorizationStatus = newStatus
+            if newStatus == .authorizedWhenInUse || newStatus == .authorizedAlways {
                 manager.startUpdatingLocation()
+            }
+            // When we get "When In Use" (including "Allow Once"), automatically prompt for "Always" upgrade
+            if newStatus == .authorizedWhenInUse, !hasRequestedAlwaysUpgrade {
+                hasRequestedAlwaysUpgrade = true
+                manager.requestAlwaysAuthorization()
             }
         }
     }
