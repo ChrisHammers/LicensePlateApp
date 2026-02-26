@@ -11,45 +11,49 @@ struct OnboardingHowItWorksView: View {
     let onNext: () -> Void
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 32) {
-                Text("How It Works")
-                    .font(.system(.largeTitle, design: .rounded))
-                    .fontWeight(.bold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                
-                VStack(alignment: .leading, spacing: 24) {
-                    HowItWorksRow(
-                        number: 1,
-                        title: "Spot plates",
-                        description: "Look for license plates as you travel"
-                    )
-                    HowItWorksRow(
-                        number: 2,
-                        title: "Mark on map",
-                        description: "Log each plate you find on the interactive map"
-                    )
-                    HowItWorksRow(
-                        number: 3,
-                        title: "Conquer regions",
-                        description: "Track progress across US, Canada, and Mexico"
-                    )
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 32) {
+                    Text("How It Works")
+                        .font(.system(.largeTitle, design: .rounded))
+                        .fontWeight(.bold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    
+                    VStack(alignment: .leading, spacing: 24) {
+                        HowItWorksRow(
+                            number: 1,
+                            title: "Spot plates",
+                            description: "Look for license plates as you travel"
+                        )
+                        HowItWorksRow(
+                            number: 2,
+                            title: "Mark on map",
+                            description: "Log each plate you find on the interactive map"
+                        )
+                        HowItWorksRow(
+                            number: 3,
+                            title: "Conquer regions",
+                            description: "Track progress across US, Canada, and Mexico"
+                        )
+                    }
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
-                
-                Button("Continue") {
-                    onNext()
-                }
-                .font(.system(.body, design: .rounded))
-                .fontWeight(.semibold)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(Color.Theme.primaryBlue, in: Capsule())
-                .padding(.horizontal, 24)
-                .padding(.top, 24)
+                .padding(.vertical, 48)
+                .padding(.bottom, 24)
             }
-            .padding(.vertical, 48)
+            
+            Button("Continue") {
+                onNext()
+            }
+            .font(.system(.body, design: .rounded))
+            .fontWeight(.semibold)
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(Color.Theme.primaryBlue, in: Capsule())
+            .padding(.horizontal, 24)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
         }
     }
 }

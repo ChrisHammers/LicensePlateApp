@@ -24,70 +24,74 @@ struct OnboardingJoinFamilyView: View {
     @State private var showError = false
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                Text("Join Family")
-                    .font(.system(.largeTitle, design: .rounded))
-                    .fontWeight(.bold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                
-                Text("Scouts need to join a family. Enter the share code from your Captain.")
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Share Code")
-                        .font(.system(.headline, design: .rounded))
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 24) {
+                    Text("Join Family")
+                        .font(.system(.largeTitle, design: .rounded))
+                        .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     
-                    TextField("Enter share code", text: $shareCode)
-                        .textFieldStyle(.roundedBorder)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .onChange(of: scannedCode) { _, newValue in
-                            if let code = newValue {
-                                shareCode = extractCode(from: code)
+                    Text("Scouts need to join a family. Enter the share code from your Captain.")
+                        .font(.system(.body, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Share Code")
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                        
+                        TextField("Enter share code", text: $shareCode)
+                            .textFieldStyle(.roundedBorder)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .onChange(of: scannedCode) { _, newValue in
+                                if let code = newValue {
+                                    shareCode = extractCode(from: code)
+                                }
                             }
-                        }
-                }
-                .padding()
-                .background(Color.Theme.cardBackground, in: RoundedRectangle(cornerRadius: 16))
-                .padding(.horizontal)
-                
-                Button {
-                    requestCameraPermissionAndScan()
-                } label: {
-                    HStack {
-                        Image(systemName: "qrcode.viewfinder")
-                        Text("Scan QR Code")
                     }
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .padding()
+                    .background(Color.Theme.cardBackground, in: RoundedRectangle(cornerRadius: 16))
+                    .padding(.horizontal)
+                    
+                    Button {
+                        requestCameraPermissionAndScan()
+                    } label: {
+                        HStack {
+                            Image(systemName: "qrcode.viewfinder")
+                            Text("Scan QR Code")
+                        }
+                        .font(.system(.body, design: .rounded))
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    
+                    if let error = errorMessage {
+                        Text(error)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.red)
+                    }
                 }
-                
-                if let error = errorMessage {
-                    Text(error)
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.red)
-                }
-                
-                Button("Continue") {
-                    joinWithCode()
-                }
-                .font(.system(.body, design: .rounded))
-                .fontWeight(.semibold)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(Color.Theme.primaryBlue, in: Capsule())
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-                .disabled(shareCode.isEmpty || isJoining || !authService.isOnline)
-                .opacity((shareCode.isEmpty || isJoining || !authService.isOnline) ? 0.6 : 1)
+                .padding(.vertical, 48)
+                .padding(.bottom, 24)
             }
-            .padding(.vertical, 48)
+            
+            Button("Continue") {
+                joinWithCode()
+            }
+            .font(.system(.body, design: .rounded))
+            .fontWeight(.semibold)
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(Color.Theme.primaryBlue, in: Capsule())
+            .padding(.horizontal, 24)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
+            .disabled(shareCode.isEmpty || isJoining || !authService.isOnline)
+            .opacity((shareCode.isEmpty || isJoining || !authService.isOnline) ? 0.6 : 1)
         }
         .onAppear {
             familyRepository.setModelContext(modelContext)

@@ -22,39 +22,45 @@ struct OnboardingCreateFamilyView: View {
     @State private var showError = false
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                Text("Create a Family")
-                    .font(.system(.largeTitle, design: .rounded))
-                    .fontWeight(.bold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                
-                Text("As a Captain, you can create a family group to add Scouts and track trips together.")
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Family Name")
-                        .font(.system(.headline, design: .rounded))
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 24) {
+                    Text("Create a Family")
+                        .font(.system(.largeTitle, design: .rounded))
+                        .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     
-                    TextField("Enter family name", text: $familyName)
-                        .textFieldStyle(.roundedBorder)
-                        .textInputAutocapitalization(.words)
-                        .disabled(isCreating)
+                    Text("As a Captain, you can create a family group to add Scouts and track trips together.")
+                        .font(.system(.body, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Family Name")
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                        
+                        TextField("Enter family name", text: $familyName)
+                            .textFieldStyle(.roundedBorder)
+                            .textInputAutocapitalization(.words)
+                            .disabled(isCreating)
+                    }
+                    .padding()
+                    .background(Color.Theme.cardBackground, in: RoundedRectangle(cornerRadius: 16))
+                    .padding(.horizontal)
+                    
+                    if let error = errorMessage {
+                        Text(error)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(.red)
+                    }
                 }
-                .padding()
-                .background(Color.Theme.cardBackground, in: RoundedRectangle(cornerRadius: 16))
-                .padding(.horizontal)
-                
-                if let error = errorMessage {
-                    Text(error)
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(.red)
-                }
-                
+                .padding(.vertical, 48)
+                .padding(.bottom, 24)
+            }
+            
+            VStack(spacing: 12) {
                 Button("Create Family") {
                     createFamily()
                 }
@@ -64,7 +70,6 @@ struct OnboardingCreateFamilyView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
                 .background(Color.Theme.primaryBlue, in: Capsule())
-                .padding(.horizontal, 24)
                 .disabled(familyName.isEmpty || isCreating)
                 .opacity((familyName.isEmpty || isCreating) ? 0.6 : 1)
                 
@@ -73,9 +78,10 @@ struct OnboardingCreateFamilyView: View {
                 }
                 .font(.system(.body, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
-                .padding(.top, 8)
             }
-            .padding(.vertical, 48)
+            .padding(.horizontal, 24)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
         }
         .onAppear {
             familyRepository.setModelContext(modelContext)

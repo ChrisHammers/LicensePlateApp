@@ -19,59 +19,63 @@ struct OnboardingPermissionsView: View {
     @State private var speechPermission: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                Text("Permissions")
-                    .font(.system(.largeTitle, design: .rounded))
-                    .fontWeight(.bold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                
-                Text("These permissions help the app work better. You can enable them later in Settings.")
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                    .multilineTextAlignment(.center)
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 24) {
+                    Text("Permissions")
+                        .font(.system(.largeTitle, design: .rounded))
+                        .fontWeight(.bold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    
+                    Text("These permissions help the app work better. You can enable them later in Settings.")
+                        .font(.system(.body, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    VStack(spacing: 16) {
+                        PermissionRow(
+                            title: "Location",
+                            description: "Show your position on the map",
+                            status: locationStatusText,
+                            onAllow: requestLocation,
+                            onSkip: { }
+                        )
+                        
+                        PermissionRow(
+                            title: "Microphone",
+                            description: "Voice input for logging plates",
+                            status: microphoneStatusText,
+                            onAllow: requestMicrophone,
+                            onSkip: { }
+                        )
+                        
+                        PermissionRow(
+                            title: "Speech Recognition",
+                            description: "Understand spoken state names",
+                            status: speechStatusText,
+                            onAllow: requestSpeech,
+                            onSkip: { }
+                        )
+                    }
                     .padding(.horizontal)
-                
-                VStack(spacing: 16) {
-                    PermissionRow(
-                        title: "Location",
-                        description: "Show your position on the map",
-                        status: locationStatusText,
-                        onAllow: requestLocation,
-                        onSkip: { }
-                    )
-                    
-                    PermissionRow(
-                        title: "Microphone",
-                        description: "Voice input for logging plates",
-                        status: microphoneStatusText,
-                        onAllow: requestMicrophone,
-                        onSkip: { }
-                    )
-                    
-                    PermissionRow(
-                        title: "Speech Recognition",
-                        description: "Understand spoken state names",
-                        status: speechStatusText,
-                        onAllow: requestSpeech,
-                        onSkip: { }
-                    )
                 }
-                .padding(.horizontal)
-                
-                Button("Continue") {
-                    onNext()
-                }
-                .font(.system(.body, design: .rounded))
-                .fontWeight(.semibold)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(Color.Theme.primaryBlue, in: Capsule())
-                .padding(.horizontal, 24)
-                .padding(.top, 24)
+                .padding(.vertical, 48)
+                .padding(.bottom, 24)
             }
-            .padding(.vertical, 48)
+            
+            Button("Continue") {
+                onNext()
+            }
+            .font(.system(.body, design: .rounded))
+            .fontWeight(.semibold)
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(Color.Theme.primaryBlue, in: Capsule())
+            .padding(.horizontal, 24)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
         }
         .onAppear {
             microphonePermission = AVAudioSession.sharedInstance().recordPermission

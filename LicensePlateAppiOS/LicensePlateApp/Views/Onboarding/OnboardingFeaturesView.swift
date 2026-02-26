@@ -11,33 +11,37 @@ struct OnboardingFeaturesView: View {
     let onNext: () -> Void
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 32) {
-                Text("Features")
-                    .font(.system(.largeTitle, design: .rounded))
-                    .fontWeight(.bold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                
-                VStack(spacing: 16) {
-                    FeatureRow(icon: "mic.fill", title: "Voice input", description: "Say state names to log plates quickly")
-                    FeatureRow(icon: "person.2.fill", title: "Friends & Family", description: "Compete and share with your crew")
-                    FeatureRow(icon: "map.fill", title: "Trip tracking", description: "Track every road trip on the map")
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 32) {
+                    Text("Features")
+                        .font(.system(.largeTitle, design: .rounded))
+                        .fontWeight(.bold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    
+                    VStack(spacing: 16) {
+                        FeatureRow(icon: "mic.fill", title: "Voice input", description: "Say state names to log plates quickly")
+                        FeatureRow(icon: "person.2.fill", title: "Friends & Family", description: "Compete and share with your crew")
+                        FeatureRow(icon: "map.fill", title: "Trip tracking", description: "Track every road trip on the map")
+                    }
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
-                
-                Button("Continue") {
-                    onNext()
-                }
-                .font(.system(.body, design: .rounded))
-                .fontWeight(.semibold)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(Color.Theme.primaryBlue, in: Capsule())
-                .padding(.horizontal, 24)
-                .padding(.top, 24)
+                .padding(.vertical, 48)
+                .padding(.bottom, 24)
             }
-            .padding(.vertical, 48)
+            
+            Button("Continue") {
+                onNext()
+            }
+            .font(.system(.body, design: .rounded))
+            .fontWeight(.semibold)
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(Color.Theme.primaryBlue, in: Capsule())
+            .padding(.horizontal, 24)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
         }
     }
 }
