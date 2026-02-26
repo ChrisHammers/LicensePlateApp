@@ -74,15 +74,13 @@ struct OnboardingAccountCreationView: View {
             SignInView(
                 authService: authService,
                 initialMode: signInInitialMode,
-                initialBirthYear: signInInitialMode == .createAccount && coordinator.birthYear > 0 ? coordinator.birthYear : nil
-            )
-                .onDisappear {
-                    if authService.isAuthenticated {
-                        coordinator.didLogIn = true
-                        showSignInSheet = false
-                        onNext()
-                    }
+                initialBirthYear: signInInitialMode == .createAccount && coordinator.birthYear > 0 ? coordinator.birthYear : nil,
+                onAuthSuccess: {
+                    coordinator.didLogIn = true
+                    showSignInSheet = false
+                    onNext()
                 }
+            )
         }
     }
 }

@@ -52,10 +52,12 @@ struct SignInView: View {
     @State private var passwordMatchError: String? = nil
     @State private var passwordMatchTask: Task<Void, Never>? = nil
     
-    init(authService: FirebaseAuthService, initialMode: SignInInitialMode = .signIn, initialBirthYear: Int? = nil) {
+    var onAuthSuccess: (() -> Void)?
+    
+    init(authService: FirebaseAuthService, initialMode: SignInInitialMode = .signIn, initialBirthYear: Int? = nil, onAuthSuccess: (() -> Void)? = nil) {
         self.authService = authService
         let year = Calendar.current.component(.year, from: .now)
-        self._isSignInMode = State(initialValue: initialMode == .createAccount)
+        self._isSignInMode = State(initialValue: initialMode == .signIn)
         self._birthYear = State(initialValue: initialBirthYear ?? year - 25)
         self._email = State(initialValue: "")
         self._password = State(initialValue: "")
@@ -69,6 +71,7 @@ struct SignInView: View {
         self._isLoading = State(initialValue: false)
         self._passwordMatchError = State(initialValue: nil)
         self._passwordMatchTask = State(initialValue: nil)
+        self.onAuthSuccess = onAuthSuccess
     }
     
     var body: some View {
@@ -396,6 +399,7 @@ struct SignInView: View {
             .onChange(of: authService.isAuthenticated) { oldValue, newValue in
                 // Auto-dismiss when authentication succeeds
                 if newValue && oldValue == false {
+                    onAuthSuccess?()
                     dismiss()
                     authService.showSignInSheet = false
                 }

@@ -122,7 +122,8 @@ final class OnboardingCoordinator: ObservableObject {
             // Came from account creation (existing account) - go back there
             currentStep = .accountCreation
         case .permissions:
-            currentStep = .premiumUpsell
+            // Guest skipped family and premium → go back to account; else came from premium
+            currentStep = didLogIn ? .premiumUpsell : .accountCreation
         case .getStarted:
             currentStep = .permissions
         }
@@ -137,10 +138,14 @@ final class OnboardingCoordinator: ObservableObject {
                 currentStep = .permissions
             }
         } else {
-            // New account or guest: Create Family (Captain) or Join Family (Scout)
-            if userType == .scout {
+            // Guest: skip family screens
+            if !didLogIn {
+                currentStep = .permissions
+            } else if userType == .scout {
+                // New account (Scout): Join Family
                 currentStep = .joinFamily
             } else {
+                // New account (Captain): Create Family
                 currentStep = .createFamily
             }
         }
