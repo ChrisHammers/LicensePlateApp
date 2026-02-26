@@ -15,7 +15,7 @@ struct OnboardingPermissionsView: View {
     let onNext: () -> Void
     
     @StateObject private var locationManager = LocationManager()
-    @State private var microphonePermission: AVAudioSession.RecordPermission = .AVAudioApplication.recordPermission.undetermined
+    @State private var microphonePermission: AVAudioSession.RecordPermission = .undetermined
     @State private var speechPermission: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     
     var body: some View {
@@ -64,15 +64,20 @@ struct OnboardingPermissionsView: View {
                 .padding(.bottom, 24)
             }
             
-            Button("Continue") {
+            Button {
                 onNext()
+            } label: {
+                Text("Continue")
+                    .font(.system(.body, design: .rounded))
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        Capsule()
+                            .fill(Color.Theme.primaryBlue)
+                    )
+                    .foregroundStyle(.white)
             }
-            .font(.system(.body, design: .rounded))
-            .fontWeight(.semibold)
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(Color.Theme.primaryBlue, in: Capsule())
             .padding(.horizontal, 24)
             .padding(.top, 16)
             .padding(.bottom, 32)
@@ -155,21 +160,30 @@ private struct PermissionRow: View {
             }
             
             HStack(spacing: 12) {
-                Button("Allow") {
+                Button {
                     onAllow()
+                } label: {
+                    Text("Allow")
+                        .font(.system(.caption, design: .rounded))
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(Color.Theme.primaryBlue)
+                        )
+                        .foregroundStyle(.white)
                 }
-                .font(.system(.caption, design: .rounded))
-                .fontWeight(.semibold)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.Theme.primaryBlue, in: Capsule())
                 
-                Button("Skip") {
+                Button {
                     onSkip()
+                } label: {
+                    Text("Skip")
+                        .font(.system(.caption, design: .rounded))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .foregroundStyle(Color.Theme.softBrown)
                 }
-                .font(.system(.caption, design: .rounded))
-                .foregroundStyle(Color.Theme.softBrown)
             }
         }
         .padding()

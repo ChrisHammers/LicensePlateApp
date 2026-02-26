@@ -61,23 +61,32 @@ struct OnboardingCreateFamilyView: View {
             }
             
             VStack(spacing: 12) {
-                Button("Create Family") {
+                Button {
                     createFamily()
+                } label: {
+                    Text("Create Family")
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            Capsule()
+                                .fill(Color.Theme.primaryBlue)
+                        )
+                        .foregroundStyle(.white)
                 }
-                .font(.system(.body, design: .rounded))
-                .fontWeight(.semibold)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(Color.Theme.primaryBlue, in: Capsule())
                 .disabled(familyName.isEmpty || isCreating)
                 .opacity((familyName.isEmpty || isCreating) ? 0.6 : 1)
                 
-                Button("Maybe Later") {
+                Button {
                     onNext()
+                } label: {
+                    Text("Maybe Later")
+                        .font(.system(.body, design: .rounded))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .foregroundStyle(Color.Theme.softBrown)
                 }
-                .font(.system(.body, design: .rounded))
-                .foregroundStyle(Color.Theme.softBrown)
             }
             .padding(.horizontal, 24)
             .padding(.top, 16)

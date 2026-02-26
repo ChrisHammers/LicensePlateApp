@@ -35,40 +35,51 @@ struct OnboardingAccountCreationView: View {
             }
             
             VStack(spacing: 12) {
-                Button("Sign In") {
+                Button {
                     coordinator.isExistingAccount = true
                     signInInitialMode = .signIn
                     showSignInSheet = true
+                } label: {
+                    Text("Sign In")
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            Capsule()
+                                .fill(Color.Theme.primaryBlue)
+                        )
+                        .foregroundStyle(.white)
                 }
-                .font(.system(.body, design: .rounded))
-                .fontWeight(.semibold)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(Color.Theme.primaryBlue, in: Capsule())
                 
-                Button("Create Account") {
+                Button {
                     coordinator.isExistingAccount = false
                     signInInitialMode = .createAccount
                     showSignInSheet = true
+                } label: {
+                    Text("Create Account")
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .overlay(
+                            Capsule().stroke(Color.Theme.primaryBlue, lineWidth: 2)
+                        )
+                        .foregroundStyle(Color.Theme.primaryBlue)
                 }
-                .font(.system(.body, design: .rounded))
-                .fontWeight(.semibold)
-                .foregroundStyle(Color.Theme.primaryBlue)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .overlay(
-                    Capsule().stroke(Color.Theme.primaryBlue, lineWidth: 2)
-                )
                 
                 if coordinator.userType != .scout {
-                    Button("Continue as Guest") {
+                    Button {
                         coordinator.isExistingAccount = false
                         coordinator.didLogIn = false
                         onNext()
+                    } label: {
+                        Text("Continue as Guest")
+                            .font(.system(.body, design: .rounded))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .foregroundStyle(Color.Theme.softBrown)
                     }
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
                 }
             }
             .padding(.horizontal, 24)

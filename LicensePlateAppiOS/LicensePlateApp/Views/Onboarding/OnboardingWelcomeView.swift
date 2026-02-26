@@ -35,15 +35,20 @@ struct OnboardingWelcomeView: View {
             
             Spacer()
             
-            Button("Get Started") {
+            Button {
                 onNext()
+            } label: {
+                Text("Get Started")
+                    .font(.system(.body, design: .rounded))
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        Capsule()
+                            .fill(Color.Theme.primaryBlue)
+                    )
+                    .foregroundStyle(.white)
             }
-            .font(.system(.body, design: .rounded))
-            .fontWeight(.semibold)
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(Color.Theme.primaryBlue, in: Capsule())
             .padding(.horizontal, 24)
             .padding(.top, 16)
             .padding(.bottom, 32)

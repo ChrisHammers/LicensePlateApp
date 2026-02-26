@@ -71,18 +71,23 @@ struct OnboardingUserTypeView: View {
                 .padding(.bottom, 24)
             }
             
-            Button("Continue") {
+            Button {
                 if coordinator.birthYear == 0 {
                     coordinator.birthYear = currentYear - 25
                 }
                 onNext()
+            } label: {
+                Text("Continue")
+                    .font(.system(.body, design: .rounded))
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        Capsule()
+                            .fill(Color.Theme.primaryBlue)
+                    )
+                    .foregroundStyle(.white)
             }
-            .font(.system(.body, design: .rounded))
-            .fontWeight(.semibold)
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-            .background(Color.Theme.primaryBlue, in: Capsule())
             .padding(.horizontal, 24)
             .padding(.top, 16)
             .padding(.bottom, 32)
@@ -121,6 +126,7 @@ private struct UserTypeButton: View {
                 }
             }
             .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: 16)
                     .fill(Color.Theme.cardBackground)
