@@ -17,7 +17,7 @@ struct OnboardingUserTypeView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 32) {
-                    Text("Are you a Captain or Scout?")
+                    Text("Are you a Captain or Scout?".localized)
                         .font(.system(.title, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
@@ -25,8 +25,8 @@ struct OnboardingUserTypeView: View {
                     
                     VStack(spacing: 12) {
                         UserTypeButton(
-                            title: "Captain",
-                            subtitle: "Parent – create families, manage settings",
+                            title: "Captain".localized,
+                            subtitle: "Parent – create families, manage settings".localized,
                             isSelected: selectedType == .captain
                         ) {
                             selectedType = .captain
@@ -34,8 +34,8 @@ struct OnboardingUserTypeView: View {
                         }
                         
                         UserTypeButton(
-                            title: "Scout",
-                            subtitle: "Child – join an existing family",
+                            title: "Scout".localized,
+                            subtitle: "Child – join an existing family".localized,
                             isSelected: selectedType == .scout
                         ) {
                             selectedType = .scout
@@ -51,7 +51,7 @@ struct OnboardingUserTypeView: View {
             Button {
                 onNext()
             } label: {
-                Text("Continue")
+                Text("Continue".localized)
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)

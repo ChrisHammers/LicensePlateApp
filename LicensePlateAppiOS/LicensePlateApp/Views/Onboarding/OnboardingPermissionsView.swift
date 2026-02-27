@@ -25,12 +25,12 @@ struct OnboardingPermissionsView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 24) {
-                    Text("Permissions")
+                    Text("Permissions".localized)
                         .font(.system(.largeTitle, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     
-                    Text("These permissions help the app work better. You can enable them later in Settings.")
+                    Text("These permissions help the app work better. You can enable them later in Settings.".localized)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .multilineTextAlignment(.center)
@@ -91,7 +91,7 @@ struct OnboardingPermissionsView: View {
             Button {
                 onNext()
             } label: {
-                Text("Continue")
+                Text("Continue".localized)
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)

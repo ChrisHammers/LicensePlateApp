@@ -27,23 +27,23 @@ struct OnboardingJoinFamilyView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 24) {
-                    Text("Join Family")
+                    Text("Join Family".localized)
                         .font(.system(.largeTitle, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     
-                    Text("Scouts need to join a family. Enter the share code from your Captain.")
+                    Text("Scouts need to join a family. Enter the share code from your Captain.".localized)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                     
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Share Code")
+                        Text("Share Code".localized)
                             .font(.system(.headline, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                         
-                        TextField("Enter share code", text: $shareCode)
+                        TextField("Enter share code".localized, text: $shareCode)
                             .textFieldStyle(.roundedBorder)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -62,7 +62,7 @@ struct OnboardingJoinFamilyView: View {
                     } label: {
                         HStack {
                             Image(systemName: "qrcode.viewfinder")
-                            Text("Scan QR Code")
+                            Text("Scan QR Code".localized)
                         }
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.primaryBlue)
@@ -88,7 +88,7 @@ struct OnboardingJoinFamilyView: View {
             Button {
                 joinWithCode()
             } label: {
-                Text("Continue")
+                Text("Continue".localized)
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
@@ -111,7 +111,7 @@ struct OnboardingJoinFamilyView: View {
         .sheet(isPresented: $showQRScanner) {
             QRScannerView(scannedCode: $scannedCode)
         }
-        .alert("Error", isPresented: $showError) {
+        .alert("Error".localized, isPresented: $showError) {
             Button("OK", role: .cancel) { }
         } message: {
             if let error = errorMessage {
@@ -136,7 +136,7 @@ struct OnboardingJoinFamilyView: View {
                 await MainActor.run { showQRScanner = true }
             } else {
                 await MainActor.run {
-                    errorMessage = "Camera permission is required to scan QR codes"
+                    errorMessage = "Camera permission is required to scan QR codes".localized
                     showError = true
                 }
             }
@@ -147,7 +147,7 @@ struct OnboardingJoinFamilyView: View {
         let trimmedCode = shareCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedCode.isEmpty else { return }
         guard authService.isOnline else {
-            errorMessage = "Requires network connection"
+            errorMessage = "Requires network connection".localized
             showError = true
             return
         }

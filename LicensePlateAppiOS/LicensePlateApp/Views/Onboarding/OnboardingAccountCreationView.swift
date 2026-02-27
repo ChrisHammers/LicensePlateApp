@@ -19,12 +19,12 @@ struct OnboardingAccountCreationView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 32) {
-                    Text("Account")
+                    Text("Account".localized)
                         .font(.system(.largeTitle, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     
-                    Text("Sign in to sync across devices, use Friends & Family, and backup your data.")
+                    Text("Sign in to sync across devices, use Friends & Family, and backup your data.".localized)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .multilineTextAlignment(.center)
@@ -40,7 +40,7 @@ struct OnboardingAccountCreationView: View {
                     signInInitialMode = .signIn
                     showSignInSheet = true
                 } label: {
-                    Text("Sign In")
+                    Text("Sign In".localized)
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
@@ -57,7 +57,7 @@ struct OnboardingAccountCreationView: View {
                     signInInitialMode = .createAccount
                     showSignInSheet = true
                 } label: {
-                    Text("Create Account")
+                    Text("Create Account".localized)
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
@@ -74,7 +74,7 @@ struct OnboardingAccountCreationView: View {
                         coordinator.didLogIn = false
                         onNext()
                     } label: {
-                        Text("Continue as Guest")
+                        Text("Continue as Guest".localized)
                             .font(.system(.body, design: .rounded))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)

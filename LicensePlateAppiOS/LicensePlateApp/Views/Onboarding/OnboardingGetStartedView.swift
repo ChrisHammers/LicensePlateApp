@@ -19,12 +19,12 @@ struct OnboardingGetStartedView: View {
                     .font(.system(size: 80))
                     .foregroundStyle(Color.Theme.primaryBlue)
                 
-                Text("You're All Set!")
+                Text("You're All Set!".localized)
                     .font(.system(.largeTitle, design: .rounded))
                     .fontWeight(.bold)
                     .foregroundStyle(Color.Theme.primaryBlue)
                 
-                Text("Start spotting license plates and conquering the map.")
+                Text("Start spotting license plates and conquering the map.".localized)
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
                     .multilineTextAlignment(.center)
@@ -36,7 +36,7 @@ struct OnboardingGetStartedView: View {
             Button {
                 onComplete()
             } label: {
-                Text("Get Started")
+                Text("Get Started".localized)
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)

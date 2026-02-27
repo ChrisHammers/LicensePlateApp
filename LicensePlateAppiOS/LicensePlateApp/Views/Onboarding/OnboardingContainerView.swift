@@ -101,7 +101,7 @@ struct OnboardingContainerView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
-                        Text("Back")
+                        Text("Back".localized)
                     }
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(Color.Theme.primaryBlue)

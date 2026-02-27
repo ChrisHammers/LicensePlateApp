@@ -16,19 +16,19 @@ struct OnboardingPremiumUpsellView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 32) {
-                    Text("Upgrade to Premium")
+                    Text("Upgrade to Premium".localized)
                         .font(.system(.largeTitle, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     
-                    Text("Get more from RoadTrip Royale with premium features.")
+                    Text("Get more from RoadTrip Royale with premium features.".localized)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                     
                     VStack(spacing: 12) {
-                        Text("Premium benefits coming soon")
+                        Text("Premium benefits coming soon".localized)
                             .font(.system(.subheadline, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
                     }
@@ -45,7 +45,7 @@ struct OnboardingPremiumUpsellView: View {
                 Button {
                     onNext()
                 } label: {
-                    Text("Continue")
+                    Text("Continue".localized)
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
@@ -60,7 +60,7 @@ struct OnboardingPremiumUpsellView: View {
                 Button {
                     onSkip()
                 } label: {
-                    Text("Skip")
+                    Text("Skip".localized)
                         .font(.system(.body, design: .rounded))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)

@@ -25,23 +25,23 @@ struct OnboardingCreateFamilyView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 24) {
-                    Text("Create a Family")
+                    Text("Create a Family".localized)
                         .font(.system(.largeTitle, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     
-                    Text("As a Captain, you can create a family group to add Scouts and track trips together.")
+                    Text("As a Captain, you can create a family group to add Scouts and track trips together.".localized)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                     
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Family Name")
+                        Text("Family Name".localized)
                             .font(.system(.headline, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                         
-                        TextField("Enter family name", text: $familyName)
+                        TextField("Enter family name".localized, text: $familyName)
                             .textFieldStyle(.roundedBorder)
                             .textInputAutocapitalization(.words)
                             .disabled(isCreating)
@@ -64,7 +64,7 @@ struct OnboardingCreateFamilyView: View {
                 Button {
                     createFamily()
                 } label: {
-                    Text("Create Family")
+                    Text("Create Family".localized)
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
@@ -81,7 +81,7 @@ struct OnboardingCreateFamilyView: View {
                 Button {
                     onNext()
                 } label: {
-                    Text("Maybe Later")
+                    Text("Maybe Later".localized)
                         .font(.system(.body, design: .rounded))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
@@ -95,7 +95,7 @@ struct OnboardingCreateFamilyView: View {
         .onAppear {
             familyRepository.setModelContext(modelContext)
         }
-        .alert("Error", isPresented: $showError) {
+        .alert("Error".localized, isPresented: $showError) {
             Button("OK", role: .cancel) { }
         } message: {
             if let error = errorMessage {
@@ -108,7 +108,7 @@ struct OnboardingCreateFamilyView: View {
         let trimmed = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         guard authService.isOnline else {
-            errorMessage = "Requires network connection"
+            errorMessage = "Requires network connection".localized
             showError = true
             return
         }

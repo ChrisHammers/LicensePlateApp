@@ -14,15 +14,15 @@ struct OnboardingFeaturesView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 32) {
-                    Text("Features")
+                    Text("Features".localized)
                         .font(.system(.largeTitle, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     
                     VStack(spacing: 16) {
-                        FeatureRow(icon: "mic.fill", title: "Voice input", description: "Say state names to log plates quickly")
-                        FeatureRow(icon: "person.2.fill", title: "Friends & Family", description: "Compete or collaborate with your crew")
-                        FeatureRow(icon: "map.fill", title: "Trip tracking", description: "Track every road trip on the map")
+                        FeatureRow(icon: "mic.fill", title: "Voice input".localized, description: "Say state names to log plates quickly".localized)
+                        FeatureRow(icon: "person.2.fill", title: "Friends & Family".localized, description: "Compete or collaborate with your crew".localized)
+                        FeatureRow(icon: "map.fill", title: "Trip tracking".localized, description: "Track every road trip on the map".localized)
                     }
                     .padding(.horizontal)
                 }
@@ -33,7 +33,7 @@ struct OnboardingFeaturesView: View {
             Button {
                 onNext()
             } label: {
-                Text("Continue")
+                Text("Continue".localized)
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)

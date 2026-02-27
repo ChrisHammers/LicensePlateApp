@@ -14,7 +14,7 @@ struct OnboardingHowItWorksView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 32) {
-                    Text("How It Works")
+                    Text("How It Works".localized)
                         .font(.system(.largeTitle, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
@@ -22,18 +22,18 @@ struct OnboardingHowItWorksView: View {
                     VStack(alignment: .leading, spacing: 24) {
                         HowItWorksRow(
                             number: 1,
-                            title: "Spot plates",
-                            description: "Look for license plates as you travel"
+                            title: "Spot plates".localized,
+                            description: "Look for license plates as you travel".localized
                         )
                         HowItWorksRow(
                             number: 2,
-                            title: "Mark on map",
-                            description: "Log each plate you find on the interactive map"
+                            title: "Mark on map".localized,
+                            description: "Log each plate you find on the interactive map".localized
                         )
                         HowItWorksRow(
                             number: 3,
-                            title: "Conquer regions",
-                            description: "Track progress across US, Canada, and Mexico"
+                            title: "Conquer regions".localized,
+                            description: "Track progress across US, Canada, and Mexico".localized
                         )
                     }
                     .padding(.horizontal)
@@ -45,7 +45,7 @@ struct OnboardingHowItWorksView: View {
             Button {
                 onNext()
             } label: {
-                Text("Continue")
+                Text("Continue".localized)
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)

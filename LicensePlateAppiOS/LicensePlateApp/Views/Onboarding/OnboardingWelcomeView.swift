@@ -20,12 +20,12 @@ struct OnboardingWelcomeView: View {
                     .foregroundStyle(Color.Theme.primaryBlue)
                 
                 VStack(spacing: 12) {
-                    Text("RoadTrip Royale")
+                    Text("RoadTrip Royale".localized)
                         .font(.system(.largeTitle, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     
-                    Text("Spot license plates, conquer the map, and rule the open road!")
+                    Text("Spot license plates, conquer the map, and rule the open road!".localized)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .multilineTextAlignment(.center)
@@ -38,7 +38,7 @@ struct OnboardingWelcomeView: View {
             Button {
                 onNext()
             } label: {
-                Text("Get Started")
+                Text("Get Started".localized)
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
