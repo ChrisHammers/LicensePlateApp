@@ -11,6 +11,7 @@ struct OnboardingDisclaimerView: View {
     let onAgree: () -> Void
     @State private var showTerms = false
     @State private var showPrivacy = false
+    @State private var hasAgreedToSafeDriving = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -60,6 +61,25 @@ struct OnboardingDisclaimerView: View {
                     .padding()
                     .background(Color.Theme.cardBackground, in: RoundedRectangle(cornerRadius: 16))
                     .padding(.horizontal)
+                    
+                    Button {
+                        hasAgreedToSafeDriving.toggle()
+                    } label: {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: hasAgreedToSafeDriving ? "checkmark.square.fill" : "square")
+                                .font(.system(size: 24))
+                                .foregroundStyle(hasAgreedToSafeDriving ? Color.Theme.primaryBlue : Color.Theme.softBrown)
+                            Text("I agree to the safe driving mandate, Terms of Service and Privacy Policy".localized)
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                                .multilineTextAlignment(.leading)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding()
+                        .background(Color.Theme.cardBackground, in: RoundedRectangle(cornerRadius: 16))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal)
                 }
                 .padding(.vertical, 48)
                 .padding(.bottom, 24)
@@ -68,7 +88,7 @@ struct OnboardingDisclaimerView: View {
             Button {
                 onAgree()
             } label: {
-                Text("I Agree")
+                Text("Continue")
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
@@ -79,6 +99,8 @@ struct OnboardingDisclaimerView: View {
                     )
                     .foregroundStyle(.white)
             }
+            .disabled(!hasAgreedToSafeDriving)
+            .opacity(hasAgreedToSafeDriving ? 1 : 0.6)
             .padding(.horizontal, 24)
             .padding(.top, 16)
             .padding(.bottom, 32)

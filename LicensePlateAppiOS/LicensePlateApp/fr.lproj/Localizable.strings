@@ -216,6 +216,7 @@
 "Voice input for logging plates" = "Saisie vocale pour enregistrer les plaques";
 "Understand spoken state names" = "Comprendre les noms d'états prononcés";
 "Scan QR codes for Family and Friends" = "Scanner les codes QR pour Famille et Amis";
+"I agree to the safe driving mandate, Terms of Service and Privacy Policy" = "J'accepte le mandat de conduite sécuritaire, les Conditions d'utilisation et la Politique de confidentialité";
 "Closes this view" = "Ferme cette vue";
 
 // Settings - ContentView Settings Navigation
