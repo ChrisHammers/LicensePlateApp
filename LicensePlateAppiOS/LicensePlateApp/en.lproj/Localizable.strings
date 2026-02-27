@@ -197,6 +197,7 @@
 "Microphone" = "Microphone";
 "Speech Recognizer" = "Speech Recognizer";
 "Camera" = "Camera";
+"Video" = "Video";
 "Allowed" = "Allowed";
 "While App is Open" = "While App is Open";
 "Disabled" = "Disabled";
@@ -211,6 +212,10 @@
 "Promotion & News" = "Promotion & News";
 "Receive promotional offers and app news" = "Receive promotional offers and app news";
 "Get notified about plates found and more" = "Get notified about plates found and more";
+"Show your position on the map, where you found a plate and track your trip" = "Show your position on the map, where you found a plate and track your trip";
+"Voice input for logging plates" = "Voice input for logging plates";
+"Understand spoken state names" = "Understand spoken state names";
+"Scan QR codes for Family and Friends" = "Scan QR codes for Family and Friends";
 "Closes this view" = "Closes this view";
 
 // Settings - ContentView Settings Navigation

@@ -197,6 +197,7 @@
 "Microphone" = "Micrófono";
 "Speech Recognizer" = "Reconocedor de Voz";
 "Camera" = "Cámara";
+"Video" = "Video";
 "Allowed" = "Permitido";
 "While App is Open" = "Mientras la App Está Abierta";
 "Disabled" = "Deshabilitado";
@@ -211,6 +212,10 @@
 "Promotion & News" = "Promoción y Noticias";
 "Receive promotional offers and app news" = "Recibir ofertas promocionales y noticias de la app";
 "Get notified about plates found and more" = "Recibir notificaciones sobre placas encontradas y más";
+"Show your position on the map, where you found a plate and track your trip" = "Mostrar tu posición en el mapa, dónde encontraste una placa y rastrear tu viaje";
+"Voice input for logging plates" = "Entrada de voz para registrar placas";
+"Understand spoken state names" = "Entender nombres de estados hablados";
+"Scan QR codes for Family and Friends" = "Escanear códigos QR para Familia y Amigos";
 "Closes this view" = "Cierra esta vista";
 
 // Settings - ContentView Settings Navigation

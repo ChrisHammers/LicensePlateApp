@@ -18,6 +18,7 @@ struct OnboardingPermissionsView: View {
     @StateObject private var locationManager = LocationManager()
     @State private var microphonePermission: AVAudioSession.RecordPermission = .undetermined
     @State private var speechPermission: SFSpeechRecognizerAuthorizationStatus = .notDetermined
+    @State private var cameraPermission: AVAuthorizationStatus = .notDetermined
     @State private var notificationPermission: UNAuthorizationStatus = .notDetermined
     
     var body: some View {
@@ -64,6 +65,15 @@ struct OnboardingPermissionsView: View {
                         )
                         
                         OnboardingPermissionRow(
+                            title: "Camera".localized,
+                            description: "Scan QR codes for Family and Friends".localized,
+                            icon: "camera.fill",
+                            status: cameraPermissionStatus,
+                            statusColor: cameraPermissionColor,
+                            onTap: handleCameraTap
+                        )
+                        
+                        OnboardingPermissionRow(
                             title: "Notifications".localized,
                             description: "Get notified about plates found and more".localized,
                             icon: "bell.fill",
@@ -107,6 +117,7 @@ struct OnboardingPermissionsView: View {
     private func checkPermissions() {
         microphonePermission = AVAudioSession.sharedInstance().recordPermission
         speechPermission = SFSpeechRecognizer.authorizationStatus()
+        cameraPermission = AVCaptureDevice.authorizationStatus(for: .video)
         Task {
             let settings = await UNUserNotificationCenter.current().notificationSettings()
             await MainActor.run {
@@ -148,16 +159,12 @@ struct OnboardingPermissionsView: View {
     
     private func handleLocationTap() {
         switch locationManager.authorizationStatus {
-        case .authorizedAlways:
-            // Perfect allowed — open Settings
+        case .authorizedAlways, .authorizedWhenInUse:
+            // Allowed or While App is Open — open Settings
             if let url = URL(string: UIApplication.openSettingsURLString) {
                 UIApplication.shared.open(url)
             }
         case .notDetermined:
-            // Show the initial permission popup
-            locationManager.requestAuthorization()
-        case .authorizedWhenInUse:
-            // Request Always upgrade (LocationManager also auto-prompts when it detects When In Use)
             locationManager.requestAuthorization()
         case .denied, .restricted:
             // Cannot re-show popup once denied — must open Settings
@@ -248,6 +255,57 @@ struct OnboardingPermissionsView: View {
             return Color.Theme.permissionOrange
         @unknown default:
             return Color.Theme.permissionOrange
+        }
+    }
+    
+    // Camera
+    private var cameraPermissionStatus: String {
+        switch cameraPermission {
+        case .authorized:
+            return "Allowed".localized
+        case .denied, .restricted:
+            return "Disabled".localized
+        case .notDetermined:
+            return "Not Set".localized
+        @unknown default:
+            return "Unknown".localized
+        }
+    }
+    
+    private var cameraPermissionColor: Color {
+        switch cameraPermission {
+        case .authorized:
+            return .green
+        case .denied, .restricted:
+            return .red
+        case .notDetermined:
+            return Color.Theme.permissionOrange
+        @unknown default:
+            return Color.Theme.permissionOrange
+        }
+    }
+    
+    private func handleCameraTap() {
+        switch cameraPermission {
+        case .authorized:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        case .notDetermined:
+            Task {
+                let granted = await AVCaptureDevice.requestAccess(for: .video)
+                await MainActor.run {
+                    cameraPermission = granted ? .authorized : .denied
+                }
+            }
+        case .denied, .restricted:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        @unknown default:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
         }
     }
     

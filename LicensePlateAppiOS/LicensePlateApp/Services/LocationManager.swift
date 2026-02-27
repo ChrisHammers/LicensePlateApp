@@ -25,9 +25,9 @@ class LocationManager: NSObject, ObservableObject {
         authorizationStatus = locationManager.authorizationStatus
     }
     
-    /// Always requests "Always" authorization — iOS shows When In Use first, then we auto-prompt for Always when we get access
+    /// Request When In Use — delegate auto-prompts for Always upgrade when we see the value change to authorizedWhenInUse
     func requestAuthorization() {
-        locationManager.requestAlwaysAuthorization()
+        locationManager.requestWhenInUseAuthorization()
     }
     
     func startUpdatingLocation() {
