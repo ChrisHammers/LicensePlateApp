@@ -13,8 +13,6 @@ struct OnboardingUserTypeView: View {
     
     @State private var selectedType: OnboardingUserType?
     
-    private let currentYear = Calendar.current.component(.year, from: Date())
-    
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -45,36 +43,12 @@ struct OnboardingUserTypeView: View {
                         }
                     }
                     .padding(.horizontal)
-                    
-                    // Birth year for both user types
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Birth Year")
-                            .font(.system(.headline, design: .rounded))
-                            .foregroundStyle(Color.Theme.primaryBlue)
-                        
-                        Picker("Birth Year", selection: Binding(
-                            get: { coordinator.birthYear > 0 ? coordinator.birthYear : currentYear - 25 },
-                            set: { coordinator.birthYear = $0 }
-                        )) {
-                            ForEach((currentYear - 100)...currentYear, id: \.self) { year in
-                                Text(String(year)).tag(year)
-                            }
-                        }
-                        .pickerStyle(.wheel)
-                        .frame(height: 120)
-                    }
-                    .padding()
-                    .background(Color.Theme.cardBackground, in: RoundedRectangle(cornerRadius: 16))
-                    .padding(.horizontal)
                 }
                 .padding(.vertical, 48)
                 .padding(.bottom, 24)
             }
             
             Button {
-                if coordinator.birthYear == 0 {
-                    coordinator.birthYear = currentYear - 25
-                }
                 onNext()
             } label: {
                 Text("Continue")
@@ -93,11 +67,6 @@ struct OnboardingUserTypeView: View {
             .padding(.bottom, 32)
             .disabled(selectedType == nil)
             .opacity(selectedType == nil ? 0.6 : 1)
-        }
-        .onAppear {
-            if coordinator.birthYear == 0 {
-                coordinator.birthYear = currentYear - 25
-            }
         }
     }
 }
