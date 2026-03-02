@@ -239,7 +239,9 @@
 "Scout" = "Explorateur";
 "Child – join an existing family" = "Enfant – rejoindre une famille existante";
 "Join Family" = "Rejoindre une Famille";
+"Join a Family" = "Rejoindre une famille";
 "Scouts need to join a family. Enter the share code from your Captain." = "Les explorateurs doivent rejoindre une famille. Entrez le code de partage de votre Capitaine.";
+"Captains can join an existing family. Enter the share code from your family's Captain." = "Les Capitaines peuvent rejoindre une famille existante. Entrez le code de partage du Capitaine de votre famille.";
 "Share Code" = "Code de Partage";
 "Enter share code" = "Entrez le code de partage";
 "Create a Family" = "Créer une Famille";

@@ -31,7 +31,13 @@ final class OnboardingCoordinator: ObservableObject {
         case getStarted
     }
     
-    @Published var currentStep: Step = .welcome
+    /// Navigation stack - acts like NavigationStack; back pops, forward pushes
+    @Published private(set) var stepStack: [Step] = [.welcome]
+    
+    var currentStep: Step {
+        stepStack.last ?? .welcome
+    }
+    
     @Published var isGoingForward = true
     @Published var userType: OnboardingUserType?
     @Published var didLogIn = false
@@ -54,11 +60,9 @@ final class OnboardingCoordinator: ObservableObject {
         self.authService = service
     }
     
-    // MARK: - Step Order (for linear flow before branching)
+    // MARK: initial flow order:
+    //[.welcome, .howItWorks, .features, .disclaimer, .userTypeAndBirthYear, .accountCreation]
     
-    private var linearSteps: [Step] {
-        [.welcome, .howItWorks, .features, .disclaimer, .userTypeAndBirthYear, .accountCreation]
-    }
     
     // MARK: - Navigation
     
@@ -73,15 +77,15 @@ final class OnboardingCoordinator: ObservableObject {
     private func performNextStep() {
         switch currentStep {
         case .welcome:
-            currentStep = .howItWorks
+            stepStack.append(.howItWorks)
         case .howItWorks:
-            currentStep = .features
+            stepStack.append(.features)
         case .features:
-            currentStep = .disclaimer
+            stepStack.append(.disclaimer)
         case .disclaimer:
-            currentStep = .userTypeAndBirthYear
+            stepStack.append(.userTypeAndBirthYear)
         case .userTypeAndBirthYear:
-            currentStep = .accountCreation
+            stepStack.append(.accountCreation)
         case .accountCreation:
             advanceFromAccountCreation()
         case .joinFamily:
@@ -89,9 +93,9 @@ final class OnboardingCoordinator: ObservableObject {
         case .createFamily:
             advanceFromCreateFamily()
         case .premiumUpsell:
-            currentStep = .permissions
+            stepStack.append(.permissions)
         case .permissions:
-            currentStep = .getStarted
+            stepStack.append(.getStarted)
         case .getStarted:
             appCoordinator?.completeOnboarding()
         }
@@ -106,76 +110,46 @@ final class OnboardingCoordinator: ObservableObject {
     }
     
     private func performPreviousStep() {
-        switch currentStep {
-        case .welcome:
-            break
-        case .howItWorks:
-            currentStep = .welcome
-        case .features:
-            currentStep = .howItWorks
-        case .disclaimer:
-            currentStep = .features
-        case .userTypeAndBirthYear:
-            currentStep = .disclaimer
-        case .accountCreation:
-            currentStep = .userTypeAndBirthYear
-        case .joinFamily:
-            currentStep = .accountCreation
-        case .createFamily:
-            currentStep = .accountCreation
-        case .premiumUpsell:
-            // Came from account creation (existing account) - go back there
-            currentStep = .accountCreation
-        case .permissions:
-            // Guest skipped family and premium → go back to account; else came from premium
-            currentStep = didLogIn ? .premiumUpsell : .accountCreation
-        case .getStarted:
-            currentStep = .permissions
-        }
+        guard stepStack.count > 1 else { return }
+        stepStack.removeLast()
     }
     
     private func advanceFromAccountCreation() {
         if !didLogIn {
-            // Guest: skip family screens
-            currentStep = .permissions
+            stepStack.append(.permissions)
             return
         }
         
-        // Create or Sign In: use activeFamilyId to determine if we need family setup
         let hasFamily = (authService?.currentUser?.activeFamilyId != nil)
         if !hasFamily {
-            if userType == .scout {
-                currentStep = .joinFamily
-            } else {
-                currentStep = .createFamily
-            }
+            stepStack.append(userType == .scout ? .joinFamily : .createFamily)
         } else if shouldShowPremiumUpsell {
-            currentStep = .premiumUpsell
+            stepStack.append(.premiumUpsell)
         } else {
-            currentStep = .permissions
+            stepStack.append(.permissions)
         }
     }
     
     private func advanceFromJoinFamily() {
         if didLogIn && shouldShowPremiumUpsell {
-            currentStep = .premiumUpsell
+            stepStack.append(.premiumUpsell)
         } else {
-            currentStep = .permissions
+            stepStack.append(.permissions)
         }
     }
     
     private func advanceFromCreateFamily() {
         if didLogIn && shouldShowPremiumUpsell {
-            currentStep = .premiumUpsell
+            stepStack.append(.premiumUpsell)
         } else {
-            currentStep = .permissions
+            stepStack.append(.permissions)
         }
     }
     
     // MARK: - Helpers
     
     var isFirstStep: Bool {
-        currentStep == .welcome
+        stepStack.count <= 1
     }
     
     var isLastStep: Bool {
@@ -195,7 +169,15 @@ final class OnboardingCoordinator: ObservableObject {
     func skipPremiumUpsell() {
         isGoingForward = true
         DispatchQueue.main.async { [weak self] in
-            self?.currentStep = .permissions
+            self?.stepStack.append(.permissions)
+        }
+    }
+    
+    /// Switch from Create Family to Join Family screen
+    func switchToJoinFamily() {
+        isGoingForward = true
+        DispatchQueue.main.async { [weak self] in
+            self?.stepStack.append(.joinFamily)
         }
     }
 }

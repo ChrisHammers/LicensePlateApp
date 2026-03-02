@@ -79,6 +79,20 @@ struct OnboardingCreateFamilyView: View {
                 .opacity((familyName.isEmpty || isCreating) ? 0.6 : 1)
                 
                 Button {
+                    coordinator.switchToJoinFamily()
+                } label: {
+                    Text("Join a Family".localized)
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.medium)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .overlay(
+                            Capsule().stroke(Color.Theme.primaryBlue, lineWidth: 2)
+                        )
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                }
+                
+                Button {
                     onNext()
                 } label: {
                     Text("Maybe Later".localized)

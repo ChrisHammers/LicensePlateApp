@@ -239,7 +239,9 @@
 "Scout" = "Scout";
 "Child – join an existing family" = "Child – join an existing family";
 "Join Family" = "Join Family";
+"Join a Family" = "Join a Family";
 "Scouts need to join a family. Enter the share code from your Captain." = "Scouts need to join a family. Enter the share code from your Captain.";
+"Captains can join an existing family. Enter the share code from your family's Captain." = "Captains can join an existing family. Enter the share code from your family's Captain.";
 "Share Code" = "Share Code";
 "Enter share code" = "Enter share code";
 "Create a Family" = "Create a Family";

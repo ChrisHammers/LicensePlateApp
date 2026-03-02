@@ -32,7 +32,7 @@ struct OnboardingJoinFamilyView: View {
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     
-                    Text("Scouts need to join a family. Enter the share code from your Captain.".localized)
+                    Text((coordinator.userType == .captain ? "Captains can join an existing family. Enter the share code from your family's Captain." : "Scouts need to join a family. Enter the share code from your Captain.").localized)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .multilineTextAlignment(.center)
