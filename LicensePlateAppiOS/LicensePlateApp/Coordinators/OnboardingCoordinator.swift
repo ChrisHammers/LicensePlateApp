@@ -135,27 +135,24 @@ final class OnboardingCoordinator: ObservableObject {
     }
     
     private func advanceFromAccountCreation() {
-        if isExistingAccount {
-            // Sign In path: Scout without family → Join Family; else skip to Premium or Permissions
-            let hasFamily = (authService?.currentUser?.activeFamilyId != nil)
-            if didLogIn && userType == .scout && !hasFamily {
-                currentStep = .joinFamily
-            } else if didLogIn && shouldShowPremiumUpsell {
-                currentStep = .premiumUpsell
-            } else {
-                currentStep = .permissions
-            }
-        } else {
+        if !didLogIn {
             // Guest: skip family screens
-            if !didLogIn {
-                currentStep = .permissions
-            } else if userType == .scout {
-                // New account (Scout): Join Family
+            currentStep = .permissions
+            return
+        }
+        
+        // Create or Sign In: use activeFamilyId to determine if we need family setup
+        let hasFamily = (authService?.currentUser?.activeFamilyId != nil)
+        if !hasFamily {
+            if userType == .scout {
                 currentStep = .joinFamily
             } else {
-                // New account (Captain): Create Family
                 currentStep = .createFamily
             }
+        } else if shouldShowPremiumUpsell {
+            currentStep = .premiumUpsell
+        } else {
+            currentStep = .permissions
         }
     }
     
