@@ -177,13 +177,13 @@ final class OnboardingCoordinator: ObservableObject {
         currentStep == .getStarted
     }
     
-    /// Whether to show premium upsell (logged in and not already premium)
+    /// Whether to show premium upsell (logged in, not already premium, and not a Child/Scout account)
     var shouldShowPremiumUpsell: Bool {
-        didLogIn && !hasPremium  // TODO: check hasPremium when paid tier exists
+        didLogIn && !hasPremium && userType != .scout  // Children cannot purchase; skip store
     }
     
     private var hasPremium: Bool {
-        false  // Placeholder until paid tier exists
+        false  // TODO: Placeholder until paid tier exists
     }
     
     /// Skip premium upsell and go to permissions
