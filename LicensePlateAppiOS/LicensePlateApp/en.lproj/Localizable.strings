@@ -274,6 +274,7 @@
 "Requires network connection" = "Requires network connection";
 "We have found the following user, %@-%@, on this device." = "We have found the following user, %@-%@, on this device.";
 "Sign In as %@" = "Sign In as %@";
+"Sign In Using Different Account" = "Sign In Using Different Account";
 
 // Settings - ContentView Settings Navigation
 "Manage location, microphone, notifications, and other permissions" = "Manage location, microphone, notifications, and other permissions";

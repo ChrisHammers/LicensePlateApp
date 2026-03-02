@@ -274,6 +274,7 @@
 "Requires network connection" = "Requiere conexión a internet";
 "We have found the following user, %@-%@, on this device." = "Hemos encontrado el siguiente usuario, %@-%@, en este dispositivo.";
 "Sign In as %@" = "Iniciar sesión como %@";
+"Sign In Using Different Account" = "Iniciar sesión con otra cuenta";
 
 // Settings - ContentView Settings Navigation
 "Manage location, microphone, notifications, and other permissions" = "Administrar ubicación, micrófono, notificaciones y otros permisos";

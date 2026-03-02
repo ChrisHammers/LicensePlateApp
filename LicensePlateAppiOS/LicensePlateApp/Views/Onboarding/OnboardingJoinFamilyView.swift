@@ -85,25 +85,37 @@ struct OnboardingJoinFamilyView: View {
                 .padding(.bottom, 24)
             }
             
-            Button {
-                joinWithCode()
-            } label: {
-                Text("Continue".localized)
-                    .font(.system(.body, design: .rounded))
-                    .fontWeight(.semibold)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        Capsule()
-                            .fill(Color.Theme.primaryBlue)
-                    )
-                    .foregroundStyle(.white)
+            VStack(spacing: 12) {
+                Button {
+                    joinWithCode()
+                } label: {
+                    Text("Continue".localized)
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            Capsule()
+                                .fill(Color.Theme.primaryBlue)
+                        )
+                        .foregroundStyle(.white)
+                }
+                .disabled(shareCode.isEmpty || isJoining || !authService.isOnline)
+                .opacity((shareCode.isEmpty || isJoining || !authService.isOnline) ? 0.6 : 1)
+                
+                if coordinator.userType != .scout {
+                    Button {
+                        onNext()
+                    } label: {
+                        Text("Skip".localized)
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                }
             }
             .padding(.horizontal, 24)
             .padding(.top, 16)
             .padding(.bottom, 32)
-            .disabled(shareCode.isEmpty || isJoining || !authService.isOnline)
-            .opacity((shareCode.isEmpty || isJoining || !authService.isOnline) ? 0.6 : 1)
         }
         .onAppear {
             familyRepository.setModelContext(modelContext)

@@ -76,7 +76,7 @@ struct OnboardingAccountCreationView: View {
                         }
                     }
                 } label: {
-                    Text("Sign In".localized)
+                    Text((authService.restoredUserInfo != nil ? "Sign In Using Different Account" : "Sign In").localized)
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)

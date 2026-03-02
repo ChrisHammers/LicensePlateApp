@@ -113,5 +113,8 @@ struct OnboardingContainerView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: "\(coordinator.currentStep.rawValue)-\(coordinator.isGoingForward)")
+        .onAppear {
+            coordinator.setAuthService(authService)
+        }
     }
 }

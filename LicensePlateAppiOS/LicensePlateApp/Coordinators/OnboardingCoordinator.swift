@@ -40,6 +40,7 @@ final class OnboardingCoordinator: ObservableObject {
     @AppStorage("onboardingBirthYear") var birthYear: Int = 0
     
     private weak var appCoordinator: AppCoordinator?
+    private weak var authService: FirebaseAuthService?
     
     init(appCoordinator: AppCoordinator? = nil) {
         self.appCoordinator = appCoordinator
@@ -47,6 +48,10 @@ final class OnboardingCoordinator: ObservableObject {
     
     func setAppCoordinator(_ coordinator: AppCoordinator) {
         self.appCoordinator = coordinator
+    }
+    
+    func setAuthService(_ service: FirebaseAuthService) {
+        self.authService = service
     }
     
     // MARK: - Step Order (for linear flow before branching)
@@ -131,8 +136,11 @@ final class OnboardingCoordinator: ObservableObject {
     
     private func advanceFromAccountCreation() {
         if isExistingAccount {
-            // Sign In path: skip Create/Join Family → Premium Upsell (if not premium) → Permissions
-            if didLogIn && shouldShowPremiumUpsell {
+            // Sign In path: Scout without family → Join Family; else skip to Premium or Permissions
+            let hasFamily = (authService?.currentUser?.activeFamilyId != nil)
+            if didLogIn && userType == .scout && !hasFamily {
+                currentStep = .joinFamily
+            } else if didLogIn && shouldShowPremiumUpsell {
                 currentStep = .premiumUpsell
             } else {
                 currentStep = .permissions
