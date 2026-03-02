@@ -35,10 +35,45 @@ struct OnboardingAccountCreationView: View {
             }
             
             VStack(spacing: 12) {
+                if let restored = authService.restoredUserInfo {
+                    VStack(spacing: 12) {
+                        Text(String(format: "We have found the following user, %@-%@, on this device.".localized, restored.userName, restored.email))
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                        
+                        Button {
+                            coordinator.isExistingAccount = true
+                            coordinator.didLogIn = true
+                            onNext()
+                        } label: {
+                            Text(String(format: "Sign In as %@".localized, restored.userName))
+                                .font(.system(.body, design: .rounded))
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.Theme.primaryBlue)
+                                )
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .padding(.bottom, 8)
+                }
+                
                 Button {
-                    coordinator.isExistingAccount = true
-                    signInInitialMode = .signIn
-                    showSignInSheet = true
+                    Task {
+                        if authService.restoredUserInfo != nil {
+                            try? await authService.signOut()
+                        }
+                        await MainActor.run {
+                            coordinator.isExistingAccount = true
+                            signInInitialMode = .signIn
+                            showSignInSheet = true
+                        }
+                    }
                 } label: {
                     Text("Sign In".localized)
                         .font(.system(.body, design: .rounded))
@@ -53,9 +88,16 @@ struct OnboardingAccountCreationView: View {
                 }
                 
                 Button {
-                    coordinator.isExistingAccount = false
-                    signInInitialMode = .createAccount
-                    showSignInSheet = true
+                    Task {
+                        if authService.restoredUserInfo != nil {
+                            try? await authService.signOut()
+                        }
+                        await MainActor.run {
+                            coordinator.isExistingAccount = false
+                            signInInitialMode = .createAccount
+                            showSignInSheet = true
+                        }
+                    }
                 } label: {
                     Text("Create Account".localized)
                         .font(.system(.body, design: .rounded))
@@ -70,13 +112,19 @@ struct OnboardingAccountCreationView: View {
                 
                 if coordinator.userType != .scout {
                     Button {
-                        coordinator.isExistingAccount = false
-                        coordinator.didLogIn = false
-                        onNext()
+                        Task {
+                            if authService.restoredUserInfo != nil {
+                                try? await authService.signOutAndCreateAnonymous()
+                            }
+                            await MainActor.run {
+                                coordinator.isExistingAccount = false
+                                coordinator.didLogIn = false
+                                onNext()
+                            }
+                        }
                     } label: {
                         Text("Continue as Guest".localized)
                             .font(.system(.body, design: .rounded))
-                            .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                             .foregroundStyle(Color.Theme.softBrown)
                     }

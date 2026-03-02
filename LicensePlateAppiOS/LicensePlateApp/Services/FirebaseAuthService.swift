@@ -94,6 +94,15 @@ class FirebaseAuthService: ObservableObject {
         networkMonitor.isConnected
     }
     
+    /// Returns info about a restored Firebase user (from Keychain) if they exist and are not anonymous.
+    /// Use this on onboarding to offer "Sign in as existing user" when a previous session was restored.
+    var restoredUserInfo: (userName: String, email: String)? {
+        guard let firebaseUser = auth.currentUser, !firebaseUser.isAnonymous else { return nil }
+        let userName = currentUser?.userName ?? firebaseUser.displayName ?? "User"
+        let email = firebaseUser.email ?? ""
+        return (userName, email)
+    }
+    
     // MARK: - Initialization
     
     /// Initialize authentication state (call on app startup)
@@ -432,6 +441,16 @@ class FirebaseAuthService: ObservableObject {
         }
         
         isAuthenticated = false
+    }
+    
+    /// Sign out and create a fresh anonymous account. Use when user chooses "Continue as Guest" over a restored account.
+    func signOutAndCreateAnonymous() async throws {
+        try await signOut()
+        if let user = currentUser {
+            user.firebaseUID = nil
+            try? modelContext?.save()
+        }
+        try await signInAnonymously()
     }
     
     // MARK: - OAuth Sign In

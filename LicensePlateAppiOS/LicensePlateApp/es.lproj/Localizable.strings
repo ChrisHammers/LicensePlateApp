@@ -272,6 +272,8 @@
 "These permissions help the app work better. You can enable them later in Settings." = "Estos permisos ayudan a que la app funcione mejor. Puedes habilitarlos más tarde en Configuración.";
 "Camera permission is required to scan QR codes" = "Se requiere permiso de cámara para escanear códigos QR";
 "Requires network connection" = "Requiere conexión a internet";
+"We have found the following user, %@-%@, on this device." = "Hemos encontrado el siguiente usuario, %@-%@, en este dispositivo.";
+"Sign In as %@" = "Iniciar sesión como %@";
 
 // Settings - ContentView Settings Navigation
 "Manage location, microphone, notifications, and other permissions" = "Administrar ubicación, micrófono, notificaciones y otros permisos";
