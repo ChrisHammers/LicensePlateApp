@@ -1175,23 +1175,24 @@ class FirebaseAuthService: ObservableObject {
             // Update login tracking
             await updateLoginTracking()
             
-            // Load from Firestore to get latest data (skip for anonymous - preserve local reset values)
-            if !firebaseUser.isAnonymous {
-                Task {
-                    if let firestoreUser = try? await loadUserDataFromFirestore(userId: firebaseUID) {
-                        // Merge Firestore data with local user
-                        existingUser.userName = firestoreUser.userName
-                        existingUser.firstName = firestoreUser.firstName
-                        existingUser.lastName = firestoreUser.lastName
+            // Load from Firestore to get latest data (for both anonymous and non-anonymous)
+            Task {
+                if let firestoreUser = try? await loadUserDataFromFirestore(userId: firebaseUID) {
+                    // Merge Firestore data with local user
+                    existingUser.userName = firestoreUser.userName
+                    existingUser.firstName = firestoreUser.firstName
+                    existingUser.lastName = firestoreUser.lastName
+                    // For anonymous users, don't use email from Firestore
+                    if !firebaseUser.isAnonymous {
                         existingUser.email = firestoreUser.email
-                        existingUser.phoneNumber = firestoreUser.phoneNumber
-                        existingUser.userImageURL = firestoreUser.userImageURL
-                        existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
-                        existingUser.activeFamilyId = firestoreUser.activeFamilyId
-                        existingUser.friendCount = firestoreUser.friendCount
-                        existingUser.isRetiredGeneral = firestoreUser.isRetiredGeneral
-                        try? modelContext.save()
                     }
+                    existingUser.phoneNumber = firestoreUser.phoneNumber
+                    existingUser.userImageURL = firestoreUser.userImageURL
+                    existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
+                    existingUser.activeFamilyId = firestoreUser.activeFamilyId
+                    existingUser.friendCount = firestoreUser.friendCount
+                    existingUser.isRetiredGeneral = firestoreUser.isRetiredGeneral
+                    try? modelContext.save()
                 }
             }
         } else {
