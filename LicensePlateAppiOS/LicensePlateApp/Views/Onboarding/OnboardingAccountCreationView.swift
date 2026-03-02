@@ -67,6 +67,7 @@ struct OnboardingAccountCreationView: View {
                     Task {
                         if authService.restoredUserInfo != nil {
                             try? await authService.signOut()
+                            try? authService.resetLocalUserToGuest()
                         }
                         await MainActor.run {
                             coordinator.isExistingAccount = true
@@ -91,6 +92,7 @@ struct OnboardingAccountCreationView: View {
                     Task {
                         if authService.restoredUserInfo != nil {
                             try? await authService.signOut()
+                            try? authService.resetLocalUserToGuest()
                         }
                         await MainActor.run {
                             coordinator.isExistingAccount = false
@@ -113,9 +115,9 @@ struct OnboardingAccountCreationView: View {
                 if coordinator.userType != .scout {
                     Button {
                         Task {
-                            if authService.restoredUserInfo != nil {
-                                try? await authService.signOutAndCreateAnonymous()
-                            }
+                            // Always sign out and create fresh anonymous - handles both restored
+                            // non-anonymous users AND anonymous users with old Firestore data
+                            try? await authService.signOutAndCreateAnonymous()
                             await MainActor.run {
                                 coordinator.isExistingAccount = false
                                 coordinator.didLogIn = false

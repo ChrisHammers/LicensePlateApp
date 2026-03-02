@@ -443,13 +443,34 @@ class FirebaseAuthService: ObservableObject {
         isAuthenticated = false
     }
     
+    /// Resets the current local user to default guest values. Call when switching to a fresh guest experience.
+    /// Single place to clear local user profile data for reuse elsewhere (e.g., sign out and switch account).
+    func resetLocalUserToGuest() throws {
+        guard let user = currentUser, let modelContext = modelContext else { return }
+        
+        let deviceId = DeviceIdentifier.getDeviceIdentifier()
+        let newUsername = DeviceIdentifier.generateDefaultUsername(deviceId: deviceId)
+        user.userName = newUsername
+        user.firstName = nil
+        user.lastName = nil
+        user.email = nil
+        user.phoneNumber = nil
+        user.firebaseUID = nil
+        user.userImageURL = nil
+        user.isUsernameManuallyChanged = false
+        user.linkedPlatforms = []
+        user.lastDateLoggedIn = nil
+        user.lastLoginLocation = []
+        user.activeFamilyId = nil
+        user.lastUpdated = .now
+        
+        try modelContext.save()
+    }
+    
     /// Sign out and create a fresh anonymous account. Use when user chooses "Continue as Guest" over a restored account.
     func signOutAndCreateAnonymous() async throws {
         try await signOut()
-        if let user = currentUser {
-            user.firebaseUID = nil
-            try? modelContext?.save()
-        }
+        try resetLocalUserToGuest()
         try await signInAnonymously()
     }
     
@@ -1154,25 +1175,23 @@ class FirebaseAuthService: ObservableObject {
             // Update login tracking
             await updateLoginTracking()
             
-            // Load from Firestore to get latest data
-            Task {
-                if let firestoreUser = try? await loadUserDataFromFirestore(userId: firebaseUID) {
-                    // Merge Firestore data with local user
-                    existingUser.userName = firestoreUser.userName
-                    existingUser.firstName = firestoreUser.firstName
-                    existingUser.lastName = firestoreUser.lastName
-                    // For anonymous users, don't use email from Firestore
-                    if !firebaseUser.isAnonymous {
+            // Load from Firestore to get latest data (skip for anonymous - preserve local reset values)
+            if !firebaseUser.isAnonymous {
+                Task {
+                    if let firestoreUser = try? await loadUserDataFromFirestore(userId: firebaseUID) {
+                        // Merge Firestore data with local user
+                        existingUser.userName = firestoreUser.userName
+                        existingUser.firstName = firestoreUser.firstName
+                        existingUser.lastName = firestoreUser.lastName
                         existingUser.email = firestoreUser.email
+                        existingUser.phoneNumber = firestoreUser.phoneNumber
+                        existingUser.userImageURL = firestoreUser.userImageURL
+                        existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
+                        existingUser.activeFamilyId = firestoreUser.activeFamilyId
+                        existingUser.friendCount = firestoreUser.friendCount
+                        existingUser.isRetiredGeneral = firestoreUser.isRetiredGeneral
+                        try? modelContext.save()
                     }
-                    existingUser.phoneNumber = firestoreUser.phoneNumber
-                    existingUser.userImageURL = firestoreUser.userImageURL
-                    existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
-                    // Friends & Family fields
-                    existingUser.activeFamilyId = firestoreUser.activeFamilyId
-                    existingUser.friendCount = firestoreUser.friendCount
-                    existingUser.isRetiredGeneral = firestoreUser.isRetiredGeneral
-                    try? modelContext.save()
                 }
             }
         } else {
