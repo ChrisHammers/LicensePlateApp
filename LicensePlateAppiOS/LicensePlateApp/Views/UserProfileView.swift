@@ -531,7 +531,7 @@ struct UserProfileView: View {
                                     .padding(.bottom, 4)
                                 
                                 // Available platforms to link (only show supported ones)
-                                let supportedPlatforms: [LinkedPlatform.PlatformType] = [.google, .apple, .microsoft, .yahoo]
+                                let supportedPlatforms: [LinkedPlatform.PlatformType] = [.google, .apple]//, .microsoft, .yahoo]
                                 let availablePlatforms = supportedPlatforms.filter { platformType in
                                     !user.linkedPlatforms.contains(where: { $0.platform == platformType })
                                 }
