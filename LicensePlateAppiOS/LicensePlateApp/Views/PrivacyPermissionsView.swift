@@ -254,11 +254,11 @@ struct PrivacyPermissionsView: View {
         case .granted:
             return .green
         case .denied:
-            return .red
+            return Color.Theme.permissionOrangeDark
         case .undetermined:
-            return Color.Theme.permissionOrange
+            return Color.Theme.permissionOrangeDark
         @unknown default:
-            return Color.Theme.permissionOrange
+            return Color.Theme.permissionOrangeDark
         }
     }
     
@@ -280,11 +280,11 @@ struct PrivacyPermissionsView: View {
         case .authorized:
             return .green
         case .denied, .restricted:
-            return .red
+            return Color.Theme.permissionOrangeDark
         case .notDetermined:
-            return Color.Theme.permissionOrange
+            return Color.Theme.permissionOrangeDark
         @unknown default:
-            return Color.Theme.permissionOrange
+            return Color.Theme.permissionOrangeDark
         }
     }
     
@@ -306,11 +306,11 @@ struct PrivacyPermissionsView: View {
         case .authorized:
             return .green
         case .denied, .restricted:
-            return .red
+            return Color.Theme.permissionOrangeDark
         case .notDetermined:
-            return Color.Theme.permissionOrange
+            return Color.Theme.permissionOrangeDark
         @unknown default:
-            return Color.Theme.permissionOrange
+            return Color.Theme.permissionOrangeDark
         }
     }
     
@@ -332,11 +332,11 @@ struct PrivacyPermissionsView: View {
         case .authorized, .provisional, .ephemeral:
             return .green
         case .denied:
-            return .red
+            return Color.Theme.permissionOrangeDark
         case .notDetermined:
-            return Color.Theme.permissionOrange
+            return Color.Theme.permissionOrangeDark
         @unknown default:
-            return Color.Theme.permissionOrange
+            return Color.Theme.permissionOrangeDark
         }
     }
     
