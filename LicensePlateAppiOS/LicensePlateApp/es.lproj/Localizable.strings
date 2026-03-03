@@ -255,10 +255,16 @@
 "Premium benefits coming soon" = "Beneficios premium próximamente";
 "Skip" = "Omitir";
 "Account" = "Cuenta";
-"Sign in to sync across devices, use Friends & Family, and backup your data." = "Inicia sesión para sincronizar entre dispositivos, usar Amigos y Familia, y respaldar tus datos.";
+"Create your RoadTrip Royale identity" = "Crea tu identidad de RoadTrip Royale";
+"Exclusive Founders Scout avatar (male or female)" = "Avatar exclusivo Founders Scout (masculino o femenino)";
+"Early members only" = "Solo miembros fundadores";
+"• Compete or Collaborate with Friends & Family" = "• Compite o colabora con Amigos y Familia";
+"• Your trips saved & synced across devices" = "• Tus viajes guardados y sincronizados entre dispositivos";
+"• Early access to future limited releases" = "• Acceso anticipado a futuras ediciones limitadas";
 "Sign In" = "Iniciar Sesión";
 "Create Account" = "Crear Cuenta";
-"Continue as Guest" = "Continuar como Invitado";
+"Unlocks exclusive Founders Scout avatar" = "Desbloquea avatar exclusivo Founders Scout";
+"Continue as Guest (no sync)" = "Continuar como Invitado (sin sincronización)";
 "How It Works" = "Cómo Funciona";
 "Spot plates" = "Encuentra placas";
 "Look for license plates as you travel" = "Busca placas mientras viajas";
@@ -275,7 +281,7 @@
 "Camera permission is required to scan QR codes" = "Se requiere permiso de cámara para escanear códigos QR";
 "Requires network connection" = "Requiere conexión a internet";
 "We have found the following user, %@-%@, on this device." = "Hemos encontrado el siguiente usuario, %@-%@, en este dispositivo.";
-"Sign In as %@" = "Iniciar sesión como %@";
+"Continue as %@" = "Continuar como %@";
 "Sign In Using Different Account" = "Iniciar sesión con otra cuenta";
 
 // Settings - ContentView Settings Navigation

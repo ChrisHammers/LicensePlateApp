@@ -60,7 +60,7 @@ struct OnboardingCreateFamilyView: View {
                 .padding(.bottom, 24)
             }
             
-            VStack(spacing: 12) {
+            VStack(spacing: 20) {
                 Button {
                     createFamily()
                 } label: {

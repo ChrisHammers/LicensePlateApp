@@ -24,17 +24,47 @@ struct OnboardingAccountCreationView: View {
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     
-                    Text("Sign in to sync across devices, use Friends & Family, and backup your data.".localized)
+                    Text("Create your RoadTrip Royale identity".localized)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack(alignment: .top, spacing: 6) {
+                            Text("•")
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Exclusive Founders Scout avatar (male or female)".localized)
+                                    .font(.system(.body, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown)
+                                Text("Early members only".localized)
+                                    .font(.system(.caption, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown.opacity(0.75))
+                            }
+                        }
+                        .padding(.horizontal)
+                        Text("• Compete or Collaborate with Friends & Family".localized)
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                            .padding(.horizontal)
+                        Text("• Your trips saved & synced across devices".localized)
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                            .padding(.horizontal)
+                        Text("• Early access to future limited releases".localized)
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                            .padding(.horizontal)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.vertical, 48)
                 .padding(.bottom, 24)
             }
             
-            VStack(spacing: 12) {
+            VStack(spacing: 20) {
                 if let restored = authService.restoredUserInfo {
                     VStack(spacing: 12) {
                         Text(String(format: "We have found the following user, %@-%@, on this device.".localized, restored.userName, restored.email))
@@ -48,7 +78,7 @@ struct OnboardingAccountCreationView: View {
                             coordinator.didLogIn = true
                             onNext()
                         } label: {
-                            Text(String(format: "Sign In as %@".localized, restored.userName))
+                            Text(String(format: "Continue as %@".localized, restored.userName))
                                 .font(.system(.body, design: .rounded))
                                 .fontWeight(.semibold)
                                 .frame(maxWidth: .infinity)
@@ -60,7 +90,6 @@ struct OnboardingAccountCreationView: View {
                                 .foregroundStyle(.white)
                         }
                     }
-                    .padding(.bottom, 8)
                 }
                 
                 Button {
@@ -88,28 +117,35 @@ struct OnboardingAccountCreationView: View {
                         .foregroundStyle(.white)
                 }
                 
-                Button {
-                    Task {
-                        if authService.restoredUserInfo != nil {
-                            try? await authService.signOut()
-                            try? authService.resetLocalUserToGuest()
+                VStack(spacing: 4) {
+                    Button {
+                        Task {
+                            if authService.restoredUserInfo != nil {
+                                try? await authService.signOut()
+                                try? authService.resetLocalUserToGuest()
+                            }
+                            await MainActor.run {
+                                coordinator.isExistingAccount = false
+                                signInInitialMode = .createAccount
+                                showSignInSheet = true
+                            }
                         }
-                        await MainActor.run {
-                            coordinator.isExistingAccount = false
-                            signInInitialMode = .createAccount
-                            showSignInSheet = true
-                        }
+                    } label: {
+                        Text("Create Account".localized)
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .overlay(
+                                Capsule().stroke(Color.Theme.primaryBlue, lineWidth: 2)
+                            )
+                            .foregroundStyle(Color.Theme.primaryBlue)
                     }
-                } label: {
-                    Text("Create Account".localized)
-                        .font(.system(.body, design: .rounded))
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .overlay(
-                            Capsule().stroke(Color.Theme.primaryBlue, lineWidth: 2)
-                        )
-                        .foregroundStyle(Color.Theme.primaryBlue)
+                    if coordinator.userType == .captain {
+                        Text("Unlocks exclusive Founders Scout avatar".localized)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
                 }
                 
                 if coordinator.userType != .scout {
@@ -125,7 +161,7 @@ struct OnboardingAccountCreationView: View {
                             }
                         }
                     } label: {
-                        Text("Continue as Guest".localized)
+                        Text("Continue as Guest (no sync)".localized)
                             .font(.system(.body, design: .rounded))
                             .padding(.vertical, 16)
                             .foregroundStyle(Color.Theme.softBrown)

@@ -255,10 +255,16 @@
 "Premium benefits coming soon" = "Premium benefits coming soon";
 "Skip" = "Skip";
 "Account" = "Account";
-"Sign in to sync across devices, use Friends & Family, and backup your data." = "Sign in to sync across devices, use Friends & Family, and backup your data.";
+"Create your RoadTrip Royale identity" = "Create your RoadTrip Royale identity";
+"Exclusive Founders Scout avatar (male or female)" = "Exclusive Founders Scout avatar (male or female)";
+"Early members only" = "Early members only";
+"• Compete or Collaborate with Friends & Family" = "• Compete or Collaborate with Friends & Family";
+"• Your trips saved & synced across devices" = "• Your trips saved & synced across devices";
+"• Early access to future limited releases" = "• Early access to future limited releases";
 "Sign In" = "Sign In";
 "Create Account" = "Create Account";
-"Continue as Guest" = "Continue as Guest";
+"Unlocks exclusive Founders Scout avatar" = "Unlocks exclusive Founders Scout avatar";
+"Continue as Guest (no sync)" = "Continue as Guest (no sync)";
 "How It Works" = "How It Works";
 "Spot plates" = "Spot plates";
 "Look for license plates as you travel" = "Look for license plates as you travel";
@@ -275,7 +281,7 @@
 "Camera permission is required to scan QR codes" = "Camera permission is required to scan QR codes";
 "Requires network connection" = "Requires network connection";
 "We have found the following user, %@-%@, on this device." = "We have found the following user, %@-%@, on this device.";
-"Sign In as %@" = "Sign In as %@";
+"Continue as %@" = "Continue as %@";
 "Sign In Using Different Account" = "Sign In Using Different Account";
 
 // Settings - ContentView Settings Navigation
