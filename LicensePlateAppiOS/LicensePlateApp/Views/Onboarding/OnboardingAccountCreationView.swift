@@ -31,6 +31,10 @@ struct OnboardingAccountCreationView: View {
                         .padding(.horizontal)
                     
                     VStack(alignment: .leading, spacing: 12) {
+                         Text("• Compete or Collaborate with Friends & Family".localized)
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                            .padding(.horizontal)
                         HStack(alignment: .top, spacing: 6) {
                             Text("•")
                                 .font(.system(.body, design: .rounded))
@@ -45,10 +49,6 @@ struct OnboardingAccountCreationView: View {
                             }
                         }
                         .padding(.horizontal)
-                        Text("• Compete or Collaborate with Friends & Family".localized)
-                            .font(.system(.body, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
-                            .padding(.horizontal)
                         Text("• Your trips saved & synced across devices".localized)
                             .font(.system(.body, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
