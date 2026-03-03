@@ -224,7 +224,7 @@
 "Voice input" = "Entrada de voz";
 "Say state names to log plates quickly" = "Di nombres de estados para registrar placas rápidamente";
 "Friends & Family" = "Amigos y Familia";
-"Compete or collaborate with your crew" = "Compite o colabora con tu equipo";
+"Compete or collaborate with your Friends & Family" = "Compite o colabora con tus Amigos y Familia";
 "Trip tracking" = "Seguimiento de viajes";
 "Track every road trip on the map" = "Rastrea cada viaje en el mapa";
 "Continue" = "Continuar";
@@ -245,7 +245,7 @@
 "Share Code" = "Código de Compartir";
 "Enter share code" = "Ingresa el código de compartir";
 "Create a Family" = "Crear una Familia";
-"As a Captain, you can create a family group to add Scouts and track trips together." = "Como Capitán, puedes crear un grupo familiar para agregar Exploradores y rastrear viajes juntos.";
+"Create a family to add Scouts and track your trips together." = "Crea una familia para agregar Exploradores y rastrear tus viajes juntos.";
 "Family Name" = "Nombre de Familia";
 "Enter family name" = "Ingresa el nombre de la familia";
 "Create Family" = "Crear Familia";

@@ -21,7 +21,7 @@ struct OnboardingFeaturesView: View {
                     
                     VStack(spacing: 16) {
                         FeatureRow(icon: "mic.fill", title: "Voice input".localized, description: "Say state names to log plates quickly".localized)
-                        FeatureRow(icon: "person.2.fill", title: "Friends & Family".localized, description: "Compete or collaborate with your crew".localized)
+                        FeatureRow(icon: "person.2.fill", title: "Friends & Family".localized, description: "Compete or collaborate with your Friends & Family".localized)
                         FeatureRow(icon: "map.fill", title: "Trip tracking".localized, description: "Track every road trip on the map".localized)
                     }
                     .padding(.horizontal)

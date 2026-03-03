@@ -30,7 +30,7 @@ struct OnboardingCreateFamilyView: View {
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     
-                    Text("As a Captain, you can create a family group to add Scouts and track trips together.".localized)
+                    Text("Create a family to add Scouts and track your trips together.".localized)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .multilineTextAlignment(.center)
