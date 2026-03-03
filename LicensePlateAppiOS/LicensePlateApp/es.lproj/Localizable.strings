@@ -267,7 +267,14 @@
 "Sign In" = "Iniciar Sesión";
 "Create Account" = "Crear Cuenta";
 "Unlocks exclusive Founders Scout avatar" = "Desbloquea avatar exclusivo Founders Scout";
+"Continue as Guest" = "Continuar como Invitado";
 "Continue as Guest (no sync)" = "Continuar como Invitado (sin sincronización)";
+"Play without an account?" = "¿Jugar sin cuenta?";
+"You can continue solo, but you'll miss:" = "Puedes continuar solo, pero te perderás:";
+"• The exclusive Founders Scout avatar" = "• El avatar exclusivo Founders Scout";
+"• Competing with Friends & Family" = "• Competir con Amigos y Familia";
+"• Trip backup & sync" = "• Respaldo y sincronización de viajes";
+"You can always create an account later." = "Siempre puedes crear una cuenta más tarde.";
 "How It Works" = "Cómo Funciona";
 "Spot plates" = "Encuentra placas";
 "Look for license plates as you travel" = "Busca placas mientras viajas";

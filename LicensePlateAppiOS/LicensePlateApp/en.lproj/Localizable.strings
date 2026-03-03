@@ -267,7 +267,14 @@
 "Sign In" = "Sign In";
 "Create Account" = "Create Account";
 "Unlocks exclusive Founders Scout avatar" = "Unlocks exclusive Founders Scout avatar";
+"Continue as Guest" = "Continue as Guest";
 "Continue as Guest (no sync)" = "Continue as Guest (no sync)";
+"Play without an account?" = "Play without an account?";
+"You can continue solo, but you'll miss:" = "You can continue solo, but you'll miss:";
+"• The exclusive Founders Scout avatar" = "• The exclusive Founders Scout avatar";
+"• Competing with Friends & Family" = "• Competing with Friends & Family";
+"• Trip backup & sync" = "• Trip backup & sync";
+"You can always create an account later." = "You can always create an account later.";
 "How It Works" = "How It Works";
 "Spot plates" = "Spot plates";
 "Look for license plates as you travel" = "Look for license plates as you travel";

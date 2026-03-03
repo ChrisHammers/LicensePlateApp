@@ -1097,103 +1097,27 @@ private struct VoiceConfirmationDialog: View {
     @Binding var skipConfirmation: Bool
     
     var body: some View {
-        ZStack {
-            // Semi-transparent background
-            Color.black.opacity(0.4)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    onCancel()
-                }
-            
-            // Dialog box
-            VStack(spacing: 0) {
-                VStack(spacing: 20) {
-                    Text("Hey, we heard the following %@:".localized(region.country == .canada ? "province".localized : "state".localized))
-                        .font(.system(.title3, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-                        .multilineTextAlignment(.center)
-                    
-                    Text(region.name)
-                        .font(.system(.largeTitle, design: .rounded))
-                        .fontWeight(.bold)
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                        .multilineTextAlignment(.center)
-                        .padding(.vertical, 4)
-                    
-                    Text("Add this to the list of license plates found?".localized)
-                        .font(.system(.body, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.top, 32)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 24)
+        ConfirmationDialogView(
+            title: "Hey, we heard the following %@:".localized(region.country == .canada ? "province".localized : "state".localized),
+            content: {
+                Text(region.name)
+                    .font(.system(.largeTitle, design: .rounded))
+                    .fontWeight(.bold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .multilineTextAlignment(.center)
+                    .padding(.vertical, 4)
                 
-                Divider()
-                    .background(Color.Theme.softBrown.opacity(0.2))
-                
-                VStack(spacing: 16) {
-                    // Don't show again checkbox
-                    Button {
-                        skipConfirmation.toggle()
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: skipConfirmation ? "checkmark.square.fill" : "square")
-                                .font(.system(size: 20))
-                                .foregroundStyle(skipConfirmation ? Color.Theme.primaryBlue : Color.Theme.softBrown)
-                            
-                            Text("Don't show this again".localized)
-                                .font(.system(.body, design: .rounded))
-                                .foregroundStyle(Color.Theme.primaryBlue)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.top, 16)
-                    
-                    // Action buttons
-                    HStack(spacing: 16) {
-                        Button {
-                            onCancel()
-                        } label: {
-                            Text("Cancel".localized)
-                                .font(.system(.headline, design: .rounded))
-                                .fontWeight(.semibold)
-                                .foregroundStyle(Color.Theme.primaryBlue)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .fill(Color.Theme.cardBackground)
-                                )
-                        }
-                        
-                        Button {
-                            onAdd()
-                        } label: {
-                            Text("Add".localized)
-                                .font(.system(.headline, design: .rounded))
-                                .fontWeight(.semibold)
-                                .foregroundStyle(Color.white)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .fill(Color.Theme.primaryBlue)
-                                )
-                        }
-                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 24)
-            }
-            .frame(maxWidth: 320)
-            .background(
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .fill(Color.Theme.cardBackground)
-                    .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
-            )
-        }
-        .accessibleTransition(.opacity.combined(with: .scale(scale: 0.9)))
+                Text("Add this to the list of license plates found?".localized)
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .multilineTextAlignment(.center)
+            },
+            primaryButtonTitle: "Add".localized,
+            primaryAction: onAdd,
+            secondaryButtonTitle: "Cancel".localized,
+            secondaryAction: onCancel,
+            optionalCheckbox: (title: "Don't show this again".localized, isChecked: $skipConfirmation)
+        )
     }
 }
 

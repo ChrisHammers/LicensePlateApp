@@ -14,6 +14,7 @@ struct OnboardingAccountCreationView: View {
     
     @State private var showSignInSheet = false
     @State private var signInInitialMode: SignInInitialMode = .signIn
+    @State private var showGuestConfirmation = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -179,16 +180,7 @@ struct OnboardingAccountCreationView: View {
                 
                 if coordinator.userType != .scout {
                     Button {
-                        Task {
-                            // Always sign out and create fresh anonymous - handles both restored
-                            // non-anonymous users AND anonymous users with old Firestore data
-                            try? await authService.signOutAndCreateAnonymous()
-                            await MainActor.run {
-                                coordinator.isExistingAccount = false
-                                coordinator.didLogIn = false
-                                onNext()
-                            }
-                        }
+                        showGuestConfirmation = true
                     } label: {
                         Text("Continue as Guest (no sync)".localized)
                             .font(.system(.body, design: .rounded))
@@ -201,6 +193,53 @@ struct OnboardingAccountCreationView: View {
             .padding(.top, 16)
             .padding(.bottom, 32)
         }
+        .overlay {
+            if showGuestConfirmation {
+                ConfirmationDialogView(
+                    title: "Play without an account?".localized,
+                    content: {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("You can continue solo, but you'll miss:".localized)
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                                .multilineTextAlignment(.leading)
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("• The exclusive Founders Scout avatar".localized)
+                                    .font(.system(.subheadline, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown)
+                                Text("• Competing with Friends & Family".localized)
+                                    .font(.system(.subheadline, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown)
+                                Text("• Trip backup & sync".localized)
+                                    .font(.system(.subheadline, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown)
+                                Text("• Early access to future limited releases".localized)
+                                    .font(.system(.subheadline, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown)
+                            }
+                            Text("You can always create an account later.".localized)
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                                .multilineTextAlignment(.leading)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    },
+                    primaryButtonTitle: "Create Account".localized,
+                    primaryAction: {
+                        showGuestConfirmation = false
+                        coordinator.isExistingAccount = false
+                        signInInitialMode = .createAccount
+                        showSignInSheet = true
+                    },
+                    secondaryButtonTitle: "Continue as Guest".localized,
+                    secondaryAction: {
+                        showGuestConfirmation = false
+                        continueAsGuest()
+                    },
+                    onTapOutside: { showGuestConfirmation = false }
+                )
+            }
+        }
         .sheet(isPresented: $showSignInSheet) {
             SignInView(
                 authService: authService,
@@ -212,6 +251,17 @@ struct OnboardingAccountCreationView: View {
                     onNext()
                 }
             )
+        }
+    }
+    
+    private func continueAsGuest() {
+        Task {
+            try? await authService.signOutAndCreateAnonymous()
+            await MainActor.run {
+                coordinator.isExistingAccount = false
+                coordinator.didLogIn = false
+                onNext()
+            }
         }
     }
 }
