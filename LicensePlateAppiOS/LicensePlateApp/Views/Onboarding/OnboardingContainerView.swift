@@ -109,8 +109,8 @@ struct OnboardingContainerView: View {
                 }
             
             
-            // Back button overlay (visible on all screens except Welcome)
-            if !coordinator.isFirstStep {
+            // Back button overlay (visible on all screens except Welcome and Get Started)
+            if !coordinator.isFirstStep && !coordinator.isLastStep {
                 Button {
                     coordinator.previousStep()
                 } label: {
