@@ -123,7 +123,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct LicensePlateAppApp: App {
   
   @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
-  
+    // Use versioned schema for future migration support
     var sharedModelContainer: ModelContainer = {
         let schema = Schema(versionedSchema: CurrentSchema.self)
         let modelConfiguration = ModelConfiguration(
@@ -132,6 +132,7 @@ struct LicensePlateAppApp: App {
         )
 
         do {
+            // Create ModelContainer with versioned schema and migration plan
             return try ModelContainer(
                 for: schema,
                 migrationPlan: AppMigrationPlan.self,
