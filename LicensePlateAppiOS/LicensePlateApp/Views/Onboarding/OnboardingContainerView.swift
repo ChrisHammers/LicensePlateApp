@@ -10,9 +10,13 @@ import SwiftData
 
 struct OnboardingContainerView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject var authService: FirebaseAuthService
     @ObservedObject var coordinator: OnboardingCoordinator
     let appCoordinator: AppCoordinator
+    
+    /// Custom background for all onboarding screens.
+    private var onboardingBackgroundStyle: AppBackgroundStyle { .paths }
     
     private var stepTransition: AnyTransition {
         if coordinator.isGoingForward {
@@ -36,8 +40,19 @@ struct OnboardingContainerView: View {
     
     var body: some View {
         ZStack(alignment: .topLeading) {
-            Color.Theme.background
-                .ignoresSafeArea()
+            Group {
+                if let imageName = AppPreferences.backgroundImageName(
+                    style: onboardingBackgroundStyle,
+                    colorScheme: colorScheme
+                ) {
+                    Image(imageName)
+                        .resizable()
+                        .ignoresSafeArea()
+                } else {
+                    Color.Theme.background
+                        .ignoresSafeArea()
+                }
+            }
             
             VStack(spacing: 0) {
                 // Content area
