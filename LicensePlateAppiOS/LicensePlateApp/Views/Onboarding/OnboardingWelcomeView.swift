@@ -18,12 +18,14 @@ struct OnboardingWelcomeView: View {
                 Image(systemName: "car.fill")
                     .font(.system(size: 80))
                     .foregroundStyle(Color.Theme.primaryBlue)
+                    .accessibleDecorative()
                 
                 VStack(spacing: 12) {
                     Text("RoadTrip Royale".localized)
                         .font(.system(.largeTitle, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
+                        .accessibleHeader("RoadTrip Royale".localized)
                     
                     Text("Spot license plates, conquer the map, and rule the open road!".localized)
                         .font(.system(.body, design: .rounded))
@@ -49,6 +51,7 @@ struct OnboardingWelcomeView: View {
                     )
                     .foregroundStyle(.white)
             }
+            .accessibleButton(label: "Get Started".localized, hint: "Continues to next screen".localized)
             .padding(.horizontal, 24)
             .padding(.top, 16)
             .padding(.bottom, 32)

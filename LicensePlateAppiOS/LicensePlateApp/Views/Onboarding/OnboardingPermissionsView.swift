@@ -29,6 +29,7 @@ struct OnboardingPermissionsView: View {
                         .font(.system(.largeTitle, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
+                        .accessibleHeader("Permissions".localized)
                     
                     Text("These permissions help the app work better. You can enable them later in Settings.".localized)
                         .font(.system(.body, design: .rounded))
@@ -102,6 +103,7 @@ struct OnboardingPermissionsView: View {
                     )
                     .foregroundStyle(.white)
             }
+            .accessibleButton(label: "Continue".localized, hint: "Continues to next screen".localized)
             .padding(.horizontal, 24)
             .padding(.top, 16)
             .padding(.bottom, 32)
@@ -405,6 +407,7 @@ private struct OnboardingPermissionRow: View {
                     .font(.system(size: 20))
                     .foregroundStyle(Color.Theme.primaryBlue)
                     .frame(width: 24)
+                    .accessibleDecorative()
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
@@ -426,11 +429,16 @@ private struct OnboardingPermissionRow: View {
                     Image(systemName: "arrow.up.right.square")
                         .font(.system(size: 12))
                         .foregroundStyle(Color.Theme.primaryBlue)
+                        .accessibleDecorative()
                 }
             }
             .padding()
             .background(Color.Theme.cardBackground, in: RoundedRectangle(cornerRadius: 16))
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(status)")
+        .accessibilityHint("Double tap to open Settings or request permission".localized)
+        .accessibilityAddTraits(.isButton)
     }
 }

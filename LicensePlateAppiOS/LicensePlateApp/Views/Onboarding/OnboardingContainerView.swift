@@ -101,6 +101,7 @@ struct OnboardingContainerView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
+                            .accessibleDecorative()
                         Text("Back".localized)
                     }
                     .font(.system(.body, design: .rounded))
@@ -108,6 +109,7 @@ struct OnboardingContainerView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
                 }
+                .accessibleButton(label: "Back".localized, hint: "Goes to previous screen".localized)
                 .padding(.top, 8)
                 .padding(.leading, 8)
             }

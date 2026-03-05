@@ -10,12 +10,32 @@ import SwiftUI
 // MARK: - Accessibility Extensions
 
 extension View {
-    /// Makes a view accessible as a button with label and optional hint
+    /// Makes a view accessible as a button with label and optional hint (hint omitted when nil or empty)
     func accessibleButton(label: String, hint: String? = nil) -> some View {
+        Group {
+            if let h = hint, !h.isEmpty {
+                self
+                    .accessibilityLabel(label)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint(h)
+            } else {
+                self
+                    .accessibilityLabel(label)
+                    .accessibilityAddTraits(.isButton)
+            }
+        }
+    }
+    
+    /// Makes a view accessible as a screen or section header for VoiceOver Headers rotor
+    func accessibleHeader(_ title: String) -> some View {
         self
-            .accessibilityLabel(label)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint(hint ?? "")
+            .accessibilityLabel(title)
+            .accessibilityAddTraits(.isHeader)
+    }
+    
+    /// Hides view from accessibility (for decorative content). Prefer this over raw accessibilityHidden for consistency.
+    func accessibleDecorative() -> some View {
+        self.accessibilityHidden(true)
     }
     
     /// Makes a toggle accessible with label and on/off state

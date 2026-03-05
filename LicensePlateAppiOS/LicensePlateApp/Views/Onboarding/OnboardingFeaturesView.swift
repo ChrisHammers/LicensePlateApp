@@ -18,6 +18,7 @@ struct OnboardingFeaturesView: View {
                         .font(.system(.largeTitle, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
+                        .accessibleHeader("Features".localized)
                     
                     VStack(spacing: 16) {
                         FeatureRow(icon: "mic.fill", title: "Voice input".localized, description: "Say state names to log plates quickly".localized)
@@ -44,6 +45,7 @@ struct OnboardingFeaturesView: View {
                     )
                     .foregroundStyle(.white)
             }
+            .accessibleButton(label: "Continue".localized, hint: "Continues to next screen".localized)
             .padding(.horizontal, 24)
             .padding(.top, 16)
             .padding(.bottom, 32)
@@ -63,6 +65,7 @@ private struct FeatureRow: View {
                 .foregroundStyle(Color.Theme.primaryBlue)
                 .frame(width: 44, height: 44)
                 .background(Color.Theme.primaryBlue.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
+                .accessibleDecorative()
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)

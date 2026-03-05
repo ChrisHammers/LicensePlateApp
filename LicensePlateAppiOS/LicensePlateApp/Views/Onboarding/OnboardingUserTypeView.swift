@@ -22,6 +22,7 @@ struct OnboardingUserTypeView: View {
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                         .multilineTextAlignment(.center)
+                        .accessibleHeader("Are you a Captain or Scout?".localized)
                     
                     VStack(spacing: 12) {
                         UserTypeButton(
@@ -62,6 +63,7 @@ struct OnboardingUserTypeView: View {
                     )
                     .foregroundStyle(.white)
             }
+            .accessibleButton(label: "Continue".localized, hint: "Continues to next screen".localized)
             .padding(.horizontal, 24)
             .padding(.top, 16)
             .padding(.bottom, 32)
@@ -92,6 +94,7 @@ private struct UserTypeButton: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(Color.Theme.primaryBlue)
+                        .accessibleDecorative()
                 }
             }
             .padding()
@@ -106,5 +109,9 @@ private struct UserTypeButton: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(title), \(subtitle)")
+        .accessibilityValue(isSelected ? "Selected".localized : "")
+        .accessibilityHint("Double tap to select".localized)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }

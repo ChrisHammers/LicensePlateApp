@@ -18,11 +18,13 @@ struct OnboardingGetStartedView: View {
                 Image(systemName: "car.fill")
                     .font(.system(size: 80))
                     .foregroundStyle(Color.Theme.primaryBlue)
+                    .accessibleDecorative()
                 
                 Text("You're All Set!".localized)
                     .font(.system(.largeTitle, design: .rounded))
                     .fontWeight(.bold)
                     .foregroundStyle(Color.Theme.primaryBlue)
+                    .accessibleHeader("You're All Set!".localized)
                 
                 Text("Start spotting license plates and conquering the map.".localized)
                     .font(.system(.body, design: .rounded))
@@ -47,6 +49,7 @@ struct OnboardingGetStartedView: View {
                     )
                     .foregroundStyle(.white)
             }
+            .accessibleButton(label: "Get Started".localized, hint: "Finishes onboarding and opens the app".localized)
             .padding(.horizontal, 24)
             .padding(.top, 16)
             .padding(.bottom, 32)

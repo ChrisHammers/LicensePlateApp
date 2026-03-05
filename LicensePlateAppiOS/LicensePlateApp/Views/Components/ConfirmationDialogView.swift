@@ -36,6 +36,7 @@ struct ConfirmationDialogView<Content: View>: View {
                         .foregroundStyle(Color.Theme.primaryBlue)
                         .fontWeight(.bold)
                         .multilineTextAlignment(.center)
+                        .accessibilityAddTraits(.isHeader)
                     
                     content()
                 }
@@ -55,6 +56,7 @@ struct ConfirmationDialogView<Content: View>: View {
                                 Image(systemName: checkbox.isChecked.wrappedValue ? "checkmark.square.fill" : "square")
                                     .font(.system(size: 20))
                                     .foregroundStyle(checkbox.isChecked.wrappedValue ? Color.Theme.primaryBlue : Color.Theme.softBrown)
+                                    .accessibilityHidden(true)
                                 
                                 Text(checkbox.title)
                                     .font(.system(.body, design: .rounded))
@@ -63,6 +65,10 @@ struct ConfirmationDialogView<Content: View>: View {
                         }
                         .buttonStyle(.plain)
                         .padding(.top, 16)
+                        .accessibilityLabel(checkbox.title)
+                        .accessibilityValue(checkbox.isChecked.wrappedValue ? "On".localized : "Off".localized)
+                        .accessibilityHint("Double tap to toggle".localized)
+                        .accessibilityAddTraits(.isButton)
                     }
                     
                     // Action buttons: secondary on left, primary on right
@@ -81,6 +87,9 @@ struct ConfirmationDialogView<Content: View>: View {
                                         .fill(Color.Theme.cardBackground)
                                 )
                         }
+                        .accessibilityLabel(secondaryButtonTitle)
+                        .accessibilityHint("Double tap to dismiss".localized)
+                        .accessibilityAddTraits(.isButton)
                         
                         Button {
                             primaryAction()
@@ -96,6 +105,9 @@ struct ConfirmationDialogView<Content: View>: View {
                                         .fill(Color.Theme.primaryBlue)
                                 )
                         }
+                        .accessibilityLabel(primaryButtonTitle)
+                        .accessibilityHint("Double tap to continue".localized)
+                        .accessibilityAddTraits(.isButton)
                     }
                 }
                 .padding(.horizontal, 24)

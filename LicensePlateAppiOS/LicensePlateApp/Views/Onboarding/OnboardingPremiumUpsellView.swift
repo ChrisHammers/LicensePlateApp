@@ -20,6 +20,7 @@ struct OnboardingPremiumUpsellView: View {
                         .font(.system(.largeTitle, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
+                        .accessibleHeader("Upgrade to Premium".localized)
                     
                     Text("Get more from RoadTrip Royale with premium features.".localized)
                         .font(.system(.body, design: .rounded))
@@ -56,6 +57,7 @@ struct OnboardingPremiumUpsellView: View {
                         )
                         .foregroundStyle(.white)
                 }
+                .accessibleButton(label: "Continue".localized, hint: "Continues to next screen".localized)
                 
                 Button {
                     onSkip()
@@ -66,6 +68,7 @@ struct OnboardingPremiumUpsellView: View {
                         .padding(.vertical, 16)
                         .foregroundStyle(Color.Theme.softBrown)
                 }
+                .accessibleButton(label: "Maybe Later".localized, hint: "Skips premium upgrade".localized)
             }
             .padding(.horizontal, 24)
             .padding(.top, 16)

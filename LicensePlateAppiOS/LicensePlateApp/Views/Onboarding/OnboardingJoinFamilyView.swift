@@ -31,6 +31,7 @@ struct OnboardingJoinFamilyView: View {
                         .font(.system(.largeTitle, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
+                        .accessibleHeader("Join Family".localized)
                     
                     Text((coordinator.userType == .captain ? "Captains can join an existing family. Enter the share code from your family's Captain." : "Scouts need to join a family. Enter the share code from your Captain.").localized)
                         .font(.system(.body, design: .rounded))
@@ -47,6 +48,7 @@ struct OnboardingJoinFamilyView: View {
                             .textFieldStyle(.roundedBorder)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                            .accessibleTextField(label: "Share Code".localized, hint: "Enter share code".localized, value: shareCode)
                             .onChange(of: scannedCode) { _, newValue in
                                 if let code = newValue {
                                     shareCode = extractCode(from: code)
@@ -62,6 +64,7 @@ struct OnboardingJoinFamilyView: View {
                     } label: {
                         HStack {
                             Image(systemName: "qrcode.viewfinder")
+                                .accessibleDecorative()
                             Text("Scan QR Code".localized)
                         }
                         .font(.system(.body, design: .rounded))
@@ -74,6 +77,7 @@ struct OnboardingJoinFamilyView: View {
                                 .fill(Color.Theme.cardBackground)
                         )
                     }
+                    .accessibleButton(label: "Scan QR Code".localized, hint: "Opens camera to scan QR code".localized)
                     
                     if let error = errorMessage {
                         Text(error)
@@ -100,6 +104,7 @@ struct OnboardingJoinFamilyView: View {
                         )
                         .foregroundStyle(.white)
                 }
+                .accessibleButton(label: "Continue".localized, hint: "Continues to next screen".localized)
                 .disabled(shareCode.isEmpty || isJoining || !authService.isOnline)
                 .opacity((shareCode.isEmpty || isJoining || !authService.isOnline) ? 0.6 : 1)
                 
@@ -111,6 +116,7 @@ struct OnboardingJoinFamilyView: View {
                             .font(.system(.body, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
                     }
+                    .accessibleButton(label: "Skip".localized, hint: "Skips joining a family".localized)
                 }
             }
             .padding(.horizontal, 24)

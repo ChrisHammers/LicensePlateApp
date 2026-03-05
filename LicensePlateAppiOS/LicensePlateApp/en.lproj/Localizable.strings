@@ -294,6 +294,29 @@
 "Continue as %@" = "Continue as %@";
 "Sign In Using Different Account" = "Sign In Using Different Account";
 
+// Accessibility - Onboarding and dialogs
+"Continues to next screen" = "Continues to next screen";
+"Goes to previous screen" = "Goes to previous screen";
+"Double tap to toggle" = "Double tap to toggle";
+"Double tap to dismiss" = "Double tap to dismiss";
+"Double tap to continue" = "Double tap to continue";
+"Opens Terms of Service" = "Opens Terms of Service";
+"Opens Privacy Policy" = "Opens Privacy Policy";
+"Double tap to select" = "Double tap to select";
+"Opens sign in" = "Opens sign in";
+"Opens create account" = "Opens create account";
+"Continues as guest without syncing" = "Continues as guest without syncing";
+"Opens camera to scan QR code" = "Opens camera to scan QR code";
+"Skips joining a family" = "Skips joining a family";
+"Creates your family and continues" = "Creates your family and continues";
+"Opens join family screen" = "Opens join family screen";
+"Skips family setup" = "Skips family setup";
+"Skips premium upgrade" = "Skips premium upgrade";
+"Double tap to open Settings or request permission" = "Double tap to open Settings or request permission";
+"Finishes onboarding and opens the app" = "Finishes onboarding and opens the app";
+"On" = "On";
+"Off" = "Off";
+
 // Settings - ContentView Settings Navigation
 "Manage location, microphone, notifications, and other permissions" = "Manage location, microphone, notifications, and other permissions";
 "Set default countries, tracking, and voice settings for new trips" = "Set default countries, tracking, and voice settings for new trips";

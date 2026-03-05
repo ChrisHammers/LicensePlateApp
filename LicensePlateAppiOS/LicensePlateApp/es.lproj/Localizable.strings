@@ -294,6 +294,29 @@
 "Continue as %@" = "Continuar como %@";
 "Sign In Using Different Account" = "Iniciar sesión con otra cuenta";
 
+// Accessibility - Onboarding and dialogs
+"Continues to next screen" = "Continúa a la siguiente pantalla";
+"Goes to previous screen" = "Regresa a la pantalla anterior";
+"Double tap to toggle" = "Doble toque para alternar";
+"Double tap to dismiss" = "Doble toque para cerrar";
+"Double tap to continue" = "Doble toque para continuar";
+"Opens Terms of Service" = "Abre los Términos de Servicio";
+"Opens Privacy Policy" = "Abre la Política de Privacidad";
+"Double tap to select" = "Doble toque para seleccionar";
+"Opens sign in" = "Abre inicio de sesión";
+"Opens create account" = "Abre crear cuenta";
+"Continues as guest without syncing" = "Continúa como invitado sin sincronizar";
+"Opens camera to scan QR code" = "Abre la cámara para escanear código QR";
+"Skips joining a family" = "Omite unirse a una familia";
+"Creates your family and continues" = "Crea tu familia y continúa";
+"Opens join family screen" = "Abre la pantalla de unirse a familia";
+"Skips family setup" = "Omite la configuración familiar";
+"Skips premium upgrade" = "Omite la actualización premium";
+"Double tap to open Settings or request permission" = "Doble toque para abrir Ajustes o solicitar permiso";
+"Finishes onboarding and opens the app" = "Finaliza la incorporación y abre la aplicación";
+"On" = "Activado";
+"Off" = "Desactivado";
+
 // Settings - ContentView Settings Navigation
 "Manage location, microphone, notifications, and other permissions" = "Administrar ubicación, micrófono, notificaciones y otros permisos";
 "Set default countries, tracking, and voice settings for new trips" = "Establecer países predeterminados, seguimiento y configuración de voz para nuevos viajes";

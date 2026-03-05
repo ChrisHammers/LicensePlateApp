@@ -29,6 +29,7 @@ struct OnboardingCreateFamilyView: View {
                         .font(.system(.largeTitle, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
+                        .accessibleHeader("Create a Family".localized)
                     
                     Text("Create a family to add Scouts and track your trips together.".localized)
                         .font(.system(.body, design: .rounded))
@@ -45,6 +46,7 @@ struct OnboardingCreateFamilyView: View {
                             .textFieldStyle(.roundedBorder)
                             .textInputAutocapitalization(.words)
                             .disabled(isCreating)
+                            .accessibleTextField(label: "Family Name".localized, hint: "Enter family name".localized, value: familyName)
                     }
                     .padding()
                     .background(Color.Theme.cardBackground, in: RoundedRectangle(cornerRadius: 16))
@@ -75,6 +77,7 @@ struct OnboardingCreateFamilyView: View {
                         )
                         .foregroundStyle(.white)
                 }
+                .accessibleButton(label: "Create Family".localized, hint: "Creates your family and continues".localized)
                 .disabled(familyName.isEmpty || isCreating)
                 .opacity((familyName.isEmpty || isCreating) ? 0.6 : 1)
                 
@@ -91,6 +94,7 @@ struct OnboardingCreateFamilyView: View {
                         )
                         .foregroundStyle(Color.Theme.primaryBlue)
                 }
+                .accessibleButton(label: "Join a Family".localized, hint: "Opens join family screen".localized)
                 
                 Button {
                     onNext()
@@ -101,6 +105,7 @@ struct OnboardingCreateFamilyView: View {
                         .padding(.vertical, 16)
                         .foregroundStyle(Color.Theme.softBrown)
                 }
+                .accessibleButton(label: "Maybe Later".localized, hint: "Skips family setup".localized)
             }
             .padding(.horizontal, 24)
             .padding(.top, 16)

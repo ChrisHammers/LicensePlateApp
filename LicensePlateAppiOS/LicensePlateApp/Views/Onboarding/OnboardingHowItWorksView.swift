@@ -18,6 +18,7 @@ struct OnboardingHowItWorksView: View {
                         .font(.system(.largeTitle, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
+                        .accessibleHeader("How It Works".localized)
                     
                     VStack(alignment: .leading, spacing: 24) {
                         HowItWorksRow(
@@ -56,6 +57,7 @@ struct OnboardingHowItWorksView: View {
                     )
                     .foregroundStyle(.white)
             }
+            .accessibleButton(label: "Continue".localized, hint: "Continues to next screen".localized)
             .padding(.horizontal, 24)
             .padding(.top, 16)
             .padding(.bottom, 32)

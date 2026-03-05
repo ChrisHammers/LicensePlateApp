@@ -20,11 +20,13 @@ struct OnboardingDisclaimerView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 56))
                         .foregroundStyle(Color.Theme.accentYellow)
+                        .accessibleDecorative()
                     
                     Text("Important Safety Notice".localized)
                         .font(.system(.title, design: .rounded))
                         .fontWeight(.bold)
                         .foregroundStyle(Color.Theme.primaryBlue)
+                        .accessibleHeader("Important Safety Notice".localized)
                     
                     VStack(alignment: .leading, spacing: 16) {
                         Text("Do not use this app while driving.".localized)
@@ -45,6 +47,7 @@ struct OnboardingDisclaimerView: View {
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                             .underline()
+                            .accessibleButton(label: "Terms of Service".localized, hint: "Opens Terms of Service".localized)
                             Text(" and ".localized)
                             Button("Privacy Policy".localized) {
                                 showPrivacy = true
@@ -53,6 +56,7 @@ struct OnboardingDisclaimerView: View {
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                             .underline()
+                            .accessibleButton(label: "Privacy Policy".localized, hint: "Opens Privacy Policy".localized)
                             Text(".")
                         }
                         .font(.system(.caption, design: .rounded))
@@ -69,6 +73,7 @@ struct OnboardingDisclaimerView: View {
                             Image(systemName: hasAgreedToSafeDriving ? "checkmark.square.fill" : "square")
                                 .font(.system(size: 24))
                                 .foregroundStyle(hasAgreedToSafeDriving ? Color.Theme.primaryBlue : Color.Theme.softBrown)
+                                .accessibleDecorative()
                             Text("I agree to the safe driving mandate, Terms of Service and Privacy Policy".localized)
                                 .font(.system(.body, design: .rounded))
                                 .foregroundStyle(Color.Theme.primaryBlue)
@@ -80,6 +85,7 @@ struct OnboardingDisclaimerView: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.horizontal)
+                    .accessibleButton(label: "I agree to the safe driving mandate, Terms of Service and Privacy Policy".localized, hint: "Double tap to toggle".localized)
                 }
                 .padding(.vertical, 48)
                 .padding(.bottom, 24)
@@ -99,6 +105,7 @@ struct OnboardingDisclaimerView: View {
                     )
                     .foregroundStyle(.white)
             }
+            .accessibleButton(label: "Continue".localized, hint: "Continues to next screen".localized)
             .disabled(!hasAgreedToSafeDriving)
             .opacity(hasAgreedToSafeDriving ? 1 : 0.6)
             .padding(.horizontal, 24)

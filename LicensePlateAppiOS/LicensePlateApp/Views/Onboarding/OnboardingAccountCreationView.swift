@@ -25,6 +25,7 @@ struct OnboardingAccountCreationView: View {
                             .font(.system(.largeTitle, design: .rounded))
                             .fontWeight(.bold)
                             .foregroundStyle(Color.Theme.primaryBlue)
+                            .accessibleHeader("Account".localized)
                         
                         Text("Join your family's journey".localized)
                             .font(.system(.body, design: .rounded))
@@ -52,6 +53,7 @@ struct OnboardingAccountCreationView: View {
                             .font(.system(.largeTitle, design: .rounded))
                             .fontWeight(.bold)
                             .foregroundStyle(Color.Theme.primaryBlue)
+                            .accessibleHeader("Account".localized)
                         
                         Text("Create your RoadTrip Royale identity".localized)
                             .font(.system(.body, design: .rounded))
@@ -119,6 +121,7 @@ struct OnboardingAccountCreationView: View {
                                 )
                                 .foregroundStyle(.white)
                         }
+                        .accessibleButton(label: String(format: "Continue as %@".localized, restored.userName), hint: "Continues to next screen".localized)
                     }
                 }
                 
@@ -146,6 +149,7 @@ struct OnboardingAccountCreationView: View {
                         )
                         .foregroundStyle(.white)
                 }
+                .accessibleButton(label: (authService.restoredUserInfo != nil ? "Sign In Using Different Account" : "Sign In").localized, hint: "Opens sign in".localized)
                 
                 VStack(spacing: 4) {
                     Button {
@@ -171,6 +175,7 @@ struct OnboardingAccountCreationView: View {
                             )
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
+                    .accessibleButton(label: "Create Account".localized, hint: "Opens create account".localized)
                     if coordinator.userType == .captain {
                         Text("Unlocks exclusive Founders Scout avatar".localized)
                             .font(.system(.caption, design: .rounded))
@@ -187,6 +192,7 @@ struct OnboardingAccountCreationView: View {
                             .padding(.vertical, 16)
                             .foregroundStyle(Color.Theme.softBrown)
                     }
+                    .accessibleButton(label: "Continue as Guest (no sync)".localized, hint: "Continues as guest without syncing".localized)
                 }
             }
             .padding(.horizontal, 24)
