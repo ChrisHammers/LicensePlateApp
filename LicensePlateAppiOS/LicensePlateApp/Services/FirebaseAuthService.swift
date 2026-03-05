@@ -94,6 +94,15 @@ class FirebaseAuthService: ObservableObject {
         networkMonitor.isConnected
     }
     
+    /// Returns info about a restored Firebase user (from Keychain) if they exist and are not anonymous.
+    /// Use this on onboarding to offer "Sign in as existing user" when a previous session was restored.
+    var restoredUserInfo: (userName: String, email: String)? {
+        guard let firebaseUser = auth.currentUser, !firebaseUser.isAnonymous else { return nil }
+        let userName = currentUser?.userName ?? firebaseUser.displayName ?? "User"
+        let email = firebaseUser.email ?? ""
+        return (userName, email)
+    }
+    
     // MARK: - Initialization
     
     /// Initialize authentication state (call on app startup)
@@ -329,7 +338,8 @@ class FirebaseAuthService: ObservableObject {
         userName: String,
         firstName: String? = nil,
         lastName: String? = nil,
-        phoneNumber: String? = nil
+        phoneNumber: String? = nil,
+        birthYear: Int? = nil
     ) async throws {
         isLoading = true
         defer { isLoading = false }
@@ -366,7 +376,11 @@ class FirebaseAuthService: ObservableObject {
                     currentUser.isUsernameManuallyChanged = true
                     
                     try modelContext.save()
-                    try await saveUserDataToFirestore(currentUser)
+                    var extraFields: [String: Any] = [:]
+                    if let birthYear = birthYear {
+                        extraFields["birthYear"] = birthYear
+                    }
+                    try await saveUserDataToFirestore(currentUser, extraFields: extraFields)
                     
                     isAuthenticated = true
                     
@@ -376,7 +390,7 @@ class FirebaseAuthService: ObservableObject {
                     // If linking fails (email already in use), create new account
                     try auth.signOut()
                     let result = try await auth.createUser(withEmail: email, password: password)
-                    await createNewUserFromFirebase(result.user, email: email, userName: userName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber)
+                    await createNewUserFromFirebase(result.user, email: email, userName: userName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber, birthYear: birthYear)
                     
                     // Update login tracking
                     await updateLoginTracking()
@@ -384,7 +398,7 @@ class FirebaseAuthService: ObservableObject {
             } else {
                 // Not anonymous, create new account
                 let result = try await auth.createUser(withEmail: email, password: password)
-                await createNewUserFromFirebase(result.user, email: email, userName: userName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber)
+                await createNewUserFromFirebase(result.user, email: email, userName: userName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber, birthYear: birthYear)
                 
                 // Update login tracking
                 await updateLoginTracking()
@@ -427,6 +441,37 @@ class FirebaseAuthService: ObservableObject {
         }
         
         isAuthenticated = false
+    }
+    
+    /// Resets the current local user to default guest values. Call when switching to a fresh guest experience.
+    /// Single place to clear local user profile data for reuse elsewhere (e.g., sign out and switch account).
+    func resetLocalUserToGuest() throws {
+        guard let user = currentUser, let modelContext = modelContext else { return }
+        
+        let deviceId = DeviceIdentifier.getDeviceIdentifier()
+        let newUsername = DeviceIdentifier.generateDefaultUsername(deviceId: deviceId)
+        user.userName = newUsername
+        user.firstName = nil
+        user.lastName = nil
+        user.email = nil
+        user.phoneNumber = nil
+        user.firebaseUID = nil
+        user.userImageURL = nil
+        user.isUsernameManuallyChanged = false
+        user.linkedPlatforms = []
+        user.lastDateLoggedIn = nil
+        user.lastLoginLocation = []
+        user.activeFamilyId = nil
+        user.lastUpdated = .now
+        
+        try modelContext.save()
+    }
+    
+    /// Sign out and create a fresh anonymous account. Use when user chooses "Continue as Guest" over a restored account.
+    func signOutAndCreateAnonymous() async throws {
+        try await signOut()
+        try resetLocalUserToGuest()
+        try await signInAnonymously()
     }
     
     // MARK: - OAuth Sign In
@@ -1130,7 +1175,7 @@ class FirebaseAuthService: ObservableObject {
             // Update login tracking
             await updateLoginTracking()
             
-            // Load from Firestore to get latest data
+            // Load from Firestore to get latest data (for both anonymous and non-anonymous)
             Task {
                 if let firestoreUser = try? await loadUserDataFromFirestore(userId: firebaseUID) {
                     // Merge Firestore data with local user
@@ -1144,7 +1189,6 @@ class FirebaseAuthService: ObservableObject {
                     existingUser.phoneNumber = firestoreUser.phoneNumber
                     existingUser.userImageURL = firestoreUser.userImageURL
                     existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
-                    // Friends & Family fields
                     existingUser.activeFamilyId = firestoreUser.activeFamilyId
                     existingUser.friendCount = firestoreUser.friendCount
                     existingUser.isRetiredGeneral = firestoreUser.isRetiredGeneral
@@ -1178,7 +1222,7 @@ class FirebaseAuthService: ObservableObject {
         }
     }
     
-    private func createNewUserFromFirebase(_ firebaseUser: User, email: String?, userName: String?, firstName: String?, lastName: String?, phoneNumber: String?) async {
+    private func createNewUserFromFirebase(_ firebaseUser: User, email: String?, userName: String?, firstName: String?, lastName: String?, phoneNumber: String?, birthYear: Int? = nil) async {
         guard let modelContext = modelContext else { return }
         
         let firebaseUID = firebaseUser.uid
@@ -1203,9 +1247,13 @@ class FirebaseAuthService: ObservableObject {
         currentUser = newUser
         isAuthenticated = true
         
-        // Save to Firestore
+        // Save to Firestore (birthYear stored in Firestore only, not SwiftData)
+        var extraFields: [String: Any] = [:]
+        if let birthYear = birthYear {
+            extraFields["birthYear"] = birthYear
+        }
         Task {
-            try? await saveUserDataToFirestore(newUser)
+            try? await saveUserDataToFirestore(newUser, extraFields: extraFields)
         }
     }
     
@@ -1245,7 +1293,7 @@ class FirebaseAuthService: ObservableObject {
         return appUserFromFirestoreData(data, id: userId)
     }
     
-    func saveUserDataToFirestore(_ user: AppUser) async throws {
+    func saveUserDataToFirestore(_ user: AppUser, extraFields: [String: Any] = [:]) async throws {
         guard isOnline else {
             user.needsSync = true
             try? modelContext?.save()
@@ -1258,7 +1306,10 @@ class FirebaseAuthService: ObservableObject {
         }
         
         let docRef = db.collection("users").document(firebaseUID)
-        let data = firestoreDataFromAppUser(user)
+        var data = firestoreDataFromAppUser(user)
+        for (key, value) in extraFields {
+            data[key] = value
+        }
         try await docRef.setData(data, merge: true)
         
         user.lastSyncedToFirebase = .now

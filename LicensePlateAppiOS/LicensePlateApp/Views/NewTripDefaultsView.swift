@@ -14,7 +14,7 @@ struct NewTripDefaultsView: View {
     @AppStorage("defaultIncludeUS") private var defaultIncludeUS = true
     @AppStorage("defaultIncludeCanada") private var defaultIncludeCanada = true
     @AppStorage("defaultIncludeMexico") private var defaultIncludeMexico = true
-    @AppStorage("defaultStartTripRightAway") private var defaultStartTripRightAway = false
+    @AppStorage("defaultStartTripRightAway") private var defaultStartTripRightAway = true
     @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
     @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
     @AppStorage("defaultSaveLocationWhenMarkingPlates") private var defaultSaveLocationWhenMarkingPlates = true

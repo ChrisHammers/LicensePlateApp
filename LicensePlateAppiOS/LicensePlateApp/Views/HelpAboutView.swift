@@ -17,7 +17,15 @@ struct HelpAboutView: View {
     @State private var showPrivacy = false
     
     private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "x.x"
+    }
+    
+    private var appBuild: String {
+        return Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?"
+    }
+    
+    private var appVersionAndBuild: String {
+        return "\(appVersion) (\(appBuild))"
     }
     
     var body: some View {
@@ -174,7 +182,7 @@ struct HelpAboutView: View {
                             
                             // App Version and Legal
                             VStack(spacing: 12) {
-                                Text("App Version %@".localized(appVersion))
+                                Text("RoadTrip Royale - App Version - %@".localized(appVersionAndBuild))
                                     .font(.system(.caption, design: .rounded))
                                     .foregroundStyle(Color.Theme.softBrown)
                                 

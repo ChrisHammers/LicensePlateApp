@@ -123,9 +123,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct LicensePlateAppApp: App {
   
   @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
-  
+    // Use versioned schema for future migration support
     var sharedModelContainer: ModelContainer = {
-        // Use versioned schema for future migration support
         let schema = Schema(versionedSchema: CurrentSchema.self)
         let modelConfiguration = ModelConfiguration(
             schema: schema,
@@ -153,7 +152,7 @@ struct LicensePlateAppApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootView()
                 .environmentObject(authService)
         }
         .modelContainer(sharedModelContainer)

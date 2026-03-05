@@ -58,6 +58,6 @@ enum AppMigrationPlan: SchemaMigrationPlan {
 // MARK: - Current Schema
 // This points to the latest schema version
 // When creating a new version, update this to point to the latest
-
+// birthYear is stored in Firestore only (not SwiftData) to avoid schema migration
 typealias CurrentSchema = SchemaVersion2
 

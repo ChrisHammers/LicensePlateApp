@@ -1,6 +1,13 @@
 import SwiftUI
 import SwiftData
 
+// MARK: - Sign In Initial Mode
+
+enum SignInInitialMode {
+    case signIn
+    case createAccount
+}
+
 // MARK: - Password Strength
 
 enum PasswordStrength {
@@ -30,7 +37,8 @@ struct SignInView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     
-    @State private var isSignInMode = true // true = sign in, false = create account
+    @State private var isSignInMode: Bool
+    @State private var birthYear: Int
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
@@ -43,6 +51,28 @@ struct SignInView: View {
     @State private var isLoading = false
     @State private var passwordMatchError: String? = nil
     @State private var passwordMatchTask: Task<Void, Never>? = nil
+    
+    var onAuthSuccess: (() -> Void)?
+    
+    init(authService: FirebaseAuthService, initialMode: SignInInitialMode = .signIn, initialBirthYear: Int? = nil, onAuthSuccess: (() -> Void)? = nil) {
+        self.authService = authService
+        let year = Calendar.current.component(.year, from: .now)
+        self._isSignInMode = State(initialValue: initialMode == .signIn)
+        self._birthYear = State(initialValue: initialBirthYear ?? year - 25)
+        self._email = State(initialValue: "")
+        self._password = State(initialValue: "")
+        self._confirmPassword = State(initialValue: "")
+        self._userName = State(initialValue: "")
+        self._firstName = State(initialValue: "")
+        self._lastName = State(initialValue: "")
+        self._phoneNumber = State(initialValue: "")
+        self._showError = State(initialValue: false)
+        self._errorMessage = State(initialValue: "")
+        self._isLoading = State(initialValue: false)
+        self._passwordMatchError = State(initialValue: nil)
+        self._passwordMatchTask = State(initialValue: nil)
+        self.onAuthSuccess = onAuthSuccess
+    }
     
     var body: some View {
         NavigationStack {
@@ -111,6 +141,22 @@ struct SignInView: View {
                                         .font(.system(.body, design: .rounded))
                                         .autocapitalization(.words)
                                         .textContentType(.familyName)
+                                }
+                                
+                                // Birth Year field
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Birth Year")
+                                        .font(.system(.body, design: .rounded))
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                    
+                                    Picker("Birth Year", selection: $birthYear) {
+                                        ForEach(((Calendar.current.component(.year, from: .now) - 100)...Calendar.current.component(.year, from: .now)), id: \.self) { year in
+                                            Text(String(year)).tag(year)
+                                        }
+                                    }
+                                    .pickerStyle(.wheel)
+                                    .frame(height: 120)
                                 }
                             }
                             
@@ -254,13 +300,14 @@ struct SignInView: View {
                                         password = ""
                                         confirmPassword = ""
                                         email = ""
-                                        // Autofill from current user
+                                        // Autofill from current user (birthYear stored in Firestore only, not available for autofill)
                                         if let currentUser = authService.currentUser {
                                             userName = currentUser.userName
                                             firstName = currentUser.firstName ?? ""
                                             lastName = currentUser.lastName ?? ""
                                             phoneNumber = currentUser.phoneNumber ?? ""
                                         }
+                                        birthYear = Calendar.current.component(.year, from: .now) - 25
                                     } else {
                                         // Switching to sign in - clear all fields
                                         password = ""
@@ -269,6 +316,7 @@ struct SignInView: View {
                                         firstName = ""
                                         lastName = ""
                                         phoneNumber = ""
+                                        birthYear = Calendar.current.component(.year, from: .now) - 25
                                     }
                                     isSignInMode.toggle()
                                 }
@@ -351,6 +399,7 @@ struct SignInView: View {
             .onChange(of: authService.isAuthenticated) { oldValue, newValue in
                 // Auto-dismiss when authentication succeeds
                 if newValue && oldValue == false {
+                    onAuthSuccess?()
                     dismiss()
                     authService.showSignInSheet = false
                 }
@@ -372,7 +421,8 @@ struct SignInView: View {
                            !email.isEmpty && 
                            !password.isEmpty && 
                            password == confirmPassword &&
-                           password.count >= 8
+                           password.count >= 8 &&
+                           birthYear > 0
             return basicValid
         }
     }
@@ -385,6 +435,7 @@ struct SignInView: View {
         firstName = ""
         lastName = ""
         phoneNumber = ""
+        birthYear = Calendar.current.component(.year, from: .now) - 25
         errorMessage = ""
     }
     
@@ -436,7 +487,8 @@ struct SignInView: View {
                     userName: userName,
                     firstName: firstName.isEmpty ? nil : firstName,
                     lastName: lastName.isEmpty ? nil : lastName,
-                    phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber
+                    phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber,
+                    birthYear: birthYear > 0 ? birthYear : nil
                 )
                 await MainActor.run {
                     isLoading = false

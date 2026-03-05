@@ -39,10 +39,11 @@ struct PrivacyPermissionsView: View {
                         VStack(spacing: 12) {
                             PermissionRow(
                                 title: "Location".localized,
+                                description: "Show your position on the map, where you found a plate and track your trip".localized,
                                 icon: "location.fill",
                                 status: locationPermissionStatus,
                                 statusColor: locationPermissionColor,
-                                onTap: openLocationSettings
+                                onTap: handleLocationTap
                             )
                             
                             SettingToggleRow(
@@ -81,30 +82,21 @@ struct PrivacyPermissionsView: View {
                         VStack(spacing: 12) {
                             PermissionRow(
                                 title: "Microphone".localized,
+                                description: "Voice input for logging plates".localized,
                                 icon: "mic.fill",
                                 status: microphonePermissionStatus,
                                 statusColor: microphonePermissionColor,
-                                onTap: openMicrophoneSettings
+                                onTap: handleMicrophoneTap
                             )
                             
                             PermissionRow(
                                 title: "Speech Recognizer".localized,
+                                description: "Understand spoken state names".localized,
                                 icon: "waveform",
                                 status: speechRecognitionPermissionStatus,
                                 statusColor: speechRecognitionPermissionColor,
-                                onTap: openSpeechRecognitionSettings
+                                onTap: handleSpeechRecognitionTap
                             )
-                            
-                            // Camera Permission (hidden for now)
-                            if false {
-                                PermissionRow(
-                                    title: "Camera".localized,
-                                    icon: "camera.fill",
-                                    status: cameraPermissionStatus,
-                                    statusColor: cameraPermissionColor,
-                                    onTap: openCameraSettings
-                                )
-                            }
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 16)
@@ -119,15 +111,41 @@ struct PrivacyPermissionsView: View {
                     }
                     .textCase(nil)
                     
+                    // Video Section
+                    Section {
+                        VStack(spacing: 12) {
+                            PermissionRow(
+                                title: "Camera".localized,
+                                description: "Scan QR codes for Family and Friends".localized,
+                                icon: "camera.fill",
+                                status: cameraPermissionStatus,
+                                statusColor: cameraPermissionColor,
+                                onTap: handleCameraTap
+                            )
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .background(Color.Theme.cardBackground)
+                        .cornerRadius(20)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                        .listRowBackground(Color.clear)
+                    } header: {
+                        Text("Video".localized)
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    .textCase(nil)
+                    
                     // Notifications Section
                     Section {
                         VStack(spacing: 12) {
                             PermissionRow(
                                 title: "Notifications".localized,
+                                description: "Get notified about plates found and more".localized,
                                 icon: "bell.fill",
                                 status: notificationPermissionStatus,
                                 statusColor: notificationPermissionColor,
-                                onTap: openNotificationSettings
+                                onTap: handleNotificationTap
                             )
                             
                             SettingToggleRow(
@@ -236,11 +254,11 @@ struct PrivacyPermissionsView: View {
         case .granted:
             return .green
         case .denied:
-            return .red
+            return Color.Theme.permissionOrangeDark
         case .undetermined:
-            return Color.Theme.permissionOrange
+            return Color.Theme.permissionOrangeDark
         @unknown default:
-            return Color.Theme.permissionOrange
+            return Color.Theme.permissionOrangeDark
         }
     }
     
@@ -262,11 +280,11 @@ struct PrivacyPermissionsView: View {
         case .authorized:
             return .green
         case .denied, .restricted:
-            return .red
+            return Color.Theme.permissionOrangeDark
         case .notDetermined:
-            return Color.Theme.permissionOrange
+            return Color.Theme.permissionOrangeDark
         @unknown default:
-            return Color.Theme.permissionOrange
+            return Color.Theme.permissionOrangeDark
         }
     }
     
@@ -288,11 +306,11 @@ struct PrivacyPermissionsView: View {
         case .authorized:
             return .green
         case .denied, .restricted:
-            return .red
+            return Color.Theme.permissionOrangeDark
         case .notDetermined:
-            return Color.Theme.permissionOrange
+            return Color.Theme.permissionOrangeDark
         @unknown default:
-            return Color.Theme.permissionOrange
+            return Color.Theme.permissionOrangeDark
         }
     }
     
@@ -314,11 +332,11 @@ struct PrivacyPermissionsView: View {
         case .authorized, .provisional, .ephemeral:
             return .green
         case .denied:
-            return .red
+            return Color.Theme.permissionOrangeDark
         case .notDetermined:
-            return Color.Theme.permissionOrange
+            return Color.Theme.permissionOrangeDark
         @unknown default:
-            return Color.Theme.permissionOrange
+            return Color.Theme.permissionOrangeDark
         }
     }
     
@@ -341,39 +359,122 @@ struct PrivacyPermissionsView: View {
         }
     }
     
-    private func openLocationSettings() {
-        if let url = URL(string: UIApplication.openSettingsURLString) {
-            UIApplication.shared.open(url)
+    private func handleLocationTap() {
+        switch locationManager.authorizationStatus {
+        case .authorizedAlways, .authorizedWhenInUse:
+            // Allowed or While App is Open — open Settings
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        case .notDetermined:
+            locationManager.requestAuthorization()
+        case .denied, .restricted:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        @unknown default:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
         }
     }
     
-    private func openMicrophoneSettings() {
-        if let url = URL(string: UIApplication.openSettingsURLString) {
-            UIApplication.shared.open(url)
+    private func handleMicrophoneTap() {
+        switch microphonePermission {
+        case .granted:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        case .undetermined:
+            AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                Task { @MainActor in
+                    microphonePermission = granted ? .granted : .denied
+                }
+            }
+        case .denied:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        @unknown default:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
         }
     }
     
-    private func openSpeechRecognitionSettings() {
-        if let url = URL(string: UIApplication.openSettingsURLString) {
-            UIApplication.shared.open(url)
+    private func handleSpeechRecognitionTap() {
+        switch speechRecognitionPermission {
+        case .authorized:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        case .notDetermined:
+            SFSpeechRecognizer.requestAuthorization { status in
+                Task { @MainActor in
+                    speechRecognitionPermission = status
+                }
+            }
+        case .denied, .restricted:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        @unknown default:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
         }
     }
     
-    private func openCameraSettings() {
-        if let url = URL(string: UIApplication.openSettingsURLString) {
-            UIApplication.shared.open(url)
+    private func handleCameraTap() {
+        switch cameraPermission {
+        case .authorized:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        case .notDetermined:
+            Task {
+                let granted = await AVCaptureDevice.requestAccess(for: .video)
+                await MainActor.run {
+                    cameraPermission = granted ? .authorized : .denied
+                }
+            }
+        case .denied, .restricted:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        @unknown default:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
         }
     }
     
-    private func openNotificationSettings() {
-        if let url = URL(string: UIApplication.openSettingsURLString) {
-            UIApplication.shared.open(url)
+    private func handleNotificationTap() {
+        switch notificationPermission {
+        case .authorized, .provisional, .ephemeral:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        case .notDetermined:
+            Task {
+                _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
+                await MainActor.run { checkPermissions() }
+            }
+        case .denied:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
+        @unknown default:
+            if let url = URL(string: UIApplication.openSettingsURLString) {
+                UIApplication.shared.open(url)
+            }
         }
     }
 }
 
 private struct PermissionRow: View {
     let title: String
+    var description: String? = nil
     let icon: String
     let status: String
     let statusColor: Color
@@ -387,11 +488,16 @@ private struct PermissionRow: View {
                     .foregroundStyle(Color.Theme.primaryBlue)
                     .frame(width: 24)
                 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: description != nil ? 4 : 6) {
                     Text(title)
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Theme.primaryBlue)
+                    if let description {
+                        Text(description)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
                 }
                 
                 Spacer()
