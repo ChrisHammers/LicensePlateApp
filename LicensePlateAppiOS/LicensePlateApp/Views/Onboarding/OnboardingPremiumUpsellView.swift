@@ -60,7 +60,7 @@ struct OnboardingPremiumUpsellView: View {
                 Button {
                     onSkip()
                 } label: {
-                    Text("Skip".localized)
+                    Text("Maybe Later".localized)
                         .font(.system(.body, design: .rounded))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
