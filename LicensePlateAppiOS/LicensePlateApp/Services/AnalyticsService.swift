@@ -68,6 +68,18 @@ class AnalyticsService {
         case inviteFailedRateLimited
         case inviteFailedPermissionDenied
         
+        // Avatar & Badge (MVP Identity)
+        case avatarAssignedRandom
+        case avatarPickerOpened(source: String)
+        case avatarSelected(avatarId: String)
+        case avatarSaved(avatarId: String, source: String)
+        case avatarLockedTapped(avatarId: String, unlockSource: String)
+        case avatarUpgradePrompt
+        case avatarUpgradeClicked
+        case badgeProgress(badgeId: String, progress: Int)
+        case badgeUnlocked(badgeId: String)
+        case badgeEquipped(badgeId: String)
+        
         var name: String {
             switch self {
             case .friendsScreenOpened: return "friends_screen_opened"
@@ -108,6 +120,16 @@ class AnalyticsService {
             case .inviteAutoRejectedNotSearchable: return "invite_auto_rejected_not_searchable"
             case .inviteFailedRateLimited: return "invite_failed_rate_limited"
             case .inviteFailedPermissionDenied: return "invite_failed_permission_denied"
+            case .avatarAssignedRandom: return "avatar_assigned_random"
+            case .avatarPickerOpened: return "avatar_picker_opened"
+            case .avatarSelected: return "avatar_selected"
+            case .avatarSaved: return "avatar_saved"
+            case .avatarLockedTapped: return "avatar_locked_tapped"
+            case .avatarUpgradePrompt: return "avatar_upgrade_prompt"
+            case .avatarUpgradeClicked: return "avatar_upgrade_clicked"
+            case .badgeProgress: return "badge_progress"
+            case .badgeUnlocked: return "badge_unlocked"
+            case .badgeEquipped: return "badge_equipped"
             }
         }
         
@@ -127,6 +149,18 @@ class AnalyticsService {
                 return ["error": error]
             case .familyJoinFailed(let error):
                 return ["error": error]
+            case .avatarPickerOpened(let source):
+                return ["source": source]
+            case .avatarSelected(let avatarId):
+                return ["avatar_id": avatarId]
+            case .avatarSaved(let avatarId, let source):
+                return ["avatar_id": avatarId, "source": source]
+            case .avatarLockedTapped(let avatarId, let unlockSource):
+                return ["avatar_id": avatarId, "unlock_source": unlockSource]
+            case .badgeProgress(let badgeId, let progress):
+                return ["badge_id": badgeId, "progress": progress]
+            case .badgeUnlocked(let badgeId), .badgeEquipped(let badgeId):
+                return ["badge_id": badgeId]
             default:
                 return nil
             }

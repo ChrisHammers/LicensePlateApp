@@ -78,6 +78,11 @@ final class AppUser {
     var isEmailPublic: Bool = false
     var isPhonePublic: Bool = false
     
+    // Avatar & Badge (MVP Identity)
+    var avatarId: String? // Catalog avatar ID; nil = use legacy avatarType/avatarColor
+    var equippedBadgeId: String? // MVP: one equipped badge slot
+    var wasEverInFamily: Bool = false // Keeps family unlocks after leaving
+    
     // Friends & Family fields
     var isRetiredGeneral: Bool = false // Global constraint - can be in multiple families
     var activeFamilyId: String? // Only for non-retired users (0 or 1 active family)
@@ -112,6 +117,9 @@ final class AppUser {
         isUsernameManuallyChanged: Bool = false,
         isEmailPublic: Bool = false,
         isPhonePublic: Bool = false,
+        avatarId: String? = nil,
+        equippedBadgeId: String? = nil,
+        wasEverInFamily: Bool = false,
         isRetiredGeneral: Bool = false,
         activeFamilyId: String? = nil,
         friendCount: Int = 0,
@@ -138,6 +146,9 @@ final class AppUser {
         self.isUsernameManuallyChanged = isUsernameManuallyChanged
         self.isEmailPublic = isEmailPublic
         self.isPhonePublic = isPhonePublic
+        self.avatarId = avatarId
+        self.equippedBadgeId = equippedBadgeId
+        self.wasEverInFamily = wasEverInFamily
         self.isRetiredGeneral = isRetiredGeneral
         self.activeFamilyId = activeFamilyId
         self.friendCount = friendCount

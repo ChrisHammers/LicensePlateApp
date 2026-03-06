@@ -33,6 +33,7 @@ struct UserProfileView: View {
     @State private var showImageConfirmation = false
     @State private var selectedImage: UIImage?
     @State private var previewImage: UIImage?
+    @State private var showAvatarPickerSheet = false
     
     // Helper function to get topmost view controller
     private func topViewController(controller: UIViewController? = nil) -> UIViewController? {
@@ -139,32 +140,21 @@ struct UserProfileView: View {
                     // Profile Image Section
                     Section {
                         VStack(spacing: 16) {
-                            // User Image
-                            Button {
-                                showImagePicker = true
-                            } label: {
-                                ZStack {
-                                    UserImageView(user: user, size: 120)
-                                    
-                                    // Edit overlay
-                                    VStack {
-                                        Spacer()
-                                        HStack {
-                                            Spacer()
-                                            Image(systemName: "camera.fill")
-                                                .font(.system(size: 16, weight: .semibold))
-                                                .foregroundStyle(.white)
-                                                .padding(8)
-                                                .background(
-                                                    Circle()
-                                                        .fill(Color.Theme.primaryBlue)
-                                                )
-                                                .offset(x: -8, y: -8)
-                                        }
-                                    }
+                            // Avatar with pencil (edit) opening avatar picker
+                            ZStack(alignment: .bottomTrailing) {
+                                AvatarBadgeView(user: user, avatarSize: 120, badgeSize: 36)
+                                Button {
+                                    showAvatarPickerSheet = true
+                                    AnalyticsService.shared.log("avatar_picker_opened", parameters: ["source": "profile"])
+                                } label: {
+                                    Image(systemName: "pencil")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 32, height: 32)
+                                        .background(Circle().fill(Color.Theme.primaryBlue))
                                 }
+                                .offset(x: -4, y: -4)
                             }
-                            .disabled(isUploadingImage)
                             
                             if isUploadingImage {
                                 ProgressView("Uploading...".localized)
@@ -644,6 +634,18 @@ struct UserProfileView: View {
                     }
                 )
             }
+            .sheet(isPresented: $showAvatarPickerSheet) {
+                ProfileAvatarPickerSheet(
+                    user: user,
+                    onSave: {
+                        try? modelContext.save()
+                        Task { try? await authService.saveUserDataToFirestore(user) }
+                        AnalyticsService.shared.log("avatar_saved", parameters: ["source": "profile"])
+                        showAvatarPickerSheet = false
+                    },
+                    onDismiss: { showAvatarPickerSheet = false }
+                )
+            }
             .onChange(of: selectedImage) { oldValue, newValue in
                 if let newImage = newValue {
                     // Show confirmation instead of immediately uploading
@@ -840,6 +842,78 @@ struct UserProfileView: View {
                     errorMessage = "Failed to upload image: %@".localized(errorDesc)
                     showError = true
                     isUploadingImage = false
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Profile Avatar Picker Sheet
+
+private struct ProfileAvatarPickerSheet: View {
+    @Bindable var user: AppUser
+    let onSave: () -> Void
+    let onDismiss: () -> Void
+    
+    @State private var selectedId: String?
+    @State private var showUnlockSheet = false
+    @State private var sheetUnlockSource: AvatarUnlockSource?
+    @State private var sheetItem: AvatarDisplayItem?
+    
+    private let catalogService = AvatarCatalogService.shared
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                AvatarPickerView(
+                    items: catalogService.displayItems(for: user),
+                    selectedId: $selectedId,
+                    onLockedTap: { item, source in
+                        sheetItem = item
+                        sheetUnlockSource = source
+                        showUnlockSheet = true
+                    },
+                    onSelected: nil
+                )
+                .frame(height: 140)
+                .padding()
+                Spacer()
+            }
+            .navigationTitle("Change avatar".localized)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel".localized) { onDismiss() }
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save".localized) {
+                        if let id = selectedId {
+                            user.avatarId = id
+                            user.lastUpdated = .now
+                            onSave()
+                        } else {
+                            onDismiss()
+                        }
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                }
+            }
+            .onAppear {
+                selectedId = user.avatarId ?? AvatarCatalog.guestAvatarIds.first
+            }
+            .sheet(isPresented: $showUnlockSheet) {
+                if let source = sheetUnlockSource {
+                    AvatarUnlockExplanationSheet(
+                        unlockSource: source,
+                        avatarName: sheetItem?.displayName ?? "",
+                        onDismiss: {
+                            showUnlockSheet = false
+                            sheetItem = nil
+                            sheetUnlockSource = nil
+                        }
+                    )
                 }
             }
         }

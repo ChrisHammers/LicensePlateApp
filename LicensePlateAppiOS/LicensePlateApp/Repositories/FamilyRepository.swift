@@ -329,6 +329,9 @@ class FamilyRepository: ObservableObject {
                        let avatarType = AvatarType(rawValue: avatarTypeString) {
                         user.avatarType = avatarType
                     }
+                    user.avatarId = data["avatarId"] as? String
+                    user.equippedBadgeId = data["equippedBadgeId"] as? String
+                    user.wasEverInFamily = data["wasEverInFamily"] as? Bool ?? false
                     
                     modelContext.insert(user)
                     try? modelContext.save()

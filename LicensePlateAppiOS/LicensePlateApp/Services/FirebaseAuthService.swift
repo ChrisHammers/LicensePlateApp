@@ -164,6 +164,8 @@ class FirebaseAuthService: ObservableObject {
             isUsernameManuallyChanged: false,
             needsSync: true
         )
+        let randomAvatarId = AvatarCatalog.randomGuestAvatarId()
+        newUser.avatarId = randomAvatarId
         
         modelContext.insert(newUser)
         try modelContext.save()
@@ -1392,6 +1394,13 @@ class FirebaseAuthService: ObservableObject {
         if let userImageURL = user.userImageURL {
             data["userImageURL"] = userImageURL
         }
+        if let avatarId = user.avatarId {
+            data["avatarId"] = avatarId
+        }
+        if let equippedBadgeId = user.equippedBadgeId {
+            data["equippedBadgeId"] = equippedBadgeId
+        }
+        data["wasEverInFamily"] = user.wasEverInFamily
         if let deviceIdentifier = user.deviceIdentifier {
             data["deviceIdentifier"] = deviceIdentifier
         }
@@ -1445,6 +1454,9 @@ class FirebaseAuthService: ObservableObject {
         let email = data["email"] as? String
         let phoneNumber = data["phoneNumber"] as? String
         let userImageURL = data["userImageURL"] as? String
+        let avatarId = data["avatarId"] as? String
+        let equippedBadgeId = data["equippedBadgeId"] as? String
+        let wasEverInFamily = data["wasEverInFamily"] as? Bool ?? false
         let deviceIdentifier = data["deviceIdentifier"] as? String
         let isUsernameManuallyChanged = data["isUsernameManuallyChanged"] as? Bool ?? false
         let isEmailPublic = data["isEmailPublic"] as? Bool ?? false
@@ -1560,6 +1572,9 @@ class FirebaseAuthService: ObservableObject {
             isUsernameManuallyChanged: isUsernameManuallyChanged,
             isEmailPublic: isEmailPublic,
             isPhonePublic: isPhonePublic,
+            avatarId: avatarId,
+            equippedBadgeId: equippedBadgeId,
+            wasEverInFamily: wasEverInFamily,
             isRetiredGeneral: isRetiredGeneral,
             activeFamilyId: activeFamilyId,
             friendCount: friendCount,

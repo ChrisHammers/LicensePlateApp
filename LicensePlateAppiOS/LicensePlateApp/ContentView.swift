@@ -117,6 +117,7 @@ struct ContentView: View {
                   InviteRepository.shared.setModelContext(modelContext)
                   FamilyRepository.shared.setModelContext(modelContext)
                   UserRepository.shared.setModelContext(modelContext)
+                  EntitlementService.shared.setModelContext(modelContext)
                   
                   // Start listening if user is authenticated
                   if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {

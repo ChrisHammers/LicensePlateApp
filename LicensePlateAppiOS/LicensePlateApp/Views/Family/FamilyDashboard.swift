@@ -341,31 +341,30 @@ struct FamilyMemberRow: View {
     let member: FamilyMember
     
     var body: some View {
-        HStack {
-            Circle()
-                .fill(Color.Theme.primaryBlue.opacity(0.3))
-                .frame(width: 50, height: 50)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(member.user?.displayName ?? "Member")
-                    .font(.system(.body, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                
-                if let userName = member.user?.userName {
-                    Text("@\(userName)")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
+        if let user = member.user {
+            UserIdentityRowView(
+                user: user,
+                subtitle: member.roleEnum.displayName,
+                avatarSize: 50
+            )
+        } else {
+            HStack {
+                Circle()
+                    .fill(Color.Theme.primaryBlue.opacity(0.3))
+                    .frame(width: 50, height: 50)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Member")
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    Text(member.roleEnum.displayName)
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
                 }
-                
-                Text(member.roleEnum.displayName)
-                    .font(.system(.caption2, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+                Spacer()
             }
-            
-            Spacer()
+            .padding(.vertical, 8)
         }
-        .padding(.vertical, 8)
     }
 }
 
@@ -373,13 +372,19 @@ struct PendingRequestRow: View {
     let request: PendingJoinRequest
     
     var body: some View {
-        HStack {
-            Circle()
-                .fill(Color.Theme.primaryBlue.opacity(0.3))
-                .frame(width: 50, height: 50)
-            
-            VStack(alignment: .leading) {
-                Text(request.user?.displayName ?? "Pending User")
+        if let user = request.user {
+            UserIdentityRowView(
+                user: user,
+                subtitle: "Pending",
+                avatarSize: 50
+            )
+        } else {
+            HStack {
+                Circle()
+                    .fill(Color.Theme.primaryBlue.opacity(0.3))
+                    .frame(width: 50, height: 50)
+                VStack(alignment: .leading) {
+                    Text("Pending User")
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
@@ -387,11 +392,11 @@ struct PendingRequestRow: View {
                 Text("Waiting for approval".localized)
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
+                }
+                Spacer()
             }
-            
-            Spacer()
+            .padding(.vertical, 8)
         }
-        .padding(.vertical, 8)
     }
 }
 

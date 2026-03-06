@@ -508,6 +508,9 @@ class UserRepository: ObservableObject {
            let avatarType = AvatarType(rawValue: avatarTypeString) {
             user.avatarType = avatarType
         }
+        user.avatarId = data["avatarId"] as? String
+        user.equippedBadgeId = data["equippedBadgeId"] as? String
+        user.wasEverInFamily = data["wasEverInFamily"] as? Bool ?? false
         
         return user
     }
@@ -538,6 +541,9 @@ class UserRepository: ObservableObject {
                 existing.friendCount = user.friendCount
                 existing.avatarColor = user.avatarColor
                 existing.avatarType = user.avatarType
+                existing.avatarId = user.avatarId
+                existing.equippedBadgeId = user.equippedBadgeId
+                existing.wasEverInFamily = user.wasEverInFamily
             } else {
                 // Insert new
                 modelContext.insert(user)
