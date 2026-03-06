@@ -86,6 +86,19 @@
 "Default zoom level when opening maps" = "Default zoom level when opening maps";
 "Show Completed Regions" = "Show Completed Regions";
 "Display regions that are already found in lists" = "Display regions that are already found in lists";
+"Show Map Markers" = "Show Map Markers";
+"Display markers on the map showing where regions were found (requires location data)" = "Display markers on the map showing where regions were found (requires location data)";
+"Show Avatars on Map" = "Show Avatars on Map";
+"Show avatars at your location on the live map (green circle remains)" = "Show avatars at your location on the live map (green circle remains)";
+"Show Region Borders" = "Show Region Borders";
+"Display colored region boundaries on the map (blue for unfound, yellow for found)" = "Display colored region boundaries on the map (blue for unfound, yellow for found)";
+"Map Provider" = "Map Provider";
+"Choose between Apple Maps and Google Maps (DEBUG only)" = "Choose between Apple Maps and Google Maps (DEBUG only)";
+"Use GMU Rendering (Testing)" = "Use GMU Rendering (Testing)";
+"Use Google Maps Utils for polygon rendering (for performance comparison)" = "Use Google Maps Utils for polygon rendering (for performance comparison)";
+"Use Tile Overlay (Testing)" = "Use Tile Overlay (Testing)";
+"Use TileOverlay for polygon rendering - best performance for many polygons" = "Use TileOverlay for polygon rendering - best performance for many polygons";
+"Debug Settings" = "Debug Settings";
 
 // Help & About
 "About" = "About";

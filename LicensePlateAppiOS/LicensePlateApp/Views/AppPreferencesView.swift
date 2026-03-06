@@ -18,6 +18,7 @@ struct AppPreferencesView: View {
   @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
   @AppStorage("appShowRegionBorders") private var appShowRegionBorders = false
   @AppStorage("appShowMapMarkers") private var appShowMapMarkers = true
+  @AppStorage("appShowUserAvatarOnMap") private var appShowUserAvatarOnMap = false
   @AppStorage("useGMURendering") private var useGMURendering = false // For comparison testing
   @AppStorage("useTileOverlayRendering") private var useTileOverlayRendering = false // For performance testing
   @AppStorage("appLanguage") private var appLanguageRaw: String = AppLanguage.english.rawValue
@@ -159,9 +160,17 @@ struct AppPreferencesView: View {
             Divider()
             
             SettingToggleRow(
-              title: "Show Map Markers",
-              description: "Display markers on the map showing where regions were found (requires location data)",
+              title: "Show Map Markers".localized,
+              description: "Display markers on the map showing where regions were found (requires location data)".localized,
               isOn: $appShowMapMarkers
+            )
+            
+            Divider()
+            
+            SettingToggleRow(
+              title: "Show Avatars on Map".localized,
+              description: "Show avatars at your location on the live map (green circle remains)".localized,
+              isOn: $appShowUserAvatarOnMap
             )
             
             Divider()
@@ -283,32 +292,32 @@ struct AppPreferencesView: View {
         Section {
           VStack(spacing: 12) {
             SettingPickerRow(
-              title: "Map Provider",
-              description: "Choose between Apple Maps and Google Maps (DEBUG only)",
+              title: "Map Provider".localized,
+              description: "Choose between Apple Maps and Google Maps (DEBUG only)".localized,
               selection: appMapProvider
             )
             
             Divider()
             
             SettingToggleRow(
-              title: "Show Region Borders",
-              description: "Display colored region boundaries on the map (blue for unfound, yellow for found)",
+              title: "Show Region Borders".localized,
+              description: "Display colored region boundaries on the map (blue for unfound, yellow for found)".localized,
               isOn: $appShowRegionBorders
             )
             
             Divider()
             
             SettingToggleRow(
-              title: "Use GMU Rendering (Testing)",
-              description: "Use Google Maps Utils for polygon rendering (for performance comparison)",
+              title: "Use GMU Rendering (Testing)".localized,
+              description: "Use Google Maps Utils for polygon rendering (for performance comparison)".localized,
               isOn: $useGMURendering
             )
             
             Divider()
             
             SettingToggleRow(
-              title: "Use Tile Overlay (Testing)",
-              description: "Use TileOverlay for polygon rendering - best performance for many polygons",
+              title: "Use Tile Overlay (Testing)".localized,
+              description: "Use TileOverlay for polygon rendering - best performance for many polygons".localized,
               isOn: $useTileOverlayRendering
             )
           }
@@ -319,7 +328,7 @@ struct AppPreferencesView: View {
           .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
           .listRowBackground(Color.clear)
         } header: {
-          Text("Debug Settings")
+          Text("Debug Settings".localized)
             .font(.system(.headline, design: .rounded))
             .foregroundStyle(Color.Theme.primaryBlue)
         }

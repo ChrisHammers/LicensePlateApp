@@ -18,6 +18,8 @@ struct GoogleMapView: UIViewRepresentable {
     let foundRegions: [FoundRegion] // Full found regions data for markers
     let showUserLocation: Bool
     let userLocation: CLLocationCoordinate2D? // User's current location coordinate
+    let showUserAvatarOnMap: Bool
+    let userAvatarImage: UIImage?
     let mapType: GMSMapViewType
     let regions: [PlateRegion]
     let namespace: Namespace.ID?
@@ -35,6 +37,8 @@ struct GoogleMapView: UIViewRepresentable {
         foundRegions: [FoundRegion] = [],
         showUserLocation: Bool = false,
         userLocation: CLLocationCoordinate2D? = nil,
+        showUserAvatarOnMap: Bool = false,
+        userAvatarImage: UIImage? = nil,
         mapType: GMSMapViewType = .normal,
         regions: [PlateRegion] = PlateRegion.all,
         namespace: Namespace.ID? = nil,
@@ -45,6 +49,8 @@ struct GoogleMapView: UIViewRepresentable {
         self.foundRegions = foundRegions
         self.showUserLocation = showUserLocation
         self.userLocation = userLocation
+        self.showUserAvatarOnMap = showUserAvatarOnMap
+        self.userAvatarImage = userAvatarImage
         self.mapType = mapType
         self.regions = regions
         self.namespace = namespace
@@ -97,12 +103,22 @@ struct GoogleMapView: UIViewRepresentable {
             )
         }
         
-        // Render custom user location marker if enabled and location available
+        // Render green circle first so avatar marker is drawn on top (avatar visible)
         if showUserLocation, let location = userLocation {
             context.coordinator.renderUserLocationMarker(
                 on: mapView,
                 coordinate: location
             )
+        }
+        
+        if showUserAvatarOnMap, let image = userAvatarImage, let location = userLocation {
+            context.coordinator.renderUserAvatarMarker(
+                on: mapView,
+                coordinate: location,
+                image: image
+            )
+        } else {
+            context.coordinator.clearUserAvatarMarker(on: mapView)
         }
         
         return mapView
@@ -165,15 +181,24 @@ struct GoogleMapView: UIViewRepresentable {
             context.coordinator.clearAllMarkers(on: mapView)
         }
         
-        // Update custom user location marker if enabled and location available
+        // Update green first, then avatar so avatar is on top
         if showUserLocation, let location = userLocation {
             context.coordinator.renderUserLocationMarker(
                 on: mapView,
                 coordinate: location
             )
         } else {
-            // Clear user location marker if disabled or no location
             context.coordinator.clearUserLocationMarker(on: mapView)
+        }
+        
+        if showUserAvatarOnMap, let image = userAvatarImage, let location = userLocation {
+            context.coordinator.renderUserAvatarMarker(
+                on: mapView,
+                coordinate: location,
+                image: image
+            )
+        } else {
+            context.coordinator.clearUserAvatarMarker(on: mapView)
         }
     }
     
@@ -191,6 +216,9 @@ struct GoogleMapView: UIViewRepresentable {
         // Clear user location marker
         coordinator.clearUserLocationMarker(on: mapView)
         
+        // Clear user avatar marker
+        coordinator.clearUserAvatarMarker(on: mapView)
+        
         // Remove delegate to prevent any callbacks after view is dismantled
         mapView.delegate = nil
     }
@@ -205,6 +233,7 @@ struct GoogleMapView: UIViewRepresentable {
         private var countryPolygons: [String: GMSPolygon] = [:] // Separate storage for country boundaries (map context only)
         private var markers: [String: GMSMarker] = [:] // Storage for region markers
         private var userLocationMarker: GMSMarker? // Custom green user location marker
+        private var userAvatarMarker: GMSMarker? // Optional avatar at user location
         private var cachedPaths: [String: [GMSMutablePath]] = [:] // Array of paths per region (for MultiPolygon support)
         private var lastFoundRegionIDs: Set<String> = []
         private var lastRegionIDs: Set<String> = []
@@ -900,19 +929,18 @@ struct GoogleMapView: UIViewRepresentable {
                 userLocationMarker = marker
             }
             
-            // Create custom green marker with extra circle overlay
-            // Inner circle: 20pt green with white stroke
-            // Outer circle: 32pt green with opacity 0.3
-            let size: CGFloat = 32
+            // Create custom green marker: outer ring + inner dot (sits behind avatar when both shown)
+            // Inner circle: 24pt green with white stroke; outer: 48pt semi-transparent
+            let size: CGFloat = 48
             let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
             let icon = renderer.image { context in
-                // Draw outer circle (larger, semi-transparent)
+                // Draw outer circle (semi-transparent)
                 let outerRect = CGRect(x: 0, y: 0, width: size, height: size)
                 context.cgContext.setFillColor(UIColor.green.withAlphaComponent(0.3).cgColor)
                 context.cgContext.fillEllipse(in: outerRect)
                 
-                // Draw inner circle (smaller, solid)
-                let innerSize: CGFloat = 20
+                // Draw inner circle (solid)
+                let innerSize: CGFloat = 24
                 let innerRect = CGRect(x: (size - innerSize) / 2, y: (size - innerSize) / 2, width: innerSize, height: innerSize)
                 context.cgContext.setFillColor(UIColor.green.cgColor)
                 context.cgContext.fillEllipse(in: innerRect)
@@ -933,6 +961,49 @@ struct GoogleMapView: UIViewRepresentable {
             if let marker = userLocationMarker {
                 marker.map = nil
                 userLocationMarker = nil
+            }
+        }
+        
+        /// Render user avatar marker at user location (drawn on top of green circle)
+        func renderUserAvatarMarker(
+            on mapView: GMSMapView,
+            coordinate: CLLocationCoordinate2D,
+            image: UIImage
+        ) {
+            let size: CGFloat = 48
+            let marker: GMSMarker
+            if let existing = userAvatarMarker {
+                marker = existing
+                marker.position = coordinate
+            } else {
+                marker = GMSMarker(position: coordinate)
+                marker.title = "You"
+                marker.map = mapView
+                userAvatarMarker = marker
+            }
+            // Circular avatar icon with white stroke
+            let renderer = UIGraphicsImageRenderer(size: CGSize(width: size, height: size))
+            let icon = renderer.image { context in
+                let rect = CGRect(x: 0, y: 0, width: size, height: size)
+                context.cgContext.saveGState()
+                context.cgContext.addEllipse(in: rect)
+                context.cgContext.clip()
+                image.draw(in: rect)
+                context.cgContext.restoreGState()
+                context.cgContext.setStrokeColor(UIColor.white.cgColor)
+                context.cgContext.setLineWidth(2.0)
+                context.cgContext.addEllipse(in: rect.insetBy(dx: 1, dy: 1))
+                context.cgContext.strokePath()
+            }
+            marker.icon = icon
+            marker.groundAnchor = CGPoint(x: 0.5, y: 0.5)
+        }
+        
+        /// Clear user avatar marker
+        func clearUserAvatarMarker(on mapView: GMSMapView) {
+            if let marker = userAvatarMarker {
+                marker.map = nil
+                userAvatarMarker = nil
             }
         }
         

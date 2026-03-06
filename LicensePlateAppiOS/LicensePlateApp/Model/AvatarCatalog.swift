@@ -6,6 +6,9 @@
 //
 
 import Foundation
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // MARK: - Asset Source (MVP: bundled only; future: downloaded)
 
@@ -153,4 +156,12 @@ enum AvatarCatalog {
     static func avatar(byId id: String) -> AvatarItem? {
         allAvatars.first { $0.id == id }
     }
+    
+    #if canImport(UIKit)
+    /// Resolve bundled avatar image for map/profile use. Returns nil if id is nil or asset not found.
+    static func image(forAvatarId id: String?) -> UIImage? {
+        guard let id = id, let item = avatar(byId: id) else { return nil }
+        return UIImage(named: item.assetName)
+    }
+    #endif
 }

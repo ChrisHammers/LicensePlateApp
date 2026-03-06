@@ -86,6 +86,19 @@
 "Default zoom level when opening maps" = "Nivel de zoom predeterminado al abrir mapas";
 "Show Completed Regions" = "Mostrar Regiones Completadas";
 "Display regions that are already found in lists" = "Mostrar regiones que ya se encontraron en las listas";
+"Show Map Markers" = "Mostrar Marcadores en el Mapa";
+"Display markers on the map showing where regions were found (requires location data)" = "Mostrar marcadores en el mapa indicando dónde se encontraron las regiones (requiere datos de ubicación)";
+"Show Avatars on Map" = "Mostrar Avatares en el Mapa";
+"Show avatars at your location on the live map (green circle remains)" = "Mostrar avatares en tu ubicación en el mapa en vivo (el círculo verde permanece)";
+"Show Region Borders" = "Mostrar Límites de Regiones";
+"Display colored region boundaries on the map (blue for unfound, yellow for found)" = "Mostrar límites de regiones en el mapa (azul sin encontrar, amarillo encontrado)";
+"Map Provider" = "Proveedor de Mapas";
+"Choose between Apple Maps and Google Maps (DEBUG only)" = "Elegir entre Apple Maps y Google Maps (solo DEBUG)";
+"Use GMU Rendering (Testing)" = "Usar Renderizado GMU (Pruebas)";
+"Use Google Maps Utils for polygon rendering (for performance comparison)" = "Usar Google Maps Utils para renderizar polígonos (comparación de rendimiento)";
+"Use Tile Overlay (Testing)" = "Usar Superposición de Mosaicos (Pruebas)";
+"Use TileOverlay for polygon rendering - best performance for many polygons" = "Usar TileOverlay para renderizar polígonos: mejor rendimiento con muchos polígonos";
+"Debug Settings" = "Configuración de Depuración";
 
 // Help & About
 "About" = "Acerca de";

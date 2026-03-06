@@ -13,6 +13,7 @@ import AudioToolbox
 import MapKit
 import CoreLocation
 import GoogleMaps
+import Combine
 
 /***
  
@@ -1636,7 +1637,9 @@ private struct FullScreenGoogleMapView: View {
     let namespace: Namespace.ID
     @Binding var isPresented: Bool
     
+    @EnvironmentObject private var authService: FirebaseAuthService
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
+    @AppStorage("appShowUserAvatarOnMap") private var appShowUserAvatarOnMap = false
     
     init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], cameraPosition: Binding<GMSCameraPosition>, locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
         self.enabledCountries = enabledCountries
@@ -1661,6 +1664,10 @@ private struct FullScreenGoogleMapView: View {
         locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways
     }
     
+    private var userAvatarImage: UIImage? {
+        AvatarCatalog.image(forAvatarId: authService.currentUser?.avatarId)
+    }
+    
     var body: some View {
         ZStack {
             // Full screen map
@@ -1670,6 +1677,8 @@ private struct FullScreenGoogleMapView: View {
                 foundRegions: foundRegions,
                 showUserLocation: showUserLocation,
                 userLocation: locationManager.location?.coordinate,
+                showUserAvatarOnMap: appShowUserAvatarOnMap,
+                userAvatarImage: userAvatarImage,
                 mapType: mapType,
                 regions: regions,
                 namespace: namespace
@@ -1967,6 +1976,46 @@ private struct ConditionalMatchedGeometryEffect: ViewModifier {
     }
 }
 
+/// User location indicator: outer ring that pulses outward; optional inner green dot (hidden when avatar is shown)
+private struct UserLocationPulseView: View {
+    static let outerSize: CGFloat = 56
+    static let innerSize: CGFloat = 24
+    static let pulseDuration: TimeInterval = 1.4
+    /// When true, only the pulse ring is drawn (no inner dot) so the avatar is the only “center”
+    var avatarVisible: Bool = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pulsePhase: Double = 0
+    
+    var body: some View {
+        ZStack {
+            // Outer circle — pulses outward and fades (timer-driven so it runs inside Map annotations)
+            if !reduceMotion {
+                Circle()
+                    .fill(Color.green.opacity(0.9))
+                    .frame(width: Self.outerSize, height: Self.outerSize)
+                    .scaleEffect(0.6 + 0.9 * pulsePhase)
+                    .opacity(0.6 * (1 - pulsePhase))
+                    .onReceive(Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()) { _ in
+                        let t = Date().timeIntervalSinceReferenceDate
+                        pulsePhase = (t.truncatingRemainder(dividingBy: Self.pulseDuration)) / Self.pulseDuration
+                    }
+            } else {
+                Circle()
+                    .fill(Color.green.opacity(0.4))
+                    .frame(width: Self.outerSize, height: Self.outerSize)
+            }
+            Circle()
+                .fill(Color.green)
+                .frame(width: !avatarVisible ? Self.innerSize: 32, height: !avatarVisible ? Self.innerSize : 32)
+                .overlay(
+                    Circle()
+                        .stroke(Color.white, lineWidth: !avatarVisible ? 3 : 0)
+                )
+        }
+        .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
+    }
+}
+
 // Full screen map view with location support (Apple Maps)
 private struct FullScreenAppleMapView: View {
     let country: PlateRegion.Country
@@ -1975,6 +2024,8 @@ private struct FullScreenAppleMapView: View {
     let namespace: Namespace.ID
     @Binding var isPresented: Bool
     
+    @EnvironmentObject private var authService: FirebaseAuthService
+    @AppStorage("appShowUserAvatarOnMap") private var appShowUserAvatarOnMap = false
     @State private var mapCameraPosition: MapCameraPosition
     
     init(country: PlateRegion.Country, foundRegionIDs: [String], locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
@@ -2141,24 +2192,28 @@ private struct FullScreenAppleMapView: View {
                     }
                 }
                 
-                // User location annotation
+                // User location: single annotation with ZStack so green is behind, avatar on top
                 if let userLocation = locationManager.location,
                    locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways {
                     Annotation("Your Location".localized, coordinate: userLocation.coordinate) {
                         ZStack {
-                            Circle()
-                                .fill(Color.green)
-                                .frame(width: 20, height: 20)
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color.white, lineWidth: 3)
-                                )
-                            
-                            Circle()
-                                .fill(Color.green.opacity(0.3))
-                                .frame(width: 32, height: 32)
+                            // Green pulse ring (and dot when no avatar) — back layer
+                            UserLocationPulseView(avatarVisible: appShowUserAvatarOnMap)
+                            // Avatar — front layer, always on top of green
+                            if appShowUserAvatarOnMap,
+                               let avatarImage = AvatarCatalog.image(forAvatarId: authService.currentUser?.avatarId) {
+                                Image(uiImage: avatarImage)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 32, height: 32)
+                                    .clipShape(Circle())
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.white, lineWidth: 1)
+                                    )
+                                    .shadow(color: Color.black.opacity(0.3), radius: 3, x: 0, y: 2)
+                            }
                         }
-                        .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
                     }
                 }
             }
