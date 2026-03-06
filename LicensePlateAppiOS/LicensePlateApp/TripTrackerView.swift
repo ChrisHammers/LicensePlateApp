@@ -1976,29 +1976,52 @@ private struct ConditionalMatchedGeometryEffect: ViewModifier {
     }
 }
 
+/// Provides pulse phase for map user-location ring. Single source of truth so we never modify view state during body.
+@MainActor
+private final class MapPulsePhaseProvider: ObservableObject {
+    static let shared = MapPulsePhaseProvider()
+    static let pulseDuration: TimeInterval = 1.4
+    
+    @Published private(set) var phase: Double = 0
+    private var timer: Timer?
+    
+    private init() {
+        startTimer()
+    }
+    
+    private func startTimer() {
+        guard timer == nil else { return }
+        timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            let t = Date().timeIntervalSinceReferenceDate
+            let newPhase = (t.truncatingRemainder(dividingBy: Self.pulseDuration)) / Self.pulseDuration
+            DispatchQueue.main.async { [weak self] in
+                self?.phase = newPhase
+            }
+        }
+        timer?.tolerance = 0.01
+        RunLoop.main.add(timer!, forMode: .common)
+    }
+}
+
 /// User location indicator: outer ring that pulses outward; optional inner green dot (hidden when avatar is shown)
 private struct UserLocationPulseView: View {
     static let outerSize: CGFloat = 56
     static let innerSize: CGFloat = 24
-    static let pulseDuration: TimeInterval = 1.4
     /// When true, only the pulse ring is drawn (no inner dot) so the avatar is the only “center”
     var avatarVisible: Bool = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pulsePhase: Double = 0
+    @ObservedObject private var pulseProvider = MapPulsePhaseProvider.shared
     
     var body: some View {
         ZStack {
-            // Outer circle — pulses outward and fades (timer-driven so it runs inside Map annotations)
+            // Outer circle — pulses outward and fades (phase from provider, no state updates in view)
             if !reduceMotion {
                 Circle()
                     .fill(Color.green.opacity(0.9))
                     .frame(width: Self.outerSize, height: Self.outerSize)
-                    .scaleEffect(0.6 + 0.9 * pulsePhase)
-                    .opacity(0.6 * (1 - pulsePhase))
-                    .onReceive(Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()) { _ in
-                        let t = Date().timeIntervalSinceReferenceDate
-                        pulsePhase = (t.truncatingRemainder(dividingBy: Self.pulseDuration)) / Self.pulseDuration
-                    }
+                    .scaleEffect(0.6 + 0.9 * pulseProvider.phase)
+                    .opacity(0.6 * (1 - pulseProvider.phase))
             } else {
                 Circle()
                     .fill(Color.green.opacity(0.4))

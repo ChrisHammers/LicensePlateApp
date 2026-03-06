@@ -262,33 +262,31 @@ struct GoogleMapView: UIViewRepresentable {
         }
         
         func mapView(_ mapView: GMSMapView, didChange position: GMSCameraPosition) {
-            // Update the binding when user moves the map to keep them in sync
+            // GMSMapViewDelegate may be called off main thread; always update binding on main
             if isUserInteracting {
                 lastCameraPosition = position
-                // Update parent's camera position binding to match user's movement
+                let parent = self.parent
                 DispatchQueue.main.async {
-                  self.parent.$cameraPosition.wrappedValue = position
+                    parent.$cameraPosition.wrappedValue = position
                 }
             }
         }
         
         func mapView(_ mapView: GMSMapView, idleAt position: GMSCameraPosition) {
-            // User finished interacting - update binding to final position
+            // User finished interacting - update binding to final position (ensure main thread)
             isUserInteracting = false
             lastCameraPosition = position
             
-            // Check if viewport changed significantly and trigger re-render if needed
-            let currentViewport = mapView.projection.visibleRegion()
             let currentZoom = position.zoom
             let zoomChangedSignificantly = abs(currentZoom - (lastZoomLevel)) > 1.0
-            
             if zoomChangedSignificantly {
-                lastViewportBounds = nil // Force viewport recalculation
+                lastViewportBounds = nil
                 lastZoomLevel = currentZoom
             }
             
+            let parent = self.parent
             DispatchQueue.main.async {
-              self.parent.$cameraPosition.wrappedValue = position
+                parent.$cameraPosition.wrappedValue = position
             }
         }
         

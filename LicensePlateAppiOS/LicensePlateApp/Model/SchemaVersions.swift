@@ -8,6 +8,16 @@
 import Foundation
 import SwiftData
 
+// MARK: - Schema-version marker (V3 only)
+// Exists solely so SchemaVersion3 has a different model set than SchemaVersion2,
+// avoiding "Duplicate version checksums detected" when both list the same entity types.
+// Do not use in app logic.
+@Model
+final class SchemaVersion3Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
 // MARK: - Schema Version 1 (Initial)
 // Initial schema with Trip and AppUser
 
@@ -61,7 +71,8 @@ enum SchemaVersion3: VersionedSchema {
             Family.self,
             FamilyMember.self,
             PendingJoinRequest.self,
-            ShareCode.self
+            ShareCode.self,
+            SchemaVersion3Marker.self  // Distinct model so V3 checksum differs from V2
         ]
     }
 }
