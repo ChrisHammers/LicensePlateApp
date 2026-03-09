@@ -15,9 +15,7 @@ struct OnboardingAvatarPickerView: View {
     let onNext: () -> Void
     
     @StateObject private var viewModel = AvatarPickerViewModel(catalogService: .shared)
-    @State private var showUnlockSheet = false
-    @State private var sheetUnlockSource: AvatarUnlockSource?
-    @State private var sheetItem: AvatarDisplayItem?
+    @State private var unlockSheetPayload: AvatarUnlockSheetPayload?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -42,15 +40,22 @@ struct OnboardingAvatarPickerView: View {
                             set: { viewModel.selectedId = $0 }
                         ),
                         onLockedTap: { item, source in
-                            sheetItem = item
-                            sheetUnlockSource = source
-                            showUnlockSheet = true
+                            unlockSheetPayload = AvatarUnlockSheetPayload(unlockSource: source, avatarName: item.displayName)
                             AnalyticsService.shared.log("avatar_locked_tapped", parameters: ["avatar_id": item.id, "unlock_source": source.rawValue])
                         },
                         onSelected: nil
                     )
-                    .frame(height: 140)
+                    .frame(height: 196)
                     .padding(.vertical, 16)
+                    
+                    VStack(spacing: 8) {
+                        Text("Selected".localized)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(selectedAvatarDisplayName)
+                            .font(.headline)
+                            .foregroundStyle(selectedAvatarDisplayName == "None".localized ? .secondary : .primary)
+                    }
                 }
                 .padding(.vertical, 32)
                 .padding(.horizontal, 24)
@@ -89,19 +94,18 @@ struct OnboardingAvatarPickerView: View {
             }
             AnalyticsService.shared.log("avatar_picker_opened", parameters: ["source": "onboarding"])
         }
-        .sheet(isPresented: $showUnlockSheet) {
-            if let source = sheetUnlockSource {
-                AvatarUnlockExplanationSheet(
-                    unlockSource: source,
-                    avatarName: sheetItem?.displayName ?? "",
-                    onDismiss: {
-                        showUnlockSheet = false
-                        sheetItem = nil
-                        sheetUnlockSource = nil
-                    }
-                )
-            }
+        .sheet(item: $unlockSheetPayload) { payload in
+            AvatarUnlockExplanationSheet(
+                unlockSource: payload.unlockSource,
+                avatarName: payload.avatarName,
+                onDismiss: { unlockSheetPayload = nil }
+            )
         }
+    }
+    
+    private var selectedAvatarDisplayName: String {
+        guard let id = viewModel.selectedId else { return "None".localized }
+        return viewModel.displayItems.first(where: { $0.id == id })?.displayName ?? "None".localized
     }
     
     private func saveAndContinue() {

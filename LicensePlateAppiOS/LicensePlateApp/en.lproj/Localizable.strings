@@ -531,4 +531,39 @@
 "Local Account" = "Local Account";
 "Your account is stored locally only. Sign in to sync to the cloud" = "Your account is stored locally only. Sign in to sync to the cloud";
 
+// Avatar unlock sheet & lock badge
+"Available to everyone" = "Available to everyone";
+"Sign up to unlock" = "Sign up to unlock";
+"Gold member avatar" = "Gold member avatar";
+"Royale member avatar" = "Royale member avatar";
+"Join a family to unlock" = "Join a family to unlock";
+"Family Pass avatar" = "Family Pass avatar";
+"Founder exclusive" = "Founder exclusive";
+"Seasonal unlock" = "Seasonal unlock";
+"Special promotion" = "Special promotion";
+"Create an account to use this avatar and save your progress." = "Create an account to use this avatar and save your progress.";
+"Upgrade to Gold to unlock this avatar and more." = "Upgrade to Gold to unlock this avatar and more.";
+"Upgrade to Royale for access to this avatar." = "Upgrade to Royale for access to this avatar.";
+"Join or create a family to unlock family avatars." = "Join or create a family to unlock family avatars.";
+"Your family's organizer has Gold or Royale—you get Family Pass avatars!" = "Your family's organizer has Gold or Royale—you get Family Pass avatars!";
+"This avatar is for our founding members." = "This avatar is for our founding members.";
+"This avatar is available through a limited-time offer." = "This avatar is available through a limited-time offer.";
+"This avatar is available to everyone." = "This avatar is available to everyone.";
+"Free" = "Free";
+"Sign Up" = "Sign Up";
+"Gold" = "Gold";
+"Royale" = "Royale";
+"Family" = "Family";
+"Family Pass" = "Family Pass";
+"Founder" = "Founder";
+"Seasonal" = "Seasonal";
+"Promo" = "Promo";
+"Double tap to select" = "Double tap to select";
+"Double tap for unlock options" = "Double tap for unlock options";
+"locked" = "locked";
+"selected" = "selected";
+"Change avatar" = "Change avatar";
+"Save avatar and continue" = "Save avatar and continue";
+"avatar" = "avatar";
+"locked avatar" = "locked avatar";
 

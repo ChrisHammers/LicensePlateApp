@@ -523,4 +523,39 @@
 "Local Account" = "Cuenta Local";
 "Your account is stored locally only. Sign in to sync to the cloud" = "Tu cuenta se almacena solo localmente. Inicia sesión para sincronizar con la nube";
 
+// Avatar unlock sheet & lock badge
+"Available to everyone" = "Disponible para todos";
+"Sign up to unlock" = "Regístrate para desbloquear";
+"Gold member avatar" = "Avatar miembro Gold";
+"Royale member avatar" = "Avatar miembro Royale";
+"Join a family to unlock" = "Únete a una familia para desbloquear";
+"Family Pass avatar" = "Avatar Family Pass";
+"Founder exclusive" = "Exclusivo fundador";
+"Seasonal unlock" = "Desbloqueo temporal";
+"Special promotion" = "Promoción especial";
+"Create an account to use this avatar and save your progress." = "Crea una cuenta para usar este avatar y guardar tu progreso.";
+"Upgrade to Gold to unlock this avatar and more." = "Actualiza a Gold para desbloquear este avatar y más.";
+"Upgrade to Royale for access to this avatar." = "Actualiza a Royale para acceder a este avatar.";
+"Join or create a family to unlock family avatars." = "Únete o crea una familia para desbloquear avatares de familia.";
+"Your family's organizer has Gold or Royale—you get Family Pass avatars!" = "El organizador de tu familia tiene Gold o Royale—¡obtienes avatares Family Pass!";
+"This avatar is for our founding members." = "Este avatar es para nuestros miembros fundadores.";
+"This avatar is available through a limited-time offer." = "Este avatar está disponible mediante una oferta por tiempo limitado.";
+"This avatar is available to everyone." = "Este avatar está disponible para todos.";
+"Free" = "Gratis";
+"Sign Up" = "Regístrate";
+"Gold" = "Gold";
+"Royale" = "Royale";
+"Family" = "Familia";
+"Family Pass" = "Family Pass";
+"Founder" = "Fundador";
+"Seasonal" = "Temporal";
+"Promo" = "Promo";
+"Double tap to select" = "Toca dos veces para seleccionar";
+"Double tap for unlock options" = "Toca dos veces para opciones de desbloqueo";
+"locked" = "bloqueado";
+"selected" = "seleccionado";
+"Change avatar" = "Cambiar avatar";
+"Save avatar and continue" = "Guardar avatar y continuar";
+"avatar" = "avatar";
+"locked avatar" = "avatar bloqueado";
 

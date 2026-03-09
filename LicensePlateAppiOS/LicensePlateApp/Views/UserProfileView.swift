@@ -856,27 +856,42 @@ private struct ProfileAvatarPickerSheet: View {
     let onDismiss: () -> Void
     
     @State private var selectedId: String?
-    @State private var showUnlockSheet = false
-    @State private var sheetUnlockSource: AvatarUnlockSource?
-    @State private var sheetItem: AvatarDisplayItem?
+    @State private var unlockSheetPayload: AvatarUnlockSheetPayload?
     
     private let catalogService = AvatarCatalogService.shared
+    
+    private var displayItems: [AvatarDisplayItem] {
+        catalogService.displayItems(for: user)
+    }
+    
+    private var selectedAvatarDisplayName: String {
+        guard let id = selectedId else { return "None".localized }
+        return displayItems.first(where: { $0.id == id })?.displayName ?? "None".localized
+    }
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
                 AvatarPickerView(
-                    items: catalogService.displayItems(for: user),
+                    items: displayItems,
                     selectedId: $selectedId,
                     onLockedTap: { item, source in
-                        sheetItem = item
-                        sheetUnlockSource = source
-                        showUnlockSheet = true
+                        unlockSheetPayload = AvatarUnlockSheetPayload(unlockSource: source, avatarName: item.displayName)
                     },
                     onSelected: nil
                 )
-                .frame(height: 140)
+                .frame(height: 196)
                 .padding()
+                
+                VStack(spacing: 8) {
+                    Text("Selected".localized)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(selectedAvatarDisplayName)
+                        .font(.headline)
+                        .foregroundStyle(selectedAvatarDisplayName == "None".localized ? .secondary : .primary)
+                }
+                
                 Spacer()
             }
             .navigationTitle("Change avatar".localized)
@@ -903,18 +918,12 @@ private struct ProfileAvatarPickerSheet: View {
             .onAppear {
                 selectedId = user.avatarId ?? AvatarCatalog.guestAvatarIds.first
             }
-            .sheet(isPresented: $showUnlockSheet) {
-                if let source = sheetUnlockSource {
-                    AvatarUnlockExplanationSheet(
-                        unlockSource: source,
-                        avatarName: sheetItem?.displayName ?? "",
-                        onDismiss: {
-                            showUnlockSheet = false
-                            sheetItem = nil
-                            sheetUnlockSource = nil
-                        }
-                    )
-                }
+            .sheet(item: $unlockSheetPayload) { payload in
+                AvatarUnlockExplanationSheet(
+                    unlockSource: payload.unlockSource,
+                    avatarName: payload.avatarName,
+                    onDismiss: { unlockSheetPayload = nil }
+                )
             }
         }
     }

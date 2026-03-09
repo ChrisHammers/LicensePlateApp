@@ -41,6 +41,21 @@ enum AvatarUnlockSource: String, Codable, CaseIterable {
         case .founder: return "star.circle"
         case .seasonal: return "leaf"
         case .specialPromotion: return "tag"
+            
+            /*
+             case .free: return "checkmark"
+             case .signedUp: return "person.crop.circle.badge.plus"
+             case .gold: return "star.fill"
+             case .royale: return "crown.fill"
+             case .family: return "person.3.fill"
+             case .familyPass: return "figure.2.and.child.holdinghands"
+             case .founder: return "flag.fill"
+             case .lifetime: return "infinity"
+             case .seasonal: return "snowflake"
+             case .promo: return "ticket.fill"
+             case .purchase: return "creditcard.fill"
+             case .achievement: return "rosette"
+             */
         }
     }
     
