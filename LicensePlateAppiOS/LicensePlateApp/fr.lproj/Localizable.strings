@@ -558,4 +558,10 @@
 "Save avatar and continue" = "Enregistrer l'avatar et continuer";
 "avatar" = "avatar";
 "locked avatar" = "avatar verrouillé";
+"Lifetime" = "À vie";
+"Achievement" = "Succès";
+"Lifetime entitlement" = "Droit à vie";
+"Achievement unlock" = "Déblocage par succès";
+"This avatar unlocks with an eligible Lifetime entitlement." = "Cet avatar se débloque avec un droit à vie éligible.";
+"This avatar unlocks by completing an achievement." = "Cet avatar se débloque en accomplissant un succès.";
 

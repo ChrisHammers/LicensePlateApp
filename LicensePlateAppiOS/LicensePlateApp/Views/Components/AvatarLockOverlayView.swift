@@ -34,22 +34,10 @@ struct AvatarLockOverlayView: View {
         case .family: return .mint
         case .familyPass: return .indigo
         case .founder: return .orange
+        case .lifetime: return .gray
+        case .achievement: return .teal
         case .seasonal: return .cyan
         case .specialPromotion: return .pink
-            /*
-             case .free: return .green
-             case .signedUp: return .blue
-             case .gold: return .yellow.opacity(0.9)
-             case .royale: return .purple
-             case .family: return .mint
-             case .familyPass: return .indigo
-             case .founder: return .orange
-             case .lifetime: return .gray
-             case .seasonal: return .cyan
-             case .promo: return .pink
-             case .purchase: return .brown
-             case .achievement: return .teal
-             */
         }
     }
     
@@ -62,22 +50,10 @@ struct AvatarLockOverlayView: View {
         case .family: return "Family".localized
         case .familyPass: return "Family Pass".localized
         case .founder: return "Founder".localized
+        case .lifetime: return "Lifetime".localized
+        case .achievement: return "Achievement".localized
         case .seasonal: return "Seasonal".localized
         case .specialPromotion: return "Promo".localized
-            /*
-             case .free: return "Free"
-             case .signedUp: return "Sign Up"
-             case .gold: return "Gold"
-             case .royale: return "Royale"
-             case .family: return "Family"
-             case .familyPass: return "Family Pass"
-             case .founder: return "Founder"
-             case .lifetime: return "Lifetime"
-             case .seasonal: return "Seasonal"
-             case .promo: return "Promo"
-             case .purchase: return "Purchase"
-             case .achievement(let name): return name
-             */
         }
     }
     

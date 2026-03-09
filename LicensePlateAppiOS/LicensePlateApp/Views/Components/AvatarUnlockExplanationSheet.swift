@@ -28,6 +28,8 @@ struct AvatarUnlockExplanationSheet: View {
         case .family: return "Join a family to unlock".localized
         case .familyPass: return "Family Pass avatar".localized
         case .founder: return "Founder exclusive".localized
+        case .lifetime: return "Lifetime entitlement".localized
+        case .achievement: return "Achievement unlock".localized
         case .seasonal: return "Seasonal unlock".localized
         case .specialPromotion: return "Special promotion".localized
         }
@@ -41,34 +43,10 @@ struct AvatarUnlockExplanationSheet: View {
         case .family: return "Join or create a family to unlock family avatars.".localized
         case .familyPass: return "Your family's organizer has Gold or Royale—you get Family Pass avatars!".localized
         case .founder: return "This avatar is for our founding members.".localized
+        case .lifetime: return "This avatar unlocks with an eligible Lifetime entitlement.".localized
+        case .achievement: return "This avatar unlocks by completing an achievement.".localized
         case .seasonal, .specialPromotion: return "This avatar is available through a limited-time offer.".localized
         case .guest: return "This avatar is available to everyone.".localized
-            /*
-             case .signedUp:
-             return "Create an account to unlock this avatar."
-         case .gold:
-             return "Upgrade to Gold to unlock this avatar."
-         case .royale:
-             return "Upgrade to Royale to unlock this avatar."
-         case .family:
-             return "Join a family to unlock this avatar."
-         case .familyPass:
-             return "This avatar unlocks through Family Pass."
-         case .founder:
-             return "This avatar is reserved for Founder players."
-         case .lifetime:
-             return "This avatar unlocks with an eligible Lifetime entitlement."
-         case .seasonal:
-             return "This is a special seasonal avatar."
-         case .promo:
-             return "This avatar unlocks through a promotion."
-         case .purchase:
-             return "This avatar requires direct purchase."
-         case .achievement(let name):
-             return "This avatar unlocks by completing Achievement \(name)."
-         case .free, .none:
-             return "This avatar is currently unavailable."
-             */
         }
     }
     

@@ -27,6 +27,8 @@ enum AvatarUnlockSource: String, Codable, CaseIterable {
     case family
     case familyPass
     case founder
+    case lifetime
+    case achievement
     case seasonal
     case specialPromotion
     
@@ -34,28 +36,15 @@ enum AvatarUnlockSource: String, Codable, CaseIterable {
         switch self {
         case .guest: return "person.circle"
         case .signedUp: return "person.badge.plus"
-        case .gold: return "crown"
+        case .gold: return "star.fill"
         case .royale: return "crown.fill"
         case .family: return "person.2"
         case .familyPass: return "person.2.fill"
-        case .founder: return "star.circle"
+        case .founder: return "flag.fill"
+        case .lifetime: return "infinity"
+        case .achievement: return "rosette"
         case .seasonal: return "leaf"
         case .specialPromotion: return "tag"
-            
-            /*
-             case .free: return "checkmark"
-             case .signedUp: return "person.crop.circle.badge.plus"
-             case .gold: return "star.fill"
-             case .royale: return "crown.fill"
-             case .family: return "person.3.fill"
-             case .familyPass: return "figure.2.and.child.holdinghands"
-             case .founder: return "flag.fill"
-             case .lifetime: return "infinity"
-             case .seasonal: return "snowflake"
-             case .promo: return "ticket.fill"
-             case .purchase: return "creditcard.fill"
-             case .achievement: return "rosette"
-             */
         }
     }
     
@@ -68,8 +57,10 @@ enum AvatarUnlockSource: String, Codable, CaseIterable {
         case .family: return 4
         case .familyPass: return 5
         case .founder: return 6
-        case .seasonal: return 7
-        case .specialPromotion: return 8
+        case .lifetime: return 7
+        case .achievement: return 8
+        case .seasonal: return 9
+        case .specialPromotion: return 10
         }
     }
 }

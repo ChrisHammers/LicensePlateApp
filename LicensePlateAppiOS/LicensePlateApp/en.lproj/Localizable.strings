@@ -566,4 +566,10 @@
 "Save avatar and continue" = "Save avatar and continue";
 "avatar" = "avatar";
 "locked avatar" = "locked avatar";
+"Lifetime" = "Lifetime";
+"Achievement" = "Achievement";
+"Lifetime entitlement" = "Lifetime entitlement";
+"Achievement unlock" = "Achievement unlock";
+"This avatar unlocks with an eligible Lifetime entitlement." = "This avatar unlocks with an eligible Lifetime entitlement.";
+"This avatar unlocks by completing an achievement." = "This avatar unlocks by completing an achievement.";
 

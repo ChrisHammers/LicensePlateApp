@@ -100,6 +100,10 @@ final class EntitlementService: ObservableObject {
             return entitlement.familyPassUnlocked
         case .founder:
             return entitlement.hasTag("founder")
+        case .lifetime:
+            return entitlement.hasTag("lifetime")
+        case .achievement:
+            return entitlement.hasTag("achievement")
         case .seasonal:
             return entitlement.hasTag("seasonal")
         case .specialPromotion:
