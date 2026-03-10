@@ -44,6 +44,7 @@ struct RootView: View {
             TripSessionRepository.shared.setModelContext(modelContext)
             GameInstanceRepository.shared.setModelContext(modelContext)
             TravelLogRepository.shared.setModelContext(modelContext)
+            TripInviteRepository.shared.setModelContext(modelContext)
             EntitlementService.shared.setModelContext(modelContext)
             if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {
                 FriendshipRepository.shared.startListening(userId: userId)

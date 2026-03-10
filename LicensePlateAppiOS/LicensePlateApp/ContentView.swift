@@ -19,6 +19,7 @@ struct ContentView: View {
     @State private var path: [UUID] = []
     @State private var isShowingCreateSheet = false
     @State private var isShowingSettings = false
+    @State private var pendingTripInvitesCount = 0
     @AppStorage("boundariesLoaded") private var boundariesLoaded = false
     
     // Custom detent for the new trip sheet - device-aware sizing
@@ -72,6 +73,37 @@ struct ContentView: View {
                     }
                     .textCase(nil)
 
+                    Section {
+                        NavigationLink(destination: PendingTripsView().environmentObject(authService)) {
+                            HStack {
+                                Label("Pending Trips".localized, systemImage: "envelope.badge")
+                                    .foregroundStyle(Color.Theme.primaryBlue)
+                                if pendingTripInvitesCount > 0 {
+                                    Spacer()
+                                    Text("\(pendingTripInvitesCount)")
+                                        .font(.system(.subheadline, design: .rounded))
+                                        .fontWeight(.semibold)
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background(Capsule().fill(Color.Theme.primaryBlue))
+                                }
+                            }
+                        }
+                        .accessibilityLabel("Pending Trips".localized)
+                        .accessibilityHint(pendingTripInvitesCount > 0 ? "You have %d pending invite(s)".localized(pendingTripInvitesCount) : "View pending trip invites".localized)
+                        NavigationLink(destination: TravelLogView().environmentObject(authService)) {
+                            Label("Travel Log".localized, systemImage: "map")
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                        }
+                        .accessibilityLabel("Travel Log".localized)
+                        .accessibilityHint("View your completed trips".localized)
+                    } header: {
+                        Text("Trip activity".localized)
+                    }
+                    .textCase(nil)
+                    .listRowBackground(Color.clear)
+
                     if trips.isEmpty {
                         Section {
                             emptyState
@@ -80,7 +112,7 @@ struct ContentView: View {
                         }
                         .textCase(nil)
                     } else {
-                        Section("Trips".localized) {
+                        Section("Active Trips".localized) {
                             tripList
                         }
                         .textCase(nil)
@@ -120,13 +152,18 @@ struct ContentView: View {
                   TripSessionRepository.shared.setModelContext(modelContext)
                   GameInstanceRepository.shared.setModelContext(modelContext)
                   TravelLogRepository.shared.setModelContext(modelContext)
+                  TripInviteRepository.shared.setModelContext(modelContext)
                   EntitlementService.shared.setModelContext(modelContext)
                   
                   // Start listening if user is authenticated
                   if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {
                       FriendshipRepository.shared.startListening(userId: userId)
                       InviteRepository.shared.startListening(userId: userId)
+                      refreshPendingTripInvitesCount()
                   }
+                }
+                .onAppear {
+                  refreshPendingTripInvitesCount()
                 }
                 .overlay {
                   if authService.showUsernameConflictDialog {
@@ -343,6 +380,15 @@ struct ContentView: View {
             FeedbackService.shared.actionError()
             assertionFailure("Failed to delete trip: \(error)")
         }
+    }
+
+    private func refreshPendingTripInvitesCount() {
+        guard let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else {
+            pendingTripInvitesCount = 0
+            return
+        }
+        TripInviteRepository.shared.setModelContext(modelContext)
+        pendingTripInvitesCount = (try? TripInviteRepository.shared.getIncomingInvites(userId: userId))?.count ?? 0
     }
 }
 
