@@ -8,12 +8,17 @@
 import Foundation
 import SwiftData
 
-// MARK: - Schema-version marker (V3 only)
-// Exists solely so SchemaVersion3 has a different model set than SchemaVersion2,
-// avoiding "Duplicate version checksums detected" when both list the same entity types.
+// MARK: - Schema-version markers
+// Exist solely so each version has a distinct model set, avoiding "Duplicate version checksums detected".
 // Do not use in app logic.
 @Model
 final class SchemaVersion3Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
+@Model
+final class SchemaVersion4Marker {
     var createdAt: Date = Date()
     init() {}
 }
@@ -77,16 +82,44 @@ enum SchemaVersion3: VersionedSchema {
     }
 }
 
+// MARK: - Schema Version 4 (Gameplay model foundation)
+// Added TripSessionEntity, GameInstanceEntity for new trip/session and game-instance persistence.
+// TODO: Eventually deprecate legacy Trip once UI/features migrate to TripSessionEntity.
+enum SchemaVersion4: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(4, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            Trip.self,
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            GameInstanceEntity.self,
+            SchemaVersion4Marker.self
+        ]
+    }
+}
+
 // MARK: - Migration Plan
+// TODO: Once UI migrates to TripSessionEntity/GameInstanceEntity, plan legacy Trip deprecation.
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self]
+        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self]
     }
-    
+
     static var stages: [MigrationStage] {
         [
             .lightweight(fromVersion: SchemaVersion1.self, toVersion: SchemaVersion2.self),
-            .lightweight(fromVersion: SchemaVersion2.self, toVersion: SchemaVersion3.self)
+            .lightweight(fromVersion: SchemaVersion2.self, toVersion: SchemaVersion3.self),
+            .lightweight(fromVersion: SchemaVersion3.self, toVersion: SchemaVersion4.self)
         ]
     }
 }
@@ -95,5 +128,5 @@ enum AppMigrationPlan: SchemaMigrationPlan {
 // This points to the latest schema version
 // When creating a new version, update this to point to the latest
 // birthYear is stored in Firestore only (not SwiftData) to avoid schema migration
-typealias CurrentSchema = SchemaVersion3
+typealias CurrentSchema = SchemaVersion4
 

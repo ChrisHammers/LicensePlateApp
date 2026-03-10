@@ -6,7 +6,9 @@
 //
 
 import Testing
+import Foundation
 @testable import LicensePlateApp
+
 
 struct GameplayModelFoundationTests {
 
@@ -25,14 +27,14 @@ struct GameplayModelFoundationTests {
     }
 
     @Test func participantCreation() async throws {
-        let p = TripParticipant(userId: "user1", role: .owner, joinedAt: .now)
+        let p = await TripParticipant(userId: "user1", role: .owner, joinedAt: .now)
         #expect(p.userId == "user1")
         #expect(p.role == .owner)
         #expect(p.leftAt == nil)
     }
 
     @Test func collaborativeCreditShape() async throws {
-        let credit = GameCredit(
+        let credit = await GameCredit(
             discoveryId: "d1",
             participantId: "user1",
             creditType: .shared,
@@ -43,7 +45,7 @@ struct GameplayModelFoundationTests {
     }
 
     @Test func competitiveCreditShape() async throws {
-        let credit = GameCredit(
+        let credit = await GameCredit(
             discoveryId: "d1",
             participantId: "user1",
             creditType: .full,
@@ -54,7 +56,7 @@ struct GameplayModelFoundationTests {
     }
 
     @Test func tripSessionMigrationSafeDefaults() async throws {
-        let session = TripSession(name: "Test Trip")
+        let session = await TripSession(name: "Test Trip")
         #expect(session.status == .draft)
         #expect(session.mode == .solo)
         #expect(session.participants.isEmpty)
@@ -63,9 +65,9 @@ struct GameplayModelFoundationTests {
     }
 
     @Test func gameInstanceAndDiscoveryConstruction() async throws {
-        let ruleSet = GameRuleSet(gameDefinitionId: "license_plate")
+        let ruleSet = await GameRuleSet(gameDefinitionId: "license_plate")
         let sessionId = UUID()
-        let gameInstance = GameInstance(
+        let gameInstance = await GameInstance(
             definitionId: "license_plate",
             sessionId: sessionId,
             ruleSet: ruleSet
@@ -73,7 +75,7 @@ struct GameplayModelFoundationTests {
         #expect(gameInstance.definitionId == "license_plate")
         #expect(gameInstance.sessionId == sessionId)
 
-        let discovery = GameDiscovery(
+        let discovery = await GameDiscovery(
             gameInstanceId: gameInstance.id,
             participantId: "user1",
             targetId: "us-ca",
@@ -84,14 +86,14 @@ struct GameplayModelFoundationTests {
     }
 
     @Test func gameDefinitionExtensible() async throws {
-        let def = GameDefinition(id: "custom_game", name: "Custom", description: "A custom game")
+        let def = await GameDefinition(id: "custom_game", name: "Custom", description: "A custom game")
         #expect(def.id == "custom_game")
         #expect(def.name == "Custom")
     }
 
     @Test func travelLogEntryConstruction() async throws {
         let sessionId = UUID()
-        let entry = TravelLogEntry(
+        let entry = await TravelLogEntry(
             sessionId: sessionId,
             tripName: "Road Trip",
             endedAt: .now,
@@ -111,12 +113,12 @@ struct GameplayModelFoundationTests {
                 inputMethod: .list
             )
         ]
-        let dto = TripSessionMapper.toLegacyDTO(session: session, discoveries: discoveries)
+        let dto = await TripSessionMapper.toLegacyDTO(session: session, discoveries: discoveries)
         #expect(dto.name == "Mapped Trip")
         #expect(dto.id == session.id)
         #expect(dto.isTripEnded == true)
         #expect(dto.foundRegions.count == 1)
-        #expect(dto.foundRegions[0].regionID == "us-ca")
-        #expect(dto.foundRegions[0].foundBy == "user1")
+        await #expect(dto.foundRegions[0].regionID == "us-ca")
+        await #expect(dto.foundRegions[0].foundBy == "user1")
     }
 }

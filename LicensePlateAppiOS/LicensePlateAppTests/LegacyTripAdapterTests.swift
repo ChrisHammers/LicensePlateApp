@@ -19,7 +19,7 @@ struct LegacyTripAdapterTests {
         foundRegions: [FoundRegion] = []
     ) throws -> Trip {
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Trip.self, configurations: [config])
+        let container = try ModelContainer(for: Trip.self, configurations: config)
         let context = ModelContext(container)
         let trip = Trip(
             name: name,
@@ -31,7 +31,7 @@ struct LegacyTripAdapterTests {
         return trip
     }
 
-    @Test func mapEmptyTripToSession() async throws {
+    @Test @MainActor func mapEmptyTripToSession() async throws {
         let trip = try makeTrip(name: "Empty", foundRegions: [])
         let result = LegacyTripAdapter.adapt(trip)
 
@@ -43,7 +43,7 @@ struct LegacyTripAdapterTests {
         #expect(result.credits.isEmpty)
     }
 
-    @Test func mapTripWithFoundRegionsNoFoundBy() async throws {
+    @Test @MainActor func mapTripWithFoundRegionsNoFoundBy() async throws {
         let regions = [
             FoundRegion(regionID: "us-ca", foundAt: .now, inputMethod: .list, foundBy: nil),
             FoundRegion(regionID: "us-ny", foundAt: .now, inputMethod: .voice, foundBy: nil)
@@ -65,7 +65,7 @@ struct LegacyTripAdapterTests {
         }
     }
 
-    @Test func mapTripWithFoundByMultipleParticipants() async throws {
+    @Test @MainActor func mapTripWithFoundByMultipleParticipants() async throws {
         let regions = [
             FoundRegion(regionID: "us-ca", foundAt: .now, inputMethod: .list, foundBy: "user1"),
             FoundRegion(regionID: "us-ny", foundAt: .now, inputMethod: .voice, foundBy: "user2")
@@ -82,7 +82,7 @@ struct LegacyTripAdapterTests {
         #expect(byUser2?.targetId == "us-ny")
     }
 
-    @Test func adapterIsReadOnlyNoPersistence() async throws {
+    @Test @MainActor func adapterIsReadOnlyNoPersistence() async throws {
         let trip = try makeTrip(name: "ReadOnly", foundRegions: [])
         let result = LegacyTripAdapter.adapt(trip)
 
@@ -94,7 +94,7 @@ struct LegacyTripAdapterTests {
         #expect(result.gameInstance.sessionId == trip.id)
     }
 
-    @Test func endedTripMapsToEndedStatus() async throws {
+    @Test @MainActor func endedTripMapsToEndedStatus() async throws {
         let trip = try makeTrip(name: "Ended", foundRegions: [])
         trip.isTripEnded = true
         trip.tripEndedAt = Date()
