@@ -91,6 +91,7 @@ struct AvatarItem: Identifiable, Equatable {
 
 // MARK: - Catalog (single source of truth; immutable IDs)
 
+// TODO: this should be downloadable update? Or always force a new version?
 enum AvatarCatalog {
     
     // MARK: Guest (10)
