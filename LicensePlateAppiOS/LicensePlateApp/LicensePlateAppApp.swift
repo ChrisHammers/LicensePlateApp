@@ -126,9 +126,10 @@ struct LicensePlateAppApp: App {
     // Use versioned schema for future migration support
     var sharedModelContainer: ModelContainer = {
         let schema = Schema(versionedSchema: CurrentSchema.self)
+        let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PLAYGROUNDS"] == "1"
         let modelConfiguration = ModelConfiguration(
             schema: schema,
-            isStoredInMemoryOnly: false
+            isStoredInMemoryOnly: isPreview
         )
 
         do {
