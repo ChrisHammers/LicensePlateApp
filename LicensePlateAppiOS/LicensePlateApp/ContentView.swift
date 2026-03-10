@@ -19,7 +19,11 @@ struct ContentView: View {
     @State private var path: [UUID] = []
     @State private var isShowingCreateSheet = false
     @State private var isShowingSettings = false
-    @State private var pendingTripInvitesCount = 0
+    @StateObject private var pendingTripsViewModel = PendingTripsViewModel(
+        tripInviteRepository: TripInviteRepository.shared,
+        authService: FirebaseAuthService()
+    )
+    @State private var travelLogEntries: [TravelLogEntry] = []
     @AppStorage("boundariesLoaded") private var boundariesLoaded = false
     
     // Custom detent for the new trip sheet - device-aware sizing
@@ -73,39 +77,9 @@ struct ContentView: View {
                     }
                     .textCase(nil)
 
-                    Section {
-                        NavigationLink(destination: PendingTripsView().environmentObject(authService)) {
-                            HStack {
-                                Label("Pending Trips".localized, systemImage: "envelope.badge")
-                                    .foregroundStyle(Color.Theme.primaryBlue)
-                                if pendingTripInvitesCount > 0 {
-                                    Spacer()
-                                    Text("\(pendingTripInvitesCount)")
-                                        .font(.system(.subheadline, design: .rounded))
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(.white)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Capsule().fill(Color.Theme.primaryBlue))
-                                }
-                            }
-                        }
-                        .accessibilityLabel("Pending Trips".localized)
-                        .accessibilityHint(pendingTripInvitesCount > 0 ? "You have %d pending invite(s)".localized(pendingTripInvitesCount) : "View pending trip invites".localized)
-                        NavigationLink(destination: TravelLogView().environmentObject(authService)) {
-                            Label("Travel Log".localized, systemImage: "map")
-                                .foregroundStyle(Color.Theme.primaryBlue)
-                        }
-                        .accessibilityLabel("Travel Log".localized)
-                        .accessibilityHint("View your completed trips".localized)
-                    } header: {
-                        Text("Trip activity".localized)
-                    }
-                    .textCase(nil)
-                    .listRowBackground(Color.clear)
-
+                    // 1. Active Trips (top)
                     if trips.isEmpty {
-                        Section {
+                        Section("Active Trips".localized) {
                             emptyState
                                 .listRowInsets(.init(top: 0, leading: 20, bottom: 24, trailing: 20))
                                 .listRowBackground(Color.clear)
@@ -116,8 +90,55 @@ struct ContentView: View {
                             tripList
                         }
                         .textCase(nil)
-                      .listRowBackground(Color.clear)
+                        .listRowBackground(Color.clear)
                     }
+
+                    // 2. Pending Invites
+                    Section("Pending Invites".localized) {
+                        if pendingTripsViewModel.incomingInvites.isEmpty && pendingTripsViewModel.outgoingInvites.isEmpty {
+                            pendingInvitesEmptyCard
+                        } else {
+                            ForEach(pendingTripsViewModel.incomingInvites, id: \.inviteId) { invite in
+                                PendingInviteCard(
+                                    invite: invite,
+                                    isIncoming: true,
+                                    onAccept: { pendingTripsViewModel.accept(invite: invite) },
+                                    onDecline: { pendingTripsViewModel.decline(invite: invite) },
+                                    onCancel: nil
+                                )
+                                .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                                .listRowBackground(Color.clear)
+                            }
+                            ForEach(pendingTripsViewModel.outgoingInvites, id: \.inviteId) { invite in
+                                PendingInviteCard(
+                                    invite: invite,
+                                    isIncoming: false,
+                                    onAccept: nil,
+                                    onDecline: nil,
+                                    onCancel: (invite.statusEnum == .sent || invite.statusEnum == .pending) ? { pendingTripsViewModel.cancel(invite: invite) } : nil
+                                )
+                                .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                                .listRowBackground(Color.clear)
+                            }
+                        }
+                    }
+                    .textCase(nil)
+                    .listRowBackground(Color.clear)
+
+                    // 3. Travel Log
+                    Section("Travel Log".localized) {
+                        if travelLogEntries.isEmpty {
+                            travelLogEmptyCard
+                        } else {
+                            ForEach(travelLogEntries) { entry in
+                                TravelLogCard(entry: entry)
+                                    .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                                    .listRowBackground(Color.clear)
+                            }
+                        }
+                    }
+                    .textCase(nil)
+                    .listRowBackground(Color.clear)
                   }
                   .scrollContentBackground(.hidden)
                   .listStyle(.insetGrouped)
@@ -159,11 +180,13 @@ struct ContentView: View {
                   if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {
                       FriendshipRepository.shared.startListening(userId: userId)
                       InviteRepository.shared.startListening(userId: userId)
-                      refreshPendingTripInvitesCount()
                   }
+                  loadTravelLogEntries()
                 }
                 .onAppear {
-                  refreshPendingTripInvitesCount()
+                  pendingTripsViewModel.setAuthService(authService)
+                  pendingTripsViewModel.loadIfNeeded()
+                  loadTravelLogEntries()
                 }
                 .overlay {
                   if authService.showUsernameConflictDialog {
@@ -259,6 +282,52 @@ struct ContentView: View {
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(Color.Theme.cardBackground)
         )
+    }
+
+    private var pendingInvitesEmptyCard: some View {
+        VStack(spacing: 12) {
+            Text("No pending invites".localized)
+                .font(.system(.title3, design: .rounded))
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.Theme.primaryBlue)
+            Text("When someone invites you to a trip, or you invite others, they will appear here.".localized)
+                .font(.system(.footnote, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+                .multilineTextAlignment(.center)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
+        )
+        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No pending invites. When someone invites you to a trip, or you invite others, they will appear here.".localized)
+    }
+
+    private var travelLogEmptyCard: some View {
+        VStack(spacing: 12) {
+            Text("No completed trips yet".localized)
+                .font(.system(.title3, design: .rounded))
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.Theme.primaryBlue)
+            Text("Your completed trips will appear here.".localized)
+                .font(.system(.footnote, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+                .multilineTextAlignment(.center)
+        }
+        .padding()
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
+        )
+        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No completed trips yet. Your completed trips will appear here.".localized)
     }
 
     private var tripList: some View {
@@ -382,13 +451,18 @@ struct ContentView: View {
         }
     }
 
-    private func refreshPendingTripInvitesCount() {
-        guard let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else {
-            pendingTripInvitesCount = 0
-            return
+    private func loadTravelLogEntries() {
+        TravelLogRepository.shared.setModelContext(modelContext)
+        let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+        do {
+            travelLogEntries = try TravelLogRepository.shared.getSummaryProjections(
+                userId: userId,
+                sortBy: .endedAtDesc,
+                limit: 50
+            )
+        } catch {
+            travelLogEntries = []
         }
-        TripInviteRepository.shared.setModelContext(modelContext)
-        pendingTripInvitesCount = (try? TripInviteRepository.shared.getIncomingInvites(userId: userId))?.count ?? 0
     }
 }
 
@@ -746,6 +820,146 @@ private struct TripRow: View {
                 .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
         )
         .accessibilityElement(children: .combine)
+    }
+}
+
+private struct PendingInviteCard: View {
+    let invite: TripInvite
+    let isIncoming: Bool
+    let onAccept: (() -> Void)?
+    let onDecline: (() -> Void)?
+    let onCancel: (() -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(invite.tripName)
+                    .font(.system(.title3, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                Spacer()
+                Text(invite.statusEnum.rawValue.capitalized)
+                    .font(.system(.footnote, design: .rounded))
+                    .fontWeight(.medium)
+                    .foregroundStyle(statusColor)
+            }
+
+            Divider()
+                .background(Color.Theme.softBrown.opacity(0.2))
+                .accessibilityHidden(true)
+
+            HStack {
+                Label("Inviter: %@".localized(invite.fromUserId), systemImage: "person")
+                    .font(.system(.footnote, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                Spacer()
+                Text("Mode: %@".localized(invite.tripMode))
+                    .font(.system(.footnote, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+            }
+
+            if isIncoming, invite.statusEnum == .pending {
+                HStack(spacing: 12) {
+                    Button("Accept".localized) {
+                        FeedbackService.shared.buttonTap()
+                        onAccept?()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.Theme.primaryBlue)
+                    .accessibilityLabel("Accept invite".localized)
+                    .accessibilityHint("Accepts this trip invite".localized)
+                    Button("Decline".localized) {
+                        FeedbackService.shared.buttonTap()
+                        onDecline?()
+                    }
+                    .buttonStyle(.bordered)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .accessibilityLabel("Decline invite".localized)
+                    .accessibilityHint("Declines this trip invite".localized)
+                }
+            } else if !isIncoming, let onCancel = onCancel {
+                Button("Cancel Invite".localized) {
+                    FeedbackService.shared.buttonTap()
+                    onCancel()
+                }
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+                .accessibilityLabel("Cancel invite".localized)
+                .accessibilityHint("Cancels this outgoing invite".localized)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
+        )
+        .accessibilityElement(children: .combine)
+    }
+
+    private var statusColor: Color {
+        switch invite.statusEnum {
+        case .pending, .sent: return Color.Theme.accentYellow
+        case .accepted: return .green
+        case .declined, .canceled, .expired: return Color.Theme.softBrown
+        }
+    }
+}
+
+private struct TravelLogCard: View {
+    let entry: TravelLogEntry
+
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(entry.tripName)
+                    .font(.system(.title3, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                Spacer()
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(.subheadline))
+                    .foregroundStyle(Color.Theme.accentYellow)
+                    .accessibilityHidden(true)
+            }
+
+            Divider()
+                .background(Color.Theme.softBrown.opacity(0.2))
+                .accessibilityHidden(true)
+
+            Text(entry.summary)
+                .font(.system(.footnote, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+
+            HStack {
+                Label("Ended".localized, systemImage: "calendar")
+                    .font(.system(.footnote, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .accessibilityLabel("Ended".localized)
+                Spacer()
+                Text(dateFormatter.string(from: entry.endedAt))
+                    .font(.system(.footnote, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .accessibilityLabel("Date: %@".localized(dateFormatter.string(from: entry.endedAt)))
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("%@. %@. Ended %@".localized(entry.tripName, entry.summary, dateFormatter.string(from: entry.endedAt)))
     }
 }
 

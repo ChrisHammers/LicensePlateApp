@@ -3,6 +3,7 @@
 //  LicensePlateApp
 //
 //  Step 04 — Pending trip invites: incoming (Accept/Decline) and outgoing (Cancel).
+//  Not linked from main list; reserved for future "See all" or deep links.
 //
 
 import SwiftUI

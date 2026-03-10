@@ -3,6 +3,7 @@
 //  LicensePlateApp
 //
 //  Step 04 — Placeholder Travel Log: lists completed trip sessions from TravelLogRepository.
+//  Not linked from main list; reserved for future "See all" or deep links.
 //
 
 import SwiftUI
