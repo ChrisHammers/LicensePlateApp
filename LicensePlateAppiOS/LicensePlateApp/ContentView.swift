@@ -117,6 +117,9 @@ struct ContentView: View {
                   InviteRepository.shared.setModelContext(modelContext)
                   FamilyRepository.shared.setModelContext(modelContext)
                   UserRepository.shared.setModelContext(modelContext)
+                  TripSessionRepository.shared.setModelContext(modelContext)
+                  GameInstanceRepository.shared.setModelContext(modelContext)
+                  TravelLogRepository.shared.setModelContext(modelContext)
                   EntitlementService.shared.setModelContext(modelContext)
                   
                   // Start listening if user is authenticated
