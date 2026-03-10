@@ -24,6 +24,7 @@ final class OnboardingCoordinator: ObservableObject {
         case disclaimer
         case userTypeAndBirthYear
         case accountCreation
+        case avatarPicker
         case joinFamily
         case createFamily
         case premiumUpsell
@@ -87,7 +88,9 @@ final class OnboardingCoordinator: ObservableObject {
         case .userTypeAndBirthYear:
             stepStack.append(.accountCreation)
         case .accountCreation:
-            advanceFromAccountCreation()
+            stepStack.append(.avatarPicker)
+        case .avatarPicker:
+            advanceFromAvatarPicker()
         case .joinFamily:
             advanceFromJoinFamily()
         case .createFamily:
@@ -115,11 +118,15 @@ final class OnboardingCoordinator: ObservableObject {
     }
     
     private func advanceFromAccountCreation() {
+        // Always go to avatar picker next; advanceFromAvatarPicker handles flow after
+        stepStack.append(.avatarPicker)
+    }
+    
+    private func advanceFromAvatarPicker() {
         if !didLogIn {
             stepStack.append(.permissions)
             return
         }
-        
         let hasFamily = (authService?.currentUser?.activeFamilyId != nil)
         if !hasFamily {
             stepStack.append(userType == .scout ? .joinFamily : .createFamily)

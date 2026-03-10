@@ -86,6 +86,19 @@
 "Default zoom level when opening maps" = "Default zoom level when opening maps";
 "Show Completed Regions" = "Show Completed Regions";
 "Display regions that are already found in lists" = "Display regions that are already found in lists";
+"Show Map Markers" = "Show Map Markers";
+"Display markers on the map showing where regions were found (requires location data)" = "Display markers on the map showing where regions were found (requires location data)";
+"Show Avatars on Map" = "Show Avatars on Map";
+"Show avatars at your location on the live map (green circle remains)" = "Show avatars at your location on the live map (green circle remains)";
+"Show Region Borders" = "Show Region Borders";
+"Display colored region boundaries on the map (blue for unfound, yellow for found)" = "Display colored region boundaries on the map (blue for unfound, yellow for found)";
+"Map Provider" = "Map Provider";
+"Choose between Apple Maps and Google Maps (DEBUG only)" = "Choose between Apple Maps and Google Maps (DEBUG only)";
+"Use GMU Rendering (Testing)" = "Use GMU Rendering (Testing)";
+"Use Google Maps Utils for polygon rendering (for performance comparison)" = "Use Google Maps Utils for polygon rendering (for performance comparison)";
+"Use Tile Overlay (Testing)" = "Use Tile Overlay (Testing)";
+"Use TileOverlay for polygon rendering - best performance for many polygons" = "Use TileOverlay for polygon rendering - best performance for many polygons";
+"Debug Settings" = "Debug Settings";
 
 // Help & About
 "About" = "About";
@@ -518,4 +531,45 @@
 "Local Account" = "Local Account";
 "Your account is stored locally only. Sign in to sync to the cloud" = "Your account is stored locally only. Sign in to sync to the cloud";
 
+// Avatar unlock sheet & lock badge
+"Available to everyone" = "Available to everyone";
+"Sign up to unlock" = "Sign up to unlock";
+"Gold member avatar" = "Gold member avatar";
+"Royale member avatar" = "Royale member avatar";
+"Join a family to unlock" = "Join a family to unlock";
+"Family Pass avatar" = "Family Pass avatar";
+"Founder exclusive" = "Founder exclusive";
+"Seasonal unlock" = "Seasonal unlock";
+"Special promotion" = "Special promotion";
+"Create an account to use this avatar and save your progress." = "Create an account to use this avatar and save your progress.";
+"Upgrade to Gold to unlock this avatar and more." = "Upgrade to Gold to unlock this avatar and more.";
+"Upgrade to Royale for access to this avatar." = "Upgrade to Royale for access to this avatar.";
+"Join or create a family to unlock family avatars." = "Join or create a family to unlock family avatars.";
+"Your family's organizer has Gold or Royale—you get Family Pass avatars!" = "Your family's organizer has Gold or Royale—you get Family Pass avatars!";
+"This avatar is for our founding members." = "This avatar is for our founding members.";
+"This avatar is available through a limited-time offer." = "This avatar is available through a limited-time offer.";
+"This avatar is available to everyone." = "This avatar is available to everyone.";
+"Free" = "Free";
+"Sign Up" = "Sign Up";
+"Gold" = "Gold";
+"Royale" = "Royale";
+"Family" = "Family";
+"Family Pass" = "Family Pass";
+"Founder" = "Founder";
+"Seasonal" = "Seasonal";
+"Promo" = "Promo";
+"Double tap to select" = "Double tap to select";
+"Double tap for unlock options" = "Double tap for unlock options";
+"locked" = "locked";
+"selected" = "selected";
+"Change avatar" = "Change avatar";
+"Save avatar and continue" = "Save avatar and continue";
+"avatar" = "avatar";
+"locked avatar" = "locked avatar";
+"Lifetime" = "Lifetime";
+"Achievement" = "Achievement";
+"Lifetime entitlement" = "Lifetime entitlement";
+"Achievement unlock" = "Achievement unlock";
+"This avatar unlocks with an eligible Lifetime entitlement." = "This avatar unlocks with an eligible Lifetime entitlement.";
+"This avatar unlocks by completing an achievement." = "This avatar unlocks by completing an achievement.";
 

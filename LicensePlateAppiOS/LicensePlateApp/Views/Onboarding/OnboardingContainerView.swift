@@ -76,6 +76,11 @@ struct OnboardingContainerView: View {
                             coordinator: coordinator,
                             onNext: { coordinator.nextStep() }
                         )
+                    case .avatarPicker:
+                        OnboardingAvatarPickerView(
+                            coordinator: coordinator,
+                            onNext: { coordinator.nextStep() }
+                        )
                     case .joinFamily:
                         OnboardingJoinFamilyView(
                             coordinator: coordinator,

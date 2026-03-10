@@ -8,6 +8,16 @@
 import Foundation
 import SwiftData
 
+// MARK: - Schema-version marker (V3 only)
+// Exists solely so SchemaVersion3 has a different model set than SchemaVersion2,
+// avoiding "Duplicate version checksums detected" when both list the same entity types.
+// Do not use in app logic.
+@Model
+final class SchemaVersion3Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
 // MARK: - Schema Version 1 (Initial)
 // Initial schema with Trip and AppUser
 
@@ -44,14 +54,40 @@ enum SchemaVersion2: VersionedSchema {
     }
 }
 
+// MARK: - Schema Version 3 (Avatar & Badge Identity)
+// Added to AppUser: avatarId, equippedBadgeId, wasEverInFamily
+
+enum SchemaVersion3: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(3, 0, 0)
+    }
+    
+    static var models: [any PersistentModel.Type] {
+        [
+            Trip.self,
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self  // Distinct model so V3 checksum differs from V2
+        ]
+    }
+}
+
 // MARK: - Migration Plan
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaVersion1.self, SchemaVersion2.self]
+        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self]
     }
     
     static var stages: [MigrationStage] {
-        [.lightweight(fromVersion: SchemaVersion1.self, toVersion: SchemaVersion2.self)]
+        [
+            .lightweight(fromVersion: SchemaVersion1.self, toVersion: SchemaVersion2.self),
+            .lightweight(fromVersion: SchemaVersion2.self, toVersion: SchemaVersion3.self)
+        ]
     }
 }
 
@@ -59,5 +95,5 @@ enum AppMigrationPlan: SchemaMigrationPlan {
 // This points to the latest schema version
 // When creating a new version, update this to point to the latest
 // birthYear is stored in Firestore only (not SwiftData) to avoid schema migration
-typealias CurrentSchema = SchemaVersion2
+typealias CurrentSchema = SchemaVersion3
 

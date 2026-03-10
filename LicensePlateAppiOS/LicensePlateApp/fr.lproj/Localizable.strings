@@ -86,6 +86,19 @@
 "Default zoom level when opening maps" = "Niveau de zoom par défaut lors de l'ouverture des cartes";
 "Show Completed Regions" = "Afficher les Régions Complétées";
 "Display regions that are already found in lists" = "Afficher les régions déjà trouvées dans les listes";
+"Show Map Markers" = "Afficher les Marqueurs sur la Carte";
+"Display markers on the map showing where regions were found (requires location data)" = "Afficher les marqueurs sur la carte indiquant où les régions ont été trouvées (nécessite la localisation)";
+"Show Avatars on Map" = "Afficher les Avatars sur la Carte";
+"Show avatars at your location on the live map (green circle remains)" = "Afficher les avatars à votre position sur la carte en direct (le cercle vert reste)";
+"Show Region Borders" = "Afficher les Frontières des Régions";
+"Display colored region boundaries on the map (blue for unfound, yellow for found)" = "Afficher les frontières des régions sur la carte (bleu non trouvé, jaune trouvé)";
+"Map Provider" = "Fournisseur de Cartes";
+"Choose between Apple Maps and Google Maps (DEBUG only)" = "Choisir entre Apple Maps et Google Maps (DEBUG uniquement)";
+"Use GMU Rendering (Testing)" = "Utiliser le Rendu GMU (Tests)";
+"Use Google Maps Utils for polygon rendering (for performance comparison)" = "Utiliser Google Maps Utils pour le rendu des polygones (comparaison de performances)";
+"Use Tile Overlay (Testing)" = "Utiliser la Superposition de Tuiles (Tests)";
+"Use TileOverlay for polygon rendering - best performance for many polygons" = "Utiliser TileOverlay pour le rendu des polygones - meilleures performances pour de nombreux polygones";
+"Debug Settings" = "Paramètres de Débogage";
 
 // Help & About
 "About" = "À Propos";
@@ -510,4 +523,45 @@
 "Local Account" = "Compte Local";
 "Your account is stored locally only. Sign in to sync to the cloud" = "Votre compte est stocké localement uniquement. Connectez-vous pour synchroniser avec le cloud";
 
+// Avatar unlock sheet & lock badge
+"Available to everyone" = "Disponible pour tous";
+"Sign up to unlock" = "Inscrivez-vous pour débloquer";
+"Gold member avatar" = "Avatar membre Gold";
+"Royale member avatar" = "Avatar membre Royale";
+"Join a family to unlock" = "Rejoignez une famille pour débloquer";
+"Family Pass avatar" = "Avatar Family Pass";
+"Founder exclusive" = "Exclusif fondateur";
+"Seasonal unlock" = "Déblocage saisonnier";
+"Special promotion" = "Promotion spéciale";
+"Create an account to use this avatar and save your progress." = "Créez un compte pour utiliser cet avatar et sauvegarder votre progression.";
+"Upgrade to Gold to unlock this avatar and more." = "Passez à Gold pour débloquer cet avatar et plus.";
+"Upgrade to Royale for access to this avatar." = "Passez à Royale pour accéder à cet avatar.";
+"Join or create a family to unlock family avatars." = "Rejoignez ou créez une famille pour débloquer les avatars famille.";
+"Your family's organizer has Gold or Royale—you get Family Pass avatars!" = "L'organisateur de votre famille a Gold ou Royale—vous obtenez les avatars Family Pass !";
+"This avatar is for our founding members." = "Cet avatar est réservé à nos membres fondateurs.";
+"This avatar is available through a limited-time offer." = "Cet avatar est disponible via une offre limitée dans le temps.";
+"This avatar is available to everyone." = "Cet avatar est disponible pour tous.";
+"Free" = "Gratuit";
+"Sign Up" = "S'inscrire";
+"Gold" = "Gold";
+"Royale" = "Royale";
+"Family" = "Famille";
+"Family Pass" = "Family Pass";
+"Founder" = "Fondateur";
+"Seasonal" = "Saisonnier";
+"Promo" = "Promo";
+"Double tap to select" = "Appuyez deux fois pour sélectionner";
+"Double tap for unlock options" = "Appuyez deux fois pour les options de déblocage";
+"locked" = "verrouillé";
+"selected" = "sélectionné";
+"Change avatar" = "Changer l'avatar";
+"Save avatar and continue" = "Enregistrer l'avatar et continuer";
+"avatar" = "avatar";
+"locked avatar" = "avatar verrouillé";
+"Lifetime" = "À vie";
+"Achievement" = "Succès";
+"Lifetime entitlement" = "Droit à vie";
+"Achievement unlock" = "Déblocage par succès";
+"This avatar unlocks with an eligible Lifetime entitlement." = "Cet avatar se débloque avec un droit à vie éligible.";
+"This avatar unlocks by completing an achievement." = "Cet avatar se débloque en accomplissant un succès.";
 
