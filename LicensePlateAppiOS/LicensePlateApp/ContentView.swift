@@ -19,6 +19,8 @@ struct ContentView: View {
     @State private var path: [UUID] = []
     @State private var isShowingCreateSheet = false
     @State private var isShowingSettings = false
+//    @State private var isShowingPendingInvites = false
+    @State private var isShowingTravelLog = false
     @StateObject private var pendingTripsViewModel = PendingTripsViewModel(
         tripInviteRepository: TripInviteRepository.shared,
         authService: FirebaseAuthService()
@@ -80,7 +82,7 @@ struct ContentView: View {
                     // 1. Active Trips (top)
                     if trips.isEmpty {
                         Section("Active Trips".localized) {
-                            emptyState
+                            activeTripEmptyCard
                                 .listRowInsets(.init(top: 0, leading: 20, bottom: 24, trailing: 20))
                                 .listRowBackground(Color.clear)
                         }
@@ -126,7 +128,7 @@ struct ContentView: View {
                     .listRowBackground(Color.clear)
 
                     // 3. Travel Log
-                    Section("Travel Log".localized) {
+                    /* Section("Travel Log".localized) {
                         if travelLogEntries.isEmpty {
                             travelLogEmptyCard
                         } else {
@@ -139,6 +141,7 @@ struct ContentView: View {
                     }
                     .textCase(nil)
                     .listRowBackground(Color.clear)
+                      */
                   }
                   .scrollContentBackground(.hidden)
                   .listStyle(.insetGrouped)
@@ -146,19 +149,33 @@ struct ContentView: View {
                 .navigationTitle("RoadTrip Royale")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                  ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                      isShowingSettings = true
-                    } label: {
-                      Image(systemName: "gearshape")
-                        .foregroundStyle(Color.Theme.primaryBlue)
+                    ToolbarItem(placement: .topBarLeading) {
+                      Button {
+                        isShowingTravelLog = true
+                      } label: {
+                        Image(systemName: "map.fill")
+                          .foregroundStyle(Color.Theme.primaryBlue)
+                      }
+                      .accessibilityLabel("Travel Log Invites".localized)
+                      .accessibilityHint("Review old Trips".localized)
                     }
-                    .accessibilityLabel("Settings".localized)
-                    .accessibilityHint("Opens app settings".localized)
-                  }
+                    ToolbarItem(placement: .topBarTrailing) {
+                      Button {
+                        isShowingSettings = true
+                      } label: {
+                        Image(systemName: "gearshape.fill")
+                          .foregroundStyle(Color.Theme.primaryBlue)
+                      }
+                      .accessibilityLabel("Settings".localized)
+                      .accessibilityHint("Opens app settings".localized)
+                    }
                 }
                 .sheet(isPresented: $isShowingSettings) {
                   DefaultSettingsView()
+                    .environmentObject(authService)
+                }
+                .sheet(isPresented: $isShowingTravelLog) {
+                  TravelLogView()
                     .environmentObject(authService)
                 }
                 .task {
@@ -259,20 +276,20 @@ struct ContentView: View {
         }
     }
 
-    private var emptyState: some View {
-        VStack(spacing: 16) {
+    private var activeTripEmptyCard: some View {
+        VStack(spacing: 12) {
             Image(systemName: "car.fill")
                 .font(.system(size: 56))
                 .foregroundStyle(Color.Theme.accentYellow)
 
             Text("No trips yet".localized)
-                .font(.system(.title2, design: .rounded))
+                .font(.system(.title3, design: .rounded))
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue)
 
             Text("Start your first adventure and begin collecting plates from across North America.".localized)
                 .multilineTextAlignment(.center)
-                .font(.system(.body, design: .rounded))
+                .font(.system(.footnote, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
                 .padding(.horizontal)
         }
@@ -281,19 +298,29 @@ struct ContentView: View {
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(Color.Theme.cardBackground)
+                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
         )
+        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No active trips. Time you get on the open road.".localized)
     }
 
     private var pendingInvitesEmptyCard: some View {
         VStack(spacing: 12) {
+            Image(systemName: "envelope.fill")
+                .font(.system(size: 56))
+                .foregroundStyle(Color.Theme.accentYellow)
+
             Text("No pending invites".localized)
                 .font(.system(.title3, design: .rounded))
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue)
+            
             Text("When someone invites you to a trip, or you invite others, they will appear here.".localized)
+                .multilineTextAlignment(.center)
                 .font(.system(.footnote, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
-                .multilineTextAlignment(.center)
+                .padding(.horizontal)
         }
         .padding()
         .frame(maxWidth: .infinity)
@@ -309,14 +336,20 @@ struct ContentView: View {
 
     private var travelLogEmptyCard: some View {
         VStack(spacing: 12) {
+            Image(systemName: "map.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(Color.Theme.accentYellow)
+
             Text("No completed trips yet".localized)
                 .font(.system(.title3, design: .rounded))
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue)
+            
             Text("Your completed trips will appear here.".localized)
+                .multilineTextAlignment(.center)
                 .font(.system(.footnote, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
-                .multilineTextAlignment(.center)
+                .padding(.horizontal)
         }
         .padding()
         .frame(maxWidth: .infinity)
