@@ -565,3 +565,7 @@
 "This avatar unlocks with an eligible Lifetime entitlement." = "Este avatar se desbloquea con un derecho de por vida válido.";
 "This avatar unlocks by completing an achievement." = "Este avatar se desbloquea al completar un logro.";
 
+// Notifications (Step 08)
+"New trip invite" = "Nueva invitación de viaje";
+"You have a new trip invite. Open the app to view." = "Tienes una nueva invitación de viaje. Abre la app para ver.";
+

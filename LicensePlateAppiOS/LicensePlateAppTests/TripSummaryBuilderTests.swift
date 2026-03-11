@@ -114,7 +114,7 @@ struct TripSummaryBuilderTests {
         )
         let lpConfig = LicensePlateGameConfig(
             regionScope: .usOnly,
-            territoryOptions: LicensePlateTerritoryOptions(includeDC: false, includeUSTerritories: false, includeCanadianTerritories: true)
+            territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: false, includeCanadianTerritories: true, includeDC: false)
         )
         let payloadData = try JSONEncoder().encode(lpConfig)
         let game = GameInstance(

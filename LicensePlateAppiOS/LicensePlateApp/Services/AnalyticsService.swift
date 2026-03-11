@@ -94,6 +94,10 @@ class AnalyticsService {
         case travelLogOpened
         case tripSummaryViewed(sessionId: String)
 
+        // Notifications & eligibility (Step 08)
+        case notificationEligibilityChecked(kind: String, eligible: Bool)
+        case notificationDeliveredTripInvite
+
         var name: String {
             switch self {
             case .friendsScreenOpened: return "friends_screen_opened"
@@ -152,6 +156,8 @@ class AnalyticsService {
             case .combinedTripCreated: return "combined_trip_created"
             case .travelLogOpened: return "travel_log_opened"
             case .tripSummaryViewed: return "trip_summary_viewed"
+            case .notificationEligibilityChecked: return "notification_eligibility_checked"
+            case .notificationDeliveredTripInvite: return "notification_delivered_trip_invite"
             }
         }
         
@@ -192,6 +198,10 @@ class AnalyticsService {
             case .tripSummaryViewed(let sessionId):
                 return ["session_id": sessionId]
             case .travelLogOpened:
+                return nil
+            case .notificationEligibilityChecked(let kind, let eligible):
+                return ["kind": kind, "eligible": eligible]
+            case .notificationDeliveredTripInvite:
                 return nil
             default:
                 return nil

@@ -213,6 +213,7 @@ struct ContentView: View {
                   travelLogViewModel.setAuthService(authService)
                   pendingTripsViewModel.loadIfNeeded()
                   loadTravelLogEntries()
+                  NotificationRoutingService.shared.startObservingIfNeeded()
                 }
                 .overlay {
                   if authService.showUsernameConflictDialog {
