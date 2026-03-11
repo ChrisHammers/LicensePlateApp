@@ -121,4 +121,31 @@ struct GameplayModelFoundationTests {
         await #expect(dto.foundRegions[0].regionID == "us-ca")
         await #expect(dto.foundRegions[0].foundBy == "user1")
     }
+
+    // Step 06.5.5 — TripSessionMapper collapseByTargetId for collaborative display
+    @Test func tripSessionMapperCollapseByTargetIdOneFoundRegionPerTargetWithFirstFinder() async throws {
+        let session = TripSession(name: "Collapsed", status: .active)
+        let gameId = UUID()
+        let base = Date()
+        let discoveries = [
+            GameDiscovery(
+                gameInstanceId: gameId,
+                participantId: "user2",
+                targetId: "us-ca",
+                discoveredAt: base.addingTimeInterval(10),
+                inputMethod: .voice
+            ),
+            GameDiscovery(
+                gameInstanceId: gameId,
+                participantId: "user1",
+                targetId: "us-ca",
+                discoveredAt: base,
+                inputMethod: .list
+            )
+        ]
+        let dto = TripSessionMapper.toLegacyDTO(session: session, discoveries: discoveries, collapseByTargetId: true)
+        #expect(dto.foundRegions.count == 1)
+        #expect(dto.foundRegions[0].regionID == "us-ca")
+        #expect(dto.foundRegions[0].foundBy == "user1")
+    }
 }

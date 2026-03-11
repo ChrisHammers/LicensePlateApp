@@ -105,4 +105,44 @@ struct LegacyTripAdapterTests {
         #expect(result.session.endedAt != nil)
         #expect(result.session.endedBy == "user1")
     }
+
+    // MARK: - Step 06.5.5 — mode logic alignment: credits from GameCreditCalculator
+
+    @Test @MainActor func collaborativeSameRegionTwoFindersProducesSharedCredits() async throws {
+        let base = Date()
+        let regions = [
+            FoundRegion(regionID: "us-ca", foundAt: base, inputMethod: .list, foundBy: "user1"),
+            FoundRegion(regionID: "us-ca", foundAt: base.addingTimeInterval(10), inputMethod: .voice, foundBy: "user2")
+        ]
+        let trip = try makeTrip(createdBy: "user1", foundRegions: regions)
+        let result = LegacyTripAdapter.adapt(trip)
+
+        #expect(result.session.mode == .collaborative)
+        #expect(result.discoveries.count == 2)
+        #expect(result.discoveries.allSatisfy { $0.targetId == "us-ca" })
+        #expect(result.credits.count == 2)
+        let participantIds = Set(result.credits.map(\.participantId))
+        #expect(participantIds == Set(["user1", "user2"]))
+        for c in result.credits {
+            #expect(c.creditType == .shared)
+            #expect(c.weight == 0.5)
+        }
+    }
+
+    @Test @MainActor func soloOneDiscoveryPerTargetProducesFullCredits() async throws {
+        let regions = [
+            FoundRegion(regionID: "us-ca", foundAt: .now, inputMethod: .list, foundBy: "solo_user"),
+            FoundRegion(regionID: "us-ny", foundAt: .now, inputMethod: .voice, foundBy: "solo_user")
+        ]
+        let trip = try makeTrip(createdBy: "solo_user", foundRegions: regions)
+        let result = LegacyTripAdapter.adapt(trip)
+
+        #expect(result.session.mode == .solo)
+        #expect(result.credits.count == 2)
+        for c in result.credits {
+            #expect(c.creditType == .full)
+            #expect(c.participantId == "solo_user")
+            #expect(c.weight == 1.0)
+        }
+    }
 }

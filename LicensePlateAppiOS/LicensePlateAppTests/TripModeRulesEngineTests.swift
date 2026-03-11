@@ -58,6 +58,10 @@ struct TripModeRulesEngineTests {
         #expect(TripModeRulesEngine.displayFirstFinderProminently(mode: .solo) == false)
     }
 
+    @Test func displayFirstFinderProminentlyCombinedIsFalse() async throws {
+        #expect(TripModeRulesEngine.displayFirstFinderProminently(mode: .combined) == false)
+    }
+
     // MARK: - canParticipantUnfind
 
     @Test func canParticipantUnfindSoloDiscovererCanUnfind() async throws {

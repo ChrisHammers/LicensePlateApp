@@ -72,7 +72,6 @@ enum LegacyTripAdapter {
         )
 
         var discoveries: [GameDiscovery] = []
-        var credits: [GameCredit] = []
         for fr in trip.foundRegions {
             let discoveryId = UUID().uuidString
             let participantId = fr.foundBy ?? createdByUserId
@@ -86,11 +85,23 @@ enum LegacyTripAdapter {
                 location: fr.foundAtLocation
             )
             discoveries.append(discovery)
-            credits.append(GameCredit(
-                discoveryId: discoveryId,
-                participantId: participantId,
-                creditType: .full
-            ))
+        }
+
+        // Compute credits per target using trip mode (Step 06.5.5 — mode logic alignment).
+        // Collaborative: use last discovery so all finders get shared credit. Full-credit modes: use first discovery so only first finder gets credit.
+        var credits: [GameCredit] = []
+        let discoveriesByTarget = Dictionary(grouping: discoveries, by: \.targetId)
+        let isShared = TripModeRulesEngine.creditType(for: session.mode) == .shared
+        for (_, targetDiscoveries) in discoveriesByTarget {
+            let sorted = targetDiscoveries.sorted { $0.discoveredAt < $1.discoveredAt }
+            guard let discovery = isShared ? sorted.last : sorted.first else { continue }
+            let existing = isShared ? Array(sorted.dropLast()) : Array(sorted.dropFirst())
+            let creditsForTarget = GameCreditCalculator.credits(
+                for: session.mode,
+                discovery: discovery,
+                existingDiscoveriesForTarget: existing
+            )
+            credits.append(contentsOf: creditsForTarget)
         }
 
         return LegacyTripAdapterResult(

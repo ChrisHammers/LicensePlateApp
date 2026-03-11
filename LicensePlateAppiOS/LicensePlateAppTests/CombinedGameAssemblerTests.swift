@@ -77,7 +77,7 @@ struct CombinedGameAssemblerTests {
         #expect(instances.isEmpty)
     }
 
-    @Test func emptyEnabledTypesReturnsEmpty() async throws {
+    @Test @MainActor func emptyEnabledTypesReturnsEmpty() async throws {
         let session = makeSession()
         let config = CombinedGameConfiguration(enabledGameTypes: [])
 
