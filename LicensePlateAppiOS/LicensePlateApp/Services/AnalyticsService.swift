@@ -90,6 +90,10 @@ class AnalyticsService {
         case combinedTripSetupOpened
         case combinedTripCreated(gameTypes: [String])
 
+        // Travel Log (Step 07)
+        case travelLogOpened
+        case tripSummaryViewed(sessionId: String)
+
         var name: String {
             switch self {
             case .friendsScreenOpened: return "friends_screen_opened"
@@ -146,6 +150,8 @@ class AnalyticsService {
             case .tripInviteCanceled: return "trip_invite_canceled"
             case .combinedTripSetupOpened: return "combined_trip_setup_opened"
             case .combinedTripCreated: return "combined_trip_created"
+            case .travelLogOpened: return "travel_log_opened"
+            case .tripSummaryViewed: return "trip_summary_viewed"
             }
         }
         
@@ -183,6 +189,10 @@ class AnalyticsService {
                 return nil
             case .combinedTripCreated(let gameTypes):
                 return ["game_types": gameTypes.joined(separator: ",")]
+            case .tripSummaryViewed(let sessionId):
+                return ["session_id": sessionId]
+            case .travelLogOpened:
+                return nil
             default:
                 return nil
             }

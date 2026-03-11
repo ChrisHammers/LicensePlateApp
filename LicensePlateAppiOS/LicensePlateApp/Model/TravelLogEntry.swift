@@ -17,6 +17,12 @@ struct TravelLogEntry: Codable, Identifiable, Sendable {
     var summary: String
     /// Optional location metadata (e.g. centroid or region list).
     var locationMetadata: [String: String]?
+    /// Number of participants (for list stats). Step 07 optional; nil when unknown.
+    var participantCount: Int?
+    /// Number of games in the trip (for list stats). Step 07 optional; nil when unknown.
+    var gameCount: Int?
+    /// Status for showing ended vs cancelled in list. Step 07 optional.
+    var status: TripStatus?
 
     init(
         id: String = UUID().uuidString,
@@ -24,7 +30,10 @@ struct TravelLogEntry: Codable, Identifiable, Sendable {
         tripName: String,
         endedAt: Date,
         summary: String,
-        locationMetadata: [String: String]? = nil
+        locationMetadata: [String: String]? = nil,
+        participantCount: Int? = nil,
+        gameCount: Int? = nil,
+        status: TripStatus? = nil
     ) {
         self.id = id
         self.sessionId = sessionId
@@ -32,5 +41,8 @@ struct TravelLogEntry: Codable, Identifiable, Sendable {
         self.endedAt = endedAt
         self.summary = summary
         self.locationMetadata = locationMetadata
+        self.participantCount = participantCount
+        self.gameCount = gameCount
+        self.status = status
     }
 }

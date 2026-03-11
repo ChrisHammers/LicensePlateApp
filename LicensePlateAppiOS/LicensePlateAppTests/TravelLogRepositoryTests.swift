@@ -68,7 +68,7 @@ struct TravelLogRepositoryTests {
         context.insert(entity1)
         try context.save()
 
-        let entries = try repo.getSummaryProjections(userId: nil, sortBy: .endedAtDesc, limit: 10)
+        let entries = try repo.getSummaryProjections(userId: nil, sortBy: .endedAtDesc, limit: 10, statusFilter: .endedOnly)
         #expect(entries.count == 1)
         #expect(entries[0].tripName == "Road Trip")
         #expect(entries[0].sessionId == UUID(uuidString: id1))
@@ -102,12 +102,12 @@ struct TravelLogRepositoryTests {
         context.insert(entity2)
         try context.save()
 
-        let desc = try repo.getSummaryProjections(userId: nil, sortBy: .endedAtDesc, limit: 10)
+        let desc = try repo.getSummaryProjections(userId: nil, sortBy: .endedAtDesc, limit: 10, statusFilter: .endedOnly)
         #expect(desc.count == 2)
         #expect(desc[0].tripName == "Newer")
         #expect(desc[1].tripName == "Older")
 
-        let asc = try repo.getSummaryProjections(userId: nil, sortBy: .endedAtAsc, limit: 10)
+        let asc = try repo.getSummaryProjections(userId: nil, sortBy: .endedAtAsc, limit: 10, statusFilter: .endedOnly)
         #expect(asc.count == 2)
         #expect(asc[0].tripName == "Older")
         #expect(asc[1].tripName == "Newer")

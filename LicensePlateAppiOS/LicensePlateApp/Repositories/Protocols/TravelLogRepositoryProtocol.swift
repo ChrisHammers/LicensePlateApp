@@ -14,10 +14,17 @@ enum TravelLogSort {
     case endedAtAsc
 }
 
+/// When true, include both ended and cancelled sessions in Travel Log. Step 07 optional.
+enum TravelLogStatusFilter {
+    case endedOnly
+    case endedAndCancelled
+}
+
 @MainActor
 protocol TravelLogRepositoryProtocol: AnyObject {
     func setModelContext(_ context: ModelContext)
 
     func fetchCompletedSessions(userId: String?, limit: Int) throws -> [TripSession]
-    func getSummaryProjections(userId: String?, sortBy: TravelLogSort, limit: Int) throws -> [TravelLogEntry]
+    /// - Parameter statusFilter: .endedOnly (default) or .endedAndCancelled for abandoned trips.
+    func getSummaryProjections(userId: String?, sortBy: TravelLogSort, limit: Int, statusFilter: TravelLogStatusFilter) throws -> [TravelLogEntry]
 }

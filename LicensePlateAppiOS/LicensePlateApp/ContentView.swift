@@ -25,6 +25,13 @@ struct ContentView: View {
         tripInviteRepository: TripInviteRepository.shared,
         authService: FirebaseAuthService()
     )
+    @StateObject private var travelLogViewModel = TravelLogViewModel(
+        travelLogRepository: TravelLogRepository.shared,
+        tripSessionRepository: TripSessionRepository.shared,
+        gameInstanceRepository: GameInstanceRepository.shared,
+        tripRepository: TripRepository.shared,
+        authService: FirebaseAuthService()
+    )
     @State private var travelLogEntries: [TravelLogEntry] = []
     @AppStorage("boundariesLoaded") private var boundariesLoaded = false
     
@@ -175,7 +182,7 @@ struct ContentView: View {
                     .environmentObject(authService)
                 }
                 .sheet(isPresented: $isShowingTravelLog) {
-                  TravelLogView()
+                  TravelLogView(viewModel: travelLogViewModel)
                     .environmentObject(authService)
                 }
                 .task {
@@ -190,6 +197,7 @@ struct ContentView: View {
                   TripSessionRepository.shared.setModelContext(modelContext)
                   GameInstanceRepository.shared.setModelContext(modelContext)
                   TravelLogRepository.shared.setModelContext(modelContext)
+                  TripRepository.shared.setModelContext(modelContext)
                   TripInviteRepository.shared.setModelContext(modelContext)
                   EntitlementService.shared.setModelContext(modelContext)
                   
@@ -202,6 +210,7 @@ struct ContentView: View {
                 }
                 .onAppear {
                   pendingTripsViewModel.setAuthService(authService)
+                  travelLogViewModel.setAuthService(authService)
                   pendingTripsViewModel.loadIfNeeded()
                   loadTravelLogEntries()
                 }
@@ -499,7 +508,8 @@ struct ContentView: View {
             travelLogEntries = try TravelLogRepository.shared.getSummaryProjections(
                 userId: userId,
                 sortBy: .endedAtDesc,
-                limit: 50
+                limit: 50,
+                statusFilter: .endedOnly
             )
         } catch {
             travelLogEntries = []

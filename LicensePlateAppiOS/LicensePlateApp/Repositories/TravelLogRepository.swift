@@ -43,12 +43,21 @@ final class TravelLogRepository: ObservableObject, TravelLogRepositoryProtocol {
 
     // MARK: - Summary projections (TravelLogEntry)
 
-    func getSummaryProjections(userId: String?, sortBy: TravelLogSort, limit: Int) throws -> [TravelLogEntry] {
+    func getSummaryProjections(userId: String?, sortBy: TravelLogSort, limit: Int, statusFilter: TravelLogStatusFilter = .endedOnly) throws -> [TravelLogEntry] {
         guard let ctx = modelContext else { throw TravelLogRepositoryError.noModelContext }
         let ended = TripStatus.ended.rawValue
-        var descriptor = FetchDescriptor<TripSessionEntity>(
-            predicate: #Predicate<TripSessionEntity> { $0.status == ended }
-        )
+        let cancelled = TripStatus.cancelled.rawValue
+        var descriptor: FetchDescriptor<TripSessionEntity>
+        switch statusFilter {
+        case .endedOnly:
+            descriptor = FetchDescriptor<TripSessionEntity>(
+                predicate: #Predicate<TripSessionEntity> { $0.status == ended }
+            )
+        case .endedAndCancelled:
+            descriptor = FetchDescriptor<TripSessionEntity>(
+                predicate: #Predicate<TripSessionEntity> { $0.status == ended || $0.status == cancelled }
+            )
+        }
         switch sortBy {
         case .endedAtDesc:
             descriptor.sortBy = [SortDescriptor(\.endedAt, order: .reverse)]
@@ -66,6 +75,8 @@ final class TravelLogRepository: ObservableObject, TravelLogRepositoryProtocol {
             guard let endedAt = entity.endedAt,
                   let sessionId = UUID(uuidString: entity.id) else { return nil }
             let participantCount = participantIds(from: entity.participantsData).count
+            let gameCount = gameCountForSession(sessionId: entity.id, context: ctx)
+            let status = TripStatus(rawValue: entity.status) ?? .ended
             let summary = participantCount > 0
                 ? "\(participantCount) participant(s)"
                 : "Trip completed"
@@ -75,7 +86,10 @@ final class TravelLogRepository: ObservableObject, TravelLogRepositoryProtocol {
                 tripName: entity.name,
                 endedAt: endedAt,
                 summary: summary,
-                locationMetadata: nil
+                locationMetadata: nil,
+                participantCount: participantCount,
+                gameCount: gameCount,
+                status: status
             )
         }
     }
@@ -88,6 +102,13 @@ final class TravelLogRepository: ObservableObject, TravelLogRepositoryProtocol {
             return []
         }
         return Set(participants.map(\.userId))
+    }
+
+    private func gameCountForSession(sessionId: String, context: ModelContext) -> Int {
+        let descriptor = FetchDescriptor<GameInstanceEntity>(
+            predicate: #Predicate<GameInstanceEntity> { $0.sessionId == sessionId }
+        )
+        return (try? context.fetchCount(descriptor)) ?? 0
     }
 }
 

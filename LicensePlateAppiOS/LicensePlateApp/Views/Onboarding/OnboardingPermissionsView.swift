@@ -149,7 +149,8 @@ struct OnboardingPermissionsView: View {
         case .authorizedAlways:
             return .green
         case .authorizedWhenInUse:
-            return Color.Theme.permissionYellow
+            return Color.Theme.permissionOrange
+            
         case .denied, .restricted:
             return .red
         case .notDetermined:

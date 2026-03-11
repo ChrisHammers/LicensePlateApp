@@ -28,9 +28,16 @@ final class PendingTripsViewUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        // Travel Log is now an inline section on the main screen
-        let travelLogHeader = app.staticTexts["Travel Log"]
-        XCTAssertTrue(travelLogHeader.waitForExistence(timeout: 8), "Travel Log section should be visible on main screen")
+        // Open Travel Log via toolbar map button; sheet shows "Travel Log" title or empty state
+        let mapButton = app.buttons["Travel Log Invites"]
+        XCTAssertTrue(mapButton.waitForExistence(timeout: 8), "Travel Log toolbar button should exist")
+        mapButton.tap()
+        let travelLogTitle = app.navigationBars["Travel Log"].firstMatch
+        let noTripsText = app.staticTexts["No completed trips yet"]
+        XCTAssertTrue(
+            travelLogTitle.waitForExistence(timeout: 4) || noTripsText.waitForExistence(timeout: 4),
+            "Travel Log sheet should show title or empty state"
+        )
     }
 
     @MainActor
