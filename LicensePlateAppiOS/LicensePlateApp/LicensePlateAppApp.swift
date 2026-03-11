@@ -126,9 +126,10 @@ struct LicensePlateAppApp: App {
     // Use versioned schema for future migration support
     var sharedModelContainer: ModelContainer = {
         let schema = Schema(versionedSchema: CurrentSchema.self)
+        let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PLAYGROUNDS"] == "1"
         let modelConfiguration = ModelConfiguration(
             schema: schema,
-            isStoredInMemoryOnly: false
+            isStoredInMemoryOnly: isPreview
         )
 
         do {
@@ -139,7 +140,18 @@ struct LicensePlateAppApp: App {
                 configurations: [modelConfiguration]
             )
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            let nsError = error as NSError
+            var detail = "\(error)"
+            if !nsError.userInfo.isEmpty {
+                detail += " UserInfo: \(nsError.userInfo)"
+            }
+            if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+                detail += " Underlying: \(underlying.localizedDescription)"
+                if !underlying.userInfo.isEmpty {
+                    detail += " \(underlying.userInfo)"
+                }
+            }
+            fatalError("Could not create ModelContainer: \(detail)")
         }
     }()
     

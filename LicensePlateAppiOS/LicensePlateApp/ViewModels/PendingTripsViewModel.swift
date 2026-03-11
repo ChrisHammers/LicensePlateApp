@@ -1,0 +1,114 @@
+//
+//  PendingTripsViewModel.swift
+//  LicensePlateApp
+//
+//  Step 04 — ViewModel for Pending Trips (trip invites). No direct Firebase or ModelContext access.
+//
+
+import Foundation
+import Combine
+
+@MainActor
+final class PendingTripsViewModel: ObservableObject {
+    @Published private(set) var incomingInvites: [TripInvite] = []
+    @Published private(set) var outgoingInvites: [TripInvite] = []
+    @Published var isLoading = false
+    @Published var errorMessage: String?
+
+    private let tripInviteRepository: TripInviteRepositoryProtocol
+    private var authService: FirebaseAuthService
+    private var cancellables = Set<AnyCancellable>()
+
+    init(tripInviteRepository: TripInviteRepositoryProtocol, authService: FirebaseAuthService) {
+        self.tripInviteRepository = tripInviteRepository
+        self.authService = authService
+    }
+
+    func setAuthService(_ service: FirebaseAuthService) {
+        self.authService = service
+    }
+
+    var currentUserId: String? {
+        authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+    }
+
+    /// Call after repository context is set. Loads invites and subscribes to updates.
+    func loadIfNeeded() {
+        guard let userId = currentUserId else { return }
+        loadInvites(userId: userId)
+        if let repo = tripInviteRepository as? TripInviteRepository {
+            repo.$tripInvites
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in
+                    self?.loadInvites(userId: userId)
+                }
+                .store(in: &cancellables)
+        }
+    }
+
+    func loadInvites(userId: String) {
+        isLoading = true
+        errorMessage = nil
+        do {
+            incomingInvites = try tripInviteRepository.getIncomingInvites(userId: userId)
+            outgoingInvites = try tripInviteRepository.getOutgoingInvites(userId: userId)
+            if let repo = tripInviteRepository as? TripInviteRepository {
+                repo.refreshPublishedInvites(userId: userId)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+
+    func accept(invite: TripInvite) {
+        guard let userId = currentUserId else { return }
+        FeedbackService.shared.buttonTap()
+        errorMessage = nil
+        do {
+            try tripInviteRepository.acceptInvite(inviteId: invite.inviteId, userId: userId)
+            AnalyticsService.shared.log(.tripInviteAccepted)
+            FeedbackService.shared.actionSuccess()
+            loadInvites(userId: userId)
+        } catch {
+            errorMessage = error.localizedDescription
+            FeedbackService.shared.actionError()
+        }
+    }
+
+    func decline(invite: TripInvite) {
+        guard let userId = currentUserId else { return }
+        FeedbackService.shared.buttonTap()
+        errorMessage = nil
+        do {
+            try tripInviteRepository.declineInvite(inviteId: invite.inviteId, userId: userId)
+            AnalyticsService.shared.log(.tripInviteDeclined)
+            FeedbackService.shared.actionSuccess()
+            loadInvites(userId: userId)
+        } catch {
+            errorMessage = error.localizedDescription
+            FeedbackService.shared.actionError()
+        }
+    }
+
+    func cancel(invite: TripInvite) {
+        guard let userId = currentUserId else { return }
+        FeedbackService.shared.buttonTap()
+        errorMessage = nil
+        do {
+            try tripInviteRepository.cancelInvite(inviteId: invite.inviteId, userId: userId)
+            AnalyticsService.shared.log(.tripInviteCanceled)
+            FeedbackService.shared.actionSuccess()
+            loadInvites(userId: userId)
+        } catch {
+            errorMessage = error.localizedDescription
+            FeedbackService.shared.actionError()
+        }
+    }
+
+    /// Call when screen appears to log analytics.
+    func onAppear() {
+        AnalyticsService.shared.log(.tripInvitesScreenOpened)
+        loadIfNeeded()
+    }
+}

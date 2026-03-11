@@ -79,7 +79,25 @@ class AnalyticsService {
         case badgeProgress(badgeId: String, progress: Int)
         case badgeUnlocked(badgeId: String)
         case badgeEquipped(badgeId: String)
-        
+
+        // Trip invites (Step 04)
+        case tripInvitesScreenOpened
+        case tripInviteAccepted
+        case tripInviteDeclined
+        case tripInviteCanceled
+
+        // Combined games (Step 06)
+        case combinedTripSetupOpened
+        case combinedTripCreated(gameTypes: [String])
+
+        // Travel Log (Step 07)
+        case travelLogOpened
+        case tripSummaryViewed(sessionId: String)
+
+        // Notifications & eligibility (Step 08)
+        case notificationEligibilityChecked(kind: String, eligible: Bool)
+        case notificationDeliveredTripInvite
+
         var name: String {
             switch self {
             case .friendsScreenOpened: return "friends_screen_opened"
@@ -130,6 +148,16 @@ class AnalyticsService {
             case .badgeProgress: return "badge_progress"
             case .badgeUnlocked: return "badge_unlocked"
             case .badgeEquipped: return "badge_equipped"
+            case .tripInvitesScreenOpened: return "trip_invites_screen_opened"
+            case .tripInviteAccepted: return "trip_invite_accepted"
+            case .tripInviteDeclined: return "trip_invite_declined"
+            case .tripInviteCanceled: return "trip_invite_canceled"
+            case .combinedTripSetupOpened: return "combined_trip_setup_opened"
+            case .combinedTripCreated: return "combined_trip_created"
+            case .travelLogOpened: return "travel_log_opened"
+            case .tripSummaryViewed: return "trip_summary_viewed"
+            case .notificationEligibilityChecked: return "notification_eligibility_checked"
+            case .notificationDeliveredTripInvite: return "notification_delivered_trip_invite"
             }
         }
         
@@ -161,6 +189,20 @@ class AnalyticsService {
                 return ["badge_id": badgeId, "progress": progress]
             case .badgeUnlocked(let badgeId), .badgeEquipped(let badgeId):
                 return ["badge_id": badgeId]
+            case .tripInvitesScreenOpened, .tripInviteAccepted, .tripInviteDeclined, .tripInviteCanceled:
+                return nil
+            case .combinedTripSetupOpened:
+                return nil
+            case .combinedTripCreated(let gameTypes):
+                return ["game_types": gameTypes.joined(separator: ",")]
+            case .tripSummaryViewed(let sessionId):
+                return ["session_id": sessionId]
+            case .travelLogOpened:
+                return nil
+            case .notificationEligibilityChecked(let kind, let eligible):
+                return ["kind": kind, "eligible": eligible]
+            case .notificationDeliveredTripInvite:
+                return nil
             default:
                 return nil
             }
