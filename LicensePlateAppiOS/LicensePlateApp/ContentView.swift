@@ -214,14 +214,22 @@ struct ContentView: View {
                   addTripButton
                 }
                 .sheet(isPresented: $isShowingCreateSheet) {
-                  NewTripSheet { tripData in
-                    createTrip(with: tripData)
-                  }
-                  .presentationDetents([smallDetent, .medium, .large], selection: $sheetDetent)
-                  .presentationDragIndicator(.visible)
-                  .onAppear {
-                    sheetDetent = smallDetent
-                  }
+                    CombinedTripSetupView(
+                        viewModel: CombinedTripSetupViewModel(
+                            tripSessionRepository: TripSessionRepository.shared,
+                            gameInstanceRepository: GameInstanceRepository.shared,
+                            authService: authService
+                        ),
+                        onCreated: { trip in
+                            path.append(trip.id)
+                            isShowingCreateSheet = false
+                        }
+                    )
+                    .presentationDetents([smallDetent, .medium, .large], selection: $sheetDetent)
+                    .presentationDragIndicator(.visible)
+                    .onAppear {
+                        sheetDetent = smallDetent
+                    }
                 }
                 .navigationDestination(for: UUID.self) { tripID in
                   if let trip = trips.first(where: { $0.id == tripID }) {
