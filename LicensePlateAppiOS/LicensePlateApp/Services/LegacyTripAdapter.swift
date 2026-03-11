@@ -55,6 +55,7 @@ enum LegacyTripAdapter {
             endedAt: trip.tripEndedAt,
             endedBy: trip.tripEndedBy,
             participants: participants,
+            teams: [],
             legacyTripId: trip.id,
             enabledCountryRawValues: trip.enabledCountryStrings.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
         )

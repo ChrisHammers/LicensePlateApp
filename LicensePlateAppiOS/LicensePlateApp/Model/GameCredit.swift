@@ -27,18 +27,22 @@ struct GameCredit: Codable, Identifiable, Sendable {
     var creditType: GameCreditType
     /// Optional weight for scoring (e.g. 1.0 for full, 0.5 for shared).
     var weight: Double?
+    /// Optional team id when credit is attributed to a team (future team-based scoring).
+    var teamId: String?
 
     init(
         id: String = UUID().uuidString,
         discoveryId: String,
         participantId: String,
         creditType: GameCreditType,
-        weight: Double? = nil
+        weight: Double? = nil,
+        teamId: String? = nil
     ) {
         self.id = id
         self.discoveryId = discoveryId
         self.participantId = participantId
         self.creditType = creditType
         self.weight = weight
+        self.teamId = teamId
     }
 }

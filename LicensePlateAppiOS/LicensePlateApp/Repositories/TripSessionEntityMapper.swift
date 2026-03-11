@@ -11,7 +11,7 @@ enum TripSessionEntityMapper {
 
     private static let countrySeparator = ","
 
-    /// Map domain TripSession to SwiftData TripSessionEntity (for insert/update).
+    /// Map domain TripSession to SwiftData TripSessionEntity (for insert/update). Teams are stored in TripSessionTeamsEntity separately.
     static func toEntity(_ session: TripSession) -> TripSessionEntity {
         let participantsData: Data? = encodeParticipants(session.participants)
         let enabledCountriesString = session.enabledCountryRawValues.joined(separator: countrySeparator)
@@ -30,9 +30,10 @@ enum TripSessionEntityMapper {
         )
     }
 
-    /// Map SwiftData TripSessionEntity to domain TripSession.
-    static func toDomain(_ entity: TripSessionEntity) -> TripSession {
+    /// Map SwiftData TripSessionEntity to domain TripSession. Pass teamsData from TripSessionTeamsEntity when available.
+    static func toDomain(_ entity: TripSessionEntity, teamsData: Data? = nil) -> TripSession {
         let participants = decodeParticipants(entity.participantsData)
+        let teams = decodeTeams(teamsData)
         let countryValues = entity.enabledCountryRawValues.split(separator: Character(countrySeparator))
             .map { String($0).trimmingCharacters(in: .whitespaces) }
         let enabledRaw = countryValues.isEmpty ? ["United States", "Canada", "Mexico"] : countryValues
@@ -48,6 +49,7 @@ enum TripSessionEntityMapper {
             endedAt: entity.endedAt,
             endedBy: entity.endedBy,
             participants: participants,
+            teams: teams,
             legacyTripId: entity.legacyTripId.flatMap { UUID(uuidString: $0) },
             enabledCountryRawValues: enabledRaw,
             riskFlags: nil
@@ -77,5 +79,20 @@ enum TripSessionEntityMapper {
     private static func decodeParticipants(_ data: Data?) -> [TripParticipant] {
         guard let data = data else { return [] }
         return (try? JSONDecoder().decode([TripParticipant].self, from: data)) ?? []
+    }
+
+    /// Encode teams for storage in TripSessionTeamsEntity. Returns nil when empty.
+    static func encodeTeamsForStorage(_ teams: [TripTeam]) -> Data? {
+        guard !teams.isEmpty else { return nil }
+        return try? JSONEncoder().encode(teams)
+    }
+
+    private static func encodeTeams(_ teams: [TripTeam]) -> Data? {
+        encodeTeamsForStorage(teams)
+    }
+
+    private static func decodeTeams(_ data: Data?) -> [TripTeam] {
+        guard let data = data else { return [] }
+        return (try? JSONDecoder().decode([TripTeam].self, from: data)) ?? []
     }
 }

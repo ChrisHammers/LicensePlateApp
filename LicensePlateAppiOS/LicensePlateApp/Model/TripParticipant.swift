@@ -23,13 +23,16 @@ struct TripParticipant: Codable, Identifiable, Sendable {
     var joinedAt: Date
     /// When they left, if applicable.
     var leftAt: Date?
+    /// Optional team id when session uses teams; nil when not assigned to a team.
+    var teamId: String?
 
     var id: String { "\(userId)_\(joinedAt.timeIntervalSince1970)" }
 
-    init(userId: String, role: TripParticipantRole = .member, joinedAt: Date = .now, leftAt: Date? = nil) {
+    init(userId: String, role: TripParticipantRole = .member, joinedAt: Date = .now, leftAt: Date? = nil, teamId: String? = nil) {
         self.userId = userId
         self.role = role
         self.joinedAt = joinedAt
         self.leftAt = leftAt
+        self.teamId = teamId
     }
 }

@@ -35,6 +35,12 @@ final class SchemaVersion6Marker {
     init() {}
 }
 
+@Model
+final class SchemaVersion7Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
 // MARK: - Schema Version 1 (Initial)
 // Initial schema with Trip and AppUser
 
@@ -176,11 +182,42 @@ enum SchemaVersion6: VersionedSchema {
     }
 }
 
+// MARK: - Schema Version 7 (Team support — new TripSessionTeamsEntity only)
+// Added TripSessionTeamsEntity; TripSessionEntity unchanged to preserve schema fingerprint for migration.
+enum SchemaVersion7: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(7, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            Trip.self,
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            TripSessionTeamsEntity.self,
+            SchemaVersion7Marker.self
+        ]
+    }
+}
+
 // MARK: - Migration Plan
 // TODO: Once UI migrates to TripSessionEntity/GameInstanceEntity, plan legacy Trip deprecation.
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self]
+        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self]
     }
 
     static var stages: [MigrationStage] {
@@ -189,7 +226,8 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             .lightweight(fromVersion: SchemaVersion2.self, toVersion: SchemaVersion3.self),
             .lightweight(fromVersion: SchemaVersion3.self, toVersion: SchemaVersion4.self),
             .lightweight(fromVersion: SchemaVersion4.self, toVersion: SchemaVersion5.self),
-            .lightweight(fromVersion: SchemaVersion5.self, toVersion: SchemaVersion6.self)
+            .lightweight(fromVersion: SchemaVersion5.self, toVersion: SchemaVersion6.self),
+            .lightweight(fromVersion: SchemaVersion6.self, toVersion: SchemaVersion7.self)
         ]
     }
 }
@@ -198,5 +236,5 @@ enum AppMigrationPlan: SchemaMigrationPlan {
 // This points to the latest schema version
 // When creating a new version, update this to point to the latest
 // birthYear is stored in Firestore only (not SwiftData) to avoid schema migration
-typealias CurrentSchema = SchemaVersion6
+typealias CurrentSchema = SchemaVersion7
 

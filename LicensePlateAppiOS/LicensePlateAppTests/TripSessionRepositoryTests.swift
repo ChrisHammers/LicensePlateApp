@@ -138,4 +138,34 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         #expect(repo.lastSyncedAt(sessionId: UUID()) == nil)
     }
+
+    /// Step 06.5 — Session with teams and participant.teamId round-trips correctly.
+    @Test func sessionWithTeamsRoundTrips() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = TripSessionRepository.shared
+        repo.setModelContext(context)
+
+        let team1 = TripTeam(name: "Team A", participantUserIds: ["user1", "user2"])
+        let team2 = TripTeam(name: "Team B", participantUserIds: ["user3"])
+        let participant1 = TripParticipant(userId: "user1", role: .owner, teamId: team1.id)
+        let participant2 = TripParticipant(userId: "user2", role: .member, teamId: team1.id)
+        let session = TripSession(
+            name: "Team Trip",
+            status: .active,
+            mode: .solo,
+            createdBy: "user1",
+            startedAt: Date(),
+            participants: [participant1, participant2],
+            teams: [team1, team2]
+        )
+        try repo.create(session: session)
+
+        let loaded = try repo.session(byId: session.id)
+        #expect(loaded != nil)
+        #expect(loaded?.teams.count == 2)
+        #expect(loaded?.teams.first { $0.name == "Team A" }?.participantUserIds == ["user1", "user2"])
+        #expect(loaded?.participants.count == 2)
+        #expect(loaded?.participants.first { $0.userId == "user1" }?.teamId == team1.id)
+    }
 }

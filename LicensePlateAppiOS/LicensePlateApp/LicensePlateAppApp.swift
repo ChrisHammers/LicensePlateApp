@@ -140,7 +140,18 @@ struct LicensePlateAppApp: App {
                 configurations: [modelConfiguration]
             )
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            let nsError = error as NSError
+            var detail = "\(error)"
+            if !nsError.userInfo.isEmpty {
+                detail += " UserInfo: \(nsError.userInfo)"
+            }
+            if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+                detail += " Underlying: \(underlying.localizedDescription)"
+                if !underlying.userInfo.isEmpty {
+                    detail += " \(underlying.userInfo)"
+                }
+            }
+            fatalError("Could not create ModelContainer: \(detail)")
         }
     }()
     

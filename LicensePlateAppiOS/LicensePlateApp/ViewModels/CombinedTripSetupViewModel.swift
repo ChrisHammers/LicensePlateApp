@@ -117,6 +117,7 @@ final class CombinedTripSetupViewModel: ObservableObject {
             endedAt: nil,
             endedBy: nil,
             participants: [participant],
+            teams: [],
             legacyTripId: nil,
             enabledCountryRawValues: countryList.map { $0.rawValue }
         )
