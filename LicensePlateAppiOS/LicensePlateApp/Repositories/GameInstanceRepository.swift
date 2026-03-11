@@ -55,6 +55,36 @@ final class GameInstanceRepository: ObservableObject, GameInstanceRepositoryProt
 
     // MARK: - Update
 
+    /// Step 07.5 — Persist full instance (commonConfig, payload, ruleSet). Use when config or payload changed.
+    func update(instance: GameInstance) throws {
+        guard let ctx = modelContext else { throw GameInstanceRepositoryError.noModelContext }
+        let id = instance.id.uuidString
+        let descriptor = FetchDescriptor<GameInstanceEntity>(
+            predicate: #Predicate<GameInstanceEntity> { $0.id == id }
+        )
+        guard let entity = try ctx.fetch(descriptor).first else {
+            throw GameInstanceRepositoryError.instanceNotFound(instance.id)
+        }
+        let updated = GameInstanceMapper.toEntity(instance)
+        entity.ruleSetData = updated.ruleSetData
+        entity.commonConfigData = updated.commonConfigData
+        entity.gameSpecificPayloadType = updated.gameSpecificPayloadType
+        entity.gameSpecificPayloadVersion = updated.gameSpecificPayloadVersion
+        entity.gameSpecificPayloadData = updated.gameSpecificPayloadData
+        try ctx.save()
+    }
+
+    /// Step 07.5 — Set lifecycle to started and lock config for all games in the session.
+    func transitionGamesToStarted(sessionId: UUID) throws {
+        let instances = try fetchByTripSession(sessionId: sessionId)
+        for var instance in instances {
+            instance.commonConfig.lifecycleState = .started
+            instance.commonConfig.configLocked = true
+            instance.commonConfig.configLockReason = .gameStarted
+            try update(instance: instance)
+        }
+    }
+
     func updateRuleSet(instanceId: UUID, ruleSet: GameRuleSet) throws {
         guard let ctx = modelContext else { throw GameInstanceRepositoryError.noModelContext }
         let id = instanceId.uuidString

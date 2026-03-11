@@ -129,6 +129,9 @@ final class CombinedTripSetupViewModel: ObservableObject {
         for instance in instances {
             try gameInstanceRepository.create(instance: instance)
         }
+        if session.startedAt != nil {
+            try gameInstanceRepository.transitionGamesToStarted(sessionId: sessionId)
+        }
 
         let legacyTrip = Trip(
             id: sessionId,

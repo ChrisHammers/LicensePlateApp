@@ -2,7 +2,7 @@
 //  GameInstanceMapper.swift
 //  LicensePlateApp
 //
-//  Maps GameInstance (domain) <-> GameInstanceEntity (SwiftData). Step 03 — repository layer.
+//  Maps GameInstance (domain) <-> GameInstanceEntity (SwiftData). Step 03 — repository layer. Step 07.5 — config envelope.
 //
 
 import Foundation
@@ -11,19 +11,30 @@ enum GameInstanceMapper {
 
     /// Map domain GameInstance to SwiftData GameInstanceEntity (for insert/update).
     static func toEntity(_ instance: GameInstance) -> GameInstanceEntity {
-        let ruleSetData = (try? JSONEncoder().encode(instance.ruleSet))
+        let ruleSetData = try? JSONEncoder().encode(instance.ruleSet)
+        let commonConfigData = try? JSONEncoder().encode(instance.commonConfig)
         return GameInstanceEntity(
             id: instance.id.uuidString,
             definitionId: instance.definitionId,
             sessionId: instance.sessionId.uuidString,
             startedAt: instance.startedAt,
             endedAt: instance.endedAt,
-            ruleSetData: ruleSetData
+            ruleSetData: ruleSetData,
+            commonConfigData: commonConfigData,
+            gameSpecificPayloadType: instance.gameSpecificPayloadType,
+            gameSpecificPayloadVersion: instance.gameSpecificPayloadVersion,
+            gameSpecificPayloadData: instance.gameSpecificPayloadData
         )
     }
 
-    /// Map SwiftData GameInstanceEntity to domain GameInstance.
+    /// Map SwiftData GameInstanceEntity to domain GameInstance. Uses commonConfigData when present; else defaults and ruleSetData.
     static func toDomain(_ entity: GameInstanceEntity) -> GameInstance {
+        let commonConfig: CommonGameConfig
+        if let data = entity.commonConfigData, let decoded = try? JSONDecoder().decode(CommonGameConfig.self, from: data) {
+            commonConfig = decoded
+        } else {
+            commonConfig = CommonGameConfig()
+        }
         let ruleSet: GameRuleSet
         if let data = entity.ruleSetData, let decoded = try? JSONDecoder().decode(GameRuleSet.self, from: data) {
             ruleSet = decoded
@@ -36,7 +47,11 @@ enum GameInstanceMapper {
             sessionId: UUID(uuidString: entity.sessionId) ?? UUID(),
             startedAt: entity.startedAt,
             endedAt: entity.endedAt,
-            ruleSet: ruleSet
+            ruleSet: ruleSet,
+            commonConfig: commonConfig,
+            gameSpecificPayloadType: entity.gameSpecificPayloadType,
+            gameSpecificPayloadVersion: entity.gameSpecificPayloadVersion,
+            gameSpecificPayloadData: entity.gameSpecificPayloadData
         )
     }
 

@@ -243,7 +243,9 @@ struct TripSummaryView: View {
                 discoveryCount: 5,
                 startedAt: nil,
                 endedAt: nil,
-                firstDiscoveries: []
+                firstDiscoveries: [],
+                completionGoal: 50,
+                progressDescription: "5 / 50 US regions"
             )
         ],
         participantContributions: [

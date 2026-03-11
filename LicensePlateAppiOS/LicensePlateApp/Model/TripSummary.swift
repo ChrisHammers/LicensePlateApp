@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// High-level stats and metadata for one game in a trip.
+/// High-level stats and metadata for one game in a trip. Step 07.5 — completionGoal and progressDescription from game config.
 struct TripSummaryGameItem: Sendable {
     var gameInstanceId: UUID
     var definitionId: String
@@ -16,6 +16,10 @@ struct TripSummaryGameItem: Sendable {
     var endedAt: Date?
     /// First discoveries or notable events (e.g. target id + label).
     var firstDiscoveries: [TargetDiscoverySummary]
+    /// Step 07.5 — Target count from game config (e.g. 50 for US states). Nil when config not available.
+    var completionGoal: Int?
+    /// Step 07.5 — Human-readable progress (e.g. "42 / 50 US states"). Nil when config not available.
+    var progressDescription: String?
 }
 
 /// Rich summary of a completed trip for TripSummaryView. All optional where data may be missing (e.g. no legacy Trip).

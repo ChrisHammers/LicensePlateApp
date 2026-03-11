@@ -97,4 +97,65 @@ struct TripSummaryBuilderTests {
         #expect(summary.discoveryProjection != nil)
         #expect(summary.discoveryProjection!.targetSummaries.count == 2)
     }
+
+    // MARK: - Step 07.5 Per-game config
+
+    @Test func buildWithLicensePlateConfigIncludesCompletionGoalAndProgressDescription() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "Config Trip",
+            status: .ended,
+            mode: .solo,
+            endedAt: Date(),
+            participants: [TripParticipant(userId: "user1", role: .owner)],
+            enabledCountryRawValues: ["United States"]
+        )
+        let lpConfig = LicensePlateGameConfig(
+            regionScope: .usOnly,
+            territoryOptions: LicensePlateTerritoryOptions(includeDC: false, includeUSTerritories: false, includeCanadianTerritories: true)
+        )
+        let payloadData = try JSONEncoder().encode(lpConfig)
+        let game = GameInstance(
+            id: gameId,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: GameType.licensePlate.rawValue),
+            commonConfig: CommonGameConfig(),
+            gameSpecificPayloadType: GameType.licensePlate.rawValue,
+            gameSpecificPayloadVersion: "1",
+            gameSpecificPayloadData: payloadData
+        )
+        let summary = TripSummaryBuilder.build(
+            session: session,
+            games: [game],
+            discoveries: [],
+            credits: []
+        )
+        #expect(summary.games.count == 1)
+        #expect(summary.games[0].completionGoal == 50)
+        #expect(summary.games[0].progressDescription == "0 / 50 US regions")
+    }
+
+    @Test func buildWithoutLicensePlatePayloadLeavesCompletionGoalAndProgressNil() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "No Config",
+            status: .ended,
+            mode: .solo,
+            participants: [TripParticipant(userId: "user1", role: .owner)]
+        )
+        let game = GameInstance(
+            id: gameId,
+            definitionId: "license_plate",
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate")
+        )
+        let summary = TripSummaryBuilder.build(session: session, games: [game], discoveries: [], credits: [])
+        #expect(summary.games[0].completionGoal == nil)
+        #expect(summary.games[0].progressDescription == nil)
+    }
 }
