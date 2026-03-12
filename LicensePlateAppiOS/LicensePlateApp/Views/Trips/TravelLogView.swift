@@ -172,7 +172,7 @@ extension TripSummary: Identifiable {
     var id: UUID { sessionId }
 }
 
-#Preview {
+#Preview("Travel Log") {
     TravelLogView(viewModel: TravelLogViewModel(
         travelLogRepository: TravelLogRepository.shared,
         tripSessionRepository: TripSessionRepository.shared,

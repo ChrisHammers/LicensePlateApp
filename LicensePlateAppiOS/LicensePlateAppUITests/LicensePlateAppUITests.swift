@@ -38,4 +38,14 @@ final class LicensePlateAppUITests: XCTestCase {
             XCUIApplication().launch()
         }
     }
+
+    /// Step 13 — Launch with --uitest and verify app launches. When app supports seed flags, extend to assert on seeded content.
+    @MainActor
+    func testLaunchWithUITestFlag() throws {
+        let app = XCUIApplication()
+        app.launchArguments = UITestLaunchHelper.launchArguments(uitest: true, skipOnboarding: false)
+        app.launchEnvironment = UITestLaunchHelper.launchEnvironment(analyticsDisabled: true)
+        app.launch()
+        XCTAssertTrue(app.exists, "App should launch")
+    }
 }

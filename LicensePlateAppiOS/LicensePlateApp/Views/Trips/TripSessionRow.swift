@@ -76,14 +76,16 @@ struct TripSessionRow: View {
     }
 }
 
-#Preview {
+#Preview("Solo trip") {
     List {
-        TripSessionRow(session: TripSession(
-            name: "Preview Session",
-            status: .active,
-            mode: .solo,
-            startedAt: Date()
-        ))
+        TripSessionRow(session: PreviewTripFixtures.soloTrip())
+    }
+    .listStyle(.insetGrouped)
+}
+
+#Preview("Completed trip") {
+    List {
+        TripSessionRow(session: PreviewTripFixtures.completedTrip())
     }
     .listStyle(.insetGrouped)
 }

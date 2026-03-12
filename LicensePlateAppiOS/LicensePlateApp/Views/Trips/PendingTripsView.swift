@@ -216,21 +216,23 @@ private struct TripInviteRow: View {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(for: TripInvite.self, configurations: config)
     let ctx = ModelContext(container)
+    let params = PreviewInviteFixturesParams.pendingInvite()
     let invite1 = TripInvite(
-        inviteId: UUID().uuidString,
-        tripSessionId: UUID().uuidString,
-        tripName: "West Coast Road Trip",
-        tripMode: TripMode.collaborative.rawValue,
-        fromUserId: "user-other",
-        toUserId: "user-me",
-        status: .pending,
-        createdAt: Date(),
-        expiresAt: Date().addingTimeInterval(86400)
+        inviteId: params.inviteId,
+        tripSessionId: params.tripSessionId,
+        tripName: params.tripName,
+        tripMode: params.tripMode,
+        fromUserId: params.fromUserId,
+        toUserId: params.toUserId,
+        status: params.status,
+        createdAt: params.createdAt,
+        expiresAt: params.expiresAt,
+        respondedAt: params.respondedAt
     )
     ctx.insert(invite1)
     try? ctx.save()
 
     return PendingTripsView()
-    .environmentObject(FirebaseAuthService())
-    .modelContainer(container)
+        .environmentObject(FirebaseAuthService())
+        .modelContainer(container)
 }
