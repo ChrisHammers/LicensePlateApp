@@ -13,11 +13,11 @@ struct CombinedTripSetupView: View {
     @Environment(\.modelContext) private var modelContext
 
     @StateObject private var viewModel: CombinedTripSetupViewModel
-    var onCreated: (Trip) -> Void
+    var onCreated: (TripSession) -> Void
 
     init(
         viewModel: CombinedTripSetupViewModel,
-        onCreated: @escaping (Trip) -> Void
+        onCreated: @escaping (TripSession) -> Void
     ) {
         _viewModel = StateObject(wrappedValue: viewModel)
         self.onCreated = onCreated
@@ -260,9 +260,9 @@ struct CombinedTripSetupView: View {
         FeedbackService.shared.buttonTap()
         viewModel.clearError()
         do {
-            let trip = try viewModel.createTrip(modelContext: modelContext)
+            let session = try viewModel.createTrip(modelContext: modelContext)
             FeedbackService.shared.actionSuccess()
-            onCreated(trip)
+            onCreated(session)
             dismiss()
         } catch {
             viewModel.setError(error.localizedDescription)

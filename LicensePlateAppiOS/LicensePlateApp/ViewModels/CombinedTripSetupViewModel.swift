@@ -81,8 +81,8 @@ final class CombinedTripSetupViewModel: ObservableObject {
         errorMessage = message
     }
 
-    /// Creates TripSession, GameInstances, and a legacy Trip. Inserts Trip into the given context and saves. Returns the created Trip on success.
-    func createTrip(modelContext: ModelContext) throws -> Trip {
+    /// Creates TripSession, GameInstances, and a legacy Trip. Inserts Trip into the given context and saves. Returns the created TripSession on success (for root navigation).
+    func createTrip(modelContext: ModelContext) throws -> TripSession {
         errorMessage = nil
         isCreating = true
         defer { isCreating = false }
@@ -169,7 +169,7 @@ final class CombinedTripSetupViewModel: ObservableObject {
 
         AnalyticsService.shared.log(.combinedTripCreated(gameTypes: types.map(\.rawValue)))
 
-        return legacyTrip
+        return session
     }
 
     private static func defaultTripName(from date: Date) -> String {

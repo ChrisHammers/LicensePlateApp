@@ -12,11 +12,19 @@ import AVFoundation
 import UserNotifications
 import Speech
 
+/// Item for the Active Trips list: session (from repo or adapted legacy) and optional Trip for display/delete.
+private struct ActiveListItem: Identifiable {
+    var id: UUID { session.id }
+    let session: TripSession
+    let isLegacyOnly: Bool
+    let trip: Trip?
+}
+
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Trip.createdAt, order: .reverse) private var trips: [Trip]
     @EnvironmentObject var authService: FirebaseAuthService
     @State private var path: [UUID] = []
+    @State private var activeListItems: [ActiveListItem] = []
     @State private var isShowingCreateSheet = false
     @State private var isShowingSettings = false
 //    @State private var isShowingPendingInvites = false
@@ -86,8 +94,8 @@ struct ContentView: View {
                     }
                     .textCase(nil)
 
-                    // 1. Active Trips (top)
-                    if trips.isEmpty {
+                    // 1. Active Trips (session-based)
+                    if activeListItems.isEmpty {
                         Section("Active Trips".localized) {
                             activeTripEmptyCard
                                 .listRowInsets(.init(top: 0, leading: 20, bottom: 24, trailing: 20))
@@ -96,7 +104,7 @@ struct ContentView: View {
                         .textCase(nil)
                     } else {
                         Section("Active Trips".localized) {
-                            tripList
+                            activeSessionList
                         }
                         .textCase(nil)
                         .listRowBackground(Color.clear)
@@ -207,12 +215,14 @@ struct ContentView: View {
                       InviteRepository.shared.startListening(userId: userId)
                   }
                   loadTravelLogEntries()
+                  loadActiveList()
                 }
                 .onAppear {
                   pendingTripsViewModel.setAuthService(authService)
                   travelLogViewModel.setAuthService(authService)
                   pendingTripsViewModel.loadIfNeeded()
                   loadTravelLogEntries()
+                  loadActiveList()
                   NotificationRoutingService.shared.startObservingIfNeeded(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
                 }
                 .overlay {
@@ -230,9 +240,10 @@ struct ContentView: View {
                             gameInstanceRepository: GameInstanceRepository.shared,
                             authService: authService
                         ),
-                        onCreated: { trip in
-                            path.append(trip.id)
+                        onCreated: { session in
+                            path.append(session.id)
                             isShowingCreateSheet = false
+                            loadActiveList()
                         }
                     )
                     .presentationDetents([smallDetent, .medium, .large], selection: $sheetDetent)
@@ -241,12 +252,15 @@ struct ContentView: View {
                         sheetDetent = smallDetent
                     }
                 }
-                .navigationDestination(for: UUID.self) { tripID in
-                  if let trip = trips.first(where: { $0.id == tripID }) {
-                    TripTrackerView(trip: trip)
-                  } else {
-                    TripMissingView()
-                  }
+                .onChange(of: isShowingCreateSheet) { _, isShowing in
+                    if !isShowing { loadActiveList() }
+                }
+                .navigationDestination(for: UUID.self) { sessionID in
+                    if let trip = try? TripRepository.shared.get(byId: sessionID) {
+                        TripTrackerView(trip: trip)
+                    } else {
+                        TripMissingView()
+                    }
                 }
               }
                 .transition(.opacity)
@@ -381,18 +395,84 @@ struct ContentView: View {
         .accessibilityLabel("No completed trips yet. Your completed trips will appear here.".localized)
     }
 
-    private var tripList: some View {
-        ForEach(trips) { trip in
-            NavigationLink(value: trip.id) {
-                TripRow(trip: trip)
-                    .padding(.vertical, 8)
+    private var activeSessionList: some View {
+        ForEach(activeListItems) { item in
+            NavigationLink(value: item.session.id) {
+                Group {
+                    if let trip = item.trip {
+                        TripRow(trip: trip)
+                    } else {
+                        TripSessionRow(session: item.session)
+                    }
+                }
+                .padding(.vertical, 8)
             }
             .listRowInsets(.init(top: 6, leading: 20, bottom: 6, trailing: 20))
             .listRowBackground(Color.clear)
-            .accessibilityLabel("Trip: %@".localized(trip.name))
+            .accessibilityLabel("Trip: %@".localized(item.session.name))
             .accessibilityHint("Double tap to open trip".localized)
         }
-        .onDelete(perform: deleteTrips)
+        .onDelete(perform: deleteActiveItems)
+    }
+
+    private func loadActiveList() {
+        let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+        do {
+            let activeSessions = try TripSessionRepository.shared.loadActiveSessions(userId: userId)
+            let excludeIds = Set(activeSessions.map(\.id))
+            let legacyTrips = try TripRepository.shared.fetchActiveLegacyTrips(excludingSessionIds: excludeIds)
+            let adaptedSessions = legacyTrips.map { LegacyTripAdapter.adapt($0).session }
+            let merged: [(TripSession, Bool)] =
+                activeSessions.map { ($0, false) } + adaptedSessions.map { ($0, true) }
+            let sorted = merged.sorted { a, b in
+                let dateA = a.0.startedAt ?? Date.distantPast
+                let dateB = b.0.startedAt ?? Date.distantPast
+                return dateA > dateB
+            }
+            var items: [ActiveListItem] = []
+            for (session, isLegacyOnly) in sorted {
+                let trip = try? TripRepository.shared.get(byId: session.id)
+                items.append(ActiveListItem(session: session, isLegacyOnly: isLegacyOnly, trip: trip))
+            }
+            activeListItems = items
+        } catch {
+            activeListItems = []
+        }
+    }
+
+    private func deleteActiveItems(at offsets: IndexSet) {
+        FeedbackService.shared.buttonTap()
+        for index in offsets {
+            let item = activeListItems[index]
+            if let trip = item.trip {
+                modelContext.delete(trip)
+            }
+            if !item.isLegacyOnly, let session = try? TripSessionRepository.shared.session(byId: item.session.id) {
+                let updated = TripSession(
+                    id: session.id,
+                    name: session.name,
+                    status: .cancelled,
+                    mode: session.mode,
+                    createdBy: session.createdBy,
+                    startedAt: session.startedAt,
+                    endedAt: Date(),
+                    endedBy: nil,
+                    participants: session.participants,
+                    teams: session.teams,
+                    legacyTripId: session.legacyTripId,
+                    enabledCountryRawValues: session.enabledCountryRawValues
+                )
+                try? TripSessionRepository.shared.save(session: updated)
+            }
+        }
+        do {
+            try modelContext.save()
+            FeedbackService.shared.actionSuccess()
+        } catch {
+            FeedbackService.shared.actionError()
+            assertionFailure("Failed to save after delete: \(error)")
+        }
+        loadActiveList()
     }
 
     private var addTripButton: some View {
@@ -486,20 +566,7 @@ struct ContentView: View {
         }
 
         path.append(newTrip.id)
-    }
-
-    private func deleteTrips(at offsets: IndexSet) {
-        FeedbackService.shared.buttonTap()
-            for index in offsets {
-            modelContext.delete(trips[index])
-        }
-        do {
-            try modelContext.save()
-            FeedbackService.shared.actionSuccess()
-        } catch {
-            FeedbackService.shared.actionError()
-            assertionFailure("Failed to delete trip: \(error)")
-        }
+        loadActiveList()
     }
 
     private func loadTravelLogEntries() {
@@ -1277,7 +1344,8 @@ struct DefaultSettingsView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: Trip.self, inMemory: true)
+        .environmentObject(FirebaseAuthService())
+        .modelContainer(for: [Trip.self, TripSessionEntity.self, GameInstanceEntity.self], inMemory: true)
 }
 
 // MARK: - Permission Row Component

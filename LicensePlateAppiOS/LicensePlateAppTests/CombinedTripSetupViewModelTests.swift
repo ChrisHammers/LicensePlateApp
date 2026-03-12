@@ -52,21 +52,28 @@ struct CombinedTripSetupViewModelTests {
         viewModel.includeCanada = false
         viewModel.includeMexico = false
 
-        let trip = try viewModel.createTrip(modelContext: ctx)
+        let session = try viewModel.createTrip(modelContext: ctx)
 
-        #expect(trip.name == "My Trip")
-        #expect(trip.foundRegions.isEmpty)
-        #expect(trip.enabledCountries == [.unitedStates])
-        #expect(trip.createdBy == userId)
+        #expect(session.name == "My Trip")
+        #expect(session.createdBy == userId)
 
-        let session = try sessionRepo.session(byId: trip.id)
-        #expect(session != nil)
-        #expect(session?.id == trip.id)
-        #expect(session?.name == "My Trip")
+        let loadedSession = try sessionRepo.session(byId: session.id)
+        #expect(loadedSession != nil)
+        #expect(loadedSession?.id == session.id)
+        #expect(loadedSession?.name == "My Trip")
 
-        let instances = try instanceRepo.fetchByTripSession(sessionId: trip.id)
+        let instances = try instanceRepo.fetchByTripSession(sessionId: session.id)
         #expect(instances.count == 1)
         #expect(instances[0].definitionId == GameType.licensePlate.rawValue)
+
+        let tripRepo = TripRepository.shared
+        tripRepo.setModelContext(ctx)
+        let trip = try tripRepo.get(byId: session.id)
+        #expect(trip != nil)
+        #expect(trip?.name == "My Trip")
+        #expect(trip?.foundRegions.isEmpty == true)
+        #expect(trip?.enabledCountries == [.unitedStates])
+        #expect(trip?.createdBy == userId)
     }
 
     @Test func createTripUsesDateNameWhenNameEmpty() async throws {
@@ -92,10 +99,15 @@ struct CombinedTripSetupViewModelTests {
         viewModel.selectedGameTypes = [.licensePlate]
         viewModel.includeUS = true
 
-        let trip = try viewModel.createTrip(modelContext: ctx)
+        let session = try viewModel.createTrip(modelContext: ctx)
 
-        #expect(!trip.name.isEmpty)
-        #expect(trip.foundRegions.isEmpty)
+        #expect(!session.name.isEmpty)
+
+        let tripRepo = TripRepository.shared
+        tripRepo.setModelContext(ctx)
+        let trip = try tripRepo.get(byId: session.id)
+        #expect(trip != nil)
+        #expect(trip?.foundRegions.isEmpty == true)
     }
 
     @Test func canCreateRequiresAtLeastOneGameType() async throws {

@@ -30,6 +30,17 @@ final class TripRepository: ObservableObject, TripRepositoryProtocol {
         descriptor.fetchLimit = 1
         return try ctx.fetch(descriptor).first
     }
+
+    /// Active legacy trips (not ended) whose id is not in the given set. Used for root list merge with sessions.
+    func fetchActiveLegacyTrips(excludingSessionIds: Set<UUID>) throws -> [Trip] {
+        guard let ctx = modelContext else { throw TripRepositoryError.noModelContext }
+        var descriptor = FetchDescriptor<Trip>(
+            predicate: #Predicate<Trip> { trip in trip.isTripEnded == false }
+        )
+        descriptor.sortBy = [SortDescriptor(\.createdAt, order: .reverse)]
+        let all = try ctx.fetch(descriptor)
+        return all.filter { !excludingSessionIds.contains($0.id) }
+    }
 }
 
 enum TripRepositoryError: Error, LocalizedError {
