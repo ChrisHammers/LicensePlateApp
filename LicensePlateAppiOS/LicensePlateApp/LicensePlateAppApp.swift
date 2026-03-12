@@ -22,7 +22,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Initialize Firebase here (after delegate is fully set up)
         // This ensures Firebase's AppDelegateSwizzler can properly detect the delegate
         initializeFirebase()
-        
+
+        // RevenueCat: configure after Firebase so we can identify user later. No-op if RevenueCatAPIKey missing.
+        RevenueCatEntitlementBridge.shared.configure()
+
         #if DEBUG
         // Initialize Google Maps after Firebase
         GoogleMapsService.shared.initializeFromConfig()

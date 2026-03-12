@@ -2,77 +2,23 @@
 //  OnboardingPremiumUpsellView.swift
 //  LicensePlateApp
 //
-//  Created for Onboarding flow
+//  Created for Onboarding flow. Uses PaywallView for offerings and purchase/restore.
 //
 
 import SwiftUI
 
 struct OnboardingPremiumUpsellView: View {
+    @StateObject private var paywallViewModel = PaywallViewModel()
     @ObservedObject var coordinator: OnboardingCoordinator
     let onNext: () -> Void
     let onSkip: () -> Void
-    
+
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 32) {
-                    Text("Upgrade to Premium".localized)
-                        .font(.system(.largeTitle, design: .rounded))
-                        .fontWeight(.bold)
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                        .accessibleHeader("Upgrade to Premium".localized)
-                    
-                    Text("Get more from RoadTrip Royale with premium features.".localized)
-                        .font(.system(.body, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-                    
-                    VStack(spacing: 12) {
-                        Text("Premium benefits coming soon".localized)
-                            .font(.system(.subheadline, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
-                    }
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.Theme.cardBackground, in: RoundedRectangle(cornerRadius: 16))
-                    .padding(.horizontal)
-                }
-                .padding(.vertical, 48)
-                .padding(.bottom, 24)
-            }
-            
-            VStack(spacing: 20) {
-                Button {
-                    onNext()
-                } label: {
-                    Text("Continue".localized)
-                        .font(.system(.body, design: .rounded))
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            Capsule()
-                                .fill(Color.Theme.primaryBlue)
-                        )
-                        .foregroundStyle(.white)
-                }
-                .accessibleButton(label: "Continue".localized, hint: "Continues to next screen".localized)
-                
-                Button {
-                    onSkip()
-                } label: {
-                    Text("Maybe Later".localized)
-                        .font(.system(.body, design: .rounded))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .foregroundStyle(Color.Theme.softBrown)
-                }
-                .accessibleButton(label: "Maybe Later".localized, hint: "Skips premium upgrade".localized)
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 16)
-            .padding(.bottom, 32)
-        }
+        PaywallView(
+            viewModel: paywallViewModel,
+            onDismiss: onSkip,
+            primaryActionTitle: "Continue".localized,
+            primaryAction: onNext
+        )
     }
 }

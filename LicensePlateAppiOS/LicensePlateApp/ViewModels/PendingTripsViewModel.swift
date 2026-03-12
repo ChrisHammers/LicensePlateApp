@@ -18,6 +18,8 @@ final class PendingTripsViewModel: ObservableObject {
     private let tripInviteRepository: TripInviteRepositoryProtocol
     private var authService: FirebaseAuthService
     private var cancellables = Set<AnyCancellable>()
+    /// True after we have subscribed to repo.$tripInvites once; prevents accumulating subscribers on every loadIfNeeded().
+    private var hasSubscribedToInvites = false
 
     init(tripInviteRepository: TripInviteRepositoryProtocol, authService: FirebaseAuthService) {
         self.tripInviteRepository = tripInviteRepository
@@ -32,18 +34,20 @@ final class PendingTripsViewModel: ObservableObject {
         authService.currentUser?.firebaseUID ?? authService.currentUser?.id
     }
 
-    /// Call after repository context is set. Loads invites and subscribes to updates.
+    /// Call after repository context is set. Loads invites and subscribes to updates (subscription is added only once).
     func loadIfNeeded() {
         guard let userId = currentUserId else { return }
         loadInvites(userId: userId)
-        if let repo = tripInviteRepository as? TripInviteRepository {
-            repo.$tripInvites
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] _ in
-                    self?.loadInvites(userId: userId)
-                }
-                .store(in: &cancellables)
-        }
+        guard let repo = tripInviteRepository as? TripInviteRepository else { return }
+        guard !hasSubscribedToInvites else { return }
+        hasSubscribedToInvites = true
+        repo.$tripInvites
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self = self, let uid = self.currentUserId else { return }
+                self.loadInvites(userId: uid)
+            }
+            .store(in: &cancellables)
     }
 
     func loadInvites(userId: String) {

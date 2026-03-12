@@ -125,7 +125,7 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
     }
 
     /// Refresh the published list for a user (incoming + outgoing).
-    /// Posts `Notification.Name.tripInviteReceived` so a future push/local notification flow can react.
+    /// NotificationRoutingService subscribes to `tripInvites` and shows a local notification only when new incoming invites are detected.
     func refreshPublishedInvites(userId: String) {
         guard let ctx = modelContext else { return }
         let searchUserId = userId
@@ -136,7 +136,6 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
         )
         descriptor.sortBy = [SortDescriptor(\.createdAt, order: .reverse)]
         tripInvites = (try? ctx.fetch(descriptor)) ?? []
-        NotificationCenter.default.post(name: .tripInviteReceived, object: nil, userInfo: ["userId": userId])
     }
 
     // MARK: - Helpers

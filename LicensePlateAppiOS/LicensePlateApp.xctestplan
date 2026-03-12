@@ -1,0 +1,38 @@
+{
+  "configurations" : [
+    {
+      "id" : "1AD76DCF-68A0-4B8E-BABF-60EA1AF37535",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "performanceAntipatternCheckerEnabled" : true,
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:LicensePlateApp.xcodeproj",
+      "identifier" : "765D54112EC391DA00D4FED1",
+      "name" : "LicensePlateApp"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:LicensePlateApp.xcodeproj",
+        "identifier" : "765D54202EC391DC00D4FED1",
+        "name" : "LicensePlateAppTests"
+      }
+    },
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:LicensePlateApp.xcodeproj",
+        "identifier" : "765D542A2EC391DC00D4FED1",
+        "name" : "LicensePlateAppUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

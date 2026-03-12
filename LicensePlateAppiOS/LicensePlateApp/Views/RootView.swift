@@ -47,10 +47,13 @@ struct RootView: View {
             TripRepository.shared.setModelContext(modelContext)
             TripInviteRepository.shared.setModelContext(modelContext)
             EntitlementService.shared.setModelContext(modelContext)
-            if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {
+            let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+            if let userId = userId {
                 FriendshipRepository.shared.startListening(userId: userId)
                 InviteRepository.shared.startListening(userId: userId)
             }
+            EntitlementService.shared.setCurrentUserId(userId)
+            await RevenueCatEntitlementBridge.shared.identify(userId: userId)
         }
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {

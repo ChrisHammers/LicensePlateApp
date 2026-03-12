@@ -219,6 +219,7 @@ struct TripTrackerView: View {
                 }
             }
         }
+        // TODO: Fix 2 (trip re-entry) — Add .onDisappear { speechRecognizer.stopListening() } here. See .cursor/plans/TRIP_REENTRY_FIXES_TODO_AND_DONE.md
         .overlay {
             if showVoiceMatchConfirmation, let region = lastMatchedRegion {
                 VoiceConfirmationDialog(

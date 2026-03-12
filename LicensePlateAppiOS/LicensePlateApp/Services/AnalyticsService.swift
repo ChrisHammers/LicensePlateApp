@@ -98,6 +98,16 @@ class AnalyticsService {
         case notificationEligibilityChecked(kind: String, eligible: Bool)
         case notificationDeliveredTripInvite
 
+        // Paywall & RevenueCat (Step 09)
+        case paywallViewed(source: String?)
+        case paywallDismissed
+        case purchaseStarted(packageId: String)
+        case purchaseCompleted(packageId: String)
+        case purchaseFailed(packageId: String?, error: String)
+        case restoreStarted
+        case restoreCompleted
+        case restoreFailed(error: String)
+
         var name: String {
             switch self {
             case .friendsScreenOpened: return "friends_screen_opened"
@@ -158,6 +168,14 @@ class AnalyticsService {
             case .tripSummaryViewed: return "trip_summary_viewed"
             case .notificationEligibilityChecked: return "notification_eligibility_checked"
             case .notificationDeliveredTripInvite: return "notification_delivered_trip_invite"
+            case .paywallViewed: return "paywall_viewed"
+            case .paywallDismissed: return "paywall_dismissed"
+            case .purchaseStarted: return "purchase_started"
+            case .purchaseCompleted: return "purchase_completed"
+            case .purchaseFailed: return "purchase_failed"
+            case .restoreStarted: return "restore_started"
+            case .restoreCompleted: return "restore_completed"
+            case .restoreFailed: return "restore_failed"
             }
         }
         
@@ -203,6 +221,25 @@ class AnalyticsService {
                 return ["kind": kind, "eligible": eligible]
             case .notificationDeliveredTripInvite:
                 return nil
+            case .paywallViewed(let source):
+                if let source = source { return ["source": source] }
+                return nil
+            case .paywallDismissed:
+                return nil
+            case .purchaseStarted(let packageId):
+                return ["package_id": packageId]
+            case .purchaseCompleted(let packageId):
+                return ["package_id": packageId]
+            case .purchaseFailed(let packageId, let error):
+                var p: [String: Any] = ["error": error]
+                if let id = packageId { p["package_id"] = id }
+                return p
+            case .restoreStarted:
+                return nil
+            case .restoreCompleted:
+                return nil
+            case .restoreFailed(let error):
+                return ["error": error]
             default:
                 return nil
             }
