@@ -105,4 +105,42 @@ struct PreviewFixturesTests {
         let accepted = PreviewInviteFixturesParams.acceptedInvite()
         #expect(accepted.status == .accepted)
     }
+
+    // MARK: - MockFactoryRegistry (Step 13.5)
+
+    @Test("MockFactoryRegistry lists all factory names and each is non-empty")
+    func registryFactoryNames() {
+        let names = MockFactoryRegistry.allFactoryNames
+        #expect(names.isEmpty == false)
+        for name in names {
+            #expect(name.isEmpty == false)
+        }
+        #expect(names.contains("MockTripFactory"))
+        #expect(names.contains("MockGameFactory"))
+        #expect(names.contains("MockDiscoveryFactory"))
+        #expect(names.contains("MockCreditFactory"))
+    }
+
+    @Test("MockFactoryRegistry registered factories are callable")
+    func registryFactoriesCallable() {
+        _ = MockTripFactory.makeSoloTrip()
+        _ = MockGameFactory.makeLicensePlateGame()
+        _ = MockDiscoveryFactory.makeDiscovery()
+        _ = MockParticipantFactory.makeDriver()
+        _ = MockTeamFactory.makeTwoTeams()
+        _ = MockCreditFactory.makeCredit()
+        _ = MockTravelLogFactory.makeTravelLogEntry()
+        _ = MockInviteFactory.makeInvite(status: .pending)
+        _ = MockUserFactory.makeUser()
+    }
+
+    @Test("MockFactoryRegistry makeFullGameplayGraph builds linked session → game → discovery → credit")
+    func registryFullGraph() {
+        let graph = MockFactoryRegistry.makeFullGameplayGraph()
+        #expect(graph.game.sessionId == graph.session.id)
+        #expect(graph.discovery.gameInstanceId == graph.game.id)
+        #expect(graph.discovery.participantId == graph.session.participants[0].userId)
+        #expect(graph.credit.discoveryId == graph.discovery.id)
+        #expect(graph.credit.participantId == graph.discovery.participantId)
+    }
 }

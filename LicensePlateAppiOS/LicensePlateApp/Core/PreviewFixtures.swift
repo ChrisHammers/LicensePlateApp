@@ -3,6 +3,7 @@
 //  LicensePlateApp
 //
 //  Step 13 — Deterministic fixtures for SwiftUI previews. Multi-game trip architecture.
+//  Previews should use PreviewConstants, Preview*Fixtures, or Mock*Factory so data stays deterministic and consistent with tests (see MockFactoryRegistry).
 //
 
 import Foundation

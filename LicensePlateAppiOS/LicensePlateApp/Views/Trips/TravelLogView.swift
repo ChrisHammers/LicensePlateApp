@@ -183,3 +183,19 @@ extension TripSummary: Identifiable {
     .environmentObject(FirebaseAuthService())
     .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self], inMemory: true)
 }
+
+#Preview("Travel Log - With entries") {
+    TravelLogView(viewModel: TravelLogViewModel(
+        travelLogRepository: TravelLogRepository.shared,
+        tripSessionRepository: TripSessionRepository.shared,
+        gameInstanceRepository: GameInstanceRepository.shared,
+        tripRepository: TripRepository.shared,
+        authService: FirebaseAuthService(),
+        previewEntries: [
+            PreviewTravelLogFixtures.travelLogEntry(),
+            PreviewTravelLogFixtures.travelLogEntryWithSummaries()
+        ]
+    ))
+    .environmentObject(FirebaseAuthService())
+    .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self], inMemory: true)
+}
