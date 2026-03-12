@@ -111,6 +111,7 @@ struct FriendsHub: View {
                 viewModel.setAuthService(authService) // Use the environment authService
                 viewModel.loadData()
                 AnalyticsService.shared.log(.friendsScreenOpened)
+                AnalyticsService.shared.logScreenView(screenName: "friends")
             }
       //  }
     }

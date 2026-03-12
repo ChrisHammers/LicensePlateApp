@@ -323,6 +323,7 @@ struct FamilyDashboard: View {
                 viewModel.setModelContext(modelContext)
                 viewModel.loadData()
                 AnalyticsService.shared.log(.familyScreenOpened)
+                AnalyticsService.shared.logScreenView(screenName: "family_dashboard")
                 
                 // Start listening to invites for badge counts
                 if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {

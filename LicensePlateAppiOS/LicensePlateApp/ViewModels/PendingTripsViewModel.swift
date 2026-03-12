@@ -71,7 +71,7 @@ final class PendingTripsViewModel: ObservableObject {
         errorMessage = nil
         do {
             try tripInviteRepository.acceptInvite(inviteId: invite.inviteId, userId: userId)
-            AnalyticsService.shared.log(.tripInviteAccepted)
+            AnalyticsService.shared.log(.tripInviteAcceptedWithContext(inviteTripId: invite.tripSessionId, inviteGameCount: nil, participantCountAfterJoin: nil))
             FeedbackService.shared.actionSuccess()
             loadInvites(userId: userId)
         } catch {
@@ -86,7 +86,7 @@ final class PendingTripsViewModel: ObservableObject {
         errorMessage = nil
         do {
             try tripInviteRepository.declineInvite(inviteId: invite.inviteId, userId: userId)
-            AnalyticsService.shared.log(.tripInviteDeclined)
+            AnalyticsService.shared.log(.tripInviteDeclinedWithContext(inviteTripId: invite.tripSessionId, inviteGameCount: nil))
             FeedbackService.shared.actionSuccess()
             loadInvites(userId: userId)
         } catch {

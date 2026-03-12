@@ -131,6 +131,19 @@ final class CombinedTripSetupViewModel: ObservableObject {
         }
         if session.startedAt != nil {
             try gameInstanceRepository.transitionGamesToStarted(sessionId: sessionId)
+            for (order, instance) in instances.enumerated() {
+                AnalyticsService.shared.log(.gameInstanceStarted(
+                    gameInstanceId: instance.id.uuidString,
+                    gameType: instance.definitionId,
+                    gameLifecycleState: "started",
+                    configLockReason: ConfigLockReason.gameStarted.rawValue
+                ))
+            }
+            AnalyticsService.shared.log(.combinedTripStartedWithGameCount(
+                tripId: sessionId.uuidString,
+                combinedGameCount: instances.count,
+                combinedGameTypes: types.map(\.rawValue)
+            ))
         }
 
         let legacyTrip = Trip(

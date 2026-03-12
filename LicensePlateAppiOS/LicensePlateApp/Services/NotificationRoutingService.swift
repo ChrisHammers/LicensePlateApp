@@ -21,12 +21,12 @@ final class NotificationRoutingService {
     }()
 
     private let eligibilityService: NotificationEligibilityService
-    private let analytics: AnalyticsService
+    private let analytics: AnalyticsLogging
     private var inviteCancellable: AnyCancellable?
     private var lastKnownIncomingCount: Int?
     private var hasSeededIncomingCount = false
 
-    init(eligibilityService: NotificationEligibilityService, analytics: AnalyticsService) {
+    init(eligibilityService: NotificationEligibilityService, analytics: AnalyticsLogging) {
         self.eligibilityService = eligibilityService
         self.analytics = analytics
     }
@@ -98,7 +98,7 @@ final class NotificationRoutingService {
             analytics.log(.notificationDeliveredTripInvite)
         } catch {
             // Log but don't surface; notification delivery is best-effort
-            analytics.log("notification_delivery_failed", parameters: ["error": "\(error)"])
+            analytics.log(.notificationDeliveryFailed(error: String(describing: error)))
         }
     }
 }

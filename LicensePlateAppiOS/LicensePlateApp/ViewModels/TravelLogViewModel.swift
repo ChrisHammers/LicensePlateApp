@@ -85,6 +85,7 @@ final class TravelLogViewModel: ObservableObject {
                 let adapted = LegacyTripAdapter.adapt(trip)
                 discoveries = adapted.discoveries
                 credits = adapted.credits
+                AnalyticsService.shared.log(.legacyTripAdapterUsed(legacyTripId: legacyId.uuidString, sessionId: sessionId.uuidString))
             }
 
             let summary = TripSummaryBuilder.build(
