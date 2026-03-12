@@ -363,7 +363,7 @@ struct AcknowledgementsView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     AcknowledgementItem(
                         name: "Firebase".localized,
-                        description: "Backend services including Authentication, Firestore, and Storage".localized,
+                        description: "Backend services including Authentication, Firestore, Storage, and Analytics".localized,
                         url: "https://firebase.google.com"
                     )
                     
@@ -371,6 +371,12 @@ struct AcknowledgementsView: View {
                         name: "Google Sign-In".localized,
                         description: "OAuth authentication for Google accounts".localized,
                         url: "https://developers.google.com/identity/sign-in/ios"
+                    )
+                    
+                    AcknowledgementItem(
+                        name: "RevenueCat".localized,
+                        description: "In-app purchases and subscription management; see RevenueCat privacy policy.".localized,
+                        url: "https://www.revenuecat.com/privacy"
                     )
                     
                     AcknowledgementItem(
@@ -396,6 +402,12 @@ struct AcknowledgementsView: View {
                         description: "Apple's mapping and location services".localized,
                         url: "https://developer.apple.com/mapkit/"
                     )
+                    
+                    // AcknowledgementItem(
+                    //     name: "Google Maps SDK".localized,
+                    //     description: "Maps and location display for trip tracking and region visualization.".localized,
+                    //     url: "https://developers.google.com/maps"
+                    // )
                     
                     AcknowledgementItem(
                         name: "Speech Framework".localized,
@@ -672,7 +684,7 @@ struct PrivacyView: View {
                     .foregroundStyle(Color.Theme.primaryBlue)
                     .padding(.top)
                 
-                Text("RoadTrip Royale uses Firebase (Google) for authentication and data storage. Your use of these services is subject to their respective privacy policies.".localized)
+                Text("Firebase and RevenueCat privacy disclosure".localized)
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
                 

@@ -443,12 +443,17 @@
 "Opens Privacy Policy" = "Abre la Política de Privacidad";
 "RoadTrip Royale uses the following open source libraries and SDKs:" = "RoadTrip Royale utiliza las siguientes bibliotecas y SDKs de código abierto:";
 "Backend services including Authentication, Firestore, and Storage" = "Servicios backend incluyendo Autenticación, Firestore y Almacenamiento";
+"Backend services including Authentication, Firestore, Storage, and Analytics" = "Servicios backend incluyendo Autenticación, Firestore, Almacenamiento y Analytics para uso anónimo y registro de eventos.";
 "OAuth authentication for Google accounts" = "Autenticación OAuth para cuentas de Google";
 "Sign in with Apple integration" = "Inicio de sesión con integración de Apple";
 "Apple's declarative UI framework" = "Marco de UI declarativo de Apple";
 "Apple's data persistence framework" = "Marco de persistencia de datos de Apple";
 "Apple's mapping and location services" = "Servicios de mapas y ubicación de Apple";
 "Apple's speech recognition framework" = "Marco de reconocimiento de voz de Apple";
+"RevenueCat" = "RevenueCat";
+"In-app purchases and subscription management; see RevenueCat privacy policy." = "Compras en la app y gestión de suscripciones; consulta la política de privacidad de RevenueCat.";
+"Google Maps SDK" = "Google Maps SDK";
+"Maps and location display for trip tracking and region visualization." = "Mapas y visualización de ubicación para seguimiento de viajes y regiones.";
 "Terms of Service" = "Términos de Servicio";
 "Last Updated: %@" = "Última Actualización: %@";
 "1. Acceptance of Terms" = "1. Aceptación de Términos";
@@ -469,6 +474,7 @@
 "Your data is stored locally on your device. If you sign in with an account, your data is also stored securely in Firebase (Google Cloud Platform) to enable syncing across devices." = "Tus datos se almacenan localmente en tu dispositivo. Si inicias sesión con una cuenta, tus datos también se almacenan de forma segura en Firebase (Google Cloud Platform) para permitir la sincronización entre dispositivos.";
 "4. Third-Party Services" = "4. Servicios de Terceros";
 "RoadTrip Royale uses Firebase (Google) for authentication and data storage. Your use of these services is subject to their respective privacy policies." = "RoadTrip Royale usa Firebase (Google) para autenticación y almacenamiento de datos. Tu uso de estos servicios está sujeto a sus respectivas políticas de privacidad.";
+"Firebase and RevenueCat privacy disclosure" = "RoadTrip Royale usa Firebase (Google) para autenticación, almacenamiento de datos y Firebase Analytics para uso anónimo y registro de eventos. Para compras en la app y suscripciones usamos RevenueCat; su política de privacidad se aplica a los datos de compras. Tu uso de estos servicios está sujeto a sus respectivas políticas de privacidad.";
 "5. Your Rights" = "5. Tus Derechos";
 "You have the right to:\n\n• Access your personal data\n• Delete your account and data\n• Opt out of data collection (though this may limit app functionality)\n• Contact us with privacy concerns" = "Tienes derecho a:\n\n• Acceder a tus datos personales\n• Eliminar tu cuenta y datos\n• Optar por no recopilar datos (aunque esto puede limitar la funcionalidad de la app)\n• Contactarnos con inquietudes de privacidad";
 "6. Contact Us" = "6. Contáctanos";
