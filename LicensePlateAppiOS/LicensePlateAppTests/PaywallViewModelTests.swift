@@ -15,7 +15,8 @@ struct PaywallViewModelTests {
 
     @Test @MainActor func unlockReasonTitleForGoldReturnsExpectedString() async throws {
         let bridge = MockRevenueCatBridge(tier: .guest)
-        let vm = PaywallViewModel(bridge: bridge, analytics: .shared)
+        let spy = AnalyticsLoggingSpy()
+        let vm = PaywallViewModel(bridge: bridge, analytics: spy)
         vm.setUnlockContext(.gold)
 
         let title = vm.unlockReasonTitle
@@ -25,7 +26,8 @@ struct PaywallViewModelTests {
 
     @Test @MainActor func unlockReasonMessageForRoyaleReturnsExpectedString() async throws {
         let bridge = MockRevenueCatBridge(tier: .guest)
-        let vm = PaywallViewModel(bridge: bridge, analytics: .shared)
+        let spy = AnalyticsLoggingSpy()
+        let vm = PaywallViewModel(bridge: bridge, analytics: spy)
         vm.setUnlockContext(.royale)
 
         let message = vm.unlockReasonMessage
@@ -35,7 +37,8 @@ struct PaywallViewModelTests {
 
     @Test @MainActor func canShowUpgradeTrueForPurchasableTiers() async throws {
         let bridge = MockRevenueCatBridge(tier: .guest)
-        let vm = PaywallViewModel(bridge: bridge, analytics: .shared)
+        let spy = AnalyticsLoggingSpy()
+        let vm = PaywallViewModel(bridge: bridge, analytics: spy)
 
         vm.setUnlockContext(.signedUp)
         #expect(vm.canShowUpgrade == true)
@@ -47,7 +50,8 @@ struct PaywallViewModelTests {
 
     @Test @MainActor func canShowUpgradeFalseForNonPurchasableTiers() async throws {
         let bridge = MockRevenueCatBridge(tier: .guest)
-        let vm = PaywallViewModel(bridge: bridge, analytics: .shared)
+        let spy = AnalyticsLoggingSpy()
+        let vm = PaywallViewModel(bridge: bridge, analytics: spy)
 
         vm.setUnlockContext(.founder)
         #expect(vm.canShowUpgrade == false)
@@ -60,12 +64,15 @@ struct PaywallViewModelTests {
             PaywallPackage(id: "monthly", displayName: "Monthly", displayPrice: "$4.99", packageType: "monthly")
         ]
         let bridge = MockRevenueCatBridge(offerings: packages)
-        let vm = PaywallViewModel(bridge: bridge, analytics: .shared)
+        let spy = AnalyticsLoggingSpy()
+        let vm = PaywallViewModel(bridge: bridge, analytics: spy)
 
         await vm.loadOfferings(source: "test")
 
         #expect(vm.packages.count == 1)
         #expect(vm.packages[0].id == "monthly")
         #expect(vm.packages[0].displayName == "Monthly")
+        #expect(spy.loggedEvents.contains { $0.name == "paywall_viewed" })
+        #expect(spy.loggedEvents.first { $0.name == "paywall_viewed" }?.parameters?["source"] as? String == "test")
     }
 }

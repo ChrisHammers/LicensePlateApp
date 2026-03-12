@@ -22,9 +22,9 @@ final class PaywallViewModel: ObservableObject {
     var unlockContext: AvatarUnlockSource?
 
     private let bridge: RevenueCatEntitlementProviding
-    private let analytics: AnalyticsService
+    private let analytics: AnalyticsLogging
 
-    init(bridge: RevenueCatEntitlementProviding = RevenueCatEntitlementBridge.shared, analytics: AnalyticsService = .shared) {
+    init(bridge: RevenueCatEntitlementProviding = RevenueCatEntitlementBridge.shared, analytics: AnalyticsLogging = AnalyticsService.shared) {
         self.bridge = bridge
         self.analytics = analytics
     }

@@ -159,7 +159,8 @@ struct LicensePlateAppApp: App {
     }()
     
     @StateObject private var authService = FirebaseAuthService()
-    
+    @StateObject private var riskAssessmentService = RiskAssessmentService(analytics: AnalyticsService.shared)
+
     init() {
         // Firebase and Google Maps initialization moved to AppDelegate.application(_:didFinishLaunchingWithOptions:)
         // to ensure proper timing with delegate setup
@@ -169,6 +170,7 @@ struct LicensePlateAppApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(authService)
+                .environmentObject(riskAssessmentService)
         }
         .modelContainer(sharedModelContainer)
     }

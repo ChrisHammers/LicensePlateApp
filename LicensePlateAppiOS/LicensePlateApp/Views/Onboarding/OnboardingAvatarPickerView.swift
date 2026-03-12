@@ -43,7 +43,7 @@ struct OnboardingAvatarPickerView: View {
                             set: { viewModel.selectedId = $0 }
                         ),
                         onLockedTap: { item, source in
-                            AnalyticsService.shared.log("avatar_locked_tapped", parameters: ["avatar_id": item.id, "unlock_source": source.rawValue])
+                            AnalyticsService.shared.log(.avatarLockedTapped(avatarId: item.id, unlockSource: source.rawValue))
                             unlockSheetPayload = AvatarUnlockSheetPayload(unlockSource: source, avatarName: item.displayName)
                         },
                         onSelected: nil
@@ -95,7 +95,7 @@ struct OnboardingAvatarPickerView: View {
             if viewModel.selectedId == nil, let user = authService.currentUser {
                 viewModel.selectedId = user.avatarId ?? AvatarCatalog.randomGuestAvatarId()
             }
-            AnalyticsService.shared.log("avatar_picker_opened", parameters: ["source": "onboarding"])
+            AnalyticsService.shared.log(.avatarPickerOpened(source: "onboarding"))
         }
         .overlay {
             if let payload = unlockSheetPayload {
@@ -136,7 +136,7 @@ struct OnboardingAvatarPickerView: View {
             Task {
                 try? await authService.saveUserDataToFirestore(user)
             }
-            AnalyticsService.shared.log("avatar_saved", parameters: ["avatar_id": id, "source": "onboarding"])
+            AnalyticsService.shared.log(.avatarSaved(avatarId: id, source: "onboarding"))
         }
         onNext()
     }

@@ -21,8 +21,10 @@ struct GameDiscovery: Codable, Identifiable, Sendable {
     var inputMethod: FoundRegion.InputMethod
     /// Optional location at discovery time.
     var location: LocationData?
-    /// Optional risk flag for future anti-spam.
+    /// Optional risk flag for future anti-spam (legacy string).
     var riskFlag: String?
+    /// Typed risk flags from heuristics (Step 11 expected structure).
+    var riskFlags: [RiskFlag]?
 
     init(
         id: String = UUID().uuidString,
@@ -32,7 +34,8 @@ struct GameDiscovery: Codable, Identifiable, Sendable {
         discoveredAt: Date = .now,
         inputMethod: FoundRegion.InputMethod,
         location: LocationData? = nil,
-        riskFlag: String? = nil
+        riskFlag: String? = nil,
+        riskFlags: [RiskFlag]? = nil
     ) {
         self.id = id
         self.gameInstanceId = gameInstanceId
@@ -42,5 +45,20 @@ struct GameDiscovery: Codable, Identifiable, Sendable {
         self.inputMethod = inputMethod
         self.location = location
         self.riskFlag = riskFlag
+        self.riskFlags = riskFlags
+    }
+
+    /// Highest severity among risk flags, if any.
+    var highestRiskSeverity: RiskSeverity? {
+        riskFlags?.map(\.severity).max()
+    }
+
+    /// True if any flag has review severity.
+    var hasReviewLevelRisk: Bool {
+        riskFlags?.contains(where: { $0.severity == .review }) ?? false
+    }
+
+    var riskFlagCount: Int {
+        riskFlags?.count ?? 0
     }
 }

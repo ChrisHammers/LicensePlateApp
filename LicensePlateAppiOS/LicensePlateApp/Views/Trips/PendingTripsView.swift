@@ -94,6 +94,7 @@ struct PendingTripsView: View {
                 TripInviteRepository.shared.setModelContext(modelContext)
                 viewModel.setAuthService(authService)
                 viewModel.onAppear()
+                AnalyticsService.shared.logScreenView(screenName: "pending_trips")
             }
         }
         .accessibilityElement(children: .contain)

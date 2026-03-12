@@ -63,6 +63,7 @@ struct TravelLogView: View {
             .onAppear {
                 viewModel.loadEntries()
                 viewModel.onScreenAppeared()
+                AnalyticsService.shared.logScreenView(screenName: "travel_log")
             }
             .sheet(item: $viewModel.selectedSummary) { summary in
                 NavigationStack {

@@ -46,6 +46,7 @@ struct CombinedTripSetupView: View {
             .onAppear {
                 FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: appPlaySoundEffects)
                 AnalyticsService.shared.log(.combinedTripSetupOpened)
+                AnalyticsService.shared.logScreenView(screenName: "combined_trip_setup")
             }
             .onChange(of: appUseVibrations) { _, newValue in
                 FeedbackService.shared.updatePreferences(hapticEnabled: newValue, soundEnabled: appPlaySoundEffects)

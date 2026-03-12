@@ -145,7 +145,7 @@ struct UserProfileView: View {
                                 AvatarBadgeView(user: user, avatarSize: 120, badgeSize: 36)
                                 Button {
                                     showAvatarPickerSheet = true
-                                    AnalyticsService.shared.log("avatar_picker_opened", parameters: ["source": "profile"])
+                                    AnalyticsService.shared.log(.avatarPickerOpened(source: "profile"))
                                 } label: {
                                     Image(systemName: "pencil")
                                         .font(.system(size: 14, weight: .semibold))
@@ -640,7 +640,7 @@ struct UserProfileView: View {
                     onSave: {
                         try? modelContext.save()
                         Task { try? await authService.saveUserDataToFirestore(user) }
-                        AnalyticsService.shared.log("avatar_saved", parameters: ["source": "profile"])
+                        AnalyticsService.shared.log(.avatarSaved(avatarId: user.avatarId ?? "", source: "profile"))
                         showAvatarPickerSheet = false
                     },
                     onDismiss: { showAvatarPickerSheet = false }
