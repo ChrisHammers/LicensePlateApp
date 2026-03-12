@@ -213,7 +213,7 @@ struct ContentView: View {
                   travelLogViewModel.setAuthService(authService)
                   pendingTripsViewModel.loadIfNeeded()
                   loadTravelLogEntries()
-                  NotificationRoutingService.shared.startObservingIfNeeded()
+                  NotificationRoutingService.shared.startObservingIfNeeded(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
                 }
                 .overlay {
                   if authService.showUsernameConflictDialog {

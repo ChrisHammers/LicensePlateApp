@@ -7,6 +7,7 @@
 
 import Foundation
 import UserNotifications
+import Combine
 
 @MainActor
 final class NotificationRoutingService {
@@ -21,7 +22,9 @@ final class NotificationRoutingService {
 
     private let eligibilityService: NotificationEligibilityService
     private let analytics: AnalyticsService
-    private var tripInviteObserver: Any?
+    private var inviteCancellable: AnyCancellable?
+    private var lastKnownIncomingCount: Int?
+    private var hasSeededIncomingCount = false
 
     init(eligibilityService: NotificationEligibilityService, analytics: AnalyticsService) {
         self.eligibilityService = eligibilityService
@@ -29,23 +32,44 @@ final class NotificationRoutingService {
     }
 
     /// Call when main app is active (e.g. ContentView.onAppear) to start observing trip invite events.
-    func startObservingIfNeeded() {
-        guard tripInviteObserver == nil else { return }
-        tripInviteObserver = NotificationCenter.default.addObserver(
-            forName: .tripInviteReceived,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            Task { @MainActor in
-                await self?.handleTripInviteReceived()
+    /// Listener is set up only once; pass current userId so we only notify when that user receives new incoming invites.
+    func startObservingIfNeeded(userId: String?) {
+        guard let userId = userId else { return }
+        guard inviteCancellable == nil else { return }
+
+        let repo = TripInviteRepository.shared
+        inviteCancellable = repo.$tripInvites
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] invites in
+                Task { @MainActor in
+                    self?.handleTripInvitesUpdate(invites: invites, userId: userId)
+                }
             }
-        }
     }
 
     func stopObserving() {
-        if let observer = tripInviteObserver {
-            NotificationCenter.default.removeObserver(observer)
-            tripInviteObserver = nil
+        inviteCancellable?.cancel()
+        inviteCancellable = nil
+        lastKnownIncomingCount = nil
+        hasSeededIncomingCount = false
+    }
+
+    private func handleTripInvitesUpdate(invites: [TripInvite], userId: String) {
+        let incomingCount = invites.filter { $0.toUserId == userId && $0.statusEnum == .pending }.count
+
+        if !hasSeededIncomingCount {
+            lastKnownIncomingCount = incomingCount
+            hasSeededIncomingCount = true
+            return
+        }
+
+        let previous = lastKnownIncomingCount ?? 0
+        lastKnownIncomingCount = incomingCount
+
+        if incomingCount > previous {
+            Task.detached(priority: .utility) { [weak self] in
+                await self?.handleTripInviteReceived()
+            }
         }
     }
 

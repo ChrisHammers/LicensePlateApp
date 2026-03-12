@@ -206,6 +206,7 @@ struct GoogleMapView: UIViewRepresentable {
     
     /// Clean up map resources when the view is removed from the hierarchy
     /// This helps reduce the duration of multiple CCTClearcutUploader instances
+    /// TODO: Fix 1 (trip re-entry) — Call coordinator.clearTileLayer() here to break map/tile retain cycle. See .cursor/plans/TRIP_REENTRY_FIXES_TODO_AND_DONE.md
     func dismantleUIView(_ mapView: GMSMapView, coordinator: Coordinator) {
         // Clear all polygons
         coordinator.clearAllPolygons(on: mapView)
