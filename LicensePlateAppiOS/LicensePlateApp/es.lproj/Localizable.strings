@@ -569,3 +569,15 @@
 "New trip invite" = "Nueva invitación de viaje";
 "You have a new trip invite. Open the app to view." = "Tienes una nueva invitación de viaje. Abre la app para ver.";
 
+// Paywall & RevenueCat (Step 09)
+"Restore Purchases" = "Restaurar compras";
+"Restore previous purchases" = "Restaurar compras anteriores";
+"Dismiss paywall" = "Cerrar paywall";
+"Purchase this package" = "Comprar este paquete";
+"Upgrade" = "Mejorar";
+"View premium plans" = "Ver planes premium";
+"Purchase failed" = "Compra fallida";
+"Purchase failed. Please try again." = "Compra fallida. Por favor, inténtalo de nuevo.";
+"No purchases to restore." = "No hay compras que restaurar.";
+"Get more from RoadTrip Royale with premium features." = "Aprovecha más RoadTrip Royale con funciones premium.";
+

@@ -12,24 +12,32 @@ import Combine
 @MainActor
 final class EntitlementService: ObservableObject {
     
-    static let shared = EntitlementService()
+    static let shared = EntitlementService(revenueCatBridge: RevenueCatEntitlementBridge.shared)
     
     private var modelContext: ModelContext?
+    private var currentAppUserId: String?
     private let familyRepository: FamilyRepository
     private let userRepository: UserRepository
+    private weak var revenueCatBridge: RevenueCatEntitlementProviding?
     
-    init(familyRepository: FamilyRepository = .shared, userRepository: UserRepository = .shared) {
+    init(familyRepository: FamilyRepository = .shared, userRepository: UserRepository = .shared, revenueCatBridge: RevenueCatEntitlementProviding? = nil) {
         self.familyRepository = familyRepository
         self.userRepository = userRepository
+        self.revenueCatBridge = revenueCatBridge
     }
     
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
     }
     
+    /// Set the current app user id (e.g. Firebase UID or local id). Used to merge RevenueCat tier/tags for this user only.
+    func setCurrentUserId(_ id: String?) {
+        currentAppUserId = id
+    }
+    
     // MARK: - Entitlement State
     
-    /// Build entitlement state for a user (uses cached family and creator when available)
+    /// Build entitlement state for a user (uses cached family and creator when available; merges RevenueCat tier/tags for current user)
     func entitlementState(for user: AppUser) -> EntitlementState {
         let tier = userTier(for: user)
         let familyId = user.activeFamilyId
@@ -50,9 +58,11 @@ final class EntitlementService: ObservableObject {
         }
         
         var tags: Set<String> = []
-        if user.firebaseUID != nil && !(user.email?.isEmpty ?? true) { /* signed up */ }
-        // TODO: when backend sends tags (founder, seasonal, etc.), add from user profile
-        // if user.hasFounderTag { tags.insert("founder") }
+        if isCurrentUser(user) {
+            if let bridge = revenueCatBridge {
+                tags = bridge.currentTags
+            }
+        }
         
         return EntitlementState(
             userTier: tier,
@@ -64,13 +74,16 @@ final class EntitlementService: ObservableObject {
         )
     }
     
-    /// User tier from auth state: guest (anonymous or no firebaseUID), signedUp (has firebaseUID + persisted), gold/royale from backend (TODO)
+    /// User tier: base from auth (guest/signedUp); for current user, merged with RevenueCat subscription tier (gold/royale).
     private func userTier(for user: AppUser) -> UserTier {
-        if user.firebaseUID == nil { return .guest }
-        // TODO: when backend provides tier, read from user or subscription
-        // if user.subscriptionTier == "royale" { return .royale }
-        // if user.subscriptionTier == "gold" { return .gold }
-        return .signedUp
+        let base: UserTier = user.firebaseUID == nil ? .guest : .signedUp
+        guard isCurrentUser(user), let bridge = revenueCatBridge else { return base }
+        return max(base, bridge.currentTier)
+    }
+    
+    private func isCurrentUser(_ user: AppUser) -> Bool {
+        guard let currentId = currentAppUserId else { return false }
+        return user.id == currentId || user.firebaseUID == currentId
     }
     
     private func getCachedUser(_ userId: String) -> AppUser? {

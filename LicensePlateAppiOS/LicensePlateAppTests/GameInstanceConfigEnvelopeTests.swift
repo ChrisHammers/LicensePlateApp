@@ -23,7 +23,7 @@ struct GameInstanceConfigEnvelopeTests {
         let sessionId = UUID()
         let lpConfig = LicensePlateGameConfig(
             regionScope: .usOnly,
-            territoryOptions: LicensePlateTerritoryOptions(includeDC: true, includeUSTerritories: false, includeCanadianTerritories: true)
+            territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: false, includeCanadianTerritories: true, includeDC: true)
         )
         let payloadData = try JSONEncoder().encode(lpConfig)
         let commonConfig = CommonGameConfig(
@@ -49,8 +49,8 @@ struct GameInstanceConfigEnvelopeTests {
         #expect(entity.gameSpecificPayloadData != nil)
 
         let back = GameInstanceMapper.toDomain(entity)
-        #expect(back.commonConfig.gameMode == .competitive)
-        #expect(back.commonConfig.lifecycleState == .created)
+        #expect(back.commonConfig.gameMode == GameMode.competitive)
+        #expect(back.commonConfig.lifecycleState == GameLifecycleState.created)
         let decoded = back.licensePlateConfig()
         #expect(decoded != nil)
         #expect(decoded?.regionScope == .usOnly)

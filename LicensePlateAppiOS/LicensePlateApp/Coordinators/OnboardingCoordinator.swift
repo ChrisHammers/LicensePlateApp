@@ -169,7 +169,7 @@ final class OnboardingCoordinator: ObservableObject {
     }
     
     private var hasPremium: Bool {
-        false  // TODO: Placeholder until paid tier exists
+        RevenueCatEntitlementBridge.shared.hasActiveEntitlement(for: .gold)
     }
     
     /// Skip premium upsell and go to permissions

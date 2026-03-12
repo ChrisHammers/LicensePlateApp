@@ -15,8 +15,11 @@ struct OnboardingAvatarPickerView: View {
     let onNext: () -> Void
     
     @StateObject private var viewModel = AvatarPickerViewModel(catalogService: .shared)
+    @StateObject private var paywallViewModel = PaywallViewModel()
     @State private var unlockSheetPayload: AvatarUnlockSheetPayload?
-    
+    @State private var showPaywallSheet = false
+    @State private var paywallUnlockSource: AvatarUnlockSource?
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -40,8 +43,8 @@ struct OnboardingAvatarPickerView: View {
                             set: { viewModel.selectedId = $0 }
                         ),
                         onLockedTap: { item, source in
-                            unlockSheetPayload = AvatarUnlockSheetPayload(unlockSource: source, avatarName: item.displayName)
                             AnalyticsService.shared.log("avatar_locked_tapped", parameters: ["avatar_id": item.id, "unlock_source": source.rawValue])
+                            unlockSheetPayload = AvatarUnlockSheetPayload(unlockSource: source, avatarName: item.displayName)
                         },
                         onSelected: nil
                     )
@@ -94,12 +97,25 @@ struct OnboardingAvatarPickerView: View {
             }
             AnalyticsService.shared.log("avatar_picker_opened", parameters: ["source": "onboarding"])
         }
-        .sheet(item: $unlockSheetPayload) { payload in
-            AvatarUnlockExplanationSheet(
-                unlockSource: payload.unlockSource,
-                avatarName: payload.avatarName,
-                onDismiss: { unlockSheetPayload = nil }
-            )
+        .overlay {
+            if let payload = unlockSheetPayload {
+                AvatarUnlockPopupView(
+                    unlockSource: payload.unlockSource,
+                    avatarName: payload.avatarName,
+                    onDismiss: { unlockSheetPayload = nil },
+                    onShowPaywall: { source in
+                        paywallUnlockSource = source
+                        unlockSheetPayload = nil
+                        showPaywallSheet = true
+                    }
+                )
+            }
+        }
+        .sheet(isPresented: $showPaywallSheet) {
+            PaywallView(viewModel: paywallViewModel, onDismiss: { showPaywallSheet = false })
+                .onAppear {
+                    paywallViewModel.setUnlockContext(paywallUnlockSource)
+                }
         }
     }
     
@@ -107,7 +123,7 @@ struct OnboardingAvatarPickerView: View {
         guard let id = viewModel.selectedId else { return "None".localized }
         return viewModel.displayItems.first(where: { $0.id == id })?.displayName ?? "None".localized
     }
-    
+
     private func saveAndContinue() {
         guard let user = authService.currentUser else {
             onNext()

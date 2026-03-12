@@ -34,7 +34,7 @@ struct UserProfileView: View {
     @State private var selectedImage: UIImage?
     @State private var previewImage: UIImage?
     @State private var showAvatarPickerSheet = false
-    
+
     // Helper function to get topmost view controller
     private func topViewController(controller: UIViewController? = nil) -> UIViewController? {
         let controller = controller ?? UIApplication.shared.connectedScenes
@@ -854,10 +854,13 @@ private struct ProfileAvatarPickerSheet: View {
     @Bindable var user: AppUser
     let onSave: () -> Void
     let onDismiss: () -> Void
-    
+
     @State private var selectedId: String?
     @State private var unlockSheetPayload: AvatarUnlockSheetPayload?
-    
+    @State private var showPaywallSheet = false
+    @State private var paywallUnlockSource: AvatarUnlockSource?
+    @StateObject private var paywallViewModel = PaywallViewModel()
+
     private let catalogService = AvatarCatalogService.shared
     
     private var displayItems: [AvatarDisplayItem] {
@@ -918,12 +921,25 @@ private struct ProfileAvatarPickerSheet: View {
             .onAppear {
                 selectedId = user.avatarId ?? AvatarCatalog.guestAvatarIds.first
             }
-            .sheet(item: $unlockSheetPayload) { payload in
-                AvatarUnlockExplanationSheet(
-                    unlockSource: payload.unlockSource,
-                    avatarName: payload.avatarName,
-                    onDismiss: { unlockSheetPayload = nil }
-                )
+            .overlay {
+                if let payload = unlockSheetPayload {
+                    AvatarUnlockPopupView(
+                        unlockSource: payload.unlockSource,
+                        avatarName: payload.avatarName,
+                        onDismiss: { unlockSheetPayload = nil },
+                        onShowPaywall: { source in
+                            paywallUnlockSource = source
+                            unlockSheetPayload = nil
+                            showPaywallSheet = true
+                        }
+                    )
+                }
+            }
+            .sheet(isPresented: $showPaywallSheet) {
+                PaywallView(viewModel: paywallViewModel, onDismiss: { showPaywallSheet = false })
+                    .onAppear {
+                        paywallViewModel.setUnlockContext(paywallUnlockSource)
+                    }
             }
         }
     }

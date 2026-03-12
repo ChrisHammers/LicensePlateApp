@@ -23,6 +23,7 @@
 		767F82E52EF3239800D11D3F /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = 767F82E42EF3239800D11D3F /* FirebaseFunctions */; };
 		767F82E72EF3239C00D11D3F /* FirebaseFunctionsCombine-Community in Frameworks */ = {isa = PBXBuildFile; productRef = 767F82E62EF3239C00D11D3F /* FirebaseFunctionsCombine-Community */; };
 		769546CA2EE0BA1000B0498F /* GoogleMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 769546C92EE0BA1000B0498F /* GoogleMaps */; };
+		76RC00032EF9999900D11D3F /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 76RC00022EF9999900D11D3F /* RevenueCat */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,6 +47,7 @@
 		765D54122EC391DA00D4FED1 /* LicensePlateApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LicensePlateApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		765D54212EC391DC00D4FED1 /* LicensePlateAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LicensePlateAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		765D542B2EC391DC00D4FED1 /* LicensePlateAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LicensePlateAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		76B62DE32F620DD300B34A50 /* LicensePlateApp.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = file; path = LicensePlateApp.xctestplan; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -100,6 +102,7 @@
 				767F82E52EF3239800D11D3F /* FirebaseFunctions in Frameworks */,
 				761312542ECBB27900F19D3A /* FirebaseAuthCombine-Community in Frameworks */,
 				761312632ECBB31A00F19D3A /* GoogleSignIn in Frameworks */,
+				76RC00032EF9999900D11D3F /* RevenueCat in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -123,6 +126,7 @@
 		765D54092EC391DA00D4FED1 = {
 			isa = PBXGroup;
 			children = (
+				76B62DE32F620DD300B34A50 /* LicensePlateApp.xctestplan */,
 				765D54142EC391DA00D4FED1 /* LicensePlateApp */,
 				765D54242EC391DC00D4FED1 /* LicensePlateAppTests */,
 				765D542E2EC391DC00D4FED1 /* LicensePlateAppUITests */,
@@ -184,6 +188,7 @@
 				767F814E2EF2057000D11D3F /* FirebaseAnalyticsCore */,
 				767F82E42EF3239800D11D3F /* FirebaseFunctions */,
 				767F82E62EF3239C00D11D3F /* FirebaseFunctionsCombine-Community */,
+				76RC00022EF9999900D11D3F /* RevenueCat */,
 			);
 			productName = LicensePlateApp;
 			productReference = 765D54122EC391DA00D4FED1 /* LicensePlateApp.app */;
@@ -274,6 +279,7 @@
 				761312612ECBB31A00F19D3A /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 				769546C82EE0BA1000B0498F /* XCRemoteSwiftPackageReference "ios-maps-sdk" */,
 				76381CD52EE2499D00D7B216 /* XCRemoteSwiftPackageReference "google-maps-ios-utils" */,
+				76RC00012EF9999900D11D3F /* XCRemoteSwiftPackageReference "purchases-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 765D54132EC391DA00D4FED1 /* Products */;
@@ -698,6 +704,14 @@
 				minimumVersion = 10.6.0;
 			};
 		};
+		76RC00012EF9999900D11D3F /* XCRemoteSwiftPackageReference "purchases-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/RevenueCat/purchases-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -780,6 +794,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 769546C82EE0BA1000B0498F /* XCRemoteSwiftPackageReference "ios-maps-sdk" */;
 			productName = GoogleMaps;
+		};
+		76RC00022EF9999900D11D3F /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 76RC00012EF9999900D11D3F /* XCRemoteSwiftPackageReference "purchases-ios" */;
+			productName = RevenueCat;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
