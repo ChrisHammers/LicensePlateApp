@@ -155,6 +155,9 @@ class AnalyticsService: AnalyticsLogging {
         case unsupportedGamePayloadVersion(payloadType: String, payloadVersion: String)
         case analyticsPropertyBuildFailed(eventName: String, error: String)
 
+        // Risk advisory (Step 11)
+        case riskAdvisoryDetected(flags: [String], tripId: String)
+
         // Notifications & eligibility (Step 08)
         case notificationEligibilityChecked(kind: String, eligible: Bool)
         case notificationDeliveredTripInvite
@@ -280,6 +283,7 @@ class AnalyticsService: AnalyticsLogging {
             case .restoreStarted: return "restore_started"
             case .restoreCompleted: return "restore_completed"
             case .restoreFailed: return "restore_failed"
+            case .riskAdvisoryDetected: return "risk_advisory_detected"
             }
         }
         
@@ -410,6 +414,8 @@ class AnalyticsService: AnalyticsLogging {
                 return ["game_payload_type": payloadType, "game_payload_version": payloadVersion]
             case .analyticsPropertyBuildFailed(let eventName, let error):
                 return ["event_name": eventName, "error": error]
+            case .riskAdvisoryDetected(let flags, let tripId):
+                return ["risk_flags": flags.joined(separator: ","), "trip_id": tripId]
             case .notificationEligibilityChecked(let kind, let eligible):
                 return ["kind": kind, "eligible": eligible]
             case .notificationDeliveredTripInvite:
