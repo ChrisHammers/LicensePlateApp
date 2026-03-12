@@ -71,6 +71,7 @@ struct TripTrackerView: View {
     @State private var chipHeight: CGFloat = 0
     @State private var micListeningPulseScale: CGFloat = 1.0
     @State private var showRiskAdvisoryMessage = false
+    @State private var riskPresentationStyle: RiskPresentationStyle? = nil
     @State private var cameraPosition: GMSCameraPosition = {
         // Initialize with default US position, will be updated on appear
         let center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
@@ -125,6 +126,7 @@ struct TripTrackerView: View {
         // } message: {
         //     Text("Unusual activity was detected; this is only for your awareness.".localized)
         // }
+        .overlay(riskAdvisoryBanner)
         .onAppear {
             FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: appPlaySoundEffects)
         }
@@ -553,7 +555,7 @@ struct TripTrackerView: View {
             foundRegions: trip.foundRegions,
             lastChange: (regionID, true, Date())
         )
-        // if result.shouldShowAdvisory { showRiskAdvisoryMessage = true }
+        applyRiskPresentation(result.flags)
     } catch {
         FeedbackService.shared.actionError()
         assertionFailure("Failed to save trip update: \(error)")
@@ -578,7 +580,7 @@ struct TripTrackerView: View {
             foundRegions: trip.foundRegions,
             lastChange: (regionID, false, Date())
         )
-        // if result.shouldShowAdvisory { showRiskAdvisoryMessage = true }
+        applyRiskPresentation(result.flags)
     } catch {
         assertionFailure("Failed to save trip update: \(error)")
     }
@@ -607,10 +609,53 @@ struct TripTrackerView: View {
                 foundRegions: trip.foundRegions,
                 lastChange: (regionID, isNowFound, Date())
             )
-            // if result.shouldShowAdvisory { showRiskAdvisoryMessage = true }
+            applyRiskPresentation(result.flags)
         } catch {
             FeedbackService.shared.actionError()
             assertionFailure("Failed to save trip update: \(error)")
+        }
+    }
+
+    private func applyRiskPresentation(_ flags: [RiskFlag]) {
+        let style = RiskPresentationMapper().presentation(for: flags)
+        if case .none = style { return }
+        if case .reviewModal = style { return }
+        riskPresentationStyle = style
+    }
+
+    @ViewBuilder private var riskAdvisoryBanner: some View {
+        if let style = riskPresentationStyle {
+            switch style {
+            case .none:
+                EmptyView()
+            case .toast(let messageKey), .inlineHint(let messageKey):
+                Text(riskBannerMessage(for: messageKey))
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.Theme.cardBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
+                    .onTapGesture {
+                        riskPresentationStyle = nil
+                    }
+                    .accessibilityLabel("Unusual activity".localized)
+                    .accessibilityHint(riskBannerMessage(for: messageKey))
+            case .reviewModal:
+                EmptyView()
+            }
+        } else {
+            EmptyView()
+        }
+    }
+
+    private func riskBannerMessage(for messageKey: String) -> String {
+        switch messageKey {
+        case "risk.toast.notice": return "Unusual activity noticed.".localized
+        case "risk.inline.warning": return "Unusual activity; for your awareness.".localized
+        default: return messageKey.localized
         }
     }
     

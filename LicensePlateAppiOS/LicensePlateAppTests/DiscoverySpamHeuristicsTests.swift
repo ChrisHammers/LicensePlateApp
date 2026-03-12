@@ -2,7 +2,7 @@
 //  DiscoverySpamHeuristicsTests.swift
 //  LicensePlateAppTests
 //
-//  Step 11 — DiscoverySpamHeuristics: advisory risk flags from found regions and recent events.
+//  Step 11 — DiscoverySpamHeuristics: context-based heuristics return typed [RiskFlag].
 //
 
 import Foundation
@@ -11,13 +11,29 @@ import Testing
 
 struct DiscoverySpamHeuristicsTests {
 
-    private func makeFoundRegion(regionID: String, foundAt: Date = Date()) -> FoundRegion {
-        FoundRegion(
-            regionID: regionID,
-            foundAt: foundAt,
-            inputMethod: .list,
-            foundBy: nil,
-            foundAtLocation: nil
+    private func makeContext(
+        tripId: UUID = UUID(),
+        subjectId: String = "us-ca",
+        occurredAt: Date = Date(),
+        previousDiscoveryTimestamps: [Date] = [],
+        recentToggleCount: Int = 0,
+        wasDuplicateCandidate: Bool = false,
+        foundRegionTimestamps: [Date] = [],
+        evaluationDate: Date = Date(),
+        recentEvents: [DiscoveryChangeEvent] = []
+    ) -> DiscoveryActionContext {
+        DiscoveryActionContext(
+            participantId: "user1",
+            tripId: tripId,
+            subjectId: subjectId,
+            inputMethod: .tap,
+            occurredAt: occurredAt,
+            previousDiscoveryTimestamps: previousDiscoveryTimestamps,
+            recentToggleCount: recentToggleCount,
+            wasDuplicateCandidate: wasDuplicateCandidate,
+            foundRegionTimestamps: foundRegionTimestamps,
+            evaluationDate: evaluationDate,
+            recentEvents: recentEvents
         )
     }
 
@@ -25,71 +41,69 @@ struct DiscoverySpamHeuristicsTests {
         DiscoveryChangeEvent(date: date, regionID: regionID, isAdd: isAdd)
     }
 
-    @Test func emptyInputReturnsNoFlags() async throws {
-        let flags = DiscoverySpamHeuristics.evaluate(foundRegions: [], recentEvents: [])
+    @Test func emptyContextReturnsNoFlags() async throws {
+        let context = makeContext()
+        let flags = DiscoverySpamHeuristics().evaluate(context: context)
         #expect(flags.isEmpty)
     }
 
-    @Test func impossibleBurstManyAddsInShortWindow() async throws {
+    @Test func burstManyAddsInShortWindow() async throws {
         let now = Date()
         let events = (0..<11).map { i in
             makeEvent(date: now.addingTimeInterval(-Double(i)), regionID: "region-\(i)", isAdd: true)
         }
-        let flags = DiscoverySpamHeuristics.evaluate(foundRegions: [], recentEvents: events)
-        #expect(flags.contains(.impossibleBurst))
+        let context = makeContext(occurredAt: now, evaluationDate: now, recentEvents: events)
+        let flags = DiscoverySpamHeuristics().evaluate(context: context)
+        #expect(flags.contains(where: { $0.type == .burstInputPattern }))
     }
 
-    @Test func rapidFindUnfindLoopSameRegionAddRemoveAdd() async throws {
+    @Test func rapidUndoRedoSameRegionAddRemoveAdd() async throws {
         let now = Date()
         let events: [DiscoveryChangeEvent] = [
             makeEvent(date: now.addingTimeInterval(-4), regionID: "us-ca", isAdd: true),
             makeEvent(date: now.addingTimeInterval(-2), regionID: "us-ca", isAdd: false),
             makeEvent(date: now, regionID: "us-ca", isAdd: true)
         ]
-        let flags = DiscoverySpamHeuristics.evaluate(foundRegions: [], recentEvents: events)
-        #expect(flags.contains(.rapidFindUnfindLoop))
+        let context = makeContext(occurredAt: now, evaluationDate: now, recentEvents: events)
+        let flags = DiscoverySpamHeuristics().evaluate(context: context)
+        #expect(flags.contains(where: { $0.type == .rapidUndoRedo }))
     }
 
-    @Test func suspiciousRepeatedTogglesSameRegion() async throws {
-        let now = Date()
-        let events: [DiscoveryChangeEvent] = (0..<4).map { i in
-            makeEvent(date: now.addingTimeInterval(-Double(9 - i)), regionID: "us-ny", isAdd: i % 2 == 0)
-        }
-        let flags = DiscoverySpamHeuristics.evaluate(foundRegions: [], recentEvents: events)
-        #expect(flags.contains(.suspiciousRepeatedToggles))
+    @Test func suspiciousToggleLoopSameRegion() async throws {
+        let context = makeContext(recentToggleCount: 4)
+        let flags = DiscoverySpamHeuristics().evaluate(context: context)
+        #expect(flags.contains(where: { $0.type == .suspiciousToggleLoop }))
     }
 
-    @Test func conflictingLocalTimestampFuture() async throws {
+    @Test func impossibleTimestampFuture() async throws {
         let future = Date().addingTimeInterval(3600)
-        let found = [makeFoundRegion(regionID: "us-ca", foundAt: future)]
-        let flags = DiscoverySpamHeuristics.evaluate(foundRegions: found, recentEvents: [])
-        #expect(flags.contains(.conflictingLocalTimestamp))
+        let context = makeContext(foundRegionTimestamps: [future], evaluationDate: Date())
+        let flags = DiscoverySpamHeuristics().evaluate(context: context)
+        #expect(flags.contains(where: { $0.type == .impossibleTimestamp }))
     }
 
-    @Test func conflictingLocalTimestampTooOld() async throws {
+    @Test func impossibleTimestampTooOld() async throws {
         let oneYearAgo = Date().addingTimeInterval(-400 * 24 * 3600)
-        let found = [makeFoundRegion(regionID: "us-ca", foundAt: oneYearAgo)]
-        let flags = DiscoverySpamHeuristics.evaluate(foundRegions: found, recentEvents: [])
-        #expect(flags.contains(.conflictingLocalTimestamp))
+        let context = makeContext(foundRegionTimestamps: [oneYearAgo], evaluationDate: Date())
+        let flags = DiscoverySpamHeuristics().evaluate(context: context)
+        #expect(flags.contains(where: { $0.type == .impossibleTimestamp }))
     }
 
-    @Test func duplicateDiscoveryAnomalySameRegionID() async throws {
-        let t = Date()
-        let found = [
-            makeFoundRegion(regionID: "us-ca", foundAt: t),
-            makeFoundRegion(regionID: "us-ca", foundAt: t.addingTimeInterval(1))
-        ]
-        let flags = DiscoverySpamHeuristics.evaluate(foundRegions: found, recentEvents: [])
-        #expect(flags.contains(.duplicateDiscoveryAnomaly))
+    @Test func duplicateDiscoveryWhenWasDuplicateCandidate() async throws {
+        let context = makeContext(wasDuplicateCandidate: true)
+        let flags = DiscoverySpamHeuristics().evaluate(context: context)
+        #expect(flags.contains(where: { $0.type == .duplicateDiscovery }))
     }
 
     @Test func normalActivityNoFlags() async throws {
         let now = Date()
-        let found = [makeFoundRegion(regionID: "us-ca", foundAt: now.addingTimeInterval(-60))]
-        let events = [
-            makeEvent(date: now.addingTimeInterval(-30), regionID: "us-ca", isAdd: true)
-        ]
-        let flags = DiscoverySpamHeuristics.evaluate(foundRegions: found, recentEvents: events)
+        let context = makeContext(
+            occurredAt: now,
+            foundRegionTimestamps: [now.addingTimeInterval(-60)],
+            evaluationDate: now,
+            recentEvents: [makeEvent(date: now.addingTimeInterval(-30), regionID: "us-ca", isAdd: true)]
+        )
+        let flags = DiscoverySpamHeuristics().evaluate(context: context)
         #expect(flags.isEmpty)
     }
 }

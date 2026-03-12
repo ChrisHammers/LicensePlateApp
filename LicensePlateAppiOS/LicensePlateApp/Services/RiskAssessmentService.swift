@@ -28,11 +28,13 @@ protocol RiskAssessing: AnyObject {
 final class RiskAssessmentService: ObservableObject, RiskAssessing {
 
     private let analytics: AnalyticsLogging?
+    private let heuristics: DiscoverySpamHeuristicsProtocol
     private let bufferCapacity: Int
     private var eventBuffers: [UUID: [DiscoveryChangeEvent]] = [:]
 
-    init(analytics: AnalyticsLogging?, bufferCapacity: Int = 50) {
+    init(analytics: AnalyticsLogging?, heuristics: DiscoverySpamHeuristicsProtocol = DiscoverySpamHeuristics(), bufferCapacity: Int = 50) {
         self.analytics = analytics
+        self.heuristics = heuristics
         self.bufferCapacity = bufferCapacity
     }
 
@@ -52,13 +54,38 @@ final class RiskAssessmentService: ObservableObject, RiskAssessing {
         }
         eventBuffers[tripId] = buffer
 
-        let flags = DiscoverySpamHeuristics.evaluate(foundRegions: foundRegions, recentEvents: buffer)
+        let context = buildContext(tripId: tripId, foundRegions: foundRegions, lastChange: lastChange, recentEvents: buffer)
+        let flags = heuristics.evaluate(context: context)
 
         if !flags.isEmpty {
-            let flagStrings = flags.map(\.rawValue)
+            let flagStrings = flags.map(\.type.rawValue)
             analytics?.log(.riskAdvisoryDetected(flags: flagStrings, tripId: tripId.uuidString))
         }
 
         return RiskAssessmentResult(flags: flags)
+    }
+
+    private func buildContext(
+        tripId: UUID,
+        foundRegions: [FoundRegion],
+        lastChange: (regionID: String, isAdd: Bool, at: Date),
+        recentEvents: [DiscoveryChangeEvent]
+    ) -> DiscoveryActionContext {
+        let ids = foundRegions.map(\.regionID)
+        let wasDuplicate = ids.count != Set(ids).count
+        let toggleCountForSubject = recentEvents.filter { $0.regionID == lastChange.regionID }.count
+        return DiscoveryActionContext(
+            participantId: "",
+            tripId: tripId,
+            subjectId: lastChange.regionID,
+            inputMethod: .tap,
+            occurredAt: lastChange.at,
+            previousDiscoveryTimestamps: recentEvents.filter(\.isAdd).map(\.date),
+            recentToggleCount: toggleCountForSubject,
+            wasDuplicateCandidate: wasDuplicate,
+            foundRegionTimestamps: foundRegions.map(\.foundAt),
+            evaluationDate: Date(),
+            recentEvents: recentEvents
+        )
     }
 }

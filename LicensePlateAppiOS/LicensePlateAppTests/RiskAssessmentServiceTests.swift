@@ -2,7 +2,7 @@
 //  RiskAssessmentServiceTests.swift
 //  LicensePlateAppTests
 //
-//  Step 11 — RiskAssessmentService: advisory assessment, analytics logging, no blocking.
+//  Step 11 — RiskAssessmentService: advisory assessment, analytics logging, no blocking; returns [RiskFlag] structs.
 //
 
 import Foundation
@@ -54,7 +54,7 @@ struct RiskAssessmentServiceTests {
             if i == 10 {
                 #expect(!result.flags.isEmpty)
                 #expect(result.shouldShowAdvisory)
-                #expect(result.flags.contains(.impossibleBurst))
+                #expect(result.flags.contains(where: { $0.type == .burstInputPattern }))
             }
         }
         let riskLogged = spy.loggedEvents.contains { $0.name == "risk_advisory_detected" }
@@ -72,7 +72,7 @@ struct RiskAssessmentServiceTests {
         #expect(result.flags.isEmpty || !result.flags.isEmpty)
     }
 
-    @Test func assessWithDuplicateDiscoveryAnomalyReturnsFlag() async throws {
+    @Test func assessWithDuplicateDiscoveryReturnsFlag() async throws {
         let spy = AnalyticsLoggingSpy()
         let service = RiskAssessmentService(analytics: spy, bufferCapacity: 50)
         let tripId = UUID()
@@ -86,7 +86,7 @@ struct RiskAssessmentServiceTests {
             foundRegions: found,
             lastChange: ("us-ca", true, t)
         )
-        #expect(result.flags.contains(.duplicateDiscoveryAnomaly))
+        #expect(result.flags.contains(where: { $0.type == .duplicateDiscovery }))
         #expect(result.shouldShowAdvisory)
         #expect(spy.loggedEvents.contains { $0.name == "risk_advisory_detected" })
     }
