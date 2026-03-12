@@ -29,6 +29,7 @@ struct RiskPresentationMapper: RiskPresentationMapping {
         case .warning:
             return .inlineHint(messageKey: "risk.inline.warning")
         case .review:
+            // .reviewModal is supported here; current UI may suppress it until a later step (Step 11.6).
             return .reviewModal(titleKey: "risk.review.title", bodyKey: "risk.review.body")
         }
     }

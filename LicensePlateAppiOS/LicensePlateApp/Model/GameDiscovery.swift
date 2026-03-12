@@ -21,9 +21,9 @@ struct GameDiscovery: Codable, Identifiable, Sendable {
     var inputMethod: FoundRegion.InputMethod
     /// Optional location at discovery time.
     var location: LocationData?
-    /// Optional risk flag for future anti-spam (legacy string).
+    /// Legacy/transitional: single risk string. Kept only for backward compatibility. Do not write for new flows; use `riskFlags` instead. Step 11.6.
     var riskFlag: String?
-    /// Typed risk flags from heuristics (Step 11 expected structure).
+    /// Authoritative discovery risk field (Step 11 expected structure). New code must use this for display, analytics, and presentation. Legacy-adapted discoveries may have nil.
     var riskFlags: [RiskFlag]?
 
     init(

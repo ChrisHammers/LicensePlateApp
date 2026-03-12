@@ -71,6 +71,7 @@ enum LegacyTripAdapter {
             ruleSet: ruleSet
         )
 
+        // Legacy-adapted discoveries do not have discovery-linked risk history; riskFlags may be nil. Downstream must handle nil and must not treat missing riskFlags as an error. Step 11.6.
         var discoveries: [GameDiscovery] = []
         for fr in trip.foundRegions {
             let discoveryId = UUID().uuidString

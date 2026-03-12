@@ -616,6 +616,7 @@ struct TripTrackerView: View {
         }
     }
 
+    /// Review-level modal is intentionally deferred; only toast and inline hint are shown for now. No hard blocking. Step 11.6.
     private func applyRiskPresentation(_ flags: [RiskFlag]) {
         let style = RiskPresentationMapper().presentation(for: flags)
         if case .none = style { return }

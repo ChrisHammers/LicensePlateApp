@@ -47,7 +47,7 @@
 		765D54122EC391DA00D4FED1 /* LicensePlateApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LicensePlateApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		765D54212EC391DC00D4FED1 /* LicensePlateAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LicensePlateAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		765D542B2EC391DC00D4FED1 /* LicensePlateAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LicensePlateAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		76B62DE32F620DD300B34A50 /* LicensePlateApp.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = file; path = LicensePlateApp.xctestplan; sourceTree = "<group>"; };
+		76B62DE32F620DD300B34A50 /* LicensePlateApp.xctestplan */ = {isa = PBXFileReference; lastKnownFileType = text; path = LicensePlateApp.xctestplan; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
