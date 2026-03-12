@@ -616,6 +616,7 @@ struct TripTrackerView: View {
         }
     }
 
+    /// Review-level modal is intentionally deferred; only toast and inline hint are shown for now. No hard blocking. Step 11.6.
     private func applyRiskPresentation(_ flags: [RiskFlag]) {
         let style = RiskPresentationMapper().presentation(for: flags)
         if case .none = style { return }
@@ -2680,19 +2681,39 @@ private struct RegionMapView: View {
     }
 }
 
-#Preview {
+#Preview("Empty trip") {
     do {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: Trip.self, configurations: configuration)
-
         let context = container.mainContext
         let authService = FirebaseAuthService()
         let sampleTrip = Trip(name: "Autumn Road Trip")
         context.insert(sampleTrip)
-
         return TripTrackerView(trip: sampleTrip)
             .modelContainer(container)
             .environmentObject(authService)
+            .environmentObject(RiskAssessmentService(analytics: nil))
+    } catch {
+        return Text("Preview Error: \(error.localizedDescription)")
+    }
+}
+
+#Preview("Trip with discoveries") {
+    do {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: Trip.self, configurations: configuration)
+        let context = container.mainContext
+        let auth = FirebaseAuthService()
+        let sampleTrip = Trip(name: "Preview Trip with Plates")
+        let fixedDate = Date(timeIntervalSince1970: 1_700_000_000)
+        sampleTrip.foundRegions = [
+            FoundRegion(regionID: "US-CA", foundAt: fixedDate, inputMethod: .list),
+            FoundRegion(regionID: "US-TX", foundAt: fixedDate.addingTimeInterval(60), inputMethod: .voice)
+        ]
+        context.insert(sampleTrip)
+        return TripTrackerView(trip: sampleTrip)
+            .modelContainer(container)
+            .environmentObject(auth)
             .environmentObject(RiskAssessmentService(analytics: nil))
     } catch {
         return Text("Preview Error: \(error.localizedDescription)")

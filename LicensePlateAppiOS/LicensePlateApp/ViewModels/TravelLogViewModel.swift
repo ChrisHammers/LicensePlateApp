@@ -21,19 +21,25 @@ final class TravelLogViewModel: ObservableObject {
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let tripRepository: TripRepositoryProtocol
     private var authService: FirebaseAuthService
+    private let usePreviewEntries: Bool
 
     init(
         travelLogRepository: TravelLogRepositoryProtocol,
         tripSessionRepository: TripSessionRepositoryProtocol,
         gameInstanceRepository: GameInstanceRepositoryProtocol,
         tripRepository: TripRepositoryProtocol,
-        authService: FirebaseAuthService
+        authService: FirebaseAuthService,
+        previewEntries: [TravelLogEntry]? = nil
     ) {
         self.travelLogRepository = travelLogRepository
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
         self.tripRepository = tripRepository
         self.authService = authService
+        self.usePreviewEntries = previewEntries != nil
+        if let entries = previewEntries {
+            self.entries = entries
+        }
     }
 
     func setAuthService(_ service: FirebaseAuthService) {
@@ -46,6 +52,7 @@ final class TravelLogViewModel: ObservableObject {
 
     /// Load travel log entries (ended and optionally cancelled). Call after repository context is set.
     func loadEntries(statusFilter: TravelLogStatusFilter = .endedAndCancelled) {
+        if usePreviewEntries { return }
         isLoading = true
         errorMessage = nil
         let userId = currentUserId

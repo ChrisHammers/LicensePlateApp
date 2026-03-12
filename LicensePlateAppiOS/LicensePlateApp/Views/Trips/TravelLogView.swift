@@ -172,13 +172,29 @@ extension TripSummary: Identifiable {
     var id: UUID { sessionId }
 }
 
-#Preview {
+#Preview("Travel Log") {
     TravelLogView(viewModel: TravelLogViewModel(
         travelLogRepository: TravelLogRepository.shared,
         tripSessionRepository: TripSessionRepository.shared,
         gameInstanceRepository: GameInstanceRepository.shared,
         tripRepository: TripRepository.shared,
         authService: FirebaseAuthService()
+    ))
+    .environmentObject(FirebaseAuthService())
+    .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self], inMemory: true)
+}
+
+#Preview("Travel Log - With entries") {
+    TravelLogView(viewModel: TravelLogViewModel(
+        travelLogRepository: TravelLogRepository.shared,
+        tripSessionRepository: TripSessionRepository.shared,
+        gameInstanceRepository: GameInstanceRepository.shared,
+        tripRepository: TripRepository.shared,
+        authService: FirebaseAuthService(),
+        previewEntries: [
+            PreviewTravelLogFixtures.travelLogEntry(),
+            PreviewTravelLogFixtures.travelLogEntryWithSummaries()
+        ]
     ))
     .environmentObject(FirebaseAuthService())
     .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self], inMemory: true)

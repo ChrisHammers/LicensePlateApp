@@ -220,41 +220,14 @@ struct TripSummaryView: View {
     }
 }
 
-#Preview {
-    let session = TripSession(
-        name: "Preview Trip",
-        status: .ended,
-        endedAt: Date(),
-        participants: [TripParticipant(userId: "user1", role: .owner)]
-    )
-    let summary = TripSummary(
-        sessionId: session.id,
-        tripName: session.name,
-        status: .ended,
-        endedAt: session.endedAt,
-        startedAt: nil,
-        participantCount: 1,
-        gameCount: 1,
-        totalDiscoveryCount: 5,
-        games: [
-            TripSummaryGameItem(
-                gameInstanceId: UUID(),
-                definitionId: "license_plate",
-                discoveryCount: 5,
-                startedAt: nil,
-                endedAt: nil,
-                firstDiscoveries: [],
-                completionGoal: 50,
-                progressDescription: "5 / 50 US regions"
-            )
-        ],
-        participantContributions: [
-            ParticipantContribution(participantId: "user1", discoveryCount: 5, weightedScore: 5.0, firstFindCount: 3)
-        ],
-        discoveryProjection: nil,
-        locationMetadata: nil
-    )
-    return NavigationStack {
-        TripSummaryView(summary: summary, onDismiss: nil)
+#Preview("Solo summary") {
+    NavigationStack {
+        TripSummaryView(summary: PreviewSummaryFixtures.tripSummarySolo(), onDismiss: nil)
+    }
+}
+
+#Preview("Multi-game summary") {
+    NavigationStack {
+        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryMultiGame(), onDismiss: nil)
     }
 }

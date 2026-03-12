@@ -727,3 +727,10 @@ struct PrivacyView: View {
     }
 }
 
+// MARK: - Previews
+
+#Preview("Help & About") {
+    NavigationStack {
+        HelpAboutView()
+    }
+}
