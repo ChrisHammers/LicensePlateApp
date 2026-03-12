@@ -31,14 +31,6 @@ final class LicensePlateAppUITests: XCTestCase {
         // Use XCTAssert and related functions to verify your tests produce the correct results.
     }
 
-    @MainActor
-    func testLaunchPerformance() throws {
-        // This measures how long it takes to launch your application.
-        measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
-        }
-    }
-
     /// Step 13 — Launch with --uitest and verify app launches. When app supports seed flags, extend to assert on seeded content.
     @MainActor
     func testLaunchWithUITestFlag() throws {
