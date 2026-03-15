@@ -66,7 +66,7 @@ enum CombinedGameAssembler {
     private static func licensePlateConfig(from session: TripSession) -> LicensePlateGameConfig {
         let scope = regionScope(from: session.enabledCountries)
         let territoryOptions = LicensePlateTerritoryOptions(
-            includeUSTerritories: false,
+            includeUSTerritories: true,
             includeCanadianTerritories: true,
             includeDC: true
         )

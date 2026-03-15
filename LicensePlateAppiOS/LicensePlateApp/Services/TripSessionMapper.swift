@@ -28,7 +28,6 @@ enum TripSessionMapper {
     static func toLegacyDTO(
         session: TripSession,
         discoveries: [GameDiscovery],
-        createdAt: Date = .now,
         lastUpdated: Date = .now,
         collapseByTargetId: Bool = false
     ) -> LegacyTripDTO {
@@ -60,7 +59,7 @@ enum TripSessionMapper {
         return LegacyTripDTO(
             id: session.id,
             name: session.name,
-            createdAt: createdAt,
+            createdAt: session.createdAt,
             lastUpdated: lastUpdated,
             createdBy: session.createdBy,
             startedAt: session.startedAt,

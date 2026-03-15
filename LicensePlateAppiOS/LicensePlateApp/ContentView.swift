@@ -12,10 +12,11 @@ import AVFoundation
 import UserNotifications
 import Speech
 
-/// Item for the Active Trips list: session only (canonical model).
+/// Item for the Active Trips list: session and derived plate count from events.
 private struct ActiveListItem: Identifiable {
     var id: UUID { session.id }
     let session: TripSession
+    let plateCount: Int
 }
 
 struct ContentView: View {
@@ -402,7 +403,7 @@ struct ContentView: View {
     private var activeSessionList: some View {
         ForEach(activeListItems) { item in
             NavigationLink(value: item.session.id) {
-                TripSessionRow(session: item.session)
+                TripSessionRow(session: item.session, plateCount: item.plateCount)
                     .padding(.vertical, 8)
             }
             .listRowInsets(.init(top: 6, leading: 20, bottom: 6, trailing: 20))
@@ -418,7 +419,10 @@ struct ContentView: View {
         do {
             let activeSessions = try TripSessionRepository.shared.loadActiveSessions(userId: userId)
             let sorted = activeSessions.sorted { ($0.startedAt ?? .distantPast) > ($1.startedAt ?? .distantPast) }
-            activeListItems = sorted.map { ActiveListItem(session: $0) }
+            activeListItems = sorted.map { session in
+                let count = (try? TripActivityEventRepository.shared.foundRegions(sessionId: session.id, gameInstanceId: nil))?.count ?? 0
+                return ActiveListItem(session: session, plateCount: count)
+            }
         } catch {
             activeListItems = []
         }
@@ -429,7 +433,6 @@ struct ContentView: View {
         for index in offsets {
             let item = activeListItems[index]
             guard let session = try? TripSessionRepository.shared.session(byId: item.session.id) else { continue }
-            var updated = session
             updated.status = .cancelled
             updated.endedAt = Date()
             try? TripSessionRepository.shared.save(session: updated)

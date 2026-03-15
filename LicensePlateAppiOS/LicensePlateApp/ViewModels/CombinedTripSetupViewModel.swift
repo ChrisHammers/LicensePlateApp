@@ -112,13 +112,13 @@ final class CombinedTripSetupViewModel: ObservableObject {
             name: finalName,
             status: .active,
             mode: mode,
+            createdAt: createdAt,
             createdBy: createdBy,
             startedAt: startedAt,
             endedAt: nil,
             endedBy: nil,
             participants: [participant],
             teams: [],
-            legacyTripId: nil,
             enabledCountryRawValues: countryList.map { $0.rawValue }
         )
 

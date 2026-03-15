@@ -20,7 +20,6 @@ struct GameplayModelFoundationTests {
     }
 
     @Test func tripStatusDefaultsAndCases() async throws {
-        #expect(TripStatus.draft.rawValue == "draft")
         #expect(TripStatus.active.rawValue == "active")
         #expect(TripStatus.ended.rawValue == "ended")
         #expect(TripStatus.cancelled.rawValue == "cancelled")
@@ -57,10 +56,9 @@ struct GameplayModelFoundationTests {
 
     @Test func tripSessionMigrationSafeDefaults() async throws {
         let session = await TripSession(name: "Test Trip")
-        #expect(session.status == .draft)
+        #expect(session.status == .active)
         #expect(session.mode == .solo)
         #expect(session.participants.isEmpty)
-        #expect(session.legacyTripId == nil)
         #expect(session.enabledCountryRawValues.count >= 3)
     }
 
@@ -104,7 +102,7 @@ struct GameplayModelFoundationTests {
     }
 
     @Test func tripSessionMapperToLegacyDTO() async throws {
-        let session = TripSession(name: "Mapped Trip", status: .ended)
+        let session = TripSession(name: "Mapped Trip", status: .ended, createdAt: .now)
         let discoveries = [
             GameDiscovery(
                 gameInstanceId: UUID(),
@@ -124,7 +122,7 @@ struct GameplayModelFoundationTests {
 
     // Step 06.5.5 — TripSessionMapper collapseByTargetId for collaborative display
     @Test func tripSessionMapperCollapseByTargetIdOneFoundRegionPerTargetWithFirstFinder() async throws {
-        let session = TripSession(name: "Collapsed", status: .active)
+        let session = TripSession(name: "Collapsed", status: .active, createdAt: .now)
         let gameId = UUID()
         let base = Date()
         let discoveries = [

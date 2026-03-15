@@ -32,13 +32,13 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let session = TripSession(name: "Repo Test Trip", status: .draft, mode: .solo)
+        let session = TripSession(name: "Repo Test Trip", status: .active, mode: .solo)
         try repo.create(session: session)
 
         let loaded = try repo.session(byId: session.id)
         #expect(loaded != nil)
         #expect(loaded?.name == "Repo Test Trip")
-        #expect(loaded?.status == .draft)
+        #expect(loaded?.status == .active)
         #expect(loaded?.mode == .solo)
     }
 
@@ -64,7 +64,7 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let session = TripSession(name: "Status Trip", status: .draft, mode: .solo)
+        let session = TripSession(name: "Status Trip", status: .active, mode: .solo)
         try repo.create(session: session)
 
         try repo.updateStatus(sessionId: session.id, status: .active)
@@ -105,7 +105,7 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let session = TripSession(name: "Original", status: .draft, mode: .solo)
+        let session = TripSession(name: "Original", status: .active, mode: .solo)
         try repo.create(session: session)
         let id = session.id
 
@@ -154,6 +154,7 @@ struct TripSessionRepositoryTests {
             name: "Team Trip",
             status: .active,
             mode: .solo,
+            createdAt: Date(),
             createdBy: "user1",
             startedAt: Date(),
             participants: [participant1, participant2],

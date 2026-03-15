@@ -30,11 +30,6 @@ final class MockTripSessionRepository: TripSessionRepositoryProtocol {
         return sessions.values.filter { $0.status == .active }
     }
 
-    func loadPendingSessions(userId: String?) throws -> [TripSession] {
-        if shouldThrow { throw NSError(domain: "MockTripSessionRepository", code: -1, userInfo: nil) }
-        return []
-    }
-
     func loadArchivedSessions(userId: String?, limit: Int) throws -> [TripSession] {
         if shouldThrow { throw NSError(domain: "MockTripSessionRepository", code: -1, userInfo: nil) }
         return Array(sessions.values.filter { $0.status == .ended }.sorted { ($0.endedAt ?? .distantPast) > ($1.endedAt ?? .distantPast) }.prefix(limit))

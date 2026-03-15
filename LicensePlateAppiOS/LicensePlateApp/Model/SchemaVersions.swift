@@ -53,6 +53,12 @@ final class SchemaVersion9Marker {
     init() {}
 }
 
+@Model
+final class SchemaVersion10Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
 // MARK: - Schema Version 1 (Initial)
 // Initial schema with Trip and AppUser
 
@@ -306,10 +312,43 @@ enum SchemaVersion9: VersionedSchema {
     }
 }
 
+// MARK: - Schema Version 10 (TripSessionEntity: add createdAt, remove legacyTripId)
+enum SchemaVersion10: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(10, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            TripSessionTeamsEntity.self,
+            SchemaVersion7Marker.self,
+            SchemaVersion8Marker.self,
+            TripActivityEventEntity.self,
+            SchemaVersion9Marker.self,
+            SchemaVersion10Marker.self
+        ]
+    }
+}
+
 // MARK: - Migration Plan
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self]
+        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self]
     }
 
     static var stages: [MigrationStage] {
@@ -321,12 +360,13 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             .lightweight(fromVersion: SchemaVersion5.self, toVersion: SchemaVersion6.self),
             .lightweight(fromVersion: SchemaVersion6.self, toVersion: SchemaVersion7.self),
             .lightweight(fromVersion: SchemaVersion7.self, toVersion: SchemaVersion8.self),
-            .lightweight(fromVersion: SchemaVersion8.self, toVersion: SchemaVersion9.self)
+            .lightweight(fromVersion: SchemaVersion8.self, toVersion: SchemaVersion9.self),
+            .lightweight(fromVersion: SchemaVersion9.self, toVersion: SchemaVersion10.self)
         ]
     }
 }
 
 // MARK: - Current Schema
-// Step 01 — V9: Trip removed, TripActivityEventEntity added; canonical gameplay only.
-typealias CurrentSchema = SchemaVersion9
+// V10: TripSessionEntity has createdAt, no legacyTripId; TripStatus.draft removed.
+typealias CurrentSchema = SchemaVersion10
 

@@ -14,18 +14,20 @@ struct CombinedGameAssemblerTests {
     private func makeSession(
         id: UUID = UUID(),
         name: String = "Test Trip",
-        status: TripStatus = .draft,
+        status: TripStatus = .active,
         mode: TripMode = .solo,
         startedAt: Date? = nil,
         endedAt: Date? = nil
     ) -> TripSession {
-        TripSession(
+        let created = Date()
+        return TripSession(
             id: id,
             name: name,
             status: status,
             mode: mode,
+            createdAt: created,
             createdBy: "user1",
-            startedAt: startedAt ?? Date(),
+            startedAt: startedAt ?? created,
             endedAt: endedAt,
             participants: [TripParticipant(userId: "user1", role: .owner)],
             enabledCountryRawValues: ["United States", "Canada", "Mexico"]

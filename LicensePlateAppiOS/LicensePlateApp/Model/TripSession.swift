@@ -8,12 +8,12 @@
 import Foundation
 
 /// Represents a trip in the new gameplay model. Supports solo, collaborative, and competitive modes.
-/// Optional `legacyTripId` links to a legacy `Trip` when adapted from existing data.
 final class TripSession {
     var id: UUID
     var name: String
     var status: TripStatus
     var mode: TripMode
+    var createdAt: Date
     var createdBy: String?
     var startedAt: Date?
     var endedAt: Date?
@@ -22,8 +22,6 @@ final class TripSession {
     var participants: [TripParticipant]
     /// Optional teams for this session (e.g. for team-based scoring). Empty when not using teams.
     var teams: [TripTeam]
-    /// When non-nil, this session was built from or backs the legacy Trip with this id.
-    var legacyTripId: UUID?
     /// Enabled countries for this trip (e.g. US, Canada, Mexico).
     var enabledCountryRawValues: [String]
     /// Optional location/risk flags for future anti-spam.
@@ -32,15 +30,15 @@ final class TripSession {
     init(
         id: UUID = UUID(),
         name: String,
-        status: TripStatus = .draft,
+        status: TripStatus = .active,
         mode: TripMode = .solo,
+        createdAt: Date = .now,
         createdBy: String? = nil,
         startedAt: Date? = nil,
         endedAt: Date? = nil,
         endedBy: String? = nil,
         participants: [TripParticipant] = [],
         teams: [TripTeam] = [],
-        legacyTripId: UUID? = nil,
         enabledCountryRawValues: [String] = ["United States", "Canada", "Mexico"],
         riskFlags: [String]? = nil
     ) {
@@ -48,13 +46,13 @@ final class TripSession {
         self.name = name
         self.status = status
         self.mode = mode
+        self.createdAt = createdAt
         self.createdBy = createdBy
         self.startedAt = startedAt
         self.endedAt = endedAt
         self.endedBy = endedBy
         self.participants = participants
         self.teams = teams
-        self.legacyTripId = legacyTripId
         self.enabledCountryRawValues = enabledCountryRawValues
         self.riskFlags = riskFlags
     }

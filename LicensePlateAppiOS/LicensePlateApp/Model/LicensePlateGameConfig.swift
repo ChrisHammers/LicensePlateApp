@@ -22,7 +22,7 @@ struct LicensePlateTerritoryOptions: Codable, Sendable {
     var includeDC: Bool
 
     init(
-        includeUSTerritories: Bool = false,
+        includeUSTerritories: Bool = true,
         includeCanadianTerritories: Bool = true,
         includeDC: Bool = true
     ) {

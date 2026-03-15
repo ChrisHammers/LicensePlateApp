@@ -41,6 +41,7 @@ struct TravelLogViewModelTests {
             name: "Past Trip",
             status: TripStatus.ended.rawValue,
             mode: TripMode.solo.rawValue,
+            createdAt: endedAt.addingTimeInterval(-100),
             endedAt: endedAt
         )
         ctx.insert(entity)
@@ -76,8 +77,8 @@ struct TravelLogViewModelTests {
             name: "New Flow Trip",
             status: TripStatus.ended.rawValue,
             mode: TripMode.solo.rawValue,
-            endedAt: endedAt,
-            legacyTripId: nil
+            createdAt: endedAt.addingTimeInterval(-100),
+            endedAt: endedAt
         )
         ctx.insert(entity)
         try ctx.save()
@@ -114,8 +115,8 @@ struct TravelLogViewModelTests {
             name: "Trip With Plates",
             status: TripStatus.ended.rawValue,
             mode: TripMode.solo.rawValue,
-            endedAt: endedAt,
-            legacyTripId: nil
+            createdAt: endedAt.addingTimeInterval(-100),
+            endedAt: endedAt
         )
         ctx.insert(entity)
         try ctx.save()

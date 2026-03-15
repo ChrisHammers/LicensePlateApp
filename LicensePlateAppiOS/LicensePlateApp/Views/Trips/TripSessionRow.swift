@@ -10,6 +10,8 @@ import SwiftUI
 /// Displays a single TripSession in the active list when TripRow cannot be used (no Trip loaded for session.id).
 struct TripSessionRow: View {
     let session: TripSession
+    /// Number of license plates / regions found for this trip (from TripActivityEventRepository).
+    var plateCount: Int = 0
 
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -21,12 +23,37 @@ struct TripSessionRow: View {
     private var dateLabel: String {
         if let started = session.startedAt {
             return dateFormatter.string(from: started)
-        } else if let created = session.createdA
-        return "—"
+        }
+        return dateFormatter.string(from: session.createdAt)
     }
 
     private var dateCaption: String {
         session.startedAt != nil ? "Started".localized : "Created".localized
+    }
+
+    /// Builds LicensePlateGameConfig from the session's enabled countries (same scope/territory logic as CombinedGameAssembler) and returns the total number of regions available for the license plate game.
+    private var licensePlateTotalAvailable: Int {
+        let config = licensePlateConfig(from: session)
+        return LicensePlateScopeCalculator.completionGoal(for: config)
+    }
+
+    /// License plate config derived from session.enabledCountries. Matches CombinedGameAssembler defaults (regionScope from countries; include DC, US territories, Canadian territories).
+    private func licensePlateConfig(from session: TripSession) -> LicensePlateGameConfig {
+        let scope = regionScope(from: session.enabledCountries)
+        let territoryOptions = LicensePlateTerritoryOptions(
+            includeUSTerritories: true,
+            includeCanadianTerritories: true,
+            includeDC: true
+        )
+        return LicensePlateGameConfig(regionScope: scope, territoryOptions: territoryOptions)
+    }
+
+    private func regionScope(from countries: [PlateRegion.Country]) -> RegionScope {
+        let set = Set(countries)
+        if set == [.unitedStates] { return .usOnly }
+        if set == [.canada] { return .canadaOnly }
+        if set == [.mexico] { return .mexicoOnly }
+        return .northAmerica
     }
 
     var body: some View {
@@ -39,10 +66,11 @@ struct TripSessionRow: View {
 
                 Spacer()
 
-                Label("—", systemImage: "licenseplate")
+                Label("\(plateCount)/\(licensePlateTotalAvailable)", systemImage: "licenseplate")
                     .font(.system(.subheadline, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
-                    .accessibilityLabel("Progress not available".localized)
+                    .accessibilityLabel(plateCount == 1 ? "1 license plate found".localized : "%d license plates found".localized(plateCount))
+                    .accessibilityValue("%d of %d".localized(plateCount, licensePlateTotalAvailable))
             }
 
             Divider()

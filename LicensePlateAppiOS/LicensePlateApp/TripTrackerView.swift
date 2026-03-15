@@ -377,6 +377,7 @@ struct TripTrackerView: View {
                 Button {
                     FeedbackService.shared.buttonTap()
                     currentSession.startedAt = Date.now
+                    currentSession.status = .active
                     try? TripSessionRepository.shared.save(session: currentSession)
                     try? TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: session.id, kind: .tripStarted, actorId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id))
                     try? TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: session.id, kind: .gameStarted, actorId: nil, payload: ["gameInstanceId": primaryGame.id.uuidString]))
@@ -1317,11 +1318,17 @@ private struct SettingsView: View {
 
             Divider()
 
-            // Started date (session has no createdAt)
+            // Started or created date
             if let startedAt = session.startedAt {
                 SettingInfoRow(
                     title: "Started".localized,
                     value: dateFormatter.string(from: startedAt)
+                )
+                Divider()
+            } else {
+                SettingInfoRow(
+                    title: "Created".localized,
+                    value: dateFormatter.string(from: session.createdAt)
                 )
                 Divider()
             }
@@ -1330,6 +1337,7 @@ private struct SettingsView: View {
             if session.startedAt == nil {
                 Button {
                     session.startedAt = Date.now
+                    session.status = .active
                     try? TripSessionRepository.shared.save(session: session)
                     try? TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: session.id, kind: .tripStarted, actorId: session.createdBy))
                     try? TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: session.id, kind: .gameStarted, actorId: nil, payload: ["gameInstanceId": primaryGame.id.uuidString]))
@@ -1444,7 +1452,6 @@ private struct SettingsView: View {
                 session.startedAt = nil
                 session.endedAt = nil
                 session.endedBy = nil
-                session.status = .draft
                 try? TripActivityEventRepository.shared.deleteEvents(sessionId: session.id, gameInstanceId: primaryGame.id)
                 try? TripSessionRepository.shared.save(session: session)
                 foundRegions = []

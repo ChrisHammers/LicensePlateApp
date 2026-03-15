@@ -66,23 +66,6 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
         return entities.map { TripSessionEntityMapper.toDomain($0, teamsData: teamsMap[$0.id].flatMap { $0 }) }
     }
 
-    func loadPendingSessions(userId: String?) throws -> [TripSession] {
-        guard let ctx = modelContext else { throw TripSessionRepositoryError.noModelContext }
-        let status = TripStatus.draft.rawValue
-        var descriptor = FetchDescriptor<TripSessionEntity>(
-            predicate: #Predicate<TripSessionEntity> { $0.status == status }
-        )
-        descriptor.sortBy = [SortDescriptor(\.startedAt, order: .reverse)]
-        var entities = try ctx.fetch(descriptor)
-        if let uid = userId {
-            entities = entities.filter { entity in
-                entity.createdBy == uid || participantIds(from: entity.participantsData).contains(uid)
-            }
-        }
-        let teamsMap = try fetchTeamsMap(sessionIds: entities.map(\.id), context: ctx)
-        return entities.map { TripSessionEntityMapper.toDomain($0, teamsData: teamsMap[$0.id].flatMap { $0 }) }
-    }
-
     func loadArchivedSessions(userId: String?, limit: Int) throws -> [TripSession] {
         guard let ctx = modelContext else { throw TripSessionRepositoryError.noModelContext }
         let ended = TripStatus.ended.rawValue
