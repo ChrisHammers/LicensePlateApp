@@ -527,6 +527,8 @@ private struct CountryCheckboxRow: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.Theme.cardBackground)
         )
+        .accessibilityLabel(title)
+        .accessibilityValue(isOn ? "On".localized : "Off".localized)
     }
 }
 

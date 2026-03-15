@@ -332,7 +332,7 @@ private struct CombinedTripCountryRow: View {
         .padding(.horizontal, 12)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.Theme.background)
+                .fill(Color.Theme.cardBackground)
         )
         .accessibilityLabel(title)
         .accessibilityValue(isOn ? "On".localized : "Off".localized)
