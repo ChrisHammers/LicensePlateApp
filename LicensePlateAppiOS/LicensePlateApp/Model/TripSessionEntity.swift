@@ -20,7 +20,7 @@ final class TripSessionEntity {
     var startedAt: Date?
     var endedAt: Date?
     var endedBy: String?
-    /// Legacy Trip id when this session was adapted from or backs an existing Trip.
+    /// Optional legacy Trip id (deprecated after Step 01 cutover; kept for schema compatibility).
     var legacyTripId: String?
     /// Comma-separated country raw values (e.g. "United States,Canada,Mexico").
     var enabledCountryRawValues: String

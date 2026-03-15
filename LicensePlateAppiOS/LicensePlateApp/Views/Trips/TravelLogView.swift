@@ -177,7 +177,7 @@ extension TripSummary: Identifiable {
         travelLogRepository: TravelLogRepository.shared,
         tripSessionRepository: TripSessionRepository.shared,
         gameInstanceRepository: GameInstanceRepository.shared,
-        tripRepository: TripRepository.shared,
+        tripActivityEventRepository: TripActivityEventRepository.shared,
         authService: FirebaseAuthService()
     ))
     .environmentObject(FirebaseAuthService())
@@ -189,7 +189,7 @@ extension TripSummary: Identifiable {
         travelLogRepository: TravelLogRepository.shared,
         tripSessionRepository: TripSessionRepository.shared,
         gameInstanceRepository: GameInstanceRepository.shared,
-        tripRepository: TripRepository.shared,
+        tripActivityEventRepository: TripActivityEventRepository.shared,
         authService: FirebaseAuthService(),
         previewEntries: [
             PreviewTravelLogFixtures.travelLogEntry(),

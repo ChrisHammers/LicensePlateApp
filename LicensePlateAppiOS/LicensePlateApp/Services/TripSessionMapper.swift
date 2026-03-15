@@ -23,7 +23,7 @@ struct LegacyTripDTO {
 
 /// Maps new model (TripSession + discoveries) to legacy-shaped DTO. Step 01: minimal implementation for tests and future write-back.
 enum TripSessionMapper {
-    /// Build a legacy-shaped DTO from a session and its discoveries (e.g. from LegacyTripAdapter result).
+    /// Build a legacy-shaped DTO from a session and its discoveries (e.g. from TripActivityEventRepository).
     /// - Parameter collapseByTargetId: When true, one FoundRegion per targetId with first finder and first discovery time (for collaborative display in legacy UI). Default false preserves one FoundRegion per GameDiscovery.
     static func toLegacyDTO(
         session: TripSession,

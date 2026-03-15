@@ -19,7 +19,7 @@ final class TravelLogViewModel: ObservableObject {
     private let travelLogRepository: TravelLogRepositoryProtocol
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
-    private let tripRepository: TripRepositoryProtocol
+    private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
     private var authService: FirebaseAuthService
     private let usePreviewEntries: Bool
 
@@ -27,14 +27,14 @@ final class TravelLogViewModel: ObservableObject {
         travelLogRepository: TravelLogRepositoryProtocol,
         tripSessionRepository: TripSessionRepositoryProtocol,
         gameInstanceRepository: GameInstanceRepositoryProtocol,
-        tripRepository: TripRepositoryProtocol,
+        tripActivityEventRepository: TripActivityEventRepositoryProtocol,
         authService: FirebaseAuthService,
         previewEntries: [TravelLogEntry]? = nil
     ) {
         self.travelLogRepository = travelLogRepository
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
-        self.tripRepository = tripRepository
+        self.tripActivityEventRepository = tripActivityEventRepository
         self.authService = authService
         self.usePreviewEntries = previewEntries != nil
         if let entries = previewEntries {
@@ -70,7 +70,7 @@ final class TravelLogViewModel: ObservableObject {
         isLoading = false
     }
 
-    /// Open summary for a session: fetch session, games, and if legacy trip then discoveries/credits; build and set selectedSummary.
+    /// Open summary for a session: fetch session, games, discoveries from event repo; compute credits; build and set selectedSummary.
     func openSummary(sessionId: UUID) {
         FeedbackService.shared.buttonTap()
         isLoadingSummary = true
@@ -84,15 +84,15 @@ final class TravelLogViewModel: ObservableObject {
                 return
             }
             let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
-            var discoveries: [GameDiscovery] = []
+            let discoveries = try tripActivityEventRepository.discoveries(sessionId: sessionId, gameInstanceId: nil)
+            let discoveriesByTarget = Dictionary(grouping: discoveries, by: \.targetId)
+            let isShared = TripModeRulesEngine.creditType(for: session.mode) == .shared
             var credits: [GameCredit] = []
-
-            if let legacyId = session.legacyTripId,
-               let trip = try tripRepository.get(byId: legacyId) {
-                let adapted = LegacyTripAdapter.adapt(trip)
-                discoveries = adapted.discoveries
-                credits = adapted.credits
-                AnalyticsService.shared.log(.legacyTripAdapterUsed(legacyTripId: legacyId.uuidString, sessionId: sessionId.uuidString))
+            for (_, targetDiscoveries) in discoveriesByTarget {
+                let sorted = targetDiscoveries.sorted { $0.discoveredAt < $1.discoveredAt }
+                guard let discovery = isShared ? sorted.last : sorted.first else { continue }
+                let existing = isShared ? Array(sorted.dropLast()) : Array(sorted.dropFirst())
+                credits.append(contentsOf: GameCreditCalculator.credits(for: session.mode, discovery: discovery, existingDiscoveriesForTarget: existing))
             }
 
             let summary = TripSummaryBuilder.build(

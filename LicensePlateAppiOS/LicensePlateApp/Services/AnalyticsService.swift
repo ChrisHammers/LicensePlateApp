@@ -150,8 +150,6 @@ class AnalyticsService: AnalyticsLogging {
         case gameConfigPayloadDecodeFailed(gameInstanceId: String?, error: String)
         case creditResolutionFailed(discoveryId: String, error: String)
         case summaryProjectionMismatch(sessionId: String, error: String)
-        case legacyTripAdapterUsed(legacyTripId: String, sessionId: String?)
-        case legacyTripAdapterFailed(error: String)
         case unsupportedGamePayloadVersion(payloadType: String, payloadVersion: String)
         case analyticsPropertyBuildFailed(eventName: String, error: String)
 
@@ -267,8 +265,6 @@ class AnalyticsService: AnalyticsLogging {
             case .gameConfigPayloadDecodeFailed: return "game_config_payload_decode_failed"
             case .creditResolutionFailed: return "credit_resolution_failed"
             case .summaryProjectionMismatch: return "summary_projection_mismatch"
-            case .legacyTripAdapterUsed: return "legacy_trip_adapter_used"
-            case .legacyTripAdapterFailed: return "legacy_trip_adapter_failed"
             case .unsupportedGamePayloadVersion: return "unsupported_game_payload_version"
             case .analyticsPropertyBuildFailed: return "analytics_property_build_failed"
             case .notificationEligibilityChecked: return "notification_eligibility_checked"
@@ -404,12 +400,6 @@ class AnalyticsService: AnalyticsLogging {
                 return ["discovery_id": discoveryId, "error": error]
             case .summaryProjectionMismatch(let sessionId, let error):
                 return ["session_id": sessionId, "error": error]
-            case .legacyTripAdapterUsed(let legacyTripId, let sessionId):
-                var p: [String: Any] = ["legacy_trip_id": legacyTripId]
-                if let id = sessionId { p["session_id"] = id }
-                return p
-            case .legacyTripAdapterFailed(let error):
-                return ["error": error]
             case .unsupportedGamePayloadVersion(let payloadType, let payloadVersion):
                 return ["game_payload_type": payloadType, "game_payload_version": payloadVersion]
             case .analyticsPropertyBuildFailed(let eventName, let error):

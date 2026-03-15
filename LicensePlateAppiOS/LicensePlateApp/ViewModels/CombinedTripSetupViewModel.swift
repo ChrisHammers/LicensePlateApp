@@ -2,7 +2,7 @@
 //  CombinedTripSetupViewModel.swift
 //  LicensePlateApp
 //
-//  Step 06 — ViewModel for combined trip setup: game types, countries, options. Creates TripSession + GameInstances + legacy Trip.
+//  Step 06 — ViewModel for combined trip setup: game types, countries, options. Creates TripSession + GameInstances (canonical only).
 //
 
 import Foundation
@@ -81,7 +81,7 @@ final class CombinedTripSetupViewModel: ObservableObject {
         errorMessage = message
     }
 
-    /// Creates TripSession, GameInstances, and a legacy Trip. Inserts Trip into the given context and saves. Returns the created TripSession on success (for root navigation).
+    /// Creates TripSession and GameInstances only (canonical model). Appends trip_started/game_started events when startTripRightAway. Returns the created TripSession on success.
     func createTrip(modelContext: ModelContext) throws -> TripSession {
         errorMessage = nil
         isCreating = true
@@ -110,7 +110,7 @@ final class CombinedTripSetupViewModel: ObservableObject {
         let session = TripSession(
             id: sessionId,
             name: finalName,
-            status: startedAt != nil ? .active : .draft,
+            status: .active,
             mode: mode,
             createdBy: createdBy,
             startedAt: startedAt,
@@ -131,7 +131,11 @@ final class CombinedTripSetupViewModel: ObservableObject {
         }
         if session.startedAt != nil {
             try gameInstanceRepository.transitionGamesToStarted(sessionId: sessionId)
-            for (order, instance) in instances.enumerated() {
+            try TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: sessionId, kind: .tripStarted, actorId: createdBy))
+            for instance in instances {
+                try TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: sessionId, kind: .gameStarted, actorId: nil, payload: ["gameInstanceId": instance.id.uuidString]))
+            }
+            for (_, instance) in instances.enumerated() {
                 AnalyticsService.shared.log(.gameInstanceStarted(
                     gameInstanceId: instance.id.uuidString,
                     gameType: instance.definitionId,
@@ -145,27 +149,6 @@ final class CombinedTripSetupViewModel: ObservableObject {
                 combinedGameTypes: types.map(\.rawValue)
             ))
         }
-
-        let legacyTrip = Trip(
-            id: sessionId,
-            createdAt: createdAt,
-            lastUpdated: createdAt,
-            name: finalName,
-            foundRegions: [],
-            skipVoiceConfirmation: skipVoiceConfirmation,
-            holdToTalk: holdToTalk,
-            createdBy: createdBy,
-            startedAt: startedAt,
-            isTripEnded: false,
-            saveLocationWhenMarkingPlates: saveLocationWhenMarkingPlates,
-            showMyLocationOnLargeMap: showMyLocationOnLargeMap,
-            trackMyLocationDuringTrip: trackMyLocationDuringTrip,
-            showMyActiveTripOnLargeMap: showMyActiveTripOnLargeMap,
-            showMyActiveTripOnSmallMap: showMyActiveTripOnSmallMap,
-            enabledCountries: countryList
-        )
-        modelContext.insert(legacyTrip)
-        try modelContext.save()
 
         AnalyticsService.shared.log(.combinedTripCreated(gameTypes: types.map(\.rawValue)))
 

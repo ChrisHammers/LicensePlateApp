@@ -21,7 +21,7 @@ struct TripSessionRow: View {
     private var dateLabel: String {
         if let started = session.startedAt {
             return dateFormatter.string(from: started)
-        }
+        } else if let created = session.createdA
         return "—"
     }
 

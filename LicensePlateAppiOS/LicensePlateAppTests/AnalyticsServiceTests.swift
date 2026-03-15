@@ -132,12 +132,7 @@ struct AnalyticsServiceTests {
         #expect(combinedStarted.parameters?["combined_game_types"] as? String == "license_plate,other")
     }
 
-    @Test @MainActor func legacyAdapterAndInviteContextEvents() async throws {
-        let legacyUsed = AnalyticsService.Event.legacyTripAdapterUsed(legacyTripId: "legacy-1", sessionId: "sess-1")
-        #expect(legacyUsed.name == "legacy_trip_adapter_used")
-        #expect(legacyUsed.parameters?["legacy_trip_id"] as? String == "legacy-1")
-        #expect(legacyUsed.parameters?["session_id"] as? String == "sess-1")
-
+    @Test @MainActor func inviteContextEvents() async throws {
         let inviteAccepted = AnalyticsService.Event.tripInviteAcceptedWithContext(
             inviteTripId: "inv-trip-1",
             inviteGameCount: 2,
@@ -150,8 +145,8 @@ struct AnalyticsServiceTests {
     }
 
     @Test @MainActor func errorEventParameters() async throws {
-        let adapterFailed = AnalyticsService.Event.legacyTripAdapterFailed(error: "decode failed")
-        #expect(adapterFailed.name == "legacy_trip_adapter_failed")
-        #expect(adapterFailed.parameters?["error"] as? String == "decode failed")
+        let buildFailed = AnalyticsService.Event.analyticsPropertyBuildFailed(eventName: "test_event", error: "decode failed")
+        #expect(buildFailed.name == "analytics_property_build_failed")
+        #expect(buildFailed.parameters?["error"] as? String == "decode failed")
     }
 }

@@ -12,10 +12,20 @@ enum TripActivityEventKind: String, Codable, CaseIterable, Sendable {
     case tripStarted = "trip_started"
     case tripEnded = "trip_ended"
     case regionFound = "region_found"
+    case regionRemoved = "region_removed"
     case participantJoined = "participant_joined"
     case participantLeft = "participant_left"
     case gameStarted = "game_started"
     case gameEnded = "game_ended"
+}
+
+/// Payload keys for TripActivityEvent (e.g. region_found, region_removed).
+enum TripActivityEventPayloadKey {
+    static let regionId = "regionId"
+    static let gameInstanceId = "gameInstanceId"
+    static let participantId = "participantId"
+    static let inputMethod = "inputMethod"
+    static let discoveredAt = "discoveredAt"
 }
 
 /// A single event in the trip lifecycle. Room for analytics and audit.
