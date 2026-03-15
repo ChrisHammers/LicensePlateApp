@@ -11,6 +11,8 @@ struct TripSummaryView: View {
     let summary: TripSummary
     var onDismiss: (() -> Void)?
 
+    @State private var participantDisplayNames: [String: String] = [:]
+
     private let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateStyle = .medium
@@ -54,6 +56,35 @@ struct TripSummaryView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Trip summary".localized)
+        .task { await loadParticipantDisplayNames() }
+    }
+
+    /// Collects all participant IDs from the summary and fetches display names from UserRepository.
+    private func loadParticipantDisplayNames() async {
+        var ids: Set<String> = Set(summary.participantContributions.map(\.participantId))
+        if let projection = summary.discoveryProjection {
+            for target in projection.targetSummaries {
+                if let first = target.firstFinderParticipantId { ids.insert(first) }
+                ids.formUnion(target.allFinderParticipantIds)
+            }
+        }
+        participantDisplayNames = await UserRepository.shared.displayNames(forUserIds: ids)
+    }
+
+    /// Region or discovery display name for a target id (e.g. "us-ca" -> "California").
+    private func regionName(for targetId: String) -> String {
+        PlateRegion.all.first(where: { $0.id == targetId })?.name ?? targetId
+    }
+
+    /// Resolved "found by" label using display names when available.
+    private func foundByLabel(for target: TargetDiscoverySummary) -> String {
+        if let firstId = target.firstFinderParticipantId, target.allFinderParticipantIds.count == 1 {
+            return "Found by %@".localized(participantDisplayNames[firstId] ?? firstId)
+        }
+        if target.allFinderParticipantIds.count > 1 {
+            return "%d finders".localized(target.allFinderParticipantIds.count)
+        }
+        return target.summaryLabel
     }
 
     private var headerSection: some View {
@@ -117,7 +148,7 @@ struct TripSummaryView: View {
                 .foregroundStyle(Color.Theme.primaryBlue)
             ForEach(summary.participantContributions, id: \.participantId) { contrib in
                 HStack {
-                    Text(contrib.participantId)
+                    Text(participantDisplayNames[contrib.participantId] ?? contrib.participantId)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .font(.system(.subheadline, design: .rounded))
@@ -180,13 +211,13 @@ struct TripSummaryView: View {
                 .foregroundStyle(Color.Theme.primaryBlue)
             ForEach(projection.targetSummaries.prefix(20), id: \.targetId) { target in
                 HStack {
-                    Text(target.targetId)
+                    Text(regionName(for: target.targetId))
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.primaryBlue)
                     Spacer()
-                    Text(target.summaryLabel)
+                    Text(foundByLabel(for: target))
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                 }

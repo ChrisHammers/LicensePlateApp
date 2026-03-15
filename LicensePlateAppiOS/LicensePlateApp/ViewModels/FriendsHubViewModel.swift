@@ -143,6 +143,9 @@ class FriendsHubViewModel: ObservableObject {
     private func updateFriendInvites(_ allInvites: [Invite], userId: String) {
         print("🔍 FriendsHubViewModel.updateFriendInvites: Processing \(allInvites.count) total invites for userId: \(userId)")
         
+        for invite in allInvites {
+            print(invite.toFirestoreData())
+        }
         // Filter for friend invites that are pending
         // Friend invites don't expire, so we don't check isExpired
         let friendInvites = allInvites.filter { invite in

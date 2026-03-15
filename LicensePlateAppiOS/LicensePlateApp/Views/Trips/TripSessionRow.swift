@@ -68,7 +68,8 @@ struct TripSessionRow: View {
 
                 Label("\(plateCount)/\(licensePlateTotalAvailable)", systemImage: "licenseplate")
                     .font(.system(.subheadline, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.Theme.accentYellow)
                     .accessibilityLabel(plateCount == 1 ? "1 license plate found".localized : "%d license plates found".localized(plateCount))
                     .accessibilityValue("%d of %d".localized(plateCount, licensePlateTotalAvailable))
             }

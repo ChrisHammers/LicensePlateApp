@@ -28,7 +28,20 @@ class UserRepository: ObservableObject {
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
     }
-    
+
+    /// Returns a dictionary of userId -> userName for the given IDs. Missing or failed lookups fall back to the id as the value.
+    func displayNames(forUserIds ids: Set<String>) async -> [String: String] {
+        var result: [String: String] = [:]
+        for id in ids {
+            if let user = try? await getUser(userId: id) {
+                result[id] = user.userName
+            } else {
+                result[id] = id
+            }
+        }
+        return result
+    }
+
     // MARK: - User Search
     
     /// Search users by username (always searchable)

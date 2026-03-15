@@ -433,6 +433,7 @@ struct ContentView: View {
         for index in offsets {
             let item = activeListItems[index]
             guard let session = try? TripSessionRepository.shared.session(byId: item.session.id) else { continue }
+            var updated = session
             updated.status = .cancelled
             updated.endedAt = Date()
             try? TripSessionRepository.shared.save(session: updated)
