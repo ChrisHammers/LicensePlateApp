@@ -77,6 +77,8 @@ struct TripTrackerView: View {
     @State private var micListeningPulseScale: CGFloat = 1.0
     @State private var showRiskAdvisoryMessage = false
     @State private var riskPresentationStyle: RiskPresentationStyle? = nil
+    /// Shown when discovery is rejected (e.g. competitive mode, other participant found first). Step 03.
+    @State private var rejectedDuplicateMessage: String? = nil
     @State private var cameraPosition: GMSCameraPosition = {
         // Initialize with default US position, will be updated on appear
         let center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
@@ -141,7 +143,12 @@ struct TripTrackerView: View {
         // } message: {
         //     Text("Unusual activity was detected; this is only for your awareness.".localized)
         // }
-        .overlay(riskAdvisoryBanner)
+        .overlay(alignment: .top) {
+            VStack(spacing: 8) {
+                rejectedDuplicateBanner
+                riskAdvisoryBanner
+            }
+        }
         .onAppear {
             FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: appPlaySoundEffects)
         }
@@ -551,8 +558,38 @@ struct TripTrackerView: View {
     }
 
   private func setFound(regionID: String, usingTab: FoundRegion.InputMethod) {
-    FeedbackService.shared.actionSuccess()
     let participantId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+
+    // Step 03: Evaluate before append; one rules path for duplicate/outcome.
+    let discoveries = (try? TripActivityEventRepository.shared.discoveries(sessionId: session.id, gameInstanceId: primaryGame.id)) ?? []
+    let byTarget = Dictionary(grouping: discoveries, by: \.targetId)
+    let existingDiscoveriesForTarget = byTarget[regionID] ?? []
+
+    let result = DiscoveryRulesEngine.evaluateDiscoverySubmission(
+        mode: session.mode,
+        existingDiscoveriesForTarget: existingDiscoveriesForTarget,
+        candidateParticipantId: participantId,
+        candidateTargetId: regionID,
+        gameInstanceId: primaryGame.id,
+        inputMethod: usingTab,
+        occurredAt: Date(),
+        riskContext: nil
+    )
+
+    if result.outcome == .rejectedDuplicate {
+        FeedbackService.shared.actionError()
+        rejectedDuplicateMessage = "Only the first finder gets credit in competitive mode.".localized
+        AnalyticsService.shared.log(.discoveryRejectedDuplicate(
+            tripId: session.id.uuidString,
+            gameInstanceId: primaryGame.id.uuidString,
+            targetId: regionID,
+            participantId: participantId.isEmpty ? nil : participantId,
+            mode: session.mode.rawValue
+        ))
+        return
+    }
+
+    FeedbackService.shared.actionSuccess()
     var payload: [String: String] = [
         TripActivityEventPayloadKey.regionId: regionID,
         TripActivityEventPayloadKey.gameInstanceId: primaryGame.id.uuidString,
@@ -565,12 +602,19 @@ struct TripTrackerView: View {
         withAccessibleAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             refreshFoundRegions()
         }
-        let result = riskAssessment.assessAfterDiscoveryChange(
+        AnalyticsService.shared.log(.discoveryOutcomeRecorded(
+            tripId: session.id.uuidString,
+            gameInstanceId: primaryGame.id.uuidString,
+            targetId: regionID,
+            outcome: result.outcome.rawValue,
+            participantId: participantId.isEmpty ? nil : participantId
+        ))
+        let riskResult = riskAssessment.assessAfterDiscoveryChange(
             tripId: session.id,
             foundRegions: foundRegions,
             lastChange: (regionID, true, Date())
         )
-        applyRiskPresentation(result.flags)
+        applyRiskPresentation(riskResult.flags)
     } catch {
         FeedbackService.shared.actionError()
         assertionFailure("Failed to append discovery event: \(error)")
@@ -607,6 +651,25 @@ struct TripTrackerView: View {
             setNotFound(regionID: regionID, usingTab: .list)
         } else {
             setFound(regionID: regionID, usingTab: .list)
+        }
+    }
+
+    @ViewBuilder private var rejectedDuplicateBanner: some View {
+        if let message = rejectedDuplicateMessage {
+            Text(message)
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(Color.Theme.primaryBlue)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color.Theme.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .onTapGesture {
+                    rejectedDuplicateMessage = nil
+                }
+                .accessibilityLabel(message)
+                .accessibilityHint("Tap to dismiss".localized)
         }
     }
 

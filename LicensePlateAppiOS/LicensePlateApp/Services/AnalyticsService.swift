@@ -156,6 +156,10 @@ class AnalyticsService: AnalyticsLogging {
         // Risk advisory (Step 11)
         case riskAdvisoryDetected(flags: [String], tripId: String)
 
+        // Discovery outcome (Step 03 — rules engine)
+        case discoveryOutcomeRecorded(tripId: String, gameInstanceId: String, targetId: String, outcome: String, participantId: String?)
+        case discoveryRejectedDuplicate(tripId: String, gameInstanceId: String, targetId: String, participantId: String?, mode: String)
+
         // Notifications & eligibility (Step 08)
         case notificationEligibilityChecked(kind: String, eligible: Bool)
         case notificationDeliveredTripInvite
@@ -280,6 +284,8 @@ class AnalyticsService: AnalyticsLogging {
             case .restoreCompleted: return "restore_completed"
             case .restoreFailed: return "restore_failed"
             case .riskAdvisoryDetected: return "risk_advisory_detected"
+            case .discoveryOutcomeRecorded: return "discovery_outcome_recorded"
+            case .discoveryRejectedDuplicate: return "discovery_rejected_duplicate"
             }
         }
         
@@ -406,6 +412,14 @@ class AnalyticsService: AnalyticsLogging {
                 return ["event_name": eventName, "error": error]
             case .riskAdvisoryDetected(let flags, let tripId):
                 return ["risk_flags": flags.joined(separator: ","), "trip_id": tripId]
+            case .discoveryOutcomeRecorded(let tripId, let gameInstanceId, let targetId, let outcome, let participantId):
+                var p: [String: Any] = ["trip_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "outcome": outcome]
+                if let id = participantId { p["participant_id"] = id }
+                return p
+            case .discoveryRejectedDuplicate(let tripId, let gameInstanceId, let targetId, let participantId, let mode):
+                var p: [String: Any] = ["trip_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "mode": mode]
+                if let id = participantId { p["participant_id"] = id }
+                return p
             case .notificationEligibilityChecked(let kind, let eligible):
                 return ["kind": kind, "eligible": eligible]
             case .notificationDeliveredTripInvite:

@@ -34,6 +34,8 @@
 "This trip has been completed" = "This trip has been completed";
 "This will stop the game. You won't be able to add states in this trip anymore." = "This will stop the game. You won't be able to add states in this trip anymore.";
 "Cancel" = "Cancel";
+"Only the first finder gets credit in competitive mode." = "Only the first finder gets credit in competitive mode.";
+"Tap to dismiss" = "Tap to dismiss";
 
 // Voice Recognition
 "Speech Recognition Needed" = "Speech Recognition Needed";

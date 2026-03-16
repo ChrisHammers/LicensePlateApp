@@ -86,14 +86,7 @@ final class TravelLogViewModel: ObservableObject {
             let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
             let discoveries = try tripActivityEventRepository.discoveries(sessionId: sessionId, gameInstanceId: nil)
             let discoveriesByTarget = Dictionary(grouping: discoveries, by: \.targetId)
-            let isShared = TripModeRulesEngine.creditType(for: session.mode) == .shared
-            var credits: [GameCredit] = []
-            for (_, targetDiscoveries) in discoveriesByTarget {
-                let sorted = targetDiscoveries.sorted { $0.discoveredAt < $1.discoveredAt }
-                guard let discovery = isShared ? sorted.last : sorted.first else { continue }
-                let existing = isShared ? Array(sorted.dropLast()) : Array(sorted.dropFirst())
-                credits.append(contentsOf: GameCreditCalculator.credits(for: session.mode, discovery: discovery, existingDiscoveriesForTarget: existing))
-            }
+            let credits = DiscoveryRulesEngine.creditsForDiscoveries(mode: session.mode, discoveriesByTarget: discoveriesByTarget)
 
             let summary = TripSummaryBuilder.build(
                 session: session,
