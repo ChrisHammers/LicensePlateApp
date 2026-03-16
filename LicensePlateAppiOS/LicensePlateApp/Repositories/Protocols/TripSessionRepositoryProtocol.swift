@@ -14,7 +14,6 @@ protocol TripSessionRepositoryProtocol: AnyObject {
 
     func create(session: TripSession) throws
     func loadActiveSessions(userId: String?) throws -> [TripSession]
-    func loadPendingSessions(userId: String?) throws -> [TripSession]
     func loadArchivedSessions(userId: String?, limit: Int) throws -> [TripSession]
     func addParticipant(sessionId: UUID, participant: TripParticipant) throws
     func removeParticipant(sessionId: UUID, userId: String) throws

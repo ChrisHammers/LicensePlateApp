@@ -2,7 +2,7 @@
 //  TravelLogViewModelTests.swift
 //  LicensePlateAppTests
 //
-//  Step 07 — TravelLogViewModel: load entries, open summary (with and without legacy trip).
+//  Step 07 — TravelLogViewModel: load entries, open summary (discoveries from TripActivityEventRepository).
 //
 
 import Foundation
@@ -32,7 +32,7 @@ struct TravelLogViewModelTests {
         TravelLogRepository.shared.setModelContext(ctx)
         TripSessionRepository.shared.setModelContext(ctx)
         GameInstanceRepository.shared.setModelContext(ctx)
-        TripRepository.shared.setModelContext(ctx)
+        TripActivityEventRepository.shared.setModelContext(ctx)
 
         let sessionId = UUID().uuidString
         let endedAt = Date().addingTimeInterval(-50)
@@ -41,6 +41,7 @@ struct TravelLogViewModelTests {
             name: "Past Trip",
             status: TripStatus.ended.rawValue,
             mode: TripMode.solo.rawValue,
+            createdAt: endedAt.addingTimeInterval(-100),
             endedAt: endedAt
         )
         ctx.insert(entity)
@@ -51,7 +52,7 @@ struct TravelLogViewModelTests {
             travelLogRepository: TravelLogRepository.shared,
             tripSessionRepository: TripSessionRepository.shared,
             gameInstanceRepository: GameInstanceRepository.shared,
-            tripRepository: TripRepository.shared,
+            tripActivityEventRepository: TripActivityEventRepository.shared,
             authService: auth
         )
         viewModel.loadEntries(statusFilter: .endedOnly)
@@ -61,13 +62,13 @@ struct TravelLogViewModelTests {
         #expect(viewModel.errorMessage == nil)
     }
 
-    @Test func openSummaryWithoutLegacyBuildsSummaryWithEmptyDiscoveries() async throws {
+    @Test func openSummaryBuildsSummaryWithEmptyDiscoveries() async throws {
         let container = try makeContainer()
         let ctx = ModelContext(container)
         TravelLogRepository.shared.setModelContext(ctx)
         TripSessionRepository.shared.setModelContext(ctx)
         GameInstanceRepository.shared.setModelContext(ctx)
-        TripRepository.shared.setModelContext(ctx)
+        TripActivityEventRepository.shared.setModelContext(ctx)
 
         let sessionId = UUID()
         let endedAt = Date().addingTimeInterval(-50)
@@ -76,8 +77,8 @@ struct TravelLogViewModelTests {
             name: "New Flow Trip",
             status: TripStatus.ended.rawValue,
             mode: TripMode.solo.rawValue,
-            endedAt: endedAt,
-            legacyTripId: nil
+            createdAt: endedAt.addingTimeInterval(-100),
+            endedAt: endedAt
         )
         ctx.insert(entity)
         try ctx.save()
@@ -87,7 +88,7 @@ struct TravelLogViewModelTests {
             travelLogRepository: TravelLogRepository.shared,
             tripSessionRepository: TripSessionRepository.shared,
             gameInstanceRepository: GameInstanceRepository.shared,
-            tripRepository: TripRepository.shared,
+            tripActivityEventRepository: TripActivityEventRepository.shared,
             authService: auth
         )
         viewModel.openSummary(sessionId: sessionId)
@@ -98,61 +99,43 @@ struct TravelLogViewModelTests {
         #expect(viewModel.selectedSummary?.participantContributions.isEmpty == true)
     }
 
-    @Test func openSummaryWithLegacyTripBuildsSummaryWithDiscoveries() async throws {
+    @Test func openSummaryWithEventsBuildsSummaryWithDiscoveries() async throws {
         let container = try makeContainer()
         let ctx = ModelContext(container)
         TravelLogRepository.shared.setModelContext(ctx)
         TripSessionRepository.shared.setModelContext(ctx)
         GameInstanceRepository.shared.setModelContext(ctx)
-        TripRepository.shared.setModelContext(ctx)
+        TripActivityEventRepository.shared.setModelContext(ctx)
 
-        let tripId = UUID()
-        let sessionId = tripId
-        let createdAt = Date().addingTimeInterval(-200)
+        let sessionId = UUID()
+        let gameId = UUID()
         let endedAt = Date().addingTimeInterval(-10)
-        let legacyTrip = Trip(
-            id: tripId,
-            createdAt: createdAt,
-            lastUpdated: endedAt,
-            name: "Legacy Trip",
-            foundRegions: [
-                FoundRegion(regionID: "CA", foundAt: createdAt, inputMethod: .list, foundBy: "user1"),
-                FoundRegion(regionID: "TX", foundAt: createdAt.addingTimeInterval(10), inputMethod: .list, foundBy: "user1")
-            ],
-            createdBy: "user1",
-            startedAt: createdAt,
-            isTripEnded: true,
-            tripEndedAt: endedAt,
-            tripEndedBy: "user1",
-            enabledCountries: [.unitedStates]
-        )
-        ctx.insert(legacyTrip)
-        try ctx.save()
-
         let entity = TripSessionEntity(
             id: sessionId.uuidString,
-            name: "Legacy Trip",
+            name: "Trip With Plates",
             status: TripStatus.ended.rawValue,
             mode: TripMode.solo.rawValue,
-            endedAt: endedAt,
-            legacyTripId: tripId.uuidString
+            createdAt: endedAt.addingTimeInterval(-100),
+            endedAt: endedAt
         )
         ctx.insert(entity)
         try ctx.save()
+
+        try TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: sessionId, kind: .regionFound, payload: [TripActivityEventPayloadKey.regionId: "CA", TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString, TripActivityEventPayloadKey.participantId: "user1", TripActivityEventPayloadKey.inputMethod: FoundRegion.InputMethod.list.rawValue]))
+        try TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: sessionId, kind: .regionFound, payload: [TripActivityEventPayloadKey.regionId: "TX", TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString, TripActivityEventPayloadKey.participantId: "user1", TripActivityEventPayloadKey.inputMethod: FoundRegion.InputMethod.list.rawValue]))
 
         let auth = FirebaseAuthService()
         let viewModel = TravelLogViewModel(
             travelLogRepository: TravelLogRepository.shared,
             tripSessionRepository: TripSessionRepository.shared,
             gameInstanceRepository: GameInstanceRepository.shared,
-            tripRepository: TripRepository.shared,
+            tripActivityEventRepository: TripActivityEventRepository.shared,
             authService: auth
         )
         viewModel.openSummary(sessionId: sessionId)
 
         #expect(viewModel.selectedSummary != nil)
-        #expect(viewModel.selectedSummary?.tripName == "Legacy Trip")
+        #expect(viewModel.selectedSummary?.tripName == "Trip With Plates")
         #expect(viewModel.selectedSummary?.totalDiscoveryCount == 2)
-        #expect(viewModel.selectedSummary?.participantContributions.isEmpty == false)
     }
 }

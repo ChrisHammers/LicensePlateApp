@@ -82,8 +82,9 @@ struct GameInstanceConfigEnvelopeTests {
         let session = TripSession(
             id: UUID(),
             name: "Test",
-            status: .draft,
+            status: .active,
             mode: .solo,
+            createdAt: .now,
             participants: [TripParticipant(userId: "u1", role: .owner)],
             enabledCountryRawValues: ["United States", "Canada", "Mexico"]
         )

@@ -46,10 +46,14 @@ struct TripTrackerView: View {
         }
     }
 
+    let session: TripSession
+    let primaryGame: GameInstance
+    @State private var currentSession: TripSession
+    @State private var foundRegions: [FoundRegion] = []
+
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
     @EnvironmentObject var riskAssessment: RiskAssessmentService
-    @Bindable var trip: Trip
     @StateObject private var speechRecognizer = SpeechRecognizer(onListeningStarted: {
         FeedbackService.shared.startRecording()
     })
@@ -58,6 +62,7 @@ struct TripTrackerView: View {
     // App Preferences for feedback
     @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
     @AppStorage("appUseVibrations") private var appUseVibrations = true
+    @AppStorage("defaultSkipVoiceConfirmation") private var skipVoiceConfirmation = false
 
     @State private var selectedTab: Tab = .list
     @State private var lastMatchedRegion: PlateRegion?
@@ -79,6 +84,16 @@ struct TripTrackerView: View {
     }()
     @Namespace private var mapNamespace
 
+    init(session: TripSession, primaryGame: GameInstance) {
+        self.session = session
+        self.primaryGame = primaryGame
+        _currentSession = State(initialValue: session)
+    }
+
+    private func refreshFoundRegions() {
+        foundRegions = (try? TripActivityEventRepository.shared.foundRegions(sessionId: session.id, gameInstanceId: primaryGame.id)) ?? []
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -99,7 +114,7 @@ struct TripTrackerView: View {
         .background(Color.Theme.background.ignoresSafeArea())
         .ignoresSafeArea(.all, edges: .bottom)
         .navigationBarTitleDisplayMode(.inline)
-        .navigationTitle(trip.name)
+        .navigationTitle(currentSession.name)
         .toolbar {
             if !showFullScreenMap {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -117,7 +132,7 @@ struct TripTrackerView: View {
         }
         .toolbar(showFullScreenMap ? .hidden : .visible, for: .navigationBar)
         .sheet(isPresented: $showSettings) {
-            SettingsView(trip: trip, modelContext: modelContext)
+            SettingsView(session: $currentSession, primaryGame: primaryGame, foundRegions: $foundRegions, modelContext: modelContext)
                 .environmentObject(authService)
         }
         // Step 11: Unusual Activity modal suppressed (risk still logged to analytics). Non-blocking options: toast/banner, inline hint, or settings summary.
@@ -139,9 +154,9 @@ struct TripTrackerView: View {
         .overlay {
             if showFullScreenMap {
                 FullScreenMapView(
-                    enabledCountries: trip.enabledCountries,
-                    foundRegionIDs: trip.foundRegionIDs,
-                    foundRegions: trip.foundRegions,
+                    enabledCountries: currentSession.enabledCountries,
+                    foundRegionIDs: foundRegions.map(\.regionID),
+                    foundRegions: foundRegions,
                     cameraPosition: $cameraPosition,
                     locationManager: locationManager,
                     namespace: mapNamespace,
@@ -152,6 +167,7 @@ struct TripTrackerView: View {
             }
         }
         .onAppear {
+            refreshFoundRegions()
             // Request location permission when view appears
             if locationManager.authorizationStatus == .notDetermined {
                 locationManager.requestAuthorization()
@@ -165,22 +181,22 @@ struct TripTrackerView: View {
             let center: CLLocationCoordinate2D
             let zoom: Float
             
-            if trip.enabledCountries.contains(.unitedStates) && trip.enabledCountries.contains(.canada) && trip.enabledCountries.contains(.mexico) {
+            if currentSession.enabledCountries.contains(.unitedStates) && currentSession.enabledCountries.contains(.canada) && currentSession.enabledCountries.contains(.mexico) {
                 center = CLLocationCoordinate2D(latitude: 45.0, longitude: -100.0)
                 zoom = 3.5
-            } else if trip.enabledCountries.contains(.unitedStates) && trip.enabledCountries.contains(.canada) {
+            } else if currentSession.enabledCountries.contains(.unitedStates) && currentSession.enabledCountries.contains(.canada) {
                 center = CLLocationCoordinate2D(latitude: 50.0, longitude: -100.0)
                 zoom = 3.8
-            } else if trip.enabledCountries.contains(.unitedStates) && trip.enabledCountries.contains(.mexico) {
+            } else if currentSession.enabledCountries.contains(.unitedStates) && currentSession.enabledCountries.contains(.mexico) {
                 center = CLLocationCoordinate2D(latitude: 32.0, longitude: -100.0)
                 zoom = 4.0
-            } else if trip.enabledCountries.contains(.unitedStates) {
+            } else if currentSession.enabledCountries.contains(.unitedStates) {
                 center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
                 zoom = 4.0
-            } else if trip.enabledCountries.contains(.canada) {
+            } else if currentSession.enabledCountries.contains(.canada) {
                 center = CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468)
                 zoom = 4.5
-            } else if trip.enabledCountries.contains(.mexico) {
+            } else if currentSession.enabledCountries.contains(.mexico) {
                 center = CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528)
                 zoom = 5.5
             } else {
@@ -190,15 +206,15 @@ struct TripTrackerView: View {
             
             cameraPosition = GMSCameraPosition.from(coordinate: center, zoom: zoom)
         }
-        .onChange(of: trip.startedAt) { oldValue, newValue in
+        .onChange(of: currentSession.startedAt) { oldValue, newValue in
             // If trip just became inactive and we're on voice tab, switch to list
             if !isTripActive && selectedTab == .voice {
                 selectedTab = .list
             }
         }
-        .onChange(of: trip.isTripEnded) { oldValue, newValue in
+        .onChange(of: currentSession.status) { oldValue, newValue in
             // If trip just ended and we're on voice tab, switch to list
-            if newValue && selectedTab == .voice {
+            if newValue == .ended && selectedTab == .voice {
                 selectedTab = .list
             }
         }
@@ -241,13 +257,7 @@ struct TripTrackerView: View {
                         showVoiceMatchConfirmation = false
                         lastMatchedRegion = nil
                     },
-                    skipConfirmation: Binding(
-                        get: { trip.skipVoiceConfirmation },
-                        set: { newValue in
-                            trip.skipVoiceConfirmation = newValue
-                            try? modelContext.save()
-                        }
-                    )
+                    skipConfirmation: $skipVoiceConfirmation
                 )
             }
         }
@@ -255,16 +265,16 @@ struct TripTrackerView: View {
 
     private var header: some View {
         VStack(spacing: 16) {
-//            Text(trip.name)
+//            Text(currentSession.name)
 //                .font(.system(.title2, design: .rounded))
 //                .fontWeight(.bold)
 //                .foregroundStyle(Color.Theme.primaryBlue)
 
           // Map view
           RegionMapView(
-              enabledCountries: trip.enabledCountries,
-              foundRegionIDs: trip.foundRegionIDs,
-              foundRegions: trip.foundRegions,
+              enabledCountries: currentSession.enabledCountries,
+              foundRegionIDs: foundRegions.map(\.regionID),
+              foundRegions: foundRegions,
               visibleCountry: visibleCountry,
               cameraPosition: $cameraPosition,
               namespace: mapNamespace,
@@ -277,9 +287,9 @@ struct TripTrackerView: View {
           
             HStack(spacing: 24) {
                 // Calculate remaining based on enabled countries only
-                let enabledRegions = PlateRegion.all.filter { trip.enabledCountries.contains($0.country) }
-                let foundValue = "\(trip.foundRegionIDs.count)"
-                let remainingValue = "\(enabledRegions.count - trip.foundRegionIDs.count)"
+                let enabledRegions = PlateRegion.all.filter { currentSession.enabledCountries.contains($0.country) }
+                let foundValue = "\(foundRegions.map(\.regionID).count)"
+                let remainingValue = "\(enabledRegions.count - foundRegions.map(\.regionID).count)"
                 
                 summaryChip(title: "Found".localized, value: foundValue, measuredWidth: $chipWidth, measuredHeight: $chipHeight)
               
@@ -357,18 +367,20 @@ struct TripTrackerView: View {
     
     private var isTripCreator: Bool {
         guard let currentUserID = authService.currentUser?.id else { return false }
-        return trip.createdBy == currentUserID
+        return currentSession.createdBy == currentUserID
     }
     
     private func startEndTripButton(height: CGFloat) -> some View {
         Group {
-            if trip.startedAt == nil {
+            if currentSession.startedAt == nil {
                 // Start Trip Button
                 Button {
                     FeedbackService.shared.buttonTap()
-                    trip.startedAt = Date.now
-                    trip.lastUpdated = Date.now
-                    try? modelContext.save()
+                    currentSession.startedAt = Date.now
+                    currentSession.status = .active
+                    try? TripSessionRepository.shared.save(session: currentSession)
+                    try? TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: session.id, kind: .tripStarted, actorId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id))
+                    try? TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: session.id, kind: .gameStarted, actorId: nil, payload: ["gameInstanceId": primaryGame.id.uuidString]))
                 } label: {
                     VStack(spacing: 6) {
                         Image(systemName: "play.circle.fill")
@@ -395,7 +407,7 @@ struct TripTrackerView: View {
                 .accessibilityLabel("Start Trip".localized)
                 .accessibilityHint(isTripCreator ? "Starts the trip and begins tracking".localized : "Only the trip creator can start the trip".localized)
                 .accessibilityAddTraits(.isButton)
-            } else if !trip.isTripEnded {
+            } else if currentSession.status != .ended {
                 // End Trip Button
                 Button {
                     FeedbackService.shared.buttonTap()
@@ -454,11 +466,12 @@ struct TripTrackerView: View {
         .alert("End Trip", isPresented: $showEndTripConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("End Trip", role: .destructive) {
-                trip.isTripEnded = true
-                trip.tripEndedAt = Date.now
-                trip.tripEndedBy = authService.currentUser?.id
-                trip.lastUpdated = Date.now
-                try? modelContext.save()
+                currentSession.endedAt = Date.now
+                currentSession.endedBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+                currentSession.status = .ended
+                try? TripSessionRepository.shared.save(session: currentSession)
+                try? TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: session.id, kind: .tripEnded, actorId: currentSession.endedBy))
+                try? TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: session.id, kind: .gameEnded, actorId: nil, payload: ["gameInstanceId": primaryGame.id.uuidString]))
             }
         } message: {
             Text("This will stop the game. You won't be able to add states in this trip anymore.")
@@ -473,7 +486,7 @@ struct TripTrackerView: View {
                      ForEach(group.regions) { region in
                          RegionCellView(
                              region: region,
-                             isSelected: trip.hasFound(regionID: region.id),
+                             isSelected: foundRegions.contains(where: { $0.regionID == region.id }),
                              toggleAction: { toggle(regionID: region.id) }
                          )
                          .listRowBackground(Color.Theme.cardBackground)
@@ -488,7 +501,7 @@ struct TripTrackerView: View {
   
     private var regionList: some View {
         // Filter regions to only show enabled countries
-        let enabledCountries = trip.enabledCountries
+        let enabledCountries = currentSession.enabledCountries
         let filteredGroups = PlateRegion.groupedByCountry().filter { enabledCountries.contains($0.country) }
         
         return List {
@@ -497,7 +510,7 @@ struct TripTrackerView: View {
                     ForEach(group.regions) { region in
                         RegionCellView(
                             region: region,
-                            isSelected: trip.hasFound(regionID: region.id),
+                            isSelected: foundRegions.contains(where: { $0.regionID == region.id }),
                             toggleAction: { toggle(regionID: region.id) },
                             isDisabled: !isTripActive
                         )
@@ -534,85 +547,66 @@ struct TripTrackerView: View {
     
     // Computed property to check if trip is active (started but not ended)
     private var isTripActive: Bool {
-        trip.startedAt != nil && !trip.isTripEnded
-    }
-  
-  private func setFound(regionID: String, usingTab: Trip.inputUsedToFindRegion) {
-    FeedbackService.shared.actionSuccess()
-    withAccessibleAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-        trip.setFound(
-            regionID: regionID,
-            usingTab: usingTab,
-            foundBy: authService.currentUser?.id,
-            location: locationManager.location
-        )
+        currentSession.startedAt != nil && currentSession.status != .ended
     }
 
+  private func setFound(regionID: String, usingTab: FoundRegion.InputMethod) {
+    FeedbackService.shared.actionSuccess()
+    let participantId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+    var payload: [String: String] = [
+        TripActivityEventPayloadKey.regionId: regionID,
+        TripActivityEventPayloadKey.gameInstanceId: primaryGame.id.uuidString,
+        TripActivityEventPayloadKey.participantId: participantId,
+        TripActivityEventPayloadKey.inputMethod: usingTab.rawValue
+    ]
+    let event = TripActivityEvent(sessionId: session.id, kind: .regionFound, actorId: participantId.isEmpty ? nil : participantId, payload: payload)
     do {
-        try modelContext.save()
+        try TripActivityEventRepository.shared.append(event)
+        withAccessibleAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            refreshFoundRegions()
+        }
         let result = riskAssessment.assessAfterDiscoveryChange(
-            tripId: trip.id,
-            foundRegions: trip.foundRegions,
+            tripId: session.id,
+            foundRegions: foundRegions,
             lastChange: (regionID, true, Date())
         )
         applyRiskPresentation(result.flags)
     } catch {
         FeedbackService.shared.actionError()
-        assertionFailure("Failed to save trip update: \(error)")
+        assertionFailure("Failed to append discovery event: \(error)")
     }
   }
-  
-  
-  private func setNotFound(regionID: String, usingTab: Trip.inputUsedToFindRegion) {
-    withAccessibleAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-        trip.setNotFound(
-            regionID: regionID,
-            usingTab: usingTab,
-            foundBy: authService.currentUser?.id,
-            location: locationManager.location
-        )
-    }
 
+  private func setNotFound(regionID: String, usingTab: FoundRegion.InputMethod) {
+    var payload: [String: String] = [
+        TripActivityEventPayloadKey.regionId: regionID,
+        TripActivityEventPayloadKey.gameInstanceId: primaryGame.id.uuidString
+    ]
+    let event = TripActivityEvent(sessionId: session.id, kind: .regionRemoved, payload: payload)
     do {
-        try modelContext.save()
+        try TripActivityEventRepository.shared.append(event)
+        withAccessibleAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            refreshFoundRegions()
+        }
         let result = riskAssessment.assessAfterDiscoveryChange(
-            tripId: trip.id,
-            foundRegions: trip.foundRegions,
+            tripId: session.id,
+            foundRegions: foundRegions,
             lastChange: (regionID, false, Date())
         )
         applyRiskPresentation(result.flags)
     } catch {
-        assertionFailure("Failed to save trip update: \(error)")
+        assertionFailure("Failed to append region_removed event: \(error)")
     }
   }
 
     private func toggle(regionID: String) {
-        // Don't allow toggling if trip is not active
         guard isTripActive else { return }
-        
         FeedbackService.shared.toggleRegion()
-        
-        withAccessibleAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-            trip.toggle(
-                regionID: regionID,
-                usingTab: .list,
-                foundBy: authService.currentUser?.id,
-                location: locationManager.location
-            )
-        }
-
-        do {
-            try modelContext.save()
-            let isNowFound = trip.hasFound(regionID: regionID)
-            let result = riskAssessment.assessAfterDiscoveryChange(
-                tripId: trip.id,
-                foundRegions: trip.foundRegions,
-                lastChange: (regionID, isNowFound, Date())
-            )
-            applyRiskPresentation(result.flags)
-        } catch {
-            FeedbackService.shared.actionError()
-            assertionFailure("Failed to save trip update: \(error)")
+        let isCurrentlyFound = foundRegions.contains(where: { $0.regionID == regionID })
+        if isCurrentlyFound {
+            setNotFound(regionID: regionID, usingTab: .list)
+        } else {
+            setFound(regionID: regionID, usingTab: .list)
         }
     }
 
@@ -846,7 +840,7 @@ struct TripTrackerView: View {
         var bestMatchScore = 0
         
         // Only search in enabled countries
-        let enabledCountries = trip.enabledCountries
+        let enabledCountries = currentSession.enabledCountries
         let enabledRegions = PlateRegion.all.filter { enabledCountries.contains($0.country) }
         
         for region in enabledRegions {
@@ -988,11 +982,11 @@ struct TripTrackerView: View {
     
     private func addRegionIfNotFound(_ region: PlateRegion) {
         // Only add if not already found
-        if !trip.hasFound(regionID: region.id) {
+        if !foundRegions.contains(where: { $0.regionID == region.id }) {
             lastMatchedRegion = region
             
             // Check if user wants to skip confirmation
-            if trip.skipVoiceConfirmation {
+            if skipVoiceConfirmation {
                 // Auto-add without confirmation
               confirmAddRegion(region, usingTab: .voice)
             } else {
@@ -1004,7 +998,7 @@ struct TripTrackerView: View {
         }
     }
     
-  private func confirmAddRegion(_ region: PlateRegion, usingTab: Trip.inputUsedToFindRegion) {
+  private func confirmAddRegion(_ region: PlateRegion, usingTab: FoundRegion.InputMethod) {
         setFound(regionID: region.id, usingTab: usingTab)
         showVoiceMatchConfirmation = false
         lastMatchedRegion = nil
@@ -1196,12 +1190,22 @@ private struct VoiceConfirmationDialog: View {
     }
 }
 
-// Settings View for current trip
+// Settings View for current trip (canonical: session + primaryGame)
 private struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @Bindable var trip: Trip
+    @Binding var session: TripSession
+    let primaryGame: GameInstance
+    @Binding var foundRegions: [FoundRegion]
     let modelContext: ModelContext
-    
+
+    @AppStorage("defaultSaveLocationWhenMarkingPlates") private var saveLocationWhenMarkingPlates = true
+    @AppStorage("defaultShowMyLocationOnLargeMap") private var showMyLocationOnLargeMap = true
+    @AppStorage("defaultTrackMyLocationDuringTrip") private var trackMyLocationDuringTrip = true
+    @AppStorage("defaultShowMyActiveTripOnLargeMap") private var showMyActiveTripOnLargeMap = true
+    @AppStorage("defaultShowMyActiveTripOnSmallMap") private var showMyActiveTripOnSmallMap = true
+    @AppStorage("defaultSkipVoiceConfirmation") private var skipVoiceConfirmation = false
+    @AppStorage("defaultHoldToTalk") private var holdToTalk = true
+
     enum SettingsSection: String, CaseIterable {
         case tripInfo = "Trip Info"
         case gameSettings = "Game Settings"
@@ -1230,23 +1234,23 @@ private struct SettingsView: View {
     @State private var editingTripName: String = ""
     
     private var isTripCreator: Bool {
-        guard let currentUserID = authService.currentUser?.id else { return false }
-        return trip.createdBy == currentUserID
+        guard let currentUserID = authService.currentUser?.id ?? authService.currentUser?.firebaseUID else { return false }
+        return session.createdBy == currentUserID
     }
-    
+
     private var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter
     }
-    
+
     var body: some View {
         NavigationStack {
             ZStack {
                 Color.Theme.background
                     .ignoresSafeArea()
-                
+
                 List {
                     ForEach(SettingsSection.allCases, id: \.id) { section in
                         Section {
@@ -1291,49 +1295,52 @@ private struct SettingsView: View {
         }
         .background(Color.Theme.background)
     }
-    
+
     private var tripInfoSettings: some View {
         Group {
             // Edit Trip Name
             SettingEditableTextRow(
                 title: "Trip Name".localized,
                 value: Binding(
-                    get: { trip.name },
+                    get: { session.name },
                     set: { newValue in
-                        trip.name = newValue
-                        trip.lastUpdated = Date.now
-                        try? modelContext.save()
+                        session.name = newValue
+                        try? TripSessionRepository.shared.save(session: session)
                     }
                 ),
                 placeholder: "Enter trip name".localized,
                 isDisabled: !isTripCreator,
                 onSave: {
-                    try? modelContext.save()
+                    try? TripSessionRepository.shared.save(session: session)
                 },
                 onCancel: {}
             )
-            
+
             Divider()
-            
-            // Created At Date
-            SettingInfoRow(
-                title: "Created".localized,
-                value: dateFormatter.string(from: trip.createdAt)
-            )
-            
-            Divider()
-            
-            // Start Date
-            if let startedAt = trip.startedAt {
+
+            // Started or created date
+            if let startedAt = session.startedAt {
                 SettingInfoRow(
                     title: "Started".localized,
                     value: dateFormatter.string(from: startedAt)
                 )
+                Divider()
             } else {
+                SettingInfoRow(
+                    title: "Created".localized,
+                    value: dateFormatter.string(from: session.createdAt)
+                )
+                Divider()
+            }
+
+            // Start Date button
+            if session.startedAt == nil {
                 Button {
-                    trip.startedAt = Date.now
-                    trip.lastUpdated = Date.now
-                    try? modelContext.save()
+                    session.startedAt = Date.now
+                    session.status = .active
+                    try? TripSessionRepository.shared.save(session: session)
+                    try? TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: session.id, kind: .tripStarted, actorId: session.createdBy))
+                    try? TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: session.id, kind: .gameStarted, actorId: nil, payload: ["gameInstanceId": primaryGame.id.uuidString]))
                 } label: {
                     HStack {
                         Text("Start Trip".localized)
@@ -1357,9 +1364,9 @@ private struct SettingsView: View {
             }
             
             Divider()
-            
+
             // End Trip Button
-            if trip.startedAt != nil && !trip.isTripEnded {
+            if session.startedAt != nil && session.status != .ended {
                 Button {
                     showEndTripConfirmation = true
                 } label: {
@@ -1381,15 +1388,15 @@ private struct SettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!isTripCreator)
-                
+
                 Divider()
-            } else if let endedAt = trip.tripEndedAt {
+            } else if let endedAt = session.endedAt {
               SettingInfoRow(
                   title: "Ended".localized,
                   value: dateFormatter.string(from: endedAt)
               )
             }
-            
+
             // Reset Button
             Button {
                 showResetConfirmation = true
@@ -1406,9 +1413,9 @@ private struct SettingsView: View {
             }
             .buttonStyle(.plain)
             .disabled(!isTripCreator)
-            
+
             Divider()
-            
+
             // Delete Button
             Button {
                 showDeleteConfirmation = true
@@ -1429,11 +1436,12 @@ private struct SettingsView: View {
         .alert("End Trip".localized, isPresented: $showEndTripConfirmation) {
             Button("Cancel".localized, role: .cancel) {}
             Button("End Trip".localized, role: .destructive) {
-                trip.isTripEnded = true
-                trip.tripEndedAt = Date.now
-                trip.tripEndedBy = authService.currentUser?.id
-                trip.lastUpdated = Date.now
-                try? modelContext.save()
+                session.endedAt = Date.now
+                session.endedBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+                session.status = .ended
+                try? TripSessionRepository.shared.save(session: session)
+                try? TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: session.id, kind: .tripEnded, actorId: session.endedBy))
+                try? TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: session.id, kind: .gameEnded, actorId: nil, payload: ["gameInstanceId": primaryGame.id.uuidString]))
             }
         } message: {
             Text("This will stop the game. You won't be able to add states in this trip anymore.".localized)
@@ -1441,22 +1449,12 @@ private struct SettingsView: View {
         .alert("Reset Trip".localized, isPresented: $showResetConfirmation) {
             Button("Cancel".localized, role: .cancel) {}
             Button("Reset".localized, role: .destructive) {
-                // Reset all trip settings except name
-                trip.startedAt = nil
-                trip.isTripEnded = false
-                trip.tripEndedAt = nil
-                trip.tripEndedBy = nil
-                trip.foundRegions = []
-                trip.skipVoiceConfirmation = false
-                trip.holdToTalk = true
-                trip.saveLocationWhenMarkingPlates = true
-                trip.showMyLocationOnLargeMap = true
-                trip.trackMyLocationDuringTrip = true
-                trip.showMyActiveTripOnLargeMap = true
-                trip.showMyActiveTripOnSmallMap = true
-                trip.lastUpdated = Date.now
-                // TODO: Add log entry for reset
-                try? modelContext.save()
+                session.startedAt = nil
+                session.endedAt = nil
+                session.endedBy = nil
+                try? TripActivityEventRepository.shared.deleteEvents(sessionId: session.id, gameInstanceId: primaryGame.id)
+                try? TripSessionRepository.shared.save(session: session)
+                foundRegions = []
             }
         } message: {
             Text("This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset.".localized)
@@ -1464,8 +1462,9 @@ private struct SettingsView: View {
         .alert("Delete Trip".localized, isPresented: $showDeleteConfirmation) {
             Button("Cancel".localized, role: .cancel) {}
             Button("Delete".localized, role: .destructive) {
-                modelContext.delete(trip)
-                try? modelContext.save()
+                session.status = .cancelled
+                session.endedAt = Date.now
+                try? TripSessionRepository.shared.save(session: session)
                 dismiss()
             }
         } message: {
@@ -1475,7 +1474,7 @@ private struct SettingsView: View {
     
     private var gameSettings: some View {
         Group {
-            let canEditCountries = trip.startedAt == nil // Countries can only be edited before trip starts
+            let canEditCountries = session.startedAt == nil // Countries can only be edited before trip starts
             
             // Countries selection
             VStack(alignment: .leading, spacing: 12) {
@@ -1487,57 +1486,54 @@ private struct SettingsView: View {
                 CountryCheckboxRow(
                     title: "United States".localized,
                     isOn: Binding(
-                        get: { trip.enabledCountries.contains(.unitedStates) },
+                        get: { session.enabledCountries.contains(.unitedStates) },
                         set: { newValue in
+                            var list = session.enabledCountries
                             if newValue {
-                                if !trip.enabledCountries.contains(.unitedStates) {
-                                    trip.enabledCountries.append(.unitedStates)
-                                }
+                                if !list.contains(.unitedStates) { list.append(.unitedStates) }
                             } else {
-                                trip.enabledCountries.removeAll { $0 == .unitedStates }
+                                list.removeAll { $0 == .unitedStates }
                             }
-                            trip.lastUpdated = Date.now
-                            try? modelContext.save()
+                            session.enabledCountries = list
+                            try? TripSessionRepository.shared.save(session: session)
                         }
                     )
                 )
                 .disabled(!canEditCountries)
                 .opacity(canEditCountries ? 1.0 : 0.5)
-                
+
                 CountryCheckboxRow(
                     title: "Canada".localized,
                     isOn: Binding(
-                        get: { trip.enabledCountries.contains(.canada) },
+                        get: { session.enabledCountries.contains(.canada) },
                         set: { newValue in
+                            var list = session.enabledCountries
                             if newValue {
-                                if !trip.enabledCountries.contains(.canada) {
-                                    trip.enabledCountries.append(.canada)
-                                }
+                                if !list.contains(.canada) { list.append(.canada) }
                             } else {
-                                trip.enabledCountries.removeAll { $0 == .canada }
+                                list.removeAll { $0 == .canada }
                             }
-                            trip.lastUpdated = Date.now
-                            try? modelContext.save()
+                            session.enabledCountries = list
+                            try? TripSessionRepository.shared.save(session: session)
                         }
                     )
                 )
                 .disabled(!canEditCountries)
                 .opacity(canEditCountries ? 1.0 : 0.5)
-                
+
                 CountryCheckboxRow(
                     title: "Mexico".localized,
                     isOn: Binding(
-                        get: { trip.enabledCountries.contains(.mexico) },
+                        get: { session.enabledCountries.contains(.mexico) },
                         set: { newValue in
+                            var list = session.enabledCountries
                             if newValue {
-                                if !trip.enabledCountries.contains(.mexico) {
-                                    trip.enabledCountries.append(.mexico)
-                                }
+                                if !list.contains(.mexico) { list.append(.mexico) }
                             } else {
-                                trip.enabledCountries.removeAll { $0 == .mexico }
+                                list.removeAll { $0 == .mexico }
                             }
-                            trip.lastUpdated = Date.now
-                            try? modelContext.save()
+                            session.enabledCountries = list
+                            try? TripSessionRepository.shared.save(session: session)
                         }
                     )
                 )
@@ -1550,108 +1546,66 @@ private struct SettingsView: View {
     private var trackingPrivacySettings: some View {
         Group {
             let locationAuthorized = locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways
-            let canEditTracking = !trip.isTripEnded // Tracking settings can be edited while active, but not after ended
-            
+            let canEditTracking = session.status != .ended
+
             SettingToggleRow(
                 title: "Save location when marking plates".localized,
                 description: "Store location data when you mark a plate as found".localized,
-                isOn: Binding(
-                    get: { trip.saveLocationWhenMarkingPlates },
-                    set: { newValue in
-                        trip.saveLocationWhenMarkingPlates = newValue
-                        trip.lastUpdated = Date.now
-                        try? modelContext.save()
-                    }
-                )
+                isOn: $saveLocationWhenMarkingPlates
             )
             .disabled(!locationAuthorized || !canEditTracking)
             .opacity((locationAuthorized && canEditTracking) ? 1.0 : 0.5)
-            
+
             Divider()
-            
+
             SettingToggleRow(
                 title: "Show my location on large map".localized,
                 description: "Display your current location on the full-screen map".localized,
-                isOn: Binding(
-                    get: { trip.showMyLocationOnLargeMap },
-                    set: { newValue in
-                        trip.showMyLocationOnLargeMap = newValue
-                        trip.lastUpdated = Date.now
-                        try? modelContext.save()
-                    }
-                )
+                isOn: $showMyLocationOnLargeMap
             )
             .disabled(!canEditTracking)
             .opacity(canEditTracking ? 1.0 : 0.5)
-            
+
             Divider()
-            
+
             SettingToggleRow(
                 title: "Track my location during trip".localized,
                 description: "Continuously track your location while a trip is active".localized,
-                isOn: Binding(
-                    get: { trip.trackMyLocationDuringTrip },
-                    set: { newValue in
-                        trip.trackMyLocationDuringTrip = newValue
-                        trip.lastUpdated = Date.now
-                        try? modelContext.save()
-                    }
-                )
+                isOn: $trackMyLocationDuringTrip
             )
             .disabled(!canEditTracking)
             .opacity(canEditTracking ? 1.0 : 0.5)
-            
+
             Divider()
-            
+
             SettingToggleRow(
                 title: "Show my active trip on the large map".localized,
                 description: "Display your active trip on the full-screen map".localized,
-                isOn: Binding(
-                    get: { trip.showMyActiveTripOnLargeMap },
-                    set: { newValue in
-                        trip.showMyActiveTripOnLargeMap = newValue
-                        trip.lastUpdated = Date.now
-                        try? modelContext.save()
-                    }
-                )
+                isOn: $showMyActiveTripOnLargeMap
             )
-            .disabled(!trip.trackMyLocationDuringTrip || !canEditTracking)
-            .opacity((trip.trackMyLocationDuringTrip && canEditTracking) ? 1.0 : 0.5)
-            
+            .disabled(!trackMyLocationDuringTrip || !canEditTracking)
+            .opacity((trackMyLocationDuringTrip && canEditTracking) ? 1.0 : 0.5)
+
             Divider()
-            
+
             SettingToggleRow(
                 title: "Show my active trip on the small map".localized,
                 description: "Display your active trip on the small map".localized,
-                isOn: Binding(
-                    get: { trip.showMyActiveTripOnSmallMap },
-                    set: { newValue in
-                        trip.showMyActiveTripOnSmallMap = newValue
-                        trip.lastUpdated = Date.now
-                        try? modelContext.save()
-                    }
-                )
+                isOn: $showMyActiveTripOnSmallMap
             )
-            .disabled(!trip.trackMyLocationDuringTrip || !canEditTracking)
-            .opacity((trip.trackMyLocationDuringTrip && canEditTracking) ? 1.0 : 0.5)
+            .disabled(!trackMyLocationDuringTrip || !canEditTracking)
+            .opacity((trackMyLocationDuringTrip && canEditTracking) ? 1.0 : 0.5)
         }
     }
     
     private var voiceSettings: some View {
         Group {
-            let canEditSettings = !trip.isTripEnded // Can only edit if trip hasn't ended
-            
+            let canEditSettings = session.status != .ended
+
             SettingToggleRow(
                 title: "Skip Voice Confirmation".localized,
                 description: "Automatically add license plates without confirmation when using Voice".localized,
-                isOn: Binding(
-                    get: { trip.skipVoiceConfirmation },
-                    set: { newValue in
-                        trip.skipVoiceConfirmation = newValue
-                        trip.lastUpdated = Date.now
-                        try? modelContext.save()
-                    }
-                )
+                isOn: $skipVoiceConfirmation
             )
             .disabled(!canEditSettings)
             .opacity(canEditSettings ? 1.0 : 0.5)
@@ -1659,14 +1613,7 @@ private struct SettingsView: View {
             SettingToggleRow(
               title: "Hold to Talk",
               description: "Press and hold the microphone button to record. If disabled the system will listen until you hit stop.",
-              isOn: Binding(
-                get: { trip.holdToTalk },
-                set: { newValue in
-                  trip.holdToTalk = newValue
-                  trip.lastUpdated = Date.now
-                  try? modelContext.save()
-                }
-              )
+              isOn: $holdToTalk
             )
             .disabled(!canEditSettings)
             .opacity(canEditSettings ? 1.0 : 0.5)
@@ -2682,41 +2629,18 @@ private struct RegionMapView: View {
 }
 
 #Preview("Empty trip") {
-    do {
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Trip.self, configurations: configuration)
-        let context = container.mainContext
-        let authService = FirebaseAuthService()
-        let sampleTrip = Trip(name: "Autumn Road Trip")
-        context.insert(sampleTrip)
-        return TripTrackerView(trip: sampleTrip)
-            .modelContainer(container)
-            .environmentObject(authService)
-            .environmentObject(RiskAssessmentService(analytics: nil))
-    } catch {
-        return Text("Preview Error: \(error.localizedDescription)")
-    }
+    let session = PreviewTripFixtures.soloTrip()
+    let primaryGame = PreviewGameFixtures.licensePlateGame(sessionId: session.id)
+    return TripTrackerView(session: session, primaryGame: primaryGame)
+        .environmentObject(FirebaseAuthService())
+        .environmentObject(RiskAssessmentService(analytics: nil))
 }
 
 #Preview("Trip with discoveries") {
-    do {
-        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-        let container = try ModelContainer(for: Trip.self, configurations: configuration)
-        let context = container.mainContext
-        let auth = FirebaseAuthService()
-        let sampleTrip = Trip(name: "Preview Trip with Plates")
-        let fixedDate = Date(timeIntervalSince1970: 1_700_000_000)
-        sampleTrip.foundRegions = [
-            FoundRegion(regionID: "US-CA", foundAt: fixedDate, inputMethod: .list),
-            FoundRegion(regionID: "US-TX", foundAt: fixedDate.addingTimeInterval(60), inputMethod: .voice)
-        ]
-        context.insert(sampleTrip)
-        return TripTrackerView(trip: sampleTrip)
-            .modelContainer(container)
-            .environmentObject(auth)
-            .environmentObject(RiskAssessmentService(analytics: nil))
-    } catch {
-        return Text("Preview Error: \(error.localizedDescription)")
-    }
+    let session = PreviewTripFixtures.soloTrip()
+    let primaryGame = PreviewGameFixtures.licensePlateGame(sessionId: session.id)
+    return TripTrackerView(session: session, primaryGame: primaryGame)
+        .environmentObject(FirebaseAuthService())
+        .environmentObject(RiskAssessmentService(analytics: nil))
 }
 

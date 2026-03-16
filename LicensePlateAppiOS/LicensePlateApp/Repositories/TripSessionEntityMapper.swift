@@ -20,11 +20,11 @@ enum TripSessionEntityMapper {
             name: session.name,
             status: session.status.rawValue,
             mode: session.mode.rawValue,
+            createdAt: session.createdAt,
             createdBy: session.createdBy,
             startedAt: session.startedAt,
             endedAt: session.endedAt,
             endedBy: session.endedBy,
-            legacyTripId: session.legacyTripId?.uuidString,
             enabledCountryRawValues: enabledCountriesString.isEmpty ? "United States,Canada,Mexico" : enabledCountriesString,
             participantsData: participantsData
         )
@@ -37,20 +37,21 @@ enum TripSessionEntityMapper {
         let countryValues = entity.enabledCountryRawValues.split(separator: Character(countrySeparator))
             .map { String($0).trimmingCharacters(in: .whitespaces) }
         let enabledRaw = countryValues.isEmpty ? ["United States", "Canada", "Mexico"] : countryValues
-        let status = TripStatus(rawValue: entity.status) ?? .draft
+        let status = TripStatus(rawValue: entity.status) ?? .active
         let mode = TripMode(rawValue: entity.mode) ?? .solo
+        let createdAt = entity.createdAt ?? entity.startedAt ?? Date.distantPast
         let session = TripSession(
             id: UUID(uuidString: entity.id) ?? UUID(),
             name: entity.name,
             status: status,
             mode: mode,
+            createdAt: createdAt,
             createdBy: entity.createdBy,
             startedAt: entity.startedAt,
             endedAt: entity.endedAt,
             endedBy: entity.endedBy,
             participants: participants,
             teams: teams,
-            legacyTripId: entity.legacyTripId.flatMap { UUID(uuidString: $0) },
             enabledCountryRawValues: enabledRaw,
             riskFlags: nil
         )
@@ -62,11 +63,11 @@ enum TripSessionEntityMapper {
         entity.name = session.name
         entity.status = session.status.rawValue
         entity.mode = session.mode.rawValue
+        entity.createdAt = session.createdAt
         entity.createdBy = session.createdBy
         entity.startedAt = session.startedAt
         entity.endedAt = session.endedAt
         entity.endedBy = session.endedBy
-        entity.legacyTripId = session.legacyTripId?.uuidString
         entity.enabledCountryRawValues = session.enabledCountryRawValues.joined(separator: countrySeparator)
         entity.participantsData = encodeParticipants(session.participants)
     }

@@ -32,13 +32,13 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let session = TripSession(name: "Repo Test Trip", status: .draft, mode: .solo)
+        let session = TripSession(name: "Repo Test Trip", status: .active, mode: .solo)
         try repo.create(session: session)
 
         let loaded = try repo.session(byId: session.id)
         #expect(loaded != nil)
         #expect(loaded?.name == "Repo Test Trip")
-        #expect(loaded?.status == .draft)
+        #expect(loaded?.status == .active)
         #expect(loaded?.mode == .solo)
     }
 
@@ -58,13 +58,27 @@ struct TripSessionRepositoryTests {
         #expect(active[0].name == "Active Trip")
     }
 
+    /// Step 02 — Documents that root active list is sourced from TripSessionRepository only (canonical model; no legacy Trip).
+    @Test func activeListUsesCanonicalTripSessionRepositoryOnly() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = TripSessionRepository.shared
+        repo.setModelContext(context)
+        let session = TripSession(name: "Canonical Active", status: .active, mode: .solo, startedAt: Date())
+        try repo.create(session: session)
+        let active = try repo.loadActiveSessions(userId: nil)
+        #expect(active.count == 1)
+        #expect(active[0].id == session.id)
+        #expect(active[0].name == "Canonical Active")
+    }
+
     @Test func updateStatusToActiveThenEnded() async throws {
         let container = try makeContainer()
         let context = ModelContext(container)
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let session = TripSession(name: "Status Trip", status: .draft, mode: .solo)
+        let session = TripSession(name: "Status Trip", status: .active, mode: .solo)
         try repo.create(session: session)
 
         try repo.updateStatus(sessionId: session.id, status: .active)
@@ -105,7 +119,7 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let session = TripSession(name: "Original", status: .draft, mode: .solo)
+        let session = TripSession(name: "Original", status: .active, mode: .solo)
         try repo.create(session: session)
         let id = session.id
 
@@ -154,6 +168,7 @@ struct TripSessionRepositoryTests {
             name: "Team Trip",
             status: .active,
             mode: .solo,
+            createdAt: Date(),
             createdBy: "user1",
             startedAt: Date(),
             participants: [participant1, participant2],

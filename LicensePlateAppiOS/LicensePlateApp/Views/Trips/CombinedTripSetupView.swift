@@ -2,7 +2,7 @@
 //  CombinedTripSetupView.swift
 //  LicensePlateApp
 //
-//  Step 06 — Combined trip setup: select game types, countries, and options. Creates TripSession + GameInstances + legacy Trip.
+//  Step 06 — Combined trip setup: select game types, countries, and options. Creates TripSession + GameInstances (canonical only).
 //
 
 import SwiftUI
@@ -332,7 +332,7 @@ private struct CombinedTripCountryRow: View {
         .padding(.horizontal, 12)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.Theme.background)
+                .fill(Color.Theme.cardBackground)
         )
         .accessibilityLabel(title)
         .accessibilityValue(isOn ? "On".localized : "Off".localized)
@@ -350,7 +350,7 @@ private struct CombinedTripCountryRow: View {
         ),
         onCreated: { _ in }
     )
-    .modelContainer(for: [Trip.self, TripSessionEntity.self, GameInstanceEntity.self], inMemory: true)
+    .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self, TripActivityEventEntity.self], inMemory: true)
 }
 
 #Preview("Combined Trip Setup - With name") {
@@ -361,5 +361,5 @@ private struct CombinedTripCountryRow: View {
     )
     vm.tripName = "Weekend Road Trip"
     return CombinedTripSetupView(viewModel: vm, onCreated: { _ in })
-        .modelContainer(for: [Trip.self, TripSessionEntity.self, GameInstanceEntity.self], inMemory: true)
+        .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self, TripActivityEventEntity.self], inMemory: true)
 }

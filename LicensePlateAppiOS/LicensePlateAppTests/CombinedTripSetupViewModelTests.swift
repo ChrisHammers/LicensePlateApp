@@ -2,7 +2,7 @@
 //  CombinedTripSetupViewModelTests.swift
 //  LicensePlateAppTests
 //
-//  Step 06 — CombinedTripSetupViewModel: create TripSession + GameInstances + legacy Trip.
+//  Step 06 — CombinedTripSetupViewModel: create TripSession + GameInstances (canonical only).
 //
 
 import Foundation
@@ -26,13 +26,15 @@ struct CombinedTripSetupViewModelTests {
         )
     }
 
-    @Test func createTripWithDefaultConfigPersistsSessionAndLegacyTrip() async throws {
+    @Test func createTripWithDefaultConfigPersistsSessionAndGameInstances() async throws {
         let container = try makeContainer()
         let ctx = ModelContext(container)
         let sessionRepo = TripSessionRepository.shared
         let instanceRepo = GameInstanceRepository.shared
+        let eventRepo = TripActivityEventRepository.shared
         sessionRepo.setModelContext(ctx)
         instanceRepo.setModelContext(ctx)
+        eventRepo.setModelContext(ctx)
 
         let auth = FirebaseAuthService()
         let userId = "test-user"
@@ -65,15 +67,6 @@ struct CombinedTripSetupViewModelTests {
         let instances = try instanceRepo.fetchByTripSession(sessionId: session.id)
         #expect(instances.count == 1)
         #expect(instances[0].definitionId == GameType.licensePlate.rawValue)
-
-        let tripRepo = TripRepository.shared
-        tripRepo.setModelContext(ctx)
-        let trip = try tripRepo.get(byId: session.id)
-        #expect(trip != nil)
-        #expect(trip?.name == "My Trip")
-        #expect(trip?.foundRegions.isEmpty == true)
-        #expect(trip?.enabledCountries == [.unitedStates])
-        #expect(trip?.createdBy == userId)
     }
 
     @Test func createTripUsesDateNameWhenNameEmpty() async throws {
@@ -81,8 +74,10 @@ struct CombinedTripSetupViewModelTests {
         let ctx = ModelContext(container)
         let sessionRepo = TripSessionRepository.shared
         let instanceRepo = GameInstanceRepository.shared
+        let eventRepo = TripActivityEventRepository.shared
         sessionRepo.setModelContext(ctx)
         instanceRepo.setModelContext(ctx)
+        eventRepo.setModelContext(ctx)
 
         let auth = FirebaseAuthService()
         let testUser = AppUser(id: "u1", userName: "U", firebaseUID: "u1")
@@ -102,12 +97,8 @@ struct CombinedTripSetupViewModelTests {
         let session = try viewModel.createTrip(modelContext: ctx)
 
         #expect(!session.name.isEmpty)
-
-        let tripRepo = TripRepository.shared
-        tripRepo.setModelContext(ctx)
-        let trip = try tripRepo.get(byId: session.id)
-        #expect(trip != nil)
-        #expect(trip?.foundRegions.isEmpty == true)
+        let instances = try instanceRepo.fetchByTripSession(sessionId: session.id)
+        #expect(instances.count == 1)
     }
 
     @Test func canCreateRequiresAtLeastOneGameType() async throws {

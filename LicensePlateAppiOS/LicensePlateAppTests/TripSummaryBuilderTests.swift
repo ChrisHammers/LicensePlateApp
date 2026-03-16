@@ -18,6 +18,7 @@ struct TripSummaryBuilderTests {
             name: "Solo Trip",
             status: .ended,
             mode: .solo,
+            createdAt: Date().addingTimeInterval(-200),
             endedAt: Date().addingTimeInterval(-100),
             participants: [TripParticipant(userId: "user1", role: .owner)]
         )
@@ -57,6 +58,7 @@ struct TripSummaryBuilderTests {
             name: "Multi Trip",
             status: .ended,
             mode: .solo,
+            createdAt: Date().addingTimeInterval(-100),
             endedAt: Date(),
             participants: [TripParticipant(userId: "user1", role: .owner)]
         )
@@ -108,6 +110,7 @@ struct TripSummaryBuilderTests {
             name: "Config Trip",
             status: .ended,
             mode: .solo,
+            createdAt: Date().addingTimeInterval(-100),
             endedAt: Date(),
             participants: [TripParticipant(userId: "user1", role: .owner)],
             enabledCountryRawValues: ["United States"]
@@ -146,6 +149,7 @@ struct TripSummaryBuilderTests {
             name: "No Config",
             status: .ended,
             mode: .solo,
+            createdAt: Date(),
             participants: [TripParticipant(userId: "user1", role: .owner)]
         )
         let game = GameInstance(

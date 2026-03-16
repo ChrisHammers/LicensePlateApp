@@ -16,6 +16,7 @@ enum MockTripFactory {
             name: "Solo Trip",
             status: .active,
             mode: .solo,
+            createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
             participants: [MockParticipantFactory.makeDriver(userId: PreviewConstants.userId1)],
@@ -31,6 +32,7 @@ enum MockTripFactory {
             name: "Collaborative Trip",
             status: .active,
             mode: .collaborative,
+            createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
             participants: [
@@ -49,6 +51,7 @@ enum MockTripFactory {
             name: "Competitive Trip",
             status: .active,
             mode: .competitive,
+            createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
             participants: [
@@ -67,6 +70,7 @@ enum MockTripFactory {
             name: "Multi-Game Trip",
             status: .active,
             mode: .combined,
+            createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
             participants: [MockParticipantFactory.makeDriver(userId: PreviewConstants.userId1)],

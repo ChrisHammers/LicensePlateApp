@@ -10,7 +10,7 @@ import Foundation
 
 enum TripSummaryBuilder {
 
-    /// Build a rich summary for a completed trip. Use discoveries and credits from LegacyTripAdapter when session has legacyTripId; otherwise pass empty arrays.
+    /// Build a rich summary for a completed trip. Use discoveries and credits from TripActivityEventRepository (and computed credits).
     static func build(
         session: TripSession,
         games: [GameInstance],

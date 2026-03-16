@@ -38,6 +38,7 @@ struct TravelLogRepositoryTests {
             name: "Trip One",
             status: TripStatus.ended.rawValue,
             mode: TripMode.solo.rawValue,
+            createdAt: Date().addingTimeInterval(-200),
             endedAt: Date().addingTimeInterval(-100)
         )
         context.insert(entity1)
@@ -63,6 +64,7 @@ struct TravelLogRepositoryTests {
             name: "Road Trip",
             status: TripStatus.ended.rawValue,
             mode: TripMode.solo.rawValue,
+            createdAt: endedAt.addingTimeInterval(-100),
             endedAt: endedAt
         )
         context.insert(entity1)
@@ -89,6 +91,7 @@ struct TravelLogRepositoryTests {
             name: "Older",
             status: TripStatus.ended.rawValue,
             mode: TripMode.solo.rawValue,
+            createdAt: older.addingTimeInterval(-100),
             endedAt: older
         )
         let entity2 = TripSessionEntity(
@@ -96,6 +99,7 @@ struct TravelLogRepositoryTests {
             name: "Newer",
             status: TripStatus.ended.rawValue,
             mode: TripMode.solo.rawValue,
+            createdAt: newer.addingTimeInterval(-100),
             endedAt: newer
         )
         context.insert(entity1)

@@ -40,8 +40,9 @@ struct SchemaMigrationGameplayTests {
         let entity = TripSessionEntity(
             id: id,
             name: name,
-            status: TripStatus.draft.rawValue,
+            status: TripStatus.active.rawValue,
             mode: TripMode.solo.rawValue,
+            createdAt: Date(),
             enabledCountryRawValues: "United States,Canada,Mexico"
         )
         context.insert(entity)
@@ -51,7 +52,7 @@ struct SchemaMigrationGameplayTests {
         let results = try context.fetch(descriptor)
         #expect(results.count == 1)
         #expect(results[0].name == name)
-        #expect(results[0].status == TripStatus.draft.rawValue)
+        #expect(results[0].status == TripStatus.active.rawValue)
         #expect(results[0].mode == TripMode.solo.rawValue)
     }
 
@@ -82,8 +83,9 @@ struct SchemaMigrationGameplayTests {
         let entity = TripSessionEntity(
             id: UUID().uuidString,
             name: "Defaults",
-            status: TripStatus.draft.rawValue,
-            mode: TripMode.solo.rawValue
+            status: TripStatus.active.rawValue,
+            mode: TripMode.solo.rawValue,
+            createdAt: Date()
         )
         #expect(entity.enabledCountryRawValues == "United States,Canada,Mexico")
         #expect(entity.createdBy == nil)
