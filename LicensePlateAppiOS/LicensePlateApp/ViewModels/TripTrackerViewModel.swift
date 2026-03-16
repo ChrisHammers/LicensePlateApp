@@ -1,0 +1,192 @@
+//
+//  TripTrackerViewModel.swift
+//  LicensePlateApp
+//
+//  Step 04 — ViewModel for gameplay screen. Orchestrates lifecycle service and discovery (rules engine + event append). No persistence in views.
+//
+
+import Foundation
+import Combine
+
+/// Result of submitting a discovery (mark found).
+enum DiscoverySubmitResult {
+    case success
+    case rejectedDuplicate(message: String)
+    case failure(Error)
+}
+
+@MainActor
+final class TripTrackerViewModel: ObservableObject {
+
+    @Published private(set) var currentSession: TripSession
+    @Published private(set) var foundRegions: [FoundRegion] = []
+    @Published var rejectedDuplicateMessage: String?
+    @Published var errorMessage: String?
+
+    let sessionId: UUID
+    let primaryGame: GameInstance
+
+    private let tripSessionRepository: TripSessionRepositoryProtocol
+    private let gameInstanceRepository: GameInstanceRepositoryProtocol
+    private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
+    private let lifecycleService: TripSessionLifecycleServiceProtocol
+    private let authService: FirebaseAuthService
+
+    var isTripCreator: Bool {
+        let currentUserID = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+        guard let id = currentUserID else { return false }
+        return currentSession.createdBy == id
+    }
+
+    var isTripActive: Bool {
+        currentSession.startedAt != nil && currentSession.status != .ended
+    }
+
+    init(
+        session: TripSession,
+        primaryGame: GameInstance,
+        tripSessionRepository: TripSessionRepositoryProtocol,
+        gameInstanceRepository: GameInstanceRepositoryProtocol,
+        tripActivityEventRepository: TripActivityEventRepositoryProtocol,
+        lifecycleService: TripSessionLifecycleServiceProtocol,
+        authService: FirebaseAuthService
+    ) {
+        self.sessionId = session.id
+        self.primaryGame = primaryGame
+        self.tripSessionRepository = tripSessionRepository
+        self.gameInstanceRepository = gameInstanceRepository
+        self.tripActivityEventRepository = tripActivityEventRepository
+        self.lifecycleService = lifecycleService
+        self.authService = authService
+        self.currentSession = session
+        self.foundRegions = (try? tripActivityEventRepository.foundRegions(sessionId: session.id, gameInstanceId: primaryGame.id)) ?? []
+    }
+
+    func refreshSession() {
+        if let session = try? tripSessionRepository.session(byId: sessionId) {
+            currentSession = session
+        }
+    }
+
+    func refreshFoundRegions() {
+        foundRegions = (try? tripActivityEventRepository.foundRegions(sessionId: sessionId, gameInstanceId: primaryGame.id)) ?? []
+    }
+
+    func startTrip() throws {
+        let actorId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        try lifecycleService.startTrip(sessionId: sessionId, actorId: actorId)
+        refreshSession()
+    }
+
+    func endTrip() throws {
+        let endedBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+        try lifecycleService.endTrip(sessionId: sessionId, endedBy: endedBy)
+        refreshSession()
+    }
+
+    func resetTrip() throws {
+        try lifecycleService.resetTrip(sessionId: sessionId, gameInstanceId: primaryGame.id)
+        refreshSession()
+        refreshFoundRegions()
+        foundRegions = []
+    }
+
+    func cancelTrip() throws {
+        let cancelledBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+        try lifecycleService.cancelSession(sessionId: sessionId, cancelledBy: cancelledBy)
+        refreshSession()
+    }
+
+    func submitDiscovery(regionID: String, inputMethod: FoundRegion.InputMethod) -> DiscoverySubmitResult {
+        let participantId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        let discoveries = (try? tripActivityEventRepository.discoveries(sessionId: sessionId, gameInstanceId: primaryGame.id)) ?? []
+        let byTarget = Dictionary(grouping: discoveries, by: \.targetId)
+        let existingDiscoveriesForTarget = byTarget[regionID] ?? []
+
+        let result = DiscoveryRulesEngine.evaluateDiscoverySubmission(
+            mode: currentSession.mode,
+            existingDiscoveriesForTarget: existingDiscoveriesForTarget,
+            candidateParticipantId: participantId,
+            candidateTargetId: regionID,
+            gameInstanceId: primaryGame.id,
+            inputMethod: inputMethod,
+            occurredAt: Date(),
+            riskContext: nil
+        )
+
+        if result.outcome == .rejectedDuplicate {
+            rejectedDuplicateMessage = "Only the first finder gets credit in competitive mode.".localized
+            AnalyticsService.shared.log(.discoveryRejectedDuplicate(
+                tripId: sessionId.uuidString,
+                gameInstanceId: primaryGame.id.uuidString,
+                targetId: regionID,
+                participantId: participantId.isEmpty ? nil : participantId,
+                mode: currentSession.mode.rawValue
+            ))
+            return .rejectedDuplicate(message: rejectedDuplicateMessage ?? "")
+        }
+
+        guard result.shouldAppendEvent else {
+            return .success
+        }
+
+        var payload: [String: String] = [
+            TripActivityEventPayloadKey.regionId: regionID,
+            TripActivityEventPayloadKey.gameInstanceId: primaryGame.id.uuidString,
+            TripActivityEventPayloadKey.participantId: participantId,
+            TripActivityEventPayloadKey.inputMethod: inputMethod.rawValue
+        ]
+        let event = TripActivityEvent(
+            sessionId: sessionId,
+            kind: .regionFound,
+            actorId: participantId.isEmpty ? nil : participantId,
+            payload: payload
+        )
+        do {
+            try tripActivityEventRepository.append(event)
+            refreshFoundRegions()
+            rejectedDuplicateMessage = nil
+            AnalyticsService.shared.log(.discoveryOutcomeRecorded(
+                tripId: sessionId.uuidString,
+                gameInstanceId: primaryGame.id.uuidString,
+                targetId: regionID,
+                outcome: result.outcome.rawValue,
+                participantId: participantId.isEmpty ? nil : participantId
+            ))
+            return .success
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    func removeDiscovery(regionID: String) {
+        var payload: [String: String] = [
+            TripActivityEventPayloadKey.regionId: regionID,
+            TripActivityEventPayloadKey.gameInstanceId: primaryGame.id.uuidString
+        ]
+        let event = TripActivityEvent(sessionId: sessionId, kind: .regionRemoved, payload: payload)
+        try? tripActivityEventRepository.append(event)
+        refreshFoundRegions()
+    }
+
+    func updateTripName(_ name: String) {
+        currentSession.name = name
+        objectWillChange.send()
+        try? tripSessionRepository.save(session: currentSession)
+    }
+
+    func setEnabledCountries(_ countries: [PlateRegion.Country]) {
+        currentSession.enabledCountries = countries
+        objectWillChange.send()
+        try? tripSessionRepository.save(session: currentSession)
+    }
+
+    func saveSession() {
+        objectWillChange.send()
+        try? tripSessionRepository.save(session: currentSession)
+    }
+
+    func clearRejectedDuplicateMessage() {
+        rejectedDuplicateMessage = nil
+    }
+}

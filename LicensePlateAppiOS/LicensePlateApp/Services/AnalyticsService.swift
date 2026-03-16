@@ -461,12 +461,25 @@ class AnalyticsService: AnalyticsLogging {
     func log(_ event: Event) {
         let parameters = event.parameters ?? [:]
         Analytics.logEvent(event.name, parameters: parameters)
+        #if DEBUG
+        Self.debugPrintEvent(event.name, parameters: parameters)
+        #endif
     }
-    
+
     /// Log with custom parameters
     func log(_ eventName: String, parameters: [String: Any] = [:]) {
         Analytics.logEvent(eventName, parameters: parameters)
+        #if DEBUG
+        Self.debugPrintEvent(eventName, parameters: parameters)
+        #endif
     }
+
+    #if DEBUG
+    private static func debugPrintEvent(_ name: String, parameters: [String: Any]) {
+        let paramStr = parameters.isEmpty ? "" : " " + parameters.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
+        print("[Analytics] \(name)\(paramStr)")
+    }
+    #endif
 
     // MARK: - Screen view & user properties (Step 10)
 
@@ -478,6 +491,9 @@ class AnalyticsService: AnalyticsLogging {
     /// Set a Firebase user property for segmentation. Names should be snake_case (e.g. "trip_mode", "has_family").
     func setUserProperty(_ value: String?, forName name: String) {
         Analytics.setUserProperty(value, forName: name)
+        #if DEBUG
+        print("[Analytics] set_user_property: name=\(name), value=\(value ?? "nil")")
+        #endif
     }
 }
 

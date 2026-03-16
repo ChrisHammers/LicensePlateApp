@@ -239,7 +239,7 @@ struct ContentView: View {
                         let games = (try? GameInstanceRepository.shared.fetchByTripSession(sessionId: sessionID)) ?? []
                         let primaryGame = games.first(where: { $0.definitionId == GameType.licensePlate.rawValue }) ?? games.first
                         if let primaryGame = primaryGame {
-                            TripTrackerView(session: session, primaryGame: primaryGame)
+                            TripTrackerView(session: session, primaryGame: primaryGame, authService: authService)
                         } else {
                             TripMissingView()
                         }
