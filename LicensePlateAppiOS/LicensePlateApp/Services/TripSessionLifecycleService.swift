@@ -98,6 +98,7 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         session.endedAt = nil
         session.endedBy = nil
         try tripSessionRepository.save(session: session)
+        AnalyticsService.shared.log(.tripSessionReset(tripId: sessionId.uuidString, gameInstanceId: gameInstanceId.uuidString))
     }
 
     func cancelSession(sessionId: UUID, cancelledBy: String?) throws {
@@ -107,6 +108,7 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         session.status = .cancelled
         session.endedAt = Date()
         try tripSessionRepository.save(session: session)
+        AnalyticsService.shared.log(.tripSessionDeleted(tripId: sessionId.uuidString))
     }
 }
 

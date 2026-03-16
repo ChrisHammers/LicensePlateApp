@@ -131,6 +131,8 @@ class AnalyticsService: AnalyticsLogging {
         case tripSessionCreated(tripId: String, tripStatus: String, tripParticipantCount: Int?, tripActiveGameCount: Int?, tripSource: String?)
         case tripSessionStarted(tripId: String, tripActiveGameCount: Int?)
         case tripSessionEnded(tripId: String)
+        case tripSessionReset(tripId: String, gameInstanceId: String)
+        case tripSessionDeleted(tripId: String)
         case tripSessionCompleted(tripId: String)
         case gameInstanceCreated(gameInstanceId: String, gameType: String, gameMode: String, tripId: String, gameOrderInTrip: Int?)
         case gameInstanceStarted(gameInstanceId: String, gameType: String, gameLifecycleState: String, configLockReason: String)
@@ -159,6 +161,7 @@ class AnalyticsService: AnalyticsLogging {
         // Discovery outcome (Step 03 — rules engine)
         case discoveryOutcomeRecorded(tripId: String, gameInstanceId: String, targetId: String, outcome: String, participantId: String?)
         case discoveryRejectedDuplicate(tripId: String, gameInstanceId: String, targetId: String, participantId: String?, mode: String)
+        case discoveryUnfind(tripId: String, gameInstanceId: String, targetId: String, participantId: String?)
 
         // Notifications & eligibility (Step 08)
         case notificationEligibilityChecked(kind: String, eligible: Bool)
@@ -254,6 +257,8 @@ class AnalyticsService: AnalyticsLogging {
             case .tripSessionCreated: return "trip_session_created"
             case .tripSessionStarted: return "trip_session_started"
             case .tripSessionEnded: return "trip_session_ended"
+            case .tripSessionReset: return "trip_session_reset"
+            case .tripSessionDeleted: return "trip_session_deleted"
             case .tripSessionCompleted: return "trip_session_completed"
             case .gameInstanceCreated: return "game_instance_created"
             case .gameInstanceStarted: return "game_instance_started"
@@ -286,6 +291,7 @@ class AnalyticsService: AnalyticsLogging {
             case .riskAdvisoryDetected: return "risk_advisory_detected"
             case .discoveryOutcomeRecorded: return "discovery_outcome_recorded"
             case .discoveryRejectedDuplicate: return "discovery_rejected_duplicate"
+            case .discoveryUnfind: return "discovery_unfind"
             }
         }
         
@@ -376,6 +382,10 @@ class AnalyticsService: AnalyticsLogging {
                 return p
             case .tripSessionEnded(let tripId), .tripSessionCompleted(let tripId):
                 return ["trip_id": tripId]
+            case .tripSessionReset(let tripId, let gameInstanceId):
+                return ["trip_id": tripId, "game_instance_id": gameInstanceId]
+            case .tripSessionDeleted(let tripId):
+                return ["trip_id": tripId]
             case .gameInstanceCreated(let gameInstanceId, let gameType, let gameMode, let tripId, let gameOrderInTrip):
                 var p: [String: Any] = ["game_instance_id": gameInstanceId, "game_type": gameType, "game_mode": gameMode, "trip_id": tripId]
                 if let o = gameOrderInTrip { p["game_order_in_trip"] = o }
@@ -418,6 +428,10 @@ class AnalyticsService: AnalyticsLogging {
                 return p
             case .discoveryRejectedDuplicate(let tripId, let gameInstanceId, let targetId, let participantId, let mode):
                 var p: [String: Any] = ["trip_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "mode": mode]
+                if let id = participantId { p["participant_id"] = id }
+                return p
+            case .discoveryUnfind(let tripId, let gameInstanceId, let targetId, let participantId):
+                var p: [String: Any] = ["trip_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId]
                 if let id = participantId { p["participant_id"] = id }
                 return p
             case .notificationEligibilityChecked(let kind, let eligible):

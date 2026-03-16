@@ -166,6 +166,13 @@ final class TripTrackerViewModel: ObservableObject {
         ]
         let event = TripActivityEvent(sessionId: sessionId, kind: .regionRemoved, payload: payload)
         try? tripActivityEventRepository.append(event)
+        let participantId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+        AnalyticsService.shared.log(.discoveryUnfind(
+            tripId: sessionId.uuidString,
+            gameInstanceId: primaryGame.id.uuidString,
+            targetId: regionID,
+            participantId: participantId
+        ))
         refreshFoundRegions()
     }
 
