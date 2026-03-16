@@ -28,8 +28,8 @@ struct TripActivityEventRepositoryTests {
         let event1 = TripActivityEvent(sessionId: sessionId, kind: .tripStarted, actorId: "user1")
         let event2 = TripActivityEvent(sessionId: sessionId, kind: .regionFound, payload: [TripActivityEventPayloadKey.regionId: "CA", TripActivityEventPayloadKey.gameInstanceId: UUID().uuidString, TripActivityEventPayloadKey.inputMethod: FoundRegion.InputMethod.list.rawValue])
 
-        try TripActivityEventRepository.shared.append(event: event1)
-        try TripActivityEventRepository.shared.append(event: event2)
+        try TripActivityEventRepository.shared.append(event1)
+        try TripActivityEventRepository.shared.append(event2)
 
         let events = try TripActivityEventRepository.shared.events(sessionId: sessionId, limit: nil)
         #expect(events.count == 2)
