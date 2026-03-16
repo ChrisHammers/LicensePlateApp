@@ -2,12 +2,12 @@
 //  TripSessionRow.swift
 //  LicensePlateApp
 //
-//  Step 12 — Row for a TripSession when no backing Trip is available for display (e.g. session-only flows).
+//  Step 12 — Row for a TripSession in the active list (session-only, canonical model).
 //
 
 import SwiftUI
 
-/// Displays a single TripSession in the active list when TripRow cannot be used (no Trip loaded for session.id).
+/// Displays a single TripSession in the active list. Shows name, date, and plate count from events.
 struct TripSessionRow: View {
     let session: TripSession
     /// Number of license plates / regions found for this trip (from TripActivityEventRepository).

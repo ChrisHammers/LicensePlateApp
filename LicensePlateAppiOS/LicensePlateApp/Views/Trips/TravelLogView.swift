@@ -76,10 +76,38 @@ struct TravelLogView: View {
     }
 
     private var emptyState: some View {
+ /*       VStack(spacing: 12) {
+            Image(systemName: "map.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(Color.Theme.accentYellow)
+
+            Text("No completed trips yet".localized)
+                .font(.system(.title3, design: .rounded))
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.Theme.primaryBlue)
+            
+            Text("Your completed trips will appear here.".localized)
+                .multilineTextAlignment(.center)
+                .font(.system(.footnote, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+                .padding(.horizontal)
+        }
+        .padding()
+        .frame(maxWidth: .infinity, maxHe)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
+        )
+        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("No completed trips yet. Your completed trips will appear here.".localized)
+   */
+        
         VStack(spacing: 16) {
-            Image(systemName: "map")
+            Image(systemName: "map.fill")
                 .font(.system(size: 60))
-                .foregroundStyle(Color.Theme.primaryBlue.opacity(0.6))
+                .foregroundStyle(Color.Theme.accentYellow)
             Text("No completed trips yet".localized)
                 .font(.system(.title2, design: .rounded))
                 .fontWeight(.semibold)
@@ -166,6 +194,64 @@ private struct TravelLogRowView: View {
         .padding(.vertical, 8)
     }
 }
+
+/*
+private struct TravelLogCard: View {
+    let entry: TravelLogEntry
+
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(entry.tripName)
+                    .font(.system(.title3, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                Spacer()
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(.subheadline))
+                    .foregroundStyle(Color.Theme.accentYellow)
+                    .accessibilityHidden(true)
+            }
+
+            Divider()
+                .background(Color.Theme.softBrown.opacity(0.2))
+                .accessibilityHidden(true)
+
+            Text(entry.summary)
+                .font(.system(.footnote, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+
+            HStack {
+                Label("Ended".localized, systemImage: "calendar")
+                    .font(.system(.footnote, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .accessibilityLabel("Ended".localized)
+                Spacer()
+                Text(dateFormatter.string(from: entry.endedAt))
+                    .font(.system(.footnote, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .accessibilityLabel("Date: %@".localized(dateFormatter.string(from: entry.endedAt)))
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("%@. %@. Ended %@".localized(entry.tripName, entry.summary, dateFormatter.string(from: entry.endedAt)))
+    }
+}
+*/
 
 // TripSummary must be Identifiable for sheet(item:)
 extension TripSummary: Identifiable {

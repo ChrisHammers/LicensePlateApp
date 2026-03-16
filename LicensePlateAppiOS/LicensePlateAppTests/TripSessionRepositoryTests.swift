@@ -58,6 +58,20 @@ struct TripSessionRepositoryTests {
         #expect(active[0].name == "Active Trip")
     }
 
+    /// Step 02 — Documents that root active list is sourced from TripSessionRepository only (canonical model; no legacy Trip).
+    @Test func activeListUsesCanonicalTripSessionRepositoryOnly() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = TripSessionRepository.shared
+        repo.setModelContext(context)
+        let session = TripSession(name: "Canonical Active", status: .active, mode: .solo, startedAt: Date())
+        try repo.create(session: session)
+        let active = try repo.loadActiveSessions(userId: nil)
+        #expect(active.count == 1)
+        #expect(active[0].id == session.id)
+        #expect(active[0].name == "Canonical Active")
+    }
+
     @Test func updateStatusToActiveThenEnded() async throws {
         let container = try makeContainer()
         let context = ModelContext(container)

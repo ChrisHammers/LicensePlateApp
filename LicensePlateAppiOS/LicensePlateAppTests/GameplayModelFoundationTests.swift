@@ -101,49 +101,4 @@ struct GameplayModelFoundationTests {
         #expect(entry.summary == "12 regions found")
     }
 
-    @Test func tripSessionMapperToLegacyDTO() async throws {
-        let session = TripSession(name: "Mapped Trip", status: .ended, createdAt: .now)
-        let discoveries = [
-            GameDiscovery(
-                gameInstanceId: UUID(),
-                participantId: "user1",
-                targetId: "us-ca",
-                inputMethod: .list
-            )
-        ]
-        let dto = await TripSessionMapper.toLegacyDTO(session: session, discoveries: discoveries)
-        #expect(dto.name == "Mapped Trip")
-        #expect(dto.id == session.id)
-        #expect(dto.isTripEnded == true)
-        #expect(dto.foundRegions.count == 1)
-        await #expect(dto.foundRegions[0].regionID == "us-ca")
-        await #expect(dto.foundRegions[0].foundBy == "user1")
-    }
-
-    // Step 06.5.5 — TripSessionMapper collapseByTargetId for collaborative display
-    @Test func tripSessionMapperCollapseByTargetIdOneFoundRegionPerTargetWithFirstFinder() async throws {
-        let session = TripSession(name: "Collapsed", status: .active, createdAt: .now)
-        let gameId = UUID()
-        let base = Date()
-        let discoveries = [
-            GameDiscovery(
-                gameInstanceId: gameId,
-                participantId: "user2",
-                targetId: "us-ca",
-                discoveredAt: base.addingTimeInterval(10),
-                inputMethod: .voice
-            ),
-            GameDiscovery(
-                gameInstanceId: gameId,
-                participantId: "user1",
-                targetId: "us-ca",
-                discoveredAt: base,
-                inputMethod: .list
-            )
-        ]
-        let dto = TripSessionMapper.toLegacyDTO(session: session, discoveries: discoveries, collapseByTargetId: true)
-        #expect(dto.foundRegions.count == 1)
-        #expect(dto.foundRegions[0].regionID == "us-ca")
-        #expect(dto.foundRegions[0].foundBy == "user1")
-    }
 }

@@ -39,7 +39,6 @@ struct ContentView: View {
         tripActivityEventRepository: TripActivityEventRepository.shared,
         authService: FirebaseAuthService()
     )
-    @State private var travelLogEntries: [TravelLogEntry] = []
     @AppStorage("boundariesLoaded") private var boundariesLoaded = false
     
     // Custom detent for the new trip sheet - device-aware sizing
@@ -140,22 +139,6 @@ struct ContentView: View {
                     }
                     .textCase(nil)
                     .listRowBackground(Color.clear)
-
-                    // 3. Travel Log
-                    /* Section("Travel Log".localized) {
-                        if travelLogEntries.isEmpty {
-                            travelLogEmptyCard
-                        } else {
-                            ForEach(travelLogEntries) { entry in
-                                TravelLogCard(entry: entry)
-                                    .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
-                                    .listRowBackground(Color.clear)
-                            }
-                        }
-                    }
-                    .textCase(nil)
-                    .listRowBackground(Color.clear)
-                      */
                   }
                   .scrollContentBackground(.hidden)
                   .listStyle(.insetGrouped)
@@ -213,15 +196,12 @@ struct ContentView: View {
                       FriendshipRepository.shared.startListening(userId: userId)
                       InviteRepository.shared.startListening(userId: userId)
                   }
-                  loadTravelLogEntries()
+                  pendingTripsViewModel.loadIfNeeded()
                   loadActiveList()
                 }
                 .onAppear {
                   pendingTripsViewModel.setAuthService(authService)
                   travelLogViewModel.setAuthService(authService)
-                  pendingTripsViewModel.loadIfNeeded()
-                  loadTravelLogEntries()
-                  loadActiveList()
                   NotificationRoutingService.shared.startObservingIfNeeded(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
                 }
                 .overlay {
@@ -371,35 +351,6 @@ struct ContentView: View {
         .accessibilityLabel("No pending invites. When someone invites you to a trip, or you invite others, they will appear here.".localized)
     }
 
-    private var travelLogEmptyCard: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "map.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(Color.Theme.accentYellow)
-
-            Text("No completed trips yet".localized)
-                .font(.system(.title3, design: .rounded))
-                .fontWeight(.semibold)
-                .foregroundStyle(Color.Theme.primaryBlue)
-            
-            Text("Your completed trips will appear here.".localized)
-                .multilineTextAlignment(.center)
-                .font(.system(.footnote, design: .rounded))
-                .foregroundStyle(Color.Theme.softBrown)
-                .padding(.horizontal)
-        }
-        .padding()
-        .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.Theme.cardBackground)
-                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
-        )
-        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("No completed trips yet. Your completed trips will appear here.".localized)
-    }
-
     private var activeSessionList: some View {
         ForEach(activeListItems) { item in
             NavigationLink(value: item.session.id) {
@@ -488,21 +439,6 @@ struct ContentView: View {
     @AppStorage("defaultTrackMyLocationDuringTrip") private var defaultTrackMyLocationDuringTrip = true
     @AppStorage("defaultShowMyActiveTripOnLargeMap") private var defaultShowMyActiveTripOnLargeMap = true
     @AppStorage("defaultShowMyActiveTripOnSmallMap") private var defaultShowMyActiveTripOnSmallMap = true
-    
-    private func loadTravelLogEntries() {
-        TravelLogRepository.shared.setModelContext(modelContext)
-        let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
-        do {
-            travelLogEntries = try TravelLogRepository.shared.getSummaryProjections(
-                userId: userId,
-                sortBy: .endedAtDesc,
-                limit: 50,
-                statusFilter: .endedOnly
-            )
-        } catch {
-            travelLogEntries = []
-        }
-    }
 }
 
 private struct CountryCheckboxRow: View {
@@ -613,62 +549,6 @@ private struct PendingInviteCard: View {
         case .accepted: return .green
         case .declined, .canceled, .expired: return Color.Theme.softBrown
         }
-    }
-}
-
-private struct TravelLogCard: View {
-    let entry: TravelLogEntry
-
-    private let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter
-    }()
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(entry.tripName)
-                    .font(.system(.title3, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                Spacer()
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(.subheadline))
-                    .foregroundStyle(Color.Theme.accentYellow)
-                    .accessibilityHidden(true)
-            }
-
-            Divider()
-                .background(Color.Theme.softBrown.opacity(0.2))
-                .accessibilityHidden(true)
-
-            Text(entry.summary)
-                .font(.system(.footnote, design: .rounded))
-                .foregroundStyle(Color.Theme.softBrown)
-
-            HStack {
-                Label("Ended".localized, systemImage: "calendar")
-                    .font(.system(.footnote, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                    .accessibilityLabel("Ended".localized)
-                Spacer()
-                Text(dateFormatter.string(from: entry.endedAt))
-                    .font(.system(.footnote, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                    .accessibilityLabel("Date: %@".localized(dateFormatter.string(from: entry.endedAt)))
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.Theme.cardBackground)
-                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("%@. %@. Ended %@".localized(entry.tripName, entry.summary, dateFormatter.string(from: entry.endedAt)))
     }
 }
 

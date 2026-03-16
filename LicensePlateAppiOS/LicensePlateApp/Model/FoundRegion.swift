@@ -2,7 +2,7 @@
 //  FoundRegion.swift
 //  LicensePlateApp
 //
-//  Step 01 — Extracted from Trip.swift for canonical model. Used by GameDiscovery, TripSessionMapper, RiskAssessmentService, etc.
+//  Step 01 — Extracted from Trip.swift for canonical model. Used by GameDiscovery, RiskAssessmentService, etc.
 //
 
 import Foundation
