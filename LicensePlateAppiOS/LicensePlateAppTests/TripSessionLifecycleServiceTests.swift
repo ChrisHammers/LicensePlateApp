@@ -38,8 +38,8 @@ struct TripSessionLifecycleServiceTests {
             id: gameId,
             definitionId: GameType.licensePlate.rawValue,
             sessionId: sessionId,
-            commonConfig: CommonGameConfig(lifecycleState: .created, configLocked: false, configLockReason: .none),
-            ruleSet: GameRuleSet()
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: CommonGameConfig(lifecycleState: .created, configLocked: false, configLockReason: .none)
         )
         gameRepo.seed(game)
 
@@ -88,8 +88,8 @@ struct TripSessionLifecycleServiceTests {
             id: gameId,
             definitionId: GameType.licensePlate.rawValue,
             sessionId: sessionId,
-            commonConfig: CommonGameConfig(lifecycleState: .started, configLocked: true, configLockReason: .gameStarted),
-            ruleSet: GameRuleSet()
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: CommonGameConfig(lifecycleState: .started, configLocked: true, configLockReason: .gameStarted)
         ))
 
         let service = TripSessionLifecycleService(

@@ -21,7 +21,7 @@ final class TripTrackerViewModel: ObservableObject {
     @Published private(set) var currentSession: TripSession
     @Published private(set) var foundRegions: [FoundRegion] = []
     @Published var rejectedDuplicateMessage: String?
-    @Published var errorMessage: String?
+    @Published private(set) var errorMessage: String?
 
     let sessionId: UUID
     let primaryGame: GameInstance
@@ -155,6 +155,7 @@ final class TripTrackerViewModel: ObservableObject {
             ))
             return .success
         } catch {
+            AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_discovery", error: error.localizedDescription))
             return .failure(error)
         }
     }
@@ -165,35 +166,69 @@ final class TripTrackerViewModel: ObservableObject {
             TripActivityEventPayloadKey.gameInstanceId: primaryGame.id.uuidString
         ]
         let event = TripActivityEvent(sessionId: sessionId, kind: .regionRemoved, payload: payload)
-        try? tripActivityEventRepository.append(event)
-        let participantId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
-        AnalyticsService.shared.log(.discoveryUnfind(
-            tripId: sessionId.uuidString,
-            gameInstanceId: primaryGame.id.uuidString,
-            targetId: regionID,
-            participantId: participantId
-        ))
-        refreshFoundRegions()
+        do {
+            try tripActivityEventRepository.append(event)
+            let participantId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+            AnalyticsService.shared.log(.discoveryUnfind(
+                tripId: sessionId.uuidString,
+                gameInstanceId: primaryGame.id.uuidString,
+                targetId: regionID,
+                participantId: participantId
+            ))
+            refreshFoundRegions()
+        } catch {
+            errorMessage = error.localizedDescription
+            AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_unfind", error: error.localizedDescription))
+            objectWillChange.send()
+        }
+    }
+
+    func clearRejectedDuplicateMessage() {
+        rejectedDuplicateMessage = nil
+    }
+
+    func setError(_ message: String) {
+        errorMessage = message
+        objectWillChange.send()
+    }
+
+    func clearError() {
+        errorMessage = nil
+        objectWillChange.send()
     }
 
     func updateTripName(_ name: String) {
         currentSession.name = name
         objectWillChange.send()
-        try? tripSessionRepository.save(session: currentSession)
+        do {
+            try tripSessionRepository.save(session: currentSession)
+        } catch {
+            errorMessage = error.localizedDescription
+            AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_settings", error: error.localizedDescription))
+            objectWillChange.send()
+        }
     }
 
     func setEnabledCountries(_ countries: [PlateRegion.Country]) {
         currentSession.enabledCountries = countries
         objectWillChange.send()
-        try? tripSessionRepository.save(session: currentSession)
+        do {
+            try tripSessionRepository.save(session: currentSession)
+        } catch {
+            errorMessage = error.localizedDescription
+            AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_settings", error: error.localizedDescription))
+            objectWillChange.send()
+        }
     }
 
     func saveSession() {
         objectWillChange.send()
-        try? tripSessionRepository.save(session: currentSession)
-    }
-
-    func clearRejectedDuplicateMessage() {
-        rejectedDuplicateMessage = nil
+        do {
+            try tripSessionRepository.save(session: currentSession)
+        } catch {
+            errorMessage = error.localizedDescription
+            AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_settings", error: error.localizedDescription))
+            objectWillChange.send()
+        }
     }
 }

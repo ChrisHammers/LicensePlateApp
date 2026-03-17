@@ -99,4 +99,27 @@ struct GameInstanceRepositoryTests {
         let decoded = try JSONDecoder().decode([String: String].self, from: entities[0].snapshotData)
         #expect(decoded["score"] == "100")
     }
+
+    /// Step 05 — Failure: update throws instanceNotFound when instance was never created.
+    @Test func updateThrowsInstanceNotFoundWhenInstanceMissing() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = GameInstanceRepository.shared
+        repo.setModelContext(context)
+
+        let unknownId = UUID()
+        let sessionId = UUID()
+        let ruleSet = GameRuleSet(gameDefinitionId: "license_plate")
+        let instance = GameInstance(id: unknownId, definitionId: "license_plate", sessionId: sessionId, ruleSet: ruleSet)
+        do {
+            try repo.update(instance: instance)
+            #expect(Bool(false), "Expected GameInstanceRepositoryError.instanceNotFound")
+        } catch let error as GameInstanceRepositoryError {
+            if case .instanceNotFound(let id) = error {
+                #expect(id == unknownId)
+            } else {
+                #expect(Bool(false), "Expected instanceNotFound, got \(error)")
+            }
+        }
+    }
 }

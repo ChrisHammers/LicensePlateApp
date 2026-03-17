@@ -1,0 +1,120 @@
+//
+//  ActiveTripsListViewModel.swift
+//  LicensePlateApp
+//
+//  Step 05 — ViewModel for ContentView active trips list. Loads list, deletes via lifecycle, surfaces save failures.
+//
+
+import Foundation
+import Combine
+
+/// Item for the Active Trips list: session and derived plate count from events.
+struct ActiveListItem: Identifiable {
+    var id: UUID { session.id }
+    let session: TripSession
+    let plateCount: Int
+}
+
+@MainActor
+final class ActiveTripsListViewModel: ObservableObject {
+
+    @Published private(set) var items: [ActiveListItem] = []
+    @Published private(set) var errorMessage: String? = nil
+
+    private let tripSessionRepository: TripSessionRepositoryProtocol
+    private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
+    private let gameInstanceRepository: GameInstanceRepositoryProtocol
+    private let lifecycleService: TripSessionLifecycleServiceProtocol
+
+    /// Session IDs that failed to delete; retry uses these.
+    private(set) var pendingDeleteSessionIds: [UUID] = []
+    private(set) var pendingUserId: String?
+
+    init(
+        tripSessionRepository: TripSessionRepositoryProtocol,
+        tripActivityEventRepository: TripActivityEventRepositoryProtocol,
+        gameInstanceRepository: GameInstanceRepositoryProtocol,
+        lifecycleService: TripSessionLifecycleServiceProtocol
+    ) {
+        self.tripSessionRepository = tripSessionRepository
+        self.tripActivityEventRepository = tripActivityEventRepository
+        self.gameInstanceRepository = gameInstanceRepository
+        self.lifecycleService = lifecycleService
+    }
+
+    func load(userId: String?) {
+        errorMessage = nil
+        do {
+            let sessions = try tripSessionRepository.loadActiveSessions(userId: userId)
+            let sorted = sessions.sorted { ($0.startedAt ?? .distantPast) > ($1.startedAt ?? .distantPast) }
+            var list: [ActiveListItem] = []
+            for session in sorted {
+                let count = (try? tripActivityEventRepository.foundRegions(sessionId: session.id, gameInstanceId: nil))?.count ?? 0
+                list.append(ActiveListItem(session: session, plateCount: count))
+            }
+            items = list
+        } catch {
+            errorMessage = error.localizedDescription
+            items = []
+        }
+    }
+
+    func deleteSessions(at offsets: IndexSet, userId: String?) {
+        let sessionIds = offsets.map { items[$0].session.id }
+        guard !sessionIds.isEmpty else { return }
+
+        errorMessage = nil
+        pendingDeleteSessionIds = []
+        pendingUserId = nil
+
+        do {
+            for sessionId in sessionIds {
+                try lifecycleService.cancelSession(sessionId: sessionId, cancelledBy: userId)
+            }
+            load(userId: userId)
+        } catch {
+            pendingDeleteSessionIds = sessionIds
+            pendingUserId = userId
+            if let uid = userId { load(userId: uid) }
+            errorMessage = error.localizedDescription
+            AnalyticsService.shared.log(.persistenceSaveFailed(context: "active_list_delete", error: error.localizedDescription))
+        }
+    }
+
+    func retryLastDelete() {
+        guard !pendingDeleteSessionIds.isEmpty, let userId = pendingUserId else {
+            clearError()
+            return
+        }
+        let ids = pendingDeleteSessionIds
+        pendingDeleteSessionIds = []
+        pendingUserId = nil
+        errorMessage = nil
+
+        do {
+            for sessionId in ids {
+                try lifecycleService.cancelSession(sessionId: sessionId, cancelledBy: userId)
+            }
+            load(userId: userId)
+        } catch {
+            pendingDeleteSessionIds = ids
+            pendingUserId = userId
+            load(userId: userId)
+            errorMessage = error.localizedDescription
+            AnalyticsService.shared.log(.persistenceSaveFailed(context: "active_list_delete", error: error.localizedDescription))
+        }
+    }
+
+    func clearError() {
+        errorMessage = nil
+    }
+
+    /// Resolve session and primary game for navigation. Returns nil if session or primary game not found.
+    func sessionAndPrimaryGame(for sessionId: UUID) -> (TripSession, GameInstance)? {
+        guard let session = try? tripSessionRepository.session(byId: sessionId) else { return nil }
+        let games = (try? gameInstanceRepository.fetchByTripSession(sessionId: sessionId)) ?? []
+        let primary = games.first(where: { $0.definitionId == GameType.licensePlate.rawValue }) ?? games.first
+        guard let primaryGame = primary else { return nil }
+        return (session, primaryGame)
+    }
+}

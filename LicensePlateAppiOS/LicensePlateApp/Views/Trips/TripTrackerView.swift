@@ -76,6 +76,7 @@ struct TripTrackerView: View {
     @State private var micListeningPulseScale: CGFloat = 1.0
     @State private var showRiskAdvisoryMessage = false
     @State private var riskPresentationStyle: RiskPresentationStyle? = nil
+    @State private var retryAction: (() -> Void)?
     @State private var cameraPosition: GMSCameraPosition = {
         // Initialize with default US position, will be updated on appear
         let center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
@@ -138,6 +139,25 @@ struct TripTrackerView: View {
         .sheet(isPresented: $showSettings) {
             SettingsView(viewModel: viewModel, primaryGame: primaryGame)
                 .environmentObject(authService)
+        }
+        .alert("Error".localized, isPresented: Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.clearError(); retryAction = nil } }
+        )) {
+            Button("OK".localized, role: .cancel) {
+                viewModel.clearError()
+                retryAction = nil
+            }
+            Button("Retry".localized) {
+                AnalyticsService.shared.log(.persistenceRetryTapped(context: "trip_tracker_save"))
+                retryAction?()
+                viewModel.clearError()
+                retryAction = nil
+            }
+        } message: {
+            if let msg = viewModel.errorMessage {
+                Text(msg)
+            }
         }
         // Step 11: Unusual Activity modal suppressed (risk still logged to analytics). Non-blocking options: toast/banner, inline hint, or settings summary.
         // .alert("Unusual Activity".localized, isPresented: $showRiskAdvisoryMessage) {
@@ -380,7 +400,12 @@ struct TripTrackerView: View {
                 // Start Trip Button
                 Button {
                     FeedbackService.shared.buttonTap()
-                    try? viewModel.startTrip()
+                    do {
+                        try viewModel.startTrip()
+                    } catch {
+                        viewModel.setError(error.localizedDescription)
+                        retryAction = { try? viewModel.startTrip() }
+                    }
                 } label: {
                     VStack(spacing: 6) {
                         Image(systemName: "play.circle.fill")
@@ -466,7 +491,12 @@ struct TripTrackerView: View {
         .alert("End Trip", isPresented: $showEndTripConfirmation) {
             Button("Cancel", role: .cancel) {}
             Button("End Trip", role: .destructive) {
-                try? viewModel.endTrip()
+                do {
+                    try viewModel.endTrip()
+                } catch {
+                    viewModel.setError(error.localizedDescription)
+                    retryAction = { try? viewModel.endTrip() }
+                }
             }
         } message: {
             Text("This will stop the game. You won't be able to add states in this trip anymore.".localized)
@@ -554,7 +584,8 @@ struct TripTrackerView: View {
                 lastChange: (regionID, true, Date())
             )
             applyRiskPresentation(riskResult.flags)
-        case .failure:
+        case .failure(let error):
+            viewModel.setError(error.localizedDescription)
             FeedbackService.shared.actionError()
         }
     }
@@ -1185,6 +1216,8 @@ private struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var viewModel: TripTrackerViewModel
     let primaryGame: GameInstance
+    
+    @State private var retryAction: (() -> Void)?
 
     @AppStorage("defaultSaveLocationWhenMarkingPlates") private var saveLocationWhenMarkingPlates = true
     @AppStorage("defaultShowMyLocationOnLargeMap") private var showMyLocationOnLargeMap = true
@@ -1318,7 +1351,12 @@ private struct SettingsView: View {
             // Start Date button
             if viewModel.currentSession.startedAt == nil {
                 Button {
-                    try? viewModel.startTrip()
+                    do {
+                        try viewModel.startTrip()
+                    } catch {
+                        viewModel.setError(error.localizedDescription)
+                        retryAction = { try? viewModel.startTrip() }
+                    }
                 } label: {
                     HStack {
                         Text("Start Trip".localized)
@@ -1414,7 +1452,12 @@ private struct SettingsView: View {
         .alert("End Trip".localized, isPresented: $showEndTripConfirmation) {
             Button("Cancel".localized, role: .cancel) {}
             Button("End Trip".localized, role: .destructive) {
-                try? viewModel.endTrip()
+                do {
+                    try viewModel.endTrip()
+                } catch {
+                    viewModel.setError(error.localizedDescription)
+                    retryAction = { try? viewModel.endTrip() }
+                }
             }
         } message: {
             Text("This will stop the game. You won't be able to add states in this trip anymore.".localized)
@@ -1422,7 +1465,12 @@ private struct SettingsView: View {
         .alert("Reset Trip".localized, isPresented: $showResetConfirmation) {
             Button("Cancel".localized, role: .cancel) {}
             Button("Reset".localized, role: .destructive) {
-                try? viewModel.resetTrip()
+                do {
+                    try viewModel.resetTrip()
+                } catch {
+                    viewModel.setError(error.localizedDescription)
+                    retryAction = { try? viewModel.resetTrip() }
+                }
             }
         } message: {
             Text("This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset.".localized)
@@ -1430,8 +1478,16 @@ private struct SettingsView: View {
         .alert("Delete Trip".localized, isPresented: $showDeleteConfirmation) {
             Button("Cancel".localized, role: .cancel) {}
             Button("Delete".localized, role: .destructive) {
-                try? viewModel.cancelTrip()
-                dismiss()
+                do {
+                    try viewModel.cancelTrip()
+                    dismiss()
+                } catch {
+                    viewModel.setError(error.localizedDescription)
+                    retryAction = {
+                        try? viewModel.cancelTrip()
+                        dismiss()
+                    }
+                }
             }
         } message: {
             Text("This will delete the trip and all scores will be removed.".localized)

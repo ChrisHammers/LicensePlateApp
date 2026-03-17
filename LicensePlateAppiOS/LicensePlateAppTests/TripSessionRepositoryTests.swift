@@ -153,6 +153,26 @@ struct TripSessionRepositoryTests {
         #expect(repo.lastSyncedAt(sessionId: UUID()) == nil)
     }
 
+    /// Step 05 — Failure: updateStatus throws sessionNotFound when session does not exist.
+    @Test func updateStatusThrowsSessionNotFoundWhenSessionMissing() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = TripSessionRepository.shared
+        repo.setModelContext(context)
+
+        let unknownId = UUID()
+        do {
+            try repo.updateStatus(sessionId: unknownId, status: .ended)
+            #expect(Bool(false), "Expected TripSessionRepositoryError.sessionNotFound")
+        } catch let error as TripSessionRepositoryError {
+            if case .sessionNotFound(let id) = error {
+                #expect(id == unknownId)
+            } else {
+                #expect(Bool(false), "Expected sessionNotFound, got \(error)")
+            }
+        }
+    }
+
     /// Step 06.5 — Session with teams and participant.teamId round-trips correctly.
     @Test func sessionWithTeamsRoundTrips() async throws {
         let container = try makeContainer()

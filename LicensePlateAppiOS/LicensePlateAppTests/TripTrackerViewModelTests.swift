@@ -32,8 +32,7 @@ struct TripTrackerViewModelTests {
         GameInstance(
             definitionId: GameType.licensePlate.rawValue,
             sessionId: sessionId,
-            commonConfig: CommonGameConfig(lifecycleState: lifecycleState, configLocked: false, configLockReason: .none),
-            ruleSet: GameRuleSet()
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"), commonConfig: CommonGameConfig(lifecycleState: lifecycleState, configLocked: false, configLockReason: .none)
         )
     }
 
@@ -182,5 +181,134 @@ struct TripTrackerViewModelTests {
         viewModel.removeDiscovery(regionID: "CA")
         #expect(!viewModel.foundRegions.contains { $0.regionID == "CA" })
         #expect(eventRepo.appendedEvents().contains { $0.kind == .regionRemoved })
+    }
+
+    // MARK: - Step 05 — Persistence failure cases
+
+    @Test func updateTripNameWhenSaveThrowsSetsErrorMessageAndKeepsInMemoryName() async throws {
+        let sessionId = UUID()
+        let session = makeSession(id: sessionId, startedAt: Date())
+        var game = makePrimaryGame(sessionId: sessionId, lifecycleState: .started)
+        game.id = UUID()
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        sessionRepo.shouldThrow = true
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let lifecycleService = MockTripSessionLifecycleService()
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: "user1", userName: "U", firebaseUID: "user1")
+
+        let viewModel = TripTrackerViewModel(
+            session: session,
+            primaryGame: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: lifecycleService,
+            authService: auth
+        )
+
+        viewModel.updateTripName("New Name")
+
+        #expect(viewModel.errorMessage != nil)
+        #expect(viewModel.currentSession.name == "New Name")
+    }
+
+    @Test func saveSessionWhenSaveThrowsSetsErrorMessage() async throws {
+        let sessionId = UUID()
+        let session = makeSession(id: sessionId, startedAt: Date())
+        var game = makePrimaryGame(sessionId: sessionId, lifecycleState: .started)
+        game.id = UUID()
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        sessionRepo.shouldThrow = true
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let lifecycleService = MockTripSessionLifecycleService()
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: "user1", userName: "U", firebaseUID: "user1")
+
+        let viewModel = TripTrackerViewModel(
+            session: session,
+            primaryGame: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: lifecycleService,
+            authService: auth
+        )
+
+        viewModel.saveSession()
+
+        #expect(viewModel.errorMessage != nil)
+    }
+
+    @Test func setErrorAndClearErrorUpdateErrorMessage() async throws {
+        let sessionId = UUID()
+        let session = makeSession(id: sessionId, startedAt: Date())
+        var game = makePrimaryGame(sessionId: sessionId, lifecycleState: .started)
+        game.id = UUID()
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let lifecycleService = MockTripSessionLifecycleService()
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: "user1", userName: "U", firebaseUID: "user1")
+
+        let viewModel = TripTrackerViewModel(
+            session: session,
+            primaryGame: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: lifecycleService,
+            authService: auth
+        )
+
+        viewModel.setError("test error")
+        #expect(viewModel.errorMessage == "test error")
+
+        viewModel.clearError()
+        #expect(viewModel.errorMessage == nil)
+    }
+
+    @Test func submitDiscoveryWhenAppendThrowsReturnsFailure() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = makeSession(id: sessionId, startedAt: Date())
+        var game = makePrimaryGame(sessionId: sessionId, lifecycleState: .started)
+        game.id = gameId
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        eventRepo.shouldThrow = true
+        let lifecycleService = MockTripSessionLifecycleService()
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: "user1", userName: "U", firebaseUID: "user1")
+
+        let viewModel = TripTrackerViewModel(
+            session: session,
+            primaryGame: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: lifecycleService,
+            authService: auth
+        )
+
+        let result = viewModel.submitDiscovery(regionID: "CA", inputMethod: .list)
+
+        guard case .failure(let error) = result else {
+            Issue.record("Expected failure when append throws, got \(result)")
+            return
+        }
+        #expect((error as NSError).domain == "MockTripActivityEventRepository")
     }
 }

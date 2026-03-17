@@ -163,6 +163,10 @@ class AnalyticsService: AnalyticsLogging {
         case discoveryRejectedDuplicate(tripId: String, gameInstanceId: String, targetId: String, participantId: String?, mode: String)
         case discoveryUnfind(tripId: String, gameInstanceId: String, targetId: String, participantId: String?)
 
+        // Persistence (Step 05)
+        case persistenceSaveFailed(context: String, error: String)
+        case persistenceRetryTapped(context: String)
+
         // Notifications & eligibility (Step 08)
         case notificationEligibilityChecked(kind: String, eligible: Bool)
         case notificationDeliveredTripInvite
@@ -292,6 +296,8 @@ class AnalyticsService: AnalyticsLogging {
             case .discoveryOutcomeRecorded: return "discovery_outcome_recorded"
             case .discoveryRejectedDuplicate: return "discovery_rejected_duplicate"
             case .discoveryUnfind: return "discovery_unfind"
+            case .persistenceSaveFailed: return "persistence_save_failed"
+            case .persistenceRetryTapped: return "persistence_retry_tapped"
             }
         }
         
@@ -434,6 +440,10 @@ class AnalyticsService: AnalyticsLogging {
                 var p: [String: Any] = ["trip_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId]
                 if let id = participantId { p["participant_id"] = id }
                 return p
+            case .persistenceSaveFailed(let context, let error):
+                return ["context": context, "error": error]
+            case .persistenceRetryTapped(let context):
+                return ["context": context]
             case .notificationEligibilityChecked(let kind, let eligible):
                 return ["kind": kind, "eligible": eligible]
             case .notificationDeliveredTripInvite:
