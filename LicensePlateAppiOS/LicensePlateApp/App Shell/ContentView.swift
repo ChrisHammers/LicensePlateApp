@@ -600,7 +600,13 @@ struct DefaultSettingsView: View {
     @AppStorage("appLanguage") private var appLanguageRaw: String = AppLanguage.english.rawValue
     @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
     @AppStorage("appUseVibrations") private var appUseVibrations = true
-    
+
+    #if DEBUG
+    @AppStorage("DebugForcePersistenceSave") private var forceFailureOnSave = false
+    @AppStorage("DebugForcePersistenceCreate") private var forceFailureOnCreate = false
+    @AppStorage("DebugForcePersistenceAppend") private var forceFailureOnAppend = false
+    #endif
+
     @EnvironmentObject var authService: FirebaseAuthService
     @Environment(\.modelContext) private var modelContext
     
@@ -719,6 +725,31 @@ struct DefaultSettingsView: View {
                         .listRowBackground(Color.clear)
                     }
                     .textCase(nil)
+
+                    #if DEBUG
+                    Section {
+                        Toggle(isOn: $forceFailureOnSave) {
+                            Text("Force failure on save".localized)
+                        }
+                        .accessibilityLabel("Force failure on save".localized)
+                        .accessibilityHint("Next session save will fail (settings save, start/end/reset/delete trip)")
+
+                        Toggle(isOn: $forceFailureOnCreate) {
+                            Text("Force failure on create".localized)
+                        }
+                        .accessibilityLabel("Force failure on create".localized)
+                        .accessibilityHint("Next session create will fail (create trip)")
+
+                        Toggle(isOn: $forceFailureOnAppend) {
+                            Text("Force failure on append".localized)
+                        }
+                        .accessibilityLabel("Force failure on append".localized)
+                        .accessibilityHint("Next event append will fail (mark found, unfind, lifecycle events)")
+                    } header: {
+                        Text("Debug – Force persistence failures".localized)
+                    }
+                    .accessibilityElement(children: .contain)
+                    #endif
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)

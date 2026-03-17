@@ -34,6 +34,11 @@ final class TripActivityEventRepository: ObservableObject, TripActivityEventRepo
 
     func append(_ event: TripActivityEvent) throws {
         guard let ctx = modelContext else { throw TripActivityEventRepositoryError.noModelContext }
+        #if DEBUG
+        if DebugPersistenceFlags.shouldForceFailure(for: .append) {
+            throw DebugForcedPersistenceError.append
+        }
+        #endif
         let payloadData = event.payload.flatMap { try? JSONEncoder().encode($0) }
         let entity = TripActivityEventEntity(
             id: event.id,

@@ -26,6 +26,11 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
 
     func create(session: TripSession) throws {
         guard let ctx = modelContext else { throw TripSessionRepositoryError.noModelContext }
+        #if DEBUG
+        if DebugPersistenceFlags.shouldForceFailure(for: .create) {
+            throw DebugForcedPersistenceError.create
+        }
+        #endif
         let entity = TripSessionEntityMapper.toEntity(session)
         ctx.insert(entity)
         upsertTeams(sessionId: session.id.uuidString, teams: session.teams, context: ctx)
@@ -34,6 +39,11 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
 
     func save(session: TripSession) throws {
         guard let ctx = modelContext else { throw TripSessionRepositoryError.noModelContext }
+        #if DEBUG
+        if DebugPersistenceFlags.shouldForceFailure(for: .save) {
+            throw DebugForcedPersistenceError.save
+        }
+        #endif
         let id = session.id.uuidString
         let descriptor = FetchDescriptor<TripSessionEntity>(
             predicate: #Predicate<TripSessionEntity> { $0.id == id }
