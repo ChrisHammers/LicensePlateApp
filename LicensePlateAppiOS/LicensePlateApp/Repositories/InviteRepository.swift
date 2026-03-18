@@ -138,6 +138,10 @@ class InviteRepository: ObservableObject {
         
         return (try? modelContext.fetch(descriptor)) ?? []
     }
+
+    func getInvite(inviteId: String, userId: String) -> Invite? {
+        getInvites(for: userId).first { $0.inviteId == inviteId }
+    }
     
     /// Get incoming invites
     func getIncomingInvites(for userId: String) -> [Invite] {

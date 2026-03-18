@@ -43,10 +43,12 @@ struct TripSessionLifecycleServiceTests {
         )
         gameRepo.seed(game)
 
+        let syncCoordinator = MockSyncCoordinator()
         let service = TripSessionLifecycleService(
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
-            tripActivityEventRepository: eventRepo
+            tripActivityEventRepository: eventRepo,
+            syncCoordinator: syncCoordinator
         )
 
         try service.startTrip(sessionId: sessionId, actorId: "user1")
@@ -92,10 +94,12 @@ struct TripSessionLifecycleServiceTests {
             commonConfig: CommonGameConfig(lifecycleState: .started, configLocked: true, configLockReason: .gameStarted)
         ))
 
+        let syncCoordinator = MockSyncCoordinator()
         let service = TripSessionLifecycleService(
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
-            tripActivityEventRepository: eventRepo
+            tripActivityEventRepository: eventRepo,
+            syncCoordinator: syncCoordinator
         )
 
         try service.endTrip(sessionId: sessionId, endedBy: "user1")
@@ -133,10 +137,12 @@ struct TripSessionLifecycleServiceTests {
         sessionRepo.seed(session)
         try eventRepo.append(TripActivityEvent(sessionId: sessionId, kind: .regionFound, payload: [TripActivityEventPayloadKey.regionId: "CA", TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString]))
 
+        let syncCoordinator = MockSyncCoordinator()
         let service = TripSessionLifecycleService(
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
-            tripActivityEventRepository: eventRepo
+            tripActivityEventRepository: eventRepo,
+            syncCoordinator: syncCoordinator
         )
 
         try service.resetTrip(sessionId: sessionId, gameInstanceId: gameId)
@@ -169,10 +175,12 @@ struct TripSessionLifecycleServiceTests {
         )
         sessionRepo.seed(session)
 
+        let syncCoordinator = MockSyncCoordinator()
         let service = TripSessionLifecycleService(
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
-            tripActivityEventRepository: eventRepo
+            tripActivityEventRepository: eventRepo,
+            syncCoordinator: syncCoordinator
         )
 
         try service.cancelSession(sessionId: sessionId, cancelledBy: "user1")

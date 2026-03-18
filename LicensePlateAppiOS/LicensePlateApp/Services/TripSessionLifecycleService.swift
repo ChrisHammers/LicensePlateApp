@@ -21,21 +21,25 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
     static let shared = TripSessionLifecycleService(
         tripSessionRepository: TripSessionRepository.shared,
         gameInstanceRepository: GameInstanceRepository.shared,
-        tripActivityEventRepository: TripActivityEventRepository.shared
+        tripActivityEventRepository: TripActivityEventRepository.shared,
+        syncCoordinator: SyncCoordinator.shared
     )
 
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
+    private let syncCoordinator: SyncCoordinatorProtocol
 
     init(
         tripSessionRepository: TripSessionRepositoryProtocol,
         gameInstanceRepository: GameInstanceRepositoryProtocol,
-        tripActivityEventRepository: TripActivityEventRepositoryProtocol
+        tripActivityEventRepository: TripActivityEventRepositoryProtocol,
+        syncCoordinator: SyncCoordinatorProtocol
     ) {
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
         self.tripActivityEventRepository = tripActivityEventRepository
+        self.syncCoordinator = syncCoordinator
     }
 
     func startTrip(sessionId: UUID, actorId: String) throws {
@@ -50,14 +54,18 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         try tripSessionRepository.save(session: session)
         try gameInstanceRepository.transitionGamesToStarted(sessionId: sessionId)
         let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
-        try tripActivityEventRepository.append(TripActivityEvent(sessionId: sessionId, kind: .tripStarted, actorId: actorId))
+        let tripStartedEvent = TripActivityEvent(sessionId: sessionId, kind: .tripStarted, actorId: actorId)
+        try tripActivityEventRepository.append(tripStartedEvent)
+        try syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: tripStartedEvent.id)
         for game in games {
-            try tripActivityEventRepository.append(TripActivityEvent(
+            let gameStartedEvent = TripActivityEvent(
                 sessionId: sessionId,
                 kind: .gameStarted,
                 actorId: nil,
                 payload: [TripActivityEventPayloadKey.gameInstanceId: game.id.uuidString]
-            ))
+            )
+            try tripActivityEventRepository.append(gameStartedEvent)
+            try syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: gameStartedEvent.id)
             AnalyticsService.shared.log(.gameInstanceStarted(
                 gameInstanceId: game.id.uuidString,
                 gameType: game.definitionId,
@@ -77,14 +85,18 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         session.status = .ended
         try tripSessionRepository.save(session: session)
         let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
-        try tripActivityEventRepository.append(TripActivityEvent(sessionId: sessionId, kind: .tripEnded, actorId: endedBy))
+        let tripEndedEvent = TripActivityEvent(sessionId: sessionId, kind: .tripEnded, actorId: endedBy)
+        try tripActivityEventRepository.append(tripEndedEvent)
+        try syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: tripEndedEvent.id)
         for game in games {
-            try tripActivityEventRepository.append(TripActivityEvent(
+            let gameEndedEvent = TripActivityEvent(
                 sessionId: sessionId,
                 kind: .gameEnded,
                 actorId: nil,
                 payload: [TripActivityEventPayloadKey.gameInstanceId: game.id.uuidString]
-            ))
+            )
+            try tripActivityEventRepository.append(gameEndedEvent)
+            try syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: gameEndedEvent.id)
         }
         AnalyticsService.shared.log(.tripSessionEnded(tripId: sessionId.uuidString))
     }

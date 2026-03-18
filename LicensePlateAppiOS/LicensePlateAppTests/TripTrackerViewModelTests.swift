@@ -49,10 +49,12 @@ struct TripTrackerViewModelTests {
         gameRepo.seed(game)
 
         let eventRepo = MockTripActivityEventRepository()
+        let syncCoordinator = MockSyncCoordinator()
         let lifecycleService = TripSessionLifecycleService(
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
-            tripActivityEventRepository: eventRepo
+            tripActivityEventRepository: eventRepo,
+            syncCoordinator: syncCoordinator
         )
         let auth = FirebaseAuthService()
         let user = AppUser(id: "user1", userName: "U", firebaseUID: "user1")
@@ -65,6 +67,7 @@ struct TripTrackerViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
+            syncCoordinator: MockSyncCoordinator(),
             authService: auth
         )
 
@@ -96,6 +99,7 @@ struct TripTrackerViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
+            syncCoordinator: MockSyncCoordinator(),
             authService: auth
         )
 
@@ -137,6 +141,7 @@ struct TripTrackerViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
+            syncCoordinator: MockSyncCoordinator(),
             authService: auth
         )
 
@@ -174,6 +179,7 @@ struct TripTrackerViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
+            syncCoordinator: MockSyncCoordinator(),
             authService: auth
         )
 
@@ -207,6 +213,7 @@ struct TripTrackerViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
+            syncCoordinator: MockSyncCoordinator(),
             authService: auth
         )
 
@@ -238,6 +245,7 @@ struct TripTrackerViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
+            syncCoordinator: MockSyncCoordinator(),
             authService: auth
         )
 
@@ -267,6 +275,7 @@ struct TripTrackerViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
+            syncCoordinator: MockSyncCoordinator(),
             authService: auth
         )
 
@@ -300,6 +309,7 @@ struct TripTrackerViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
+            syncCoordinator: MockSyncCoordinator(),
             authService: auth
         )
 

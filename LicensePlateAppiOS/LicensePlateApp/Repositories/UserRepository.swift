@@ -567,7 +567,7 @@ class UserRepository: ObservableObject {
     }
     
     /// Get user by ID (from SwiftData cache or Firestore)
-    private func getUser(userId: String) async throws -> AppUser? {
+    func getUser(userId: String) async throws -> AppUser? {
         // First check SwiftData cache
         if let modelContext = modelContext {
             let searchUserId = userId
@@ -593,6 +593,12 @@ class UserRepository: ObservableObject {
         cacheUsers([user])
         
         return user
+    }
+
+    func clearActiveFamilyIdFromServer(firebaseUID: String) async throws {
+        try await db.collection("users").document(firebaseUID).updateData([
+            "activeFamilyId": FieldValue.delete()
+        ])
     }
 }
 

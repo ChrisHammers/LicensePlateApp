@@ -60,6 +60,7 @@ class FirebaseAuthService: ObservableObject {
     private let db = Firestore.firestore()
     
     private var modelContext: ModelContext?
+    private weak var syncCoordinator: SyncCoordinatorProtocol?
     private var authStateListener: AuthStateDidChangeListenerHandle?
     private let networkMonitor = NetworkMonitor()
     
@@ -86,6 +87,10 @@ class FirebaseAuthService: ObservableObject {
     
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
+    }
+
+    func setSyncCoordinator(_ coordinator: SyncCoordinatorProtocol) {
+        self.syncCoordinator = coordinator
     }
     
     // MARK: - Network Status
@@ -1296,14 +1301,18 @@ class FirebaseAuthService: ObservableObject {
     }
     
     func saveUserDataToFirestore(_ user: AppUser, extraFields: [String: Any] = [:]) async throws {
+        let syncUserId = user.firebaseUID ?? user.id
         guard isOnline else {
             user.needsSync = true
+            try? syncCoordinator?.enqueueUserProfileSync(userId: syncUserId)
             try? modelContext?.save()
             return
         }
         
         guard let firebaseUID = user.firebaseUID else {
             user.needsSync = true
+            try? syncCoordinator?.enqueueUserProfileSync(userId: syncUserId)
+            try? modelContext?.save()
             return
         }
         

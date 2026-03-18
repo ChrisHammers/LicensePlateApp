@@ -30,6 +30,7 @@ final class TripTrackerViewModel: ObservableObject {
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
     private let lifecycleService: TripSessionLifecycleServiceProtocol
+    private let syncCoordinator: SyncCoordinatorProtocol
     private let authService: FirebaseAuthService
 
     var isTripCreator: Bool {
@@ -49,6 +50,7 @@ final class TripTrackerViewModel: ObservableObject {
         gameInstanceRepository: GameInstanceRepositoryProtocol,
         tripActivityEventRepository: TripActivityEventRepositoryProtocol,
         lifecycleService: TripSessionLifecycleServiceProtocol,
+        syncCoordinator: SyncCoordinatorProtocol,
         authService: FirebaseAuthService
     ) {
         self.sessionId = session.id
@@ -57,6 +59,7 @@ final class TripTrackerViewModel: ObservableObject {
         self.gameInstanceRepository = gameInstanceRepository
         self.tripActivityEventRepository = tripActivityEventRepository
         self.lifecycleService = lifecycleService
+        self.syncCoordinator = syncCoordinator
         self.authService = authService
         self.currentSession = session
         self.foundRegions = (try? tripActivityEventRepository.foundRegions(sessionId: session.id, gameInstanceId: primaryGame.id)) ?? []
@@ -144,6 +147,7 @@ final class TripTrackerViewModel: ObservableObject {
         )
         do {
             try tripActivityEventRepository.append(event)
+            try? syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: event.id)
             refreshFoundRegions()
             rejectedDuplicateMessage = nil
             AnalyticsService.shared.log(.discoveryOutcomeRecorded(
@@ -168,6 +172,7 @@ final class TripTrackerViewModel: ObservableObject {
         let event = TripActivityEvent(sessionId: sessionId, kind: .regionRemoved, payload: payload)
         do {
             try tripActivityEventRepository.append(event)
+            try? syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: event.id)
             let participantId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
             AnalyticsService.shared.log(.discoveryUnfind(
                 tripId: sessionId.uuidString,

@@ -7,7 +7,6 @@
 
 import SwiftUI
 import SwiftData
-import FirebaseFirestore
 
 struct FriendInviteDetail: View {
     let inviteId: String
@@ -127,6 +126,7 @@ struct FriendInviteDetail: View {
             }
             .onAppear {
                 friendshipRepository.setModelContext(modelContext)
+                InviteRepository.shared.setModelContext(modelContext)
             }
             .task {
                 await loadInviteAndUser()
@@ -136,6 +136,8 @@ struct FriendInviteDetail: View {
     
     private func loadInviteAndUser() async {
         isLoadingUser = true
+        
+        let currentUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
         
         // First try to get invite from SwiftData
         let searchInviteId = inviteId
@@ -149,21 +151,9 @@ struct FriendInviteDetail: View {
         
         if let cachedInvite = try? modelContext.fetch(inviteDescriptor).first {
             fromUserId = cachedInvite.fromUserId
-        } else {
-            // If not in cache, fetch from Firestore
-            let db = Firestore.firestore()
-            do {
-                let inviteDoc = try await db.collection("invites").document(inviteId).getDocument()
-                if let data = inviteDoc.data() {
-                    fromUserId = data["fromUserId"] as? String
-                }
-            } catch {
-                print("⚠️ Failed to fetch invite \(inviteId): \(error.localizedDescription)")
-                await MainActor.run {
-                    isLoadingUser = false
-                }
-                return
-            }
+        } else if let currentUserId = currentUserId {
+            await InviteRepository.shared.refreshInvite(inviteId: inviteId, userId: currentUserId)
+            fromUserId = InviteRepository.shared.getInvite(inviteId: inviteId, userId: currentUserId)?.fromUserId
         }
         
         guard let userId = fromUserId else {
@@ -173,82 +163,20 @@ struct FriendInviteDetail: View {
             return
         }
         
-        // Fetch user data
-        await loadUser(userId: userId)
-    }
-    
-    private func loadUser(userId: String) async {
-        // First try to get from SwiftData cache
-        let searchUserId = userId
-        let descriptor = FetchDescriptor<AppUser>(
-            predicate: #Predicate<AppUser> { user in
-                user.id == searchUserId || user.firebaseUID == searchUserId
-            }
-        )
-        
-        if let cachedUser = try? modelContext.fetch(descriptor).first {
-            await MainActor.run {
-                self.user = cachedUser
-                self.isLoadingUser = false
-            }
-            return
-        }
-        
-        // If not in cache, fetch from Firestore
-        let db = Firestore.firestore()
         do {
-            let userDoc = try await db.collection("users").document(userId).getDocument()
-            
-            guard let data = userDoc.data(),
-                  let userName = data["userName"] as? String else {
+            if let fetchedUser = try await UserRepository.shared.getUser(userId: userId) {
                 await MainActor.run {
-                    isLoadingUser = false
+                    self.user = fetchedUser
+                    self.isLoadingUser = false
                 }
                 return
             }
-            
-            let privacy = data["privacy"] as? [String: Any] ?? [:]
-            
-            let fetchedUser = AppUser(
-                id: userId,
-                userName: userName,
-                firstName: data["firstName"] as? String,
-                lastName: data["lastName"] as? String,
-                email: data["email"] as? String,
-                phoneNumber: data["phone"] as? String,
-                createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? .now,
-                lastUpdated: (data["updatedAt"] as? Timestamp)?.dateValue() ?? .now,
-                isEmailPublic: privacy["emailSearchable"] as? Bool ?? false,
-                isPhonePublic: privacy["phoneSearchable"] as? Bool ?? false,
-                isRetiredGeneral: data["isRetiredGeneral"] as? Bool ?? false,
-                activeFamilyId: data["activeFamilyId"] as? String,
-                friendCount: data["friendCount"] as? Int ?? 0,
-                firebaseUID: userId
-            )
-            
-            // Set avatar if available
-            if let avatarColorString = data["avatarColor"] as? String,
-               let avatarColor = AvatarColor(rawValue: avatarColorString) {
-                fetchedUser.avatarColor = avatarColor
-            }
-            if let avatarTypeString = data["avatarType"] as? String,
-               let avatarType = AvatarType(rawValue: avatarTypeString) {
-                fetchedUser.avatarType = avatarType
-            }
-            
-            // Cache in SwiftData
-            modelContext.insert(fetchedUser)
-            try? modelContext.save()
-            
-            await MainActor.run {
-                self.user = fetchedUser
-                self.isLoadingUser = false
-            }
         } catch {
-            print("⚠️ Failed to fetch user \(userId): \(error.localizedDescription)")
-            await MainActor.run {
-                isLoadingUser = false
-            }
+            print("⚠️ Failed to load user \(userId): \(error.localizedDescription)")
+        }
+        
+        await MainActor.run {
+            isLoadingUser = false
         }
     }
     
