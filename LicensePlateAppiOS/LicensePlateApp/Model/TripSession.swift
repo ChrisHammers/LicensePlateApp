@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// Represents a trip in the new gameplay model. Supports solo, collaborative, and competitive modes.
+/// Session/container only: lifecycle, participants, visibility, trip-level status. Board and progress are owned by GameInstance and derived from events; trip-level rollups are provided by projections (e.g. TripRollup).
 final class TripSession {
     var id: UUID
     var name: String

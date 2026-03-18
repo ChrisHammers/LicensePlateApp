@@ -360,7 +360,7 @@ struct ContentView: View {
     private var activeSessionList: some View {
         ForEach(activeTripsListViewModel.items) { item in
             NavigationLink(value: item.session.id) {
-                TripSessionRow(session: item.session, plateCount: item.plateCount)
+                TripSessionRow(session: item.session, rollup: item.rollup)
                     .padding(.vertical, 8)
             }
             .listRowInsets(.init(top: 6, leading: 20, bottom: 6, trailing: 20))

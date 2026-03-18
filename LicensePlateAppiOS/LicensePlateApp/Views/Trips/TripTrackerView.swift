@@ -184,7 +184,7 @@ struct TripTrackerView: View {
         .overlay {
             if showFullScreenMap {
                 FullScreenMapView(
-                    enabledCountries: viewModel.currentSession.enabledCountries,
+                    enabledCountries: gameScopedEnabledCountries,
                     foundRegionIDs: viewModel.foundRegions.map(\.regionID),
                     foundRegions: viewModel.foundRegions,
                     cameraPosition: $cameraPosition,
@@ -207,26 +207,27 @@ struct TripTrackerView: View {
                 selectedTab = .list
             }
             
-            // Initialize camera position based on enabled countries (only once on appear)
+            // Initialize camera position based on game-scoped enabled countries (only once on appear)
+            let countries = gameScopedEnabledCountries
             let center: CLLocationCoordinate2D
             let zoom: Float
-            
-            if viewModel.currentSession.enabledCountries.contains(.unitedStates) && viewModel.currentSession.enabledCountries.contains(.canada) && viewModel.currentSession.enabledCountries.contains(.mexico) {
+
+            if countries.contains(.unitedStates) && countries.contains(.canada) && countries.contains(.mexico) {
                 center = CLLocationCoordinate2D(latitude: 45.0, longitude: -100.0)
                 zoom = 3.5
-            } else if viewModel.currentSession.enabledCountries.contains(.unitedStates) && viewModel.currentSession.enabledCountries.contains(.canada) {
+            } else if countries.contains(.unitedStates) && countries.contains(.canada) {
                 center = CLLocationCoordinate2D(latitude: 50.0, longitude: -100.0)
                 zoom = 3.8
-            } else if viewModel.currentSession.enabledCountries.contains(.unitedStates) && viewModel.currentSession.enabledCountries.contains(.mexico) {
+            } else if countries.contains(.unitedStates) && countries.contains(.mexico) {
                 center = CLLocationCoordinate2D(latitude: 32.0, longitude: -100.0)
                 zoom = 4.0
-            } else if viewModel.currentSession.enabledCountries.contains(.unitedStates) {
+            } else if countries.contains(.unitedStates) {
                 center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
                 zoom = 4.0
-            } else if viewModel.currentSession.enabledCountries.contains(.canada) {
+            } else if countries.contains(.canada) {
                 center = CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468)
                 zoom = 4.5
-            } else if viewModel.currentSession.enabledCountries.contains(.mexico) {
+            } else if countries.contains(.mexico) {
                 center = CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528)
                 zoom = 5.5
             } else {
@@ -293,6 +294,30 @@ struct TripTrackerView: View {
         }
     }
 
+    /// Game-scoped enabled countries (and regions) for board/progress. Uses primary game's license-plate config when available; else session.
+    private var gameScopedEnabledCountries: [PlateRegion.Country] {
+        if let config = primaryGame.licensePlateConfig() {
+            let targetIds = Set(LicensePlateScopeCalculator.targetRegionIds(for: config))
+            return Array(Set(PlateRegion.all.filter { targetIds.contains($0.id) }.map(\.country)))
+        }
+        return viewModel.currentSession.enabledCountries
+    }
+
+    private var headerFoundValue: String {
+        "\(viewModel.foundRegions.count)"
+    }
+
+    /// Remaining count: game-scoped (primary game completion goal) when license-plate; else session-enabled region count.
+    private var headerRemainingValue: String {
+        let foundCount = viewModel.foundRegions.count
+        if let lpConfig = primaryGame.licensePlateConfig() {
+            let goal = LicensePlateScopeCalculator.completionGoal(for: lpConfig)
+            return "\(max(0, goal - foundCount))"
+        }
+        let enabledRegions = PlateRegion.all.filter { gameScopedEnabledCountries.contains($0.country) }
+        return "\(enabledRegions.count - foundCount)"
+    }
+
     private var header: some View {
         VStack(spacing: 16) {
 //            Text(currentSession.name)
@@ -300,9 +325,9 @@ struct TripTrackerView: View {
 //                .fontWeight(.bold)
 //                .foregroundStyle(Color.Theme.primaryBlue)
 
-          // Map view
+          // Map view (game-scoped when primary game is license-plate)
           RegionMapView(
-              enabledCountries: viewModel.currentSession.enabledCountries,
+              enabledCountries: gameScopedEnabledCountries,
               foundRegionIDs: viewModel.foundRegions.map(\.regionID),
               foundRegions: viewModel.foundRegions,
               visibleCountry: visibleCountry,
@@ -316,17 +341,9 @@ struct TripTrackerView: View {
           .padding(.horizontal, 32)
           
             HStack(spacing: 24) {
-                // Calculate remaining based on enabled countries only
-                let enabledRegions = PlateRegion.all.filter { viewModel.currentSession.enabledCountries.contains($0.country) }
-                let foundValue = "\(viewModel.foundRegions.map(\.regionID).count)"
-                let remainingValue = "\(enabledRegions.count - viewModel.foundRegions.map(\.regionID).count)"
-                
-                summaryChip(title: "Found".localized, value: foundValue, measuredWidth: $chipWidth, measuredHeight: $chipHeight)
-              
-                // Start/End Trip Button
+                summaryChip(title: "Found".localized, value: headerFoundValue, measuredWidth: $chipWidth, measuredHeight: $chipHeight)
                 startEndTripButton(height: chipHeight)
-              
-                summaryChip(title: "Remaining".localized, value: remainingValue, measuredWidth: $chipWidth, measuredHeight: $chipHeight)
+                summaryChip(title: "Remaining".localized, value: headerRemainingValue, measuredWidth: $chipWidth, measuredHeight: $chipHeight)
             }
             .padding(.horizontal, 32)
             
@@ -526,8 +543,8 @@ struct TripTrackerView: View {
      }
   
     private var regionList: some View {
-        // Filter regions to only show enabled countries
-        let enabledCountries = viewModel.currentSession.enabledCountries
+        // Filter regions by game-scoped enabled countries (primary game when license-plate)
+        let enabledCountries = gameScopedEnabledCountries
         let filteredGroups = PlateRegion.groupedByCountry().filter { enabledCountries.contains($0.country) }
         
         return List {
@@ -861,10 +878,10 @@ struct TripTrackerView: View {
         var bestMatch: PlateRegion?
         var bestMatchScore = 0
         
-        // Only search in enabled countries
-        let enabledCountries = viewModel.currentSession.enabledCountries
+        // Only search in game-scoped enabled regions
+        let enabledCountries = gameScopedEnabledCountries
         let enabledRegions = PlateRegion.all.filter { enabledCountries.contains($0.country) }
-        
+
         for region in enabledRegions {
             let normalizedRegionName = region.name.lowercased()
             let regionWords = normalizedRegionName.components(separatedBy: " ").filter { !$0.isEmpty }

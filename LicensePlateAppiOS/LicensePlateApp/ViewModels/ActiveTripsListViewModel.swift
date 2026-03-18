@@ -8,11 +8,11 @@
 import Foundation
 import Combine
 
-/// Item for the Active Trips list: session and derived plate count from events.
+/// Item for the Active Trips list: session and trip-level rollup (game-scoped progress via rollup.primaryGame*).
 struct ActiveListItem: Identifiable {
     var id: UUID { session.id }
     let session: TripSession
-    let plateCount: Int
+    let rollup: TripRollup
 }
 
 @MainActor
@@ -49,8 +49,10 @@ final class ActiveTripsListViewModel: ObservableObject {
             let sorted = sessions.sorted { ($0.startedAt ?? .distantPast) > ($1.startedAt ?? .distantPast) }
             var list: [ActiveListItem] = []
             for session in sorted {
-                let count = (try? tripActivityEventRepository.foundRegions(sessionId: session.id, gameInstanceId: nil))?.count ?? 0
-                list.append(ActiveListItem(session: session, plateCount: count))
+                let games = (try? gameInstanceRepository.fetchByTripSession(sessionId: session.id)) ?? []
+                let discoveries = (try? tripActivityEventRepository.discoveries(sessionId: session.id, gameInstanceId: nil)) ?? []
+                let rollup = TripRollup.build(session: session, games: games, discoveries: discoveries)
+                list.append(ActiveListItem(session: session, rollup: rollup))
             }
             items = list
         } catch {
