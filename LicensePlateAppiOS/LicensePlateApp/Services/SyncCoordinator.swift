@@ -21,6 +21,8 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
 
     private let repository: SyncQueueRepositoryProtocol
     private var userSyncExecutor: UserSyncExecutorProtocol?
+    private var lastProcessPendingRunAt: Date?
+    private let processPendingMinInterval: TimeInterval = 30
 
     init(repository: SyncQueueRepositoryProtocol, userSyncExecutor: UserSyncExecutorProtocol? = nil) {
         self.repository = repository
@@ -65,6 +67,12 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
 
     func processPendingSyncItems() async {
         guard let userSyncExecutor else { return }
+        let now = Date()
+        if let last = lastProcessPendingRunAt, now.timeIntervalSince(last) < processPendingMinInterval {
+            return
+        }
+        lastProcessPendingRunAt = now
+
         let pending = (try? repository.fetchPending(limit: 50)) ?? []
         let retryDue = (try? repository.fetchFailedRetryDue()) ?? []
         let candidates = Dictionary(uniqueKeysWithValues: (pending + retryDue).map { ($0.id, $0) }).values.sorted { $0.createdAt < $1.createdAt }
