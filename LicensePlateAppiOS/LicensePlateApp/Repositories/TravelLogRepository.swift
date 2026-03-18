@@ -3,6 +3,7 @@
 //  LicensePlateApp
 //
 //  Projection of completed trip sessions for Travel Log. Step 03 — repository layer.
+//  Composes TripSessionRepository and GameInstanceRepository; no direct entity access.
 //
 
 import Foundation
@@ -12,103 +13,64 @@ import Combine
 @MainActor
 final class TravelLogRepository: ObservableObject, TravelLogRepositoryProtocol {
 
-    static let shared = TravelLogRepository()
+    static let shared = TravelLogRepository(
+        tripSessionRepository: TripSessionRepository.shared,
+        gameInstanceRepository: GameInstanceRepository.shared
+    )
 
-    private var modelContext: ModelContext?
+    private let tripSessionRepository: TripSessionRepositoryProtocol
+    private let gameInstanceRepository: GameInstanceRepositoryProtocol
 
-    private init() {}
+    init(tripSessionRepository: TripSessionRepositoryProtocol, gameInstanceRepository: GameInstanceRepositoryProtocol) {
+        self.tripSessionRepository = tripSessionRepository
+        self.gameInstanceRepository = gameInstanceRepository
+    }
 
     func setModelContext(_ context: ModelContext) {
-        self.modelContext = context
+        // No-op: session and game repos receive context from RootView/ContentView.
     }
 
     // MARK: - Completed sessions (domain)
 
     func fetchCompletedSessions(userId: String?, limit: Int) throws -> [TripSession] {
-        guard let ctx = modelContext else { throw TravelLogRepositoryError.noModelContext }
-        let ended = TripStatus.ended.rawValue
-        var descriptor = FetchDescriptor<TripSessionEntity>(
-            predicate: #Predicate<TripSessionEntity> { $0.status == ended }
+        try tripSessionRepository.loadArchivedSessions(
+            userId: userId,
+            limit: limit,
+            includeCancelled: false,
+            sortBy: .endedAtDesc
         )
-        descriptor.sortBy = [SortDescriptor(\.endedAt, order: .reverse)]
-        descriptor.fetchLimit = limit
-        var entities = try ctx.fetch(descriptor)
-        if let uid = userId {
-            entities = entities.filter { entity in
-                entity.createdBy == uid || participantIds(from: entity.participantsData).contains(uid)
-            }
-        }
-        return entities.map { TripSessionEntityMapper.toDomain($0) }
     }
 
     // MARK: - Summary projections (TravelLogEntry)
 
     func getSummaryProjections(userId: String?, sortBy: TravelLogSort, limit: Int, statusFilter: TravelLogStatusFilter = .endedOnly) throws -> [TravelLogEntry] {
-        guard let ctx = modelContext else { throw TravelLogRepositoryError.noModelContext }
-        let ended = TripStatus.ended.rawValue
-        let cancelled = TripStatus.cancelled.rawValue
-        var descriptor: FetchDescriptor<TripSessionEntity>
-        switch statusFilter {
-        case .endedOnly:
-            descriptor = FetchDescriptor<TripSessionEntity>(
-                predicate: #Predicate<TripSessionEntity> { $0.status == ended }
-            )
-        case .endedAndCancelled:
-            descriptor = FetchDescriptor<TripSessionEntity>(
-                predicate: #Predicate<TripSessionEntity> { $0.status == ended || $0.status == cancelled }
-            )
-        }
-        switch sortBy {
-        case .endedAtDesc:
-            descriptor.sortBy = [SortDescriptor(\.endedAt, order: .reverse)]
-        case .endedAtAsc:
-            descriptor.sortBy = [SortDescriptor(\.endedAt, order: .forward)]
-        }
-        descriptor.fetchLimit = limit
-        var entities = try ctx.fetch(descriptor)
-        if let uid = userId {
-            entities = entities.filter { entity in
-                entity.createdBy == uid || participantIds(from: entity.participantsData).contains(uid)
-            }
-        }
-        return entities.compactMap { entity -> TravelLogEntry? in
-            guard let endedAt = entity.endedAt,
-                  let sessionId = UUID(uuidString: entity.id) else { return nil }
-            let participantCount = participantIds(from: entity.participantsData).count
-            let gameCount = gameCountForSession(sessionId: entity.id, context: ctx)
-            let status = TripStatus(rawValue: entity.status) ?? .ended
+        let sessions = try tripSessionRepository.loadArchivedSessions(
+            userId: userId,
+            limit: limit,
+            includeCancelled: statusFilter == .endedAndCancelled,
+            sortBy: sortBy
+        )
+        var entries: [TravelLogEntry] = []
+        for session in sessions {
+            guard let endedAt = session.endedAt else { continue }
+            let participantCount = session.participants.count
+            let gameCount = try gameInstanceRepository.gameCount(sessionId: session.id)
             let summary = participantCount > 0
                 ? "\(participantCount) participant(s)"
                 : "Trip completed"
-            return TravelLogEntry(
-                id: entity.id,
-                sessionId: sessionId,
-                tripName: entity.name,
+            entries.append(TravelLogEntry(
+                id: session.id.uuidString,
+                sessionId: session.id,
+                tripName: session.name,
                 endedAt: endedAt,
                 summary: summary,
                 locationMetadata: nil,
                 participantCount: participantCount,
                 gameCount: gameCount,
-                status: status
-            )
+                status: session.status
+            ))
         }
-    }
-
-    // MARK: - Helpers
-
-    private func participantIds(from participantsData: Data?) -> Set<String> {
-        guard let data = participantsData,
-              let participants = try? JSONDecoder().decode([TripParticipant].self, from: data) else {
-            return []
-        }
-        return Set(participants.map(\.userId))
-    }
-
-    private func gameCountForSession(sessionId: String, context: ModelContext) -> Int {
-        let descriptor = FetchDescriptor<GameInstanceEntity>(
-            predicate: #Predicate<GameInstanceEntity> { $0.sessionId == sessionId }
-        )
-        return (try? context.fetchCount(descriptor)) ?? 0
+        return entries
     }
 }
 

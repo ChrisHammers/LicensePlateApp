@@ -33,6 +33,20 @@ final class MockGameInstanceRepository: GameInstanceRepositoryProtocol {
         return bySession[sessionId] ?? []
     }
 
+    func gameCount(sessionId: UUID) throws -> Int {
+        if shouldThrow { throw NSError(domain: "MockGameInstanceRepository", code: -1, userInfo: nil) }
+        return (bySession[sessionId] ?? []).count
+    }
+
+    func deleteForSession(sessionId: UUID) throws {
+        if shouldThrow { throw NSError(domain: "MockGameInstanceRepository", code: -1, userInfo: nil) }
+        guard let list = bySession[sessionId] else { return }
+        for instance in list {
+            instances.removeValue(forKey: instance.id)
+        }
+        bySession.removeValue(forKey: sessionId)
+    }
+
     func update(instance: GameInstance) throws {
         if shouldThrow { throw NSError(domain: "MockGameInstanceRepository", code: -1, userInfo: nil) }
         instances[instance.id] = instance

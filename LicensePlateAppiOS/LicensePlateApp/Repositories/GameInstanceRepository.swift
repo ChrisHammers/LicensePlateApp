@@ -44,6 +44,35 @@ final class GameInstanceRepository: ObservableObject, GameInstanceRepositoryProt
         return entities.map { GameInstanceMapper.toDomain($0) }
     }
 
+    func gameCount(sessionId: UUID) throws -> Int {
+        guard let ctx = modelContext else { throw GameInstanceRepositoryError.noModelContext }
+        let sid = sessionId.uuidString
+        let descriptor = FetchDescriptor<GameInstanceEntity>(
+            predicate: #Predicate<GameInstanceEntity> { $0.sessionId == sid }
+        )
+        return try ctx.fetchCount(descriptor)
+    }
+
+    func deleteForSession(sessionId: UUID) throws {
+        guard let ctx = modelContext else { throw GameInstanceRepositoryError.noModelContext }
+        let sid = sessionId.uuidString
+        let descriptor = FetchDescriptor<GameInstanceEntity>(
+            predicate: #Predicate<GameInstanceEntity> { $0.sessionId == sid }
+        )
+        let entities = try ctx.fetch(descriptor)
+        for entity in entities {
+            let instanceId = entity.id
+            let snapshotDescriptor = FetchDescriptor<GameScoreSnapshotEntity>(
+                predicate: #Predicate<GameScoreSnapshotEntity> { $0.gameInstanceId == instanceId }
+            )
+            for snapshot in try ctx.fetch(snapshotDescriptor) {
+                ctx.delete(snapshot)
+            }
+            ctx.delete(entity)
+        }
+        try ctx.save()
+    }
+
     func instance(byId id: UUID) throws -> GameInstance? {
         guard let ctx = modelContext else { throw GameInstanceRepositoryError.noModelContext }
         let descriptor = FetchDescriptor<GameInstanceEntity>(

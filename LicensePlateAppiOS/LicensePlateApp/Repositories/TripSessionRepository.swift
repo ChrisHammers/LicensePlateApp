@@ -76,16 +76,24 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
         return entities.map { TripSessionEntityMapper.toDomain($0, teamsData: teamsMap[$0.id].flatMap { $0 }) }
     }
 
-    func loadArchivedSessions(userId: String?, limit: Int) throws -> [TripSession] {
+    func loadArchivedSessions(userId: String?, limit: Int, includeCancelled: Bool, sortBy: TravelLogSort) throws -> [TripSession] {
         guard let ctx = modelContext else { throw TripSessionRepositoryError.noModelContext }
         let ended = TripStatus.ended.rawValue
         let cancelled = TripStatus.cancelled.rawValue
-        var descriptor = FetchDescriptor<TripSessionEntity>(
-            predicate: #Predicate<TripSessionEntity> { $0.status == ended || $0.status == cancelled }
-        )
-        descriptor.sortBy = [SortDescriptor(\.endedAt, order: .reverse)]
-        descriptor.fetchLimit = limit
-        var entities = try ctx.fetch(descriptor)
+        let descriptor: FetchDescriptor<TripSessionEntity>
+        if includeCancelled {
+            descriptor = FetchDescriptor<TripSessionEntity>(
+                predicate: #Predicate<TripSessionEntity> { $0.status == ended || $0.status == cancelled }
+            )
+        } else {
+            descriptor = FetchDescriptor<TripSessionEntity>(
+                predicate: #Predicate<TripSessionEntity> { $0.status == ended }
+            )
+        }
+        var mutableDescriptor = descriptor
+        mutableDescriptor.sortBy = [SortDescriptor(\.endedAt, order: sortBy == .endedAtDesc ? .reverse : .forward)]
+        mutableDescriptor.fetchLimit = limit
+        var entities = try ctx.fetch(mutableDescriptor)
         if let uid = userId {
             entities = entities.filter { entity in
                 entity.createdBy == uid || participantIds(from: entity.participantsData).contains(uid)

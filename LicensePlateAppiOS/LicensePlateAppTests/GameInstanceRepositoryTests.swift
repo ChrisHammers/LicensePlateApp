@@ -43,6 +43,41 @@ struct GameInstanceRepositoryTests {
         #expect(bySession[0].sessionId == sessionId)
     }
 
+    @Test func gameCountReturnsZeroWhenEmptyAndCountWhenInstancesExist() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = GameInstanceRepository.shared
+        repo.setModelContext(context)
+
+        let sessionId = UUID()
+        #expect(try repo.gameCount(sessionId: sessionId) == 0)
+
+        let instance = GameInstance(definitionId: "license_plate", sessionId: sessionId, ruleSet: GameRuleSet(gameDefinitionId: "license_plate"))
+        try repo.create(instance: instance)
+        #expect(try repo.gameCount(sessionId: sessionId) == 1)
+
+        let instance2 = GameInstance(definitionId: "other", sessionId: sessionId, ruleSet: GameRuleSet(gameDefinitionId: "other"))
+        try repo.create(instance: instance2)
+        #expect(try repo.gameCount(sessionId: sessionId) == 2)
+    }
+
+    @Test func deleteForSessionRemovesAllInstancesForSession() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = GameInstanceRepository.shared
+        repo.setModelContext(context)
+
+        let sessionId = UUID()
+        let instance = GameInstance(definitionId: "license_plate", sessionId: sessionId, ruleSet: GameRuleSet(gameDefinitionId: "license_plate"))
+        try repo.create(instance: instance)
+        #expect(try repo.fetchByTripSession(sessionId: sessionId).count == 1)
+        #expect(try repo.gameCount(sessionId: sessionId) == 1)
+
+        try repo.deleteForSession(sessionId: sessionId)
+        #expect(try repo.fetchByTripSession(sessionId: sessionId).isEmpty)
+        #expect(try repo.gameCount(sessionId: sessionId) == 0)
+    }
+
     @Test func instanceByIdReturnsNilWhenMissing() async throws {
         let container = try makeContainer()
         let context = ModelContext(container)

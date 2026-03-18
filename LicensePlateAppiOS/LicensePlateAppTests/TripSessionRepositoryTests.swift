@@ -143,9 +143,45 @@ struct TripSessionRepositoryTests {
         let activeSession = TripSession(name: "Active Trip", status: .active, mode: .solo, startedAt: Date())
         try repo.create(session: activeSession)
 
-        let archived = try repo.loadArchivedSessions(userId: nil, limit: 10)
+        let archived = try repo.loadArchivedSessions(userId: nil, limit: 10, includeCancelled: false, sortBy: .endedAtDesc)
         #expect(archived.count == 1)
         #expect(archived[0].name == "Ended Trip")
+    }
+
+    @Test func loadArchivedSessionsIncludeCancelledFalseExcludesCancelled() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = TripSessionRepository.shared
+        repo.setModelContext(context)
+
+        let endedSession = TripSession(name: "Ended", status: .ended, mode: .solo, endedAt: Date())
+        try repo.create(session: endedSession)
+        var cancelledSession = TripSession(name: "Cancelled", status: .active, mode: .solo)
+        try repo.create(session: cancelledSession)
+        try repo.updateStatus(sessionId: cancelledSession.id, status: .cancelled)
+
+        let archived = try repo.loadArchivedSessions(userId: nil, limit: 10, includeCancelled: false, sortBy: .endedAtDesc)
+        #expect(archived.count == 1)
+        #expect(archived[0].name == "Ended")
+    }
+
+    @Test func loadArchivedSessionsSortByEndedAtAsc() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = TripSessionRepository.shared
+        repo.setModelContext(context)
+
+        let older = Date().addingTimeInterval(-200)
+        let newer = Date().addingTimeInterval(-100)
+        let session1 = TripSession(name: "Older", status: .ended, mode: .solo, endedAt: older)
+        let session2 = TripSession(name: "Newer", status: .ended, mode: .solo, endedAt: newer)
+        try repo.create(session: session1)
+        try repo.create(session: session2)
+
+        let archived = try repo.loadArchivedSessions(userId: nil, limit: 10, includeCancelled: true, sortBy: .endedAtAsc)
+        #expect(archived.count == 2)
+        #expect(archived[0].name == "Older")
+        #expect(archived[1].name == "Newer")
     }
 
     @Test func lastSyncedAtReturnsNil() async throws {
