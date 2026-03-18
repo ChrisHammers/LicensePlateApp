@@ -12,18 +12,16 @@ import AVFoundation
 import UserNotifications
 import Speech
 
-/// Item for the Active Trips list: session and derived plate count from events.
-private struct ActiveListItem: Identifiable {
-    var id: UUID { session.id }
-    let session: TripSession
-    let plateCount: Int
-}
-
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
     @State private var path: [UUID] = []
-    @State private var activeListItems: [ActiveListItem] = []
+    @StateObject private var activeTripsListViewModel = ActiveTripsListViewModel(
+        tripSessionRepository: TripSessionRepository.shared,
+        tripActivityEventRepository: TripActivityEventRepository.shared,
+        gameInstanceRepository: GameInstanceRepository.shared,
+        lifecycleService: TripSessionLifecycleService.shared
+    )
     @State private var isShowingCreateSheet = false
     @State private var isShowingSettings = false
 //    @State private var isShowingPendingInvites = false
@@ -93,7 +91,7 @@ struct ContentView: View {
                     .textCase(nil)
 
                     // 1. Active Trips (session-based)
-                    if activeListItems.isEmpty {
+                    if activeTripsListViewModel.items.isEmpty {
                         Section("Active Trips".localized) {
                             activeTripEmptyCard
                                 .listRowInsets(.init(top: 0, leading: 20, bottom: 24, trailing: 20))
@@ -197,7 +195,7 @@ struct ContentView: View {
                       InviteRepository.shared.startListening(userId: userId)
                   }
                   pendingTripsViewModel.loadIfNeeded()
-                  loadActiveList()
+                  activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
                 }
                 .onAppear {
                   pendingTripsViewModel.setAuthService(authService)
@@ -222,7 +220,7 @@ struct ContentView: View {
                         onCreated: { session in
                             path.append(session.id)
                             isShowingCreateSheet = false
-                            loadActiveList()
+                            activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
                         }
                     )
                     .presentationDetents([smallDetent, .medium, .large], selection: $sheetDetent)
@@ -232,17 +230,25 @@ struct ContentView: View {
                     }
                 }
                 .onChange(of: isShowingCreateSheet) { _, isShowing in
-                    if !isShowing { loadActiveList() }
+                    if !isShowing { activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id) }
+                }
+                .alert("Error".localized, isPresented: Binding(
+                    get: { activeTripsListViewModel.errorMessage != nil },
+                    set: { if !$0 { activeTripsListViewModel.clearError() } }
+                )) {
+                    Button("OK".localized, role: .cancel) { activeTripsListViewModel.clearError() }
+                    Button("Retry".localized) {
+                        AnalyticsService.shared.log(.persistenceRetryTapped(context: "active_list_delete"))
+                        activeTripsListViewModel.retryLastDelete()
+                    }
+                } message: {
+                    if let msg = activeTripsListViewModel.errorMessage {
+                        Text(msg)
+                    }
                 }
                 .navigationDestination(for: UUID.self) { sessionID in
-                    if let session = try? TripSessionRepository.shared.session(byId: sessionID) {
-                        let games = (try? GameInstanceRepository.shared.fetchByTripSession(sessionId: sessionID)) ?? []
-                        let primaryGame = games.first(where: { $0.definitionId == GameType.licensePlate.rawValue }) ?? games.first
-                        if let primaryGame = primaryGame {
-                            TripTrackerView(session: session, primaryGame: primaryGame)
-                        } else {
-                            TripMissingView()
-                        }
+                    if let (session, primaryGame) = activeTripsListViewModel.sessionAndPrimaryGame(for: sessionID) {
+                        TripTrackerView(session: session, primaryGame: primaryGame, authService: authService)
                     } else {
                         TripMissingView()
                     }
@@ -352,7 +358,7 @@ struct ContentView: View {
     }
 
     private var activeSessionList: some View {
-        ForEach(activeListItems) { item in
+        ForEach(activeTripsListViewModel.items) { item in
             NavigationLink(value: item.session.id) {
                 TripSessionRow(session: item.session, plateCount: item.plateCount)
                     .padding(.vertical, 8)
@@ -362,41 +368,15 @@ struct ContentView: View {
             .accessibilityLabel("Trip: %@".localized(item.session.name))
             .accessibilityHint("Double tap to open trip".localized)
         }
-        .onDelete(perform: deleteActiveItems)
-    }
-
-    private func loadActiveList() {
-        let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
-        do {
-            let activeSessions = try TripSessionRepository.shared.loadActiveSessions(userId: userId)
-            let sorted = activeSessions.sorted { ($0.startedAt ?? .distantPast) > ($1.startedAt ?? .distantPast) }
-            activeListItems = sorted.map { session in
-                let count = (try? TripActivityEventRepository.shared.foundRegions(sessionId: session.id, gameInstanceId: nil))?.count ?? 0
-                return ActiveListItem(session: session, plateCount: count)
+        .onDelete { offsets in
+            FeedbackService.shared.buttonTap()
+            activeTripsListViewModel.deleteSessions(at: offsets, userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
+            if activeTripsListViewModel.errorMessage == nil {
+                FeedbackService.shared.actionSuccess()
+            } else {
+                FeedbackService.shared.actionError()
             }
-        } catch {
-            activeListItems = []
         }
-    }
-
-    private func deleteActiveItems(at offsets: IndexSet) {
-        FeedbackService.shared.buttonTap()
-        for index in offsets {
-            let item = activeListItems[index]
-            guard let session = try? TripSessionRepository.shared.session(byId: item.session.id) else { continue }
-            var updated = session
-            updated.status = .cancelled
-            updated.endedAt = Date()
-            try? TripSessionRepository.shared.save(session: updated)
-        }
-        do {
-            try modelContext.save()
-            FeedbackService.shared.actionSuccess()
-        } catch {
-            FeedbackService.shared.actionError()
-            assertionFailure("Failed to save after delete: \(error)")
-        }
-        loadActiveList()
     }
 
     private var addTripButton: some View {
@@ -620,7 +600,13 @@ struct DefaultSettingsView: View {
     @AppStorage("appLanguage") private var appLanguageRaw: String = AppLanguage.english.rawValue
     @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
     @AppStorage("appUseVibrations") private var appUseVibrations = true
-    
+
+    #if DEBUG
+    @AppStorage("DebugForcePersistenceSave") private var forceFailureOnSave = false
+    @AppStorage("DebugForcePersistenceCreate") private var forceFailureOnCreate = false
+    @AppStorage("DebugForcePersistenceAppend") private var forceFailureOnAppend = false
+    #endif
+
     @EnvironmentObject var authService: FirebaseAuthService
     @Environment(\.modelContext) private var modelContext
     
@@ -739,6 +725,31 @@ struct DefaultSettingsView: View {
                         .listRowBackground(Color.clear)
                     }
                     .textCase(nil)
+
+                    #if DEBUG
+                    Section {
+                        Toggle(isOn: $forceFailureOnSave) {
+                            Text("Force failure on save".localized)
+                        }
+                        .accessibilityLabel("Force failure on save".localized)
+                        .accessibilityHint("Next session save will fail (settings save, start/end/reset/delete trip)")
+
+                        Toggle(isOn: $forceFailureOnCreate) {
+                            Text("Force failure on create".localized)
+                        }
+                        .accessibilityLabel("Force failure on create".localized)
+                        .accessibilityHint("Next session create will fail (create trip)")
+
+                        Toggle(isOn: $forceFailureOnAppend) {
+                            Text("Force failure on append".localized)
+                        }
+                        .accessibilityLabel("Force failure on append".localized)
+                        .accessibilityHint("Next event append will fail (mark found, unfind, lifecycle events)")
+                    } header: {
+                        Text("Debug – Force persistence failures".localized)
+                    }
+                    .accessibilityElement(children: .contain)
+                    #endif
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
@@ -816,6 +827,25 @@ struct DefaultSettingsView: View {
     ContentView()
         .environmentObject(FirebaseAuthService())
         .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self, TripActivityEventEntity.self], inMemory: true)
+}
+
+/// Step 05 — Preview for persistence error state (same copy as alert message for design/accessibility).
+#Preview("Persistence error state") {
+    VStack(spacing: 16) {
+        Image(systemName: "exclamationmark.triangle.fill")
+            .font(.largeTitle)
+            .foregroundStyle(.orange)
+        Text("Error".localized)
+            .font(.headline)
+        Text("Couldn't save. Please try again.")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+    }
+    .padding()
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("Error".localized)
+    .accessibilityHint("Couldn't save. Please try again.")
 }
 
 // MARK: - Permission Row Component

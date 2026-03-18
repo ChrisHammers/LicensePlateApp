@@ -131,6 +131,8 @@ class AnalyticsService: AnalyticsLogging {
         case tripSessionCreated(tripId: String, tripStatus: String, tripParticipantCount: Int?, tripActiveGameCount: Int?, tripSource: String?)
         case tripSessionStarted(tripId: String, tripActiveGameCount: Int?)
         case tripSessionEnded(tripId: String)
+        case tripSessionReset(tripId: String, gameInstanceId: String)
+        case tripSessionDeleted(tripId: String)
         case tripSessionCompleted(tripId: String)
         case gameInstanceCreated(gameInstanceId: String, gameType: String, gameMode: String, tripId: String, gameOrderInTrip: Int?)
         case gameInstanceStarted(gameInstanceId: String, gameType: String, gameLifecycleState: String, configLockReason: String)
@@ -155,6 +157,15 @@ class AnalyticsService: AnalyticsLogging {
 
         // Risk advisory (Step 11)
         case riskAdvisoryDetected(flags: [String], tripId: String)
+
+        // Discovery outcome (Step 03 — rules engine)
+        case discoveryOutcomeRecorded(tripId: String, gameInstanceId: String, targetId: String, outcome: String, participantId: String?)
+        case discoveryRejectedDuplicate(tripId: String, gameInstanceId: String, targetId: String, participantId: String?, mode: String)
+        case discoveryUnfind(tripId: String, gameInstanceId: String, targetId: String, participantId: String?)
+
+        // Persistence (Step 05)
+        case persistenceSaveFailed(context: String, error: String)
+        case persistenceRetryTapped(context: String)
 
         // Notifications & eligibility (Step 08)
         case notificationEligibilityChecked(kind: String, eligible: Bool)
@@ -250,6 +261,8 @@ class AnalyticsService: AnalyticsLogging {
             case .tripSessionCreated: return "trip_session_created"
             case .tripSessionStarted: return "trip_session_started"
             case .tripSessionEnded: return "trip_session_ended"
+            case .tripSessionReset: return "trip_session_reset"
+            case .tripSessionDeleted: return "trip_session_deleted"
             case .tripSessionCompleted: return "trip_session_completed"
             case .gameInstanceCreated: return "game_instance_created"
             case .gameInstanceStarted: return "game_instance_started"
@@ -280,6 +293,11 @@ class AnalyticsService: AnalyticsLogging {
             case .restoreCompleted: return "restore_completed"
             case .restoreFailed: return "restore_failed"
             case .riskAdvisoryDetected: return "risk_advisory_detected"
+            case .discoveryOutcomeRecorded: return "discovery_outcome_recorded"
+            case .discoveryRejectedDuplicate: return "discovery_rejected_duplicate"
+            case .discoveryUnfind: return "discovery_unfind"
+            case .persistenceSaveFailed: return "persistence_save_failed"
+            case .persistenceRetryTapped: return "persistence_retry_tapped"
             }
         }
         
@@ -370,6 +388,10 @@ class AnalyticsService: AnalyticsLogging {
                 return p
             case .tripSessionEnded(let tripId), .tripSessionCompleted(let tripId):
                 return ["trip_id": tripId]
+            case .tripSessionReset(let tripId, let gameInstanceId):
+                return ["trip_id": tripId, "game_instance_id": gameInstanceId]
+            case .tripSessionDeleted(let tripId):
+                return ["trip_id": tripId]
             case .gameInstanceCreated(let gameInstanceId, let gameType, let gameMode, let tripId, let gameOrderInTrip):
                 var p: [String: Any] = ["game_instance_id": gameInstanceId, "game_type": gameType, "game_mode": gameMode, "trip_id": tripId]
                 if let o = gameOrderInTrip { p["game_order_in_trip"] = o }
@@ -406,6 +428,22 @@ class AnalyticsService: AnalyticsLogging {
                 return ["event_name": eventName, "error": error]
             case .riskAdvisoryDetected(let flags, let tripId):
                 return ["risk_flags": flags.joined(separator: ","), "trip_id": tripId]
+            case .discoveryOutcomeRecorded(let tripId, let gameInstanceId, let targetId, let outcome, let participantId):
+                var p: [String: Any] = ["trip_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "outcome": outcome]
+                if let id = participantId { p["participant_id"] = id }
+                return p
+            case .discoveryRejectedDuplicate(let tripId, let gameInstanceId, let targetId, let participantId, let mode):
+                var p: [String: Any] = ["trip_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "mode": mode]
+                if let id = participantId { p["participant_id"] = id }
+                return p
+            case .discoveryUnfind(let tripId, let gameInstanceId, let targetId, let participantId):
+                var p: [String: Any] = ["trip_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId]
+                if let id = participantId { p["participant_id"] = id }
+                return p
+            case .persistenceSaveFailed(let context, let error):
+                return ["context": context, "error": error]
+            case .persistenceRetryTapped(let context):
+                return ["context": context]
             case .notificationEligibilityChecked(let kind, let eligible):
                 return ["kind": kind, "eligible": eligible]
             case .notificationDeliveredTripInvite:
@@ -447,12 +485,25 @@ class AnalyticsService: AnalyticsLogging {
     func log(_ event: Event) {
         let parameters = event.parameters ?? [:]
         Analytics.logEvent(event.name, parameters: parameters)
+        #if DEBUG
+        Self.debugPrintEvent(event.name, parameters: parameters)
+        #endif
     }
-    
+
     /// Log with custom parameters
     func log(_ eventName: String, parameters: [String: Any] = [:]) {
         Analytics.logEvent(eventName, parameters: parameters)
+        #if DEBUG
+        Self.debugPrintEvent(eventName, parameters: parameters)
+        #endif
     }
+
+    #if DEBUG
+    private static func debugPrintEvent(_ name: String, parameters: [String: Any]) {
+        let paramStr = parameters.isEmpty ? "" : " " + parameters.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
+        print("[Analytics] \(name)\(paramStr)")
+    }
+    #endif
 
     // MARK: - Screen view & user properties (Step 10)
 
@@ -464,6 +515,9 @@ class AnalyticsService: AnalyticsLogging {
     /// Set a Firebase user property for segmentation. Names should be snake_case (e.g. "trip_mode", "has_family").
     func setUserProperty(_ value: String?, forName name: String) {
         Analytics.setUserProperty(value, forName: name)
+        #if DEBUG
+        print("[Analytics] set_user_property: name=\(name), value=\(value ?? "nil")")
+        #endif
     }
 }
 

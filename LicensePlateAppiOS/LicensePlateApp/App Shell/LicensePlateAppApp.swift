@@ -26,7 +26,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // RevenueCat: configure after Firebase so we can identify user later. No-op if RevenueCatAPIKey missing.
         RevenueCatEntitlementBridge.shared.configure()
 
-        #if DEBUG
+        #if false
         // Initialize Google Maps after Firebase
         GoogleMapsService.shared.initializeFromConfig()
         

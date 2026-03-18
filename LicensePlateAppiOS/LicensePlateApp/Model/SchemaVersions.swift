@@ -59,6 +59,12 @@ final class SchemaVersion10Marker {
     init() {}
 }
 
+@Model
+final class SchemaVersion11Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
 // MARK: - Schema Version 1 (Initial)
 // Initial schema with Trip and AppUser
 
@@ -345,10 +351,47 @@ enum SchemaVersion10: VersionedSchema {
     }
 }
 
+// MARK: - Schema Version 11 (Sync queue foundation)
+// V11: Sync queue foundation (SyncQueueItemEntity, RemoteSyncMetadataEntity).
+enum SchemaVersion11: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(11, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            TripSessionTeamsEntity.self,
+            SchemaVersion7Marker.self,
+            SchemaVersion8Marker.self,
+            TripActivityEventEntity.self,
+            SchemaVersion9Marker.self,
+            SchemaVersion10Marker.self,
+            SyncQueueItemEntity.self,
+            RemoteSyncMetadataEntity.self,
+            SchemaVersion11Marker.self
+        ]
+    }
+}
+
 // MARK: - Migration Plan
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self]
+        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self, SchemaVersion11.self]
     }
 
     static var stages: [MigrationStage] {
@@ -361,12 +404,13 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             .lightweight(fromVersion: SchemaVersion6.self, toVersion: SchemaVersion7.self),
             .lightweight(fromVersion: SchemaVersion7.self, toVersion: SchemaVersion8.self),
             .lightweight(fromVersion: SchemaVersion8.self, toVersion: SchemaVersion9.self),
-            .lightweight(fromVersion: SchemaVersion9.self, toVersion: SchemaVersion10.self)
+            .lightweight(fromVersion: SchemaVersion9.self, toVersion: SchemaVersion10.self),
+            .lightweight(fromVersion: SchemaVersion10.self, toVersion: SchemaVersion11.self)
         ]
     }
 }
 
 // MARK: - Current Schema
-// V10: TripSessionEntity has createdAt, no legacyTripId; TripStatus.draft removed.
-typealias CurrentSchema = SchemaVersion10
+// V11: Sync queue foundation (SyncQueueItemEntity, RemoteSyncMetadataEntity).
+typealias CurrentSchema = SchemaVersion11
 

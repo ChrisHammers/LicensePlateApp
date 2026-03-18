@@ -25,6 +25,7 @@ struct FamilyDashboard: View {
         let tempAuthService = FirebaseAuthService()
         _viewModel = StateObject(wrappedValue: FamilyDashboardViewModel(
             familyRepository: .shared,
+            userRepository: UserRepository.shared,
             authService: tempAuthService
         ))
     }

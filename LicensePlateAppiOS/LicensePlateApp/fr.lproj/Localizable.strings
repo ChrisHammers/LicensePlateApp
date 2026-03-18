@@ -34,6 +34,8 @@
 "This trip has been completed" = "Ce voyage a été complété";
 "This will stop the game. You won't be able to add states in this trip anymore." = "Cela arrêtera le jeu. Vous ne pourrez plus ajouter d'états dans ce voyage.";
 "Cancel" = "Annuler";
+"Only the first finder gets credit in competitive mode." = "Seul le premier qui trouve obtient des points en mode compétitif.";
+"Tap to dismiss" = "Appuyez pour fermer";
 
 // Voice Recognition
 "Speech Recognition Needed" = "Reconnaissance Vocale Nécessaire";

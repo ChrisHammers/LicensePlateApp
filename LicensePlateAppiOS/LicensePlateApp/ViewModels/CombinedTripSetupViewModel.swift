@@ -34,15 +34,18 @@ final class CombinedTripSetupViewModel: ObservableObject {
 
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
+    private let lifecycleService: TripSessionLifecycleServiceProtocol
     private let authService: FirebaseAuthService
 
     init(
         tripSessionRepository: TripSessionRepositoryProtocol,
         gameInstanceRepository: GameInstanceRepositoryProtocol,
+        lifecycleService: TripSessionLifecycleServiceProtocol = TripSessionLifecycleService.shared,
         authService: FirebaseAuthService
     ) {
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
+        self.lifecycleService = lifecycleService
         self.authService = authService
     }
 
@@ -130,24 +133,7 @@ final class CombinedTripSetupViewModel: ObservableObject {
             try gameInstanceRepository.create(instance: instance)
         }
         if session.startedAt != nil {
-            try gameInstanceRepository.transitionGamesToStarted(sessionId: sessionId)
-            try TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: sessionId, kind: .tripStarted, actorId: createdBy))
-            for instance in instances {
-                try TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: sessionId, kind: .gameStarted, actorId: nil, payload: ["gameInstanceId": instance.id.uuidString]))
-            }
-            for (_, instance) in instances.enumerated() {
-                AnalyticsService.shared.log(.gameInstanceStarted(
-                    gameInstanceId: instance.id.uuidString,
-                    gameType: instance.definitionId,
-                    gameLifecycleState: "started",
-                    configLockReason: ConfigLockReason.gameStarted.rawValue
-                ))
-            }
-            AnalyticsService.shared.log(.combinedTripStartedWithGameCount(
-                tripId: sessionId.uuidString,
-                combinedGameCount: instances.count,
-                combinedGameTypes: types.map(\.rawValue)
-            ))
+            try lifecycleService.startTrip(sessionId: sessionId, actorId: createdBy)
         }
 
         AnalyticsService.shared.log(.combinedTripCreated(gameTypes: types.map(\.rawValue)))

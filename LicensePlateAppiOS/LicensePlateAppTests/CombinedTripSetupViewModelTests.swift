@@ -161,4 +161,40 @@ struct CombinedTripSetupViewModelTests {
         viewModel.toggleGameType(.licensePlate)
         #expect(viewModel.selectedGameTypes.contains(.licensePlate))
     }
+
+    @Test func createTripWithStartRightAwayCallsLifecycleServiceStartTrip() async throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        let sessionRepo = TripSessionRepository.shared
+        let instanceRepo = GameInstanceRepository.shared
+        let eventRepo = TripActivityEventRepository.shared
+        sessionRepo.setModelContext(ctx)
+        instanceRepo.setModelContext(ctx)
+        eventRepo.setModelContext(ctx)
+
+        let auth = FirebaseAuthService()
+        let userId = "test-user"
+        let testUser = AppUser(id: userId, userName: "Test", firebaseUID: userId)
+        ctx.insert(testUser)
+        try ctx.save()
+        auth.currentUser = testUser
+
+        let mockLifecycle = MockTripSessionLifecycleService()
+        let viewModel = CombinedTripSetupViewModel(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: instanceRepo,
+            lifecycleService: mockLifecycle,
+            authService: auth
+        )
+        viewModel.tripName = "My Trip"
+        viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = true
+        viewModel.startTripRightAway = true
+
+        let session = try viewModel.createTrip(modelContext: ctx)
+
+        #expect(mockLifecycle.startTripCallCount == 1)
+        #expect(mockLifecycle.startTripSessionIds.first == session.id)
+        #expect(mockLifecycle.startTripActorIds.first == userId)
+    }
 }

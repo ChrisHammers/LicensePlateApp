@@ -61,4 +61,17 @@ struct TripActivityEventRepositoryTests {
         #expect(regions.count == 1)
         #expect(regions[0].regionID == "TX")
     }
+
+    /// Step 05 — Failure: append throws when mock is configured to throw (failure propagation).
+    @Test func appendThrowsWhenMockConfiguredToThrow() async throws {
+        let mock = MockTripActivityEventRepository()
+        mock.shouldThrow = true
+        let event = TripActivityEvent(sessionId: UUID(), kind: .tripStarted, actorId: "u1")
+        do {
+            try mock.append(event)
+            #expect(Bool(false), "Expected append to throw")
+        } catch {
+            #expect((error as NSError).domain == "MockTripActivityEventRepository")
+        }
+    }
 }

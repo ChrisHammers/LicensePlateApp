@@ -8,7 +8,6 @@
 import Foundation
 import SwiftData
 import Combine
-import FirebaseFirestore
 import FirebaseAuth
 
 @MainActor
@@ -21,13 +20,15 @@ class FamilyDashboardViewModel: ObservableObject {
     @Published var errorMessage: String?
     
     private let familyRepository: FamilyRepository
+    private let userRepository: UserRepository
     private var inviteRepository: InviteRepository?
     private var authService: FirebaseAuthService
     private var cancellables = Set<AnyCancellable>()
     private var isLoadingData = false
     
-    init(familyRepository: FamilyRepository, authService: FirebaseAuthService) {
+    init(familyRepository: FamilyRepository, userRepository: UserRepository, authService: FirebaseAuthService) {
         self.familyRepository = familyRepository
+        self.userRepository = userRepository
         self.authService = authService
         
         // Setup observers
@@ -339,25 +340,11 @@ class FamilyDashboardViewModel: ObservableObject {
             user.activeFamilyId = nil
         }
         
-        // Clear from Firestore directly (delete the field)
-        if authService.isOnline {
-            do {
-                let db = Firestore.firestore()
-                try await db.collection("users").document(firebaseUID).updateData([
-                    "activeFamilyId": FieldValue.delete()
-                ])
-                
-                // Save SwiftData changes after successful Firestore update
-                try? await authService.saveUserDataToFirestore(user)
-            } catch {
-                // If update fails, mark for sync
-                await MainActor.run {
-                    user.needsSync = true
-                }
-                try? await authService.saveUserDataToFirestore(user)
-            }
-        } else {
-            // Mark for sync when online
+        do {
+            try await userRepository.clearActiveFamilyIdFromServer(firebaseUID: firebaseUID)
+            try? await authService.saveUserDataToFirestore(user)
+        } catch {
+            // If update fails, mark for sync
             await MainActor.run {
                 user.needsSync = true
             }
