@@ -80,10 +80,22 @@ struct AnalyticsServiceTests {
         #expect(screenEvent.parameters?["screen_name"] as? String == "travel_log")
         #expect(screenEvent.parameters?["screen_class"] as? String == "TravelLogView")
 
-        // combined_trip_created
+        // combined_trip_created (optional params when provided)
         let combinedEvent = AnalyticsService.Event.combinedTripCreated(gameTypes: ["license_plate", "other"])
         let gameTypesParam = combinedEvent.parameters?["game_types"] as? String
         #expect(gameTypesParam == "license_plate,other")
+
+        let combinedWithContext = AnalyticsService.Event.combinedTripCreated(
+            gameTypes: ["lp"],
+            tripSessionId: "session-1",
+            tripMode: "solo",
+            participantCount: 1,
+            gameCount: 1
+        )
+        #expect(combinedWithContext.parameters?["trip_session_id"] as? String == "session-1")
+        #expect(combinedWithContext.parameters?["trip_mode"] as? String == "solo")
+        #expect(combinedWithContext.parameters?["participant_count"] as? Int == 1)
+        #expect(combinedWithContext.parameters?["game_count"] as? Int == 1)
     }
 
     @Test @MainActor func spyRecordsTypedEvents() async throws {
@@ -114,12 +126,14 @@ struct AnalyticsServiceTests {
             gameInstanceId: "gi-1",
             gameType: "license_plate",
             gameLifecycleState: "started",
-            configLockReason: "game_started"
+            configLockReason: "game_started",
+            tripSessionId: "session-1"
         )
         #expect(started.name == "game_instance_started")
         #expect(started.parameters?["game_instance_id"] as? String == "gi-1")
         #expect(started.parameters?["game_type"] as? String == "license_plate")
         #expect(started.parameters?["config_lock_reason"] as? String == "game_started")
+        #expect(started.parameters?["trip_session_id"] as? String == "session-1")
 
         let combinedStarted = AnalyticsService.Event.combinedTripStartedWithGameCount(
             tripId: "trip-1",
@@ -127,9 +141,27 @@ struct AnalyticsServiceTests {
             combinedGameTypes: ["license_plate", "other"]
         )
         #expect(combinedStarted.name == "combined_trip_started_with_game_count")
-        #expect(combinedStarted.parameters?["trip_id"] as? String == "trip-1")
+        #expect(combinedStarted.parameters?["trip_session_id"] as? String == "trip-1")
         #expect(combinedStarted.parameters?["combined_game_count"] as? Int == 2)
         #expect(combinedStarted.parameters?["combined_game_types"] as? String == "license_plate,other")
+    }
+
+    @Test @MainActor func tripSessionCreatedAndGameInstanceEndedParameters() async throws {
+        let created = AnalyticsService.Event.tripSessionCreated(
+            tripId: "sid-1",
+            tripStatus: "active",
+            tripParticipantCount: 1,
+            tripActiveGameCount: 2,
+            tripSource: "combined_setup"
+        )
+        #expect(created.parameters?["trip_session_id"] as? String == "sid-1")
+        #expect(created.parameters?["trip_participant_count"] as? Int == 1)
+        #expect(created.parameters?["trip_active_game_count"] as? Int == 2)
+
+        let ended = AnalyticsService.Event.gameInstanceEnded(gameInstanceId: "g1", gameType: "lp", tripSessionId: "s1")
+        #expect(ended.parameters?["game_instance_id"] as? String == "g1")
+        #expect(ended.parameters?["game_type"] as? String == "lp")
+        #expect(ended.parameters?["trip_session_id"] as? String == "s1")
     }
 
     @Test @MainActor func inviteContextEvents() async throws {

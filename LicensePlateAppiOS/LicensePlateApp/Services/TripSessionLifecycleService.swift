@@ -70,7 +70,8 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
                 gameInstanceId: game.id.uuidString,
                 gameType: game.definitionId,
                 gameLifecycleState: "started",
-                configLockReason: ConfigLockReason.gameStarted.rawValue
+                configLockReason: ConfigLockReason.gameStarted.rawValue,
+                tripSessionId: sessionId.uuidString
             ))
         }
         AnalyticsService.shared.log(.tripSessionStarted(tripId: sessionId.uuidString, tripActiveGameCount: games.count))
@@ -97,8 +98,10 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
             )
             try tripActivityEventRepository.append(gameEndedEvent)
             try syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: gameEndedEvent.id)
+            AnalyticsService.shared.log(.gameInstanceEnded(gameInstanceId: game.id.uuidString, gameType: game.definitionId, tripSessionId: sessionId.uuidString))
         }
         AnalyticsService.shared.log(.tripSessionEnded(tripId: sessionId.uuidString))
+        AnalyticsService.shared.log(.tripSessionCompleted(tripId: sessionId.uuidString))
     }
 
     func resetTrip(sessionId: UUID, gameInstanceId: UUID) throws {

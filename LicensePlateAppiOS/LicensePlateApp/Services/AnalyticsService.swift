@@ -107,7 +107,7 @@ class AnalyticsService: AnalyticsLogging {
 
         // Combined games (Step 06)
         case combinedTripSetupOpened
-        case combinedTripCreated(gameTypes: [String])
+        case combinedTripCreated(gameTypes: [String], tripSessionId: String? = nil, tripMode: String? = nil, participantCount: Int? = nil, gameCount: Int? = nil)
 
         // Combined games extended (Step 10.5)
         case combinedGameRemovedBeforeStart(gameInstanceId: String, combinedGameCount: Int)
@@ -135,9 +135,9 @@ class AnalyticsService: AnalyticsLogging {
         case tripSessionDeleted(tripId: String)
         case tripSessionCompleted(tripId: String)
         case gameInstanceCreated(gameInstanceId: String, gameType: String, gameMode: String, tripId: String, gameOrderInTrip: Int?)
-        case gameInstanceStarted(gameInstanceId: String, gameType: String, gameLifecycleState: String, configLockReason: String)
-        case gameInstanceEnded(gameInstanceId: String, gameType: String)
-        case gameInstanceCompleted(gameInstanceId: String, gameType: String)
+        case gameInstanceStarted(gameInstanceId: String, gameType: String, gameLifecycleState: String, configLockReason: String, tripSessionId: String)
+        case gameInstanceEnded(gameInstanceId: String, gameType: String, tripSessionId: String)
+        case gameInstanceCompleted(gameInstanceId: String, gameType: String, tripSessionId: String)
         case gameConfigLocked(gameInstanceId: String, configLockReason: String)
         case gameConfigLockBlockedEdit(gameInstanceId: String, configLockReason: String)
 
@@ -343,19 +343,24 @@ class AnalyticsService: AnalyticsLogging {
                 if let c = inviteGameCount { p["invite_game_count"] = c }
                 return p.isEmpty ? nil : p
             case .participantJoinedTrip(let tripId, let participantCountAfterJoin, let teamCountAfterJoin):
-                var p: [String: Any] = ["trip_id": tripId, "participant_count_after_join": participantCountAfterJoin]
+                var p: [String: Any] = ["trip_session_id": tripId, "participant_count_after_join": participantCountAfterJoin]
                 if let c = teamCountAfterJoin { p["team_count_after_join"] = c }
                 return p
             case .participantLeftTrip(let tripId):
-                return ["trip_id": tripId]
+                return ["trip_session_id": tripId]
             case .participantRemovedFromTrip(let tripId, let actorParticipantId):
-                var p: [String: Any] = ["trip_id": tripId]
+                var p: [String: Any] = ["trip_session_id": tripId]
                 if let id = actorParticipantId { p["actor_participant_id"] = id }
                 return p
             case .combinedTripSetupOpened:
                 return nil
-            case .combinedTripCreated(let gameTypes):
-                return ["game_types": gameTypes.joined(separator: ",")]
+            case .combinedTripCreated(let gameTypes, let tripSessionId, let tripMode, let participantCount, let gameCount):
+                var p: [String: Any] = ["game_types": gameTypes.joined(separator: ",")]
+                if let id = tripSessionId { p["trip_session_id"] = id }
+                if let mode = tripMode { p["trip_mode"] = mode }
+                if let count = participantCount { p["participant_count"] = count }
+                if let count = gameCount { p["game_count"] = count }
+                return p
             case .combinedGameRemovedBeforeStart(let gameInstanceId, let combinedGameCount):
                 return ["game_instance_id": gameInstanceId, "combined_game_count": combinedGameCount]
             case .combinedGameReordered(let combinedGameCount, let combinedGameTypes):
@@ -365,7 +370,7 @@ class AnalyticsService: AnalyticsLogging {
             case .combinedGameConfigChanged(let gameInstanceId, let settingKey, let oldValue, let newValue):
                 return ["game_instance_id": gameInstanceId, "setting_key": settingKey, "old_value": oldValue, "new_value": newValue]
             case .combinedTripStartedWithGameCount(let tripId, let combinedGameCount, let combinedGameTypes):
-                return ["trip_id": tripId, "combined_game_count": combinedGameCount, "combined_game_types": combinedGameTypes.joined(separator: ",")]
+                return ["trip_session_id": tripId, "combined_game_count": combinedGameCount, "combined_game_types": combinedGameTypes.joined(separator: ",")]
             case .tripSummaryViewed(let sessionId):
                 return ["session_id": sessionId]
             case .tripSummaryViewedGameSection(let sessionId), .tripSummaryViewedParticipantSection(let sessionId), .tripSummaryViewedMapRecap(let sessionId):
@@ -377,29 +382,31 @@ class AnalyticsService: AnalyticsLogging {
             case .travelLogOpened:
                 return nil
             case .tripSessionCreated(let tripId, let tripStatus, let tripParticipantCount, let tripActiveGameCount, let tripSource):
-                var p: [String: Any] = ["trip_id": tripId, "trip_status": tripStatus]
+                var p: [String: Any] = ["trip_session_id": tripId, "trip_status": tripStatus]
                 if let c = tripParticipantCount { p["trip_participant_count"] = c }
                 if let c = tripActiveGameCount { p["trip_active_game_count"] = c }
                 if let s = tripSource { p["trip_source"] = s }
                 return p
             case .tripSessionStarted(let tripId, let tripActiveGameCount):
-                var p: [String: Any] = ["trip_id": tripId]
+                var p: [String: Any] = ["trip_session_id": tripId]
                 if let c = tripActiveGameCount { p["trip_active_game_count"] = c }
                 return p
             case .tripSessionEnded(let tripId), .tripSessionCompleted(let tripId):
-                return ["trip_id": tripId]
+                return ["trip_session_id": tripId]
             case .tripSessionReset(let tripId, let gameInstanceId):
-                return ["trip_id": tripId, "game_instance_id": gameInstanceId]
+                return ["trip_session_id": tripId, "game_instance_id": gameInstanceId]
             case .tripSessionDeleted(let tripId):
-                return ["trip_id": tripId]
+                return ["trip_session_id": tripId]
             case .gameInstanceCreated(let gameInstanceId, let gameType, let gameMode, let tripId, let gameOrderInTrip):
-                var p: [String: Any] = ["game_instance_id": gameInstanceId, "game_type": gameType, "game_mode": gameMode, "trip_id": tripId]
+                var p: [String: Any] = ["game_instance_id": gameInstanceId, "game_type": gameType, "game_mode": gameMode, "trip_session_id": tripId]
                 if let o = gameOrderInTrip { p["game_order_in_trip"] = o }
                 return p
-            case .gameInstanceStarted(let gameInstanceId, let gameType, let gameLifecycleState, let configLockReason):
-                return ["game_instance_id": gameInstanceId, "game_type": gameType, "game_lifecycle_state": gameLifecycleState, "config_lock_reason": configLockReason]
-            case .gameInstanceEnded(let gameInstanceId, let gameType), .gameInstanceCompleted(let gameInstanceId, let gameType):
-                return ["game_instance_id": gameInstanceId, "game_type": gameType]
+            case .gameInstanceStarted(let gameInstanceId, let gameType, let gameLifecycleState, let configLockReason, let tripSessionId):
+                return ["game_instance_id": gameInstanceId, "game_type": gameType, "game_lifecycle_state": gameLifecycleState, "config_lock_reason": configLockReason, "trip_session_id": tripSessionId]
+            case .gameInstanceEnded(let gameInstanceId, let gameType, let tripSessionId):
+                return ["game_instance_id": gameInstanceId, "game_type": gameType, "trip_session_id": tripSessionId]
+            case .gameInstanceCompleted(let gameInstanceId, let gameType, let tripSessionId):
+                return ["game_instance_id": gameInstanceId, "game_type": gameType, "trip_session_id": tripSessionId]
             case .gameConfigLocked(let gameInstanceId, let configLockReason), .gameConfigLockBlockedEdit(let gameInstanceId, let configLockReason):
                 return ["game_instance_id": gameInstanceId, "config_lock_reason": configLockReason]
             case .gameConfigViewed(let gameInstanceId, let configLocked, let configLockReason):
@@ -427,17 +434,17 @@ class AnalyticsService: AnalyticsLogging {
             case .analyticsPropertyBuildFailed(let eventName, let error):
                 return ["event_name": eventName, "error": error]
             case .riskAdvisoryDetected(let flags, let tripId):
-                return ["risk_flags": flags.joined(separator: ","), "trip_id": tripId]
+                return ["risk_flags": flags.joined(separator: ","), "trip_session_id": tripId]
             case .discoveryOutcomeRecorded(let tripId, let gameInstanceId, let targetId, let outcome, let participantId):
-                var p: [String: Any] = ["trip_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "outcome": outcome]
+                var p: [String: Any] = ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "outcome": outcome]
                 if let id = participantId { p["participant_id"] = id }
                 return p
             case .discoveryRejectedDuplicate(let tripId, let gameInstanceId, let targetId, let participantId, let mode):
-                var p: [String: Any] = ["trip_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "mode": mode]
+                var p: [String: Any] = ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "mode": mode]
                 if let id = participantId { p["participant_id"] = id }
                 return p
             case .discoveryUnfind(let tripId, let gameInstanceId, let targetId, let participantId):
-                var p: [String: Any] = ["trip_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId]
+                var p: [String: Any] = ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId]
                 if let id = participantId { p["participant_id"] = id }
                 return p
             case .persistenceSaveFailed(let context, let error):
