@@ -67,6 +67,9 @@ struct CombinedTripSetupViewModelTests {
         let instances = try instanceRepo.fetchByTripSession(sessionId: session.id)
         #expect(instances.count == 1)
         #expect(instances[0].definitionId == GameType.licensePlate.rawValue)
+        #expect(session.mode == .solo)
+        #expect(session.participants.count == 1)
+        #expect(session.participants[0].role == .owner)
     }
 
     @Test func createTripUsesDateNameWhenNameEmpty() async throws {

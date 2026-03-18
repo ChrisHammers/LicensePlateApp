@@ -3,6 +3,7 @@
 //  LicensePlateApp
 //
 //  Step 04 — ViewModel for gameplay screen. Orchestrates lifecycle service and discovery (rules engine + event append). No persistence in views.
+//  Active gameplay reads current session and selected/active game instance; discovery writes go through TripActivityEvent only (canonical). Solo is the one-participant case; no separate engine.
 //
 
 import Foundation

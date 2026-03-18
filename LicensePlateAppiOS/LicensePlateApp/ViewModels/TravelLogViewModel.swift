@@ -70,7 +70,7 @@ final class TravelLogViewModel: ObservableObject {
         isLoading = false
     }
 
-    /// Open summary for a session: fetch session, games, discoveries from event repo; compute credits; build and set selectedSummary.
+    /// Open summary for a session: fetch session, games, discoveries from event repo; compute credits; build and set selectedSummary. Recap is built from canonical data only: TripSession, GameInstance, and TripActivityEvent-derived discoveries and credits.
     func openSummary(sessionId: UUID) {
         FeedbackService.shared.buttonTap()
         isLoadingSummary = true

@@ -124,7 +124,7 @@ enum SchemaVersion3: VersionedSchema {
 
 // MARK: - Schema Version 4 (Gameplay model foundation)
 // Added TripSessionEntity, GameInstanceEntity for new trip/session and game-instance persistence.
-// TODO: Eventually deprecate legacy Trip once UI/features migrate to TripSessionEntity.
+// Legacy Trip removed in V9; TripSessionEntity is canonical.
 enum SchemaVersion4: VersionedSchema {
     static var versionIdentifier: Schema.Version {
         Schema.Version(4, 0, 0)

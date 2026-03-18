@@ -94,6 +94,7 @@ struct TravelLogViewModelTests {
         viewModel.openSummary(sessionId: sessionId)
 
         #expect(viewModel.selectedSummary != nil)
+        #expect(viewModel.selectedSummary?.sessionId == sessionId)
         #expect(viewModel.selectedSummary?.tripName == "New Flow Trip")
         #expect(viewModel.selectedSummary?.totalDiscoveryCount == 0)
         #expect(viewModel.selectedSummary?.participantContributions.isEmpty == true)
@@ -135,6 +136,7 @@ struct TravelLogViewModelTests {
         viewModel.openSummary(sessionId: sessionId)
 
         #expect(viewModel.selectedSummary != nil)
+        #expect(viewModel.selectedSummary?.sessionId == sessionId)
         #expect(viewModel.selectedSummary?.tripName == "Trip With Plates")
         #expect(viewModel.selectedSummary?.totalDiscoveryCount == 2)
     }

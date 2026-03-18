@@ -85,6 +85,7 @@ final class CombinedTripSetupViewModel: ObservableObject {
     }
 
     /// Creates TripSession and GameInstances only (canonical model). Appends trip_started/game_started events when startTripRightAway. Returns the created TripSession on success.
+    /// Solo is the one-participant case: one TripSession, one TripParticipant (creator), and one default GameInstance when a single game type is selected. No legacy Trip; no dual-write.
     func createTrip(modelContext: ModelContext) throws -> TripSession {
         errorMessage = nil
         isCreating = true
