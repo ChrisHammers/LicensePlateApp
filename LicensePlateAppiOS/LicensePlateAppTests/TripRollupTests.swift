@@ -20,7 +20,6 @@ struct TripRollupTests {
             mode: .solo,
             createdAt: Date(),
             participants: [TripParticipant(userId: "u1", role: .owner, joinedAt: Date())],
-            teams: [],
             enabledCountryRawValues: ["United States"]
         )
         let rollup = TripRollup.build(session: session, games: [], discoveries: [])
@@ -41,7 +40,6 @@ struct TripRollupTests {
             mode: .solo,
             createdAt: Date(),
             participants: [TripParticipant(userId: "u1", role: .owner, joinedAt: Date())],
-            teams: [],
             enabledCountryRawValues: ["United States", "Canada"]
         )
         let game = GameInstance(

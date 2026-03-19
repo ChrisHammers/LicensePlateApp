@@ -56,11 +56,10 @@ enum CombinedGameAssembler {
         }
     }
 
+    /// Default game mode when assembling from trip. TripMode is solo/multiplayer only; game mode defaults to collaborative.
     private static func gameMode(from tripMode: TripMode) -> GameMode {
-        switch tripMode {
-        case .competitive: return .competitive
-        case .solo, .collaborative, .combined: return .collaborative
-        }
+        _ = tripMode
+        return .collaborative
     }
 
     private static func licensePlateConfig(from session: TripSession) -> LicensePlateGameConfig {

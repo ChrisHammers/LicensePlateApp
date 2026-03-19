@@ -20,8 +20,6 @@ final class TripSession {
     var endedBy: String?
     /// Snapshot of participants (e.g. for display); can be derived from events or stored.
     var participants: [TripParticipant]
-    /// Optional teams for this session (e.g. for team-based scoring). Empty when not using teams.
-    var teams: [TripTeam]
     /// Enabled countries for this trip (e.g. US, Canada, Mexico).
     var enabledCountryRawValues: [String]
     /// Optional location/risk flags for future anti-spam.
@@ -38,7 +36,6 @@ final class TripSession {
         endedAt: Date? = nil,
         endedBy: String? = nil,
         participants: [TripParticipant] = [],
-        teams: [TripTeam] = [],
         enabledCountryRawValues: [String] = ["United States", "Canada", "Mexico"],
         riskFlags: [String]? = nil
     ) {
@@ -52,7 +49,6 @@ final class TripSession {
         self.endedAt = endedAt
         self.endedBy = endedBy
         self.participants = participants
-        self.teams = teams
         self.enabledCountryRawValues = enabledCountryRawValues
         self.riskFlags = riskFlags
     }

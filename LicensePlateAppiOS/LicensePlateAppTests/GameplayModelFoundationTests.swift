@@ -14,9 +14,7 @@ struct GameplayModelFoundationTests {
 
     @Test func tripModeDefaultsAndCases() async throws {
         #expect(TripMode.solo.rawValue == "solo")
-        #expect(TripMode.collaborative.rawValue == "collaborative")
-        #expect(TripMode.competitive.rawValue == "competitive")
-        #expect(TripMode.combined.rawValue == "combined")
+        #expect(TripMode.multiplayer.rawValue == "multiplayer")
     }
 
     @Test func tripStatusDefaultsAndCases() async throws {

@@ -11,7 +11,7 @@ enum TripSessionEntityMapper {
 
     private static let countrySeparator = ","
 
-    /// Map domain TripSession to SwiftData TripSessionEntity (for insert/update). Teams are stored in TripSessionTeamsEntity separately.
+    /// Map domain TripSession to SwiftData TripSessionEntity (for insert/update). Teams are on GameInstance (Step 6.9.1).
     static func toEntity(_ session: TripSession) -> TripSessionEntity {
         let participantsData: Data? = encodeParticipants(session.participants)
         let enabledCountriesString = session.enabledCountryRawValues.joined(separator: countrySeparator)
@@ -30,17 +30,16 @@ enum TripSessionEntityMapper {
         )
     }
 
-    /// Map SwiftData TripSessionEntity to domain TripSession. Pass teamsData from TripSessionTeamsEntity when available.
-    static func toDomain(_ entity: TripSessionEntity, teamsData: Data? = nil) -> TripSession {
+    /// Map SwiftData TripSessionEntity to domain TripSession. Teams are on GameInstance (Step 6.9.1).
+    static func toDomain(_ entity: TripSessionEntity) -> TripSession {
         let participants = decodeParticipants(entity.participantsData)
-        let teams = decodeTeams(teamsData)
         let countryValues = entity.enabledCountryRawValues.split(separator: Character(countrySeparator))
             .map { String($0).trimmingCharacters(in: .whitespaces) }
         let enabledRaw = countryValues.isEmpty ? ["United States", "Canada", "Mexico"] : countryValues
         let status = TripStatus(rawValue: entity.status) ?? .active
-        let mode = TripMode(rawValue: entity.mode) ?? .solo
+        let mode = Self.mapEntityModeToTripMode(entity.mode)
         let createdAt = entity.createdAt ?? entity.startedAt ?? Date.distantPast
-        let session = TripSession(
+        return TripSession(
             id: UUID(uuidString: entity.id) ?? UUID(),
             name: entity.name,
             status: status,
@@ -51,11 +50,9 @@ enum TripSessionEntityMapper {
             endedAt: entity.endedAt,
             endedBy: entity.endedBy,
             participants: participants,
-            teams: teams,
             enabledCountryRawValues: enabledRaw,
             riskFlags: nil
         )
-        return session
     }
 
     /// Update an existing entity in-place from a domain session (for upsert).
@@ -82,18 +79,17 @@ enum TripSessionEntityMapper {
         return (try? JSONDecoder().decode([TripParticipant].self, from: data)) ?? []
     }
 
-    /// Encode teams for storage in TripSessionTeamsEntity. Returns nil when empty.
-    static func encodeTeamsForStorage(_ teams: [TripTeam]) -> Data? {
-        guard !teams.isEmpty else { return nil }
-        return try? JSONEncoder().encode(teams)
-    }
-
-    private static func encodeTeams(_ teams: [TripTeam]) -> Data? {
-        encodeTeamsForStorage(teams)
-    }
-
-    private static func decodeTeams(_ data: Data?) -> [TripTeam] {
-        guard let data = data else { return [] }
-        return (try? JSONDecoder().decode([TripTeam].self, from: data)) ?? []
+    /// Backward compatibility: stored mode may be legacy (collaborative, competitive, combined). Map to solo or multiplayer.
+    private static func mapEntityModeToTripMode(_ raw: String) -> TripMode {
+        switch TripMode(rawValue: raw) {
+        case .solo: return .solo
+        case .multiplayer: return .multiplayer
+        case nil:
+            // Legacy values: treat as multiplayer (trip had multiple participants or multiple game types).
+            switch raw {
+            case "collaborative", "competitive", "combined": return .multiplayer
+            default: return .solo
+            }
+        }
     }
 }

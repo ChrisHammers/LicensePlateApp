@@ -135,6 +135,31 @@ struct GameInstanceRepositoryTests {
         #expect(decoded["score"] == "100")
     }
 
+    /// Step 6.9.1 — Game with teams round-trips correctly.
+    @Test func gameWithTeamsRoundTrips() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = GameInstanceRepository.shared
+        repo.setModelContext(context)
+
+        let sessionId = UUID()
+        let team1 = TripTeam(name: "Team A", participantUserIds: ["user1", "user2"])
+        let team2 = TripTeam(name: "Team B", participantUserIds: ["user3"])
+        let instance = GameInstance(
+            definitionId: "license_plate",
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            teams: [team1, team2]
+        )
+        try repo.create(instance: instance)
+
+        let loaded = try repo.instance(byId: instance.id)
+        #expect(loaded != nil)
+        #expect(loaded?.teams.count == 2)
+        #expect(loaded?.teams.first { $0.name == "Team A" }?.participantUserIds == ["user1", "user2"])
+        #expect(loaded?.teams.first { $0.name == "Team B" }?.participantUserIds == ["user3"])
+    }
+
     /// Step 05 — Failure: update throws instanceNotFound when instance was never created.
     @Test func updateThrowsInstanceNotFoundWhenInstanceMissing() async throws {
         let container = try makeContainer()

@@ -13,6 +13,7 @@ final class TripInvite {
     @Attribute(.unique) var inviteId: String
     var tripSessionId: String
     var tripName: String
+    /// Trip participation mode: TripMode.rawValue (solo or multiplayer). Game-level mode (collaborative/competitive) is on GameInstance.
     var tripMode: String
     var fromUserId: String
     var toUserId: String?

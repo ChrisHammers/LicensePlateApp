@@ -8,14 +8,14 @@
 import Foundation
 
 /// Centralized engine for discovery submission outcomes and credit resolution.
-/// Uses TripModeRulesEngine and GameCreditCalculator; no persistence. Advisory risk remains in RiskAssessmentService (post-append).
+/// Uses GameModeRulesEngine and GameCreditCalculator; no persistence. Advisory risk remains in RiskAssessmentService (post-append).
 enum DiscoveryRulesEngine {
 
     // MARK: - Write path: evaluate before append
 
     /// Evaluates a candidate discovery submission. Caller should append the event only when `result.shouldAppendEvent` is true.
     /// - Parameters:
-    ///   - mode: Trip session mode.
+    ///   - mode: Game mode (from GameInstance.commonConfig.gameMode). Solo is a trip characteristic (one participant); game mode is still collaborative or competitive.
     ///   - existingDiscoveriesForTarget: Discoveries already recorded for this target (0 or 1 with current repo replay).
     ///   - candidateParticipantId: Participant making the new find.
     ///   - candidateTargetId: Target being found (e.g. region id).
@@ -25,7 +25,7 @@ enum DiscoveryRulesEngine {
     ///   - riskContext: Optional; if nil, risk flags are empty (risk assessment stays post-append).
     /// - Returns: Outcome, optional risk flags, and credits to assign (nil when rejected or personal_duplicate with no new credit).
     static func evaluateDiscoverySubmission(
-        mode: TripMode,
+        mode: GameMode,
         existingDiscoveriesForTarget: [GameDiscovery],
         candidateParticipantId: String,
         candidateTargetId: String,
@@ -75,7 +75,7 @@ enum DiscoveryRulesEngine {
                 riskFlags: riskFlags(from: riskContext, discovery: candidateDiscovery),
                 creditsToAssign: nil
             )
-        case .collaborative, .combined:
+        case .collaborative:
             let credits = GameCreditCalculator.credits(
                 for: mode,
                 discovery: candidateDiscovery,
@@ -86,13 +86,6 @@ enum DiscoveryRulesEngine {
                 riskFlags: riskFlags(from: riskContext, discovery: candidateDiscovery),
                 creditsToAssign: credits
             )
-        case .solo:
-            // Solo implies single participant; other participant should not occur. Treat as reject to be safe.
-            return DiscoveryEvaluationResult(
-                outcome: .rejectedDuplicate,
-                riskFlags: riskFlags(from: riskContext, discovery: candidateDiscovery),
-                creditsToAssign: nil
-            )
         }
     }
 
@@ -100,14 +93,14 @@ enum DiscoveryRulesEngine {
 
     /// Returns credits for all discoveries using the same rules as the write path (one representative discovery per target, same as current summary logic).
     /// - Parameters:
-    ///   - mode: Trip session mode.
+    ///   - mode: Game mode (from GameInstance.commonConfig.gameMode).
     ///   - discoveriesByTarget: Discoveries grouped by targetId (e.g. from Dictionary(grouping: discoveries, by: \.targetId)).
-    /// - Returns: Flat list of GameCredit (one set per target: first finder for competitive/solo, all finders for collaborative/combined).
+    /// - Returns: Flat list of GameCredit (one set per target: first finder for competitive, all finders for collaborative).
     static func creditsForDiscoveries(
-        mode: TripMode,
+        mode: GameMode,
         discoveriesByTarget: [String: [GameDiscovery]]
     ) -> [GameCredit] {
-        let isShared = TripModeRulesEngine.creditType(for: mode) == .shared
+        let isShared = GameModeRulesEngine.creditType(for: mode) == .shared
         var allCredits: [GameCredit] = []
         for (_, targetDiscoveries) in discoveriesByTarget {
             let sorted = targetDiscoveries.sorted { $0.discoveredAt < $1.discoveredAt }

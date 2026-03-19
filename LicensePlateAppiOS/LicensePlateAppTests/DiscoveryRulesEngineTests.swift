@@ -29,9 +29,9 @@ struct DiscoveryRulesEngineTests {
 
     // MARK: - evaluateDiscoverySubmission: no existing (new_credit)
 
-    @Test func evaluateSoloNoExistingReturnsNewCredit() async throws {
+    @Test func evaluateCompetitiveNoExistingReturnsNewCreditFull() async throws {
         let result = DiscoveryRulesEngine.evaluateDiscoverySubmission(
-            mode: .solo,
+            mode: .competitive,
             existingDiscoveriesForTarget: [],
             candidateParticipantId: "user1",
             candidateTargetId: "region-1",
@@ -62,27 +62,12 @@ struct DiscoveryRulesEngineTests {
         #expect(result.creditsToAssign?[0].creditType == .shared)
     }
 
-    @Test func evaluateCompetitiveNoExistingReturnsNewCredit() async throws {
-        let result = DiscoveryRulesEngine.evaluateDiscoverySubmission(
-            mode: .competitive,
-            existingDiscoveriesForTarget: [],
-            candidateParticipantId: "user1",
-            candidateTargetId: "region-1",
-            gameInstanceId: gameInstanceId,
-            inputMethod: .list,
-            occurredAt: Date()
-        )
-        #expect(result.outcome == .newCredit)
-        #expect(result.shouldAppendEvent == true)
-        #expect(result.creditsToAssign?.count == 1)
-    }
-
     // MARK: - evaluateDiscoverySubmission: same participant (personal_duplicate)
 
-    @Test func evaluateSoloSameParticipantReturnsPersonalDuplicate() async throws {
+    @Test func evaluateCompetitiveSameParticipantReturnsPersonalDuplicate() async throws {
         let existing = makeDiscovery(participantId: "user1")
         let result = DiscoveryRulesEngine.evaluateDiscoverySubmission(
-            mode: .solo,
+            mode: .competitive,
             existingDiscoveriesForTarget: [existing],
             candidateParticipantId: "user1",
             candidateTargetId: "region-1",
@@ -99,21 +84,6 @@ struct DiscoveryRulesEngineTests {
         let existing = makeDiscovery(participantId: "user1")
         let result = DiscoveryRulesEngine.evaluateDiscoverySubmission(
             mode: .collaborative,
-            existingDiscoveriesForTarget: [existing],
-            candidateParticipantId: "user1",
-            candidateTargetId: "region-1",
-            gameInstanceId: gameInstanceId,
-            inputMethod: .list,
-            occurredAt: Date()
-        )
-        #expect(result.outcome == .personalDuplicate)
-        #expect(result.creditsToAssign == nil)
-    }
-
-    @Test func evaluateCompetitiveSameParticipantReturnsPersonalDuplicate() async throws {
-        let existing = makeDiscovery(participantId: "user1")
-        let result = DiscoveryRulesEngine.evaluateDiscoverySubmission(
-            mode: .competitive,
             existingDiscoveriesForTarget: [existing],
             candidateParticipantId: "user1",
             candidateTargetId: "region-1",
@@ -167,10 +137,10 @@ struct DiscoveryRulesEngineTests {
 
     // MARK: - creditsForDiscoveries
 
-    @Test func creditsForDiscoveriesSoloOneDiscoveryReturnsOneCredit() async throws {
+    @Test func creditsForDiscoveriesCompetitiveOneDiscoveryReturnsOneCredit() async throws {
         let discovery = makeDiscovery(participantId: "user1")
         let byTarget = ["region-1": [discovery]]
-        let credits = DiscoveryRulesEngine.creditsForDiscoveries(mode: .solo, discoveriesByTarget: byTarget)
+        let credits = DiscoveryRulesEngine.creditsForDiscoveries(mode: .competitive, discoveriesByTarget: byTarget)
         #expect(credits.count == 1)
         #expect(credits[0].participantId == "user1")
         #expect(credits[0].creditType == .full)
@@ -201,7 +171,7 @@ struct DiscoveryRulesEngineTests {
     }
 
     @Test func creditsForDiscoveriesEmptyTargetsReturnsEmpty() async throws {
-        let credits = DiscoveryRulesEngine.creditsForDiscoveries(mode: .solo, discoveriesByTarget: [:])
+        let credits = DiscoveryRulesEngine.creditsForDiscoveries(mode: .competitive, discoveriesByTarget: [:])
         #expect(credits.isEmpty)
     }
 }

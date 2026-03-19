@@ -108,7 +108,7 @@ final class CombinedTripSetupViewModel: ObservableObject {
         let sessionId = UUID()
         let createdBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? "unknown"
         let participant = TripParticipant(userId: createdBy, role: .owner, joinedAt: createdAt)
-        let mode: TripMode = types.count > 1 ? .combined : .solo
+        let mode: TripMode = .solo
         let startedAt = startTripRightAway ? createdAt : nil
 
         let session = TripSession(
@@ -122,7 +122,6 @@ final class CombinedTripSetupViewModel: ObservableObject {
             endedAt: nil,
             endedBy: nil,
             participants: [participant],
-            teams: [],
             enabledCountryRawValues: countryList.map { $0.rawValue }
         )
 
@@ -134,7 +133,7 @@ final class CombinedTripSetupViewModel: ObservableObject {
         AnalyticsService.shared.log(.tripSessionCreated(tripId: sessionId.uuidString, tripStatus: session.status.rawValue, tripParticipantCount: session.participants.count, tripActiveGameCount: instances.count, tripSource: "combined_setup"))
         for (index, instance) in instances.enumerated() {
             try gameInstanceRepository.create(instance: instance)
-            AnalyticsService.shared.log(.gameInstanceCreated(gameInstanceId: instance.id.uuidString, gameType: instance.definitionId, gameMode: session.mode.rawValue, tripId: sessionId.uuidString, gameOrderInTrip: index + 1))
+            AnalyticsService.shared.log(.gameInstanceCreated(gameInstanceId: instance.id.uuidString, gameType: instance.definitionId, gameMode: instance.commonConfig.gameMode.rawValue, tripId: sessionId.uuidString, gameOrderInTrip: index + 1))
         }
         AnalyticsService.shared.log(.combinedTripCreated(gameTypes: types.map(\.rawValue), tripSessionId: sessionId.uuidString, tripMode: session.mode.rawValue, participantCount: session.participants.count, gameCount: instances.count))
         if session.startedAt != nil {

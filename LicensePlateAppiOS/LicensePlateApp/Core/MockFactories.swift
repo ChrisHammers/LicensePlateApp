@@ -19,8 +19,7 @@ enum MockTripFactory {
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
-            participants: [MockParticipantFactory.makeDriver(userId: PreviewConstants.userId1)],
-            teams: []
+            participants: [MockParticipantFactory.makeDriver(userId: PreviewConstants.userId1)]
         )
         overrides(&session)
         return session
@@ -31,15 +30,14 @@ enum MockTripFactory {
             id: PreviewConstants.sessionIdCollaborative,
             name: "Collaborative Trip",
             status: .active,
-            mode: .collaborative,
+            mode: .multiplayer,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
             participants: [
                 MockParticipantFactory.makeDriver(userId: PreviewConstants.userId1),
                 MockParticipantFactory.makePassenger(userId: PreviewConstants.userId2)
-            ],
-            teams: []
+            ]
         )
         overrides(&session)
         return session
@@ -50,15 +48,14 @@ enum MockTripFactory {
             id: PreviewConstants.sessionIdCompetitive,
             name: "Competitive Trip",
             status: .active,
-            mode: .competitive,
+            mode: .multiplayer,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
             participants: [
                 MockParticipantFactory.makeDriver(userId: PreviewConstants.userId1),
                 MockParticipantFactory.makePassenger(userId: PreviewConstants.userId2)
-            ],
-            teams: []
+            ]
         )
         overrides(&session)
         return session
@@ -69,12 +66,11 @@ enum MockTripFactory {
             id: PreviewConstants.sessionIdMulti,
             name: "Multi-Game Trip",
             status: .active,
-            mode: .combined,
+            mode: .multiplayer,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
-            participants: [MockParticipantFactory.makeDriver(userId: PreviewConstants.userId1)],
-            teams: []
+            participants: [MockParticipantFactory.makeDriver(userId: PreviewConstants.userId1)]
         )
         overrides(&session)
         return session
@@ -282,7 +278,7 @@ enum MockInviteFactory {
             inviteId: "mock-invite-\(status.rawValue)",
             tripSessionId: tripSessionId,
             tripName: tripName,
-            tripMode: TripMode.collaborative.rawValue,
+            tripMode: TripMode.multiplayer.rawValue,
             fromUserId: fromUserId,
             toUserId: toUserId,
             status: status,

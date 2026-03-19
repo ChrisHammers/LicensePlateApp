@@ -85,14 +85,19 @@ final class TravelLogViewModel: ObservableObject {
             }
             let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
             let discoveries = try tripActivityEventRepository.discoveries(sessionId: sessionId, gameInstanceId: nil)
-            let discoveriesByTarget = Dictionary(grouping: discoveries, by: \.targetId)
-            let credits = DiscoveryRulesEngine.creditsForDiscoveries(mode: session.mode, discoveriesByTarget: discoveriesByTarget)
+            var allCredits: [GameCredit] = []
+            for game in games {
+                let gameDiscoveries = discoveries.filter { $0.gameInstanceId == game.id }
+                let discoveriesByTarget = Dictionary(grouping: gameDiscoveries, by: \.targetId)
+                let gameCredits = DiscoveryRulesEngine.creditsForDiscoveries(mode: game.commonConfig.gameMode, discoveriesByTarget: discoveriesByTarget)
+                allCredits.append(contentsOf: gameCredits)
+            }
 
             let summary = TripSummaryBuilder.build(
                 session: session,
                 games: games,
                 discoveries: discoveries,
-                credits: credits
+                credits: allCredits
             )
             selectedSummary = summary
             AnalyticsService.shared.log(.tripSummaryViewed(sessionId: sessionId.uuidString))

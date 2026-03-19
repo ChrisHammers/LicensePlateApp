@@ -27,20 +27,6 @@ struct GameCreditCalculatorTests {
         )
     }
 
-    @Test func creditsSoloOneFullCreditForDiscoverer() async throws {
-        let discovery = makeDiscovery(participantId: "user1")
-        let result = GameCreditCalculator.credits(
-            for: .solo,
-            discovery: discovery,
-            existingDiscoveriesForTarget: []
-        )
-        #expect(result.count == 1)
-        #expect(result[0].participantId == "user1")
-        #expect(result[0].creditType == .full)
-        #expect(result[0].discoveryId == discovery.id)
-        #expect(result[0].weight == 1.0)
-    }
-
     @Test func creditsCompetitiveOneFullCreditForDiscoverer() async throws {
         let discovery = makeDiscovery(participantId: "user2")
         let result = GameCreditCalculator.credits(
@@ -101,18 +87,6 @@ struct GameCreditCalculatorTests {
             #expect(credit.creditType == .shared)
             #expect(credit.weight == 1.0 / 3.0)
         }
-    }
-
-    @Test func creditsCombinedOneFullCreditForDiscoverer() async throws {
-        let discovery = makeDiscovery(participantId: "user1")
-        let result = GameCreditCalculator.credits(
-            for: .combined,
-            discovery: discovery,
-            existingDiscoveriesForTarget: []
-        )
-        #expect(result.count == 1)
-        #expect(result[0].creditType == .full)
-        #expect(result[0].participantId == "user1")
     }
 
     // Step 06.5.5 — competitive: only first finder receives credit when passing first discovery

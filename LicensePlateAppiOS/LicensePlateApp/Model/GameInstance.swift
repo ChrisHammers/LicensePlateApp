@@ -27,6 +27,8 @@ final class GameInstance {
     var gameSpecificPayloadVersion: String?
     /// Step 07.5 — Encoded game-specific config (e.g. LicensePlateGameConfig). Decode where needed.
     var gameSpecificPayloadData: Data?
+    /// Step 6.9.1 — Teams for this game (e.g. for team-based scoring). Empty when not using teams.
+    var teams: [TripTeam]
 
     init(
         id: UUID = UUID(),
@@ -38,7 +40,8 @@ final class GameInstance {
         commonConfig: CommonGameConfig = CommonGameConfig(),
         gameSpecificPayloadType: String? = nil,
         gameSpecificPayloadVersion: String? = nil,
-        gameSpecificPayloadData: Data? = nil
+        gameSpecificPayloadData: Data? = nil,
+        teams: [TripTeam] = []
     ) {
         self.id = id
         self.definitionId = definitionId
@@ -50,6 +53,7 @@ final class GameInstance {
         self.gameSpecificPayloadType = gameSpecificPayloadType
         self.gameSpecificPayloadVersion = gameSpecificPayloadVersion
         self.gameSpecificPayloadData = gameSpecificPayloadData
+        self.teams = teams
     }
 
     /// Decodes LicensePlateGameConfig from gameSpecificPayloadData when definitionId is license_plate. Returns nil otherwise.

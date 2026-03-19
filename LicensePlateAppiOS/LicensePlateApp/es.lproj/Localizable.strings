@@ -162,6 +162,10 @@
 "Start Trip" = "Iniciar Viaje";
 "End Trip" = "Terminar Viaje";
 "Reset Trip" = "Restablecer Viaje";
+"Reset Game" = "Restablecer Juego";
+"Trip already ended" = "El viaje ya terminó";
+"Reset is not available for ended trips." = "No se puede restablecer en viajes terminados.";
+"Only this game's progress will be reset (discoveries and game state). The trip and its dates will not be changed." = "Solo se restablecerá el progreso de este juego (descubrimientos y estado). El viaje y sus fechas no cambiarán.";
 "Delete Trip" = "Eliminar Viaje";
 "Countries to Include" = "Países a Incluir";
 "United States" = "Estados Unidos";

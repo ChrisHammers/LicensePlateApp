@@ -2,19 +2,16 @@
 //  TripSessionTeamsEntity.swift
 //  LicensePlateApp
 //
-//  Step 06.5 — Separate entity for session teams. Avoids changing TripSessionEntity (which would break schema version fingerprint).
+//  Step 06.5 — Legacy entity for session-level teams. Step 6.9.1 — Teams moved to GameInstance; this entity is only retained in schema versions 7–11 for migration. Removed from SchemaVersion12.
 //
 
 import Foundation
 import SwiftData
 
-/// Stores encoded [TripTeam] for a trip session. One-to-one with TripSessionEntity by sessionId.
-/// Added in SchemaVersion7 only; TripSessionEntity is unchanged so existing stores migrate without "unknown model version".
+/// Deprecated: Teams are now on GameInstance (GameInstanceEntity.teamsData). Kept for schema versions 7–11 so migration can run.
 @Model
 final class TripSessionTeamsEntity {
-    /// Session this teams payload belongs to (matches TripSessionEntity.id).
     var sessionId: String
-    /// Encoded [TripTeam] (JSON).
     var teamsData: Data?
 
     init(sessionId: String, teamsData: Data? = nil) {

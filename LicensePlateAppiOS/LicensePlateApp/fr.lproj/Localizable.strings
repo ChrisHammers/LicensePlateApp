@@ -162,6 +162,10 @@
 "Start Trip" = "Démarrer le Voyage";
 "End Trip" = "Terminer le Voyage";
 "Reset Trip" = "Réinitialiser le Voyage";
+"Reset Game" = "Réinitialiser la Partie";
+"Trip already ended" = "Le voyage est déjà terminé";
+"Reset is not available for ended trips." = "La réinitialisation n'est pas disponible pour les voyages terminés.";
+"Only this game's progress will be reset (discoveries and game state). The trip and its dates will not be changed." = "Seul le progrès de cette partie sera réinitialisé (découvertes et état). Le voyage et ses dates ne seront pas modifiés.";
 "Delete Trip" = "Supprimer le Voyage";
 "Countries to Include" = "Pays à Inclure";
 "United States" = "États-Unis";

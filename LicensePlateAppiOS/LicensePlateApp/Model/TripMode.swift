@@ -2,20 +2,15 @@
 //  TripMode.swift
 //  LicensePlateApp
 //
-//  Gameplay model foundation — trip participation mode.
+//  Step 6.9.1 — Trip participation: solo vs multiplayer. Game-level mode (collaborative/competitive) is on GameInstance.
 //
 
 import Foundation
 
-/// How a trip/session is played: solo, shared collaborative, competitive, or combined games.
-/// Extensible for future modes (e.g. challenge, time-limited).
+/// Whether the trip is single-participant or multi-participant. Game rules (collaborative vs competitive) are on GameInstance.commonConfig.gameMode.
 enum TripMode: String, Codable, CaseIterable, Sendable {
     /// Single player; no other participants.
     case solo
-    /// Shared trip; discoveries count for the group (collaborative credit).
-    case collaborative
-    /// Separate scores per participant (competitive credit).
-    case competitive
-    /// Multiple game types in one trip (e.g. license plates + another game).
-    case combined
+    /// Multiple participants (invited or joined). Game mode per game is on GameInstance.
+    case multiplayer
 }

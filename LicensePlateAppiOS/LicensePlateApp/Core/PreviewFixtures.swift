@@ -50,8 +50,7 @@ enum PreviewTripFixtures {
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
             endedAt: nil,
-            participants: [PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1)],
-            teams: []
+            participants: [PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1)]
         )
     }
 
@@ -60,12 +59,11 @@ enum PreviewTripFixtures {
             id: PreviewConstants.sessionIdMulti,
             name: "Multi-Game Trip",
             status: .active,
-            mode: .combined,
+            mode: .multiplayer,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
-            participants: [PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1)],
-            teams: []
+            participants: [PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1)]
         )
     }
 
@@ -74,15 +72,14 @@ enum PreviewTripFixtures {
             id: PreviewConstants.sessionIdCollaborative,
             name: "Family Road Trip",
             status: .active,
-            mode: .collaborative,
+            mode: .multiplayer,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
             participants: [
                 PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1),
                 PreviewParticipantFixtures.passenger(userId: PreviewConstants.userId2)
-            ],
-            teams: []
+            ]
         )
     }
 
@@ -91,32 +88,28 @@ enum PreviewTripFixtures {
             id: PreviewConstants.sessionIdCompetitive,
             name: "Competitive Trip",
             status: .active,
-            mode: .competitive,
+            mode: .multiplayer,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
             participants: [
                 PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1),
                 PreviewParticipantFixtures.passenger(userId: PreviewConstants.userId2)
-            ],
-            teams: []
+            ]
         )
     }
 
+    /// Session for team-based preview. Teams are on GameInstance; use PreviewGameFixtures.licensePlateGame(sessionId:teams:) for a game with teams.
     static func tripWithTeams() -> TripSession {
-        let teams = PreviewTeamFixtures.twoTeams(
-            participantUserIds: ([PreviewConstants.userId1], [PreviewConstants.userId2])
-        )
-        return TripSession(
+        TripSession(
             id: PreviewConstants.sessionIdWithTeams,
             name: "Team Road Trip",
             status: .active,
-            mode: .competitive,
+            mode: .multiplayer,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
-            participants: PreviewParticipantFixtures.participantsForSession(teamIds: (PreviewConstants.teamId1, PreviewConstants.teamId2)),
-            teams: teams
+            participants: PreviewParticipantFixtures.participantsForSession(teamIds: (PreviewConstants.teamId1, PreviewConstants.teamId2))
         )
     }
 
@@ -129,8 +122,7 @@ enum PreviewTripFixtures {
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
-            participants: [PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1)],
-            teams: []
+            participants: [PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1)]
         )
     }
 
@@ -145,8 +137,7 @@ enum PreviewTripFixtures {
             startedAt: PreviewConstants.fixedDate,
             endedAt: PreviewConstants.fixedDateEnded,
             endedBy: PreviewConstants.userId1,
-            participants: [PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1)],
-            teams: []
+            participants: [PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1)]
         )
     }
 }
@@ -154,7 +145,7 @@ enum PreviewTripFixtures {
 // MARK: - PreviewGameFixtures
 
 enum PreviewGameFixtures {
-    static func licensePlateGame(sessionId: UUID = PreviewConstants.sessionIdSolo) -> GameInstance {
+    static func licensePlateGame(sessionId: UUID = PreviewConstants.sessionIdSolo, teams: [TripTeam] = []) -> GameInstance {
         let ruleSet = GameRuleSet(gameDefinitionId: GameType.licensePlate.rawValue)
         var config = CommonGameConfig()
         config.lifecycleState = .started
@@ -170,7 +161,8 @@ enum PreviewGameFixtures {
             commonConfig: config,
             gameSpecificPayloadType: "license_plate",
             gameSpecificPayloadVersion: "1",
-            gameSpecificPayloadData: payloadData
+            gameSpecificPayloadData: payloadData,
+            teams: teams
         )
     }
 
@@ -427,7 +419,7 @@ struct PreviewInviteFixturesParams {
             inviteId: "preview-invite-pending",
             tripSessionId: PreviewConstants.sessionIdCollaborative.uuidString,
             tripName: "Family Road Trip",
-            tripMode: TripMode.collaborative.rawValue,
+            tripMode: TripMode.multiplayer.rawValue,
             fromUserId: PreviewConstants.userId1,
             toUserId: PreviewConstants.userId2,
             status: .pending,
@@ -442,7 +434,7 @@ struct PreviewInviteFixturesParams {
             inviteId: "preview-invite-accepted",
             tripSessionId: PreviewConstants.sessionIdCollaborative.uuidString,
             tripName: "Family Road Trip",
-            tripMode: TripMode.collaborative.rawValue,
+            tripMode: TripMode.multiplayer.rawValue,
             fromUserId: PreviewConstants.userId1,
             toUserId: PreviewConstants.userId2,
             status: .accepted,

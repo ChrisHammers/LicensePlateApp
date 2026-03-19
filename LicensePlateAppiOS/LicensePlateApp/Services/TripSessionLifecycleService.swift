@@ -3,6 +3,7 @@
 //  LicensePlateApp
 //
 //  Step 04 — Single orchestration path for start/end/reset/cancel trip. Used by CombinedTripSetupViewModel and LicensePlateGameViewModel.
+//  Step 6.9.1 — resetTrip resets the specified game only (events + game state). Fails if trip is ended. Does not alter trip-level lifecycle.
 //
 
 import Foundation
@@ -104,15 +105,19 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         AnalyticsService.shared.log(.tripSessionCompleted(tripId: sessionId.uuidString))
     }
 
+    /// Resets the specified game only (events + game state). Fails if trip is ended. Does not alter trip-level lifecycle (startedAt, endedAt, endedBy).
     func resetTrip(sessionId: UUID, gameInstanceId: UUID) throws {
-        try tripActivityEventRepository.deleteEvents(sessionId: sessionId, gameInstanceId: gameInstanceId)
-        guard var session = try tripSessionRepository.session(byId: sessionId) else {
+        guard let session = try tripSessionRepository.session(byId: sessionId) else {
             throw TripSessionLifecycleServiceError.sessionNotFound(sessionId)
         }
-        session.startedAt = nil
-        session.endedAt = nil
-        session.endedBy = nil
-        try tripSessionRepository.save(session: session)
+        if session.status == .ended {
+            throw TripSessionLifecycleServiceError.tripAlreadyEnded
+        }
+        try tripActivityEventRepository.deleteEvents(sessionId: sessionId, gameInstanceId: gameInstanceId)
+        if var game = try gameInstanceRepository.instance(byId: gameInstanceId) {
+            game.commonConfig.lifecycleState = .created
+            try gameInstanceRepository.update(instance: game)
+        }
         AnalyticsService.shared.log(.tripSessionReset(tripId: sessionId.uuidString, gameInstanceId: gameInstanceId.uuidString))
     }
 
@@ -129,10 +134,12 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
 
 enum TripSessionLifecycleServiceError: Error, LocalizedError {
     case sessionNotFound(UUID)
+    case tripAlreadyEnded
 
     var errorDescription: String? {
         switch self {
         case .sessionNotFound(let id): return "Trip session not found: \(id.uuidString)"
+        case .tripAlreadyEnded: return "Trip already ended".localized
         }
     }
 }

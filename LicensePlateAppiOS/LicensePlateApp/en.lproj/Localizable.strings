@@ -162,6 +162,10 @@
 "Start Trip" = "Start Trip";
 "End Trip" = "End Trip";
 "Reset Trip" = "Reset Trip";
+"Reset Game" = "Reset Game";
+"Trip already ended" = "Trip already ended";
+"Reset is not available for ended trips." = "Reset is not available for ended trips.";
+"Only this game's progress will be reset (discoveries and game state). The trip and its dates will not be changed." = "Only this game's progress will be reset (discoveries and game state). The trip and its dates will not be changed.";
 "Delete Trip" = "Delete Trip";
 "Countries to Include" = "Countries to Include";
 "United States" = "United States";

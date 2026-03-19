@@ -209,18 +209,25 @@ struct TripGameSettingsView: View {
             Button {
                 showResetConfirmation = true
             } label: {
-                HStack {
-                    Text("Reset Trip".localized)
-                        .font(.system(.body, design: .rounded))
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                    Spacer()
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Reset Game".localized)
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(viewModel.currentSession.status == .ended ? Color.secondary : Color.Theme.primaryBlue)
+                        Spacer()
+                    }
+                    if viewModel.currentSession.status == .ended {
+                        Text("Reset is not available for ended trips.".localized)
+                            .font(.caption)
+                            .foregroundStyle(Color.secondary)
+                    }
                 }
                 .padding(.vertical, 12)
                 .padding(.horizontal, 16)
             }
             .buttonStyle(.plain)
-            .disabled(!viewModel.isTripCreator)
+            .disabled(!viewModel.isTripCreator || viewModel.currentSession.status == .ended)
 
             Divider()
 
@@ -253,7 +260,7 @@ struct TripGameSettingsView: View {
         } message: {
             Text("This will stop the game. You won't be able to add states in this trip anymore.".localized)
         }
-        .alert("Reset Trip".localized, isPresented: $showResetConfirmation) {
+        .alert("Reset Game".localized, isPresented: $showResetConfirmation) {
             Button("Cancel".localized, role: .cancel) {}
             Button("Reset".localized, role: .destructive) {
                 do {
@@ -264,7 +271,7 @@ struct TripGameSettingsView: View {
                 }
             }
         } message: {
-            Text("This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset.".localized)
+            Text("Only this game's progress will be reset (discoveries and game state). The trip and its dates will not be changed.".localized)
         }
         .alert("Delete Trip".localized, isPresented: $showDeleteConfirmation) {
             Button("Cancel".localized, role: .cancel) {}

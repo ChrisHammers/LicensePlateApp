@@ -50,7 +50,7 @@ struct PendingTripsViewModelTests {
             inviteId: UUID().uuidString,
             tripSessionId: UUID().uuidString,
             tripName: "Outgoing Trip",
-            tripMode: TripMode.collaborative.rawValue,
+            tripMode: TripMode.multiplayer.rawValue,
             fromUserId: userId,
             toUserId: otherId,
             status: .sent,

@@ -33,7 +33,6 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
         #endif
         let entity = TripSessionEntityMapper.toEntity(session)
         ctx.insert(entity)
-        upsertTeams(sessionId: session.id.uuidString, teams: session.teams, context: ctx)
         try ctx.save()
     }
 
@@ -53,7 +52,6 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
         } else {
             ctx.insert(TripSessionEntityMapper.toEntity(session))
         }
-        upsertTeams(sessionId: id, teams: session.teams, context: ctx)
         try ctx.save()
     }
 
@@ -72,8 +70,7 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
                 entity.createdBy == uid || participantIds(from: entity.participantsData).contains(uid)
             }
         }
-        let teamsMap = try fetchTeamsMap(sessionIds: entities.map(\.id), context: ctx)
-        return entities.map { TripSessionEntityMapper.toDomain($0, teamsData: teamsMap[$0.id].flatMap { $0 }) }
+        return entities.map { TripSessionEntityMapper.toDomain($0) }
     }
 
     func loadArchivedSessions(userId: String?, limit: Int, includeCancelled: Bool, sortBy: TravelLogSort) throws -> [TripSession] {
@@ -99,8 +96,7 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
                 entity.createdBy == uid || participantIds(from: entity.participantsData).contains(uid)
             }
         }
-        let teamsMap = try fetchTeamsMap(sessionIds: entities.map(\.id), context: ctx)
-        return entities.map { TripSessionEntityMapper.toDomain($0, teamsData: teamsMap[$0.id].flatMap { $0 }) }
+        return entities.map { TripSessionEntityMapper.toDomain($0) }
     }
 
     // MARK: - Participant
@@ -154,8 +150,7 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
     func session(byId id: UUID) throws -> TripSession? {
         guard let ctx = modelContext else { throw TripSessionRepositoryError.noModelContext }
         guard let entity = try fetchEntity(byId: id.uuidString, context: ctx) else { return nil }
-        let teamsData = try? fetchTeamsEntity(bySessionId: id.uuidString, context: ctx)?.teamsData
-        return TripSessionEntityMapper.toDomain(entity, teamsData: teamsData)
+        return TripSessionEntityMapper.toDomain(entity)
     }
 
     /// Placeholder for future sync; entity does not yet have lastSyncedAt.
@@ -170,31 +165,6 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
             predicate: #Predicate<TripSessionEntity> { $0.id == id }
         )
         return try context.fetch(descriptor).first
-    }
-
-    private func fetchTeamsEntity(bySessionId sessionId: String, context: ModelContext) throws -> TripSessionTeamsEntity? {
-        let descriptor = FetchDescriptor<TripSessionTeamsEntity>(
-            predicate: #Predicate<TripSessionTeamsEntity> { $0.sessionId == sessionId }
-        )
-        return try context.fetch(descriptor).first
-    }
-
-    private func fetchTeamsMap(sessionIds: [String], context: ModelContext) throws -> [String: Data?] {
-        let descriptor = FetchDescriptor<TripSessionTeamsEntity>()
-        let all = try context.fetch(descriptor)
-        let sessionIdSet = Set(sessionIds)
-        return all
-            .filter { sessionIdSet.contains($0.sessionId) }
-            .reduce(into: [String: Data?]()) { $0[$1.sessionId] = $1.teamsData }
-    }
-
-    private func upsertTeams(sessionId: String, teams: [TripTeam], context: ModelContext) {
-        let data = TripSessionEntityMapper.encodeTeamsForStorage(teams)
-        if let existing = try? fetchTeamsEntity(bySessionId: sessionId, context: context) {
-            existing.teamsData = data
-        } else if data != nil || !teams.isEmpty {
-            context.insert(TripSessionTeamsEntity(sessionId: sessionId, teamsData: data))
-        }
     }
 
     private func participantIds(from participantsData: Data?) -> Set<String> {

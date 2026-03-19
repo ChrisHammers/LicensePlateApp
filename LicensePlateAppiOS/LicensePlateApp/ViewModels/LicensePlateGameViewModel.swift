@@ -107,7 +107,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         let existingDiscoveriesForTarget = byTarget[regionID] ?? []
 
         let result = DiscoveryRulesEngine.evaluateDiscoverySubmission(
-            mode: currentSession.mode,
+            mode: game.commonConfig.gameMode,
             existingDiscoveriesForTarget: existingDiscoveriesForTarget,
             candidateParticipantId: participantId,
             candidateTargetId: regionID,
@@ -124,7 +124,7 @@ final class LicensePlateGameViewModel: ObservableObject {
                 gameInstanceId: game.id.uuidString,
                 targetId: regionID,
                 participantId: participantId.isEmpty ? nil : participantId,
-                mode: currentSession.mode.rawValue
+                mode: game.commonConfig.gameMode.rawValue
             ))
             return .rejectedDuplicate(message: rejectedDuplicateMessage ?? "")
         }

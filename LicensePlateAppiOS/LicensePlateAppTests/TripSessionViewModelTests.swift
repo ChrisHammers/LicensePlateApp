@@ -23,7 +23,6 @@ struct TripSessionViewModelTests {
             createdBy: "user1",
             startedAt: Date(),
             participants: [TripParticipant(userId: "user1", role: .owner, joinedAt: Date())],
-            teams: [],
             enabledCountryRawValues: ["United States"]
         )
     }
