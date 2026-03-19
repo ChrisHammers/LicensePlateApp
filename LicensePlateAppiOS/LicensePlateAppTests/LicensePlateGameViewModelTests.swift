@@ -2,7 +2,7 @@
 //  LicensePlateGameViewModelTests.swift
 //  LicensePlateAppTests
 //
-//  Step 6.8 — LicensePlateGameViewModel: same behavior as TripTrackerViewModel (game-level). startTrip, submitDiscovery, removeDiscovery, persistence failures.
+//  Step 6.8 — LicensePlateGameViewModel: startTrip, submitDiscovery, removeDiscovery, persistence failures.
 //
 
 import Foundation

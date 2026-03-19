@@ -2,7 +2,7 @@
 //  LicensePlateGameViewModel.swift
 //  LicensePlateApp
 //
-//  Step 6.8 — ViewModel for license plate game screen. Same logic as TripTrackerViewModel (game-level only).
+//  Step 6.8 — ViewModel for license plate game screen (game-level only).
 //
 
 import Foundation
