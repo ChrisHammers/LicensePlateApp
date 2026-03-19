@@ -8,6 +8,13 @@
 import Foundation
 import Combine
 
+/// Result of submitting a discovery (mark found).
+enum DiscoverySubmitResult {
+    case success
+    case rejectedDuplicate(message: String)
+    case failure(Error)
+}
+
 @MainActor
 final class LicensePlateGameViewModel: ObservableObject {
 
