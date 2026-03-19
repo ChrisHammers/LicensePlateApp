@@ -130,11 +130,10 @@ final class CombinedTripSetupViewModel: ObservableObject {
 
         let config = CombinedGameConfiguration(enabledGameTypes: Array(types))
         let instances = CombinedGameAssembler.assemble(session: session, config: config)
-        for instance in instances {
-            try gameInstanceRepository.create(instance: instance)
-        }
+        
         AnalyticsService.shared.log(.tripSessionCreated(tripId: sessionId.uuidString, tripStatus: session.status.rawValue, tripParticipantCount: session.participants.count, tripActiveGameCount: instances.count, tripSource: "combined_setup"))
         for (index, instance) in instances.enumerated() {
+            try gameInstanceRepository.create(instance: instance)
             AnalyticsService.shared.log(.gameInstanceCreated(gameInstanceId: instance.id.uuidString, gameType: instance.definitionId, gameMode: session.mode.rawValue, tripId: sessionId.uuidString, gameOrderInTrip: index + 1))
         }
         AnalyticsService.shared.log(.combinedTripCreated(gameTypes: types.map(\.rawValue), tripSessionId: sessionId.uuidString, tripMode: session.mode.rawValue, participantCount: session.participants.count, gameCount: instances.count))
