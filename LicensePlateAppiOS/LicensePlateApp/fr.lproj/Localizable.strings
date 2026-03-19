@@ -15,6 +15,9 @@
 "Create Trip" = "Créer un Voyage";
 "Trip: %@" = "Voyage : %@";
 "Double tap to open trip" = "Appuyez deux fois pour ouvrir le voyage";
+"Session Unavailable" = "Session indisponible";
+"We could not find this trip session." = "Nous n'avons pas pu trouver cette session de voyage.";
+"Session Unavailable. We could not find this trip session." = "Session indisponible. Nous n'avons pas pu trouver cette session de voyage.";
 
 // Trip Tracking
 "List" = "Liste";

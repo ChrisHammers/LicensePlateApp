@@ -12,10 +12,14 @@ import AVFoundation
 import UserNotifications
 import Speech
 
+/// Navigation stack: each value is a TripSession.id (session-anchored navigation).
+private typealias SessionPath = [UUID]
+
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    @State private var path: [UUID] = []
+    /// Navigation stack: each value is a TripSession.id (session-anchored navigation).
+    @State private var path: SessionPath = []
     @StateObject private var activeTripsListViewModel = ActiveTripsListViewModel(
         tripSessionRepository: TripSessionRepository.shared,
         tripActivityEventRepository: TripActivityEventRepository.shared,
@@ -539,11 +543,11 @@ private struct TripMissingView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(Color.Theme.accentYellow)
                 .accessibilityHidden(true)
-            Text("Trip Unavailable")
+            Text("Session Unavailable".localized)
                 .font(.system(.title2, design: .rounded))
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue)
-            Text("We could not find the trip you were looking for.")
+            Text("We could not find this trip session.".localized)
                 .font(.system(.body, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
         }
@@ -551,7 +555,7 @@ private struct TripMissingView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.Theme.background)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Trip Unavailable. We could not find the trip you were looking for.")
+        .accessibilityLabel("Session Unavailable. We could not find this trip session.".localized)
     }
 }
 

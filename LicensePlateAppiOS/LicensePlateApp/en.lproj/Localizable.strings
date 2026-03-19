@@ -15,6 +15,9 @@
 "Create Trip" = "Create Trip";
 "Trip: %@" = "Trip: %@";
 "Double tap to open trip" = "Double tap to open trip";
+"Session Unavailable" = "Session Unavailable";
+"We could not find this trip session." = "We could not find this trip session.";
+"Session Unavailable. We could not find this trip session." = "Session Unavailable. We could not find this trip session.";
 
 // Trip Tracking
 "List" = "List";
