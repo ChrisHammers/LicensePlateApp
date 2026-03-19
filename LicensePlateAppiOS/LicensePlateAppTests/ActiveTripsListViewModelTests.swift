@@ -170,4 +170,115 @@ struct ActiveTripsListViewModelTests {
 
         #expect(viewModel.errorMessage == nil)
     }
+
+    // MARK: - Step 6.8 — session(for:) and sessionAndGame(sessionId:gameId:)
+
+    @Test func sessionForWhenSessionExistsReturnsSession() async throws {
+        let session = makeSession(id: UUID(), name: "Seeded Trip")
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let eventRepo = MockTripActivityEventRepository()
+        let gameRepo = MockGameInstanceRepository()
+        let lifecycleService = MockTripSessionLifecycleService()
+
+        let viewModel = ActiveTripsListViewModel(
+            tripSessionRepository: sessionRepo,
+            tripActivityEventRepository: eventRepo,
+            gameInstanceRepository: gameRepo,
+            lifecycleService: lifecycleService
+        )
+
+        let result = viewModel.session(for: session.id)
+
+        #expect(result != nil)
+        #expect(result?.id == session.id)
+        #expect(result?.name == "Seeded Trip")
+    }
+
+    @Test func sessionForWhenSessionMissingReturnsNil() async throws {
+        let sessionRepo = MockTripSessionRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let gameRepo = MockGameInstanceRepository()
+        let lifecycleService = MockTripSessionLifecycleService()
+
+        let viewModel = ActiveTripsListViewModel(
+            tripSessionRepository: sessionRepo,
+            tripActivityEventRepository: eventRepo,
+            gameInstanceRepository: gameRepo,
+            lifecycleService: lifecycleService
+        )
+
+        let result = viewModel.session(for: UUID())
+
+        #expect(result == nil)
+    }
+
+    @Test func sessionAndGameWhenBothExistReturnsTuple() async throws {
+        let session = makeSession(id: UUID(), name: "Trip With Game")
+        var game = GameInstance(
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: session.id,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: CommonGameConfig(lifecycleState: .started, configLocked: true, configLockReason: .gameStarted)
+        )
+        game.id = UUID()
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        gameRepo.seed(game)
+        let eventRepo = MockTripActivityEventRepository()
+        let lifecycleService = MockTripSessionLifecycleService()
+
+        let viewModel = ActiveTripsListViewModel(
+            tripSessionRepository: sessionRepo,
+            tripActivityEventRepository: eventRepo,
+            gameInstanceRepository: gameRepo,
+            lifecycleService: lifecycleService
+        )
+
+        let result = viewModel.sessionAndGame(sessionId: session.id, gameId: game.id)
+
+        #expect(result != nil)
+        #expect(result!.0.id == session.id)
+        #expect(result!.1.id == game.id)
+    }
+
+    @Test func sessionAndGameWhenSessionMissingReturnsNil() async throws {
+        let sessionRepo = MockTripSessionRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let gameRepo = MockGameInstanceRepository()
+        let lifecycleService = MockTripSessionLifecycleService()
+
+        let viewModel = ActiveTripsListViewModel(
+            tripSessionRepository: sessionRepo,
+            tripActivityEventRepository: eventRepo,
+            gameInstanceRepository: gameRepo,
+            lifecycleService: lifecycleService
+        )
+
+        let result = viewModel.sessionAndGame(sessionId: UUID(), gameId: UUID())
+
+        #expect(result == nil)
+    }
+
+    @Test func sessionAndGameWhenGameMissingReturnsNil() async throws {
+        let session = makeSession(id: UUID(), name: "Trip No Game")
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let lifecycleService = MockTripSessionLifecycleService()
+
+        let viewModel = ActiveTripsListViewModel(
+            tripSessionRepository: sessionRepo,
+            tripActivityEventRepository: eventRepo,
+            gameInstanceRepository: gameRepo,
+            lifecycleService: lifecycleService
+        )
+
+        let result = viewModel.sessionAndGame(sessionId: session.id, gameId: UUID())
+
+        #expect(result == nil)
+    }
 }

@@ -119,4 +119,17 @@ final class ActiveTripsListViewModel: ObservableObject {
         guard let primaryGame = primary else { return nil }
         return (session, primaryGame)
     }
+
+    /// Session by id; nil if not found. Used for TripSessionView / missing check.
+    func session(for sessionId: UUID) -> TripSession? {
+        try? tripSessionRepository.session(byId: sessionId)
+    }
+
+    /// Resolve session and specific game by ids. Used for coordinator .game(sessionId, gameId) destination.
+    func sessionAndGame(sessionId: UUID, gameId: UUID) -> (TripSession, GameInstance)? {
+        guard let session = try? tripSessionRepository.session(byId: sessionId) else { return nil }
+        let games = (try? gameInstanceRepository.fetchByTripSession(sessionId: sessionId)) ?? []
+        guard let game = games.first(where: { $0.id == gameId }) else { return nil }
+        return (session, game)
+    }
 }

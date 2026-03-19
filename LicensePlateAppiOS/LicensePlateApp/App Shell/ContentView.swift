@@ -12,14 +12,10 @@ import AVFoundation
 import UserNotifications
 import Speech
 
-/// Navigation stack: each value is a TripSession.id (session-anchored navigation).
-private typealias SessionPath = [UUID]
-
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    /// Navigation stack: each value is a TripSession.id (session-anchored navigation).
-    @State private var path: SessionPath = []
+    @StateObject private var mainCoordinator = MainCoordinator()
     @StateObject private var activeTripsListViewModel = ActiveTripsListViewModel(
         tripSessionRepository: TripSessionRepository.shared,
         tripActivityEventRepository: TripActivityEventRepository.shared,
@@ -84,7 +80,7 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             if boundariesLoaded {
-              NavigationStack(path: $path) {
+              NavigationStack(path: $mainCoordinator.path) {
                 AppBackgroundView {
                   List {
                     Section {
@@ -222,7 +218,7 @@ struct ContentView: View {
                             authService: authService
                         ),
                         onCreated: { session in
-                            path.append(session.id)
+                            mainCoordinator.openSession(session.id)
                             isShowingCreateSheet = false
                             activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
                         }
@@ -250,15 +246,25 @@ struct ContentView: View {
                         Text(msg)
                     }
                 }
-                .navigationDestination(for: UUID.self) { sessionID in
-                    if let (session, primaryGame) = activeTripsListViewModel.sessionAndPrimaryGame(for: sessionID) {
-                        TripTrackerView(session: session, primaryGame: primaryGame, authService: authService)
-                    } else {
-                        TripMissingView()
+                .navigationDestination(for: MainCoordinator.MainRoute.self) { route in
+                    switch route {
+                    case .session(let sessionId):
+                        if activeTripsListViewModel.session(for: sessionId) != nil {
+                            TripSessionView(sessionId: sessionId)
+                        } else {
+                            TripMissingView()
+                        }
+                    case .game(let sessionId, let gameId):
+                        if let (session, game) = activeTripsListViewModel.sessionAndGame(sessionId: sessionId, gameId: gameId) {
+                            LicensePlateGameView(session: session, game: game, authService: authService)
+                        } else {
+                            TripMissingView()
+                        }
                     }
                 }
               }
-                .transition(.opacity)
+              .environmentObject(mainCoordinator)
+              .transition(.opacity)
             } else {
                 SplashScreenView()
                     .transition(.opacity)
@@ -363,10 +369,14 @@ struct ContentView: View {
 
     private var activeSessionList: some View {
         ForEach(activeTripsListViewModel.items) { item in
-            NavigationLink(value: item.session.id) {
+            Button {
+                FeedbackService.shared.buttonTap()
+                mainCoordinator.openSession(item.session.id)
+            } label: {
                 TripSessionRow(session: item.session, rollup: item.rollup)
                     .padding(.vertical, 8)
             }
+            .buttonStyle(.plain)
             .listRowInsets(.init(top: 6, leading: 20, bottom: 6, trailing: 20))
             .listRowBackground(Color.clear)
             .accessibilityLabel("Trip: %@".localized(item.session.name))
@@ -533,29 +543,6 @@ private struct PendingInviteCard: View {
         case .accepted: return .green
         case .declined, .canceled, .expired: return Color.Theme.softBrown
         }
-    }
-}
-
-private struct TripMissingView: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(Color.Theme.accentYellow)
-                .accessibilityHidden(true)
-            Text("Session Unavailable".localized)
-                .font(.system(.title2, design: .rounded))
-                .fontWeight(.semibold)
-                .foregroundStyle(Color.Theme.primaryBlue)
-            Text("We could not find this trip session.".localized)
-                .font(.system(.body, design: .rounded))
-                .foregroundStyle(Color.Theme.softBrown)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.Theme.background)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Session Unavailable. We could not find this trip session.".localized)
     }
 }
 
