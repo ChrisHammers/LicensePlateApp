@@ -54,6 +54,7 @@ enum PreviewTripFixtures {
         )
     }
 
+    /// Multiplayer trip (one participant; use for multi-game-type previews). Game mode is on each GameInstance.
     static func multiGameTrip() -> TripSession {
         TripSession(
             id: PreviewConstants.sessionIdMulti,
@@ -67,6 +68,7 @@ enum PreviewTripFixtures {
         )
     }
 
+    /// Multiplayer trip with two participants (e.g. family). For collaborative game behavior use a game with commonConfig.gameMode == .collaborative.
     static func collaborativeTrip() -> TripSession {
         TripSession(
             id: PreviewConstants.sessionIdCollaborative,
@@ -83,6 +85,7 @@ enum PreviewTripFixtures {
         )
     }
 
+    /// Multiplayer trip with two participants. For competitive game behavior use a game with commonConfig.gameMode == .competitive.
     static func competitiveTrip() -> TripSession {
         TripSession(
             id: PreviewConstants.sessionIdCompetitive,

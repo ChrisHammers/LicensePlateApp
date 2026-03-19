@@ -98,7 +98,7 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let session = TripSession(name: "Participants Trip", status: .active, mode: .collaborative, createdBy: "user1")
+        let session = TripSession(name: "Participants Trip", status: .active, mode: .multiplayer, createdBy: "user1")
         try repo.create(session: session)
 
         let participant = TripParticipant(userId: "user2", role: .member)
