@@ -151,6 +151,16 @@ struct LicensePlateGameViewModelTests {
         }
         #expect(viewModel.rejectedInvalidParticipantMessage != nil)
         #expect(viewModel.rejectedDuplicateMessage == nil)
+        #expect(eventRepo.appendedEvents().contains {
+            $0.kind == .discoveryRejected
+            && $0.payload?[TripActivityEventPayloadKey.regionId] == "CA"
+            && $0.payload?[TripActivityEventPayloadKey.rejectionReason] == DiscoveryOutcome.rejectedInvalidParticipant.rawValue
+        })
+        #expect(!eventRepo.appendedEvents().contains {
+            $0.kind == .regionFound
+            && $0.payload?[TripActivityEventPayloadKey.regionId] == "CA"
+            && $0.payload?[TripActivityEventPayloadKey.participantId] == "user1"
+        })
     }
 
     @Test func removeDiscoveryAppendsRegionRemovedAndRefreshesFoundRegions() async throws {

@@ -13,6 +13,7 @@ enum TripActivityEventKind: String, Codable, CaseIterable, Sendable {
     case tripEnded = "trip_ended"
     case regionFound = "region_found"
     case regionRemoved = "region_removed"
+    case discoveryRejected = "discovery_rejected"
     case participantJoined = "participant_joined"
     case participantLeft = "participant_left"
     case gameStarted = "game_started"
@@ -26,6 +27,9 @@ enum TripActivityEventPayloadKey {
     static let participantId = "participantId"
     static let inputMethod = "inputMethod"
     static let discoveredAt = "discoveredAt"
+    static let rejectionReason = "rejectionReason"
+    static let tripMode = "tripMode"
+    static let gameMode = "gameMode"
 }
 
 /// A single event in the trip lifecycle. Room for analytics and audit.

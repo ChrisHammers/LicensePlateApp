@@ -124,6 +124,28 @@ final class LicensePlateGameViewModel: ObservableObject {
         if result.outcome == .rejectedInvalidParticipant {
             rejectedDuplicateMessage = nil
             rejectedInvalidParticipantMessage = "This trip is solo, but a find is already recorded for someone else. That shouldn’t happen — someone may have access they shouldn’t.".localized
+            let payload: [String: String] = [
+                TripActivityEventPayloadKey.regionId: regionID,
+                TripActivityEventPayloadKey.gameInstanceId: game.id.uuidString,
+                TripActivityEventPayloadKey.participantId: participantId,
+                TripActivityEventPayloadKey.inputMethod: inputMethod.rawValue,
+                TripActivityEventPayloadKey.rejectionReason: result.outcome.rawValue,
+                TripActivityEventPayloadKey.tripMode: currentSession.mode.rawValue,
+                TripActivityEventPayloadKey.gameMode: game.commonConfig.gameMode.rawValue
+            ]
+            let rejectionEvent = TripActivityEvent(
+                sessionId: sessionId,
+                kind: .discoveryRejected,
+                actorId: participantId.isEmpty ? nil : participantId,
+                payload: payload
+            )
+            do {
+                try tripActivityEventRepository.append(rejectionEvent)
+                try? syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: rejectionEvent.id)
+            } catch {
+                AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_discovery_rejection", error: error.localizedDescription))
+                return .failure(error)
+            }
             AnalyticsService.shared.log(.discoveryRejectedInvalidParticipant(
                 tripId: sessionId.uuidString,
                 gameInstanceId: game.id.uuidString,
@@ -138,6 +160,28 @@ final class LicensePlateGameViewModel: ObservableObject {
         if result.outcome == .rejectedDuplicate {
             rejectedInvalidParticipantMessage = nil
             rejectedDuplicateMessage = "Only the first finder gets credit in competitive mode.".localized
+            let payload: [String: String] = [
+                TripActivityEventPayloadKey.regionId: regionID,
+                TripActivityEventPayloadKey.gameInstanceId: game.id.uuidString,
+                TripActivityEventPayloadKey.participantId: participantId,
+                TripActivityEventPayloadKey.inputMethod: inputMethod.rawValue,
+                TripActivityEventPayloadKey.rejectionReason: result.outcome.rawValue,
+                TripActivityEventPayloadKey.tripMode: currentSession.mode.rawValue,
+                TripActivityEventPayloadKey.gameMode: game.commonConfig.gameMode.rawValue
+            ]
+            let rejectionEvent = TripActivityEvent(
+                sessionId: sessionId,
+                kind: .discoveryRejected,
+                actorId: participantId.isEmpty ? nil : participantId,
+                payload: payload
+            )
+            do {
+                try tripActivityEventRepository.append(rejectionEvent)
+                try? syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: rejectionEvent.id)
+            } catch {
+                AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_discovery_rejection", error: error.localizedDescription))
+                return .failure(error)
+            }
             AnalyticsService.shared.log(.discoveryRejectedDuplicate(
                 tripId: sessionId.uuidString,
                 gameInstanceId: game.id.uuidString,

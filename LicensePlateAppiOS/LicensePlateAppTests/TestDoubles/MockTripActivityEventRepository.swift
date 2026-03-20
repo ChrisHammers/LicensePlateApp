@@ -101,7 +101,7 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
             let gidStr = gid.uuidString
             events.removeAll { event in
                 guard event.sessionId == sessionId else { return false }
-                guard event.kind == .regionFound || event.kind == .regionRemoved else { return false }
+                guard event.kind == .regionFound || event.kind == .regionRemoved || event.kind == .discoveryRejected else { return false }
                 return event.payload?[TripActivityEventPayloadKey.gameInstanceId] == gidStr
             }
         } else {

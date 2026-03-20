@@ -140,7 +140,7 @@ final class TripActivityEventRepository: ObservableObject, TripActivityEventRepo
                 predicate: #Predicate<TripActivityEventEntity> { $0.sessionId == sid }
             )
             let entities = try ctx.fetch(descriptor)
-            for entity in entities where entity.kind == TripActivityEventKind.regionFound.rawValue || entity.kind == TripActivityEventKind.regionRemoved.rawValue {
+            for entity in entities where entity.kind == TripActivityEventKind.regionFound.rawValue || entity.kind == TripActivityEventKind.regionRemoved.rawValue || entity.kind == TripActivityEventKind.discoveryRejected.rawValue {
                 if let data = entity.payloadData,
                    let payload = try? JSONDecoder().decode([String: String].self, from: data),
                    payload[TripActivityEventPayloadKey.gameInstanceId] == gidStr {
