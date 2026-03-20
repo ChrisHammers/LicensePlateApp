@@ -22,7 +22,7 @@ struct GameInstanceConfigEnvelopeTests {
     @Test func roundTripWithCommonConfigAndLicensePlatePayload() async throws {
         let sessionId = UUID()
         let lpConfig = LicensePlateGameConfig(
-            regionScope: .usOnly,
+            selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue],
             territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: false, includeCanadianTerritories: true, includeDC: true)
         )
         let payloadData = try JSONEncoder().encode(lpConfig)
@@ -53,7 +53,7 @@ struct GameInstanceConfigEnvelopeTests {
         #expect(back.commonConfig.lifecycleState == GameLifecycleState.created)
         let decoded = back.licensePlateConfig()
         #expect(decoded != nil)
-        #expect(decoded?.regionScope == .usOnly)
+        #expect(decoded?.selectedCountries == [.unitedStates])
         #expect(decoded?.territoryOptions.includeDC == true)
     }
 

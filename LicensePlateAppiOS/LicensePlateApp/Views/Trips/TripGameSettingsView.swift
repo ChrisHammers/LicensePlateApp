@@ -50,6 +50,9 @@ struct TripGameSettingsView: View {
     @State private var showDeleteConfirmation = false
     @State private var isEditingTripName = false
     @State private var editingTripName: String = ""
+    @State private var includeUS: Bool = false
+    @State private var includeCanada: Bool = false
+    @State private var includeMexico: Bool = false
 
     private var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
@@ -107,6 +110,9 @@ struct TripGameSettingsView: View {
             }
         }
         .background(Color.Theme.background)
+        .onAppear {
+            syncCountryTogglesFromGameConfig()
+        }
     }
 
     private var tripInfoSettings: some View {
@@ -292,11 +298,13 @@ struct TripGameSettingsView: View {
         }
     }
 
-    /// Enabled countries from this game's license-plate config (Step 6.9.2); default North America when config nil.
-    private var enabledCountriesForGame: [PlateRegion.Country] {
-        let config = game.licensePlateConfig() ?? LicensePlateGameConfig(regionScope: .northAmerica, territoryOptions: LicensePlateTerritoryOptions())
-        let targetIds = Set(LicensePlateScopeCalculator.targetRegionIds(for: config))
-        return Array(Set(PlateRegion.all.filter { targetIds.contains($0.id) }.map(\.country)))
+    /// Enabled countries from current toggle state.
+    private var selectedCountriesFromToggles: [PlateRegion.Country] {
+        var list: [PlateRegion.Country] = []
+        if includeUS { list.append(.unitedStates) }
+        if includeCanada { list.append(.canada) }
+        if includeMexico { list.append(.mexico) }
+        return list
     }
 
     private var gameSettings: some View {
@@ -312,15 +320,10 @@ struct TripGameSettingsView: View {
                 CountryCheckboxRow(
                     title: "United States".localized,
                     isOn: Binding(
-                        get: { enabledCountriesForGame.contains(.unitedStates) },
+                        get: { includeUS },
                         set: { newValue in
-                            var list = enabledCountriesForGame
-                            if newValue {
-                                if !list.contains(.unitedStates) { list.append(.unitedStates) }
-                            } else {
-                                list.removeAll { $0 == .unitedStates }
-                            }
-                            viewModel.setEnabledCountriesForGame(list)
+                            includeUS = newValue
+                            persistCountrySelection()
                         }
                     )
                 )
@@ -330,15 +333,10 @@ struct TripGameSettingsView: View {
                 CountryCheckboxRow(
                     title: "Canada".localized,
                     isOn: Binding(
-                        get: { enabledCountriesForGame.contains(.canada) },
+                        get: { includeCanada },
                         set: { newValue in
-                            var list = enabledCountriesForGame
-                            if newValue {
-                                if !list.contains(.canada) { list.append(.canada) }
-                            } else {
-                                list.removeAll { $0 == .canada }
-                            }
-                            viewModel.setEnabledCountriesForGame(list)
+                            includeCanada = newValue
+                            persistCountrySelection()
                         }
                     )
                 )
@@ -348,20 +346,22 @@ struct TripGameSettingsView: View {
                 CountryCheckboxRow(
                     title: "Mexico".localized,
                     isOn: Binding(
-                        get: { enabledCountriesForGame.contains(.mexico) },
+                        get: { includeMexico },
                         set: { newValue in
-                            var list = enabledCountriesForGame
-                            if newValue {
-                                if !list.contains(.mexico) { list.append(.mexico) }
-                            } else {
-                                list.removeAll { $0 == .mexico }
-                            }
-                            viewModel.setEnabledCountriesForGame(list)
+                            includeMexico = newValue
+                            persistCountrySelection()
                         }
                     )
                 )
                 .disabled(!canEditCountries)
                 .opacity(canEditCountries ? 1.0 : 0.5)
+
+                if selectedCountriesFromToggles.isEmpty {
+                    Text("Select at least one country.".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.red)
+                        .accessibilityLabel("Select at least one country.".localized)
+                }
             }
         }
     }
@@ -442,6 +442,25 @@ struct TripGameSettingsView: View {
                 .opacity(canEditSettings ? 1.0 : 0.5)
             }
         }
+    }
+
+    private func syncCountryTogglesFromGameConfig() {
+        let defaultConfig = LicensePlateGameConfig(
+            selectedCountriesRawValues: [
+                PlateRegion.Country.unitedStates.rawValue,
+                PlateRegion.Country.canada.rawValue,
+                PlateRegion.Country.mexico.rawValue
+            ],
+            territoryOptions: LicensePlateTerritoryOptions()
+        )
+        let selected = Set((game.licensePlateConfig() ?? defaultConfig).selectedCountries)
+        includeUS = selected.contains(.unitedStates)
+        includeCanada = selected.contains(.canada)
+        includeMexico = selected.contains(.mexico)
+    }
+
+    private func persistCountrySelection() {
+        viewModel.setEnabledCountriesForGame(selectedCountriesFromToggles)
     }
 }
 

@@ -36,13 +36,15 @@ struct CombinedGameAssemblerTests {
     @Test func oneGameTypeReturnsOneInstance() async throws {
         let session = makeSession()
         let config = CombinedGameConfiguration(enabledGameTypes: [.licensePlate])
+        let lpConfig = CombinedGameAssembler.licensePlateConfig(from: [.unitedStates, .canada])
 
-        let instances = CombinedGameAssembler.assemble(session: session, config: config)
+        let instances = CombinedGameAssembler.assemble(session: session, config: config, licensePlateConfig: lpConfig)
 
         #expect(instances.count == 1)
         #expect(instances[0].sessionId == session.id)
         #expect(instances[0].definitionId == GameType.licensePlate.rawValue)
         #expect(instances[0].ruleSet.gameDefinitionId == GameType.licensePlate.rawValue)
+        #expect(instances[0].licensePlateConfig()?.selectedCountries == [.unitedStates, .canada])
     }
 
     @Test func defaultConfigReturnsLicensePlateOnly() async throws {

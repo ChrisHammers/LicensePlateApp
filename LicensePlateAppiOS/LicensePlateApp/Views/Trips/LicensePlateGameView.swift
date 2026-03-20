@@ -287,7 +287,14 @@ struct LicensePlateGameView: View {
 
     /// Game-scoped enabled countries (and regions) for board/progress. Uses game's license-plate config when available; else North America default.
     private var gameScopedEnabledCountries: [PlateRegion.Country] {
-        let config = game.licensePlateConfig() ?? LicensePlateGameConfig(regionScope: .northAmerica, territoryOptions: LicensePlateTerritoryOptions())
+        let config = game.licensePlateConfig() ?? LicensePlateGameConfig(
+            selectedCountriesRawValues: [
+                PlateRegion.Country.unitedStates.rawValue,
+                PlateRegion.Country.canada.rawValue,
+                PlateRegion.Country.mexico.rawValue
+            ],
+            territoryOptions: LicensePlateTerritoryOptions()
+        )
         let targetIds = Set(LicensePlateScopeCalculator.targetRegionIds(for: config))
         return Array(Set(PlateRegion.all.filter { targetIds.contains($0.id) }.map(\.country)))
     }

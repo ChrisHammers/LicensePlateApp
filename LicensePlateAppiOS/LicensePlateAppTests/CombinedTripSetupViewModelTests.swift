@@ -67,7 +67,7 @@ struct CombinedTripSetupViewModelTests {
         let instances = try instanceRepo.fetchByTripSession(sessionId: session.id)
         #expect(instances.count == 1)
         #expect(instances[0].definitionId == GameType.licensePlate.rawValue)
-        #expect(instances[0].licensePlateConfig()?.regionScope == .usOnly)
+        #expect(instances[0].licensePlateConfig()?.selectedCountries == [.unitedStates])
         #expect(session.mode == .solo)
         #expect(session.participants.count == 1)
         #expect(session.participants[0].role == .owner)
@@ -148,6 +148,20 @@ struct CombinedTripSetupViewModelTests {
         #expect(throws: CombinedTripSetupError.self) {
             _ = try viewModel.createTrip(modelContext: ctx)
         }
+    }
+
+    @Test func countryValidationMessageShownWhenNoCountriesSelected() async throws {
+        let auth = FirebaseAuthService()
+        let viewModel = CombinedTripSetupViewModel(
+            tripSessionRepository: TripSessionRepository.shared,
+            gameInstanceRepository: GameInstanceRepository.shared,
+            authService: auth
+        )
+        viewModel.includeUS = false
+        viewModel.includeCanada = false
+        viewModel.includeMexico = false
+        #expect(viewModel.countryValidationMessage == "Select at least one country.".localized)
+        #expect(viewModel.canCreate == false)
     }
 
     @Test func toggleGameTypeAddsAndRemoves() async throws {

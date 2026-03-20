@@ -74,16 +74,23 @@ enum TripSummaryBuilder {
     private static func progressFromGame(_ game: GameInstance, discoveryCount: Int) -> (Int?, String?) {
         guard let lpConfig = game.licensePlateConfig() else { return (nil, nil) }
         let goal = LicensePlateScopeCalculator.completionGoal(for: lpConfig)
-        let label = progressLabel(for: lpConfig.regionScope)
+        let label = progressLabel(for: lpConfig.selectedCountries)
         return (goal, "\(discoveryCount) / \(goal) \(label)")
     }
 
-    private static func progressLabel(for scope: RegionScope) -> String {
-        switch scope {
-        case .usOnly: return "US regions"
-        case .canadaOnly: return "Canadian regions"
-        case .mexicoOnly: return "Mexican regions"
-        case .northAmerica: return "North American regions"
+    private static func progressLabel(for countries: [PlateRegion.Country]) -> String {
+        let set = Set(countries)
+        if set == [.unitedStates] { return "US regions" }
+        if set == [.canada] { return "Canadian regions" }
+        if set == [.mexico] { return "Mexican regions" }
+        if set == [.unitedStates, .canada, .mexico] { return "North American regions" }
+        let names = countries.map { country in
+            switch country {
+            case .unitedStates: return "US"
+            case .canada: return "Canada"
+            case .mexico: return "Mexico"
+            }
         }
+        return "\(names.joined(separator: " + ")) regions"
     }
 }

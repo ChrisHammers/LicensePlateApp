@@ -20,7 +20,7 @@ struct SelectedGameConfigReadPathTests {
             createdAt: Date(),
             participants: []
         )
-        let usOnlyConfig = LicensePlateGameConfig(regionScope: .usOnly, territoryOptions: LicensePlateTerritoryOptions())
+        let usOnlyConfig = LicensePlateGameConfig(selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue], territoryOptions: LicensePlateTerritoryOptions())
         let payloadData = try JSONEncoder().encode(usOnlyConfig)
         let game = GameInstance(
             definitionId: GameType.licensePlate.rawValue,
@@ -28,7 +28,7 @@ struct SelectedGameConfigReadPathTests {
             ruleSet: GameRuleSet(gameDefinitionId: GameType.licensePlate.rawValue),
             gameSpecificPayloadData: payloadData
         )
-        let config = game.licensePlateConfig() ?? LicensePlateGameConfig(regionScope: .northAmerica, territoryOptions: LicensePlateTerritoryOptions())
+        let config = game.licensePlateConfig() ?? LicensePlateGameConfig(selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue, PlateRegion.Country.canada.rawValue, PlateRegion.Country.mexico.rawValue], territoryOptions: LicensePlateTerritoryOptions())
         let targetIds = Set(LicensePlateScopeCalculator.targetRegionIds(for: config))
         let countries = Array(Set(PlateRegion.all.filter { targetIds.contains($0.id) }.map(\.country)))
         #expect(countries.contains(.unitedStates))
@@ -45,11 +45,11 @@ struct SelectedGameConfigReadPathTests {
             participants: [TripParticipant(userId: "u1", role: .owner, joinedAt: Date())]
         )
         let mexicoOnlyConfig = CombinedGameAssembler.licensePlateConfig(from: [.mexico])
-        #expect(mexicoOnlyConfig.regionScope == .mexicoOnly)
+        #expect(mexicoOnlyConfig.selectedCountries == [.mexico])
         let config = CombinedGameConfiguration(enabledGameTypes: [.licensePlate])
         let instances = CombinedGameAssembler.assemble(session: session, config: config, licensePlateConfig: mexicoOnlyConfig)
         #expect(instances.count == 1)
         let decoded = instances[0].licensePlateConfig()
-        #expect(decoded?.regionScope == .mexicoOnly)
+        #expect(decoded?.selectedCountries == [.mexico])
     }
 }

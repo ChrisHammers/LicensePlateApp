@@ -3,6 +3,7 @@
 //  LicensePlateApp
 //
 //  Step 07.5 — Derive target region IDs and completion goal from LicensePlateGameConfig. Pure logic.
+//  Step 6.9.x — explicit selected countries; RegionScope removed.
 //
 
 import Foundation
@@ -16,19 +17,10 @@ enum LicensePlateScopeCalculator {
     /// Returns target region IDs for the given config (subset of PlateRegion.all ids).
     static func targetRegionIds(for config: LicensePlateGameConfig) -> [String] {
         let all = PlateRegion.all
-        switch config.regionScope {
-        case .usOnly:
-            return filterUS(all, includeDC: config.territoryOptions.includeDC, includeUSTerritories: config.territoryOptions.includeUSTerritories).map(\.id)
-        case .canadaOnly:
-            return filterCanada(all, includeTerritories: config.territoryOptions.includeCanadianTerritories).map(\.id)
-        case .mexicoOnly:
-            return all.filter { $0.country == .mexico }.map(\.id)
-        case .northAmerica:
-            let usIds = filterUS(all, includeDC: config.territoryOptions.includeDC, includeUSTerritories: config.territoryOptions.includeUSTerritories).map(\.id)
-            let caIds = filterCanada(all, includeTerritories: config.territoryOptions.includeCanadianTerritories).map(\.id)
-            let mxIds = all.filter { $0.country == .mexico }.map(\.id)
-            return usIds + caIds + mxIds
-        }
+        let selected = Set(config.selectedCountries)
+        guard !selected.isEmpty else { return [] }
+        let filteredByCountry = all.filter { selected.contains($0.country) }
+        return filterTerritories(filteredByCountry, options: config.territoryOptions).map(\.id)
     }
 
     /// Completion goal (number of target regions) for the given config.
@@ -36,19 +28,16 @@ enum LicensePlateScopeCalculator {
         targetRegionIds(for: config).count
     }
 
-    private static func filterUS(_ regions: [PlateRegion], includeDC: Bool, includeUSTerritories: Bool) -> [PlateRegion] {
+    private static func filterTerritories(_ regions: [PlateRegion], options: LicensePlateTerritoryOptions) -> [PlateRegion] {
         regions.filter { region in
-            guard region.country == .unitedStates else { return false }
-            if region.id == usDCId { return includeDC }
-            if usTerritoryIds.contains(region.id) { return includeUSTerritories }
-            return true // 50 states
-        }
-    }
-
-    private static func filterCanada(_ regions: [PlateRegion], includeTerritories: Bool) -> [PlateRegion] {
-        regions.filter { region in
-            guard region.country == .canada else { return false }
-            if canadianTerritoryIds.contains(region.id) { return includeTerritories }
+            if region.country == .unitedStates {
+                if region.id == usDCId { return options.includeDC }
+                if usTerritoryIds.contains(region.id) { return options.includeUSTerritories }
+                return true
+            }
+            if region.country == .canada && canadianTerritoryIds.contains(region.id) {
+                return options.includeCanadianTerritories
+            }
             return true
         }
     }

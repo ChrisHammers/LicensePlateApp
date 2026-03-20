@@ -9,7 +9,7 @@ import Foundation
 
 /// Classifies game settings for editability. Used by UI/validation; no persistence.
 enum GameSettingEditability {
-    /// Locked once lifecycleState == .started (e.g. regionScope, territoryOptions, scoringProfile).
+    /// Locked once lifecycleState == .started (e.g. selectedCountries, territoryOptions, scoringProfile).
     case immutableAfterStart
     /// Can be changed after start (e.g. skipVoiceConfirmation, tracking display).
     case alwaysEditable

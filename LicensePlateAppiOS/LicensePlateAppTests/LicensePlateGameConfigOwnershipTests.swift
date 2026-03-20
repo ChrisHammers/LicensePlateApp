@@ -12,14 +12,14 @@ import Testing
 struct LicensePlateGameConfigOwnershipTests {
 
     @Test func enabledCountriesDerivedFromGameConfig() async throws {
-        let config = LicensePlateGameConfig(regionScope: .usOnly, territoryOptions: LicensePlateTerritoryOptions())
+        let config = LicensePlateGameConfig(selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue], territoryOptions: LicensePlateTerritoryOptions())
         let targetIds = LicensePlateScopeCalculator.targetRegionIds(for: config)
         let countries = Set(PlateRegion.all.filter { targetIds.contains($0.id) }.map(\.country))
         #expect(countries == [.unitedStates])
     }
 
     @Test func gameInstanceWithPayloadDecodesConfigAndYieldsRegionIds() async throws {
-        let config = LicensePlateGameConfig(regionScope: .canadaOnly, territoryOptions: LicensePlateTerritoryOptions())
+        let config = LicensePlateGameConfig(selectedCountriesRawValues: [PlateRegion.Country.canada.rawValue], territoryOptions: LicensePlateTerritoryOptions())
         let payloadData = try JSONEncoder().encode(config)
         let game = GameInstance(
             definitionId: GameType.licensePlate.rawValue,
@@ -29,13 +29,13 @@ struct LicensePlateGameConfigOwnershipTests {
         )
         let decoded = game.licensePlateConfig()
         #expect(decoded != nil)
-        #expect(decoded?.regionScope == .canadaOnly)
+        #expect(decoded?.selectedCountries == [.canada])
         let targetIds = LicensePlateScopeCalculator.targetRegionIds(for: decoded!)
         #expect(!targetIds.isEmpty)
     }
 
     @Test func completionGoalFromGameConfig() async throws {
-        let config = LicensePlateGameConfig(regionScope: .northAmerica, territoryOptions: LicensePlateTerritoryOptions())
+        let config = LicensePlateGameConfig(selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue, PlateRegion.Country.canada.rawValue, PlateRegion.Country.mexico.rawValue], territoryOptions: LicensePlateTerritoryOptions())
         let goal = LicensePlateScopeCalculator.completionGoal(for: config)
         #expect(goal > 50)
     }

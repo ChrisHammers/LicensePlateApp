@@ -33,7 +33,11 @@ enum CombinedGameAssembler {
         )
 
         let defaultLPConfig = LicensePlateGameConfig(
-            regionScope: .northAmerica,
+            selectedCountriesRawValues: [
+                PlateRegion.Country.unitedStates.rawValue,
+                PlateRegion.Country.canada.rawValue,
+                PlateRegion.Country.mexico.rawValue
+            ],
             territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: true, includeCanadianTerritories: true, includeDC: true)
         )
 
@@ -64,13 +68,15 @@ enum CombinedGameAssembler {
 
     /// Build LicensePlateGameConfig from selected countries (for setup flow). Step 6.9.2.
     static func licensePlateConfig(from countries: [PlateRegion.Country]) -> LicensePlateGameConfig {
-        let scope = regionScope(from: countries)
         let territoryOptions = LicensePlateTerritoryOptions(
             includeUSTerritories: true,
             includeCanadianTerritories: true,
             includeDC: true
         )
-        return LicensePlateGameConfig(regionScope: scope, territoryOptions: territoryOptions)
+        return LicensePlateGameConfig(
+            selectedCountriesRawValues: countries.map(\.rawValue),
+            territoryOptions: territoryOptions
+        )
     }
 
     /// Default game mode when assembling from trip. TripMode is solo/multiplayer only; game mode defaults to collaborative.
@@ -79,11 +85,4 @@ enum CombinedGameAssembler {
         return .collaborative
     }
 
-    private static func regionScope(from countries: [PlateRegion.Country]) -> RegionScope {
-        let set = Set(countries)
-        if set == [.unitedStates] { return .usOnly }
-        if set == [.canada] { return .canadaOnly }
-        if set == [.mexico] { return .mexicoOnly }
-        return .northAmerica
-    }
 }

@@ -88,7 +88,7 @@ enum MockGameFactory {
         config.lifecycleState = .started
         configOverrides(&config)
         let ruleSet = GameRuleSet(gameDefinitionId: GameType.licensePlate.rawValue)
-        let lpConfig = LicensePlateGameConfig(regionScope: .northAmerica)
+        let lpConfig = LicensePlateGameConfig(selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue, PlateRegion.Country.canada.rawValue, PlateRegion.Country.mexico.rawValue])
         let payloadData = try? JSONEncoder().encode(lpConfig)
         return GameInstance(
             id: PreviewConstants.gameInstanceId1,

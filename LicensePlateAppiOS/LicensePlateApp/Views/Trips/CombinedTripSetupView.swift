@@ -173,6 +173,13 @@ struct CombinedTripSetupView: View {
                     CombinedTripCountryRow(title: "United States".localized, isOn: $viewModel.includeUS)
                     CombinedTripCountryRow(title: "Canada".localized, isOn: $viewModel.includeCanada)
                     CombinedTripCountryRow(title: "Mexico".localized, isOn: $viewModel.includeMexico)
+
+                    if let countryValidationMessage = viewModel.countryValidationMessage {
+                        Text(countryValidationMessage)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.red)
+                            .accessibilityLabel(countryValidationMessage)
+                    }
                 }
             }
             .padding(.horizontal, 16)

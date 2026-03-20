@@ -65,6 +65,10 @@ final class CombinedTripSetupViewModel: ObservableObject {
             && !enabledCountries.isEmpty
     }
 
+    var countryValidationMessage: String? {
+        enabledCountries.isEmpty ? "Select at least one country.".localized : nil
+    }
+
     // MARK: - Actions
 
     func toggleGameType(_ gameType: GameType) {
