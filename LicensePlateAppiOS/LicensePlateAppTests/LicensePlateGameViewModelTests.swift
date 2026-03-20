@@ -22,8 +22,7 @@ struct LicensePlateGameViewModelTests {
             createdAt: Date(),
             createdBy: "user1",
             startedAt: startedAt,
-            participants: [TripParticipant(userId: "user1", role: .owner, joinedAt: Date())],
-            enabledCountryRawValues: ["United States"]
+            participants: [TripParticipant(userId: "user1", role: .owner, joinedAt: Date())]
         )
     }
 

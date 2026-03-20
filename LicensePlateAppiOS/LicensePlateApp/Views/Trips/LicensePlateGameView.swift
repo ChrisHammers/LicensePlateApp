@@ -285,13 +285,11 @@ struct LicensePlateGameView: View {
         }
     }
 
-    /// Game-scoped enabled countries (and regions) for board/progress. Uses game's license-plate config when available; else session.
+    /// Game-scoped enabled countries (and regions) for board/progress. Uses game's license-plate config when available; else North America default.
     private var gameScopedEnabledCountries: [PlateRegion.Country] {
-        if let config = game.licensePlateConfig() {
-            let targetIds = Set(LicensePlateScopeCalculator.targetRegionIds(for: config))
-            return Array(Set(PlateRegion.all.filter { targetIds.contains($0.id) }.map(\.country)))
-        }
-        return viewModel.currentSession.enabledCountries
+        let config = game.licensePlateConfig() ?? LicensePlateGameConfig(regionScope: .northAmerica, territoryOptions: LicensePlateTerritoryOptions())
+        let targetIds = Set(LicensePlateScopeCalculator.targetRegionIds(for: config))
+        return Array(Set(PlateRegion.all.filter { targetIds.contains($0.id) }.map(\.country)))
     }
 
     private var headerFoundValue: String {

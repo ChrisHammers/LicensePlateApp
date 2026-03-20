@@ -57,7 +57,6 @@ struct GameplayModelFoundationTests {
         #expect(session.status == .active)
         #expect(session.mode == .solo)
         #expect(session.participants.isEmpty)
-        #expect(session.enabledCountryRawValues.count >= 3)
     }
 
     @Test func gameInstanceAndDiscoveryConstruction() async throws {

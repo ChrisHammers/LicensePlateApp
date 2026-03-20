@@ -42,8 +42,7 @@ struct SchemaMigrationGameplayTests {
             name: name,
             status: TripStatus.active.rawValue,
             mode: TripMode.solo.rawValue,
-            createdAt: Date(),
-            enabledCountryRawValues: "United States,Canada,Mexico"
+            createdAt: Date()
         )
         context.insert(entity)
         try context.save()
@@ -87,7 +86,6 @@ struct SchemaMigrationGameplayTests {
             mode: TripMode.solo.rawValue,
             createdAt: Date()
         )
-        #expect(entity.enabledCountryRawValues == "United States,Canada,Mexico")
         #expect(entity.createdBy == nil)
         #expect(entity.startedAt == nil)
         #expect(entity.endedAt == nil)

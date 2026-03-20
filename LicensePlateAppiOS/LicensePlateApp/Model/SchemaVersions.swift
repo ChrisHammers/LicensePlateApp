@@ -71,6 +71,12 @@ final class SchemaVersion12Marker {
     init() {}
 }
 
+@Model
+final class SchemaVersion13Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
 // MARK: - Schema Version 1 (Initial)
 // Initial schema with Trip and AppUser
 
@@ -431,10 +437,47 @@ enum SchemaVersion12: VersionedSchema {
     }
 }
 
+// MARK: - Schema Version 13 (Step 6.9.2 — TripSessionEntity: remove enabledCountryRawValues; region scope on GameInstance)
+enum SchemaVersion13: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(13, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            SchemaVersion7Marker.self,
+            SchemaVersion8Marker.self,
+            TripActivityEventEntity.self,
+            SchemaVersion9Marker.self,
+            SchemaVersion10Marker.self,
+            SyncQueueItemEntity.self,
+            RemoteSyncMetadataEntity.self,
+            SchemaVersion11Marker.self,
+            SchemaVersion12Marker.self,
+            SchemaVersion13Marker.self
+        ]
+    }
+}
+
 // MARK: - Migration Plan
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self, SchemaVersion11.self, SchemaVersion12.self]
+        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self, SchemaVersion11.self, SchemaVersion12.self, SchemaVersion13.self]
     }
 
     static var stages: [MigrationStage] {
@@ -449,12 +492,13 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             .lightweight(fromVersion: SchemaVersion8.self, toVersion: SchemaVersion9.self),
             .lightweight(fromVersion: SchemaVersion9.self, toVersion: SchemaVersion10.self),
             .lightweight(fromVersion: SchemaVersion10.self, toVersion: SchemaVersion11.self),
-            .lightweight(fromVersion: SchemaVersion11.self, toVersion: SchemaVersion12.self)
+            .lightweight(fromVersion: SchemaVersion11.self, toVersion: SchemaVersion12.self),
+            .lightweight(fromVersion: SchemaVersion12.self, toVersion: SchemaVersion13.self)
         ]
     }
 }
 
 // MARK: - Current Schema
-// V12: Step 6.9.1 — Teams on GameInstance (GameInstanceEntity.teamsData); TripSessionTeamsEntity removed.
-typealias CurrentSchema = SchemaVersion12
+// V13: Step 6.9.2 — TripSessionEntity enabledCountryRawValues removed; region scope on GameInstance.
+typealias CurrentSchema = SchemaVersion13
 

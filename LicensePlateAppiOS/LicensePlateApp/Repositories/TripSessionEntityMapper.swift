@@ -9,12 +9,9 @@ import Foundation
 
 enum TripSessionEntityMapper {
 
-    private static let countrySeparator = ","
-
-    /// Map domain TripSession to SwiftData TripSessionEntity (for insert/update). Teams are on GameInstance (Step 6.9.1).
+    /// Map domain TripSession to SwiftData TripSessionEntity (for insert/update). Teams and region scope are on GameInstance (Step 6.9.1, 6.9.2).
     static func toEntity(_ session: TripSession) -> TripSessionEntity {
         let participantsData: Data? = encodeParticipants(session.participants)
-        let enabledCountriesString = session.enabledCountryRawValues.joined(separator: countrySeparator)
         return TripSessionEntity(
             id: session.id.uuidString,
             name: session.name,
@@ -25,17 +22,13 @@ enum TripSessionEntityMapper {
             startedAt: session.startedAt,
             endedAt: session.endedAt,
             endedBy: session.endedBy,
-            enabledCountryRawValues: enabledCountriesString.isEmpty ? "United States,Canada,Mexico" : enabledCountriesString,
             participantsData: participantsData
         )
     }
 
-    /// Map SwiftData TripSessionEntity to domain TripSession. Teams are on GameInstance (Step 6.9.1).
+    /// Map SwiftData TripSessionEntity to domain TripSession. Teams and region scope are on GameInstance (Step 6.9.1, 6.9.2).
     static func toDomain(_ entity: TripSessionEntity) -> TripSession {
         let participants = decodeParticipants(entity.participantsData)
-        let countryValues = entity.enabledCountryRawValues.split(separator: Character(countrySeparator))
-            .map { String($0).trimmingCharacters(in: .whitespaces) }
-        let enabledRaw = countryValues.isEmpty ? ["United States", "Canada", "Mexico"] : countryValues
         let status = TripStatus(rawValue: entity.status) ?? .active
         let mode = Self.mapEntityModeToTripMode(entity.mode)
         let createdAt = entity.createdAt ?? entity.startedAt ?? Date.distantPast
@@ -50,7 +43,6 @@ enum TripSessionEntityMapper {
             endedAt: entity.endedAt,
             endedBy: entity.endedBy,
             participants: participants,
-            enabledCountryRawValues: enabledRaw,
             riskFlags: nil
         )
     }
@@ -65,7 +57,6 @@ enum TripSessionEntityMapper {
         entity.startedAt = session.startedAt
         entity.endedAt = session.endedAt
         entity.endedBy = session.endedBy
-        entity.enabledCountryRawValues = session.enabledCountryRawValues.joined(separator: countrySeparator)
         entity.participantsData = encodeParticipants(session.participants)
     }
 

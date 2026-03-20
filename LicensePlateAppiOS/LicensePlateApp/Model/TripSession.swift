@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// Session/container only: lifecycle, participants, visibility, trip-level status. Board and progress are owned by GameInstance and derived from events; trip-level rollups are provided by projections (e.g. TripRollup).
+/// Session/container only: lifecycle, participants, visibility, trip-level status. Region/country scope lives on GameInstance (e.g. LicensePlateGameConfig); board and progress are owned by GameInstance and derived from events; trip-level rollups are provided by projections (e.g. TripRollup).
 final class TripSession {
     var id: UUID
     var name: String
@@ -20,9 +20,7 @@ final class TripSession {
     var endedBy: String?
     /// Snapshot of participants (e.g. for display); can be derived from events or stored.
     var participants: [TripParticipant]
-    /// Enabled countries for this trip (e.g. US, Canada, Mexico).
-    var enabledCountryRawValues: [String]
-    /// Optional location/risk flags for future anti-spam.
+    /// Optional location/risk flags for future anti-spam (trip-level metadata; not persisted).
     var riskFlags: [String]?
 
     init(
@@ -36,7 +34,6 @@ final class TripSession {
         endedAt: Date? = nil,
         endedBy: String? = nil,
         participants: [TripParticipant] = [],
-        enabledCountryRawValues: [String] = ["United States", "Canada", "Mexico"],
         riskFlags: [String]? = nil
     ) {
         self.id = id
@@ -49,17 +46,6 @@ final class TripSession {
         self.endedAt = endedAt
         self.endedBy = endedBy
         self.participants = participants
-        self.enabledCountryRawValues = enabledCountryRawValues
         self.riskFlags = riskFlags
-    }
-
-    /// Enabled countries as enum values when using PlateRegion.Country.
-    var enabledCountries: [PlateRegion.Country] {
-        get {
-            enabledCountryRawValues.compactMap { PlateRegion.Country(rawValue: $0) }
-        }
-        set {
-            enabledCountryRawValues = newValue.map { $0.rawValue }
-        }
     }
 }

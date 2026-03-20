@@ -28,8 +28,7 @@ struct TripSessionLifecycleServiceTests {
             createdAt: Date(),
             createdBy: "user1",
             startedAt: nil,
-            participants: [TripParticipant(userId: "user1", role: .owner, joinedAt: Date())],
-            enabledCountryRawValues: ["United States"]
+            participants: [TripParticipant(userId: "user1", role: .owner, joinedAt: Date())]
         )
         sessionRepo.seed(session)
 
@@ -80,8 +79,7 @@ struct TripSessionLifecycleServiceTests {
             createdAt: Date(),
             createdBy: "user1",
             startedAt: Date(),
-            participants: [TripParticipant(userId: "user1", role: .owner, joinedAt: Date())],
-            enabledCountryRawValues: ["United States"]
+            participants: [TripParticipant(userId: "user1", role: .owner, joinedAt: Date())]
         )
         sessionRepo.seed(session)
         gameRepo.seed(GameInstance(
@@ -129,8 +127,7 @@ struct TripSessionLifecycleServiceTests {
             startedAt: startedAt,
             endedAt: nil,
             endedBy: nil,
-            participants: [],
-            enabledCountryRawValues: ["United States"]
+            participants: []
         )
         sessionRepo.seed(session)
         var game = GameInstance(
@@ -182,8 +179,7 @@ struct TripSessionLifecycleServiceTests {
             startedAt: Date(),
             endedAt: Date(),
             endedBy: "user1",
-            participants: [],
-            enabledCountryRawValues: ["United States"]
+            participants: []
         )
         sessionRepo.seed(session)
         gameRepo.seed(GameInstance(
@@ -225,8 +221,7 @@ struct TripSessionLifecycleServiceTests {
             createdAt: Date(),
             createdBy: "user1",
             startedAt: Date(),
-            participants: [],
-            enabledCountryRawValues: ["United States"]
+            participants: []
         )
         sessionRepo.seed(session)
 

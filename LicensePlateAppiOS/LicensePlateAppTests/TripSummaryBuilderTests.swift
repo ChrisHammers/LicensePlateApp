@@ -112,8 +112,7 @@ struct TripSummaryBuilderTests {
             mode: .solo,
             createdAt: Date().addingTimeInterval(-100),
             endedAt: Date(),
-            participants: [TripParticipant(userId: "user1", role: .owner)],
-            enabledCountryRawValues: ["United States"]
+            participants: [TripParticipant(userId: "user1", role: .owner)]
         )
         let lpConfig = LicensePlateGameConfig(
             regionScope: .usOnly,

@@ -85,11 +85,11 @@ struct GameInstanceConfigEnvelopeTests {
             status: .active,
             mode: .solo,
             createdAt: .now,
-            participants: [TripParticipant(userId: "u1", role: .owner)],
-            enabledCountryRawValues: ["United States", "Canada", "Mexico"]
+            participants: [TripParticipant(userId: "u1", role: .owner)]
         )
         let config = CombinedGameConfiguration(enabledGameTypes: [.licensePlate])
-        let instances = CombinedGameAssembler.assemble(session: session, config: config)
+        let lpConfig = CombinedGameAssembler.licensePlateConfig(from: [.unitedStates, .canada, .mexico])
+        let instances = CombinedGameAssembler.assemble(session: session, config: config, licensePlateConfig: lpConfig)
         #expect(instances.count == 1)
         #expect(instances[0].commonConfig.scoringProfile == "default")
         #expect(instances[0].commonConfig.lifecycleState == .created)

@@ -29,8 +29,7 @@ struct CombinedGameAssemblerTests {
             createdBy: "user1",
             startedAt: startedAt ?? created,
             endedAt: endedAt,
-            participants: [TripParticipant(userId: "user1", role: .owner)],
-            enabledCountryRawValues: ["United States", "Canada", "Mexico"]
+            participants: [TripParticipant(userId: "user1", role: .owner)]
         )
     }
 

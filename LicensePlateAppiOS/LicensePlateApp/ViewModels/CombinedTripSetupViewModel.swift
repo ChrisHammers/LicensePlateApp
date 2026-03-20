@@ -121,14 +121,14 @@ final class CombinedTripSetupViewModel: ObservableObject {
             startedAt: startedAt,
             endedAt: nil,
             endedBy: nil,
-            participants: [participant],
-            enabledCountryRawValues: countryList.map { $0.rawValue }
+            participants: [participant]
         )
 
         try tripSessionRepository.create(session: session)
 
         let config = CombinedGameConfiguration(enabledGameTypes: Array(types))
-        let instances = CombinedGameAssembler.assemble(session: session, config: config)
+        let lpConfig = CombinedGameAssembler.licensePlateConfig(from: countryList)
+        let instances = CombinedGameAssembler.assemble(session: session, config: config, licensePlateConfig: lpConfig)
         
         AnalyticsService.shared.log(.tripSessionCreated(tripId: sessionId.uuidString, tripStatus: session.status.rawValue, tripParticipantCount: session.participants.count, tripActiveGameCount: instances.count, tripSource: "combined_setup"))
         for (index, instance) in instances.enumerated() {

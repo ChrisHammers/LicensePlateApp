@@ -292,9 +292,16 @@ struct TripGameSettingsView: View {
         }
     }
 
+    /// Enabled countries from this game's license-plate config (Step 6.9.2); default North America when config nil.
+    private var enabledCountriesForGame: [PlateRegion.Country] {
+        let config = game.licensePlateConfig() ?? LicensePlateGameConfig(regionScope: .northAmerica, territoryOptions: LicensePlateTerritoryOptions())
+        let targetIds = Set(LicensePlateScopeCalculator.targetRegionIds(for: config))
+        return Array(Set(PlateRegion.all.filter { targetIds.contains($0.id) }.map(\.country)))
+    }
+
     private var gameSettings: some View {
         Group {
-            let canEditCountries = viewModel.currentSession.startedAt == nil
+            let canEditCountries = viewModel.currentSession.startedAt == nil && !game.commonConfig.configLocked
 
             VStack(alignment: .leading, spacing: 12) {
                 Text("Countries to Include".localized)
@@ -305,15 +312,15 @@ struct TripGameSettingsView: View {
                 CountryCheckboxRow(
                     title: "United States".localized,
                     isOn: Binding(
-                        get: { viewModel.currentSession.enabledCountries.contains(.unitedStates) },
+                        get: { enabledCountriesForGame.contains(.unitedStates) },
                         set: { newValue in
-                            var list = viewModel.currentSession.enabledCountries
+                            var list = enabledCountriesForGame
                             if newValue {
                                 if !list.contains(.unitedStates) { list.append(.unitedStates) }
                             } else {
                                 list.removeAll { $0 == .unitedStates }
                             }
-                            viewModel.setEnabledCountries(list)
+                            viewModel.setEnabledCountriesForGame(list)
                         }
                     )
                 )
@@ -323,15 +330,15 @@ struct TripGameSettingsView: View {
                 CountryCheckboxRow(
                     title: "Canada".localized,
                     isOn: Binding(
-                        get: { viewModel.currentSession.enabledCountries.contains(.canada) },
+                        get: { enabledCountriesForGame.contains(.canada) },
                         set: { newValue in
-                            var list = viewModel.currentSession.enabledCountries
+                            var list = enabledCountriesForGame
                             if newValue {
                                 if !list.contains(.canada) { list.append(.canada) }
                             } else {
                                 list.removeAll { $0 == .canada }
                             }
-                            viewModel.setEnabledCountries(list)
+                            viewModel.setEnabledCountriesForGame(list)
                         }
                     )
                 )
@@ -341,15 +348,15 @@ struct TripGameSettingsView: View {
                 CountryCheckboxRow(
                     title: "Mexico".localized,
                     isOn: Binding(
-                        get: { viewModel.currentSession.enabledCountries.contains(.mexico) },
+                        get: { enabledCountriesForGame.contains(.mexico) },
                         set: { newValue in
-                            var list = viewModel.currentSession.enabledCountries
+                            var list = enabledCountriesForGame
                             if newValue {
                                 if !list.contains(.mexico) { list.append(.mexico) }
                             } else {
                                 list.removeAll { $0 == .mexico }
                             }
-                            viewModel.setEnabledCountries(list)
+                            viewModel.setEnabledCountriesForGame(list)
                         }
                     )
                 )

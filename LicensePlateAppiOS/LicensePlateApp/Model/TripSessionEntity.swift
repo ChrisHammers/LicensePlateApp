@@ -20,8 +20,6 @@ final class TripSessionEntity {
     var startedAt: Date?
     var endedAt: Date?
     var endedBy: String?
-    /// Comma-separated country raw values (e.g. "United States,Canada,Mexico").
-    var enabledCountryRawValues: String
     /// Encoded [TripParticipant] (JSON); optional for migration.
     var participantsData: Data?
 
@@ -35,7 +33,6 @@ final class TripSessionEntity {
         startedAt: Date? = nil,
         endedAt: Date? = nil,
         endedBy: String? = nil,
-        enabledCountryRawValues: String = "United States,Canada,Mexico",
         participantsData: Data? = nil
     ) {
         self.id = id
@@ -47,7 +44,6 @@ final class TripSessionEntity {
         self.startedAt = startedAt
         self.endedAt = endedAt
         self.endedBy = endedBy
-        self.enabledCountryRawValues = enabledCountryRawValues
         self.participantsData = participantsData
     }
 }

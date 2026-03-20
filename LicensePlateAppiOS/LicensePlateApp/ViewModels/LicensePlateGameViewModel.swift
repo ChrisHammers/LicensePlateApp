@@ -214,11 +214,13 @@ final class LicensePlateGameViewModel: ObservableObject {
         }
     }
 
-    func setEnabledCountries(_ countries: [PlateRegion.Country]) {
-        currentSession.enabledCountries = countries
+    /// Step 6.9.2 — Update this game's license-plate config (region scope) from selected countries; persists via GameInstanceRepository.
+    func setEnabledCountriesForGame(_ countries: [PlateRegion.Country]) {
+        let newConfig = CombinedGameAssembler.licensePlateConfig(from: countries)
+        game.gameSpecificPayloadData = try? JSONEncoder().encode(newConfig)
         objectWillChange.send()
         do {
-            try tripSessionRepository.save(session: currentSession)
+            try gameInstanceRepository.update(instance: game)
         } catch {
             errorMessage = error.localizedDescription
             AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_settings", error: error.localizedDescription))
