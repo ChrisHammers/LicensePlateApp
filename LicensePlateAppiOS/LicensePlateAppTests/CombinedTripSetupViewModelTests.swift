@@ -215,4 +215,77 @@ struct CombinedTripSetupViewModelTests {
         #expect(mockLifecycle.startTripSessionIds.first == session.id)
         #expect(mockLifecycle.startTripActorIds.first == userId)
     }
+
+    @Test func createTripPersistsTerritoryOptionsFromSetupToggles() async throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        let sessionRepo = TripSessionRepository.shared
+        let instanceRepo = GameInstanceRepository.shared
+        let eventRepo = TripActivityEventRepository.shared
+        sessionRepo.setModelContext(ctx)
+        instanceRepo.setModelContext(ctx)
+        eventRepo.setModelContext(ctx)
+
+        let auth = FirebaseAuthService()
+        let testUser = AppUser(id: "u1", userName: "U", firebaseUID: "u1")
+        ctx.insert(testUser)
+        try ctx.save()
+        auth.currentUser = testUser
+
+        let viewModel = CombinedTripSetupViewModel(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: instanceRepo,
+            authService: auth
+        )
+        viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = true
+        viewModel.includeCanada = false
+        viewModel.includeMexico = false
+        viewModel.includeUSTerritories = false
+        viewModel.includeDC = true
+        viewModel.includeCanadianTerritories = true
+
+        let session = try viewModel.createTrip(modelContext: ctx)
+
+        let instances = try instanceRepo.fetchByTripSession(sessionId: session.id)
+        let decoded = instances[0].licensePlateConfig()
+        #expect(decoded?.territoryOptions.includeUSTerritories == false)
+        #expect(decoded?.territoryOptions.includeDC == true)
+        #expect(decoded?.territoryOptions.includeCanadianTerritories == false)
+    }
+
+    @Test func createTripNormalizesTerritoryWhenUSDeselected() async throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        let sessionRepo = TripSessionRepository.shared
+        let instanceRepo = GameInstanceRepository.shared
+        sessionRepo.setModelContext(ctx)
+        instanceRepo.setModelContext(ctx)
+
+        let auth = FirebaseAuthService()
+        let testUser = AppUser(id: "u2", userName: "U", firebaseUID: "u2")
+        ctx.insert(testUser)
+        try ctx.save()
+        auth.currentUser = testUser
+
+        let viewModel = CombinedTripSetupViewModel(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: instanceRepo,
+            authService: auth
+        )
+        viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = false
+        viewModel.includeCanada = true
+        viewModel.includeMexico = false
+        viewModel.includeUSTerritories = true
+        viewModel.includeDC = true
+        viewModel.includeCanadianTerritories = true
+
+        let session = try viewModel.createTrip(modelContext: ctx)
+        let instances = try instanceRepo.fetchByTripSession(sessionId: session.id)
+        let opts = instances[0].licensePlateConfig()?.territoryOptions
+        #expect(opts?.includeUSTerritories == false)
+        #expect(opts?.includeDC == false)
+        #expect(opts?.includeCanadianTerritories == true)
+    }
 }

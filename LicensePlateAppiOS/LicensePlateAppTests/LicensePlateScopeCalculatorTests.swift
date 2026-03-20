@@ -101,4 +101,17 @@ struct LicensePlateScopeCalculatorTests {
         #expect(ids.contains(where: { $0.hasPrefix("ca-") }) == false)
         #expect(ids.count == 82) // 50 US states + 32 Mexico states
     }
+
+    @Test func assemblerNormalizesTerritoryFlagsWhenParentCountryMissing() async throws {
+        let allOn = LicensePlateTerritoryOptions(includeUSTerritories: true, includeCanadianTerritories: true, includeDC: true)
+        let config = CombinedGameAssembler.licensePlateConfig(from: [.mexico], territoryOptions: allOn)
+        #expect(config.territoryOptions.includeUSTerritories == false)
+        #expect(config.territoryOptions.includeDC == false)
+        #expect(config.territoryOptions.includeCanadianTerritories == false)
+        let ids = LicensePlateScopeCalculator.targetRegionIds(for: config)
+        #expect(ids.contains("us-dc") == false)
+        #expect(ids.contains("us-pr") == false)
+        #expect(ids.contains("ca-yt") == false)
+        #expect(ids.count == 32)
+    }
 }

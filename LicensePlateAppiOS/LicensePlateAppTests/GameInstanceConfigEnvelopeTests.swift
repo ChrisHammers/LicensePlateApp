@@ -55,6 +55,8 @@ struct GameInstanceConfigEnvelopeTests {
         #expect(decoded != nil)
         #expect(decoded?.selectedCountries == [.unitedStates])
         #expect(decoded?.territoryOptions.includeDC == true)
+        #expect(decoded?.territoryOptions.includeUSTerritories == false)
+        #expect(decoded?.territoryOptions.includeCanadianTerritories == true)
     }
 
     @Test func legacyEntityWithoutCommonConfigDataDecodesWithDefaults() async throws {

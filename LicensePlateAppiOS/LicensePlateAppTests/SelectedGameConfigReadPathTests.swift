@@ -52,4 +52,30 @@ struct SelectedGameConfigReadPathTests {
         let decoded = instances[0].licensePlateConfig()
         #expect(decoded?.selectedCountries == [.mexico])
     }
+
+    @Test func readPathUsesTerritoryOffForUSWhenDCExcluded() async throws {
+        let session = TripSession(
+            id: UUID(),
+            name: "Trip",
+            status: .active,
+            mode: .solo,
+            createdAt: Date(),
+            participants: []
+        )
+        let cfg = CombinedGameAssembler.licensePlateConfig(
+            from: [.unitedStates],
+            territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: false, includeCanadianTerritories: false, includeDC: false)
+        )
+        let data = try JSONEncoder().encode(cfg)
+        let game = GameInstance(
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: session.id,
+            ruleSet: GameRuleSet(gameDefinitionId: GameType.licensePlate.rawValue),
+            gameSpecificPayloadData: data
+        )
+        let decoded = game.licensePlateConfig()!
+        let ids = LicensePlateScopeCalculator.targetRegionIds(for: decoded)
+        #expect(ids.contains("us-dc") == false)
+        #expect(ids.count == 50)
+    }
 }

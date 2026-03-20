@@ -50,9 +50,6 @@ struct TripGameSettingsView: View {
     @State private var showDeleteConfirmation = false
     @State private var isEditingTripName = false
     @State private var editingTripName: String = ""
-    @State private var includeUS: Bool = false
-    @State private var includeCanada: Bool = false
-    @State private var includeMexico: Bool = false
 
     private var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
@@ -101,7 +98,12 @@ struct TripGameSettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done".localized) {
-                        dismiss()
+                        do {
+                            try viewModel.commitLicensePlateScopeDraft()
+                            dismiss()
+                        } catch {
+                            viewModel.setError(error.localizedDescription)
+                        }
                     }
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
@@ -111,7 +113,10 @@ struct TripGameSettingsView: View {
         }
         .background(Color.Theme.background)
         .onAppear {
-            syncCountryTogglesFromGameConfig()
+            viewModel.beginLicensePlateScopeDraft()
+        }
+        .onDisappear {
+            viewModel.discardLicensePlateScopeDraft()
         }
     }
 
@@ -298,70 +303,16 @@ struct TripGameSettingsView: View {
         }
     }
 
-    /// Enabled countries from current toggle state.
-    private var selectedCountriesFromToggles: [PlateRegion.Country] {
-        var list: [PlateRegion.Country] = []
-        if includeUS { list.append(.unitedStates) }
-        if includeCanada { list.append(.canada) }
-        if includeMexico { list.append(.mexico) }
-        return list
-    }
-
     private var gameSettings: some View {
         Group {
             let canEditCountries = viewModel.currentSession.startedAt == nil && !game.commonConfig.configLocked
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Countries to Include".localized)
-                    .font(.system(.headline, design: .rounded))
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                    .padding(.bottom, 4)
-
-                CountryCheckboxRow(
-                    title: "United States".localized,
-                    isOn: Binding(
-                        get: { includeUS },
-                        set: { newValue in
-                            includeUS = newValue
-                            persistCountrySelection()
-                        }
-                    )
-                )
-                .disabled(!canEditCountries)
-                .opacity(canEditCountries ? 1.0 : 0.5)
-
-                CountryCheckboxRow(
-                    title: "Canada".localized,
-                    isOn: Binding(
-                        get: { includeCanada },
-                        set: { newValue in
-                            includeCanada = newValue
-                            persistCountrySelection()
-                        }
-                    )
-                )
-                .disabled(!canEditCountries)
-                .opacity(canEditCountries ? 1.0 : 0.5)
-
-                CountryCheckboxRow(
-                    title: "Mexico".localized,
-                    isOn: Binding(
-                        get: { includeMexico },
-                        set: { newValue in
-                            includeMexico = newValue
-                            persistCountrySelection()
-                        }
-                    )
-                )
-                .disabled(!canEditCountries)
-                .opacity(canEditCountries ? 1.0 : 0.5)
-
-                if selectedCountriesFromToggles.isEmpty {
-                    Text("Select at least one country.".localized)
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(Color.red)
-                        .accessibilityLabel("Select at least one country.".localized)
-                }
+            if let draft = viewModel.licensePlateScopeDraft {
+                LicensePlateGameScopeDraftSection(draft: draft, canEditCountries: canEditCountries)
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
             }
         }
     }
@@ -444,23 +395,105 @@ struct TripGameSettingsView: View {
         }
     }
 
-    private func syncCountryTogglesFromGameConfig() {
-        let defaultConfig = LicensePlateGameConfig(
-            selectedCountriesRawValues: [
-                PlateRegion.Country.unitedStates.rawValue,
-                PlateRegion.Country.canada.rawValue,
-                PlateRegion.Country.mexico.rawValue
-            ],
-            territoryOptions: LicensePlateTerritoryOptions()
-        )
-        let selected = Set((game.licensePlateConfig() ?? defaultConfig).selectedCountries)
-        includeUS = selected.contains(.unitedStates)
-        includeCanada = selected.contains(.canada)
-        includeMexico = selected.contains(.mexico)
+}
+
+/// Countries + territory scope edited in Game Settings; persisted when user taps Done on the sheet.
+private struct LicensePlateGameScopeDraftSection: View {
+    @ObservedObject var draft: LicensePlateScopeSettingsDraft
+    let canEditCountries: Bool
+
+    private var selectedCountries: [PlateRegion.Country] {
+        var list: [PlateRegion.Country] = []
+        if draft.includeUS { list.append(.unitedStates) }
+        if draft.includeCanada { list.append(.canada) }
+        if draft.includeMexico { list.append(.mexico) }
+        return list
     }
 
-    private func persistCountrySelection() {
-        viewModel.setEnabledCountriesForGame(selectedCountriesFromToggles)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Countries to Include".localized)
+                .font(.system(.headline, design: .rounded))
+                .foregroundStyle(Color.Theme.primaryBlue)
+                .padding(.bottom, 4)
+
+            CountryCheckboxRow(
+                title: "United States".localized,
+                isOn: Binding(
+                    get: { draft.includeUS },
+                    set: { newValue in
+                        draft.includeUS = newValue
+                        draft.applyParentGating()
+                    }
+                )
+            )
+            .disabled(!canEditCountries)
+            .opacity(canEditCountries ? 1.0 : 0.5)
+
+            CountryCheckboxRow(
+                title: "Canada".localized,
+                isOn: Binding(
+                    get: { draft.includeCanada },
+                    set: { newValue in
+                        draft.includeCanada = newValue
+                        draft.applyParentGating()
+                    }
+                )
+            )
+            .disabled(!canEditCountries)
+            .opacity(canEditCountries ? 1.0 : 0.5)
+
+            CountryCheckboxRow(
+                title: "Mexico".localized,
+                isOn: Binding(
+                    get: { draft.includeMexico },
+                    set: { newValue in
+                        draft.includeMexico = newValue
+                    }
+                )
+            )
+            .disabled(!canEditCountries)
+            .opacity(canEditCountries ? 1.0 : 0.5)
+
+            Text("Enable United States to configure US territories and Washington, DC. Enable Canada for Canadian territories.".localized)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+                .accessibilityLabel("Enable United States to configure US territories and Washington, DC. Enable Canada for Canadian territories.".localized)
+
+            SettingToggleRow(
+                title: "Include US Territories".localized,
+                description: "Puerto Rico, Guam, US Virgin Islands, American Samoa, Northern Mariana Islands".localized,
+                isOn: $draft.includeUSTerritories
+            )
+            .disabled(!canEditCountries || !draft.includeUS)
+            .opacity((canEditCountries && draft.includeUS) ? 1.0 : 0.5)
+            .accessibilityHint((canEditCountries && draft.includeUS) ? "" : "Enable United States first".localized)
+
+            SettingToggleRow(
+                title: "Include Washington, DC".localized,
+                description: "District of Columbia as its own plate region".localized,
+                isOn: $draft.includeDC
+            )
+            .disabled(!canEditCountries || !draft.includeUS)
+            .opacity((canEditCountries && draft.includeUS) ? 1.0 : 0.5)
+            .accessibilityHint((canEditCountries && draft.includeUS) ? "" : "Enable United States first".localized)
+
+            SettingToggleRow(
+                title: "Include Canadian Territories".localized,
+                description: "Nunavut, Northwest Territories, Yukon".localized,
+                isOn: $draft.includeCanadianTerritories
+            )
+            .disabled(!canEditCountries || !draft.includeCanada)
+            .opacity((canEditCountries && draft.includeCanada) ? 1.0 : 0.5)
+            .accessibilityHint((canEditCountries && draft.includeCanada) ? "" : "Enable Canada first".localized)
+
+            if selectedCountries.isEmpty {
+                Text("Select at least one country.".localized)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.red)
+                    .accessibilityLabel("Select at least one country.".localized)
+            }
+        }
     }
 }
 

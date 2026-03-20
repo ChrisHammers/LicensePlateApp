@@ -18,6 +18,9 @@ final class CombinedTripSetupViewModel: ObservableObject {
     @Published var includeUS: Bool = true
     @Published var includeCanada: Bool = true
     @Published var includeMexico: Bool = true
+    @Published var includeUSTerritories: Bool = true
+    @Published var includeDC: Bool = true
+    @Published var includeCanadianTerritories: Bool = true
     @Published var startTripRightAway: Bool = false
     @Published var skipVoiceConfirmation: Bool = false
     @Published var holdToTalk: Bool = true
@@ -69,6 +72,17 @@ final class CombinedTripSetupViewModel: ObservableObject {
         enabledCountries.isEmpty ? "Select at least one country.".localized : nil
     }
 
+    /// Clears territory toggles when their parent country is off (UI convenience; assembler normalizes on save too).
+    func applyTerritoryGatingFromCountryToggles() {
+        if !includeUS {
+            includeUSTerritories = false
+            includeDC = false
+        }
+        if !includeCanada {
+            includeCanadianTerritories = false
+        }
+    }
+
     // MARK: - Actions
 
     func toggleGameType(_ gameType: GameType) {
@@ -104,6 +118,8 @@ final class CombinedTripSetupViewModel: ObservableObject {
             throw CombinedTripSetupError.noGameTypesSelected
         }
 
+        applyTerritoryGatingFromCountryToggles()
+
         let createdAt = Date()
         let finalName = tripName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? Self.defaultTripName(from: createdAt)
@@ -131,7 +147,12 @@ final class CombinedTripSetupViewModel: ObservableObject {
         try tripSessionRepository.create(session: session)
 
         let config = CombinedGameConfiguration(enabledGameTypes: Array(types))
-        let lpConfig = CombinedGameAssembler.licensePlateConfig(from: countryList)
+        let territoryOpts = LicensePlateTerritoryOptions(
+            includeUSTerritories: includeUSTerritories,
+            includeCanadianTerritories: includeCanadianTerritories,
+            includeDC: includeDC
+        )
+        let lpConfig = CombinedGameAssembler.licensePlateConfig(from: countryList, territoryOptions: territoryOpts)
         let instances = CombinedGameAssembler.assemble(session: session, config: config, licensePlateConfig: lpConfig)
         
         AnalyticsService.shared.log(.tripSessionCreated(tripId: sessionId.uuidString, tripStatus: session.status.rawValue, tripParticipantCount: session.participants.count, tripActiveGameCount: instances.count, tripSource: "combined_setup"))

@@ -66,17 +66,32 @@ enum CombinedGameAssembler {
         }
     }
 
-    /// Build LicensePlateGameConfig from selected countries (for setup flow). Step 6.9.2.
+    /// Build LicensePlateGameConfig from selected countries with default territory options (all on). Step 6.9.2.
     static func licensePlateConfig(from countries: [PlateRegion.Country]) -> LicensePlateGameConfig {
-        let territoryOptions = LicensePlateTerritoryOptions(
-            includeUSTerritories: true,
-            includeCanadianTerritories: true,
-            includeDC: true
-        )
+        licensePlateConfig(from: countries, territoryOptions: LicensePlateTerritoryOptions())
+    }
+
+    /// Build LicensePlateGameConfig; `territoryOptions` are normalized so flags cannot apply without their parent country.
+    static func licensePlateConfig(from countries: [PlateRegion.Country], territoryOptions: LicensePlateTerritoryOptions) -> LicensePlateGameConfig {
+        let normalized = normalizedTerritoryOptions(territoryOptions, forCountries: countries)
         return LicensePlateGameConfig(
             selectedCountriesRawValues: countries.map(\.rawValue),
-            territoryOptions: territoryOptions
+            territoryOptions: normalized
         )
+    }
+
+    /// Forces US territory / DC off when US is not selected; Canadian territories off when Canada is not selected.
+    static func normalizedTerritoryOptions(_ options: LicensePlateTerritoryOptions, forCountries countries: [PlateRegion.Country]) -> LicensePlateTerritoryOptions {
+        let set = Set(countries)
+        var out = options
+        if !set.contains(.unitedStates) {
+            out.includeUSTerritories = false
+            out.includeDC = false
+        }
+        if !set.contains(.canada) {
+            out.includeCanadianTerritories = false
+        }
+        return out
     }
 
     /// Default game mode when assembling from trip. TripMode is solo/multiplayer only; game mode defaults to collaborative.

@@ -171,8 +171,46 @@ struct CombinedTripSetupView: View {
                         .foregroundStyle(Color.Theme.primaryBlue)
 
                     CombinedTripCountryRow(title: "United States".localized, isOn: $viewModel.includeUS)
+                        .onChange(of: viewModel.includeUS) { _, _ in
+                            viewModel.applyTerritoryGatingFromCountryToggles()
+                        }
                     CombinedTripCountryRow(title: "Canada".localized, isOn: $viewModel.includeCanada)
+                        .onChange(of: viewModel.includeCanada) { _, _ in
+                            viewModel.applyTerritoryGatingFromCountryToggles()
+                        }
                     CombinedTripCountryRow(title: "Mexico".localized, isOn: $viewModel.includeMexico)
+
+                    Text("Enable United States to configure US territories and Washington, DC. Enable Canada for Canadian territories.".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .accessibilityLabel("Enable United States to configure US territories and Washington, DC. Enable Canada for Canadian territories.".localized)
+
+                    SettingToggleRow(
+                        title: "Include US Territories".localized,
+                        description: "Puerto Rico, Guam, US Virgin Islands, American Samoa, Northern Mariana Islands".localized,
+                        isOn: $viewModel.includeUSTerritories
+                    )
+                    .disabled(!viewModel.includeUS)
+                    .opacity(viewModel.includeUS ? 1.0 : 0.5)
+                    .accessibilityHint(viewModel.includeUS ? "" : "Enable United States first".localized)
+
+                    SettingToggleRow(
+                        title: "Include Washington, DC".localized,
+                        description: "District of Columbia as its own plate region".localized,
+                        isOn: $viewModel.includeDC
+                    )
+                    .disabled(!viewModel.includeUS)
+                    .opacity(viewModel.includeUS ? 1.0 : 0.5)
+                    .accessibilityHint(viewModel.includeUS ? "" : "Enable United States first".localized)
+
+                    SettingToggleRow(
+                        title: "Include Canadian Territories".localized,
+                        description: "Nunavut, Northwest Territories, Yukon".localized,
+                        isOn: $viewModel.includeCanadianTerritories
+                    )
+                    .disabled(!viewModel.includeCanada)
+                    .opacity(viewModel.includeCanada ? 1.0 : 0.5)
+                    .accessibilityHint(viewModel.includeCanada ? "" : "Enable Canada first".localized)
 
                     if let countryValidationMessage = viewModel.countryValidationMessage {
                         Text(countryValidationMessage)

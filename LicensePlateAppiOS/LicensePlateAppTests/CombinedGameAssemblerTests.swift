@@ -111,4 +111,13 @@ struct CombinedGameAssemblerTests {
         #expect(instances.count == 1)
         #expect(instances[0].startedAt == started)
     }
+
+    @Test func licensePlateConfigOverloadNormalizesTerritoriesForCountrySet() async throws {
+        let raw = LicensePlateTerritoryOptions(includeUSTerritories: true, includeCanadianTerritories: true, includeDC: true)
+        let config = CombinedGameAssembler.licensePlateConfig(from: [.canada], territoryOptions: raw)
+        #expect(config.selectedCountries == [.canada])
+        #expect(config.territoryOptions.includeCanadianTerritories == true)
+        #expect(config.territoryOptions.includeUSTerritories == false)
+        #expect(config.territoryOptions.includeDC == false)
+    }
 }

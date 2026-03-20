@@ -328,4 +328,107 @@ struct LicensePlateGameViewModelTests {
         }
         #expect((error as NSError).domain == "MockTripActivityEventRepository")
     }
+
+    @Test func commitLicensePlateScopeDraftPersistsCountriesAndTerritories() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = makeSession(id: sessionId, startedAt: nil)
+        var game = makeGame(sessionId: sessionId, lifecycleState: .created)
+        game.id = gameId
+        let initial = LicensePlateGameConfig(
+            selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue],
+            territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: false, includeCanadianTerritories: false, includeDC: true)
+        )
+        game.gameSpecificPayloadData = try JSONEncoder().encode(initial)
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        try gameRepo.create(instance: game)
+        let eventRepo = MockTripActivityEventRepository()
+        let lifecycleService = MockTripSessionLifecycleService()
+        let auth = FirebaseAuthService()
+
+        let viewModel = LicensePlateGameViewModel(
+            session: session,
+            game: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: lifecycleService,
+            syncCoordinator: MockSyncCoordinator(),
+            authService: auth
+        )
+
+        viewModel.beginLicensePlateScopeDraft()
+        guard let draft = viewModel.licensePlateScopeDraft else {
+            Issue.record("Expected license plate scope draft")
+            return
+        }
+        draft.includeCanada = true
+        draft.includeCanadianTerritories = true
+        try viewModel.commitLicensePlateScopeDraft()
+
+        #expect(viewModel.licensePlateScopeDraft == nil)
+        let decoded = game.licensePlateConfig()
+        #expect(decoded?.selectedCountries.contains(.unitedStates) == true)
+        #expect(decoded?.selectedCountries.contains(.canada) == true)
+        #expect(decoded?.territoryOptions.includeCanadianTerritories == true)
+    }
+
+    @Test func commitLicensePlateScopeDraftNormalizesTerritoriesForMexicoOnly() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = makeSession(id: sessionId, startedAt: nil)
+        var game = makeGame(sessionId: sessionId, lifecycleState: .created)
+        game.id = gameId
+        let initial = LicensePlateGameConfig(
+            selectedCountriesRawValues: [
+                PlateRegion.Country.unitedStates.rawValue,
+                PlateRegion.Country.canada.rawValue,
+                PlateRegion.Country.mexico.rawValue
+            ],
+            territoryOptions: LicensePlateTerritoryOptions()
+        )
+        game.gameSpecificPayloadData = try JSONEncoder().encode(initial)
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        try gameRepo.create(instance: game)
+        let eventRepo = MockTripActivityEventRepository()
+        let lifecycleService = MockTripSessionLifecycleService()
+        let auth = FirebaseAuthService()
+
+        let viewModel = LicensePlateGameViewModel(
+            session: session,
+            game: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: lifecycleService,
+            syncCoordinator: MockSyncCoordinator(),
+            authService: auth
+        )
+
+        viewModel.beginLicensePlateScopeDraft()
+        guard let draft = viewModel.licensePlateScopeDraft else {
+            Issue.record("Expected license plate scope draft")
+            return
+        }
+        draft.includeUS = false
+        draft.includeCanada = false
+        draft.includeMexico = true
+        draft.includeUSTerritories = true
+        draft.includeDC = true
+        draft.includeCanadianTerritories = true
+        draft.applyParentGating()
+        try viewModel.commitLicensePlateScopeDraft()
+
+        let decoded = game.licensePlateConfig()
+        #expect(decoded?.selectedCountries == [.mexico])
+        #expect(decoded?.territoryOptions.includeUSTerritories == false)
+        #expect(decoded?.territoryOptions.includeDC == false)
+        #expect(decoded?.territoryOptions.includeCanadianTerritories == false)
+    }
 }

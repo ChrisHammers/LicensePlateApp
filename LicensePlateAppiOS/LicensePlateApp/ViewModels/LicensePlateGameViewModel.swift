@@ -25,6 +25,8 @@ final class LicensePlateGameViewModel: ObservableObject {
     @Published var rejectedDuplicateMessage: String?
     @Published var rejectedInvalidParticipantMessage: String?
     @Published private(set) var errorMessage: String?
+    /// Editable license-plate scope while Game Settings sheet is open; persisted when user taps Done.
+    @Published private(set) var licensePlateScopeDraft: LicensePlateScopeSettingsDraft?
 
     let sessionId: UUID
     let game: GameInstance
@@ -282,17 +284,60 @@ final class LicensePlateGameViewModel: ObservableObject {
         }
     }
 
-    /// Step 6.9.2 — Update this game's license-plate config (region scope) from selected countries; persists via GameInstanceRepository.
-    func setEnabledCountriesForGame(_ countries: [PlateRegion.Country]) {
-        let newConfig = CombinedGameAssembler.licensePlateConfig(from: countries)
-        game.gameSpecificPayloadData = try? JSONEncoder().encode(newConfig)
-        objectWillChange.send()
+    /// Load countries + territory toggles for Game Settings; call when the settings sheet appears.
+    func beginLicensePlateScopeDraft() {
+        let defaultConfig = LicensePlateGameConfig(
+            selectedCountriesRawValues: [
+                PlateRegion.Country.unitedStates.rawValue,
+                PlateRegion.Country.canada.rawValue,
+                PlateRegion.Country.mexico.rawValue
+            ],
+            territoryOptions: LicensePlateTerritoryOptions()
+        )
+        let cfg = game.licensePlateConfig() ?? defaultConfig
+        let selected = Set(cfg.selectedCountries)
+        licensePlateScopeDraft = LicensePlateScopeSettingsDraft(
+            includeUS: selected.contains(.unitedStates),
+            includeCanada: selected.contains(.canada),
+            includeMexico: selected.contains(.mexico),
+            includeUSTerritories: cfg.territoryOptions.includeUSTerritories,
+            includeDC: cfg.territoryOptions.includeDC,
+            includeCanadianTerritories: cfg.territoryOptions.includeCanadianTerritories
+        )
+    }
+
+    /// Drop draft without saving (e.g. sheet dismissed by swipe).
+    func discardLicensePlateScopeDraft() {
+        licensePlateScopeDraft = nil
+    }
+
+    /// Encode and persist draft to `game` (normalization applied in assembler). Clears draft on success.
+    func commitLicensePlateScopeDraft() throws {
+        guard let draft = licensePlateScopeDraft else { return }
+        var countries: [PlateRegion.Country] = []
+        if draft.includeUS { countries.append(.unitedStates) }
+        if draft.includeCanada { countries.append(.canada) }
+        if draft.includeMexico { countries.append(.mexico) }
+        draft.applyParentGating()
+        let territoryOpts = LicensePlateTerritoryOptions(
+            includeUSTerritories: draft.includeUSTerritories,
+            includeCanadianTerritories: draft.includeCanadianTerritories,
+            includeDC: draft.includeDC
+        )
+        let newConfig = CombinedGameAssembler.licensePlateConfig(from: countries, territoryOptions: territoryOpts)
+        let data = try JSONEncoder().encode(newConfig)
+        let previousPayload = game.gameSpecificPayloadData
+        game.gameSpecificPayloadData = data
         do {
             try gameInstanceRepository.update(instance: game)
+            licensePlateScopeDraft = nil
+            objectWillChange.send()
         } catch {
+            game.gameSpecificPayloadData = previousPayload
             errorMessage = error.localizedDescription
             AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_settings", error: error.localizedDescription))
             objectWillChange.send()
+            throw error
         }
     }
 
