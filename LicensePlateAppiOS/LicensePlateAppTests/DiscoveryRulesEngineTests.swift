@@ -32,6 +32,7 @@ struct DiscoveryRulesEngineTests {
     @Test func evaluateCompetitiveNoExistingReturnsNewCreditFull() async throws {
         let result = DiscoveryRulesEngine.evaluateDiscoverySubmission(
             mode: .competitive,
+            tripMode: .multiplayer,
             existingDiscoveriesForTarget: [],
             candidateParticipantId: "user1",
             candidateTargetId: "region-1",
@@ -49,6 +50,7 @@ struct DiscoveryRulesEngineTests {
     @Test func evaluateCollaborativeNoExistingReturnsNewCredit() async throws {
         let result = DiscoveryRulesEngine.evaluateDiscoverySubmission(
             mode: .collaborative,
+            tripMode: .multiplayer,
             existingDiscoveriesForTarget: [],
             candidateParticipantId: "user1",
             candidateTargetId: "region-1",
@@ -68,6 +70,7 @@ struct DiscoveryRulesEngineTests {
         let existing = makeDiscovery(participantId: "user1")
         let result = DiscoveryRulesEngine.evaluateDiscoverySubmission(
             mode: .competitive,
+            tripMode: .multiplayer,
             existingDiscoveriesForTarget: [existing],
             candidateParticipantId: "user1",
             candidateTargetId: "region-1",
@@ -84,6 +87,7 @@ struct DiscoveryRulesEngineTests {
         let existing = makeDiscovery(participantId: "user1")
         let result = DiscoveryRulesEngine.evaluateDiscoverySubmission(
             mode: .collaborative,
+            tripMode: .multiplayer,
             existingDiscoveriesForTarget: [existing],
             candidateParticipantId: "user1",
             candidateTargetId: "region-1",
@@ -101,6 +105,7 @@ struct DiscoveryRulesEngineTests {
         let existing = makeDiscovery(participantId: "user1")
         let result = DiscoveryRulesEngine.evaluateDiscoverySubmission(
             mode: .competitive,
+            tripMode: .multiplayer,
             existingDiscoveriesForTarget: [existing],
             candidateParticipantId: "user2",
             candidateTargetId: "region-1",
@@ -117,6 +122,7 @@ struct DiscoveryRulesEngineTests {
         let existing = makeDiscovery(participantId: "user1")
         let result = DiscoveryRulesEngine.evaluateDiscoverySubmission(
             mode: .collaborative,
+            tripMode: .multiplayer,
             existingDiscoveriesForTarget: [existing],
             candidateParticipantId: "user2",
             candidateTargetId: "region-1",
@@ -133,6 +139,23 @@ struct DiscoveryRulesEngineTests {
             #expect(credit.creditType == .shared)
             #expect(credit.weight == 0.5)
         }
+    }
+
+    @Test func evaluateSoloTripOtherParticipantReturnsRejectedInvalidParticipantEvenWhenCollaborative() async throws {
+        let existing = makeDiscovery(participantId: "user1")
+        let result = DiscoveryRulesEngine.evaluateDiscoverySubmission(
+            mode: .collaborative,
+            tripMode: .solo,
+            existingDiscoveriesForTarget: [existing],
+            candidateParticipantId: "user2",
+            candidateTargetId: "region-1",
+            gameInstanceId: gameInstanceId,
+            inputMethod: .list,
+            occurredAt: Date()
+        )
+        #expect(result.outcome == .rejectedInvalidParticipant)
+        #expect(result.shouldAppendEvent == false)
+        #expect(result.creditsToAssign == nil)
     }
 
     // MARK: - creditsForDiscoveries

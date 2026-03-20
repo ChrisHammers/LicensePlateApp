@@ -159,6 +159,7 @@ struct LicensePlateGameView: View {
         // }
         .overlay(alignment: .top) {
             VStack(spacing: 8) {
+                rejectedInvalidParticipantBanner
                 rejectedDuplicateBanner
                 riskAdvisoryBanner
             }
@@ -587,7 +588,7 @@ struct LicensePlateGameView: View {
   private func setFound(regionID: String, usingTab: FoundRegion.InputMethod) {
         let result = viewModel.submitDiscovery(regionID: regionID, inputMethod: usingTab)
         switch result {
-        case .rejectedDuplicate:
+        case .rejectedDuplicate, .rejectedInvalidParticipant:
             FeedbackService.shared.actionError()
         case .success:
             FeedbackService.shared.actionSuccess()
@@ -623,6 +624,25 @@ struct LicensePlateGameView: View {
             setNotFound(regionID: regionID, usingTab: .list)
         } else {
             setFound(regionID: regionID, usingTab: .list)
+        }
+    }
+
+    @ViewBuilder private var rejectedInvalidParticipantBanner: some View {
+        if let message = viewModel.rejectedInvalidParticipantMessage {
+            Text(message)
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(Color.red)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color.Theme.cardBackground)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .padding(.horizontal, 20)
+                .padding(.top, 8)
+                .onTapGesture {
+                    viewModel.clearRejectedInvalidParticipantMessage()
+                }
+                .accessibilityLabel(message)
+                .accessibilityHint("Tap to dismiss".localized)
         }
     }
 

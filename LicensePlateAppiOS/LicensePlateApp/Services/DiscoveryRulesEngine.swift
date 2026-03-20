@@ -15,7 +15,8 @@ enum DiscoveryRulesEngine {
 
     /// Evaluates a candidate discovery submission. Caller should append the event only when `result.shouldAppendEvent` is true.
     /// - Parameters:
-    ///   - mode: Game mode (from GameInstance.commonConfig.gameMode). Solo is a trip characteristic (one participant); game mode is still collaborative or competitive.
+    ///   - mode: Game mode (from GameInstance.commonConfig.gameMode).
+    ///   - tripMode: Trip participation (from TripSession.mode). Solo trips must not accept finds from multiple distinct participants for the same target.
     ///   - existingDiscoveriesForTarget: Discoveries already recorded for this target (0 or 1 with current repo replay).
     ///   - candidateParticipantId: Participant making the new find.
     ///   - candidateTargetId: Target being found (e.g. region id).
@@ -26,6 +27,7 @@ enum DiscoveryRulesEngine {
     /// - Returns: Outcome, optional risk flags, and credits to assign (nil when rejected or personal_duplicate with no new credit).
     static func evaluateDiscoverySubmission(
         mode: GameMode,
+        tripMode: TripMode,
         existingDiscoveriesForTarget: [GameDiscovery],
         candidateParticipantId: String,
         candidateTargetId: String,
@@ -68,6 +70,15 @@ enum DiscoveryRulesEngine {
         }
 
         // Other participant already found this target.
+        if tripMode == .solo {
+            // Solo implies a single participant; conflicting attribution is invalid (enforce server-side too).
+            return DiscoveryEvaluationResult(
+                outcome: .rejectedInvalidParticipant,
+                riskFlags: riskFlags(from: riskContext, discovery: candidateDiscovery),
+                creditsToAssign: nil
+            )
+        }
+
         switch mode {
         case .competitive:
             return DiscoveryEvaluationResult(

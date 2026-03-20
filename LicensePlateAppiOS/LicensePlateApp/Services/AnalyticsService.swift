@@ -161,6 +161,7 @@ class AnalyticsService: AnalyticsLogging {
         // Discovery outcome (Step 03 — rules engine)
         case discoveryOutcomeRecorded(tripId: String, gameInstanceId: String, targetId: String, outcome: String, participantId: String?)
         case discoveryRejectedDuplicate(tripId: String, gameInstanceId: String, targetId: String, participantId: String?, mode: String)
+        case discoveryRejectedInvalidParticipant(tripId: String, gameInstanceId: String, targetId: String, participantId: String?, tripMode: String, gameMode: String)
         case discoveryUnfind(tripId: String, gameInstanceId: String, targetId: String, participantId: String?)
 
         // Persistence (Step 05)
@@ -295,6 +296,7 @@ class AnalyticsService: AnalyticsLogging {
             case .riskAdvisoryDetected: return "risk_advisory_detected"
             case .discoveryOutcomeRecorded: return "discovery_outcome_recorded"
             case .discoveryRejectedDuplicate: return "discovery_rejected_duplicate"
+            case .discoveryRejectedInvalidParticipant: return "discovery_rejected_invalid_participant"
             case .discoveryUnfind: return "discovery_unfind"
             case .persistenceSaveFailed: return "persistence_save_failed"
             case .persistenceRetryTapped: return "persistence_retry_tapped"
@@ -441,6 +443,16 @@ class AnalyticsService: AnalyticsLogging {
                 return p
             case .discoveryRejectedDuplicate(let tripId, let gameInstanceId, let targetId, let participantId, let mode):
                 var p: [String: Any] = ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "mode": mode]
+                if let id = participantId { p["participant_id"] = id }
+                return p
+            case .discoveryRejectedInvalidParticipant(let tripId, let gameInstanceId, let targetId, let participantId, let tripMode, let gameMode):
+                var p: [String: Any] = [
+                    "trip_session_id": tripId,
+                    "game_instance_id": gameInstanceId,
+                    "target_id": targetId,
+                    "trip_mode": tripMode,
+                    "game_mode": gameMode
+                ]
                 if let id = participantId { p["participant_id"] = id }
                 return p
             case .discoveryUnfind(let tripId, let gameInstanceId, let targetId, let participantId):

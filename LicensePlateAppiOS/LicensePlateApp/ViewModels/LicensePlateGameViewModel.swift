@@ -12,6 +12,8 @@ import Combine
 enum DiscoverySubmitResult {
     case success
     case rejectedDuplicate(message: String)
+    /// Solo trip but another participant already credited for this target — invalid attribution (client + server should enforce).
+    case rejectedInvalidParticipant(message: String)
     case failure(Error)
 }
 
@@ -21,6 +23,7 @@ final class LicensePlateGameViewModel: ObservableObject {
     @Published private(set) var currentSession: TripSession
     @Published private(set) var foundRegions: [FoundRegion] = []
     @Published var rejectedDuplicateMessage: String?
+    @Published var rejectedInvalidParticipantMessage: String?
     @Published private(set) var errorMessage: String?
 
     let sessionId: UUID
@@ -108,6 +111,7 @@ final class LicensePlateGameViewModel: ObservableObject {
 
         let result = DiscoveryRulesEngine.evaluateDiscoverySubmission(
             mode: game.commonConfig.gameMode,
+            tripMode: currentSession.mode,
             existingDiscoveriesForTarget: existingDiscoveriesForTarget,
             candidateParticipantId: participantId,
             candidateTargetId: regionID,
@@ -117,7 +121,22 @@ final class LicensePlateGameViewModel: ObservableObject {
             riskContext: nil
         )
 
+        if result.outcome == .rejectedInvalidParticipant {
+            rejectedDuplicateMessage = nil
+            rejectedInvalidParticipantMessage = "This trip is solo, but a find is already recorded for someone else. That shouldn’t happen — someone may have access they shouldn’t.".localized
+            AnalyticsService.shared.log(.discoveryRejectedInvalidParticipant(
+                tripId: sessionId.uuidString,
+                gameInstanceId: game.id.uuidString,
+                targetId: regionID,
+                participantId: participantId.isEmpty ? nil : participantId,
+                tripMode: currentSession.mode.rawValue,
+                gameMode: game.commonConfig.gameMode.rawValue
+            ))
+            return .rejectedInvalidParticipant(message: rejectedInvalidParticipantMessage ?? "")
+        }
+
         if result.outcome == .rejectedDuplicate {
+            rejectedInvalidParticipantMessage = nil
             rejectedDuplicateMessage = "Only the first finder gets credit in competitive mode.".localized
             AnalyticsService.shared.log(.discoveryRejectedDuplicate(
                 tripId: sessionId.uuidString,
@@ -150,6 +169,7 @@ final class LicensePlateGameViewModel: ObservableObject {
             try? syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: event.id)
             refreshFoundRegions()
             rejectedDuplicateMessage = nil
+            rejectedInvalidParticipantMessage = nil
             AnalyticsService.shared.log(.discoveryOutcomeRecorded(
                 tripId: sessionId.uuidString,
                 gameInstanceId: game.id.uuidString,
@@ -190,6 +210,10 @@ final class LicensePlateGameViewModel: ObservableObject {
 
     func clearRejectedDuplicateMessage() {
         rejectedDuplicateMessage = nil
+    }
+
+    func clearRejectedInvalidParticipantMessage() {
+        rejectedInvalidParticipantMessage = nil
     }
 
     func setError(_ message: String) {

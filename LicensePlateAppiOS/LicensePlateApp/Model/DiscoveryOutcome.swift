@@ -18,6 +18,8 @@ enum DiscoveryOutcome: String, Codable, Sendable, CaseIterable {
     case personalDuplicate = "personal_duplicate"
     /// Other participant already found this target (e.g. competitive); do not append.
     case rejectedDuplicate = "rejected_duplicate"
+    /// Solo trip but discovery attributed to another participant; treat as invalid access / corrupted data; do not append.
+    case rejectedInvalidParticipant = "rejected_invalid_participant"
 }
 
 /// Result of the rules engine evaluation for a single discovery submission.
@@ -28,9 +30,14 @@ struct DiscoveryEvaluationResult: Sendable {
     /// Credits that would be assigned for this submission; nil when rejected or personal_duplicate with no new credit.
     var creditsToAssign: [GameCredit]?
 
-    /// When true, the event should be appended; when false (rejected_duplicate), do not append.
+    /// When true, the event should be appended; when false (rejected_duplicate / rejected_invalid_participant), do not append.
     var shouldAppendEvent: Bool {
-        outcome != .rejectedDuplicate
+        switch outcome {
+        case .rejectedDuplicate, .rejectedInvalidParticipant:
+            return false
+        default:
+            return true
+        }
     }
 
     init(

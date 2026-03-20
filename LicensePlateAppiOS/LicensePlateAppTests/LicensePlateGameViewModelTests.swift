@@ -111,7 +111,7 @@ struct LicensePlateGameViewModelTests {
         #expect(eventRepo.appendedEvents().contains { $0.kind == .regionFound && $0.payload?[TripActivityEventPayloadKey.regionId] == "CA" })
     }
 
-    @Test func submitDiscoveryWhenOtherParticipantAlreadyFoundSoloReturnsRejectedDuplicate() async throws {
+    @Test func submitDiscoveryWhenOtherParticipantAlreadyFoundSoloReturnsRejectedInvalidParticipant() async throws {
         let sessionId = UUID()
         let gameId = UUID()
         let session = makeSession(id: sessionId, startedAt: Date())
@@ -145,11 +145,12 @@ struct LicensePlateGameViewModelTests {
 
         let result = viewModel.submitDiscovery(regionID: "CA", inputMethod: .list)
 
-        guard case .rejectedDuplicate = result else {
-            Issue.record("Expected rejectedDuplicate when other participant already found in solo, got \(result)")
+        guard case .rejectedInvalidParticipant = result else {
+            Issue.record("Expected rejectedInvalidParticipant when other participant already found in solo, got \(result)")
             return
         }
-        #expect(viewModel.rejectedDuplicateMessage != nil)
+        #expect(viewModel.rejectedInvalidParticipantMessage != nil)
+        #expect(viewModel.rejectedDuplicateMessage == nil)
     }
 
     @Test func removeDiscoveryAppendsRegionRemovedAndRefreshesFoundRegions() async throws {
