@@ -620,3 +620,10 @@
 "Remove game is not available for ended or cancelled trips." = "Retirer un jeu n’est pas disponible pour les trajets terminés ou annulés.";
 "A trip must keep at least one game." = "Un trajet doit comporter au moins un jeu.";
 
+// Step 6.9.6 Phase D — Invite rows (trip vs game)
+"1 game" = "1 jeu";
+"%d games" = "%d jeux";
+"Trip participation: %@" = "Participation au trajet : %@";
+"Status: %@" = "Statut : %@";
+"Inviter: %@" = "Invitant : %@";
+

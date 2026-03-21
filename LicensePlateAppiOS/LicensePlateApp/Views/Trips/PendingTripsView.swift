@@ -47,6 +47,7 @@ struct PendingTripsView: View {
                                 ForEach(viewModel.incomingInvites, id: \.inviteId) { invite in
                                     TripInviteRow(
                                         invite: invite,
+                                        snapshot: viewModel.displaySnapshot(for: invite),
                                         isIncoming: true,
                                         onAccept: { viewModel.accept(invite: invite) },
                                         onDecline: { viewModel.decline(invite: invite) },
@@ -61,6 +62,7 @@ struct PendingTripsView: View {
                                 ForEach(viewModel.outgoingInvites, id: \.inviteId) { invite in
                                     TripInviteRow(
                                         invite: invite,
+                                        snapshot: viewModel.displaySnapshot(for: invite),
                                         isIncoming: false,
                                         onAccept: nil,
                                         onDecline: nil,
@@ -130,6 +132,7 @@ struct PendingTripsView: View {
 
 private struct TripInviteRow: View {
     let invite: TripInvite
+    let snapshot: InviteDisplaySnapshot
     let isIncoming: Bool
     let onAccept: (() -> Void)?
     let onDecline: (() -> Void)?
@@ -142,13 +145,18 @@ private struct TripInviteRow: View {
                     Text(invite.tripName)
                         .font(.system(.headline, design: .rounded))
                         .foregroundStyle(Color.Theme.primaryBlue)
-                    Text("Inviter: %@".localized(invite.fromUserId))
+                    Text(snapshot.inviterLine)
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
-                    Text("Mode: %@".localized(invite.tripMode))
+                    Text(snapshot.tripParticipationLine)
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
-                    Text("Status: %@".localized(invite.statusEnum.rawValue))
+                    if let games = snapshot.gamesOnTripLine {
+                        Text(games)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    Text(snapshot.statusLine)
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(statusColor)
                 }

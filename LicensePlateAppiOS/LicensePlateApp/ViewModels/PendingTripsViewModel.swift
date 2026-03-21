@@ -16,14 +16,34 @@ final class PendingTripsViewModel: ObservableObject {
     @Published var errorMessage: String?
 
     private let tripInviteRepository: TripInviteRepositoryProtocol
+    private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private var authService: FirebaseAuthService
     private var cancellables = Set<AnyCancellable>()
     /// True after we have subscribed to repo.$tripInvites once; prevents accumulating subscribers on every loadIfNeeded().
     private var hasSubscribedToInvites = false
 
-    init(tripInviteRepository: TripInviteRepositoryProtocol, authService: FirebaseAuthService) {
+    init(
+        tripInviteRepository: TripInviteRepositoryProtocol,
+        authService: FirebaseAuthService,
+        gameInstanceRepository: GameInstanceRepositoryProtocol = GameInstanceRepository.shared
+    ) {
         self.tripInviteRepository = tripInviteRepository
         self.authService = authService
+        self.gameInstanceRepository = gameInstanceRepository
+    }
+
+    /// Snapshot for UI: trip participation (TripMode) vs optional local game count.
+    func displaySnapshot(for invite: TripInvite) -> InviteDisplaySnapshot {
+        InviteDisplaySnapshot.make(from: invite, localGameCount: localGameCount(for: invite.tripSessionId))
+    }
+
+    private func localGameCount(for tripSessionId: String) -> Int? {
+        guard let sessionUUID = UUID(uuidString: tripSessionId) else { return nil }
+        return try? gameInstanceRepository.gameCount(sessionId: sessionUUID)
+    }
+
+    private func gameCountForAnalytics(invite: TripInvite) -> Int? {
+        localGameCount(for: invite.tripSessionId)
     }
 
     func setAuthService(_ service: FirebaseAuthService) {
@@ -71,7 +91,11 @@ final class PendingTripsViewModel: ObservableObject {
         errorMessage = nil
         do {
             try tripInviteRepository.acceptInvite(inviteId: invite.inviteId, userId: userId)
-            AnalyticsService.shared.log(.tripInviteAcceptedWithContext(inviteTripId: invite.tripSessionId, inviteGameCount: nil, participantCountAfterJoin: nil))
+            AnalyticsService.shared.log(.tripInviteAcceptedWithContext(
+                inviteTripId: invite.tripSessionId,
+                inviteGameCount: gameCountForAnalytics(invite: invite),
+                participantCountAfterJoin: nil
+            ))
             FeedbackService.shared.actionSuccess()
             loadInvites(userId: userId)
         } catch {
@@ -86,7 +110,10 @@ final class PendingTripsViewModel: ObservableObject {
         errorMessage = nil
         do {
             try tripInviteRepository.declineInvite(inviteId: invite.inviteId, userId: userId)
-            AnalyticsService.shared.log(.tripInviteDeclinedWithContext(inviteTripId: invite.tripSessionId, inviteGameCount: nil))
+            AnalyticsService.shared.log(.tripInviteDeclinedWithContext(
+                inviteTripId: invite.tripSessionId,
+                inviteGameCount: gameCountForAnalytics(invite: invite)
+            ))
             FeedbackService.shared.actionSuccess()
             loadInvites(userId: userId)
         } catch {

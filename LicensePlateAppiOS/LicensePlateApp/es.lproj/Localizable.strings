@@ -620,3 +620,10 @@
 "Remove game is not available for ended or cancelled trips." = "No se puede quitar el juego en viajes finalizados o cancelados.";
 "A trip must keep at least one game." = "Un viaje debe tener al menos un juego.";
 
+// Step 6.9.6 Phase D — Invite rows (trip vs game)
+"1 game" = "1 juego";
+"%d games" = "%d juegos";
+"Trip participation: %@" = "Participación en el viaje: %@";
+"Status: %@" = "Estado: %@";
+"Inviter: %@" = "Invitador: %@";
+

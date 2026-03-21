@@ -114,6 +114,7 @@ struct ContentView: View {
                             ForEach(pendingTripsViewModel.incomingInvites, id: \.inviteId) { invite in
                                 PendingInviteCard(
                                     invite: invite,
+                                    snapshot: pendingTripsViewModel.displaySnapshot(for: invite),
                                     isIncoming: true,
                                     onAccept: { pendingTripsViewModel.accept(invite: invite) },
                                     onDecline: { pendingTripsViewModel.decline(invite: invite) },
@@ -125,6 +126,7 @@ struct ContentView: View {
                             ForEach(pendingTripsViewModel.outgoingInvites, id: \.inviteId) { invite in
                                 PendingInviteCard(
                                     invite: invite,
+                                    snapshot: pendingTripsViewModel.displaySnapshot(for: invite),
                                     isIncoming: false,
                                     onAccept: nil,
                                     onDecline: nil,
@@ -437,6 +439,7 @@ struct ContentView: View {
 
 private struct PendingInviteCard: View {
     let invite: TripInvite
+    let snapshot: InviteDisplaySnapshot
     let isIncoming: Bool
     let onAccept: (() -> Void)?
     let onDecline: (() -> Void)?
@@ -460,14 +463,18 @@ private struct PendingInviteCard: View {
                 .background(Color.Theme.softBrown.opacity(0.2))
                 .accessibilityHidden(true)
 
-            HStack {
-                Label("Inviter: %@".localized(invite.fromUserId), systemImage: "person")
+            VStack(alignment: .leading, spacing: 6) {
+                Label(snapshot.inviterLine, systemImage: "person")
                     .font(.system(.footnote, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
-                Spacer()
-                Text("Mode: %@".localized(invite.tripMode))
+                Text(snapshot.tripParticipationLine)
                     .font(.system(.footnote, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
+                if let games = snapshot.gamesOnTripLine {
+                    Text(games)
+                        .font(.system(.footnote, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                }
             }
 
             if isIncoming, invite.statusEnum == .pending {

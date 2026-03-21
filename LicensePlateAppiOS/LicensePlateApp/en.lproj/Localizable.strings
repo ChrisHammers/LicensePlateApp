@@ -651,3 +651,8 @@
 "License plate progress (primary game)" = "License plate progress (primary game)";
 "%d games" = "%d games";
 "Participants: %d" = "Participants: %d";
+
+// Step 6.9.6 Phase D — Invite rows (trip vs game)
+"1 game" = "1 game";
+"Status: %@" = "Status: %@";
+"Inviter: %@" = "Inviter: %@";
