@@ -28,7 +28,6 @@ struct NewTripDefaultsView: View {
                 Color.Theme.background
                     .ignoresSafeArea()
                 
-                List {
                     Section {
                         VStack(spacing: 12) {
                             // Start Trip - First item

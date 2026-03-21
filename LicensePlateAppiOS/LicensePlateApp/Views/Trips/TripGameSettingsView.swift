@@ -107,7 +107,11 @@ struct TripGameSettingsView: View {
                     }
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .foregroundStyle(!(viewModel.licensePlateScopeDraft?.canSave ?? false) ? .secondary : Color.Theme.primaryBlue)
+                    .disabled(!(viewModel.licensePlateScopeDraft?.canSave ?? false))
+                    .accessibilityLabel("Done".localized)
+                    .accessibilityHint(!(viewModel.licensePlateScopeDraft?.canSave ?? false) ? "Select at least one country before saving.".localized : "Done editing changes, saves changes, and dismisses the settings view".localized
+                    )
                 }
             }
         }
@@ -402,14 +406,6 @@ private struct LicensePlateGameScopeDraftSection: View {
     @ObservedObject var draft: LicensePlateScopeSettingsDraft
     let canEditCountries: Bool
 
-    private var selectedCountries: [PlateRegion.Country] {
-        var list: [PlateRegion.Country] = []
-        if draft.includeUS { list.append(.unitedStates) }
-        if draft.includeCanada { list.append(.canada) }
-        if draft.includeMexico { list.append(.mexico) }
-        return list
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Countries to Include".localized)
@@ -486,12 +482,12 @@ private struct LicensePlateGameScopeDraftSection: View {
             .disabled(!canEditCountries || !draft.includeCanada)
             .opacity((canEditCountries && draft.includeCanada) ? 1.0 : 0.5)
             .accessibilityHint((canEditCountries && draft.includeCanada) ? "" : "Enable Canada first".localized)
-
-            if selectedCountries.isEmpty {
-                Text("Select at least one country.".localized)
+            
+            if let message = draft.countryValidationMessage {
+                Text(message)
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Color.red)
-                    .accessibilityLabel("Select at least one country.".localized)
+                    .accessibilityLabel(message)
             }
         }
     }

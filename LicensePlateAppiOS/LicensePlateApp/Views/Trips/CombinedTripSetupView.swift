@@ -69,10 +69,11 @@ struct CombinedTripSetupView: View {
                         createTapped()
                     }
                     .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .foregroundStyle(!viewModel.canCreate || viewModel.isCreating ? .secondary : Color.Theme.primaryBlue)
                     .disabled(!viewModel.canCreate || viewModel.isCreating)
                     .accessibilityLabel("Create".localized)
-                    .accessibilityHint("Creates the trip with selected games and options".localized)
+                    .accessibilityHint(!viewModel.canCreate ? "Select at least one country before saving.".localized : "Creates the trip with selected games and options".localized
+                    )
                 }
             }
             .alert("Error".localized, isPresented: Binding(
@@ -212,11 +213,11 @@ struct CombinedTripSetupView: View {
                     .opacity(viewModel.includeCanada ? 1.0 : 0.5)
                     .accessibilityHint(viewModel.includeCanada ? "" : "Enable Canada first".localized)
 
-                    if let countryValidationMessage = viewModel.countryValidationMessage {
-                        Text(countryValidationMessage)
+                    if let message = viewModel.countryValidationMessage {
+                        Text(message)
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.red)
-                            .accessibilityLabel(countryValidationMessage)
+                            .accessibilityLabel(message)
                     }
                 }
             }

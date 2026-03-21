@@ -16,6 +16,22 @@ final class LicensePlateScopeSettingsDraft: ObservableObject {
     @Published var includeUSTerritories: Bool
     @Published var includeDC: Bool
     @Published var includeCanadianTerritories: Bool
+    
+    var canSave: Bool {
+        !enabledCountries.isEmpty
+    }
+    
+    var countryValidationMessage: String? {
+        !enabledCountries.isEmpty ? nil : "Select at least one country.".localized
+    }
+    
+    var enabledCountries: [PlateRegion.Country] {
+        var list: [PlateRegion.Country] = []
+        if includeUS { list.append(.unitedStates) }
+        if includeCanada { list.append(.canada) }
+        if includeMexico { list.append(.mexico) }
+        return list
+    }
 
     init(
         includeUS: Bool,

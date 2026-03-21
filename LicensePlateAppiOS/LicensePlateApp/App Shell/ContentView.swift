@@ -424,7 +424,7 @@ struct ContentView: View {
 
     @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
     @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
-    @AppStorage("defaultStartTripRightAway") private var defaultStartTripRightAway = false
+    @AppStorage("defaultStartTripRightAway") private var defaultStartTripRightAway = true
     @AppStorage("defaultIncludeUS") private var defaultIncludeUS = true
     @AppStorage("defaultIncludeCanada") private var defaultIncludeCanada = true
     @AppStorage("defaultIncludeMexico") private var defaultIncludeMexico = true
@@ -556,7 +556,7 @@ struct DefaultSettingsView: View {
     @Environment(\.colorScheme) private var systemColorScheme
     @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
     @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
-    @AppStorage("defaultStartTripRightAway") private var defaultStartTripRightAway = false
+    @AppStorage("defaultStartTripRightAway") private var defaultStartTripRightAway = true
     @AppStorage("defaultIncludeUS") private var defaultIncludeUS = true
     @AppStorage("defaultIncludeCanada") private var defaultIncludeCanada = true
     @AppStorage("defaultIncludeMexico") private var defaultIncludeMexico = true

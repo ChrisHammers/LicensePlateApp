@@ -16,6 +16,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Initialize app language on first launch based on device language
         LocalizationHelper.initializeAppLanguageIfNeeded()
 
+        NewTripDefaultsBootstrap.registerFactoryDefaults()
+
         // Reset boundariesLoaded to false on app launch to ensure splash screen shows
         UserDefaults.standard.set(false, forKey: "boundariesLoaded")
         

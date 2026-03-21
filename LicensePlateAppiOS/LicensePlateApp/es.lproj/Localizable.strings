@@ -373,6 +373,11 @@
 "Will use date and time" = "Se usará fecha y hora";
 "Create" = "Crear";
 "Cancels creating a new trip" = "Cancela la creación de un nuevo viaje";
+"Creates the trip with selected games and options" = "Crea el viaje con los juegos y opciones seleccionados";
+"Done editing changes, saves changes, and dismisses the settings view" = "Termina la edición, guarda los cambios y cierra la vista de ajustes";
+"Saves new trip defaults and closes this view" = "Guarda los valores predeterminados del nuevo viaje y cierra esta vista";
+"Select at least one country before saving." = "Selecciona al menos un país antes de guardar.";
+"Enable location tracking during trip first" = "Primero activa el seguimiento de ubicación durante el viaje";
 
 // Enum Values - AppDarkMode
 "Light" = "Claro";
