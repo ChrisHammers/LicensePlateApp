@@ -435,33 +435,6 @@ struct ContentView: View {
     @AppStorage("defaultShowMyActiveTripOnSmallMap") private var defaultShowMyActiveTripOnSmallMap = true
 }
 
-private struct CountryCheckboxRow: View {
-    let title: String
-    @Binding var isOn: Bool
-    
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.system(.body, design: .rounded))
-                .foregroundStyle(Color.Theme.primaryBlue)
-            
-            Spacer()
-            
-            Toggle("", isOn: $isOn)
-                .tint(Color.Theme.primaryBlue)
-                .labelsHidden()
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.Theme.cardBackground)
-        )
-        .accessibilityLabel(title)
-        .accessibilityValue(isOn ? "On".localized : "Off".localized)
-    }
-}
-
 private struct PendingInviteCard: View {
     let invite: TripInvite
     let isIncoming: Bool

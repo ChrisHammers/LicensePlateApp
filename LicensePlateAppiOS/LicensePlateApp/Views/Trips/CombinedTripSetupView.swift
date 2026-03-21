@@ -171,15 +171,15 @@ struct CombinedTripSetupView: View {
                         .font(.system(.headline, design: .rounded))
                         .foregroundStyle(Color.Theme.primaryBlue)
 
-                    CombinedTripCountryRow(title: "United States".localized, isOn: $viewModel.includeUS)
+                    SettingToggleRow(title: "United States".localized, isOn: $viewModel.includeUS)
                         .onChange(of: viewModel.includeUS) { _, _ in
                             viewModel.applyTerritoryGatingFromCountryToggles()
                         }
-                    CombinedTripCountryRow(title: "Canada".localized, isOn: $viewModel.includeCanada)
+                    SettingToggleRow(title: "Canada".localized, isOn: $viewModel.includeCanada)
                         .onChange(of: viewModel.includeCanada) { _, _ in
                             viewModel.applyTerritoryGatingFromCountryToggles()
                         }
-                    CombinedTripCountryRow(title: "Mexico".localized, isOn: $viewModel.includeMexico)
+                    SettingToggleRow(title: "Mexico".localized, isOn: $viewModel.includeMexico)
 
                     Text("Enable United States to configure US territories and Washington, DC. Enable Canada for Canadian territories.".localized)
                         .font(.system(.caption, design: .rounded))
@@ -353,35 +353,6 @@ private struct GameTypeRow: View {
         .accessibilityLabel(gameType.displayName)
         .accessibilityValue(isSelected ? "Selected".localized : "Not selected".localized)
         .accessibilityHint("Toggle this game for the trip".localized)
-    }
-}
-
-// MARK: - Country row
-
-private struct CombinedTripCountryRow: View {
-    let title: String
-    @Binding var isOn: Bool
-
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.system(.body, design: .rounded))
-                .foregroundStyle(Color.Theme.primaryBlue)
-
-            Spacer()
-
-            Toggle("", isOn: $isOn)
-                .tint(Color.Theme.primaryBlue)
-                .labelsHidden()
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.Theme.cardBackground)
-        )
-        .accessibilityLabel(title)
-        .accessibilityValue(isOn ? "On".localized : "Off".localized)
     }
 }
 

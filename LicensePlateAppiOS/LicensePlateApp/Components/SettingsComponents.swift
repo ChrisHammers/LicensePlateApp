@@ -13,11 +13,11 @@ import SwiftUI
 /// Supports title, description, and optional detail text
 struct SettingToggleRow: View {
     let title: String
-    let description: String
+    let description: String?
     let detail: String?
     @Binding var isOn: Bool
     
-    init(title: String, description: String, detail: String? = nil, isOn: Binding<Bool>) {
+    init(title: String, description: String? = nil, detail: String? = nil, isOn: Binding<Bool>) {
         self.title = title
         self.description = description
         self.detail = detail
@@ -32,9 +32,11 @@ struct SettingToggleRow: View {
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
                 
-                Text(description)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
+                if let description = description {
+                    Text(description)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                }
                 
                 if let detail = detail {
                     Text(detail)
@@ -50,9 +52,9 @@ struct SettingToggleRow: View {
                 .labelsHidden()
                 .accessibilityLabel(title)
                 .accessibilityValue(isOn ? "On" : "Off")
-                .accessibilityHint(description)
+                .accessibilityHint(description ?? title) //TODO: allow this to be passed in, I imagine title is useless since it's up above.
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 12) //TODO: allow changeable values since CountryRow has 8,12
         .padding(.horizontal, 16)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)

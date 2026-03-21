@@ -41,9 +41,9 @@ struct NewTripDefaultsView: View {
                                 .padding(.bottom, 4)
                                 .padding(.horizontal, 16)
 
-                            CountryCheckboxRow(title: "United States".localized, isOn: $viewModel.includeUS)
-                            CountryCheckboxRow(title: "Canada".localized, isOn: $viewModel.includeCanada)
-                            CountryCheckboxRow(title: "Mexico".localized, isOn: $viewModel.includeMexico)
+                            SettingToggleRow(title: "United States".localized, isOn: $viewModel.includeUS)
+                            SettingToggleRow(title: "Canada".localized, isOn: $viewModel.includeCanada)
+                            SettingToggleRow(title: "Mexico".localized, isOn: $viewModel.includeMexico)
 
                             if let message = viewModel.countryValidationMessage {
                                 Text(message)
@@ -162,32 +162,5 @@ private extension View {
         } else {
             self
         }
-    }
-}
-
-private struct CountryCheckboxRow: View {
-    let title: String
-    @Binding var isOn: Bool
-
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.system(.body, design: .rounded))
-                .foregroundStyle(Color.Theme.primaryBlue)
-
-            Spacer()
-
-            Toggle("", isOn: $isOn)
-                .tint(Color.Theme.primaryBlue)
-                .labelsHidden()
-                .accessibilityLabel(title)
-                .accessibilityValue(isOn ? "On".localized : "Off".localized)
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.Theme.cardBackground)
-        )
     }
 }

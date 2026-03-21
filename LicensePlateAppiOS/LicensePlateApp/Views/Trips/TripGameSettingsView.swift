@@ -313,6 +313,8 @@ struct TripGameSettingsView: View {
 
             if let draft = viewModel.licensePlateScopeDraft {
                 LicensePlateGameScopeDraftSection(draft: draft, canEditCountries: canEditCountries)
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -413,7 +415,7 @@ private struct LicensePlateGameScopeDraftSection: View {
                 .foregroundStyle(Color.Theme.primaryBlue)
                 .padding(.bottom, 4)
 
-            CountryCheckboxRow(
+            SettingToggleRow(
                 title: "United States".localized,
                 isOn: Binding(
                     get: { draft.includeUS },
@@ -426,7 +428,7 @@ private struct LicensePlateGameScopeDraftSection: View {
             .disabled(!canEditCountries)
             .opacity(canEditCountries ? 1.0 : 0.5)
 
-            CountryCheckboxRow(
+            SettingToggleRow(
                 title: "Canada".localized,
                 isOn: Binding(
                     get: { draft.includeCanada },
@@ -439,7 +441,7 @@ private struct LicensePlateGameScopeDraftSection: View {
             .disabled(!canEditCountries)
             .opacity(canEditCountries ? 1.0 : 0.5)
 
-            CountryCheckboxRow(
+            SettingToggleRow(
                 title: "Mexico".localized,
                 isOn: Binding(
                     get: { draft.includeMexico },
@@ -490,31 +492,5 @@ private struct LicensePlateGameScopeDraftSection: View {
                     .accessibilityLabel(message)
             }
         }
-    }
-}
-
-// Country checkbox row component for trip/game settings
-private struct CountryCheckboxRow: View {
-    let title: String
-    @Binding var isOn: Bool
-
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.system(.body, design: .rounded))
-                .foregroundStyle(Color.Theme.primaryBlue)
-
-            Spacer()
-
-            Toggle("", isOn: $isOn)
-                .tint(Color.Theme.primaryBlue)
-                .labelsHidden()
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.Theme.cardBackground)
-        )
     }
 }
