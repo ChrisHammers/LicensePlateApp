@@ -1,22 +1,20 @@
 //
-//  TripGameSettingsView.swift
+//  GameSettingsView.swift
 //  LicensePlateApp
 //
-//  Step 6.8 — Game/trip settings sheet. Extracted from TripTrackerView for use by LicensePlateGameView.
+//  Step 6.9.3.1 — Game-level settings: scope, reset/remove game, tracking & voice defaults. Opened from LicensePlateGameView.
 //
 
 import SwiftUI
 import CoreLocation
 
-/// Settings sheet for the license plate game: trip info, countries, tracking, voice. Used by LicensePlateGameView.
-struct TripGameSettingsView: View {
+struct GameSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var viewModel: LicensePlateGameViewModel
-    let game: GameInstance
-    /// Called after this game is removed and the sheet is dismissed (e.g. pop `LicensePlateGameView`).
     var onGameInstanceRemoved: (() -> Void)? = nil
 
     @State private var retryAction: (() -> Void)?
+    @State private var showEndGameConfirmation = false
 
     @AppStorage("defaultSaveLocationWhenMarkingPlates") private var saveLocationWhenMarkingPlates = true
     @AppStorage("defaultShowMyLocationOnLargeMap") private var showMyLocationOnLargeMap = true
@@ -27,32 +25,24 @@ struct TripGameSettingsView: View {
     @AppStorage("defaultHoldToTalk") private var holdToTalk = true
 
     enum SettingsSection: String, CaseIterable {
-        case tripInfo = "Trip Info"
+        case gameInfo = "Game info"
         case gameSettings = "Game Settings"
         case trackingPrivacy = "Tracking & Privacy"
         case voice = "Voice"
+        case gameActions = "Game actions"
 
         var id: String { rawValue }
 
         var localizedTitle: String {
             switch self {
-            case .tripInfo: return "Trip Info".localized
+            case .gameInfo: return "Game info".localized
             case .gameSettings: return "Game Settings".localized
             case .trackingPrivacy: return "Tracking & Privacy".localized
             case .voice: return "Voice".localized
+            case .gameActions: return "Game actions".localized
             }
         }
     }
-
-    @EnvironmentObject var authService: FirebaseAuthService
-    @StateObject private var locationManager = LocationManager()
-
-    @State private var showEndTripConfirmation = false
-    @State private var showResetConfirmation = false
-    @State private var showRemoveGameConfirmation = false
-    @State private var showDeleteConfirmation = false
-    @State private var isEditingTripName = false
-    @State private var editingTripName: String = ""
 
     private var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
@@ -60,6 +50,11 @@ struct TripGameSettingsView: View {
         formatter.timeStyle = .short
         return formatter
     }
+
+    @StateObject private var locationManager = LocationManager()
+
+    @State private var showResetConfirmation = false
+    @State private var showRemoveGameConfirmation = false
 
     private var isTripTerminalForGameReset: Bool {
         viewModel.currentSession.status == .ended || viewModel.currentSession.status == .cancelled
@@ -76,14 +71,16 @@ struct TripGameSettingsView: View {
                         Section {
                             VStack {
                                 switch section {
-                                case .tripInfo:
-                                    tripInfoSettings
+                                case .gameInfo:
+                                    gameInfoContent
                                 case .gameSettings:
                                     gameSettings
                                 case .trackingPrivacy:
                                     trackingPrivacySettings
                                 case .voice:
                                     voiceSettings
+                                case .gameActions:
+                                    gameActionsContent
                                 }
                             }
                             .background(Color.Theme.cardBackground)
@@ -100,7 +97,7 @@ struct TripGameSettingsView: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle("Settings".localized)
+            .navigationTitle("Game settings".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -117,13 +114,14 @@ struct TripGameSettingsView: View {
                     .foregroundStyle(!(viewModel.licensePlateScopeDraft?.canSave ?? false) ? .secondary : Color.Theme.primaryBlue)
                     .disabled(!(viewModel.licensePlateScopeDraft?.canSave ?? false))
                     .accessibilityLabel("Done".localized)
-                    .accessibilityHint(!(viewModel.licensePlateScopeDraft?.canSave ?? false) ? "Select at least one country before saving.".localized : "Done editing changes, saves changes, and dismisses the settings view".localized
+                    .accessibilityHint(!(viewModel.licensePlateScopeDraft?.canSave ?? false) ? "Select at least one country before saving.".localized : "Done editing changes, saves game scope, and dismisses game settings".localized
                     )
                 }
             }
         }
         .background(Color.Theme.background)
         .onAppear {
+            viewModel.refreshGame()
             viewModel.beginLicensePlateScopeDraft()
         }
         .onDisappear {
@@ -131,51 +129,54 @@ struct TripGameSettingsView: View {
         }
     }
 
-    private var tripInfoSettings: some View {
+    private var gameInfoContent: some View {
         Group {
-            SettingEditableTextRow(
-                title: "Trip Name".localized,
-                value: Binding(
-                    get: { viewModel.currentSession.name },
-                    set: { newValue in
-                        viewModel.updateTripName(newValue)
-                    }
-                ),
-                placeholder: "Enter trip name".localized,
-                isDisabled: !viewModel.isTripCreator,
-                onSave: {
-                    viewModel.saveSession()
-                },
-                onCancel: {}
-            )
+            let displayName = GameType(rawValue: viewModel.game.definitionId)?.displayName ?? viewModel.game.definitionId
+            SettingInfoRow(title: "Name".localized, value: displayName)
 
             Divider()
 
-            if let startedAt = viewModel.currentSession.startedAt {
-                SettingInfoRow(
-                    title: "Started".localized,
-                    value: dateFormatter.string(from: startedAt)
-                )
+            SettingInfoRow(
+                title: "Status".localized,
+                value: localizedGameLifecycleState(viewModel.game.commonConfig.lifecycleState)
+            )
+
+            if let endedAt = viewModel.game.endedAt {
                 Divider()
-            } else {
-                SettingInfoRow(
-                    title: "Created".localized,
-                    value: dateFormatter.string(from: viewModel.currentSession.createdAt)
-                )
-                Divider()
+                SettingInfoRow(title: "Ended".localized, value: dateFormatter.string(from: endedAt))
             }
 
-            if viewModel.currentSession.startedAt == nil {
+            Divider()
+
+            if viewModel.currentSession.status == .ended || viewModel.currentSession.status == .cancelled {
+                Text(viewModel.currentSession.status == .cancelled
+                    ? "This trip was cancelled; game actions are unavailable.".localized
+                    : "This trip has ended; game actions are unavailable.".localized
+                )
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(Color.secondary)
+                .padding(.vertical, 8)
+                .accessibilityLabel(viewModel.currentSession.status == .cancelled
+                    ? "This trip was cancelled; game actions are unavailable.".localized
+                    : "This trip has ended; game actions are unavailable.".localized
+                )
+            } else if !viewModel.isTripContainerActive {
+                Text("Start the trip from trip settings before starting this game.".localized)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.secondary)
+                    .padding(.vertical, 8)
+                    .accessibilityLabel("Start the trip from trip settings before starting this game.".localized)
+            } else if viewModel.game.commonConfig.lifecycleState == .created {
                 Button {
                     do {
-                        try viewModel.startTrip()
+                        try viewModel.startGame()
                     } catch {
                         viewModel.setError(error.localizedDescription)
-                        retryAction = { try? viewModel.startTrip() }
+                        retryAction = { try? viewModel.startGame() }
                     }
                 } label: {
                     HStack {
-                        Text("Start Trip".localized)
+                        Text("Start Game".localized)
                             .font(.system(.body, design: .rounded))
                             .fontWeight(.semibold)
                             .foregroundStyle(.white)
@@ -193,16 +194,16 @@ struct TripGameSettingsView: View {
                 .buttonStyle(.plain)
                 .disabled(!viewModel.isTripCreator)
                 .opacity(viewModel.isTripCreator ? 1.0 : 0.5)
-            }
+                .accessibilityLabel("Start Game".localized)
+                .accessibilityHint(viewModel.isTripCreator ? "Starts this game so you can mark plates".localized : "Only the trip creator can start the game".localized)
 
-            Divider()
-
-            if viewModel.currentSession.startedAt != nil && viewModel.currentSession.status == .active {
+                Divider()
+            } else if viewModel.game.commonConfig.lifecycleState == .started {
                 Button {
-                    showEndTripConfirmation = true
+                    showEndGameConfirmation = true
                 } label: {
                     HStack {
-                        Text("End Trip".localized)
+                        Text("End Game".localized)
                             .font(.system(.body, design: .rounded))
                             .fontWeight(.semibold)
                             .foregroundStyle(.white)
@@ -219,15 +220,70 @@ struct TripGameSettingsView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!viewModel.isTripCreator)
+                .opacity(viewModel.isTripCreator ? 1.0 : 0.5)
+                .accessibilityLabel("End Game".localized)
+                .accessibilityHint(viewModel.isTripCreator ? "Ends this game for this trip".localized : "Only the trip creator can end the game".localized)
 
                 Divider()
-            } else if let endedAt = viewModel.currentSession.endedAt {
-                SettingInfoRow(
-                    title: viewModel.currentSession.status == .cancelled ? "Cancelled".localized : "Ended".localized,
-                    value: dateFormatter.string(from: endedAt)
+            } else {
+                Text(
+                    viewModel.game.commonConfig.lifecycleState == .completed
+                        ? "This game is complete. Reset it from Game actions to play again.".localized
+                        : "This game has ended. Reset it from Game actions to play again.".localized
+                )
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(Color.secondary)
+                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel(
+                    viewModel.game.commonConfig.lifecycleState == .completed
+                        ? "This game is complete. Reset it from Game actions to play again.".localized
+                        : "This game has ended. Reset it from Game actions to play again.".localized
                 )
             }
+        }
+        .alert("End Game".localized, isPresented: $showEndGameConfirmation) {
+            Button("Cancel".localized, role: .cancel) {}
+            Button("End Game".localized, role: .destructive) {
+                do {
+                    try viewModel.endGame()
+                } catch {
+                    viewModel.setError(error.localizedDescription)
+                    retryAction = { try? viewModel.endGame() }
+                }
+            }
+        } message: {
+            Text("This ends this game for this trip. You won't be able to add plates to this game until it is reset or restarted.".localized)
+        }
+    }
 
+    private func localizedGameLifecycleState(_ state: GameInstanceState) -> String {
+        switch state {
+        case .created: return "Not started".localized
+        case .started: return "In progress".localized
+        case .ended: return "Ended".localized
+        case .completed: return "Completed".localized
+        }
+    }
+
+    private var gameSettings: some View {
+        Group {
+            let canEditCountries = viewModel.currentSession.startedAt == nil && !viewModel.game.commonConfig.configLocked
+
+            if let draft = viewModel.licensePlateScopeDraft {
+                LicensePlateGameScopeDraftSection(draft: draft, canEditCountries: canEditCountries)
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+            } else {
+                ProgressView()
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding()
+            }
+        }
+    }
+
+    private var gameActionsContent: some View {
+        Group {
             Button {
                 showResetConfirmation = true
             } label: {
@@ -279,37 +335,6 @@ struct TripGameSettingsView: View {
             }
             .buttonStyle(.plain)
             .disabled(!viewModel.canRemoveThisGameInstance)
-
-            Divider()
-
-            Button {
-                showDeleteConfirmation = true
-            } label: {
-                HStack {
-                    Text("Delete Trip".localized)
-                        .font(.system(.body, design: .rounded))
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.red)
-                    Spacer()
-                }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 16)
-            }
-            .buttonStyle(.plain)
-            .disabled(!viewModel.isTripCreator)
-        }
-        .alert("End Trip".localized, isPresented: $showEndTripConfirmation) {
-            Button("Cancel".localized, role: .cancel) {}
-            Button("End Trip".localized, role: .destructive) {
-                do {
-                    try viewModel.endTrip()
-                } catch {
-                    viewModel.setError(error.localizedDescription)
-                    retryAction = { try? viewModel.endTrip() }
-                }
-            }
-        } message: {
-            Text("This ends the trip. You won't be able to add license plates to this trip anymore.".localized)
         }
         .alert("Reset Game".localized, isPresented: $showResetConfirmation) {
             Button("Cancel".localized, role: .cancel) {}
@@ -338,39 +363,6 @@ struct TripGameSettingsView: View {
             }
         } message: {
             Text("This removes only this game from the trip. The trip continues with your other games.".localized)
-        }
-        .alert("Delete Trip".localized, isPresented: $showDeleteConfirmation) {
-            Button("Cancel".localized, role: .cancel) {}
-            Button("Delete".localized, role: .destructive) {
-                do {
-                    try viewModel.deleteTrip()
-                    dismiss()
-                } catch {
-                    viewModel.setError(error.localizedDescription)
-                    retryAction = {
-                        try? viewModel.deleteTrip()
-                        dismiss()
-                    }
-                }
-            }
-        } message: {
-            Text("This will delete the trip and all scores will be removed.".localized)
-        }
-    }
-
-    private var gameSettings: some View {
-        Group {
-            let canEditCountries = viewModel.currentSession.startedAt == nil && !game.commonConfig.configLocked
-
-            if let draft = viewModel.licensePlateScopeDraft {
-                LicensePlateGameScopeDraftSection(draft: draft, canEditCountries: canEditCountries)
-                .padding(.vertical, 12)
-                .padding(.horizontal, 16)
-            } else {
-                ProgressView()
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding()
-            }
         }
     }
 
@@ -451,7 +443,6 @@ struct TripGameSettingsView: View {
             }
         }
     }
-
 }
 
 /// Countries + territory scope edited in Game Settings; persisted when user taps Done on the sheet.
@@ -535,7 +526,7 @@ private struct LicensePlateGameScopeDraftSection: View {
             .disabled(!canEditCountries || !draft.includeCanada)
             .opacity((canEditCountries && draft.includeCanada) ? 1.0 : 0.5)
             .accessibilityHint((canEditCountries && draft.includeCanada) ? "" : "Enable Canada first".localized)
-            
+
             if let message = draft.countryValidationMessage {
                 Text(message)
                     .font(.system(.caption, design: .rounded))
@@ -544,4 +535,40 @@ private struct LicensePlateGameScopeDraftSection: View {
             }
         }
     }
+}
+
+#Preview("Game settings") {
+    let sessionId = UUID()
+    let gameId = UUID()
+    let session = TripSession(
+        id: sessionId,
+        name: "Preview",
+        status: .active,
+        mode: .solo,
+        createdAt: Date(),
+        createdBy: "u1",
+        startedAt: Date(),
+        participants: []
+    )
+    let game = GameInstance(
+        id: gameId,
+        definitionId: GameType.licensePlate.rawValue,
+        sessionId: sessionId,
+        ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+        commonConfig: CommonGameConfig(lifecycleState: .created, configLocked: false, configLockReason: .none)
+    )
+    let auth = FirebaseAuthService()
+    auth.currentUser = AppUser(id: "u1", userName: "U", firebaseUID: "u1")
+    return GameSettingsView(
+        viewModel: LicensePlateGameViewModel(
+            session: session,
+            game: game,
+            tripSessionRepository: TripSessionRepository.shared,
+            gameInstanceRepository: GameInstanceRepository.shared,
+            tripActivityEventRepository: TripActivityEventRepository.shared,
+            lifecycleService: TripSessionLifecycleService.shared,
+            syncCoordinator: SyncCoordinator.shared,
+            authService: auth
+        )
+    )
 }

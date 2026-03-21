@@ -11,7 +11,9 @@ struct TripSessionView: View {
     let sessionId: UUID
 
     @EnvironmentObject private var coordinator: MainCoordinator
+    @EnvironmentObject private var authService: FirebaseAuthService
     @StateObject private var viewModel: TripSessionViewModel
+    @State private var showTripSettings = false
 
     init(sessionId: UUID) {
         self.sessionId = sessionId
@@ -75,6 +77,39 @@ struct TripSessionView: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .background(Color.Theme.background)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    FeedbackService.shared.buttonTap()
+                    viewModel.load()
+                    showTripSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                }
+                .accessibilityLabel("Trip settings".localized)
+                .accessibilityHint("Trip name, start or end trip, or delete trip".localized)
+            }
+        }
+        .sheet(isPresented: $showTripSettings) {
+            TripSettingsView(
+                viewModel: TripSettingsViewModel(
+                    session: session,
+                    tripSessionRepository: TripSessionRepository.shared,
+                    lifecycleService: TripSessionLifecycleService.shared,
+                    authService: authService
+                ),
+                onTripDeleted: {
+                    coordinator.pop()
+                }
+            )
+            .environmentObject(authService)
+        }
+        .onChange(of: showTripSettings) { _, isPresented in
+            if !isPresented {
+                viewModel.load()
+            }
+        }
     }
 
     private func tripStatusRow(session: TripSession) -> some View {
@@ -125,5 +160,6 @@ private struct GameRowView: View {
     NavigationStack {
         TripSessionView(sessionId: PreviewConstants.sessionIdSolo)
             .environmentObject(MainCoordinator())
+            .environmentObject(FirebaseAuthService())
     }
 }

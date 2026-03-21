@@ -37,8 +37,6 @@ struct LicensePlateGameView: View {
         }
     }
 
-    let session: TripSession
-    let game: GameInstance
     let authService: FirebaseAuthService
 
     @StateObject private var viewModel: LicensePlateGameViewModel
@@ -61,7 +59,7 @@ struct LicensePlateGameView: View {
     @State private var showSettings = false
     @State private var visibleCountry: PlateRegion.Country = .unitedStates
     @State private var showFullScreenMap = false
-    @State private var showEndTripConfirmation = false
+    @State private var showEndGameConfirmation = false
     @State private var chipWidth: CGFloat = 0
     @State private var chipHeight: CGFloat = 0
     @State private var micListeningPulseScale: CGFloat = 1.0
@@ -77,8 +75,6 @@ struct LicensePlateGameView: View {
     @Namespace private var mapNamespace
 
     init(session: TripSession, game: GameInstance, authService: FirebaseAuthService) {
-        self.session = session
-        self.game = game
         self.authService = authService
         _viewModel = StateObject(wrappedValue: LicensePlateGameViewModel(
             session: session,
@@ -123,14 +119,14 @@ struct LicensePlateGameView: View {
                         Image(systemName: "gearshape")
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
-                    .accessibilityLabel("Trip Settings".localized)
-                    .accessibilityHint("Opens settings for this trip".localized)
+                    .accessibilityLabel("Game settings".localized)
+                    .accessibilityHint("Opens settings for this license plate game".localized)
                 }
             }
         }
         .toolbar(showFullScreenMap ? .hidden : .visible, for: .navigationBar)
         .sheet(isPresented: $showSettings) {
-            TripGameSettingsView(viewModel: viewModel, game: game, onGameInstanceRemoved: {
+            GameSettingsView(viewModel: viewModel, onGameInstanceRemoved: {
                 dismiss()
             })
                 .environmentObject(authService)
@@ -192,13 +188,15 @@ struct LicensePlateGameView: View {
             }
         }
         .onAppear {
+            viewModel.refreshSession()
+            viewModel.refreshGame()
             viewModel.refreshFoundRegions()
             // Request location permission when view appears
             if locationManager.authorizationStatus == .notDetermined {
                 locationManager.requestAuthorization()
             }
-            // Switch to list tab if trip is not active and currently on voice tab
-            if !viewModel.isTripActive && selectedTab == .voice {
+            // Switch to list tab if the game is not playable and we're on voice tab
+            if !viewModel.isGamePlayActive && selectedTab == .voice {
                 selectedTab = .list
             }
             
@@ -232,15 +230,18 @@ struct LicensePlateGameView: View {
             
             cameraPosition = GMSCameraPosition.from(coordinate: center, zoom: zoom)
         }
-        .onChange(of: viewModel.currentSession.startedAt) { oldValue, newValue in
-            // If trip just became inactive and we're on voice tab, switch to list
-            if !viewModel.isTripActive && selectedTab == .voice {
+        .onChange(of: viewModel.currentSession.startedAt) { _, _ in
+            if !viewModel.isGamePlayActive && selectedTab == .voice {
                 selectedTab = .list
             }
         }
-        .onChange(of: viewModel.currentSession.status) { oldValue, newValue in
-            // If trip just ended and we're on voice tab, switch to list
-            if newValue == .ended && selectedTab == .voice {
+        .onChange(of: viewModel.currentSession.status) { _, newValue in
+            if (newValue == .ended || newValue == .cancelled), selectedTab == .voice {
+                selectedTab = .list
+            }
+        }
+        .onChange(of: viewModel.game.commonConfig.lifecycleState) { _, _ in
+            if !viewModel.isGamePlayActive && selectedTab == .voice {
                 selectedTab = .list
             }
         }
@@ -291,7 +292,7 @@ struct LicensePlateGameView: View {
 
     /// Game-scoped enabled countries (and regions) for board/progress. Uses game's license-plate config when available; else North America default.
     private var gameScopedEnabledCountries: [PlateRegion.Country] {
-        let config = game.licensePlateConfig() ?? LicensePlateGameConfig(
+        let config = viewModel.game.licensePlateConfig() ?? LicensePlateGameConfig(
             selectedCountriesRawValues: [
                 PlateRegion.Country.unitedStates.rawValue,
                 PlateRegion.Country.canada.rawValue,
@@ -310,7 +311,7 @@ struct LicensePlateGameView: View {
     /// Remaining count: game-scoped (game completion goal) when license-plate; else session-enabled region count.
     private var headerRemainingValue: String {
         let foundCount = viewModel.foundRegions.count
-        if let lpConfig = game.licensePlateConfig() {
+        if let lpConfig = viewModel.game.licensePlateConfig() {
             let goal = LicensePlateScopeCalculator.completionGoal(for: lpConfig)
             return "\(max(0, goal - foundCount))"
         }
@@ -342,7 +343,7 @@ struct LicensePlateGameView: View {
           
             HStack(spacing: 24) {
                 summaryChip(title: "Found".localized, value: headerFoundValue, measuredWidth: $chipWidth, measuredHeight: $chipHeight)
-                startEndTripButton(height: chipHeight)
+                startEndGameButton(height: chipHeight)
                 summaryChip(title: "Remaining".localized, value: headerRemainingValue, measuredWidth: $chipWidth, measuredHeight: $chipHeight)
             }
             .padding(.horizontal, 32)
@@ -412,17 +413,62 @@ struct LicensePlateGameView: View {
         .accessibilityLabel("\(title): \(value)")
     }
     
-    private func startEndTripButton(height: CGFloat) -> some View {
+    private func startEndGameButton(height: CGFloat) -> some View {
         Group {
-            if viewModel.currentSession.startedAt == nil {
-                // Start Trip Button
+            if viewModel.currentSession.status == .ended || viewModel.currentSession.status == .cancelled {
+                VStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(.title2, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .accessibilityHidden(true)
+                    Text(viewModel.currentSession.status == .cancelled ? "CANCELLED".localized : "ENDED".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.softBrown)
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity)
+                .frame(height: height > 0 ? height : nil)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.Theme.background)
+                )
+                .accessibilityLabel(viewModel.currentSession.status == .cancelled ? "Trip cancelled".localized : "Trip ended".localized)
+                .accessibilityValue(viewModel.currentSession.status == .cancelled ? "This trip was cancelled".localized : "This trip has ended".localized)
+                .accessibilityAddTraits(.isStaticText)
+            } else if !viewModel.isTripContainerActive {
+                VStack(spacing: 6) {
+                    Image(systemName: "car.circle")
+                        .font(.system(.title2, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .accessibilityHidden(true)
+                    Text("Trip not started".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 8)
+                .frame(maxWidth: .infinity)
+                .frame(height: height > 0 ? height : nil)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.Theme.background)
+                )
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Trip not started".localized)
+                .accessibilityValue("Start the trip from trip settings before starting this game".localized)
+                .accessibilityAddTraits(.isStaticText)
+            } else if viewModel.game.commonConfig.lifecycleState == .created {
                 Button {
                     FeedbackService.shared.buttonTap()
                     do {
-                        try viewModel.startTrip()
+                        try viewModel.startGame()
                     } catch {
                         viewModel.setError(error.localizedDescription)
-                        retryAction = { try? viewModel.startTrip() }
+                        retryAction = { try? viewModel.startGame() }
                     }
                 } label: {
                     VStack(spacing: 6) {
@@ -447,14 +493,13 @@ struct LicensePlateGameView: View {
                 .disabled(!viewModel.isTripCreator)
                 .opacity(viewModel.isTripCreator ? 1.0 : 0.5)
                 .frame(height: height > 0 ? height : nil)
-                .accessibilityLabel("Start Trip".localized)
-                .accessibilityHint(viewModel.isTripCreator ? "Starts the trip and begins tracking".localized : "Only the trip creator can start the trip".localized)
+                .accessibilityLabel("Start Game".localized)
+                .accessibilityHint(viewModel.isTripCreator ? "Starts this game so you can mark plates".localized : "Only the trip creator can start the game".localized)
                 .accessibilityAddTraits(.isButton)
-            } else if viewModel.isTripActive {
-                // End Trip Button
+            } else if viewModel.game.commonConfig.lifecycleState == .started {
                 Button {
                     FeedbackService.shared.buttonTap()
-                    showEndTripConfirmation = true
+                    showEndGameConfirmation = true
                 } label: {
                     VStack(spacing: 6) {
                         Image(systemName: "stop.circle.fill")
@@ -478,17 +523,16 @@ struct LicensePlateGameView: View {
                 .disabled(!viewModel.isTripCreator)
                 .opacity(viewModel.isTripCreator ? 1.0 : 0.5)
                 .frame(height: height > 0 ? height : nil)
-                .accessibilityLabel("End Trip".localized)
-                .accessibilityHint(viewModel.isTripCreator ? "Ends the trip and stops tracking".localized : "Only the trip creator can end the trip".localized)
+                .accessibilityLabel("End Game".localized)
+                .accessibilityHint(viewModel.isTripCreator ? "Ends this game for this trip".localized : "Only the trip creator can end the game".localized)
                 .accessibilityAddTraits(.isButton)
             } else {
-                // Trip ended or cancelled — show status
                 VStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(.title2, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .accessibilityHidden(true)
-                    Text(viewModel.currentSession.status == .cancelled ? "CANCELLED".localized : "ENDED".localized)
+                    Text(viewModel.game.commonConfig.lifecycleState == .completed ? "DONE".localized : "GAME ENDED".localized)
                         .font(.system(.caption, design: .rounded))
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Theme.softBrown)
@@ -501,23 +545,22 @@ struct LicensePlateGameView: View {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(Color.Theme.background)
                 )
-                .accessibilityLabel(viewModel.currentSession.status == .cancelled ? "Trip cancelled".localized : "Trip Ended".localized)
-                .accessibilityValue(viewModel.currentSession.status == .cancelled ? "This trip was cancelled".localized : "This trip has ended".localized)
+                .accessibilityLabel(viewModel.game.commonConfig.lifecycleState == .completed ? "Game completed".localized : "Game ended".localized)
                 .accessibilityAddTraits(.isStaticText)
             }
         }
-        .alert("End Trip", isPresented: $showEndTripConfirmation) {
-            Button("Cancel", role: .cancel) {}
-            Button("End Trip", role: .destructive) {
+        .alert("End Game".localized, isPresented: $showEndGameConfirmation) {
+            Button("Cancel".localized, role: .cancel) {}
+            Button("End Game".localized, role: .destructive) {
                 do {
-                    try viewModel.endTrip()
+                    try viewModel.endGame()
                 } catch {
                     viewModel.setError(error.localizedDescription)
-                    retryAction = { try? viewModel.endTrip() }
+                    retryAction = { try? viewModel.endGame() }
                 }
             }
         } message: {
-            Text("This ends the trip. You won't be able to add license plates to this trip anymore.".localized)
+            Text("This ends this game for this trip. You won't be able to add plates to this game until it is reset or restarted.".localized)
         }
     }
 
@@ -555,7 +598,7 @@ struct LicensePlateGameView: View {
                             region: region,
                             isSelected: viewModel.foundRegions.contains(where: { $0.regionID == region.id }),
                             toggleAction: { toggle(regionID: region.id) },
-                            isDisabled: !viewModel.isTripActive
+                            isDisabled: !viewModel.isGamePlayActive
                         )
                         .listRowBackground(Color.Theme.cardBackground)
                         .onAppear {
@@ -620,7 +663,7 @@ struct LicensePlateGameView: View {
     }
 
     private func toggle(regionID: String) {
-        guard viewModel.isTripActive else { return }
+        guard viewModel.isGamePlayActive else { return }
         FeedbackService.shared.toggleRegion()
         let isCurrentlyFound = viewModel.foundRegions.contains(where: { $0.regionID == regionID })
         if isCurrentlyFound {
@@ -763,7 +806,7 @@ struct LicensePlateGameView: View {
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { _ in
-                        if viewModel.isTripActive && !speechRecognizer.isListening && !speechRecognizer.isPreparing && !speechRecognizer.isStarting && speechRecognizer.authorizationStatus == .authorized {
+                        if viewModel.isGamePlayActive && !speechRecognizer.isListening && !speechRecognizer.isPreparing && !speechRecognizer.isStarting && speechRecognizer.authorizationStatus == .authorized {
                             speechRecognizer.startListening()
                         }
                     }
@@ -773,11 +816,11 @@ struct LicensePlateGameView: View {
                         }
                     }
             )
-            .disabled(!viewModel.isTripActive || speechRecognizer.authorizationStatus != .authorized)
+            .disabled(!viewModel.isGamePlayActive || speechRecognizer.authorizationStatus != .authorized)
             .accessibilityLabel("Voice Input".localized)
             .accessibilityValue((speechRecognizer.isListening || speechRecognizer.isPreparing || speechRecognizer.isStarting) ? "Recording".localized : "Not recording".localized)
             .accessibilityHint(
-                !viewModel.isTripActive ? "Trip must be started to use voice input".localized :
+                !viewModel.isGamePlayActive ? "Start the trip and this game to use voice input".localized :
                 speechRecognizer.authorizationStatus != .authorized ? "Speech recognition permission required".localized :
                 "Press and hold to record license plate".localized
             )
@@ -872,7 +915,7 @@ struct LicensePlateGameView: View {
     
     private func processRecognizedText(_ text: String) {
         // Don't process if trip is not active
-        guard viewModel.isTripActive else { return }
+        guard viewModel.isGamePlayActive else { return }
         
         let normalizedText = text.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedText.isEmpty else { return }
@@ -1086,7 +1129,7 @@ struct LicensePlateGameView: View {
 //          .frame(maxWidth: .infinity, maxHeight: .infinity)
         HStack(spacing: 16) {
             ForEach(Tab.allCases) { tab in
-                let isTabDisabled = !viewModel.isTripActive
+                let isTabDisabled = !viewModel.isGamePlayActive
                 Button {
                     // Prevent switching to tabs if trip is not active
                     if isTabDisabled {

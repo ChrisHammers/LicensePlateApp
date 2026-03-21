@@ -21,6 +21,8 @@ enum DiscoverySubmitResult {
 final class LicensePlateGameViewModel: ObservableObject {
 
     @Published private(set) var currentSession: TripSession
+    /// Latest persisted game instance (refresh after lifecycle or config changes).
+    @Published private(set) var game: GameInstance
     @Published private(set) var foundRegions: [FoundRegion] = []
     @Published var rejectedDuplicateMessage: String?
     @Published var rejectedInvalidParticipantMessage: String?
@@ -29,7 +31,6 @@ final class LicensePlateGameViewModel: ObservableObject {
     @Published private(set) var licensePlateScopeDraft: LicensePlateScopeSettingsDraft?
 
     let sessionId: UUID
-    let game: GameInstance
 
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
@@ -45,9 +46,14 @@ final class LicensePlateGameViewModel: ObservableObject {
         return currentSession.createdBy == id
     }
 
-    /// True when the trip has been started through the lifecycle service (`.active` + `startedAt`).
-    var isTripActive: Bool {
+    /// Trip container is in progress (user has started the trip).
+    var isTripContainerActive: Bool {
         currentSession.status == .active && currentSession.startedAt != nil
+    }
+
+    /// License plate play is allowed: active trip and this game’s lifecycle is `.started`.
+    var isGamePlayActive: Bool {
+        isTripContainerActive && game.commonConfig.lifecycleState == .started
     }
 
     /// Games on this trip (for optional “remove this game” when the trip has multiple).
@@ -93,6 +99,12 @@ final class LicensePlateGameViewModel: ObservableObject {
         }
     }
 
+    func refreshGame() {
+        if let updated = try? gameInstanceRepository.instance(byId: game.id) {
+            game = updated
+        }
+    }
+
     func refreshFoundRegions() {
         foundRegions = (try? tripActivityEventRepository.foundRegions(sessionId: sessionId, gameInstanceId: game.id)) ?? []
     }
@@ -101,17 +113,32 @@ final class LicensePlateGameViewModel: ObservableObject {
         let actorId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
         try lifecycleService.startTrip(sessionId: sessionId, actorId: actorId)
         refreshSession()
+        refreshGame()
     }
 
     func endTrip() throws {
         let endedBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
         try lifecycleService.endTrip(sessionId: sessionId, endedBy: endedBy)
         refreshSession()
+        refreshGame()
+    }
+
+    func startGame() throws {
+        try gameInstanceLifecycleService.startGame(sessionId: sessionId, gameInstanceId: game.id)
+        refreshSession()
+        refreshGame()
+    }
+
+    func endGame() throws {
+        try gameInstanceLifecycleService.endGame(sessionId: sessionId, gameInstanceId: game.id)
+        refreshSession()
+        refreshGame()
     }
 
     func resetGame() throws {
         try gameInstanceLifecycleService.resetGame(sessionId: sessionId, gameInstanceId: game.id)
         refreshSession()
+        refreshGame()
         refreshFoundRegions()
         foundRegions = []
     }
@@ -121,12 +148,14 @@ final class LicensePlateGameViewModel: ObservableObject {
         let cancelledBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
         try lifecycleService.cancelSession(sessionId: sessionId, cancelledBy: cancelledBy)
         refreshSession()
+        refreshGame()
     }
 
     /// Removes this game instance from the trip (multi-game only). Pop the game screen after success.
     func deleteGameInstance() throws {
         try gameInstanceLifecycleService.deleteGame(sessionId: sessionId, gameInstanceId: game.id)
         refreshSession()
+        refreshGame()
     }
 
     func submitDiscovery(regionID: String, inputMethod: FoundRegion.InputMethod) -> DiscoverySubmitResult {
@@ -372,6 +401,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         game.gameSpecificPayloadData = data
         do {
             try gameInstanceRepository.update(instance: game)
+            refreshGame()
             licensePlateScopeDraft = nil
             objectWillChange.send()
         } catch {

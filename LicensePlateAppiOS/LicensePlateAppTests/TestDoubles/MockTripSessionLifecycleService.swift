@@ -17,6 +17,7 @@ final class MockTripSessionLifecycleService: TripSessionLifecycleServiceProtocol
     var endTripCallCount = 0
     var endTripSessionIds: [UUID] = []
     var cancelSessionCallCount = 0
+    var cancelSessionIds: [UUID] = []
 
     var shouldThrow = false
 
@@ -36,5 +37,6 @@ final class MockTripSessionLifecycleService: TripSessionLifecycleServiceProtocol
     func cancelSession(sessionId: UUID, cancelledBy: String?) throws {
         if shouldThrow { throw NSError(domain: "MockLifecycleService", code: -1, userInfo: nil) }
         cancelSessionCallCount += 1
+        cancelSessionIds.append(sessionId)
     }
 }

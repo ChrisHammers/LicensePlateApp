@@ -31,7 +31,7 @@ struct GameInstanceLifecycleRuleTests {
 
     @Test func validateGameResetThrowsWhenTripCancelled() throws {
         do {
-            try GameplayLifecycleRules.validateGameResetAllowed(tripSessionState: .cancelled)
+             try GameplayLifecycleRules.validateGameResetAllowed(tripSessionState: .cancelled)
             Issue.record("Expected gameResetTripTerminal")
         } catch let error as GameplayLifecycleRulesError {
             #expect(error == .gameResetTripTerminal)
