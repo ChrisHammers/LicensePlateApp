@@ -17,6 +17,8 @@ protocol TripActivityEventRepositoryProtocol: AnyObject {
     func foundRegions(sessionId: UUID, gameInstanceId: UUID?) throws -> [FoundRegion]
     /// Remove all events for a session (or discovery-related events for one game when gameInstanceId is provided). Used for reset game / cancel session cleanup.
     func deleteEvents(sessionId: UUID, gameInstanceId: UUID?) throws
+    /// Remove every persisted event whose payload references this game (e.g. game_started, discoveries). Used when removing a game instance from a trip.
+    func deleteAllEventsForGame(sessionId: UUID, gameInstanceId: UUID) throws
 }
 
 @MainActor
@@ -155,6 +157,23 @@ final class TripActivityEventRepository: ObservableObject, TripActivityEventRepo
             for entity in entities {
                 ctx.delete(entity)
             }
+        }
+        try ctx.save()
+    }
+
+    func deleteAllEventsForGame(sessionId: UUID, gameInstanceId: UUID) throws {
+        guard let ctx = modelContext else { throw TripActivityEventRepositoryError.noModelContext }
+        let sid = sessionId.uuidString
+        let gidStr = gameInstanceId.uuidString
+        var descriptor = FetchDescriptor<TripActivityEventEntity>(
+            predicate: #Predicate<TripActivityEventEntity> { $0.sessionId == sid }
+        )
+        let entities = try ctx.fetch(descriptor)
+        for entity in entities {
+            guard let data = entity.payloadData,
+                  let payload = try? JSONDecoder().decode([String: String].self, from: data),
+                  payload[TripActivityEventPayloadKey.gameInstanceId] == gidStr else { continue }
+            ctx.delete(entity)
         }
         try ctx.save()
     }

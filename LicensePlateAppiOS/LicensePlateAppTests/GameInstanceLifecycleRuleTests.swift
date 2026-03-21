@@ -38,4 +38,27 @@ struct GameInstanceLifecycleRuleTests {
             #expect(error != .tripResetNotAllowed)
         }
     }
+
+    @Test func validateGameDeleteAllowedWhenTwoGamesAndTripActive() throws {
+        try GameplayLifecycleRules.validateGameDeleteAllowed(tripSessionState: .active, gameCountInSession: 2)
+        try GameplayLifecycleRules.validateGameDeleteAllowed(tripSessionState: .created, gameCountInSession: 3)
+    }
+
+    @Test func validateGameDeleteThrowsWhenOnlyOneGame() throws {
+        do {
+            try GameplayLifecycleRules.validateGameDeleteAllowed(tripSessionState: .active, gameCountInSession: 1)
+            Issue.record("Expected gameDeleteLastGameNotAllowed")
+        } catch let error as GameplayLifecycleRulesError {
+            #expect(error == .gameDeleteLastGameNotAllowed)
+        }
+    }
+
+    @Test func validateGameDeleteThrowsWhenTripEnded() throws {
+        do {
+            try GameplayLifecycleRules.validateGameDeleteAllowed(tripSessionState: .ended, gameCountInSession: 2)
+            Issue.record("Expected gameResetTripTerminal")
+        } catch let error as GameplayLifecycleRulesError {
+            #expect(error == .gameResetTripTerminal)
+        }
+    }
 }

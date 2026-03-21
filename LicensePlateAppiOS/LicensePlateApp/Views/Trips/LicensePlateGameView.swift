@@ -68,6 +68,7 @@ struct LicensePlateGameView: View {
     @State private var showRiskAdvisoryMessage = false
     @State private var riskPresentationStyle: RiskPresentationStyle? = nil
     @State private var retryAction: (() -> Void)?
+    @Environment(\.dismiss) private var dismiss
     @State private var cameraPosition: GMSCameraPosition = {
         // Initialize with default US position, will be updated on appear
         let center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
@@ -129,7 +130,9 @@ struct LicensePlateGameView: View {
         }
         .toolbar(showFullScreenMap ? .hidden : .visible, for: .navigationBar)
         .sheet(isPresented: $showSettings) {
-            TripGameSettingsView(viewModel: viewModel, game: game)
+            TripGameSettingsView(viewModel: viewModel, game: game, onGameInstanceRemoved: {
+                dismiss()
+            })
                 .environmentObject(authService)
         }
         .alert("Error".localized, isPresented: Binding(

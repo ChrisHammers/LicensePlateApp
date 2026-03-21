@@ -20,6 +20,8 @@ protocol GameInstanceRepositoryProtocol: AnyObject {
     func gameCount(sessionId: UUID) throws -> Int
     /// Removes all game instances for the session; call from lifecycle when a session is deleted/cancelled (detach).
     func deleteForSession(sessionId: UUID) throws
+    /// Removes one game instance and its score snapshot row(s), if any.
+    func delete(instanceId: UUID) throws
     func update(instance: GameInstance) throws
     /// Step 07.5 — Transition all games for the session to started and lock config.
     func transitionGamesToStarted(sessionId: UUID) throws

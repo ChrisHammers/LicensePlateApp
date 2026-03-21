@@ -13,6 +13,9 @@ final class MockGameInstanceLifecycleService: GameInstanceLifecycleServiceProtoc
     var startGameCallCount = 0
     var endGameCallCount = 0
     var resetGameCallCount = 0
+    var deleteGameCallCount = 0
+    var lastDeleteSessionId: UUID?
+    var lastDeleteGameInstanceId: UUID?
     var lastResetSessionId: UUID?
     var lastResetGameInstanceId: UUID?
     var shouldThrow = false
@@ -32,5 +35,12 @@ final class MockGameInstanceLifecycleService: GameInstanceLifecycleServiceProtoc
         resetGameCallCount += 1
         lastResetSessionId = sessionId
         lastResetGameInstanceId = gameInstanceId
+    }
+
+    func deleteGame(sessionId: UUID, gameInstanceId: UUID) throws {
+        if shouldThrow { throw NSError(domain: "MockGameInstanceLifecycleService", code: -1, userInfo: nil) }
+        deleteGameCallCount += 1
+        lastDeleteSessionId = sessionId
+        lastDeleteGameInstanceId = gameInstanceId
     }
 }

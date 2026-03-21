@@ -343,4 +343,90 @@ struct GameInstanceLifecycleServiceTests {
         #expect(eventRepo.appendedEvents().filter { $0.kind == .gameEnded }.isEmpty)
         #expect(sync.enqueueCallCount == 0)
     }
+
+    @Test func deleteGameRemovesInstanceAndEventsWhenMultipleGames() async throws {
+        let sessionRepo = MockTripSessionRepository()
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let sessionId = UUID()
+        let keepId = UUID()
+        let removeId = UUID()
+        sessionRepo.seed(TripSession(
+            id: sessionId,
+            name: "T",
+            status: .created,
+            mode: .solo,
+            createdAt: Date(),
+            createdBy: "u",
+            startedAt: nil,
+            participants: []
+        ))
+        gameRepo.seed(GameInstance(
+            id: keepId,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: CommonGameConfig()
+        ))
+        gameRepo.seed(GameInstance(
+            id: removeId,
+            definitionId: GameType.roadSignBingo.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: GameType.roadSignBingo.rawValue),
+            commonConfig: CommonGameConfig()
+        ))
+        try eventRepo.append(TripActivityEvent(
+            sessionId: sessionId,
+            kind: .gameStarted,
+            payload: [TripActivityEventPayloadKey.gameInstanceId: removeId.uuidString]
+        ))
+        let service = GameInstanceLifecycleService(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            syncCoordinator: MockSyncCoordinator()
+        )
+        try service.deleteGame(sessionId: sessionId, gameInstanceId: removeId)
+        #expect(try gameRepo.instance(byId: removeId) == nil)
+        #expect(try gameRepo.instance(byId: keepId) != nil)
+        #expect(try gameRepo.gameCount(sessionId: sessionId) == 1)
+        #expect(eventRepo.appendedEvents().filter { $0.kind == .gameStarted }.isEmpty)
+    }
+
+    @Test func deleteGameThrowsWhenOnlyOneGameInSession() async throws {
+        let sessionRepo = MockTripSessionRepository()
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let sessionId = UUID()
+        let gameId = UUID()
+        sessionRepo.seed(TripSession(
+            id: sessionId,
+            name: "T",
+            status: .active,
+            mode: .solo,
+            createdAt: Date(),
+            createdBy: "u",
+            startedAt: Date(),
+            participants: []
+        ))
+        gameRepo.seed(GameInstance(
+            id: gameId,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: CommonGameConfig()
+        ))
+        let service = GameInstanceLifecycleService(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            syncCoordinator: MockSyncCoordinator()
+        )
+        do {
+            try service.deleteGame(sessionId: sessionId, gameInstanceId: gameId)
+            Issue.record("Expected gameDeleteLastGameNotAllowed")
+        } catch let error as GameplayLifecycleRulesError {
+            #expect(error == .gameDeleteLastGameNotAllowed)
+        }
+    }
 }

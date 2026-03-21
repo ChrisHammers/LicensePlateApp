@@ -109,6 +109,15 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
         }
     }
 
+    func deleteAllEventsForGame(sessionId: UUID, gameInstanceId: UUID) throws {
+        if shouldThrow { throw NSError(domain: "MockTripActivityEventRepository", code: -1, userInfo: nil) }
+        let gidStr = gameInstanceId.uuidString
+        events.removeAll { event in
+            guard event.sessionId == sessionId else { return false }
+            return event.payload?[TripActivityEventPayloadKey.gameInstanceId] == gidStr
+        }
+    }
+
     /// Test helper: appended events (e.g. to assert trip_started, game_started)
     func appendedEvents() -> [TripActivityEvent] {
         events

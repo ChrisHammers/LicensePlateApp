@@ -186,6 +186,7 @@
 "Hold to Talk" = "Hold to Talk";
 "Press and hold the microphone button to record. If disabled the system will listen until you hit stop." = "Press and hold the microphone button to record. If disabled the system will listen until you hit stop.";
 "Reset" = "Reset";
+"Remove" = "Remove";
 "Delete" = "Delete";
 "This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset." = "This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset.";
 "This will delete the trip and all scores will be removed." = "This will delete the trip and all scores will be removed.";
@@ -621,4 +622,9 @@
 "Start the trip before starting games." = "Start the trip before starting games.";
 "CANCELLED" = "CANCELLED";
 "Game state: %@" = "Game state: %@";
+"Remove this game" = "Remove this game";
+"This removes only this game from the trip. The trip continues with your other games." = "This removes only this game from the trip. The trip continues with your other games.";
+"Only available when the trip has more than one game." = "Only available when the trip has more than one game.";
+"Remove game is not available for ended or cancelled trips." = "Remove game is not available for ended or cancelled trips.";
+"A trip must keep at least one game." = "A trip must keep at least one game.";
 

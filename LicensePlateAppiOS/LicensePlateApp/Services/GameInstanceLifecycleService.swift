@@ -2,7 +2,7 @@
 //  GameInstanceLifecycleService.swift
 //  LicensePlateApp
 //
-//  Step 6.9.3 — Game-level lifecycle: start, end, reset. Trip container orchestration stays in TripSessionLifecycleService.
+//  Step 6.9.3 — Game-level lifecycle: start, end, reset, delete instance. Trip container orchestration stays in TripSessionLifecycleService.
 //
 
 import Foundation
@@ -35,6 +35,8 @@ protocol GameInstanceLifecycleServiceProtocol: AnyObject {
     func startGame(sessionId: UUID, gameInstanceId: UUID) throws
     func endGame(sessionId: UUID, gameInstanceId: UUID) throws
     func resetGame(sessionId: UUID, gameInstanceId: UUID) throws
+    /// Removes this game from the trip (events + SwiftData row). Requires at least one other game on the session.
+    func deleteGame(sessionId: UUID, gameInstanceId: UUID) throws
 }
 
 @MainActor
@@ -153,5 +155,32 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
             try gameInstanceRepository.update(instance: game)
         }
         AnalyticsService.shared.log(.gameInstanceReset(tripSessionId: sessionId.uuidString, gameInstanceId: gameInstanceId.uuidString))
+    }
+
+    /// Deletes persisted events tagged with this game, then removes the `GameInstance`. Does not end the trip.
+    func deleteGame(sessionId: UUID, gameInstanceId: UUID) throws {
+        guard let session = try tripSessionRepository.session(byId: sessionId) else {
+            throw GameInstanceLifecycleServiceError.sessionNotFound(sessionId)
+        }
+        if session.status == .cancelled {
+            throw GameInstanceLifecycleServiceError.sessionCancelled
+        }
+        let gameCount = try gameInstanceRepository.gameCount(sessionId: sessionId)
+        try GameplayLifecycleRules.validateGameDeleteAllowed(tripSessionState: session.status, gameCountInSession: gameCount)
+        guard let game = try gameInstanceRepository.instance(byId: gameInstanceId) else {
+            throw GameInstanceLifecycleServiceError.gameNotFound(gameInstanceId)
+        }
+        guard game.sessionId == sessionId else {
+            throw GameInstanceLifecycleServiceError.gameNotInSession(gameInstanceId: gameInstanceId, sessionId: sessionId)
+        }
+        try tripActivityEventRepository.deleteAllEventsForGame(sessionId: sessionId, gameInstanceId: gameInstanceId)
+        try gameInstanceRepository.delete(instanceId: gameInstanceId)
+        let remaining = gameCount - 1
+        AnalyticsService.shared.log(.gameInstanceDeleted(
+            tripSessionId: sessionId.uuidString,
+            gameInstanceId: gameInstanceId.uuidString,
+            gameType: game.definitionId,
+            remainingGameCount: remaining
+        ))
     }
 }

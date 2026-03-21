@@ -168,6 +168,17 @@ struct AnalyticsServiceTests {
         #expect(completed.parameters?["game_instance_id"] as? String == "g2")
         #expect(completed.parameters?["game_type"] as? String == "license_plate")
         #expect(completed.parameters?["trip_session_id"] as? String == "s2")
+
+        let deleted = AnalyticsService.Event.gameInstanceDeleted(
+            tripSessionId: "s3",
+            gameInstanceId: "g3",
+            gameType: "license_plate",
+            remainingGameCount: 1
+        )
+        #expect(deleted.name == "game_instance_deleted")
+        #expect(deleted.parameters?["trip_session_id"] as? String == "s3")
+        #expect(deleted.parameters?["game_instance_id"] as? String == "g3")
+        #expect(deleted.parameters?["remaining_game_count"] as? Int == 1)
     }
 
     @Test @MainActor func inviteContextEvents() async throws {

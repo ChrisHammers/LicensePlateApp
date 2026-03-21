@@ -133,6 +133,8 @@ class AnalyticsService: AnalyticsLogging {
         case tripSessionEnded(tripId: String)
         /// Step 6.9.3 — Game progress reset (discoveries cleared for one game); not a trip reset.
         case gameInstanceReset(tripSessionId: String, gameInstanceId: String)
+        /// One game removed from a multi-game trip (local instance + its events).
+        case gameInstanceDeleted(tripSessionId: String, gameInstanceId: String, gameType: String, remainingGameCount: Int)
         /// Trip cancelled from active list or settings (soft delete UX).
         case tripSessionCancelled(tripId: String)
         /// Reserved for future hard tombstone delete; not emitted on cancel today.
@@ -266,6 +268,7 @@ class AnalyticsService: AnalyticsLogging {
             case .tripSessionStarted: return "trip_session_started"
             case .tripSessionEnded: return "trip_session_ended"
             case .gameInstanceReset: return "game_instance_reset"
+            case .gameInstanceDeleted: return "game_instance_deleted"
             case .tripSessionCancelled: return "trip_session_cancelled"
             case .tripSessionDeleted: return "trip_session_deleted"
             case .gameInstanceCreated: return "game_instance_created"
@@ -400,6 +403,13 @@ class AnalyticsService: AnalyticsLogging {
                 return ["trip_session_id": tripId]
             case .gameInstanceReset(let tripSessionId, let gameInstanceId):
                 return ["trip_session_id": tripSessionId, "game_instance_id": gameInstanceId]
+            case .gameInstanceDeleted(let tripSessionId, let gameInstanceId, let gameType, let remainingGameCount):
+                return [
+                    "trip_session_id": tripSessionId,
+                    "game_instance_id": gameInstanceId,
+                    "game_type": gameType,
+                    "remaining_game_count": remainingGameCount
+                ]
             case .tripSessionCancelled(let tripId), .tripSessionDeleted(let tripId):
                 return ["trip_session_id": tripId]
             case .gameInstanceCreated(let gameInstanceId, let gameType, let gameMode, let tripId, let gameOrderInTrip):

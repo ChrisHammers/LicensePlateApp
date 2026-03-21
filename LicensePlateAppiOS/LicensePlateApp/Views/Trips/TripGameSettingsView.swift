@@ -13,6 +13,8 @@ struct TripGameSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var viewModel: LicensePlateGameViewModel
     let game: GameInstance
+    /// Called after this game is removed and the sheet is dismissed (e.g. pop `LicensePlateGameView`).
+    var onGameInstanceRemoved: (() -> Void)? = nil
 
     @State private var retryAction: (() -> Void)?
 
@@ -47,6 +49,7 @@ struct TripGameSettingsView: View {
 
     @State private var showEndTripConfirmation = false
     @State private var showResetConfirmation = false
+    @State private var showRemoveGameConfirmation = false
     @State private var showDeleteConfirmation = false
     @State private var isEditingTripName = false
     @State private var editingTripName: String = ""
@@ -251,6 +254,35 @@ struct TripGameSettingsView: View {
             Divider()
 
             Button {
+                showRemoveGameConfirmation = true
+            } label: {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Remove this game".localized)
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(viewModel.canRemoveThisGameInstance ? Color.Theme.primaryBlue : Color.secondary)
+                        Spacer()
+                    }
+                    if !viewModel.canRemoveThisGameInstance, viewModel.isTripCreator, !isTripTerminalForGameReset {
+                        Text("Only available when the trip has more than one game.".localized)
+                            .font(.caption)
+                            .foregroundStyle(Color.secondary)
+                    } else if isTripTerminalForGameReset {
+                        Text("Remove game is not available for ended or cancelled trips.".localized)
+                            .font(.caption)
+                            .foregroundStyle(Color.secondary)
+                    }
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+            }
+            .buttonStyle(.plain)
+            .disabled(!viewModel.canRemoveThisGameInstance)
+
+            Divider()
+
+            Button {
                 showDeleteConfirmation = true
             } label: {
                 HStack {
@@ -291,6 +323,21 @@ struct TripGameSettingsView: View {
             }
         } message: {
             Text("Only this game's progress will be reset (discoveries and game state). The trip and its dates will not be changed.".localized)
+        }
+        .alert("Remove this game".localized, isPresented: $showRemoveGameConfirmation) {
+            Button("Cancel".localized, role: .cancel) {}
+            Button("Remove".localized, role: .destructive) {
+                do {
+                    try viewModel.deleteGameInstance()
+                    dismiss()
+                    onGameInstanceRemoved?()
+                } catch {
+                    viewModel.setError(error.localizedDescription)
+                    retryAction = { try? viewModel.deleteGameInstance(); dismiss(); onGameInstanceRemoved?() }
+                }
+            }
+        } message: {
+            Text("This removes only this game from the trip. The trip continues with your other games.".localized)
         }
         .alert("Delete Trip".localized, isPresented: $showDeleteConfirmation) {
             Button("Cancel".localized, role: .cancel) {}

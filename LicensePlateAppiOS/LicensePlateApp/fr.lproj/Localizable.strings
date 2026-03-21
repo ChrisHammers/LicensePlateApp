@@ -186,6 +186,7 @@
 "Hold to Talk" = "Maintenez pour Parler";
 "Press and hold the microphone button to record. If disabled the system will listen until you hit stop." = "Appuyez et maintenez le bouton du microphone pour enregistrer. Si désactivé, le système écoutera jusqu'à ce que vous appuyiez sur arrêter.";
 "Reset" = "Réinitialiser";
+"Remove" = "Retirer";
 "Delete" = "Supprimer";
 "This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset." = "Cela réinitialisera tous les paramètres du voyage sauf le nom du voyage. Tout sera réinitialisé, y compris la Date de Démarrage, qui ne démarrera pas automatiquement. Tous les journaux seront effacés, sauf un journal indiquant qu'il a été réinitialisé.";
 "This will delete the trip and all scores will be removed." = "Cela supprimera le voyage et tous les scores seront supprimés.";
@@ -613,4 +614,9 @@
 "Start the trip before starting games." = "Démarrez le trajet avant de lancer les jeux.";
 "CANCELLED" = "ANNULÉ";
 "Game state: %@" = "État du jeu : %@";
+"Remove this game" = "Retirer ce jeu";
+"This removes only this game from the trip. The trip continues with your other games." = "Cela retire uniquement ce jeu du trajet. Le trajet continue avec vos autres jeux.";
+"Only available when the trip has more than one game." = "Disponible seulement si le trajet comporte plus d’un jeu.";
+"Remove game is not available for ended or cancelled trips." = "Retirer un jeu n’est pas disponible pour les trajets terminés ou annulés.";
+"A trip must keep at least one game." = "Un trajet doit comporter au moins un jeu.";
 

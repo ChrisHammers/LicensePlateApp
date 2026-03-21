@@ -47,6 +47,21 @@ final class MockGameInstanceRepository: GameInstanceRepositoryProtocol {
         bySession.removeValue(forKey: sessionId)
     }
 
+    func delete(instanceId: UUID) throws {
+        if shouldThrow { throw NSError(domain: "MockGameInstanceRepository", code: -1, userInfo: nil) }
+        guard let inst = instances.removeValue(forKey: instanceId) else {
+            throw GameInstanceRepositoryError.instanceNotFound(instanceId)
+        }
+        if var list = bySession[inst.sessionId] {
+            list.removeAll { $0.id == instanceId }
+            if list.isEmpty {
+                bySession.removeValue(forKey: inst.sessionId)
+            } else {
+                bySession[inst.sessionId] = list
+            }
+        }
+    }
+
     func update(instance: GameInstance) throws {
         if shouldThrow { throw NSError(domain: "MockGameInstanceRepository", code: -1, userInfo: nil) }
         instances[instance.id] = instance

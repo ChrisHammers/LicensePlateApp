@@ -50,6 +50,19 @@ final class LicensePlateGameViewModel: ObservableObject {
         currentSession.status == .active && currentSession.startedAt != nil
     }
 
+    /// Games on this trip (for optional “remove this game” when the trip has multiple).
+    var tripGameInstanceCount: Int {
+        (try? gameInstanceRepository.gameCount(sessionId: sessionId)) ?? 0
+    }
+
+    /// Creator only; trip not ended/cancelled; at least two games so one can be removed.
+    var canRemoveThisGameInstance: Bool {
+        isTripCreator
+            && tripGameInstanceCount >= 2
+            && currentSession.status != .ended
+            && currentSession.status != .cancelled
+    }
+
     init(
         session: TripSession,
         game: GameInstance,
@@ -107,6 +120,12 @@ final class LicensePlateGameViewModel: ObservableObject {
     func deleteTrip() throws {
         let cancelledBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
         try lifecycleService.cancelSession(sessionId: sessionId, cancelledBy: cancelledBy)
+        refreshSession()
+    }
+
+    /// Removes this game instance from the trip (multi-game only). Pop the game screen after success.
+    func deleteGameInstance() throws {
+        try gameInstanceLifecycleService.deleteGame(sessionId: sessionId, gameInstanceId: game.id)
         refreshSession()
     }
 

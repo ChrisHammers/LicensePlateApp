@@ -73,6 +73,25 @@ final class GameInstanceRepository: ObservableObject, GameInstanceRepositoryProt
         try ctx.save()
     }
 
+    func delete(instanceId: UUID) throws {
+        guard let ctx = modelContext else { throw GameInstanceRepositoryError.noModelContext }
+        let id = instanceId.uuidString
+        let descriptor = FetchDescriptor<GameInstanceEntity>(
+            predicate: #Predicate<GameInstanceEntity> { $0.id == id }
+        )
+        guard let entity = try ctx.fetch(descriptor).first else {
+            throw GameInstanceRepositoryError.instanceNotFound(instanceId)
+        }
+        let snapshotDescriptor = FetchDescriptor<GameScoreSnapshotEntity>(
+            predicate: #Predicate<GameScoreSnapshotEntity> { $0.gameInstanceId == id }
+        )
+        for snapshot in try ctx.fetch(snapshotDescriptor) {
+            ctx.delete(snapshot)
+        }
+        ctx.delete(entity)
+        try ctx.save()
+    }
+
     func instance(byId id: UUID) throws -> GameInstance? {
         guard let ctx = modelContext else { throw GameInstanceRepositoryError.noModelContext }
         let descriptor = FetchDescriptor<GameInstanceEntity>(
