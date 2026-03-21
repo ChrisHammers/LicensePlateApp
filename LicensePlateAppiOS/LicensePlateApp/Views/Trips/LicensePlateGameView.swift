@@ -641,6 +641,7 @@ struct LicensePlateGameView: View {
             withAccessibleAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {}
             let riskResult = riskAssessment.assessAfterDiscoveryChange(
                 tripId: viewModel.sessionId,
+                gameInstanceId: viewModel.game.id,
                 foundRegions: viewModel.foundRegions,
                 lastChange: (regionID, true, Date())
             )
@@ -656,6 +657,7 @@ struct LicensePlateGameView: View {
         withAccessibleAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {}
         let result = riskAssessment.assessAfterDiscoveryChange(
             tripId: viewModel.sessionId,
+            gameInstanceId: viewModel.game.id,
             foundRegions: viewModel.foundRegions,
             lastChange: (regionID, false, Date())
         )
