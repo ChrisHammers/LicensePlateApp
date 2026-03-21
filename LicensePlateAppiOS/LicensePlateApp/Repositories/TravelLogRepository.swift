@@ -55,9 +55,7 @@ final class TravelLogRepository: ObservableObject, TravelLogRepositoryProtocol {
             guard let endedAt = session.endedAt else { continue }
             let participantCount = session.participants.count
             let gameCount = try gameInstanceRepository.gameCount(sessionId: session.id)
-            let summary = participantCount > 0
-                ? "\(participantCount) participant(s)"
-                : "Trip completed"
+            let summary = Self.listSummaryLine(participantCount: participantCount, gameCount: gameCount)
             entries.append(TravelLogEntry(
                 id: session.id.uuidString,
                 sessionId: session.id,
@@ -71,6 +69,21 @@ final class TravelLogRepository: ObservableObject, TravelLogRepositoryProtocol {
             ))
         }
         return entries
+    }
+
+    /// Trip-level subtitle for the travel log list (participants + game count). No per-game mode (game-scoped).
+    private static func listSummaryLine(participantCount: Int, gameCount: Int) -> String {
+        switch (participantCount > 0, gameCount > 0) {
+        case (true, true):
+            return "%1$d participants · %2$d games".localized(participantCount, gameCount)
+        case (true, false):
+            if participantCount == 1 { return "1 participant".localized }
+            return "%d participants".localized(participantCount)
+        case (false, true):
+            return "Trip completed · %d games".localized(gameCount)
+        case (false, false):
+            return "Trip completed".localized
+        }
     }
 }
 

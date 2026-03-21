@@ -91,8 +91,12 @@ struct TripSummaryView: View {
     private func gameContextLabel(for target: TargetDiscoverySummary) -> String? {
         guard summary.gameCount > 1, let gid = target.gameInstanceId,
               let item = summary.games.first(where: { $0.gameInstanceId == gid }) else { return nil }
-        return GameType(rawValue: item.definitionId)?.displayName
-            ?? item.definitionId.replacingOccurrences(of: "_", with: " ").capitalized
+        return gameTypeTitle(item.definitionId)
+    }
+
+    private func gameTypeTitle(_ definitionId: String) -> String {
+        GameType(rawValue: definitionId)?.displayName
+            ?? definitionId.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
     private var headerSection: some View {
@@ -121,6 +125,16 @@ struct TripSummaryView: View {
             Text("Overview".localized)
                 .font(.system(.headline, design: .rounded))
                 .foregroundStyle(Color.Theme.primaryBlue)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Trip participation: %@".localized(summary.tripMode.localizedDisplayName))
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .accessibilityLabel("Trip participation".localized + ", " + summary.tripMode.localizedDisplayName)
+                Text("Trip status: %@".localized(tripStatusLabel(summary.status)))
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .accessibilityLabel("Trip status".localized + ", " + tripStatusLabel(summary.status))
+            }
             HStack(spacing: 24) {
                 statItem(value: "\(summary.participantCount)", label: "Participants".localized)
                 statItem(value: "\(summary.gameCount)", label: "Games".localized)
@@ -134,7 +148,21 @@ struct TripSummaryView: View {
                 .fill(Color.Theme.cardBackground)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Overview".localized + ", \(summary.participantCount) participants, \(summary.gameCount) games, \(summary.totalDiscoveryCount) discoveries")
+        .accessibilityLabel(
+            "Overview".localized
+                + ", \(summary.tripMode.localizedDisplayName)"
+                + ", \(tripStatusLabel(summary.status))"
+                + ", \(summary.participantCount) participants, \(summary.gameCount) games, \(summary.totalDiscoveryCount) discoveries"
+        )
+    }
+
+    private func tripStatusLabel(_ status: TripSessionState) -> String {
+        switch status {
+        case .created: return "Created".localized
+        case .active: return "Active".localized
+        case .ended: return "Ended".localized
+        case .cancelled: return "Cancelled".localized
+        }
     }
 
     private func statItem(value: String, label: String) -> some View {
@@ -154,6 +182,13 @@ struct TripSummaryView: View {
             Text("Participant contributions".localized)
                 .font(.system(.headline, design: .rounded))
                 .foregroundStyle(Color.Theme.primaryBlue)
+            if summary.gameCount > 1 {
+                Text("Scores and finds combine all games on this trip.".localized)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("Scores and finds combine all games on this trip.".localized)
+            }
             ForEach(summary.participantContributions, id: \.participantId) { contrib in
                 HStack {
                     Text(participantDisplayNames[contrib.participantId] ?? contrib.participantId)
@@ -187,13 +222,28 @@ struct TripSummaryView: View {
                 .foregroundStyle(Color.Theme.primaryBlue)
             ForEach(summary.games, id: \.gameInstanceId) { game in
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(game.definitionId.replacingOccurrences(of: "_", with: " ").capitalized)
+                    Text(gameTypeTitle(game.definitionId))
                         .font(.system(.subheadline, design: .rounded))
                         .fontWeight(.medium)
                         .foregroundStyle(Color.Theme.primaryBlue)
                     Text("\(game.discoveryCount) discoveries".localized)
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
+                    if let progress = game.progressDescription {
+                        Text(progress)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    Text("Game mode: %@".localized(game.gameMode.localizedDisplayName))
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .accessibilityLabel("Game mode".localized + ", " + game.gameMode.localizedDisplayName)
+                    if let teams = game.teamSummary {
+                        Text("Teams: %@".localized(teams))
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                            .accessibilityLabel("Teams".localized + ", " + teams)
+                    }
                 }
                 .padding(.vertical, 6)
                 .padding(.horizontal, 12)
@@ -202,6 +252,7 @@ struct TripSummaryView: View {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Color.Theme.background)
                 )
+                .accessibilityElement(children: .combine)
             }
         }
         .padding()
@@ -217,6 +268,13 @@ struct TripSummaryView: View {
             Text("First discoveries".localized)
                 .font(.system(.headline, design: .rounded))
                 .foregroundStyle(Color.Theme.primaryBlue)
+            if summary.gameCount > 1 {
+                Text("Scores and finds combine all games on this trip.".localized)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown.opacity(0.9))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("Scores and finds combine all games on this trip.".localized)
+            }
             ForEach(Array(projection.targetSummaries.prefix(20))) { target in
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {

@@ -627,3 +627,21 @@
 "Only available when the trip has more than one game." = "Only available when the trip has more than one game.";
 "Remove game is not available for ended or cancelled trips." = "Remove game is not available for ended or cancelled trips.";
 "A trip must keep at least one game." = "A trip must keep at least one game.";
+
+// Step 6.9.6 Phase B — Travel log list + trip summary UI
+"%1$d participants · %2$d games" = "%1$d participants · %2$d games";
+"1 participant" = "1 participant";
+"%d participants" = "%d participants";
+"Trip completed · %d games" = "Trip completed · %d games";
+"Trip completed" = "Trip completed";
+"Trip participation: %@" = "Trip participation: %@";
+"Trip status: %@" = "Trip status: %@";
+"Trip participation" = "Trip participation";
+"Trip status" = "Trip status";
+"Game mode: %@" = "Game mode: %@";
+"Game mode" = "Game mode";
+"Teams: %@" = "Teams: %@";
+"Teams" = "Teams";
+"Scores and finds combine all games on this trip." = "Scores and finds combine all games on this trip.";
+"Active" = "Active";
+"Cancelled" = "Cancelled";

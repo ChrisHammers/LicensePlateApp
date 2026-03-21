@@ -153,5 +153,7 @@ struct TravelLogRepositoryTests {
         #expect(entries.count == 1)
         #expect(entries[0].tripName == "Trip With Games")
         #expect(entries[0].gameCount == 1)
+        #expect(entries[0].summary.contains("1"))
+        #expect(entries[0].summary.lowercased().contains("game"))
     }
 }
