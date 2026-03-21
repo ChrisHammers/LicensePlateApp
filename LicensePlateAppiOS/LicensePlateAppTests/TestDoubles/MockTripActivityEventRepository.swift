@@ -33,7 +33,7 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
     func discoveries(sessionId: UUID, gameInstanceId: UUID?) throws -> [GameDiscovery] {
         let allEvents = try events(sessionId: sessionId, limit: nil)
         let discoveryEvents = allEvents.filter { $0.kind == .regionFound || $0.kind == .regionRemoved }
-        var byRegion: [String: (TripActivityEvent, [String: String])] = [:]
+        var byKey: [String: (TripActivityEvent, [String: String])] = [:]
         for event in discoveryEvents {
             let payload = event.payload ?? [:]
             guard let regionId = payload[TripActivityEventPayloadKey.regionId] else { continue }
@@ -42,16 +42,21 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
                UUID(uuidString: payloadGid) != filterGid {
                 continue
             }
+            guard let stateKey = Self.discoveryReplayStateKey(regionId: regionId, payload: payload, gameInstanceFilter: gameInstanceId) else {
+                continue
+            }
             if event.kind == .regionRemoved {
-                byRegion.removeValue(forKey: regionId)
+                byKey.removeValue(forKey: stateKey)
             } else {
-                byRegion[regionId] = (event, payload)
+                byKey[stateKey] = (event, payload)
             }
         }
-        return byRegion.values.sorted { ($0.0.timestamp) < ($1.0.timestamp) }.compactMap { event, payload in
+        return byKey.values.sorted { ($0.0.timestamp) < ($1.0.timestamp) }.compactMap { event, payload in
             let targetId = payload[TripActivityEventPayloadKey.regionId] ?? ""
             guard !targetId.isEmpty else { return nil }
-            let gid = (payload[TripActivityEventPayloadKey.gameInstanceId].flatMap { UUID(uuidString: $0) }) ?? gameInstanceId ?? sessionId
+            guard let gid = Self.resolvedGameInstanceId(payload: payload, gameInstanceFilter: gameInstanceId) else {
+                return nil
+            }
             let participantId = payload[TripActivityEventPayloadKey.participantId] ?? event.actorId ?? ""
             let inputMethod = FoundRegion.InputMethod(rawValue: payload[TripActivityEventPayloadKey.inputMethod] ?? FoundRegion.InputMethod.list.rawValue) ?? .list
             return GameDiscovery(
@@ -68,7 +73,7 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
     func foundRegions(sessionId: UUID, gameInstanceId: UUID?) throws -> [FoundRegion] {
         let allEvents = try events(sessionId: sessionId, limit: nil)
         let discoveryEvents = allEvents.filter { $0.kind == .regionFound || $0.kind == .regionRemoved }
-        var byRegion: [String: (TripActivityEvent, [String: String])] = [:]
+        var byKey: [String: (TripActivityEvent, [String: String])] = [:]
         for event in discoveryEvents {
             let payload = event.payload ?? [:]
             guard let regionId = payload[TripActivityEventPayloadKey.regionId] else { continue }
@@ -77,13 +82,16 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
                UUID(uuidString: payloadGid) != filterGid {
                 continue
             }
+            guard let stateKey = Self.discoveryReplayStateKey(regionId: regionId, payload: payload, gameInstanceFilter: gameInstanceId) else {
+                continue
+            }
             if event.kind == .regionRemoved {
-                byRegion.removeValue(forKey: regionId)
+                byKey.removeValue(forKey: stateKey)
             } else {
-                byRegion[regionId] = (event, payload)
+                byKey[stateKey] = (event, payload)
             }
         }
-        return byRegion.values.sorted { ($0.0.timestamp) < ($1.0.timestamp) }.map { event, payload in
+        return byKey.values.sorted { ($0.0.timestamp) < ($1.0.timestamp) }.map { event, payload in
             let inputMethod = FoundRegion.InputMethod(rawValue: payload[TripActivityEventPayloadKey.inputMethod] ?? FoundRegion.InputMethod.list.rawValue) ?? .list
             return FoundRegion(
                 regionID: payload[TripActivityEventPayloadKey.regionId] ?? "",
@@ -125,5 +133,27 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
 
     func clear() {
         events.removeAll()
+    }
+
+    private static func discoveryReplayStateKey(
+        regionId: String,
+        payload: [String: String],
+        gameInstanceFilter: UUID?
+    ) -> String? {
+        if gameInstanceFilter != nil {
+            return regionId
+        }
+        guard let gidStr = payload[TripActivityEventPayloadKey.gameInstanceId],
+              UUID(uuidString: gidStr) != nil else {
+            return nil
+        }
+        return "\(gidStr)_\(regionId)"
+    }
+
+    private static func resolvedGameInstanceId(payload: [String: String], gameInstanceFilter: UUID?) -> UUID? {
+        if let s = payload[TripActivityEventPayloadKey.gameInstanceId], let u = UUID(uuidString: s) {
+            return u
+        }
+        return gameInstanceFilter
     }
 }

@@ -31,17 +31,20 @@ final class TripSessionViewModel: ObservableObject {
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol?
+    private let gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
 
     init(
         sessionId: UUID,
         tripSessionRepository: TripSessionRepositoryProtocol,
         gameInstanceRepository: GameInstanceRepositoryProtocol,
-        tripActivityEventRepository: TripActivityEventRepositoryProtocol? = nil
+        tripActivityEventRepository: TripActivityEventRepositoryProtocol? = nil,
+        gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol = GameInstanceLifecycleService.shared
     ) {
         self.sessionId = sessionId
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
         self.tripActivityEventRepository = tripActivityEventRepository
+        self.gameInstanceLifecycleService = gameInstanceLifecycleService
     }
 
     func load() {
@@ -86,8 +89,65 @@ final class TripSessionViewModel: ObservableObject {
         }
     }
 
-    /// Stub: Add game to this trip. TODO wire to add-game flow.
+    /// Adds another license plate game, cloning mode/teams/scope from the first LP game on the trip (defaults if none).
     func addGame() {
-        // No-op for Step 6.8
+        do {
+            guard let session = try tripSessionRepository.session(byId: sessionId) else {
+                errorMessage = nil
+                self.session = nil
+                gameRowItems = []
+                return
+            }
+            if session.status == .ended || session.status == .cancelled {
+                errorMessage = "This trip can’t be changed anymore.".localized
+                return
+            }
+
+            let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
+            let template = games.first { $0.definitionId == GameType.licensePlate.rawValue }
+            let choice = GameSetupChoice(
+                gameType: .licensePlate,
+                gameMode: template?.commonConfig.gameMode ?? .collaborative,
+                teams: template?.teams ?? []
+            )
+            let lpConfig = template?.licensePlateConfig()
+            let config = CombinedGameConfiguration(enabledGameTypes: [.licensePlate])
+            let assembled = CombinedGameAssembler.assemble(
+                session: session,
+                config: config,
+                choicesByGameType: [.licensePlate: choice],
+                licensePlateConfig: lpConfig
+            )
+            guard let instance = assembled.first else {
+                errorMessage = "Could not add game.".localized
+                return
+            }
+            try gameInstanceRepository.create(instance: instance)
+
+            let order = games.count + 1
+            AnalyticsService.shared.log(.gameInstanceCreated(
+                gameInstanceId: instance.id.uuidString,
+                gameType: instance.definitionId,
+                gameMode: instance.commonConfig.gameMode.rawValue,
+                tripId: sessionId.uuidString,
+                gameOrderInTrip: order
+            ))
+
+            var startGameError: String?
+            if session.status == .active, session.startedAt != nil {
+                do {
+                    try gameInstanceLifecycleService.startGame(sessionId: sessionId, gameInstanceId: instance.id)
+                } catch {
+                    startGameError = error.localizedDescription
+                }
+            }
+
+            load()
+            if let startGameError {
+                errorMessage = startGameError
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }

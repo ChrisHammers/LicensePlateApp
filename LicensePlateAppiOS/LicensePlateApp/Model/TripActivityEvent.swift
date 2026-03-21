@@ -33,8 +33,14 @@ enum TripActivityEventPayloadKey {
 }
 
 /// A single event in the trip lifecycle. Room for analytics and audit.
+///
+/// **Trip vs gameplay payload:** Trip-scoped kinds (e.g. `tripStarted`, `tripEnded`, `participantJoined`, `participantLeft`)
+/// do not require `TripActivityEventPayloadKey.gameInstanceId` in the payload. Gameplay kinds that affect a specific game
+/// (`regionFound`, `regionRemoved`, `discoveryRejected`, `gameStarted`, `gameEnded`) must include `gameInstanceId` in
+/// the payload when persisting or replaying discoveries for that game.
 struct TripActivityEvent: Codable, Identifiable, Sendable {
     var id: String
+    /// Trip session (container) id — persisted on the entity as the session scope for this event log.
     var sessionId: UUID
     var kind: TripActivityEventKind
     var timestamp: Date
@@ -42,6 +48,9 @@ struct TripActivityEvent: Codable, Identifiable, Sendable {
     var actorId: String?
     /// Optional JSON-like payload for event-specific data.
     var payload: [String: String]?
+
+    /// Canonical trip container id; same value as `sessionId` (spine naming).
+    var tripSessionId: UUID { sessionId }
 
     init(
         id: String = UUID().uuidString,

@@ -62,6 +62,28 @@ struct TripActivityEventRepositoryTests {
         #expect(regions[0].regionID == "TX")
     }
 
+    /// Step 6.9.5 — Two games can both have the same region id; unfiltered load must return two discoveries with distinct game ids.
+    @Test func discoveriesAllGames_twoGamesSameRegionId_bothReplayed() async throws {
+        let ctx = try makeContainer()
+        let sessionId = UUID()
+        let game1 = UUID()
+        let game2 = UUID()
+        let list = FoundRegion.InputMethod.list.rawValue
+        try TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: sessionId, kind: .regionFound, payload: [
+            TripActivityEventPayloadKey.regionId: "CA",
+            TripActivityEventPayloadKey.gameInstanceId: game1.uuidString,
+            TripActivityEventPayloadKey.inputMethod: list
+        ]))
+        try TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: sessionId, kind: .regionFound, payload: [
+            TripActivityEventPayloadKey.regionId: "CA",
+            TripActivityEventPayloadKey.gameInstanceId: game2.uuidString,
+            TripActivityEventPayloadKey.inputMethod: list
+        ]))
+        let discoveries = try TripActivityEventRepository.shared.discoveries(sessionId: sessionId, gameInstanceId: nil)
+        #expect(discoveries.count == 2)
+        #expect(Set(discoveries.map(\.gameInstanceId)) == Set([game1, game2]))
+    }
+
     /// Step 05 — Failure: append throws when mock is configured to throw (failure propagation).
     @Test func appendThrowsWhenMockConfiguredToThrow() async throws {
         let mock = MockTripActivityEventRepository()

@@ -38,6 +38,16 @@ struct TripSessionView: View {
         .onAppear {
             viewModel.load()
         }
+        .alert("Error".localized, isPresented: Binding(
+            get: { viewModel.errorMessage != nil },
+            set: { if !$0 { viewModel.errorMessage = nil } }
+        )) {
+            Button("OK".localized, role: .cancel) {
+                viewModel.errorMessage = nil
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? "")
+        }
     }
 
     private func content(session: TripSession) -> some View {
