@@ -111,15 +111,6 @@ final class ActiveTripsListViewModel: ObservableObject {
         errorMessage = nil
     }
 
-    /// Resolve session and primary game for navigation. Returns nil if session or primary game not found.
-    func sessionAndPrimaryGame(for sessionId: UUID) -> (TripSession, GameInstance)? {
-        guard let session = try? tripSessionRepository.session(byId: sessionId) else { return nil }
-        let games = (try? gameInstanceRepository.fetchByTripSession(sessionId: sessionId)) ?? []
-        let primary = games.first(where: { $0.definitionId == GameType.licensePlate.rawValue }) ?? games.first
-        guard let primaryGame = primary else { return nil }
-        return (session, primaryGame)
-    }
-
     /// Session by id; nil if not found. Used for TripSessionView / missing check.
     func session(for sessionId: UUID) -> TripSession? {
         try? tripSessionRepository.session(byId: sessionId)
