@@ -39,6 +39,7 @@ struct TripSummaryBuilderTests {
         )
         #expect(summary.sessionId == sessionId)
         #expect(summary.tripName == "Solo Trip")
+        #expect(summary.tripMode == .solo)
         #expect(summary.status == .ended)
         #expect(summary.participantCount == 1)
         #expect(summary.gameCount == 1)
@@ -46,6 +47,8 @@ struct TripSummaryBuilderTests {
         #expect(summary.games.count == 1)
         #expect(summary.games[0].definitionId == "license_plate")
         #expect(summary.games[0].discoveryCount == 0)
+        #expect(summary.games[0].gameMode == .collaborative)
+        #expect(summary.games[0].teamSummary == nil)
         #expect(summary.participantContributions.isEmpty)
         #expect(summary.discoveryProjection == nil)
     }
@@ -57,7 +60,7 @@ struct TripSummaryBuilderTests {
             id: sessionId,
             name: "Multi Trip",
             status: .ended,
-            mode: .solo,
+            mode: .multiplayer,
             createdAt: Date().addingTimeInterval(-100),
             endedAt: Date(),
             participants: [TripParticipant(userId: "user1", role: .owner)]
@@ -90,8 +93,10 @@ struct TripSummaryBuilderTests {
             discoveries: [d1, d2],
             credits: credits
         )
+        #expect(summary.tripMode == .multiplayer)
         #expect(summary.totalDiscoveryCount == 2)
         #expect(summary.games[0].discoveryCount == 2)
+        #expect(summary.games[0].gameMode == .collaborative)
         #expect(summary.participantContributions.count == 1)
         #expect(summary.participantContributions[0].participantId == "user1")
         #expect(summary.participantContributions[0].discoveryCount == 2)
@@ -138,6 +143,8 @@ struct TripSummaryBuilderTests {
         #expect(summary.games.count == 1)
         #expect(summary.games[0].completionGoal == 50)
         #expect(summary.games[0].progressDescription == "0 / 50 US regions")
+        #expect(summary.games[0].gameMode == .collaborative)
+        #expect(summary.games[0].teamSummary == nil)
     }
 
     @Test func buildWithoutLicensePlatePayloadLeavesCompletionGoalAndProgressNil() async throws {
@@ -160,6 +167,62 @@ struct TripSummaryBuilderTests {
         let summary = TripSummaryBuilder.build(session: session, games: [game], discoveries: [], credits: [])
         #expect(summary.games[0].completionGoal == nil)
         #expect(summary.games[0].progressDescription == nil)
+        #expect(summary.games[0].gameMode == .collaborative)
+        #expect(summary.games[0].teamSummary == nil)
+    }
+
+    @Test func buildReflectsGameModeFromCommonConfig() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "Competitive run",
+            status: .ended,
+            mode: .solo,
+            createdAt: Date(),
+            participants: [TripParticipant(userId: "user1", role: .owner)]
+        )
+        var config = CommonGameConfig()
+        config.gameMode = .competitive
+        let game = GameInstance(
+            id: gameId,
+            definitionId: "license_plate",
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: config
+        )
+        let summary = TripSummaryBuilder.build(session: session, games: [game], discoveries: [], credits: [])
+        #expect(summary.games[0].gameMode == .competitive)
+    }
+
+    @Test func buildWithTeamsSetsTeamSummary() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "Team trip",
+            status: .ended,
+            mode: .multiplayer,
+            createdAt: Date(),
+            participants: [
+                TripParticipant(userId: "a", role: .owner),
+                TripParticipant(userId: "b", role: .member)
+            ]
+        )
+        let teams = [
+            TripTeam(name: "Team Red", participantUserIds: ["a"]),
+            TripTeam(name: "Team Blue", participantUserIds: ["b"])
+        ]
+        let game = GameInstance(
+            id: gameId,
+            definitionId: "license_plate",
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            teams: teams
+        )
+        let summary = TripSummaryBuilder.build(session: session, games: [game], discoveries: [], credits: [])
+        #expect(summary.games[0].teamSummary != nil)
+        #expect(summary.tripMode == .multiplayer)
     }
 
     /// Step 6.9.5 — Same region id in two games: trip-level `discoveryProjection` keeps two rows keyed by game + target.
@@ -213,6 +276,9 @@ struct TripSummaryBuilderTests {
             discoveries: [d1, d2],
             credits: credits
         )
+        #expect(summary.tripMode == .multiplayer)
+        #expect(summary.games[0].gameMode == .collaborative)
+        #expect(summary.games[1].gameMode == .collaborative)
         #expect(summary.discoveryProjection != nil)
         let projection = summary.discoveryProjection!
         #expect(projection.targetSummaries.count == 2)

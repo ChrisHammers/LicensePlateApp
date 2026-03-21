@@ -20,12 +20,18 @@ struct TripSummaryGameItem: Sendable {
     var completionGoal: Int?
     /// Step 07.5 — Human-readable progress (e.g. "42 / 50 US states"). Nil when config not available.
     var progressDescription: String?
+    /// Game-level collaborative vs competitive (from `GameInstance.commonConfig`).
+    var gameMode: GameMode
+    /// Short teams summary when `teams` was non-empty on the game; nil otherwise.
+    var teamSummary: String?
 }
 
 /// Rich summary of a completed trip for TripSummaryView. All optional where data may be missing (e.g. no legacy Trip).
 struct TripSummary: Sendable {
     var sessionId: UUID
     var tripName: String
+    /// Trip participation: solo vs multiplayer (from `TripSession.mode`).
+    var tripMode: TripMode
     var status: TripSessionState
     var endedAt: Date?
     var startedAt: Date?

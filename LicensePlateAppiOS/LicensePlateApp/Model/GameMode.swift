@@ -11,4 +11,12 @@ import Foundation
 enum GameMode: String, Codable, CaseIterable, Sendable {
     case collaborative
     case competitive
+
+    /// User-visible label; matches game setup copy (`CombinedTripSetupView`).
+    var localizedDisplayName: String {
+        switch self {
+        case .collaborative: return "Collaborative".localized
+        case .competitive: return "Competitive".localized
+        }
+    }
 }

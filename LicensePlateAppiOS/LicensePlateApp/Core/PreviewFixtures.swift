@@ -313,6 +313,7 @@ enum PreviewSummaryFixtures {
         TripSummary(
             sessionId: PreviewConstants.sessionIdCompleted,
             tripName: "Completed Trip",
+            tripMode: .solo,
             status: .ended,
             endedAt: PreviewConstants.fixedDateEnded,
             startedAt: PreviewConstants.fixedDate,
@@ -328,7 +329,9 @@ enum PreviewSummaryFixtures {
                     endedAt: PreviewConstants.fixedDateEnded,
                     firstDiscoveries: [],
                     completionGoal: 50,
-                    progressDescription: "12 / 50 US states"
+                    progressDescription: "12 / 50 US states",
+                    gameMode: .collaborative,
+                    teamSummary: nil
                 )
             ],
             participantContributions: [
@@ -348,6 +351,7 @@ enum PreviewSummaryFixtures {
         TripSummary(
             sessionId: PreviewConstants.sessionIdMulti,
             tripName: "Multi-Game Trip",
+            tripMode: .solo,
             status: .ended,
             endedAt: PreviewConstants.fixedDateEnded,
             startedAt: PreviewConstants.fixedDate,
@@ -363,7 +367,9 @@ enum PreviewSummaryFixtures {
                     endedAt: PreviewConstants.fixedDateEnded,
                     firstDiscoveries: [],
                     completionGoal: 50,
-                    progressDescription: "12 / 50"
+                    progressDescription: "12 / 50",
+                    gameMode: .collaborative,
+                    teamSummary: "Road Crew"
                 ),
                 TripSummaryGameItem(
                     gameInstanceId: PreviewConstants.gameInstanceId2,
@@ -373,7 +379,9 @@ enum PreviewSummaryFixtures {
                     endedAt: PreviewConstants.fixedDateEnded,
                     firstDiscoveries: [],
                     completionGoal: nil,
-                    progressDescription: nil
+                    progressDescription: nil,
+                    gameMode: .competitive,
+                    teamSummary: nil
                 ),
                 TripSummaryGameItem(
                     gameInstanceId: PreviewConstants.gameInstanceId3,
@@ -383,7 +391,9 @@ enum PreviewSummaryFixtures {
                     endedAt: PreviewConstants.fixedDateEnded,
                     firstDiscoveries: [],
                     completionGoal: nil,
-                    progressDescription: nil
+                    progressDescription: nil,
+                    gameMode: .collaborative,
+                    teamSummary: nil
                 )
             ],
             participantContributions: [
@@ -425,6 +435,7 @@ enum PreviewSummaryFixtures {
         return TripSummary(
             sessionId: PreviewConstants.sessionIdMulti,
             tripName: "Same state, two games",
+            tripMode: .multiplayer,
             status: .ended,
             endedAt: PreviewConstants.fixedDateEnded,
             startedAt: PreviewConstants.fixedDate,
@@ -440,7 +451,9 @@ enum PreviewSummaryFixtures {
                     endedAt: PreviewConstants.fixedDateEnded,
                     firstDiscoveries: [],
                     completionGoal: 50,
-                    progressDescription: "1 / 50 US states"
+                    progressDescription: "1 / 50 US states",
+                    gameMode: .collaborative,
+                    teamSummary: nil
                 ),
                 TripSummaryGameItem(
                     gameInstanceId: g2,
@@ -450,7 +463,9 @@ enum PreviewSummaryFixtures {
                     endedAt: PreviewConstants.fixedDateEnded,
                     firstDiscoveries: [],
                     completionGoal: 50,
-                    progressDescription: "1 / 50 US states"
+                    progressDescription: "1 / 50 US states",
+                    gameMode: .collaborative,
+                    teamSummary: nil
                 )
             ],
             participantContributions: [

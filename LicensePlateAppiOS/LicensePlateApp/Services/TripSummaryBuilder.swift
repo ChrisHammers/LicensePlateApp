@@ -40,7 +40,9 @@ enum TripSummaryBuilder {
                 endedAt: game.endedAt,
                 firstDiscoveries: projection.targetSummaries,
                 completionGoal: completionGoal,
-                progressDescription: progressDescription
+                progressDescription: progressDescription,
+                gameMode: game.commonConfig.gameMode,
+                teamSummary: Self.teamSummary(for: game.teams)
             ))
         }
 
@@ -57,6 +59,7 @@ enum TripSummaryBuilder {
         return TripSummary(
             sessionId: session.id,
             tripName: session.name,
+            tripMode: session.mode,
             status: session.status,
             endedAt: session.endedAt,
             startedAt: session.startedAt,
@@ -68,6 +71,16 @@ enum TripSummaryBuilder {
             discoveryProjection: discoveryProjection,
             locationMetadata: nil
         )
+    }
+
+    /// Non-empty teams → short summary for UI; nil when no teams.
+    private static func teamSummary(for teams: [TripTeam]) -> String? {
+        guard !teams.isEmpty else { return nil }
+        if teams.count == 1 {
+            let name = teams[0].name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? "1 team".localized : name
+        }
+        return "%d teams".localized(teams.count)
     }
 
     /// Step 07.5 — Derive completion goal and progress description from game config (license plate only).

@@ -80,9 +80,18 @@ struct PreviewFixturesTests {
         let summary = PreviewSummaryFixtures.tripSummarySolo()
         #expect(summary.totalDiscoveryCount == 12)
         #expect(summary.games.count == 1)
+        #expect(summary.tripMode == .solo)
+        #expect(summary.games[0].gameMode == .collaborative)
 
         let multiSummary = PreviewSummaryFixtures.tripSummaryMultiGame()
         #expect(multiSummary.gameCount == 3)
+        #expect(multiSummary.tripMode == .solo)
+        #expect(multiSummary.games[0].gameMode == .collaborative)
+        #expect(multiSummary.games[1].gameMode == .competitive)
+
+        let dup = PreviewSummaryFixtures.tripSummaryDuplicateRegionAcrossGames()
+        #expect(dup.tripMode == .multiplayer)
+        #expect(dup.games.allSatisfy { $0.gameMode == .collaborative })
     }
 
     @Test("MockFactories build complete graph")
