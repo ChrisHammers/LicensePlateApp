@@ -90,12 +90,16 @@ struct AnalyticsServiceTests {
             tripSessionId: "session-1",
             tripMode: "solo",
             participantCount: 1,
-            gameCount: 1
+            gameCount: 1,
+            gameModes: ["collaborative"],
+            hasTeams: false
         )
         #expect(combinedWithContext.parameters?["trip_session_id"] as? String == "session-1")
         #expect(combinedWithContext.parameters?["trip_mode"] as? String == "solo")
         #expect(combinedWithContext.parameters?["participant_count"] as? Int == 1)
         #expect(combinedWithContext.parameters?["game_count"] as? Int == 1)
+        #expect(combinedWithContext.parameters?["game_modes"] as? String == "collaborative")
+        #expect(combinedWithContext.parameters?["has_teams"] as? Bool == false)
     }
 
     @Test @MainActor func spyRecordsTypedEvents() async throws {

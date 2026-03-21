@@ -54,7 +54,7 @@ struct CombinedTripSetupViewModelTests {
         viewModel.includeCanada = false
         viewModel.includeMexico = false
 
-        let session = try viewModel.createTrip(modelContext: ctx)
+        let session = try viewModel.createTrip()
 
         #expect(session.name == "My Trip")
         #expect(session.createdBy == userId)
@@ -102,7 +102,7 @@ struct CombinedTripSetupViewModelTests {
         viewModel.selectedGameTypes = [.licensePlate]
         viewModel.includeUS = true
 
-        let session = try viewModel.createTrip(modelContext: ctx)
+        let session = try viewModel.createTrip()
 
         #expect(!session.name.isEmpty)
         let instances = try instanceRepo.fetchByTripSession(sessionId: session.id)
@@ -150,7 +150,7 @@ struct CombinedTripSetupViewModelTests {
         viewModel.includeMexico = false
 
         #expect(throws: CombinedTripSetupError.self) {
-            _ = try viewModel.createTrip(modelContext: ctx)
+            _ = try viewModel.createTrip()
         }
     }
 
@@ -213,7 +213,7 @@ struct CombinedTripSetupViewModelTests {
         viewModel.includeUS = true
         viewModel.startTripRightAway = true
 
-        let session = try viewModel.createTrip(modelContext: ctx)
+        let session = try viewModel.createTrip()
 
         #expect(mockLifecycle.startTripCallCount == 1)
         #expect(mockLifecycle.startTripSessionIds.first == session.id)
@@ -249,7 +249,7 @@ struct CombinedTripSetupViewModelTests {
         viewModel.includeDC = true
         viewModel.includeCanadianTerritories = true
 
-        let session = try viewModel.createTrip(modelContext: ctx)
+        let session = try viewModel.createTrip()
 
         let instances = try instanceRepo.fetchByTripSession(sessionId: session.id)
         let decoded = instances[0].licensePlateConfig()
@@ -285,11 +285,68 @@ struct CombinedTripSetupViewModelTests {
         viewModel.includeDC = true
         viewModel.includeCanadianTerritories = true
 
-        let session = try viewModel.createTrip(modelContext: ctx)
+        let session = try viewModel.createTrip()
         let instances = try instanceRepo.fetchByTripSession(sessionId: session.id)
         let opts = instances[0].licensePlateConfig()?.territoryOptions
         #expect(opts?.includeUSTerritories == false)
         #expect(opts?.includeDC == false)
         #expect(opts?.includeCanadianTerritories == true)
+    }
+
+    @Test func createTripPersistsMultiplayerTripMode() async throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        let sessionRepo = TripSessionRepository.shared
+        let instanceRepo = GameInstanceRepository.shared
+        sessionRepo.setModelContext(ctx)
+        instanceRepo.setModelContext(ctx)
+
+        let auth = FirebaseAuthService()
+        let testUser = AppUser(id: "u-mp", userName: "U", firebaseUID: "u-mp")
+        ctx.insert(testUser)
+        try ctx.save()
+        auth.currentUser = testUser
+
+        let viewModel = CombinedTripSetupViewModel(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: instanceRepo,
+            authService: auth
+        )
+        viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = true
+        viewModel.tripParticipationMode = .multiplayer
+
+        let session = try viewModel.createTrip()
+        #expect(session.mode == .multiplayer)
+        #expect(session.participants.count == 1)
+    }
+
+    @Test func createTripPersistsCompetitiveGameMode() async throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        let sessionRepo = TripSessionRepository.shared
+        let instanceRepo = GameInstanceRepository.shared
+        sessionRepo.setModelContext(ctx)
+        instanceRepo.setModelContext(ctx)
+
+        let auth = FirebaseAuthService()
+        let testUser = AppUser(id: "u-cmp", userName: "U", firebaseUID: "u-cmp")
+        ctx.insert(testUser)
+        try ctx.save()
+        auth.currentUser = testUser
+
+        let viewModel = CombinedTripSetupViewModel(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: instanceRepo,
+            authService: auth
+        )
+        viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = true
+        viewModel.defaultGameMode = .competitive
+
+        let session = try viewModel.createTrip()
+        let instances = try instanceRepo.fetchByTripSession(sessionId: session.id)
+        #expect(instances.count == 1)
+        #expect(instances[0].commonConfig.gameMode == .competitive)
     }
 }

@@ -107,7 +107,15 @@ class AnalyticsService: AnalyticsLogging {
 
         // Combined games (Step 06)
         case combinedTripSetupOpened
-        case combinedTripCreated(gameTypes: [String], tripSessionId: String? = nil, tripMode: String? = nil, participantCount: Int? = nil, gameCount: Int? = nil)
+        case combinedTripCreated(
+            gameTypes: [String],
+            tripSessionId: String? = nil,
+            tripMode: String? = nil,
+            participantCount: Int? = nil,
+            gameCount: Int? = nil,
+            gameModes: [String]? = nil,
+            hasTeams: Bool? = nil
+        )
 
         // Combined games extended (Step 10.5)
         case combinedGameRemovedBeforeStart(gameInstanceId: String, combinedGameCount: Int)
@@ -362,12 +370,14 @@ class AnalyticsService: AnalyticsLogging {
                 return p
             case .combinedTripSetupOpened:
                 return nil
-            case .combinedTripCreated(let gameTypes, let tripSessionId, let tripMode, let participantCount, let gameCount):
+            case .combinedTripCreated(let gameTypes, let tripSessionId, let tripMode, let participantCount, let gameCount, let gameModes, let hasTeams):
                 var p: [String: Any] = ["game_types": gameTypes.joined(separator: ",")]
                 if let id = tripSessionId { p["trip_session_id"] = id }
                 if let mode = tripMode { p["trip_mode"] = mode }
                 if let count = participantCount { p["participant_count"] = count }
                 if let count = gameCount { p["game_count"] = count }
+                if let modes = gameModes, !modes.isEmpty { p["game_modes"] = modes.joined(separator: ",") }
+                if let teams = hasTeams { p["has_teams"] = teams }
                 return p
             case .combinedGameRemovedBeforeStart(let gameInstanceId, let combinedGameCount):
                 return ["game_instance_id": gameInstanceId, "combined_game_count": combinedGameCount]

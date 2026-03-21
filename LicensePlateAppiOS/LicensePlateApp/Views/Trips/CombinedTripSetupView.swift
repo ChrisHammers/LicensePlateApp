@@ -10,7 +10,6 @@ import SwiftData
 
 struct CombinedTripSetupView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
 
     @StateObject private var viewModel: CombinedTripSetupViewModel
     var onCreated: (TripSession) -> Void
@@ -26,6 +25,21 @@ struct CombinedTripSetupView: View {
     @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
     @AppStorage("appUseVibrations") private var appUseVibrations = true
 
+    /// Explicit bindings for pickers (same pattern as `AppPreferencesView` private picker bindings).
+    private var tripParticipationModeBinding: Binding<TripMode> {
+        Binding(
+            get: { viewModel.tripParticipationMode },
+            set: { viewModel.tripParticipationMode = $0 }
+        )
+    }
+
+    private var defaultGameModeBinding: Binding<GameMode> {
+        Binding(
+            get: { viewModel.defaultGameMode },
+            set: { viewModel.defaultGameMode = $0 }
+        )
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -34,6 +48,7 @@ struct CombinedTripSetupView: View {
 
                 List {
                     basicInfoSection
+                    tripParticipationSection
                     gamesSection
                     tripOptionsSection
                     tripSettingsSection
@@ -45,8 +60,7 @@ struct CombinedTripSetupView: View {
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: appPlaySoundEffects)
-                AnalyticsService.shared.log(.combinedTripSetupOpened)
-                AnalyticsService.shared.logScreenView(screenName: "combined_trip_setup")
+                viewModel.logSetupScreenAppeared()
             }
             .onChange(of: appUseVibrations) { _, newValue in
                 FeedbackService.shared.updatePreferences(hapticEnabled: newValue, soundEnabled: appPlaySoundEffects)
@@ -122,6 +136,37 @@ struct CombinedTripSetupView: View {
         .textCase(nil)
     }
 
+    private var tripParticipationSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Who's on this trip?".localized)
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+
+                Picker(selection: tripParticipationModeBinding) {
+                    Text("Solo".localized).tag(TripMode.solo)
+                    Text("Multiplayer".localized).tag(TripMode.multiplayer)
+                } label: {
+                    Text("Trip type".localized)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityLabel("Trip participation mode".localized)
+                .accessibilityHint("Solo is one participant. Multiplayer is for inviting others.".localized)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+            .background(Color.Theme.cardBackground)
+            .cornerRadius(20)
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+            .listRowBackground(Color.clear)
+        } header: {
+            Text("Trip".localized)
+                .font(.system(.headline, design: .rounded))
+                .foregroundStyle(Color.Theme.primaryBlue)
+        }
+        .textCase(nil)
+    }
+
     private var gamesSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 12) {
@@ -140,6 +185,21 @@ struct CombinedTripSetupView: View {
                         onToggle: { viewModel.toggleGameType(gameType) }
                     )
                 }
+
+                Text("Play style applies to each selected game.".localized)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .accessibilityLabel("Play style applies to each selected game.".localized)
+
+                Picker(selection: defaultGameModeBinding) {
+                    Text("Collaborative".localized).tag(GameMode.collaborative)
+                    Text("Competitive".localized).tag(GameMode.competitive)
+                } label: {
+                    Text("Play style".localized)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityLabel("Game play style".localized)
+                .accessibilityHint("Collaborative shares credit. Competitive scores individually.".localized)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
@@ -306,7 +366,7 @@ struct CombinedTripSetupView: View {
         FeedbackService.shared.buttonTap()
         viewModel.clearError()
         do {
-            let session = try viewModel.createTrip(modelContext: modelContext)
+            let session = try viewModel.createTrip()
             FeedbackService.shared.actionSuccess()
             onCreated(session)
             dismiss()

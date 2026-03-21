@@ -31,7 +31,7 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
             throw DebugForcedPersistenceError.create
         }
         #endif
-        let entity = TripSessionEntityMapper.toEntity(session)
+        let entity = TripSessionPersistence.toEntity(session)
         ctx.insert(entity)
         try ctx.save()
     }
@@ -48,9 +48,9 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
             predicate: #Predicate<TripSessionEntity> { $0.id == id }
         )
         if let existing = try ctx.fetch(descriptor).first {
-            TripSessionEntityMapper.updateEntity(existing, from: session)
+            TripSessionPersistence.updateEntity(existing, from: session)
         } else {
-            ctx.insert(TripSessionEntityMapper.toEntity(session))
+            ctx.insert(TripSessionPersistence.toEntity(session))
         }
         try ctx.save()
     }
@@ -71,7 +71,7 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
                 entity.createdBy == uid || participantIds(from: entity.participantsData).contains(uid)
             }
         }
-        return entities.map { TripSessionEntityMapper.toDomain($0) }
+        return entities.map { TripSessionPersistence.toDomain($0) }
     }
 
     func loadArchivedSessions(userId: String?, limit: Int, includeCancelled: Bool, sortBy: TravelLogSort) throws -> [TripSession] {
@@ -97,7 +97,7 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
                 entity.createdBy == uid || participantIds(from: entity.participantsData).contains(uid)
             }
         }
-        return entities.map { TripSessionEntityMapper.toDomain($0) }
+        return entities.map { TripSessionPersistence.toDomain($0) }
     }
 
     // MARK: - Participant
@@ -108,7 +108,7 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
         guard let entity = try fetchEntity(byId: id, context: ctx) else {
             throw TripSessionRepositoryError.sessionNotFound(sessionId)
         }
-        var participants = TripSessionEntityMapper.toDomain(entity).participants
+        var participants = TripSessionPersistence.toDomain(entity).participants
         if !participants.contains(where: { $0.userId == participant.userId }) {
             participants.append(participant)
         }
@@ -122,7 +122,7 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
         guard let entity = try fetchEntity(byId: id, context: ctx) else {
             throw TripSessionRepositoryError.sessionNotFound(sessionId)
         }
-        var participants = TripSessionEntityMapper.toDomain(entity).participants
+        var participants = TripSessionPersistence.toDomain(entity).participants
         participants.removeAll { $0.userId == userId }
         entity.participantsData = participants.isEmpty ? nil : (try? JSONEncoder().encode(participants))
         try ctx.save()
@@ -151,7 +151,7 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
     func session(byId id: UUID) throws -> TripSession? {
         guard let ctx = modelContext else { throw TripSessionRepositoryError.noModelContext }
         guard let entity = try fetchEntity(byId: id.uuidString, context: ctx) else { return nil }
-        return TripSessionEntityMapper.toDomain(entity)
+        return TripSessionPersistence.toDomain(entity)
     }
 
     /// Placeholder for future sync; entity does not yet have lastSyncedAt.
@@ -174,6 +174,68 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
             return []
         }
         return Set(participants.map(\.userId))
+    }
+}
+
+// MARK: - Domain <-> SwiftData (V1; TripMode stored as TripMode.rawValue only)
+
+private enum TripSessionPersistence {
+    static func toEntity(_ session: TripSession) -> TripSessionEntity {
+        let participantsData: Data? = encodeParticipants(session.participants)
+        return TripSessionEntity(
+            id: session.id.uuidString,
+            name: session.name,
+            status: session.status.rawValue,
+            mode: session.mode.rawValue,
+            createdAt: session.createdAt,
+            createdBy: session.createdBy,
+            startedAt: session.startedAt,
+            endedAt: session.endedAt,
+            endedBy: session.endedBy,
+            participantsData: participantsData
+        )
+    }
+
+    static func toDomain(_ entity: TripSessionEntity) -> TripSession {
+        let participants = decodeParticipants(entity.participantsData)
+        let status = TripSessionState(rawValue: entity.status) ?? .active
+        let mode = TripMode(rawValue: entity.mode) ?? .solo
+        let createdAt = entity.createdAt ?? entity.startedAt ?? Date.distantPast
+        return TripSession(
+            id: UUID(uuidString: entity.id) ?? UUID(),
+            name: entity.name,
+            status: status,
+            mode: mode,
+            createdAt: createdAt,
+            createdBy: entity.createdBy,
+            startedAt: entity.startedAt,
+            endedAt: entity.endedAt,
+            endedBy: entity.endedBy,
+            participants: participants,
+            riskFlags: nil
+        )
+    }
+
+    static func updateEntity(_ entity: TripSessionEntity, from session: TripSession) {
+        entity.name = session.name
+        entity.status = session.status.rawValue
+        entity.mode = session.mode.rawValue
+        entity.createdAt = session.createdAt
+        entity.createdBy = session.createdBy
+        entity.startedAt = session.startedAt
+        entity.endedAt = session.endedAt
+        entity.endedBy = session.endedBy
+        entity.participantsData = encodeParticipants(session.participants)
+    }
+
+    private static func encodeParticipants(_ participants: [TripParticipant]) -> Data? {
+        guard !participants.isEmpty else { return nil }
+        return try? JSONEncoder().encode(participants)
+    }
+
+    private static func decodeParticipants(_ data: Data?) -> [TripParticipant] {
+        guard let data else { return [] }
+        return (try? JSONDecoder().decode([TripParticipant].self, from: data)) ?? []
     }
 }
 

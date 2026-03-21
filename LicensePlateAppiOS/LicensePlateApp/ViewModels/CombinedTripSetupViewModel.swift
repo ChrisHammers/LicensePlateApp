@@ -3,10 +3,10 @@
 //  LicensePlateApp
 //
 //  Step 06 — ViewModel for combined trip setup: game types, countries, options. Creates TripSession + GameInstances (canonical only).
+//  Step 6.9.4 — Trip mode (solo/multiplayer) and default game mode are independent; game assembly uses GameSetupChoice.
 //
 
 import Foundation
-import SwiftData
 import Combine
 
 @MainActor
@@ -14,6 +14,10 @@ final class CombinedTripSetupViewModel: ObservableObject {
     // MARK: - State
 
     @Published var tripName: String = ""
+    /// Trip participation: solo vs multiplayer (roster/invites). Not the same as per-game `GameMode`.
+    @Published var tripParticipationMode: TripMode = .solo
+    /// MVP: one play style for every selected game type; future UI can supply per-type choices without changing `TripSession`.
+    @Published var defaultGameMode: GameMode = .collaborative
     @Published var selectedGameTypes: Set<GameType> = [.licensePlate]
     @Published var includeUS: Bool = true
     @Published var includeCanada: Bool = true
@@ -50,6 +54,13 @@ final class CombinedTripSetupViewModel: ObservableObject {
         self.gameInstanceRepository = gameInstanceRepository
         self.lifecycleService = lifecycleService
         self.authService = authService
+    }
+
+    // MARK: - Analytics (setup screen)
+
+    func logSetupScreenAppeared() {
+        AnalyticsService.shared.log(.combinedTripSetupOpened)
+        AnalyticsService.shared.logScreenView(screenName: "combined_trip_setup")
     }
 
     // MARK: - Validation
@@ -103,8 +114,7 @@ final class CombinedTripSetupViewModel: ObservableObject {
     }
 
     /// Creates TripSession (status `.created`, `startedAt` nil) and GameInstances. When `startTripRightAway`, calls `startTrip` so the session becomes `.active`, games start, and trip/game events are appended. Returns the session as persisted (reloaded) on success.
-    /// Solo is the one-participant case: one TripSession, one TripParticipant (creator), and one default GameInstance when a single game type is selected. No legacy Trip; no dual-write.
-    func createTrip(modelContext: ModelContext) throws -> TripSession {
+    func createTrip() throws -> TripSession {
         errorMessage = nil
         isCreating = true
         defer { isCreating = false }
@@ -128,13 +138,12 @@ final class CombinedTripSetupViewModel: ObservableObject {
         let sessionId = UUID()
         let createdBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? "unknown"
         let participant = TripParticipant(userId: createdBy, role: .owner, joinedAt: createdAt)
-        let mode: TripMode = .solo
 
         let session = TripSession(
             id: sessionId,
             name: finalName,
             status: .created,
-            mode: mode,
+            mode: tripParticipationMode,
             createdAt: createdAt,
             createdBy: createdBy,
             startedAt: nil,
@@ -146,20 +155,40 @@ final class CombinedTripSetupViewModel: ObservableObject {
         try tripSessionRepository.create(session: session)
 
         let config = CombinedGameConfiguration(enabledGameTypes: Array(types))
+        var choicesByGameType: [GameType: GameSetupChoice] = [:]
+        for type in types {
+            choicesByGameType[type] = GameSetupChoice(gameType: type, gameMode: defaultGameMode, teams: [])
+        }
         let territoryOpts = LicensePlateTerritoryOptions(
             includeUSTerritories: includeUSTerritories,
             includeCanadianTerritories: includeCanadianTerritories,
             includeDC: includeDC
         )
         let lpConfig = CombinedGameAssembler.licensePlateConfig(from: countryList, territoryOptions: territoryOpts)
-        let instances = CombinedGameAssembler.assemble(session: session, config: config, licensePlateConfig: lpConfig)
-        
+        let instances = CombinedGameAssembler.assemble(
+            session: session,
+            config: config,
+            choicesByGameType: choicesByGameType,
+            licensePlateConfig: lpConfig
+        )
+
+        let gameModeStrings = instances.map(\.commonConfig.gameMode.rawValue)
+        let hasTeams = instances.contains { !$0.teams.isEmpty }
+
         AnalyticsService.shared.log(.tripSessionCreated(tripId: sessionId.uuidString, tripStatus: session.status.rawValue, tripParticipantCount: session.participants.count, tripActiveGameCount: instances.count, tripSource: "combined_setup"))
         for (index, instance) in instances.enumerated() {
             try gameInstanceRepository.create(instance: instance)
             AnalyticsService.shared.log(.gameInstanceCreated(gameInstanceId: instance.id.uuidString, gameType: instance.definitionId, gameMode: instance.commonConfig.gameMode.rawValue, tripId: sessionId.uuidString, gameOrderInTrip: index + 1))
         }
-        AnalyticsService.shared.log(.combinedTripCreated(gameTypes: types.map(\.rawValue), tripSessionId: sessionId.uuidString, tripMode: session.mode.rawValue, participantCount: session.participants.count, gameCount: instances.count))
+        AnalyticsService.shared.log(.combinedTripCreated(
+            gameTypes: types.map(\.rawValue),
+            tripSessionId: sessionId.uuidString,
+            tripMode: session.mode.rawValue,
+            participantCount: session.participants.count,
+            gameCount: instances.count,
+            gameModes: gameModeStrings,
+            hasTeams: hasTeams
+        ))
         if startTripRightAway {
             try lifecycleService.startTrip(sessionId: sessionId, actorId: createdBy)
         }

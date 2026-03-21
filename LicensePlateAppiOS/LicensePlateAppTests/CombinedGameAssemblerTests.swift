@@ -120,4 +120,38 @@ struct CombinedGameAssemblerTests {
         #expect(config.territoryOptions.includeUSTerritories == false)
         #expect(config.territoryOptions.includeDC == false)
     }
+
+    @Test func competitiveGameModeIsNotDerivedFromTripMode() async throws {
+        let session = makeSession(mode: .multiplayer)
+        let config = CombinedGameConfiguration(enabledGameTypes: [.licensePlate])
+        let choices: [GameType: GameSetupChoice] = [
+            .licensePlate: GameSetupChoice(gameType: .licensePlate, gameMode: .competitive, teams: [])
+        ]
+        let instances = CombinedGameAssembler.assemble(
+            session: session,
+            config: config,
+            choicesByGameType: choices,
+            licensePlateConfig: nil
+        )
+        #expect(instances.count == 1)
+        #expect(instances[0].commonConfig.gameMode == .competitive)
+    }
+
+    @Test func teamsFromChoiceAppliedToInstance() async throws {
+        let session = makeSession(mode: .solo)
+        let teams = [TripTeam(name: "Team Alpha", participantUserIds: ["user1"])]
+        let config = CombinedGameConfiguration(enabledGameTypes: [.licensePlate])
+        let choices: [GameType: GameSetupChoice] = [
+            .licensePlate: GameSetupChoice(gameType: .licensePlate, gameMode: .collaborative, teams: teams)
+        ]
+        let instances = CombinedGameAssembler.assemble(
+            session: session,
+            config: config,
+            choicesByGameType: choices,
+            licensePlateConfig: nil
+        )
+        #expect(instances.count == 1)
+        #expect(instances[0].teams.count == 1)
+        #expect(instances[0].teams[0].name == "Team Alpha")
+    }
 }
