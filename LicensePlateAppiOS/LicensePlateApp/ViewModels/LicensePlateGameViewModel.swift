@@ -173,6 +173,7 @@ final class LicensePlateGameViewModel: ObservableObject {
             gameInstanceId: game.id,
             inputMethod: inputMethod,
             occurredAt: Date(),
+            teams: game.teams,
             riskContext: nil
         )
 

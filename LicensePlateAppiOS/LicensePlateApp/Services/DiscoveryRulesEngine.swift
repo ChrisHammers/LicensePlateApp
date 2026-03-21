@@ -23,6 +23,7 @@ enum DiscoveryRulesEngine {
     ///   - gameInstanceId: Game instance id.
     ///   - inputMethod: How the find was made.
     ///   - occurredAt: Time of the find.
+    ///   - teams: Game instance teams; used only for `GameCredit.teamId` on credits (not for duplicate rules).
     ///   - riskContext: Optional; if nil, risk flags are empty (risk assessment stays post-append).
     /// - Returns: Outcome, optional risk flags, and credits to assign (nil when rejected or personal_duplicate with no new credit).
     static func evaluateDiscoverySubmission(
@@ -34,6 +35,7 @@ enum DiscoveryRulesEngine {
         gameInstanceId: UUID,
         inputMethod: FoundRegion.InputMethod,
         occurredAt: Date,
+        teams: [TripTeam] = [],
         riskContext: DiscoveryActionContext? = nil
     ) -> DiscoveryEvaluationResult {
         let candidateDiscovery = GameDiscovery(
@@ -49,7 +51,8 @@ enum DiscoveryRulesEngine {
             let credits = GameCreditCalculator.credits(
                 for: mode,
                 discovery: candidateDiscovery,
-                existingDiscoveriesForTarget: []
+                existingDiscoveriesForTarget: [],
+                teams: teams
             )
             return DiscoveryEvaluationResult(
                 outcome: .newCredit,
@@ -90,7 +93,8 @@ enum DiscoveryRulesEngine {
             let credits = GameCreditCalculator.credits(
                 for: mode,
                 discovery: candidateDiscovery,
-                existingDiscoveriesForTarget: existing
+                existingDiscoveriesForTarget: existing,
+                teams: teams
             )
             return DiscoveryEvaluationResult(
                 outcome: .sharedDuplicate,
@@ -106,10 +110,12 @@ enum DiscoveryRulesEngine {
     /// - Parameters:
     ///   - mode: Game mode (from GameInstance.commonConfig.gameMode).
     ///   - discoveriesByTarget: Discoveries grouped by targetId (e.g. from Dictionary(grouping: discoveries, by: \.targetId)).
+    ///   - teams: Game instance teams for `GameCredit.teamId` resolution.
     /// - Returns: Flat list of GameCredit (one set per target: first finder for competitive, all finders for collaborative).
     static func creditsForDiscoveries(
         mode: GameMode,
-        discoveriesByTarget: [String: [GameDiscovery]]
+        discoveriesByTarget: [String: [GameDiscovery]],
+        teams: [TripTeam] = []
     ) -> [GameCredit] {
         let isShared = GameModeRulesEngine.creditType(for: mode) == .shared
         var allCredits: [GameCredit] = []
@@ -120,7 +126,8 @@ enum DiscoveryRulesEngine {
             let credits = GameCreditCalculator.credits(
                 for: mode,
                 discovery: discovery,
-                existingDiscoveriesForTarget: existing
+                existingDiscoveriesForTarget: existing,
+                teams: teams
             )
             allCredits.append(contentsOf: credits)
         }

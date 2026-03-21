@@ -197,4 +197,23 @@ struct DiscoveryRulesEngineTests {
         let credits = DiscoveryRulesEngine.creditsForDiscoveries(mode: .competitive, discoveriesByTarget: [:])
         #expect(credits.isEmpty)
     }
+
+    @Test func creditsForDiscoveriesCollaborativeAppliesGameTeamsToCredits() async throws {
+        let teams = [
+            TripTeam(id: "t1", name: "One", participantUserIds: ["user1"]),
+            TripTeam(id: "t2", name: "Two", participantUserIds: ["user2"])
+        ]
+        let d1 = makeDiscovery(participantId: "user1", discoveredAt: Date().addingTimeInterval(-1))
+        let d2 = makeDiscovery(participantId: "user2", discoveredAt: Date())
+        let byTarget = ["region-1": [d1, d2]]
+        let credits = DiscoveryRulesEngine.creditsForDiscoveries(
+            mode: .collaborative,
+            discoveriesByTarget: byTarget,
+            teams: teams
+        )
+        #expect(credits.count == 2)
+        let byParticipant = Dictionary(uniqueKeysWithValues: credits.map { ($0.participantId, $0.teamId) })
+        #expect(byParticipant["user1"] == "t1")
+        #expect(byParticipant["user2"] == "t2")
+    }
 }

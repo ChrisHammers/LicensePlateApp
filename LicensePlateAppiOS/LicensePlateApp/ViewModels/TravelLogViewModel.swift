@@ -89,7 +89,11 @@ final class TravelLogViewModel: ObservableObject {
             for game in games {
                 let gameDiscoveries = discoveries.filter { $0.gameInstanceId == game.id }
                 let discoveriesByTarget = Dictionary(grouping: gameDiscoveries, by: \.targetId)
-                let gameCredits = DiscoveryRulesEngine.creditsForDiscoveries(mode: game.commonConfig.gameMode, discoveriesByTarget: discoveriesByTarget)
+                let gameCredits = DiscoveryRulesEngine.creditsForDiscoveries(
+                    mode: game.commonConfig.gameMode,
+                    discoveriesByTarget: discoveriesByTarget,
+                    teams: game.teams
+                )
                 allCredits.append(contentsOf: gameCredits)
             }
 
