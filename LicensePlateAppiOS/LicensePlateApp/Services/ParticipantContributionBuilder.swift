@@ -50,9 +50,11 @@ enum ParticipantContributionBuilder {
     }
 
     private static func buildFirstFindCountByParticipant(discoveries: [GameDiscovery]) -> [String: Int] {
-        let byTarget = Dictionary(grouping: discoveries, by: \.targetId)
+        let byGameTarget = Dictionary(grouping: discoveries) { d in
+            "\(d.gameInstanceId.uuidString)_\(d.targetId)"
+        }
         var firstFindCount: [String: Int] = [:]
-        for (_, targetDiscoveries) in byTarget {
+        for (_, targetDiscoveries) in byGameTarget {
             let summary = ParticipantDiscoveryResolver.summary(discoveries: targetDiscoveries)
             if let firstId = summary.firstFinderParticipantId {
                 firstFindCount[firstId, default: 0] += 1

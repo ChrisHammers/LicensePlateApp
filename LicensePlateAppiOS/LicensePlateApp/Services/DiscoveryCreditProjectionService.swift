@@ -15,11 +15,18 @@ struct ParticipantScoreSummary: Sendable {
 }
 
 /// Per-target discovery summary for UI (first finder and label from ParticipantDiscoveryResolver).
-struct TargetDiscoverySummary: Sendable {
+struct TargetDiscoverySummary: Sendable, Identifiable {
+    /// Set when aggregating multiple games so the same `targetId` can appear once per game.
+    var gameInstanceId: UUID?
     var targetId: String
     var firstFinderParticipantId: String?
     var allFinderParticipantIds: [String]
     var summaryLabel: String
+
+    var id: String {
+        let g = gameInstanceId.map(\.uuidString) ?? "_"
+        return "\(g)_\(targetId)"
+    }
 }
 
 /// Full projection result: participant scores and per-target summaries.
@@ -50,11 +57,15 @@ enum DiscoveryCreditProjectionService {
     }
 
     private static func buildTargetSummaries(discoveries: [GameDiscovery]) -> [TargetDiscoverySummary] {
-        let byTarget = Dictionary(grouping: discoveries, by: \.targetId)
-        return byTarget.map { targetId, targetDiscoveries in
+        let byGameTarget = Dictionary(grouping: discoveries) { d in
+            "\(d.gameInstanceId.uuidString)_\(d.targetId)"
+        }
+        return byGameTarget.values.compactMap { targetDiscoveries -> TargetDiscoverySummary? in
+            guard let first = targetDiscoveries.first else { return nil }
             let summary = ParticipantDiscoveryResolver.summary(discoveries: targetDiscoveries)
             return TargetDiscoverySummary(
-                targetId: targetId,
+                gameInstanceId: first.gameInstanceId,
+                targetId: first.targetId,
                 firstFinderParticipantId: summary.firstFinderParticipantId,
                 allFinderParticipantIds: summary.allFinderParticipantIds,
                 summaryLabel: summary.summaryLabel

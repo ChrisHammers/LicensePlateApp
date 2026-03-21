@@ -87,6 +87,14 @@ struct TripSummaryView: View {
         return target.summaryLabel
     }
 
+    /// Secondary line when the same region can appear for more than one game on this trip.
+    private func gameContextLabel(for target: TargetDiscoverySummary) -> String? {
+        guard summary.gameCount > 1, let gid = target.gameInstanceId,
+              let item = summary.games.first(where: { $0.gameInstanceId == gid }) else { return nil }
+        return GameType(rawValue: item.definitionId)?.displayName
+            ?? item.definitionId.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(summary.tripName)
@@ -209,19 +217,28 @@ struct TripSummaryView: View {
             Text("First discoveries".localized)
                 .font(.system(.headline, design: .rounded))
                 .foregroundStyle(Color.Theme.primaryBlue)
-            ForEach(projection.targetSummaries.prefix(20), id: \.targetId) { target in
-                HStack {
-                    Text(regionName(for: target.targetId))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                    Spacer()
-                    Text(foundByLabel(for: target))
-                        .font(.system(.caption2, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
+            ForEach(Array(projection.targetSummaries.prefix(20))) { target in
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text(regionName(for: target.targetId))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                        Spacer()
+                        Text(foundByLabel(for: target))
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    if let gameLabel = gameContextLabel(for: target) {
+                        Text(gameLabel)
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown.opacity(0.9))
+                    }
                 }
                 .padding(.vertical, 4)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(firstDiscoveryAccessibilityLabel(for: target))
             }
         }
         .padding()
@@ -230,6 +247,14 @@ struct TripSummaryView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.Theme.cardBackground)
         )
+    }
+
+    private func firstDiscoveryAccessibilityLabel(for target: TargetDiscoverySummary) -> String {
+        var parts: [String] = [regionName(for: target.targetId), foundByLabel(for: target)]
+        if let gameLabel = gameContextLabel(for: target) {
+            parts.append("Game".localized + ": " + gameLabel)
+        }
+        return parts.joined(separator: ", ")
     }
 
     private var mapRecapPlaceholder: some View {
@@ -260,5 +285,11 @@ struct TripSummaryView: View {
 #Preview("Multi-game summary") {
     NavigationStack {
         TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryMultiGame(), onDismiss: nil)
+    }
+}
+
+#Preview("First discoveries — same region, two games") {
+    NavigationStack {
+        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryDuplicateRegionAcrossGames(), onDismiss: nil)
     }
 }

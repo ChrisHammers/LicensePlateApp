@@ -161,4 +161,65 @@ struct TripSummaryBuilderTests {
         #expect(summary.games[0].completionGoal == nil)
         #expect(summary.games[0].progressDescription == nil)
     }
+
+    /// Step 6.9.5 — Same region id in two games: trip-level `discoveryProjection` keeps two rows keyed by game + target.
+    @Test func buildTwoGamesSameTargetId_tripDiscoveryProjectionNotMerged() async throws {
+        let sessionId = UUID()
+        let gameId1 = UUID()
+        let gameId2 = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "Dual LP",
+            status: .ended,
+            mode: .multiplayer,
+            createdAt: Date().addingTimeInterval(-100),
+            endedAt: Date(),
+            participants: [
+                TripParticipant(userId: "u1", role: .owner),
+                TripParticipant(userId: "u2", role: .member)
+            ]
+        )
+        let game1 = GameInstance(
+            id: gameId1,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: GameType.licensePlate.rawValue)
+        )
+        let game2 = GameInstance(
+            id: gameId2,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: GameType.licensePlate.rawValue)
+        )
+        let d1 = GameDiscovery(
+            gameInstanceId: gameId1,
+            participantId: "u1",
+            targetId: "CA",
+            inputMethod: .list
+        )
+        let d2 = GameDiscovery(
+            gameInstanceId: gameId2,
+            participantId: "u2",
+            targetId: "CA",
+            inputMethod: .list
+        )
+        let credits: [GameCredit] = [
+            GameCredit(discoveryId: d1.id, participantId: "u1", creditType: .full, weight: 1.0),
+            GameCredit(discoveryId: d2.id, participantId: "u2", creditType: .full, weight: 1.0)
+        ]
+        let summary = TripSummaryBuilder.build(
+            session: session,
+            games: [game1, game2],
+            discoveries: [d1, d2],
+            credits: credits
+        )
+        #expect(summary.discoveryProjection != nil)
+        let projection = summary.discoveryProjection!
+        #expect(projection.targetSummaries.count == 2)
+        let rowIds = Set(projection.targetSummaries.map(\.id))
+        #expect(rowIds == Set(["\(gameId1.uuidString)_CA", "\(gameId2.uuidString)_CA"]))
+        let byUser = Dictionary(uniqueKeysWithValues: summary.participantContributions.map { ($0.participantId, $0.firstFindCount) })
+        #expect(byUser["u1"] == 1)
+        #expect(byUser["u2"] == 1)
+    }
 }

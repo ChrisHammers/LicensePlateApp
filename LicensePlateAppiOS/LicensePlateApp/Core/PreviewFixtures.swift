@@ -398,6 +398,79 @@ enum PreviewSummaryFixtures {
             locationMetadata: nil
         )
     }
+
+    /// Two license plate games both found the same region — trip-level first discoveries list shows two rows with game context.
+    static func tripSummaryDuplicateRegionAcrossGames() -> TripSummary {
+        let g1 = PreviewConstants.gameInstanceId1
+        let g2 = PreviewConstants.gameInstanceId2
+        let projection = DiscoveryCreditProjection(
+            participantScores: [],
+            targetSummaries: [
+                TargetDiscoverySummary(
+                    gameInstanceId: g1,
+                    targetId: "us-ca",
+                    firstFinderParticipantId: PreviewConstants.userId1,
+                    allFinderParticipantIds: [PreviewConstants.userId1],
+                    summaryLabel: "Found by \(PreviewConstants.userId1)"
+                ),
+                TargetDiscoverySummary(
+                    gameInstanceId: g2,
+                    targetId: "us-ca",
+                    firstFinderParticipantId: PreviewConstants.userId2,
+                    allFinderParticipantIds: [PreviewConstants.userId2],
+                    summaryLabel: "Found by \(PreviewConstants.userId2)"
+                )
+            ]
+        )
+        return TripSummary(
+            sessionId: PreviewConstants.sessionIdMulti,
+            tripName: "Same state, two games",
+            status: .ended,
+            endedAt: PreviewConstants.fixedDateEnded,
+            startedAt: PreviewConstants.fixedDate,
+            participantCount: 2,
+            gameCount: 2,
+            totalDiscoveryCount: 2,
+            games: [
+                TripSummaryGameItem(
+                    gameInstanceId: g1,
+                    definitionId: GameType.licensePlate.rawValue,
+                    discoveryCount: 1,
+                    startedAt: PreviewConstants.fixedDate,
+                    endedAt: PreviewConstants.fixedDateEnded,
+                    firstDiscoveries: [],
+                    completionGoal: 50,
+                    progressDescription: "1 / 50 US states"
+                ),
+                TripSummaryGameItem(
+                    gameInstanceId: g2,
+                    definitionId: GameType.licensePlate.rawValue,
+                    discoveryCount: 1,
+                    startedAt: PreviewConstants.fixedDate,
+                    endedAt: PreviewConstants.fixedDateEnded,
+                    firstDiscoveries: [],
+                    completionGoal: 50,
+                    progressDescription: "1 / 50 US states"
+                )
+            ],
+            participantContributions: [
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId1,
+                    discoveryCount: 1,
+                    weightedScore: 1.0,
+                    firstFindCount: 1
+                ),
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId2,
+                    discoveryCount: 1,
+                    weightedScore: 1.0,
+                    firstFindCount: 1
+                )
+            ],
+            discoveryProjection: projection,
+            locationMetadata: nil
+        )
+    }
 }
 
 // MARK: - PreviewInviteFixtures (TripInvite is @Model — use in preview with modelContainer and insert)

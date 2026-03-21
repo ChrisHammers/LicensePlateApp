@@ -39,6 +39,7 @@ struct DiscoveryCreditProjectionServiceTests {
         let result = DiscoveryCreditProjectionService.project(discoveries: [d], credits: nil)
         #expect(result.targetSummaries.count == 1)
         #expect(result.targetSummaries[0].targetId == "us-ca")
+        #expect(result.targetSummaries[0].gameInstanceId == d.gameInstanceId)
         #expect(result.targetSummaries[0].firstFinderParticipantId == "user1")
         #expect(result.targetSummaries[0].summaryLabel.contains("user1"))
         #expect(result.participantScores.count == 1)
@@ -48,9 +49,10 @@ struct DiscoveryCreditProjectionServiceTests {
     }
 
     @Test func projectTwoDiscoveriesSameTargetFirstFinderInSummary() async throws {
+        let gameId = UUID()
         let base = Date()
-        let d1 = makeDiscovery(participantId: "user1", targetId: "us-ca", discoveredAt: base)
-        let d2 = makeDiscovery(participantId: "user2", targetId: "us-ca", discoveredAt: base.addingTimeInterval(10))
+        let d1 = makeDiscovery(participantId: "user1", targetId: "us-ca", gameInstanceId: gameId, discoveredAt: base)
+        let d2 = makeDiscovery(participantId: "user2", targetId: "us-ca", gameInstanceId: gameId, discoveredAt: base.addingTimeInterval(10))
         let result = DiscoveryCreditProjectionService.project(discoveries: [d1, d2], credits: nil)
         #expect(result.targetSummaries.count == 1)
         #expect(result.targetSummaries[0].firstFinderParticipantId == "user1")
@@ -59,8 +61,9 @@ struct DiscoveryCreditProjectionServiceTests {
     }
 
     @Test func projectWithCreditsUsesWeightsForParticipantScores() async throws {
-        let d1 = makeDiscovery(participantId: "user1", targetId: "us-ca")
-        let d2 = makeDiscovery(participantId: "user2", targetId: "us-ca")
+        let gameId = UUID()
+        let d1 = makeDiscovery(participantId: "user1", targetId: "us-ca", gameInstanceId: gameId)
+        let d2 = makeDiscovery(participantId: "user2", targetId: "us-ca", gameInstanceId: gameId)
         let credits = [
             GameCredit(discoveryId: d1.id, participantId: "user1", creditType: .shared, weight: 0.5),
             GameCredit(discoveryId: d1.id, participantId: "user2", creditType: .shared, weight: 0.5)
@@ -75,8 +78,9 @@ struct DiscoveryCreditProjectionServiceTests {
     }
 
     @Test func projectMultipleTargetsProducesOneSummaryPerTarget() async throws {
-        let d1 = makeDiscovery(participantId: "user1", targetId: "us-ca")
-        let d2 = makeDiscovery(participantId: "user1", targetId: "us-ny")
+        let gameId = UUID()
+        let d1 = makeDiscovery(participantId: "user1", targetId: "us-ca", gameInstanceId: gameId)
+        let d2 = makeDiscovery(participantId: "user1", targetId: "us-ny", gameInstanceId: gameId)
         let result = DiscoveryCreditProjectionService.project(discoveries: [d1, d2], credits: nil)
         #expect(result.targetSummaries.count == 2)
         #expect(Set(result.targetSummaries.map(\.targetId)) == Set(["us-ca", "us-ny"]))
