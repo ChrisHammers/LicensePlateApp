@@ -16,6 +16,10 @@ struct GameRowItem: Identifiable {
     let title: String
     let statusOrLifecycle: String
     let progressSummary: String
+    /// Localized collaborative / competitive (game-scoped).
+    let gameModeDisplay: String
+    /// Nil when the game has no teams.
+    let teamSummary: String?
     /// True when user can tap to enter this game (e.g. license plate).
     let isEnterable: Bool
 }
@@ -72,12 +76,16 @@ final class TripSessionViewModel: ObservableObject {
                 let lifecycle = game.commonConfig.lifecycleState.rawValue
                 let title = GameType(rawValue: game.definitionId)?.displayName ?? game.definitionId
                 let isEnterable = game.definitionId == GameType.licensePlate.rawValue
+                let modeDisplay = game.commonConfig.gameMode.localizedDisplayName
+                let teamsLine = Self.teamSummary(for: game.teams)
                 rows.append(GameRowItem(
                     gameId: game.id,
                     definitionId: game.definitionId,
                     title: title,
                     statusOrLifecycle: lifecycle,
                     progressSummary: progressSummary,
+                    gameModeDisplay: modeDisplay,
+                    teamSummary: teamsLine,
                     isEnterable: isEnterable
                 ))
             }
@@ -149,5 +157,15 @@ final class TripSessionViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Matches `TripSummaryBuilder` team line for list UI.
+    private static func teamSummary(for teams: [TripTeam]) -> String? {
+        guard !teams.isEmpty else { return nil }
+        if teams.count == 1 {
+            let name = teams[0].name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? "1 team".localized : name
+        }
+        return "%d teams".localized(teams.count)
     }
 }

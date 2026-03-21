@@ -42,6 +42,23 @@ struct TripSessionRow: View {
         return "\(rollup.primaryGameDiscoveryCount)"
     }
 
+    private var tripMetaLine: String {
+        "%@ · %d games".localized(session.mode.localizedDisplayName, rollup.gameCount)
+    }
+
+    private var combinedAccessibilityLabel: String {
+        let plateFound = rollup.primaryGameDiscoveryCount == 1
+            ? "1 license plate found".localized
+            : "%d license plates found".localized(rollup.primaryGameDiscoveryCount)
+        return [
+            "Trip: %@".localized(session.name),
+            "Trip participation: %@".localized(session.mode.localizedDisplayName),
+            "%d games".localized(rollup.gameCount),
+            plateFound,
+            accessibilityValue
+        ].joined(separator: ". ")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -58,6 +75,18 @@ struct TripSessionRow: View {
                     .foregroundStyle(Color.Theme.accentYellow)
                     .accessibilityLabel(rollup.primaryGameDiscoveryCount == 1 ? "1 license plate found".localized : "%d license plates found".localized(rollup.primaryGameDiscoveryCount))
                     .accessibilityValue(accessibilityValue)
+            }
+
+            Text(tripMetaLine)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+                .accessibilityHidden(true)
+
+            if rollup.gameCount > 1 {
+                Text("License plate progress (primary game)".localized)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown.opacity(0.9))
+                    .accessibilityHidden(true)
             }
 
             Divider()
@@ -86,7 +115,7 @@ struct TripSessionRow: View {
                 .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Trip: %@".localized(session.name))
+        .accessibilityLabel(combinedAccessibilityLabel)
         .accessibilityHint("Double tap to open trip".localized)
     }
 }
@@ -116,6 +145,22 @@ struct TripSessionRow: View {
                 participantCount: 1,
                 totalDiscoveryCount: 0,
                 primaryGameDiscoveryCount: 0,
+                primaryGameCompletionGoal: 50
+            )
+        )
+    }
+    .listStyle(.insetGrouped)
+}
+
+#Preview("Multiplayer multi-game") {
+    List {
+        TripSessionRow(
+            session: PreviewTripFixtures.multiGameTrip(),
+            rollup: TripRollup(
+                gameCount: 3,
+                participantCount: 1,
+                totalDiscoveryCount: 10,
+                primaryGameDiscoveryCount: 6,
                 primaryGameCompletionGoal: 50
             )
         )

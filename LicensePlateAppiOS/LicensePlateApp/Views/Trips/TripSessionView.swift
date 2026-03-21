@@ -124,15 +124,34 @@ struct TripSessionView: View {
 
     private func tripStatusRow(session: TripSession) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Status: \(session.status.rawValue.capitalized)".localized)
+            Text("Trip status: %@".localized(tripStatusLabel(session.status)))
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(Color.Theme.primaryBlue)
-            Text("Participants: \(session.participants.count)".localized)
+                .accessibilityLabel("Trip status".localized + ", " + tripStatusLabel(session.status))
+            Text("Trip participation: %@".localized(session.mode.localizedDisplayName))
                 .font(.system(.caption, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
+                .accessibilityLabel("Trip participation".localized + ", " + session.mode.localizedDisplayName)
+            Text("%d games".localized(viewModel.gameRowItems.count))
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+                .accessibilityLabel("%d games".localized(viewModel.gameRowItems.count))
+            Text("Participants: %d".localized(session.participants.count))
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+                .accessibilityLabel("Participants: %d".localized(session.participants.count))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 4)
+    }
+
+    private func tripStatusLabel(_ status: TripSessionState) -> String {
+        switch status {
+        case .created: return "Created".localized
+        case .active: return "Active".localized
+        case .ended: return "Ended".localized
+        case .cancelled: return "Cancelled".localized
+        }
     }
 }
 
@@ -149,6 +168,16 @@ private struct GameRowView: View {
                 Text(item.progressSummary)
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
+                Text("Game mode: %@".localized(item.gameModeDisplay))
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .accessibilityLabel("Game mode".localized + ", " + item.gameModeDisplay)
+                if let teams = item.teamSummary {
+                    Text("Teams: %@".localized(teams))
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .accessibilityLabel("Teams".localized + ", " + teams)
+                }
                 Text(item.statusOrLifecycle.capitalized)
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown.opacity(0.85))

@@ -645,3 +645,9 @@
 "Scores and finds combine all games on this trip." = "Scores and finds combine all games on this trip.";
 "Active" = "Active";
 "Cancelled" = "Cancelled";
+
+// Step 6.9.6 Phase C — Active trip list + trip dashboard
+"%@ · %d games" = "%@ · %d games";
+"License plate progress (primary game)" = "License plate progress (primary game)";
+"%d games" = "%d games";
+"Participants: %d" = "Participants: %d";
