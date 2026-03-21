@@ -59,9 +59,10 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
 
     func loadActiveSessions(userId: String?) throws -> [TripSession] {
         guard let ctx = modelContext else { throw TripSessionRepositoryError.noModelContext }
-        let status = TripStatus.active.rawValue
+        let activeStatus = TripSessionState.active.rawValue
+        let createdStatus = TripSessionState.created.rawValue
         var descriptor = FetchDescriptor<TripSessionEntity>(
-            predicate: #Predicate<TripSessionEntity> { $0.status == status }
+            predicate: #Predicate<TripSessionEntity> { $0.status == activeStatus || $0.status == createdStatus }
         )
         descriptor.sortBy = [SortDescriptor(\.startedAt, order: .reverse)]
         var entities = try ctx.fetch(descriptor)
@@ -75,8 +76,8 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
 
     func loadArchivedSessions(userId: String?, limit: Int, includeCancelled: Bool, sortBy: TravelLogSort) throws -> [TripSession] {
         guard let ctx = modelContext else { throw TripSessionRepositoryError.noModelContext }
-        let ended = TripStatus.ended.rawValue
-        let cancelled = TripStatus.cancelled.rawValue
+        let ended = TripSessionState.ended.rawValue
+        let cancelled = TripSessionState.cancelled.rawValue
         let descriptor: FetchDescriptor<TripSessionEntity>
         if includeCancelled {
             descriptor = FetchDescriptor<TripSessionEntity>(
@@ -129,7 +130,7 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
 
     // MARK: - Status
 
-    func updateStatus(sessionId: UUID, status: TripStatus) throws {
+    func updateStatus(sessionId: UUID, status: TripSessionState) throws {
         guard let ctx = modelContext else { throw TripSessionRepositoryError.noModelContext }
         let id = sessionId.uuidString
         guard let entity = try fetchEntity(byId: id, context: ctx) else {

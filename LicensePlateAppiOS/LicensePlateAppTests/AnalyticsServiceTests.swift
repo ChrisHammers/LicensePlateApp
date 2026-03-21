@@ -162,6 +162,12 @@ struct AnalyticsServiceTests {
         #expect(ended.parameters?["game_instance_id"] as? String == "g1")
         #expect(ended.parameters?["game_type"] as? String == "lp")
         #expect(ended.parameters?["trip_session_id"] as? String == "s1")
+
+        let completed = AnalyticsService.Event.gameInstanceCompleted(gameInstanceId: "g2", gameType: "license_plate", tripSessionId: "s2")
+        #expect(completed.name == "game_instance_completed")
+        #expect(completed.parameters?["game_instance_id"] as? String == "g2")
+        #expect(completed.parameters?["game_type"] as? String == "license_plate")
+        #expect(completed.parameters?["trip_session_id"] as? String == "s2")
     }
 
     @Test @MainActor func inviteContextEvents() async throws {

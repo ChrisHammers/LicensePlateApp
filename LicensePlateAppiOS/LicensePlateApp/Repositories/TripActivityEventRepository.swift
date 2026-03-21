@@ -15,7 +15,7 @@ protocol TripActivityEventRepositoryProtocol: AnyObject {
     func events(sessionId: UUID, limit: Int?) throws -> [TripActivityEvent]
     func discoveries(sessionId: UUID, gameInstanceId: UUID?) throws -> [GameDiscovery]
     func foundRegions(sessionId: UUID, gameInstanceId: UUID?) throws -> [FoundRegion]
-    /// Remove all events for a session (or for a specific game when gameInstanceId is provided). Used for "Reset Trip".
+    /// Remove all events for a session (or discovery-related events for one game when gameInstanceId is provided). Used for reset game / cancel session cleanup.
     func deleteEvents(sessionId: UUID, gameInstanceId: UUID?) throws
 }
 

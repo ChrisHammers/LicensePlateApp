@@ -17,7 +17,7 @@ struct LicensePlateGameViewModelTests {
         TripSession(
             id: id,
             name: "Test Trip",
-            status: .active,
+            status: startedAt == nil ? .created : .active,
             mode: .solo,
             createdAt: Date(),
             createdBy: "user1",
@@ -26,7 +26,7 @@ struct LicensePlateGameViewModelTests {
         )
     }
 
-    private func makeGame(sessionId: UUID, lifecycleState: GameLifecycleState = .created) -> GameInstance {
+    private func makeGame(sessionId: UUID, lifecycleState: GameInstanceState = .created) -> GameInstance {
         var game = GameInstance(
             definitionId: GameType.licensePlate.rawValue,
             sessionId: sessionId,
@@ -49,11 +49,18 @@ struct LicensePlateGameViewModelTests {
         gameRepo.seed(game)
         let eventRepo = MockTripActivityEventRepository()
         let syncCoordinator = MockSyncCoordinator()
-        let lifecycleService = TripSessionLifecycleService(
+        let gameLifecycle = GameInstanceLifecycleService(
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             syncCoordinator: syncCoordinator
+        )
+        let lifecycleService = TripSessionLifecycleService(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            syncCoordinator: syncCoordinator,
+            gameInstanceLifecycleService: gameLifecycle
         )
         let auth = FirebaseAuthService()
         auth.currentUser = AppUser(id: "user1", userName: "U", firebaseUID: "user1")
@@ -430,5 +437,13 @@ struct LicensePlateGameViewModelTests {
         #expect(decoded?.territoryOptions.includeUSTerritories == false)
         #expect(decoded?.territoryOptions.includeDC == false)
         #expect(decoded?.territoryOptions.includeCanadianTerritories == false)
+    }
+
+    @Test func gameCompletionAnalyticsGateLogsOnlyWhenCrossingGoal() {
+        #expect(GameCompletionAnalyticsGate.shouldLogGameInstanceCompleted(countBefore: 0, countAfter: 1, goal: 1))
+        #expect(GameCompletionAnalyticsGate.shouldLogGameInstanceCompleted(countBefore: 49, countAfter: 50, goal: 50))
+        #expect(!GameCompletionAnalyticsGate.shouldLogGameInstanceCompleted(countBefore: 0, countAfter: 0, goal: 5))
+        #expect(!GameCompletionAnalyticsGate.shouldLogGameInstanceCompleted(countBefore: 0, countAfter: 1, goal: 0))
+        #expect(!GameCompletionAnalyticsGate.shouldLogGameInstanceCompleted(countBefore: 50, countAfter: 51, goal: 50))
     }
 }

@@ -102,7 +102,7 @@ final class CombinedTripSetupViewModel: ObservableObject {
         errorMessage = message
     }
 
-    /// Creates TripSession and GameInstances only (canonical model). Appends trip_started/game_started events when startTripRightAway. Returns the created TripSession on success.
+    /// Creates TripSession (status `.created`, `startedAt` nil) and GameInstances. When `startTripRightAway`, calls `startTrip` so the session becomes `.active`, games start, and trip/game events are appended. Returns the session as persisted (reloaded) on success.
     /// Solo is the one-participant case: one TripSession, one TripParticipant (creator), and one default GameInstance when a single game type is selected. No legacy Trip; no dual-write.
     func createTrip(modelContext: ModelContext) throws -> TripSession {
         errorMessage = nil
@@ -129,16 +129,15 @@ final class CombinedTripSetupViewModel: ObservableObject {
         let createdBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? "unknown"
         let participant = TripParticipant(userId: createdBy, role: .owner, joinedAt: createdAt)
         let mode: TripMode = .solo
-        let startedAt = startTripRightAway ? createdAt : nil
 
         let session = TripSession(
             id: sessionId,
             name: finalName,
-            status: .active,
+            status: .created,
             mode: mode,
             createdAt: createdAt,
             createdBy: createdBy,
-            startedAt: startedAt,
+            startedAt: nil,
             endedAt: nil,
             endedBy: nil,
             participants: [participant]
@@ -161,10 +160,10 @@ final class CombinedTripSetupViewModel: ObservableObject {
             AnalyticsService.shared.log(.gameInstanceCreated(gameInstanceId: instance.id.uuidString, gameType: instance.definitionId, gameMode: instance.commonConfig.gameMode.rawValue, tripId: sessionId.uuidString, gameOrderInTrip: index + 1))
         }
         AnalyticsService.shared.log(.combinedTripCreated(gameTypes: types.map(\.rawValue), tripSessionId: sessionId.uuidString, tripMode: session.mode.rawValue, participantCount: session.participants.count, gameCount: instances.count))
-        if session.startedAt != nil {
+        if startTripRightAway {
             try lifecycleService.startTrip(sessionId: sessionId, actorId: createdBy)
         }
-        return session
+        return try tripSessionRepository.session(byId: sessionId) ?? session
     }
 
     private static func defaultTripName(from date: Date) -> String {

@@ -39,7 +39,7 @@ struct TravelLogViewModelTests {
         let entity = TripSessionEntity(
             id: sessionId,
             name: "Past Trip",
-            status: TripStatus.ended.rawValue,
+            status: TripSessionState.ended.rawValue,
             mode: TripMode.solo.rawValue,
             createdAt: endedAt.addingTimeInterval(-100),
             endedAt: endedAt
@@ -75,7 +75,7 @@ struct TravelLogViewModelTests {
         let entity = TripSessionEntity(
             id: sessionId.uuidString,
             name: "New Flow Trip",
-            status: TripStatus.ended.rawValue,
+            status: TripSessionState.ended.rawValue,
             mode: TripMode.solo.rawValue,
             createdAt: endedAt.addingTimeInterval(-100),
             endedAt: endedAt
@@ -114,7 +114,7 @@ struct TravelLogViewModelTests {
         let entity = TripSessionEntity(
             id: sessionId.uuidString,
             name: "Trip With Plates",
-            status: TripStatus.ended.rawValue,
+            status: TripSessionState.ended.rawValue,
             mode: TripMode.solo.rawValue,
             createdAt: endedAt.addingTimeInterval(-100),
             endedAt: endedAt

@@ -173,12 +173,12 @@ struct GameInstanceRepositoryTests {
         let instance = GameInstance(id: unknownId, definitionId: "license_plate", sessionId: sessionId, ruleSet: ruleSet)
         do {
             try repo.update(instance: instance)
-            #expect(Bool(false), "Expected GameInstanceRepositoryError.instanceNotFound")
+            Issue.record("Expected GameInstanceRepositoryError.instanceNotFound")
         } catch let error as GameInstanceRepositoryError {
             if case .instanceNotFound(let id) = error {
                 #expect(id == unknownId)
             } else {
-                #expect(Bool(false), "Expected instanceNotFound, got \(error)")
+                Issue.record("Expected instanceNotFound, got \(error)")
             }
         }
     }

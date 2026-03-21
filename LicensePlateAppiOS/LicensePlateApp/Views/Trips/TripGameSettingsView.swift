@@ -58,6 +58,10 @@ struct TripGameSettingsView: View {
         return formatter
     }
 
+    private var isTripTerminalForGameReset: Bool {
+        viewModel.currentSession.status == .ended || viewModel.currentSession.status == .cancelled
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -190,7 +194,7 @@ struct TripGameSettingsView: View {
 
             Divider()
 
-            if viewModel.currentSession.startedAt != nil && viewModel.currentSession.status != .ended {
+            if viewModel.currentSession.startedAt != nil && viewModel.currentSession.status == .active {
                 Button {
                     showEndTripConfirmation = true
                 } label: {
@@ -216,7 +220,7 @@ struct TripGameSettingsView: View {
                 Divider()
             } else if let endedAt = viewModel.currentSession.endedAt {
                 SettingInfoRow(
-                    title: "Ended".localized,
+                    title: viewModel.currentSession.status == .cancelled ? "Cancelled".localized : "Ended".localized,
                     value: dateFormatter.string(from: endedAt)
                 )
             }
@@ -229,11 +233,11 @@ struct TripGameSettingsView: View {
                         Text("Reset Game".localized)
                             .font(.system(.body, design: .rounded))
                             .fontWeight(.semibold)
-                            .foregroundStyle(viewModel.currentSession.status == .ended ? Color.secondary : Color.Theme.primaryBlue)
+                            .foregroundStyle(isTripTerminalForGameReset ? Color.secondary : Color.Theme.primaryBlue)
                         Spacer()
                     }
-                    if viewModel.currentSession.status == .ended {
-                        Text("Reset is not available for ended trips.".localized)
+                    if isTripTerminalForGameReset {
+                        Text("Reset is not available for ended or cancelled trips.".localized)
                             .font(.caption)
                             .foregroundStyle(Color.secondary)
                     }
@@ -242,7 +246,7 @@ struct TripGameSettingsView: View {
                 .padding(.horizontal, 16)
             }
             .buttonStyle(.plain)
-            .disabled(!viewModel.isTripCreator || viewModel.currentSession.status == .ended)
+            .disabled(!viewModel.isTripCreator || isTripTerminalForGameReset)
 
             Divider()
 
@@ -273,16 +277,16 @@ struct TripGameSettingsView: View {
                 }
             }
         } message: {
-            Text("This will stop the game. You won't be able to add states in this trip anymore.".localized)
+            Text("This ends the trip. You won't be able to add license plates to this trip anymore.".localized)
         }
         .alert("Reset Game".localized, isPresented: $showResetConfirmation) {
             Button("Cancel".localized, role: .cancel) {}
             Button("Reset".localized, role: .destructive) {
                 do {
-                    try viewModel.resetTrip()
+                    try viewModel.resetGame()
                 } catch {
                     viewModel.setError(error.localizedDescription)
-                    retryAction = { try? viewModel.resetTrip() }
+                    retryAction = { try? viewModel.resetGame() }
                 }
             }
         } message: {
@@ -292,12 +296,12 @@ struct TripGameSettingsView: View {
             Button("Cancel".localized, role: .cancel) {}
             Button("Delete".localized, role: .destructive) {
                 do {
-                    try viewModel.cancelTrip()
+                    try viewModel.deleteTrip()
                     dismiss()
                 } catch {
                     viewModel.setError(error.localizedDescription)
                     retryAction = {
-                        try? viewModel.cancelTrip()
+                        try? viewModel.deleteTrip()
                         dismiss()
                     }
                 }

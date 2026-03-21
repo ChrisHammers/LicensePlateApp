@@ -19,7 +19,7 @@ protocol TripSessionRepositoryProtocol: AnyObject {
     func loadArchivedSessions(userId: String?, limit: Int, includeCancelled: Bool, sortBy: TravelLogSort) throws -> [TripSession]
     func addParticipant(sessionId: UUID, participant: TripParticipant) throws
     func removeParticipant(sessionId: UUID, userId: String) throws
-    func updateStatus(sessionId: UUID, status: TripStatus) throws
+    func updateStatus(sessionId: UUID, status: TripSessionState) throws
     func save(session: TripSession) throws
     func session(byId id: UUID) throws -> TripSession?
 

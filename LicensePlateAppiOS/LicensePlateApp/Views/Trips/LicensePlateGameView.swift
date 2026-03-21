@@ -447,7 +447,7 @@ struct LicensePlateGameView: View {
                 .accessibilityLabel("Start Trip".localized)
                 .accessibilityHint(viewModel.isTripCreator ? "Starts the trip and begins tracking".localized : "Only the trip creator can start the trip".localized)
                 .accessibilityAddTraits(.isButton)
-            } else if viewModel.currentSession.status != .ended {
+            } else if viewModel.isTripActive {
                 // End Trip Button
                 Button {
                     FeedbackService.shared.buttonTap()
@@ -479,13 +479,13 @@ struct LicensePlateGameView: View {
                 .accessibilityHint(viewModel.isTripCreator ? "Ends the trip and stops tracking".localized : "Only the trip creator can end the trip".localized)
                 .accessibilityAddTraits(.isButton)
             } else {
-                // Trip Ended - Show status
+                // Trip ended or cancelled — show status
                 VStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(.title2, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .accessibilityHidden(true)
-                    Text("ENDED".localized)
+                    Text(viewModel.currentSession.status == .cancelled ? "CANCELLED".localized : "ENDED".localized)
                         .font(.system(.caption, design: .rounded))
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Theme.softBrown)
@@ -498,8 +498,8 @@ struct LicensePlateGameView: View {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(Color.Theme.background)
                 )
-                .accessibilityLabel("Trip Ended".localized)
-                .accessibilityValue("This trip has been completed".localized)
+                .accessibilityLabel(viewModel.currentSession.status == .cancelled ? "Trip cancelled".localized : "Trip Ended".localized)
+                .accessibilityValue(viewModel.currentSession.status == .cancelled ? "This trip was cancelled".localized : "This trip has ended".localized)
                 .accessibilityAddTraits(.isStaticText)
             }
         }
@@ -514,7 +514,7 @@ struct LicensePlateGameView: View {
                 }
             }
         } message: {
-            Text("This will stop the game. You won't be able to add states in this trip anymore.".localized)
+            Text("This ends the trip. You won't be able to add license plates to this trip anymore.".localized)
         }
     }
 

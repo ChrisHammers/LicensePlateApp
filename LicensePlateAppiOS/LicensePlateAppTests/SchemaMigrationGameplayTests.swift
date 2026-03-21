@@ -40,7 +40,7 @@ struct SchemaMigrationGameplayTests {
         let entity = TripSessionEntity(
             id: id,
             name: name,
-            status: TripStatus.active.rawValue,
+            status: TripSessionState.active.rawValue,
             mode: TripMode.solo.rawValue,
             createdAt: Date()
         )
@@ -51,7 +51,7 @@ struct SchemaMigrationGameplayTests {
         let results = try context.fetch(descriptor)
         #expect(results.count == 1)
         #expect(results[0].name == name)
-        #expect(results[0].status == TripStatus.active.rawValue)
+        #expect(results[0].status == TripSessionState.active.rawValue)
         #expect(results[0].mode == TripMode.solo.rawValue)
     }
 
@@ -82,7 +82,7 @@ struct SchemaMigrationGameplayTests {
         let entity = TripSessionEntity(
             id: UUID().uuidString,
             name: "Defaults",
-            status: TripStatus.active.rawValue,
+            status: TripSessionState.active.rawValue,
             mode: TripMode.solo.rawValue,
             createdAt: Date()
         )

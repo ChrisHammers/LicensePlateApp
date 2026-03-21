@@ -9,7 +9,7 @@ import Foundation
 
 /// Common configuration shared by all game types. Stored on GameInstance.
 struct CommonGameConfig: Codable, Sendable {
-    var lifecycleState: GameLifecycleState
+    var lifecycleState: GameInstanceState
     var gameMode: GameMode
     /// Predefined profile id (e.g. "default" = 1 point per discovery).
     var scoringProfile: String
@@ -25,7 +25,7 @@ struct CommonGameConfig: Codable, Sendable {
     var showTripPathOnMap: Bool
 
     init(
-        lifecycleState: GameLifecycleState = .created,
+        lifecycleState: GameInstanceState = .created,
         gameMode: GameMode = .collaborative,
         scoringProfile: String = "default",
         configVersion: String = "1",

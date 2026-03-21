@@ -14,7 +14,7 @@ struct CombinedGameAssemblerTests {
     private func makeSession(
         id: UUID = UUID(),
         name: String = "Test Trip",
-        status: TripStatus = .active,
+        status: TripSessionState = .active,
         mode: TripMode = .solo,
         startedAt: Date? = nil,
         endedAt: Date? = nil

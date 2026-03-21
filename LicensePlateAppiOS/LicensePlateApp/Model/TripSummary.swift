@@ -26,7 +26,7 @@ struct TripSummaryGameItem: Sendable {
 struct TripSummary: Sendable {
     var sessionId: UUID
     var tripName: String
-    var status: TripStatus
+    var status: TripSessionState
     var endedAt: Date?
     var startedAt: Date?
     var participantCount: Int

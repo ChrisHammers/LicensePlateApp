@@ -32,7 +32,7 @@ struct TripSessionConfigOwnershipTests {
     @Test func tripSessionMinimalInitSucceeds() async throws {
         let session = TripSession(name: "Minimal")
         #expect(session.name == "Minimal")
-        #expect(session.status == .active)
+        #expect(session.status == .created)
         #expect(session.mode == .solo)
         #expect(session.participants.isEmpty)
     }

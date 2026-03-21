@@ -1,14 +1,14 @@
 //
-//  GameLifecycleState.swift
+//  GameInstanceState.swift
 //  LicensePlateApp
 //
-//  Step 07.5 — Per-game lifecycle: created, started, ended, completed.
+//  Per-game lifecycle (Step 6.9.3); stored on GameInstance.commonConfig.
 //
 
 import Foundation
 
 /// Lifecycle state of a game instance. Games are not "enabled/disabled"; they use these states.
-enum GameLifecycleState: String, Codable, CaseIterable, Sendable {
+enum GameInstanceState: String, Codable, CaseIterable, Sendable {
     /// Game configured but not yet started.
     case created
     /// Game is active; discoveries can be recorded.

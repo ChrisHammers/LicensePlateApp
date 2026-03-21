@@ -601,3 +601,16 @@
 "No purchases to restore." = "Aucun achat à restaurer.";
 "Get more from RoadTrip Royale with premium features." = "Profitez davantage de RoadTrip Royale avec les fonctionnalités premium.";
 
+// Step 6.9.3 — Trip vs game lifecycle
+"Trips cannot be reset." = "Les trajets ne peuvent pas être réinitialisés.";
+"Game reset is not available for this trip." = "La réinitialisation du jeu n’est pas disponible pour ce trajet.";
+"This ends the trip. You won't be able to add license plates to this trip anymore." = "Cela met fin au trajet. Vous ne pourrez plus ajouter de plaques à ce trajet.";
+"Reset is not available for ended or cancelled trips." = "La réinitialisation n’est pas disponible pour les trajets terminés ou annulés.";
+"This trip has ended" = "Ce trajet est terminé";
+"Trip cancelled" = "Trajet annulé";
+"This trip was cancelled" = "Ce trajet a été annulé";
+"This trip was cancelled." = "Ce trajet a été annulé.";
+"Start the trip before starting games." = "Démarrez le trajet avant de lancer les jeux.";
+"CANCELLED" = "ANNULÉ";
+"Game state: %@" = "État du jeu : %@";
+

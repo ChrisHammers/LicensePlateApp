@@ -35,6 +35,7 @@ final class LicensePlateGameViewModel: ObservableObject {
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
     private let lifecycleService: TripSessionLifecycleServiceProtocol
+    private let gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
     private let syncCoordinator: SyncCoordinatorProtocol
     private let authService: FirebaseAuthService
 
@@ -44,8 +45,9 @@ final class LicensePlateGameViewModel: ObservableObject {
         return currentSession.createdBy == id
     }
 
+    /// True when the trip has been started through the lifecycle service (`.active` + `startedAt`).
     var isTripActive: Bool {
-        currentSession.startedAt != nil && currentSession.status != .ended
+        currentSession.status == .active && currentSession.startedAt != nil
     }
 
     init(
@@ -55,6 +57,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         gameInstanceRepository: GameInstanceRepositoryProtocol,
         tripActivityEventRepository: TripActivityEventRepositoryProtocol,
         lifecycleService: TripSessionLifecycleServiceProtocol,
+        gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol = GameInstanceLifecycleService.shared,
         syncCoordinator: SyncCoordinatorProtocol,
         authService: FirebaseAuthService
     ) {
@@ -65,6 +68,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         self.gameInstanceRepository = gameInstanceRepository
         self.tripActivityEventRepository = tripActivityEventRepository
         self.lifecycleService = lifecycleService
+        self.gameInstanceLifecycleService = gameInstanceLifecycleService
         self.syncCoordinator = syncCoordinator
         self.authService = authService
         self.foundRegions = (try? tripActivityEventRepository.foundRegions(sessionId: session.id, gameInstanceId: game.id)) ?? []
@@ -92,14 +96,15 @@ final class LicensePlateGameViewModel: ObservableObject {
         refreshSession()
     }
 
-    func resetTrip() throws {
-        try lifecycleService.resetTrip(sessionId: sessionId, gameInstanceId: game.id)
+    func resetGame() throws {
+        try gameInstanceLifecycleService.resetGame(sessionId: sessionId, gameInstanceId: game.id)
         refreshSession()
         refreshFoundRegions()
         foundRegions = []
     }
 
-    func cancelTrip() throws {
+    /// Cancels the trip session (UI: Delete trip); clears games and events via `TripSessionLifecycleService`.
+    func deleteTrip() throws {
         let cancelledBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
         try lifecycleService.cancelSession(sessionId: sessionId, cancelledBy: cancelledBy)
         refreshSession()
@@ -198,6 +203,8 @@ final class LicensePlateGameViewModel: ObservableObject {
             return .success
         }
 
+        let countBeforeUniqueFound = foundRegions.count
+
         var payload: [String: String] = [
             TripActivityEventPayloadKey.regionId: regionID,
             TripActivityEventPayloadKey.gameInstanceId: game.id.uuidString,
@@ -223,6 +230,22 @@ final class LicensePlateGameViewModel: ObservableObject {
                 outcome: result.outcome.rawValue,
                 participantId: participantId.isEmpty ? nil : participantId
             ))
+            if game.definitionId == GameType.licensePlate.rawValue,
+               let lpConfig = game.licensePlateConfig() {
+                let goal = LicensePlateScopeCalculator.completionGoal(for: lpConfig)
+                let countAfter = foundRegions.count
+                if GameCompletionAnalyticsGate.shouldLogGameInstanceCompleted(
+                    countBefore: countBeforeUniqueFound,
+                    countAfter: countAfter,
+                    goal: goal
+                ) {
+                    AnalyticsService.shared.log(.gameInstanceCompleted(
+                        gameInstanceId: game.id.uuidString,
+                        gameType: game.definitionId,
+                        tripSessionId: sessionId.uuidString
+                    ))
+                }
+            }
             return .success
         } catch {
             AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_discovery", error: error.localizedDescription))
@@ -350,5 +373,12 @@ final class LicensePlateGameViewModel: ObservableObject {
             AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_settings", error: error.localizedDescription))
             objectWillChange.send()
         }
+    }
+}
+
+/// When to emit `gameInstanceCompleted` after a new find (crosses configured goal once). Tested via `@testable`.
+enum GameCompletionAnalyticsGate {
+    static func shouldLogGameInstanceCompleted(countBefore: Int, countAfter: Int, goal: Int) -> Bool {
+        goal > 0 && countBefore < goal && countAfter >= goal
     }
 }

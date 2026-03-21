@@ -58,11 +58,15 @@ struct CombinedTripSetupViewModelTests {
 
         #expect(session.name == "My Trip")
         #expect(session.createdBy == userId)
+        #expect(session.status == .created)
+        #expect(session.startedAt == nil)
 
         let loadedSession = try sessionRepo.session(byId: session.id)
         #expect(loadedSession != nil)
         #expect(loadedSession?.id == session.id)
         #expect(loadedSession?.name == "My Trip")
+        #expect(loadedSession?.status == .created)
+        #expect(loadedSession?.startedAt == nil)
 
         let instances = try instanceRepo.fetchByTripSession(sessionId: session.id)
         #expect(instances.count == 1)

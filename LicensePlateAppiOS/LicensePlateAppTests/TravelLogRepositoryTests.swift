@@ -37,7 +37,7 @@ struct TravelLogRepositoryTests {
         let entity1 = TripSessionEntity(
             id: id1,
             name: "Trip One",
-            status: TripStatus.ended.rawValue,
+            status: TripSessionState.ended.rawValue,
             mode: TripMode.solo.rawValue,
             createdAt: Date().addingTimeInterval(-200),
             endedAt: Date().addingTimeInterval(-100)
@@ -64,7 +64,7 @@ struct TravelLogRepositoryTests {
         let entity1 = TripSessionEntity(
             id: id1,
             name: "Road Trip",
-            status: TripStatus.ended.rawValue,
+            status: TripSessionState.ended.rawValue,
             mode: TripMode.solo.rawValue,
             createdAt: endedAt.addingTimeInterval(-100),
             endedAt: endedAt
@@ -92,7 +92,7 @@ struct TravelLogRepositoryTests {
         let entity1 = TripSessionEntity(
             id: UUID().uuidString,
             name: "Older",
-            status: TripStatus.ended.rawValue,
+            status: TripSessionState.ended.rawValue,
             mode: TripMode.solo.rawValue,
             createdAt: older.addingTimeInterval(-100),
             endedAt: older
@@ -100,7 +100,7 @@ struct TravelLogRepositoryTests {
         let entity2 = TripSessionEntity(
             id: UUID().uuidString,
             name: "Newer",
-            status: TripStatus.ended.rawValue,
+            status: TripSessionState.ended.rawValue,
             mode: TripMode.solo.rawValue,
             createdAt: newer.addingTimeInterval(-100),
             endedAt: newer
@@ -133,7 +133,7 @@ struct TravelLogRepositoryTests {
         let entity1 = TripSessionEntity(
             id: id1,
             name: "Trip With Games",
-            status: TripStatus.ended.rawValue,
+            status: TripSessionState.ended.rawValue,
             mode: TripMode.solo.rawValue,
             createdAt: endedAt.addingTimeInterval(-100),
             endedAt: endedAt

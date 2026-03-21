@@ -29,7 +29,7 @@ enum TripSessionEntityMapper {
     /// Map SwiftData TripSessionEntity to domain TripSession. Teams and region scope are on GameInstance (Step 6.9.1, 6.9.2).
     static func toDomain(_ entity: TripSessionEntity) -> TripSession {
         let participants = decodeParticipants(entity.participantsData)
-        let status = TripStatus(rawValue: entity.status) ?? .active
+        let status = TripSessionState(rawValue: entity.status) ?? .active
         let mode = Self.mapEntityModeToTripMode(entity.mode)
         let createdAt = entity.createdAt ?? entity.startedAt ?? Date.distantPast
         return TripSession(

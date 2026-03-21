@@ -199,12 +199,12 @@ struct TripSessionRepositoryTests {
         let unknownId = UUID()
         do {
             try repo.updateStatus(sessionId: unknownId, status: .ended)
-            #expect(Bool(false), "Expected TripSessionRepositoryError.sessionNotFound")
+            Issue.record("Expected TripSessionRepositoryError.sessionNotFound")
         } catch let error as TripSessionRepositoryError {
             if case .sessionNotFound(let id) = error {
                 #expect(id == unknownId)
             } else {
-                #expect(Bool(false), "Expected sessionNotFound, got \(error)")
+                Issue.record("Expected sessionNotFound, got \(error)")
             }
         }
     }

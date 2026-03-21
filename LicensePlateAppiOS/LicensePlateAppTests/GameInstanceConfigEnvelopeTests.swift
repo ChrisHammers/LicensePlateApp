@@ -50,7 +50,7 @@ struct GameInstanceConfigEnvelopeTests {
 
         let back = GameInstanceMapper.toDomain(entity)
         #expect(back.commonConfig.gameMode == GameMode.competitive)
-        #expect(back.commonConfig.lifecycleState == GameLifecycleState.created)
+        #expect(back.commonConfig.lifecycleState == GameInstanceState.created)
         let decoded = back.licensePlateConfig()
         #expect(decoded != nil)
         #expect(decoded?.selectedCountries == [.unitedStates])

@@ -104,6 +104,10 @@ private struct GameRowView: View {
                 Text(item.progressSummary)
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
+                Text(item.statusOrLifecycle.capitalized)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown.opacity(0.85))
+                    .accessibilityLabel("Game state: %@".localized(item.statusOrLifecycle))
             }
             Spacer()
             if item.isEnterable {

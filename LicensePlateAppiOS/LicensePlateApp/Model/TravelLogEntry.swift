@@ -22,7 +22,7 @@ struct TravelLogEntry: Codable, Identifiable, Sendable {
     /// Number of games in the trip (for list stats). Step 07 optional; nil when unknown.
     var gameCount: Int?
     /// Status for showing ended vs cancelled in list. Step 07 optional.
-    var status: TripStatus?
+    var status: TripSessionState?
 
     init(
         id: String = UUID().uuidString,
@@ -33,7 +33,7 @@ struct TravelLogEntry: Codable, Identifiable, Sendable {
         locationMetadata: [String: String]? = nil,
         participantCount: Int? = nil,
         gameCount: Int? = nil,
-        status: TripStatus? = nil
+        status: TripSessionState? = nil
     ) {
         self.id = id
         self.sessionId = sessionId

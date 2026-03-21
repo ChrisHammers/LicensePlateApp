@@ -131,9 +131,12 @@ class AnalyticsService: AnalyticsLogging {
         case tripSessionCreated(tripId: String, tripStatus: String, tripParticipantCount: Int?, tripActiveGameCount: Int?, tripSource: String?)
         case tripSessionStarted(tripId: String, tripActiveGameCount: Int?)
         case tripSessionEnded(tripId: String)
-        case tripSessionReset(tripId: String, gameInstanceId: String)
+        /// Step 6.9.3 — Game progress reset (discoveries cleared for one game); not a trip reset.
+        case gameInstanceReset(tripSessionId: String, gameInstanceId: String)
+        /// Trip cancelled from active list or settings (soft delete UX).
+        case tripSessionCancelled(tripId: String)
+        /// Reserved for future hard tombstone delete; not emitted on cancel today.
         case tripSessionDeleted(tripId: String)
-        case tripSessionCompleted(tripId: String)
         case gameInstanceCreated(gameInstanceId: String, gameType: String, gameMode: String, tripId: String, gameOrderInTrip: Int?)
         case gameInstanceStarted(gameInstanceId: String, gameType: String, gameLifecycleState: String, configLockReason: String, tripSessionId: String)
         case gameInstanceEnded(gameInstanceId: String, gameType: String, tripSessionId: String)
@@ -262,9 +265,9 @@ class AnalyticsService: AnalyticsLogging {
             case .tripSessionCreated: return "trip_session_created"
             case .tripSessionStarted: return "trip_session_started"
             case .tripSessionEnded: return "trip_session_ended"
-            case .tripSessionReset: return "trip_session_reset"
+            case .gameInstanceReset: return "game_instance_reset"
+            case .tripSessionCancelled: return "trip_session_cancelled"
             case .tripSessionDeleted: return "trip_session_deleted"
-            case .tripSessionCompleted: return "trip_session_completed"
             case .gameInstanceCreated: return "game_instance_created"
             case .gameInstanceStarted: return "game_instance_started"
             case .gameInstanceEnded: return "game_instance_ended"
@@ -393,11 +396,11 @@ class AnalyticsService: AnalyticsLogging {
                 var p: [String: Any] = ["trip_session_id": tripId]
                 if let c = tripActiveGameCount { p["trip_active_game_count"] = c }
                 return p
-            case .tripSessionEnded(let tripId), .tripSessionCompleted(let tripId):
+            case .tripSessionEnded(let tripId):
                 return ["trip_session_id": tripId]
-            case .tripSessionReset(let tripId, let gameInstanceId):
-                return ["trip_session_id": tripId, "game_instance_id": gameInstanceId]
-            case .tripSessionDeleted(let tripId):
+            case .gameInstanceReset(let tripSessionId, let gameInstanceId):
+                return ["trip_session_id": tripSessionId, "game_instance_id": gameInstanceId]
+            case .tripSessionCancelled(let tripId), .tripSessionDeleted(let tripId):
                 return ["trip_session_id": tripId]
             case .gameInstanceCreated(let gameInstanceId, let gameType, let gameMode, let tripId, let gameOrderInTrip):
                 var p: [String: Any] = ["game_instance_id": gameInstanceId, "game_type": gameType, "game_mode": gameMode, "trip_session_id": tripId]

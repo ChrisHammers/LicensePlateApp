@@ -11,7 +11,7 @@ import Foundation
 final class TripSession {
     var id: UUID
     var name: String
-    var status: TripStatus
+    var status: TripSessionState
     var mode: TripMode
     var createdAt: Date
     var createdBy: String?
@@ -26,7 +26,7 @@ final class TripSession {
     init(
         id: UUID = UUID(),
         name: String,
-        status: TripStatus = .active,
+        status: TripSessionState = .created,
         mode: TripMode = .solo,
         createdAt: Date = .now,
         createdBy: String? = nil,

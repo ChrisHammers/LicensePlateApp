@@ -27,7 +27,7 @@ final class MockTripSessionRepository: TripSessionRepositoryProtocol {
 
     func loadActiveSessions(userId: String?) throws -> [TripSession] {
         if shouldThrow { throw NSError(domain: "MockTripSessionRepository", code: -1, userInfo: nil) }
-        return sessions.values.filter { $0.status == .active }
+        return sessions.values.filter { $0.status == .active || $0.status == .created }
     }
 
     func loadArchivedSessions(userId: String?, limit: Int, includeCancelled: Bool, sortBy: TravelLogSort) throws -> [TripSession] {
@@ -63,7 +63,7 @@ final class MockTripSessionRepository: TripSessionRepositoryProtocol {
         }
     }
 
-    func updateStatus(sessionId: UUID, status: TripStatus) throws {
+    func updateStatus(sessionId: UUID, status: TripSessionState) throws {
         if shouldThrow { throw NSError(domain: "MockTripSessionRepository", code: -1, userInfo: nil) }
         if var session = sessions[sessionId] {
             session.status = status
