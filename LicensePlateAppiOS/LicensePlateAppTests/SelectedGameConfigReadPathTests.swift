@@ -16,7 +16,6 @@ struct SelectedGameConfigReadPathTests {
             id: UUID(),
             name: "Trip",
             status: .active,
-            mode: .solo,
             createdAt: Date(),
             participants: []
         )
@@ -40,7 +39,6 @@ struct SelectedGameConfigReadPathTests {
             id: UUID(),
             name: "Trip",
             status: .active,
-            mode: .solo,
             createdAt: Date(),
             participants: [TripParticipant(userId: "u1", role: .owner, joinedAt: Date())]
         )
@@ -58,7 +56,6 @@ struct SelectedGameConfigReadPathTests {
             id: UUID(),
             name: "Trip",
             status: .active,
-            mode: .solo,
             createdAt: Date(),
             participants: []
         )

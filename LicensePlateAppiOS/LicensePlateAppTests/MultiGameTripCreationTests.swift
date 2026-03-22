@@ -2,7 +2,8 @@
 //  MultiGameTripCreationTests.swift
 //  LicensePlateAppTests
 //
-//  Step 6.9.4 — One TripSession can host multiple GameInstances; trip mode stays solo/multiplayer only.
+//  Step 6.9.4 — One TripSession can host multiple GameInstances.
+//  Step 6.10 — Trip participation (`TripSession.mode`) is derived from roster size (solo vs multiplayer).
 //
 
 import Foundation
@@ -33,7 +34,6 @@ struct MultiGameTripCreationTests {
             id: sessionId,
             name: "Multi-game",
             status: .created,
-            mode: .solo,
             createdAt: created,
             createdBy: "owner",
             startedAt: nil,

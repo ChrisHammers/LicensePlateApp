@@ -544,7 +544,6 @@ private struct LicensePlateGameScopeDraftSection: View {
         id: sessionId,
         name: "Preview",
         status: .active,
-        mode: .solo,
         createdAt: Date(),
         createdBy: "u1",
         startedAt: Date(),

@@ -43,17 +43,19 @@ struct TripSessionRow: View {
     }
 
     private var tripMetaLine: String {
-        "%@ · %d games".localized(session.mode.localizedDisplayName, rollup.gameCount)
+        "%@ · %@".localized(session.mode.localizedDisplayName, rollup.gameCount == 1 ? "1 game".localized : "%d games".localized(rollup.gameCount))
+        
     }
 
     private var combinedAccessibilityLabel: String {
         let plateFound = rollup.primaryGameDiscoveryCount == 1
             ? "1 license plate found".localized
             : "%d license plates found".localized(rollup.primaryGameDiscoveryCount)
+        let gamesLine = rollup.gameCount == 1 ? "1 game".localized : "%d games".localized(rollup.gameCount)
         return [
             "Trip: %@".localized(session.name),
             "Trip participation: %@".localized(session.mode.localizedDisplayName),
-            "%d games".localized(rollup.gameCount),
+            gamesLine,
             plateFound,
             accessibilityValue
         ].joined(separator: ". ")

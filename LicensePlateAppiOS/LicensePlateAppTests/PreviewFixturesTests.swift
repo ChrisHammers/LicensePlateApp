@@ -20,7 +20,7 @@ struct PreviewFixturesTests {
         #expect(solo.name == "Solo Road Trip")
 
         let multi = PreviewTripFixtures.multiGameTrip()
-        #expect(multi.mode == .multiplayer)
+        #expect(multi.mode == .solo)
         #expect(multi.participants.count == 1)
 
         let collaborative = PreviewTripFixtures.collaborativeTrip()

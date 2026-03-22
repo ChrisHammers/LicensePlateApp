@@ -15,21 +15,21 @@ struct CombinedGameAssemblerTests {
         id: UUID = UUID(),
         name: String = "Test Trip",
         status: TripSessionState = .active,
-        mode: TripMode = .solo,
         startedAt: Date? = nil,
-        endedAt: Date? = nil
+        endedAt: Date? = nil,
+        participants: [TripParticipant]? = nil
     ) -> TripSession {
         let created = Date()
+        let roster = participants ?? [TripParticipant(userId: "user1", role: .owner)]
         return TripSession(
             id: id,
             name: name,
             status: status,
-            mode: mode,
             createdAt: created,
             createdBy: "user1",
             startedAt: startedAt ?? created,
             endedAt: endedAt,
-            participants: [TripParticipant(userId: "user1", role: .owner)]
+            participants: roster
         )
     }
 
@@ -122,7 +122,10 @@ struct CombinedGameAssemblerTests {
     }
 
     @Test func competitiveGameModeIsNotDerivedFromTripMode() async throws {
-        let session = makeSession(mode: .multiplayer)
+        let session = makeSession(participants: [
+            TripParticipant(userId: "user1", role: .owner),
+            TripParticipant(userId: "user2", role: .member)
+        ])
         let config = CombinedGameConfiguration(enabledGameTypes: [.licensePlate])
         let choices: [GameType: GameSetupChoice] = [
             .licensePlate: GameSetupChoice(gameType: .licensePlate, gameMode: .competitive, teams: [])
@@ -138,7 +141,7 @@ struct CombinedGameAssemblerTests {
     }
 
     @Test func teamsFromChoiceAppliedToInstance() async throws {
-        let session = makeSession(mode: .solo)
+        let session = makeSession()
         let teams = [TripTeam(name: "Team Alpha", participantUserIds: ["user1"])]
         let config = CombinedGameConfiguration(enabledGameTypes: [.licensePlate])
         let choices: [GameType: GameSetupChoice] = [

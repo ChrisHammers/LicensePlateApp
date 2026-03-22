@@ -26,13 +26,6 @@ struct CombinedTripSetupView: View {
     @AppStorage("appUseVibrations") private var appUseVibrations = true
 
     /// Explicit bindings for pickers (same pattern as `AppPreferencesView` private picker bindings).
-    private var tripParticipationModeBinding: Binding<TripMode> {
-        Binding(
-            get: { viewModel.tripParticipationMode },
-            set: { viewModel.tripParticipationMode = $0 }
-        )
-    }
-
     private var defaultGameModeBinding: Binding<GameMode> {
         Binding(
             get: { viewModel.defaultGameMode },
@@ -143,15 +136,11 @@ struct CombinedTripSetupView: View {
                     .font(.system(.headline, design: .rounded))
                     .foregroundStyle(Color.Theme.primaryBlue)
 
-                Picker(selection: tripParticipationModeBinding) {
-                    Text("Solo".localized).tag(TripMode.solo)
-                    Text("Multiplayer".localized).tag(TripMode.multiplayer)
-                } label: {
-                    Text("Trip type".localized)
-                }
-                .pickerStyle(.segmented)
-                .accessibilityLabel("Trip participation mode".localized)
-                .accessibilityHint("Solo is one participant. Multiplayer is for inviting others.".localized)
+                Text("Your trip starts with you. Invite friends or family anytime to play together.".localized)
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("Your trip starts with you. Invite friends or family anytime to play together.".localized)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 16)

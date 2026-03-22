@@ -14,7 +14,6 @@ final class TripSessionEntity {
     var id: String
     var name: String
     var status: String
-    var mode: String
     var createdAt: Date?
     var createdBy: String?
     var startedAt: Date?
@@ -27,7 +26,6 @@ final class TripSessionEntity {
         id: String,
         name: String,
         status: String,
-        mode: String,
         createdAt: Date? = nil,
         createdBy: String? = nil,
         startedAt: Date? = nil,
@@ -38,7 +36,6 @@ final class TripSessionEntity {
         self.id = id
         self.name = name
         self.status = status
-        self.mode = mode
         self.createdAt = createdAt
         self.createdBy = createdBy
         self.startedAt = startedAt

@@ -38,7 +38,6 @@ struct TravelLogRepositoryTests {
             id: id1,
             name: "Trip One",
             status: TripSessionState.ended.rawValue,
-            mode: TripMode.solo.rawValue,
             createdAt: Date().addingTimeInterval(-200),
             endedAt: Date().addingTimeInterval(-100)
         )
@@ -65,7 +64,6 @@ struct TravelLogRepositoryTests {
             id: id1,
             name: "Road Trip",
             status: TripSessionState.ended.rawValue,
-            mode: TripMode.solo.rawValue,
             createdAt: endedAt.addingTimeInterval(-100),
             endedAt: endedAt
         )
@@ -93,7 +91,6 @@ struct TravelLogRepositoryTests {
             id: UUID().uuidString,
             name: "Older",
             status: TripSessionState.ended.rawValue,
-            mode: TripMode.solo.rawValue,
             createdAt: older.addingTimeInterval(-100),
             endedAt: older
         )
@@ -101,7 +98,6 @@ struct TravelLogRepositoryTests {
             id: UUID().uuidString,
             name: "Newer",
             status: TripSessionState.ended.rawValue,
-            mode: TripMode.solo.rawValue,
             createdAt: newer.addingTimeInterval(-100),
             endedAt: newer
         )
@@ -134,7 +130,6 @@ struct TravelLogRepositoryTests {
             id: id1,
             name: "Trip With Games",
             status: TripSessionState.ended.rawValue,
-            mode: TripMode.solo.rawValue,
             createdAt: endedAt.addingTimeInterval(-100),
             endedAt: endedAt
         )

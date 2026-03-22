@@ -32,7 +32,7 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let session = TripSession(name: "Repo Test Trip", status: .active, mode: .solo)
+        let session = TripSession(name: "Repo Test Trip", status: .active)
         try repo.create(session: session)
 
         let loaded = try repo.session(byId: session.id)
@@ -51,7 +51,7 @@ struct TripSessionRepositoryTests {
         var active = try repo.loadActiveSessions(userId: nil)
         #expect(active.isEmpty)
 
-        let session = TripSession(name: "Active Trip", status: .active, mode: .solo, startedAt: Date())
+        let session = TripSession(name: "Active Trip", status: .active, startedAt: Date())
         try repo.create(session: session)
         active = try repo.loadActiveSessions(userId: nil)
         #expect(active.count == 1)
@@ -64,7 +64,7 @@ struct TripSessionRepositoryTests {
         let context = ModelContext(container)
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
-        let session = TripSession(name: "Canonical Active", status: .active, mode: .solo, startedAt: Date())
+        let session = TripSession(name: "Canonical Active", status: .active, startedAt: Date())
         try repo.create(session: session)
         let active = try repo.loadActiveSessions(userId: nil)
         #expect(active.count == 1)
@@ -78,7 +78,7 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let session = TripSession(name: "Status Trip", status: .active, mode: .solo)
+        let session = TripSession(name: "Status Trip", status: .active)
         try repo.create(session: session)
 
         try repo.updateStatus(sessionId: session.id, status: .active)
@@ -98,7 +98,7 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let session = TripSession(name: "Participants Trip", status: .active, mode: .multiplayer, createdBy: "user1")
+        let session = TripSession(name: "Participants Trip", status: .active, createdBy: "user1")
         try repo.create(session: session)
 
         let participant = TripParticipant(userId: "user2", role: .member)
@@ -119,7 +119,7 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let session = TripSession(name: "Original", status: .active, mode: .solo)
+        let session = TripSession(name: "Original", status: .active)
         try repo.create(session: session)
         let id = session.id
 
@@ -138,9 +138,9 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let endedSession = TripSession(name: "Ended Trip", status: .ended, mode: .solo, endedAt: Date())
+        let endedSession = TripSession(name: "Ended Trip", status: .ended, endedAt: Date())
         try repo.create(session: endedSession)
-        let activeSession = TripSession(name: "Active Trip", status: .active, mode: .solo, startedAt: Date())
+        let activeSession = TripSession(name: "Active Trip", status: .active, startedAt: Date())
         try repo.create(session: activeSession)
 
         let archived = try repo.loadArchivedSessions(userId: nil, limit: 10, includeCancelled: false, sortBy: .endedAtDesc)
@@ -154,9 +154,9 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let endedSession = TripSession(name: "Ended", status: .ended, mode: .solo, endedAt: Date())
+        let endedSession = TripSession(name: "Ended", status: .ended, endedAt: Date())
         try repo.create(session: endedSession)
-        var cancelledSession = TripSession(name: "Cancelled", status: .active, mode: .solo)
+        var cancelledSession = TripSession(name: "Cancelled", status: .active)
         try repo.create(session: cancelledSession)
         try repo.updateStatus(sessionId: cancelledSession.id, status: .cancelled)
 
@@ -173,8 +173,8 @@ struct TripSessionRepositoryTests {
 
         let older = Date().addingTimeInterval(-200)
         let newer = Date().addingTimeInterval(-100)
-        let session1 = TripSession(name: "Older", status: .ended, mode: .solo, endedAt: older)
-        let session2 = TripSession(name: "Newer", status: .ended, mode: .solo, endedAt: newer)
+        let session1 = TripSession(name: "Older", status: .ended, endedAt: older)
+        let session2 = TripSession(name: "Newer", status: .ended, endedAt: newer)
         try repo.create(session: session1)
         try repo.create(session: session2)
 
@@ -222,7 +222,6 @@ struct TripSessionRepositoryTests {
         let session = TripSession(
             name: "Team Trip",
             status: .active,
-            mode: .solo,
             createdAt: Date(),
             createdBy: "user1",
             startedAt: Date(),

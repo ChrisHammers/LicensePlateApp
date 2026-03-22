@@ -293,7 +293,7 @@ struct CombinedTripSetupViewModelTests {
         #expect(opts?.includeCanadianTerritories == true)
     }
 
-    @Test func createTripPersistsMultiplayerTripMode() async throws {
+    @Test func createTripDerivedParticipationSoloWithOneParticipant() async throws {
         let container = try makeContainer()
         let ctx = ModelContext(container)
         let sessionRepo = TripSessionRepository.shared
@@ -314,10 +314,9 @@ struct CombinedTripSetupViewModelTests {
         )
         viewModel.selectedGameTypes = [.licensePlate]
         viewModel.includeUS = true
-        viewModel.tripParticipationMode = .multiplayer
 
         let session = try viewModel.createTrip()
-        #expect(session.mode == .multiplayer)
+        #expect(session.mode == .solo)
         #expect(session.participants.count == 1)
     }
 

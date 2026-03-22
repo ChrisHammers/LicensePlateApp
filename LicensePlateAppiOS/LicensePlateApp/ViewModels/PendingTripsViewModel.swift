@@ -32,7 +32,7 @@ final class PendingTripsViewModel: ObservableObject {
         self.gameInstanceRepository = gameInstanceRepository
     }
 
-    /// Snapshot for UI: trip participation (TripMode) vs optional local game count.
+    /// Snapshot for UI: inviter/status and optional local game count.
     func displaySnapshot(for invite: TripInvite) -> InviteDisplaySnapshot {
         InviteDisplaySnapshot.make(from: invite, localGameCount: localGameCount(for: invite.tripSessionId))
     }

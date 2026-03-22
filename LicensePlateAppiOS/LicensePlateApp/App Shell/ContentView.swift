@@ -467,9 +467,6 @@ private struct PendingInviteCard: View {
                 Label(snapshot.inviterLine, systemImage: "person")
                     .font(.system(.footnote, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
-                Text(snapshot.tripParticipationLine)
-                    .font(.system(.footnote, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
                 if let games = snapshot.gamesOnTripLine {
                     Text(games)
                         .font(.system(.footnote, design: .rounded))

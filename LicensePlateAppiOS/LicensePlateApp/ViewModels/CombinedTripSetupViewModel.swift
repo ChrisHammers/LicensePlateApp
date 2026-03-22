@@ -3,7 +3,8 @@
 //  LicensePlateApp
 //
 //  Step 06 — ViewModel for combined trip setup: game types, countries, options. Creates TripSession + GameInstances (canonical only).
-//  Step 6.9.4 — Trip mode (solo/multiplayer) and default game mode are independent; game assembly uses GameSetupChoice.
+//  Step 6.9.4 — Default game mode from setup; game assembly uses GameSetupChoice.
+//  Step 6.10 — Trip participation (solo/multiplayer) is derived from participant count, not chosen here.
 //
 
 import Foundation
@@ -14,8 +15,6 @@ final class CombinedTripSetupViewModel: ObservableObject {
     // MARK: - State
 
     @Published var tripName: String = ""
-    /// Trip participation: solo vs multiplayer (roster/invites). Not the same as per-game `GameMode`.
-    @Published var tripParticipationMode: TripMode = .solo
     /// MVP: one play style for every selected game type; future UI can supply per-type choices without changing `TripSession`.
     @Published var defaultGameMode: GameMode = .collaborative
     @Published var selectedGameTypes: Set<GameType> = [.licensePlate]
@@ -143,7 +142,6 @@ final class CombinedTripSetupViewModel: ObservableObject {
             id: sessionId,
             name: finalName,
             status: .created,
-            mode: tripParticipationMode,
             createdAt: createdAt,
             createdBy: createdBy,
             startedAt: nil,
@@ -183,7 +181,6 @@ final class CombinedTripSetupViewModel: ObservableObject {
         AnalyticsService.shared.log(.combinedTripCreated(
             gameTypes: types.map(\.rawValue),
             tripSessionId: sessionId.uuidString,
-            tripMode: session.mode.rawValue,
             participantCount: session.participants.count,
             gameCount: instances.count,
             gameModes: gameModeStrings,

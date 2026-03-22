@@ -110,7 +110,6 @@ class AnalyticsService: AnalyticsLogging {
         case combinedTripCreated(
             gameTypes: [String],
             tripSessionId: String? = nil,
-            tripMode: String? = nil,
             participantCount: Int? = nil,
             gameCount: Int? = nil,
             gameModes: [String]? = nil,
@@ -174,7 +173,7 @@ class AnalyticsService: AnalyticsLogging {
         // Discovery outcome (Step 03 — rules engine)
         case discoveryOutcomeRecorded(tripId: String, gameInstanceId: String, targetId: String, outcome: String, participantId: String?)
         case discoveryRejectedDuplicate(tripId: String, gameInstanceId: String, targetId: String, participantId: String?, mode: String)
-        case discoveryRejectedInvalidParticipant(tripId: String, gameInstanceId: String, targetId: String, participantId: String?, tripMode: String, gameMode: String)
+        case discoveryRejectedInvalidParticipant(tripId: String, gameInstanceId: String, targetId: String, participantId: String?, tripParticipantCount: Int, gameMode: String)
         case discoveryUnfind(tripId: String, gameInstanceId: String, targetId: String, participantId: String?)
 
         // Persistence (Step 05)
@@ -370,10 +369,9 @@ class AnalyticsService: AnalyticsLogging {
                 return p
             case .combinedTripSetupOpened:
                 return nil
-            case .combinedTripCreated(let gameTypes, let tripSessionId, let tripMode, let participantCount, let gameCount, let gameModes, let hasTeams):
+            case .combinedTripCreated(let gameTypes, let tripSessionId, let participantCount, let gameCount, let gameModes, let hasTeams):
                 var p: [String: Any] = ["game_types": gameTypes.joined(separator: ",")]
                 if let id = tripSessionId { p["trip_session_id"] = id }
-                if let mode = tripMode { p["trip_mode"] = mode }
                 if let count = participantCount { p["participant_count"] = count }
                 if let count = gameCount { p["game_count"] = count }
                 if let modes = gameModes, !modes.isEmpty { p["game_modes"] = modes.joined(separator: ",") }
@@ -468,12 +466,12 @@ class AnalyticsService: AnalyticsLogging {
                 var p: [String: Any] = ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "mode": mode]
                 if let id = participantId { p["participant_id"] = id }
                 return p
-            case .discoveryRejectedInvalidParticipant(let tripId, let gameInstanceId, let targetId, let participantId, let tripMode, let gameMode):
+            case .discoveryRejectedInvalidParticipant(let tripId, let gameInstanceId, let targetId, let participantId, let tripParticipantCount, let gameMode):
                 var p: [String: Any] = [
                     "trip_session_id": tripId,
                     "game_instance_id": gameInstanceId,
                     "target_id": targetId,
-                    "trip_mode": tripMode,
+                    "trip_participant_count": tripParticipantCount,
                     "game_mode": gameMode
                 ]
                 if let id = participantId { p["participant_id"] = id }

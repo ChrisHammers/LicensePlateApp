@@ -17,7 +17,6 @@ struct TripSummaryBuilderTests {
             id: sessionId,
             name: "Solo Trip",
             status: .ended,
-            mode: .solo,
             createdAt: Date().addingTimeInterval(-200),
             endedAt: Date().addingTimeInterval(-100),
             participants: [TripParticipant(userId: "user1", role: .owner)]
@@ -60,7 +59,6 @@ struct TripSummaryBuilderTests {
             id: sessionId,
             name: "Multi Trip",
             status: .ended,
-            mode: .multiplayer,
             createdAt: Date().addingTimeInterval(-100),
             endedAt: Date(),
             participants: [TripParticipant(userId: "user1", role: .owner)]
@@ -93,7 +91,7 @@ struct TripSummaryBuilderTests {
             discoveries: [d1, d2],
             credits: credits
         )
-        #expect(summary.tripMode == .multiplayer)
+        #expect(summary.tripMode == .solo)
         #expect(summary.totalDiscoveryCount == 2)
         #expect(summary.games[0].discoveryCount == 2)
         #expect(summary.games[0].gameMode == .collaborative)
@@ -114,7 +112,6 @@ struct TripSummaryBuilderTests {
             id: sessionId,
             name: "Config Trip",
             status: .ended,
-            mode: .solo,
             createdAt: Date().addingTimeInterval(-100),
             endedAt: Date(),
             participants: [TripParticipant(userId: "user1", role: .owner)]
@@ -154,7 +151,6 @@ struct TripSummaryBuilderTests {
             id: sessionId,
             name: "No Config",
             status: .ended,
-            mode: .solo,
             createdAt: Date(),
             participants: [TripParticipant(userId: "user1", role: .owner)]
         )
@@ -178,7 +174,6 @@ struct TripSummaryBuilderTests {
             id: sessionId,
             name: "Competitive run",
             status: .ended,
-            mode: .solo,
             createdAt: Date(),
             participants: [TripParticipant(userId: "user1", role: .owner)]
         )
@@ -202,7 +197,6 @@ struct TripSummaryBuilderTests {
             id: sessionId,
             name: "Team trip",
             status: .ended,
-            mode: .multiplayer,
             createdAt: Date(),
             participants: [
                 TripParticipant(userId: "a", role: .owner),
@@ -234,7 +228,6 @@ struct TripSummaryBuilderTests {
             id: sessionId,
             name: "Dual LP",
             status: .ended,
-            mode: .multiplayer,
             createdAt: Date().addingTimeInterval(-100),
             endedAt: Date(),
             participants: [

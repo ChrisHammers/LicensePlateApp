@@ -18,7 +18,6 @@ struct LicensePlateGameViewModelTests {
             id: id,
             name: "Test Trip",
             status: startedAt == nil ? .created : .active,
-            mode: .solo,
             createdAt: Date(),
             createdBy: "user1",
             startedAt: startedAt,
@@ -162,6 +161,7 @@ struct LicensePlateGameViewModelTests {
             $0.kind == .discoveryRejected
             && $0.payload?[TripActivityEventPayloadKey.regionId] == "CA"
             && $0.payload?[TripActivityEventPayloadKey.rejectionReason] == DiscoveryOutcome.rejectedInvalidParticipant.rawValue
+            && $0.payload?[TripActivityEventPayloadKey.participantCount] == "1"
         })
         #expect(!eventRepo.appendedEvents().contains {
             $0.kind == .regionFound

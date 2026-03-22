@@ -12,7 +12,11 @@ final class TripSession {
     var id: UUID
     var name: String
     var status: TripSessionState
-    var mode: TripMode
+    /// Derived from roster: more than one distinct participant ⇒ multiplayer; not persisted.
+    var mode: TripMode {
+        participants.count > 1 ? .multiplayer : .solo
+    }
+
     var createdAt: Date
     var createdBy: String?
     var startedAt: Date?
@@ -27,7 +31,6 @@ final class TripSession {
         id: UUID = UUID(),
         name: String,
         status: TripSessionState = .created,
-        mode: TripMode = .solo,
         createdAt: Date = .now,
         createdBy: String? = nil,
         startedAt: Date? = nil,
@@ -39,7 +42,6 @@ final class TripSession {
         self.id = id
         self.name = name
         self.status = status
-        self.mode = mode
         self.createdAt = createdAt
         self.createdBy = createdBy
         self.startedAt = startedAt

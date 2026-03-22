@@ -17,7 +17,6 @@ struct TripRollupTests {
             id: sessionId,
             name: "Empty",
             status: .active,
-            mode: .solo,
             createdAt: Date(),
             participants: [TripParticipant(userId: "u1", role: .owner, joinedAt: Date())]
         )
@@ -36,7 +35,6 @@ struct TripRollupTests {
             id: sessionId,
             name: "Solo",
             status: .active,
-            mode: .solo,
             createdAt: Date(),
             participants: [TripParticipant(userId: "u1", role: .owner, joinedAt: Date())]
         )

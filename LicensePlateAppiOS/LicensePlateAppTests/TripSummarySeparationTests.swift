@@ -18,7 +18,6 @@ struct TripSummarySeparationTests {
             id: sessionId,
             name: "Multiplayer trip",
             status: .ended,
-            mode: .multiplayer,
             createdAt: Date(),
             participants: [
                 TripParticipant(userId: "u1", role: .owner),
@@ -46,7 +45,6 @@ struct TripSummarySeparationTests {
             id: sessionId,
             name: "Solo",
             status: .ended,
-            mode: .solo,
             createdAt: Date(),
             participants: [TripParticipant(userId: "u1", role: .owner)]
         )

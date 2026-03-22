@@ -177,7 +177,7 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
     }
 }
 
-// MARK: - Domain <-> SwiftData (V1; TripMode stored as TripMode.rawValue only)
+// MARK: - Domain <-> SwiftData (Trip participation derived from participants; not stored on entity)
 
 private enum TripSessionPersistence {
     static func toEntity(_ session: TripSession) -> TripSessionEntity {
@@ -186,7 +186,6 @@ private enum TripSessionPersistence {
             id: session.id.uuidString,
             name: session.name,
             status: session.status.rawValue,
-            mode: session.mode.rawValue,
             createdAt: session.createdAt,
             createdBy: session.createdBy,
             startedAt: session.startedAt,
@@ -199,13 +198,11 @@ private enum TripSessionPersistence {
     static func toDomain(_ entity: TripSessionEntity) -> TripSession {
         let participants = decodeParticipants(entity.participantsData)
         let status = TripSessionState(rawValue: entity.status) ?? .active
-        let mode = TripMode(rawValue: entity.mode) ?? .solo
         let createdAt = entity.createdAt ?? entity.startedAt ?? Date.distantPast
         return TripSession(
             id: UUID(uuidString: entity.id) ?? UUID(),
             name: entity.name,
             status: status,
-            mode: mode,
             createdAt: createdAt,
             createdBy: entity.createdBy,
             startedAt: entity.startedAt,
@@ -219,7 +216,6 @@ private enum TripSessionPersistence {
     static func updateEntity(_ entity: TripSessionEntity, from session: TripSession) {
         entity.name = session.name
         entity.status = session.status.rawValue
-        entity.mode = session.mode.rawValue
         entity.createdAt = session.createdAt
         entity.createdBy = session.createdBy
         entity.startedAt = session.startedAt

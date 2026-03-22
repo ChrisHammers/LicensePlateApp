@@ -148,9 +148,6 @@ private struct TripInviteRow: View {
                     Text(snapshot.inviterLine)
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
-                    Text(snapshot.tripParticipationLine)
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
                     if let games = snapshot.gamesOnTripLine {
                         Text(games)
                             .font(.system(.caption, design: .rounded))
@@ -229,7 +226,6 @@ private struct TripInviteRow: View {
         inviteId: params.inviteId,
         tripSessionId: params.tripSessionId,
         tripName: params.tripName,
-        tripMode: params.tripMode,
         fromUserId: params.fromUserId,
         toUserId: params.toUserId,
         status: params.status,

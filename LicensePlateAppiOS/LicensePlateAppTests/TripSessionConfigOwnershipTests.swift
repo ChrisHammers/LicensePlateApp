@@ -16,7 +16,6 @@ struct TripSessionConfigOwnershipTests {
             id: UUID(),
             name: "Trip",
             status: .active,
-            mode: .solo,
             createdAt: Date(),
             createdBy: "user1",
             participants: [TripParticipant(userId: "user1", role: .owner, joinedAt: Date())]

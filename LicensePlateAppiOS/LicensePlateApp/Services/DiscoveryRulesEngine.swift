@@ -16,7 +16,7 @@ enum DiscoveryRulesEngine {
     /// Evaluates a candidate discovery submission. Caller should append the event only when `result.shouldAppendEvent` is true.
     /// - Parameters:
     ///   - mode: Game mode (from GameInstance.commonConfig.gameMode).
-    ///   - tripMode: Trip participation (from TripSession.mode). Solo trips must not accept finds from multiple distinct participants for the same target.
+    ///   - tripMode: Trip participation derived from `TripSession` roster (`TripSession.mode`). Solo trips must not accept finds from multiple distinct participants for the same target.
     ///   - existingDiscoveriesForTarget: Discoveries already recorded for this target (0 or 1 with current repo replay).
     ///   - candidateParticipantId: Participant making the new find.
     ///   - candidateTargetId: Target being found (e.g. region id).

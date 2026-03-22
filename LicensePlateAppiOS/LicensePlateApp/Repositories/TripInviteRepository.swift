@@ -100,7 +100,6 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
     func createInvite(
         tripSessionId: String,
         tripName: String,
-        tripMode: String,
         fromUserId: String,
         toUserId: String,
         expiresAt: Date
@@ -111,7 +110,6 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
             inviteId: inviteId,
             tripSessionId: tripSessionId,
             tripName: tripName,
-            tripMode: tripMode,
             fromUserId: fromUserId,
             toUserId: toUserId,
             status: .sent,

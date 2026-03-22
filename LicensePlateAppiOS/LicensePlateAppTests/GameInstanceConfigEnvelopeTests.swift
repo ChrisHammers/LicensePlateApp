@@ -85,7 +85,6 @@ struct GameInstanceConfigEnvelopeTests {
             id: UUID(),
             name: "Test",
             status: .active,
-            mode: .solo,
             createdAt: .now,
             participants: [TripParticipant(userId: "u1", role: .owner)]
         )

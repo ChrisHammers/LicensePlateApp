@@ -28,7 +28,7 @@ enum TripActivityEventPayloadKey {
     static let inputMethod = "inputMethod"
     static let discoveredAt = "discoveredAt"
     static let rejectionReason = "rejectionReason"
-    static let tripMode = "tripMode"
+    static let participantCount = "participantCount"
     static let gameMode = "gameMode"
 }
 

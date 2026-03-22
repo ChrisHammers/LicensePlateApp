@@ -30,7 +30,7 @@ struct TripSummaryGameItem: Sendable {
 struct TripSummary: Sendable {
     var sessionId: UUID
     var tripName: String
-    /// Trip participation: solo vs multiplayer (from `TripSession.mode`).
+    /// Trip participation: solo vs multiplayer (derived from `TripSession` roster via `TripSession.mode`).
     var tripMode: TripMode
     var status: TripSessionState
     var endedAt: Date?

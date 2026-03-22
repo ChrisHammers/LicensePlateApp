@@ -15,7 +15,6 @@ enum MockTripFactory {
             id: PreviewConstants.sessionIdSolo,
             name: "Solo Trip",
             status: .active,
-            mode: .solo,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
@@ -30,7 +29,6 @@ enum MockTripFactory {
             id: PreviewConstants.sessionIdCollaborative,
             name: "Collaborative Trip",
             status: .active,
-            mode: .multiplayer,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
@@ -48,7 +46,6 @@ enum MockTripFactory {
             id: PreviewConstants.sessionIdCompetitive,
             name: "Competitive Trip",
             status: .active,
-            mode: .multiplayer,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
@@ -66,7 +63,6 @@ enum MockTripFactory {
             id: PreviewConstants.sessionIdMulti,
             name: "Multi-Game Trip",
             status: .active,
-            mode: .multiplayer,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
@@ -255,7 +251,6 @@ struct MockInviteParams {
     var inviteId: String
     var tripSessionId: String
     var tripName: String
-    var tripMode: String
     var fromUserId: String
     var toUserId: String?
     var status: TripInvite.TripInviteStatus
@@ -278,7 +273,6 @@ enum MockInviteFactory {
             inviteId: "mock-invite-\(status.rawValue)",
             tripSessionId: tripSessionId,
             tripName: tripName,
-            tripMode: TripMode.multiplayer.rawValue,
             fromUserId: fromUserId,
             toUserId: toUserId,
             status: status,

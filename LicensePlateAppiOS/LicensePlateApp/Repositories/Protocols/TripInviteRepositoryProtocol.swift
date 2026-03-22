@@ -20,7 +20,6 @@ protocol TripInviteRepositoryProtocol: AnyObject {
     func createInvite(
         tripSessionId: String,
         tripName: String,
-        tripMode: String,
         fromUserId: String,
         toUserId: String,
         expiresAt: Date

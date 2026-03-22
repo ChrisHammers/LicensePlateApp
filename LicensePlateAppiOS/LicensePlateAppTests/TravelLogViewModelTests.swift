@@ -40,7 +40,6 @@ struct TravelLogViewModelTests {
             id: sessionId,
             name: "Past Trip",
             status: TripSessionState.ended.rawValue,
-            mode: TripMode.solo.rawValue,
             createdAt: endedAt.addingTimeInterval(-100),
             endedAt: endedAt
         )
@@ -76,7 +75,6 @@ struct TravelLogViewModelTests {
             id: sessionId.uuidString,
             name: "New Flow Trip",
             status: TripSessionState.ended.rawValue,
-            mode: TripMode.solo.rawValue,
             createdAt: endedAt.addingTimeInterval(-100),
             endedAt: endedAt
         )
@@ -115,7 +113,6 @@ struct TravelLogViewModelTests {
             id: sessionId.uuidString,
             name: "Trip With Plates",
             status: TripSessionState.ended.rawValue,
-            mode: TripMode.solo.rawValue,
             createdAt: endedAt.addingTimeInterval(-100),
             endedAt: endedAt
         )

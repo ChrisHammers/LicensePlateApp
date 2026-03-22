@@ -45,7 +45,6 @@ enum PreviewTripFixtures {
             id: PreviewConstants.sessionIdSolo,
             name: "Solo Road Trip",
             status: .active,
-            mode: .solo,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
@@ -60,7 +59,6 @@ enum PreviewTripFixtures {
             id: PreviewConstants.sessionIdMulti,
             name: "Multi-Game Trip",
             status: .active,
-            mode: .multiplayer,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
@@ -74,7 +72,6 @@ enum PreviewTripFixtures {
             id: PreviewConstants.sessionIdCollaborative,
             name: "Family Road Trip",
             status: .active,
-            mode: .multiplayer,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
@@ -91,7 +88,6 @@ enum PreviewTripFixtures {
             id: PreviewConstants.sessionIdCompetitive,
             name: "Competitive Trip",
             status: .active,
-            mode: .multiplayer,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
@@ -108,7 +104,6 @@ enum PreviewTripFixtures {
             id: PreviewConstants.sessionIdWithTeams,
             name: "Team Road Trip",
             status: .active,
-            mode: .multiplayer,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
@@ -121,7 +116,6 @@ enum PreviewTripFixtures {
             id: PreviewConstants.sessionIdPartial,
             name: "In Progress Trip",
             status: .active,
-            mode: .solo,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
@@ -134,7 +128,6 @@ enum PreviewTripFixtures {
             id: PreviewConstants.sessionIdCompleted,
             name: "Completed Trip",
             status: .ended,
-            mode: .solo,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
@@ -497,7 +490,6 @@ struct PreviewInviteFixturesParams {
     let inviteId: String
     let tripSessionId: String
     let tripName: String
-    let tripMode: String
     let fromUserId: String
     let toUserId: String?
     let status: TripInvite.TripInviteStatus
@@ -510,7 +502,6 @@ struct PreviewInviteFixturesParams {
             inviteId: "preview-invite-pending",
             tripSessionId: PreviewConstants.sessionIdCollaborative.uuidString,
             tripName: "Family Road Trip",
-            tripMode: TripMode.multiplayer.rawValue,
             fromUserId: PreviewConstants.userId1,
             toUserId: PreviewConstants.userId2,
             status: .pending,
@@ -525,7 +516,6 @@ struct PreviewInviteFixturesParams {
             inviteId: "preview-invite-accepted",
             tripSessionId: PreviewConstants.sessionIdCollaborative.uuidString,
             tripName: "Family Road Trip",
-            tripMode: TripMode.multiplayer.rawValue,
             fromUserId: PreviewConstants.userId1,
             toUserId: PreviewConstants.userId2,
             status: .accepted,

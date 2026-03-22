@@ -238,7 +238,6 @@ struct TripSettingsView: View {
     let session = TripSession(
         name: "Preview Trip",
         status: .active,
-        mode: .solo,
         createdAt: Date(),
         createdBy: "u1",
         startedAt: Date(),

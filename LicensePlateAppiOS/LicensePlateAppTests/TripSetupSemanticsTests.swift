@@ -2,7 +2,7 @@
 //  TripSetupSemanticsTests.swift
 //  LicensePlateAppTests
 //
-//  Step 6.9.4 — Trip-level setup: TripMode and roster container; no per-game rules on TripSession.
+//  Step 6.9.4 / 6.10 — Trip roster from setup; participation derived from participant count.
 //
 
 import Foundation
@@ -19,7 +19,7 @@ struct TripSetupSemanticsTests {
         return try ModelContainer(for: schema, migrationPlan: AppMigrationPlan.self, configurations: [config])
     }
 
-    @Test func multiplayerTripWithSingleParticipantIsValid() async throws {
+    @Test func newTripWithSingleParticipantIsSoloDerived() async throws {
         let container = try makeContainer()
         let ctx = ModelContext(container)
         let sessionRepo = TripSessionRepository.shared
@@ -28,7 +28,7 @@ struct TripSetupSemanticsTests {
         instanceRepo.setModelContext(ctx)
 
         let auth = FirebaseAuthService()
-        let userId = "solo-but-mp-trip"
+        let userId = "creator-only"
         let testUser = AppUser(id: userId, userName: "T", firebaseUID: userId)
         ctx.insert(testUser)
         try ctx.save()
@@ -41,10 +41,9 @@ struct TripSetupSemanticsTests {
         )
         viewModel.selectedGameTypes = [.licensePlate]
         viewModel.includeUS = true
-        viewModel.tripParticipationMode = .multiplayer
 
         let session = try viewModel.createTrip()
-        #expect(session.mode == .multiplayer)
+        #expect(session.mode == .solo)
         #expect(session.participants.count == 1)
     }
 }

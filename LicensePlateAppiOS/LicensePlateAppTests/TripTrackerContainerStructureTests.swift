@@ -18,7 +18,6 @@ struct TripTrackerContainerStructureTests {
             id: id,
             name: name,
             status: .active,
-            mode: .solo,
             createdAt: Date(),
             createdBy: "user1",
             startedAt: Date(),

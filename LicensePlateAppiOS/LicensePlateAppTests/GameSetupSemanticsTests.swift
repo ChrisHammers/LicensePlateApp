@@ -2,7 +2,7 @@
 //  GameSetupSemanticsTests.swift
 //  LicensePlateAppTests
 //
-//  Step 6.9.4 — GameMode and teams come from assembly choices, not TripSession.mode.
+//  Step 6.9.4 — GameMode and teams come from assembly choices, not from trip participation (roster size).
 //
 
 import Foundation
@@ -11,18 +11,17 @@ import Testing
 
 struct GameSetupSemanticsTests {
 
-    private func makeSession(mode: TripMode) -> TripSession {
+    private func makeSession(participants: [TripParticipant]) -> TripSession {
         let created = Date()
         return TripSession(
             id: UUID(),
             name: "Test",
             status: .active,
-            mode: mode,
             createdAt: created,
             createdBy: "user1",
             startedAt: created,
             endedAt: nil,
-            participants: [TripParticipant(userId: "user1", role: .owner)]
+            participants: participants
         )
     }
 
@@ -32,8 +31,11 @@ struct GameSetupSemanticsTests {
             .licensePlate: GameSetupChoice(gameType: .licensePlate, gameMode: .competitive, teams: [])
         ]
 
-        let soloSession = makeSession(mode: .solo)
-        let multiSession = makeSession(mode: .multiplayer)
+        let soloSession = makeSession(participants: [TripParticipant(userId: "user1", role: .owner)])
+        let multiSession = makeSession(participants: [
+            TripParticipant(userId: "user1", role: .owner),
+            TripParticipant(userId: "user2", role: .member)
+        ])
 
         let soloInstances = CombinedGameAssembler.assemble(
             session: soloSession,

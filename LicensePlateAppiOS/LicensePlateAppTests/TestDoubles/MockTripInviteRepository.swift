@@ -55,7 +55,6 @@ final class MockTripInviteRepository: TripInviteRepositoryProtocol {
     func createInvite(
         tripSessionId: String,
         tripName: String,
-        tripMode: String,
         fromUserId: String,
         toUserId: String,
         expiresAt: Date
@@ -65,7 +64,6 @@ final class MockTripInviteRepository: TripInviteRepositoryProtocol {
             inviteId: UUID().uuidString,
             tripSessionId: tripSessionId,
             tripName: tripName,
-            tripMode: tripMode,
             fromUserId: fromUserId,
             toUserId: toUserId,
             status: .sent,

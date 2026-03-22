@@ -2,7 +2,8 @@
 //  InviteSnapshotTripGameSeparationTests.swift
 //  LicensePlateAppTests
 //
-//  Step 6.9.6 Phase D — Trip participation (TripMode) vs game count lines stay separate.
+//  Step 6.9.6 Phase D — Invite row: game count line vs other metadata.
+//  Step 6.10 — No trip participation line on invites; participation is roster-derived elsewhere.
 //
 
 import Foundation
@@ -11,12 +12,11 @@ import Testing
 
 struct InviteSnapshotTripGameSeparationTests {
 
-    private func makeInvite(tripMode: String = TripMode.multiplayer.rawValue) -> TripInvite {
+    private func makeInvite() -> TripInvite {
         TripInvite(
             inviteId: UUID().uuidString,
             tripSessionId: UUID().uuidString,
             tripName: "Test Trip",
-            tripMode: tripMode,
             fromUserId: "inviter",
             toUserId: "invitee",
             status: .pending,
@@ -31,21 +31,13 @@ struct InviteSnapshotTripGameSeparationTests {
         #expect(snapshot.gamesOnTripLine == nil)
     }
 
-    @Test func tripParticipationLineUsesTripModeDisplayNameNotRawStorage() {
-        let invite = makeInvite(tripMode: TripMode.solo.rawValue)
-        let snapshot = InviteDisplaySnapshot.make(from: invite, localGameCount: nil)
-        let expectedMode = TripMode.solo.localizedDisplayName
-        #expect(snapshot.tripParticipationLine.contains(expectedMode))
-        #expect(!snapshot.tripParticipationLine.contains(invite.tripMode))
-    }
-
-    @Test func gamesOnTripLineSeparateFromTripParticipationWhenCountProvided() {
-        let invite = makeInvite(tripMode: TripMode.multiplayer.rawValue)
+    @Test func gamesOnTripLineSeparateFromTripNameWhenCountProvided() {
+        let invite = makeInvite()
         let snapshot = InviteDisplaySnapshot.make(from: invite, localGameCount: 3)
         #expect(snapshot.gamesOnTripLine != nil)
         #expect(snapshot.gamesOnTripLine == "%d games".localized(3))
-        #expect(!snapshot.tripParticipationLine.contains("3"))
-        #expect(!snapshot.tripParticipationLine.lowercased().contains("game"))
+        #expect(snapshot.tripName == "Test Trip")
+        #expect(!snapshot.inviterLine.contains("3"))
     }
 
     @Test func singleGameUsesSingularLocalizedString() {

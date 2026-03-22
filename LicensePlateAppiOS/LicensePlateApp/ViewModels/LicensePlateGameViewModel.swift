@@ -186,7 +186,7 @@ final class LicensePlateGameViewModel: ObservableObject {
                 TripActivityEventPayloadKey.participantId: participantId,
                 TripActivityEventPayloadKey.inputMethod: inputMethod.rawValue,
                 TripActivityEventPayloadKey.rejectionReason: result.outcome.rawValue,
-                TripActivityEventPayloadKey.tripMode: currentSession.mode.rawValue,
+                TripActivityEventPayloadKey.participantCount: String(currentSession.participants.count),
                 TripActivityEventPayloadKey.gameMode: game.commonConfig.gameMode.rawValue
             ]
             let rejectionEvent = TripActivityEvent(
@@ -207,7 +207,7 @@ final class LicensePlateGameViewModel: ObservableObject {
                 gameInstanceId: game.id.uuidString,
                 targetId: regionID,
                 participantId: participantId.isEmpty ? nil : participantId,
-                tripMode: currentSession.mode.rawValue,
+                tripParticipantCount: currentSession.participants.count,
                 gameMode: game.commonConfig.gameMode.rawValue
             ))
             return .rejectedInvalidParticipant(message: rejectedInvalidParticipantMessage ?? "")
@@ -222,7 +222,7 @@ final class LicensePlateGameViewModel: ObservableObject {
                 TripActivityEventPayloadKey.participantId: participantId,
                 TripActivityEventPayloadKey.inputMethod: inputMethod.rawValue,
                 TripActivityEventPayloadKey.rejectionReason: result.outcome.rawValue,
-                TripActivityEventPayloadKey.tripMode: currentSession.mode.rawValue,
+                TripActivityEventPayloadKey.participantCount: String(currentSession.participants.count),
                 TripActivityEventPayloadKey.gameMode: game.commonConfig.gameMode.rawValue
             ]
             let rejectionEvent = TripActivityEvent(

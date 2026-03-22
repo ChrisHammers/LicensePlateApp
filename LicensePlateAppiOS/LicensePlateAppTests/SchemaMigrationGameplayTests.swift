@@ -41,7 +41,6 @@ struct SchemaMigrationGameplayTests {
             id: id,
             name: name,
             status: TripSessionState.active.rawValue,
-            mode: TripMode.solo.rawValue,
             createdAt: Date()
         )
         context.insert(entity)
@@ -52,7 +51,6 @@ struct SchemaMigrationGameplayTests {
         #expect(results.count == 1)
         #expect(results[0].name == name)
         #expect(results[0].status == TripSessionState.active.rawValue)
-        #expect(results[0].mode == TripMode.solo.rawValue)
     }
 
     @Test func insertAndFetchGameInstanceEntity() async throws {
@@ -83,7 +81,6 @@ struct SchemaMigrationGameplayTests {
             id: UUID().uuidString,
             name: "Defaults",
             status: TripSessionState.active.rawValue,
-            mode: TripMode.solo.rawValue,
             createdAt: Date()
         )
         #expect(entity.createdBy == nil)

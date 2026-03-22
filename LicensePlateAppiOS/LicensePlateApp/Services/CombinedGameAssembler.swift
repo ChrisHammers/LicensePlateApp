@@ -4,7 +4,7 @@
 //
 //  Step 06 — Builds game instances for a trip session from combined game configuration. No persistence; caller uses repositories.
 //  Step 07.5 — commonConfig and license_plate payload. Step 6.9.2 — LP config from caller, not TripSession.
-//  Step 6.9.4 — GameMode and teams from `GameSetupChoice`, not from `TripSession.mode`.
+//  Step 6.9.4 — GameMode and teams from `GameSetupChoice`, not from trip participation (roster size).
 //
 
 import Foundation
