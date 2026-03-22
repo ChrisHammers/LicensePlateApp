@@ -37,7 +37,7 @@ final class LicensePlateGameViewModel: ObservableObject {
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
     private let lifecycleService: TripSessionLifecycleServiceProtocol
     private let gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
-    private let syncCoordinator: SyncCoordinatorProtocol
+    private let tripActivityEventRecording: TripActivityEventRecordingProtocol
     private let authService: FirebaseAuthService
 
     var isTripCreator: Bool {
@@ -77,7 +77,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         tripActivityEventRepository: TripActivityEventRepositoryProtocol,
         lifecycleService: TripSessionLifecycleServiceProtocol,
         gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol = GameInstanceLifecycleService.shared,
-        syncCoordinator: SyncCoordinatorProtocol,
+        tripActivityEventRecording: TripActivityEventRecordingProtocol = TripActivityEventRecordingService.shared,
         authService: FirebaseAuthService
     ) {
         self.currentSession = session
@@ -88,7 +88,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         self.tripActivityEventRepository = tripActivityEventRepository
         self.lifecycleService = lifecycleService
         self.gameInstanceLifecycleService = gameInstanceLifecycleService
-        self.syncCoordinator = syncCoordinator
+        self.tripActivityEventRecording = tripActivityEventRecording
         self.authService = authService
         self.foundRegions = (try? tripActivityEventRepository.foundRegions(sessionId: session.id, gameInstanceId: game.id)) ?? []
     }
@@ -196,8 +196,7 @@ final class LicensePlateGameViewModel: ObservableObject {
                 payload: payload
             )
             do {
-                try tripActivityEventRepository.append(rejectionEvent)
-                try? syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: rejectionEvent.id)
+                try tripActivityEventRecording.recordForSync(rejectionEvent)
             } catch {
                 AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_discovery_rejection", error: error.localizedDescription))
                 return .failure(error)
@@ -232,8 +231,7 @@ final class LicensePlateGameViewModel: ObservableObject {
                 payload: payload
             )
             do {
-                try tripActivityEventRepository.append(rejectionEvent)
-                try? syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: rejectionEvent.id)
+                try tripActivityEventRecording.recordForSync(rejectionEvent)
             } catch {
                 AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_discovery_rejection", error: error.localizedDescription))
                 return .failure(error)
@@ -267,8 +265,7 @@ final class LicensePlateGameViewModel: ObservableObject {
             payload: payload
         )
         do {
-            try tripActivityEventRepository.append(event)
-            try? syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: event.id)
+            try tripActivityEventRecording.recordForSync(event)
             refreshFoundRegions()
             rejectedDuplicateMessage = nil
             rejectedInvalidParticipantMessage = nil
@@ -309,8 +306,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         ]
         let event = TripActivityEvent(sessionId: sessionId, kind: .regionRemoved, payload: payload)
         do {
-            try tripActivityEventRepository.append(event)
-            try? syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: event.id)
+            try tripActivityEventRecording.recordForSync(event)
             let participantId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
             AnalyticsService.shared.log(.discoveryUnfind(
                 tripId: sessionId.uuidString,

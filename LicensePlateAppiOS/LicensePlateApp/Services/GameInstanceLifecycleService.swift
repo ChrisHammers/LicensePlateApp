@@ -46,24 +46,24 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
         tripSessionRepository: TripSessionRepository.shared,
         gameInstanceRepository: GameInstanceRepository.shared,
         tripActivityEventRepository: TripActivityEventRepository.shared,
-        syncCoordinator: SyncCoordinator.shared
+        tripActivityEventRecording: TripActivityEventRecordingService.shared
     )
 
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
-    private let syncCoordinator: SyncCoordinatorProtocol
+    private let tripActivityEventRecording: TripActivityEventRecordingProtocol
 
     init(
         tripSessionRepository: TripSessionRepositoryProtocol,
         gameInstanceRepository: GameInstanceRepositoryProtocol,
         tripActivityEventRepository: TripActivityEventRepositoryProtocol,
-        syncCoordinator: SyncCoordinatorProtocol
+        tripActivityEventRecording: TripActivityEventRecordingProtocol
     ) {
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
         self.tripActivityEventRepository = tripActivityEventRepository
-        self.syncCoordinator = syncCoordinator
+        self.tripActivityEventRecording = tripActivityEventRecording
     }
 
     /// Transitions one game to started, locks config, appends `gameStarted`, sync enqueue, analytics. Idempotent if already started+locked.
@@ -97,8 +97,7 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
             actorId: nil,
             payload: [TripActivityEventPayloadKey.gameInstanceId: gameInstanceId.uuidString]
         )
-        try tripActivityEventRepository.append(gameStartedEvent)
-        try syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: gameStartedEvent.id)
+        try tripActivityEventRecording.recordForSync(gameStartedEvent)
         AnalyticsService.shared.log(.gameInstanceStarted(
             gameInstanceId: gameInstanceId.uuidString,
             gameType: game.definitionId,
@@ -134,8 +133,7 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
             actorId: nil,
             payload: [TripActivityEventPayloadKey.gameInstanceId: gameInstanceId.uuidString]
         )
-        try tripActivityEventRepository.append(gameEndedEvent)
-        try syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: gameEndedEvent.id)
+        try tripActivityEventRecording.recordForSync(gameEndedEvent)
         AnalyticsService.shared.log(.gameInstanceEnded(
             gameInstanceId: gameInstanceId.uuidString,
             gameType: game.definitionId,

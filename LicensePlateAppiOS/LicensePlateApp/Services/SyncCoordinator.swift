@@ -10,6 +10,8 @@ import Foundation
 @MainActor
 protocol SyncCoordinatorProtocol: AnyObject {
     func enqueueForSync(sessionId: UUID, eventId: String) throws
+    /// Enqueues a gameplay sync item only when none exists yet for `eventId` in a non-terminal queue state.
+    func ensureGameplayEventEnqueued(sessionId: UUID, eventId: String) throws
     func enqueueUserProfileSync(userId: String) throws
     func processPendingSyncItems() async
 }
@@ -47,6 +49,13 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
             payloadData: nil
         )
         try repository.enqueue(item)
+    }
+
+    func ensureGameplayEventEnqueued(sessionId: UUID, eventId: String) throws {
+        if try repository.hasNonTerminalGameplayItem(forEventId: eventId) {
+            return
+        }
+        try enqueueForSync(sessionId: sessionId, eventId: eventId)
     }
 
     func enqueueUserProfileSync(userId: String) throws {

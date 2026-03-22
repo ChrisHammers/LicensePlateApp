@@ -21,6 +21,23 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
         events.append(event)
     }
 
+    @discardableResult
+    func appendIfAbsent(_ event: TripActivityEvent) throws -> Bool {
+        if shouldThrow { throw NSError(domain: "MockTripActivityEventRepository", code: -1, userInfo: nil) }
+        if let idx = events.firstIndex(where: { $0.id == event.id }) {
+            let existing = events[idx]
+            guard existing.sessionId == event.sessionId,
+                  existing.kind == event.kind,
+                  existing.actorId == event.actorId,
+                  existing.payload == event.payload else {
+                throw TripActivityEventRepositoryError.idCollision(id: event.id)
+            }
+            return false
+        }
+        events.append(event)
+        return true
+    }
+
     func events(sessionId: UUID, limit: Int?) throws -> [TripActivityEvent] {
         if shouldThrow { throw NSError(domain: "MockTripActivityEventRepository", code: -1, userInfo: nil) }
         var list = events.filter { $0.sessionId == sessionId }.sorted { $0.timestamp < $1.timestamp }

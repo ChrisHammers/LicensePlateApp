@@ -42,6 +42,22 @@ struct SyncCoordinatorTests {
         #expect(pending[0].payloadEventId == eventId)
     }
 
+    @Test func ensureGameplayEventEnqueuedIsIdempotentPerEventId() async throws {
+        let ctx = try makeContext()
+        let repo = SyncQueueRepository.shared
+        repo.setModelContext(ctx)
+        let coordinator = SyncCoordinator(repository: repo)
+
+        let sessionId = UUID()
+        let eventId = "evt-\(UUID().uuidString)"
+        try coordinator.ensureGameplayEventEnqueued(sessionId: sessionId, eventId: eventId)
+        try coordinator.ensureGameplayEventEnqueued(sessionId: sessionId, eventId: eventId)
+
+        let pending = try repo.fetchPending(limit: 10)
+        #expect(pending.count == 1)
+        #expect(pending[0].payloadEventId == eventId)
+    }
+
     @Test func enqueueUserProfileSyncCreatesOnePendingItem() async throws {
         let ctx = try makeContext()
         let repo = SyncQueueRepository.shared

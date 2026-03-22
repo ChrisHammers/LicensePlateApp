@@ -83,7 +83,6 @@ struct LicensePlateGameView: View {
             gameInstanceRepository: GameInstanceRepository.shared,
             tripActivityEventRepository: TripActivityEventRepository.shared,
             lifecycleService: TripSessionLifecycleService.shared,
-            syncCoordinator: SyncCoordinator.shared,
             authService: authService
         ))
     }

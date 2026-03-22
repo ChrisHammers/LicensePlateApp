@@ -22,27 +22,27 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         tripSessionRepository: TripSessionRepository.shared,
         gameInstanceRepository: GameInstanceRepository.shared,
         tripActivityEventRepository: TripActivityEventRepository.shared,
-        syncCoordinator: SyncCoordinator.shared,
+        tripActivityEventRecording: TripActivityEventRecordingService.shared,
         gameInstanceLifecycleService: GameInstanceLifecycleService.shared
     )
 
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
-    private let syncCoordinator: SyncCoordinatorProtocol
+    private let tripActivityEventRecording: TripActivityEventRecordingProtocol
     private let gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
 
     init(
         tripSessionRepository: TripSessionRepositoryProtocol,
         gameInstanceRepository: GameInstanceRepositoryProtocol,
         tripActivityEventRepository: TripActivityEventRepositoryProtocol,
-        syncCoordinator: SyncCoordinatorProtocol,
+        tripActivityEventRecording: TripActivityEventRecordingProtocol,
         gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
     ) {
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
         self.tripActivityEventRepository = tripActivityEventRepository
-        self.syncCoordinator = syncCoordinator
+        self.tripActivityEventRecording = tripActivityEventRecording
         self.gameInstanceLifecycleService = gameInstanceLifecycleService
     }
 
@@ -61,14 +61,16 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
             try gameInstanceLifecycleService.startGame(sessionId: sessionId, gameInstanceId: game.id)
         }
         let tripStartedEvent = TripActivityEvent(sessionId: sessionId, kind: .tripStarted, actorId: actorId)
-        try tripActivityEventRepository.append(tripStartedEvent)
-        try syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: tripStartedEvent.id)
+        try tripActivityEventRecording.recordForSync(tripStartedEvent)
         AnalyticsService.shared.log(.tripSessionStarted(tripId: sessionId.uuidString, tripActiveGameCount: games.count))
     }
 
     func endTrip(sessionId: UUID, endedBy: String?) throws {
         guard var session = try tripSessionRepository.session(byId: sessionId) else {
             throw TripSessionLifecycleServiceError.sessionNotFound(sessionId)
+        }
+        if session.status == .ended {
+            return
         }
         session.endedAt = Date()
         session.endedBy = endedBy
@@ -79,8 +81,7 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
             try gameInstanceLifecycleService.endGame(sessionId: sessionId, gameInstanceId: game.id)
         }
         let tripEndedEvent = TripActivityEvent(sessionId: sessionId, kind: .tripEnded, actorId: endedBy)
-        try tripActivityEventRepository.append(tripEndedEvent)
-        try syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: tripEndedEvent.id)
+        try tripActivityEventRecording.recordForSync(tripEndedEvent)
         AnalyticsService.shared.log(.tripSessionEnded(tripId: sessionId.uuidString))
     }
 

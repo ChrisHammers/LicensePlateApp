@@ -49,7 +49,7 @@ struct TripVsGameActionGuardrailTests {
             tripActivityEventRepository: eventRepo,
             lifecycleService: tripLifecycle,
             gameInstanceLifecycleService: gameLifecycle,
-            syncCoordinator: MockSyncCoordinator(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
             authService: auth
         )
 
@@ -99,7 +99,7 @@ struct TripVsGameActionGuardrailTests {
             tripActivityEventRepository: eventRepo,
             lifecycleService: tripLifecycle,
             gameInstanceLifecycleService: gameLifecycle,
-            syncCoordinator: MockSyncCoordinator(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
             authService: auth
         )
 
@@ -153,7 +153,7 @@ struct TripVsGameActionGuardrailTests {
             tripActivityEventRepository: eventRepo,
             lifecycleService: tripLifecycle,
             gameInstanceLifecycleService: gameLifecycle,
-            syncCoordinator: MockSyncCoordinator(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
             authService: auth
         )
 
@@ -203,7 +203,7 @@ struct TripVsGameActionGuardrailTests {
             tripActivityEventRepository: eventRepo,
             lifecycleService: tripLifecycle,
             gameInstanceLifecycleService: gameLifecycle,
-            syncCoordinator: MockSyncCoordinator(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
             authService: auth
         )
 
@@ -250,7 +250,7 @@ struct TripVsGameActionGuardrailTests {
             tripActivityEventRepository: eventRepo,
             lifecycleService: tripLifecycle,
             gameInstanceLifecycleService: gameLifecycle,
-            syncCoordinator: MockSyncCoordinator(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
             authService: auth
         )
 

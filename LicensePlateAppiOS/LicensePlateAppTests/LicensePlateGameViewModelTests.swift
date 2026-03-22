@@ -48,17 +48,18 @@ struct LicensePlateGameViewModelTests {
         gameRepo.seed(game)
         let eventRepo = MockTripActivityEventRepository()
         let syncCoordinator = MockSyncCoordinator()
+        let recording = TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: syncCoordinator)
         let gameLifecycle = GameInstanceLifecycleService(
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: syncCoordinator
+            tripActivityEventRecording: recording
         )
         let lifecycleService = TripSessionLifecycleService(
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: syncCoordinator,
+            tripActivityEventRecording: recording,
             gameInstanceLifecycleService: gameLifecycle
         )
         let auth = FirebaseAuthService()
@@ -71,7 +72,7 @@ struct LicensePlateGameViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
-            syncCoordinator: MockSyncCoordinator(),
+            tripActivityEventRecording: recording,
             authService: auth
         )
 
@@ -103,7 +104,7 @@ struct LicensePlateGameViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
-            syncCoordinator: MockSyncCoordinator(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
             authService: auth
         )
 
@@ -145,7 +146,7 @@ struct LicensePlateGameViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
-            syncCoordinator: MockSyncCoordinator(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
             authService: auth
         )
 
@@ -195,7 +196,7 @@ struct LicensePlateGameViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
-            syncCoordinator: MockSyncCoordinator(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
             authService: auth
         )
 
@@ -227,7 +228,7 @@ struct LicensePlateGameViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
-            syncCoordinator: MockSyncCoordinator(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
             authService: auth
         )
 
@@ -259,7 +260,7 @@ struct LicensePlateGameViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
-            syncCoordinator: MockSyncCoordinator(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
             authService: auth
         )
 
@@ -289,7 +290,7 @@ struct LicensePlateGameViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
-            syncCoordinator: MockSyncCoordinator(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
             authService: auth
         )
 
@@ -323,7 +324,7 @@ struct LicensePlateGameViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
-            syncCoordinator: MockSyncCoordinator(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
             authService: auth
         )
 
@@ -363,7 +364,7 @@ struct LicensePlateGameViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
-            syncCoordinator: MockSyncCoordinator(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
             authService: auth
         )
 
@@ -414,7 +415,7 @@ struct LicensePlateGameViewModelTests {
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
             lifecycleService: lifecycleService,
-            syncCoordinator: MockSyncCoordinator(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
             authService: auth
         )
 

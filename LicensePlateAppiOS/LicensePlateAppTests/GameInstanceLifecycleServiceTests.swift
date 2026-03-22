@@ -48,7 +48,7 @@ struct GameInstanceLifecycleServiceTests {
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: sync
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: sync)
         )
 
         try service.resetGame(sessionId: sessionId, gameInstanceId: gameId)
@@ -96,7 +96,7 @@ struct GameInstanceLifecycleServiceTests {
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: sync
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: sync)
         )
 
         do {
@@ -136,7 +136,7 @@ struct GameInstanceLifecycleServiceTests {
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: sync
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: sync)
         )
         do {
             try service.resetGame(sessionId: sessionId, gameInstanceId: gameId)
@@ -172,7 +172,7 @@ struct GameInstanceLifecycleServiceTests {
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: MockSyncCoordinator()
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator())
         )
         do {
             try service.startGame(sessionId: sessionId, gameInstanceId: gameId)
@@ -209,7 +209,7 @@ struct GameInstanceLifecycleServiceTests {
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: sync
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: sync)
         )
         try service.startGame(sessionId: sessionId, gameInstanceId: gameId)
         let game = try gameRepo.instance(byId: gameId)
@@ -248,7 +248,7 @@ struct GameInstanceLifecycleServiceTests {
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: sync
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: sync)
         )
         try service.startGame(sessionId: sessionId, gameInstanceId: gameId)
         try service.startGame(sessionId: sessionId, gameInstanceId: gameId)
@@ -283,7 +283,7 @@ struct GameInstanceLifecycleServiceTests {
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: sync
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: sync)
         )
         try service.endGame(sessionId: sessionId, gameInstanceId: gameId)
         let game = try gameRepo.instance(byId: gameId)
@@ -328,7 +328,7 @@ struct GameInstanceLifecycleServiceTests {
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: sync
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: sync)
         )
         try service.endGame(sessionId: sessionId, gameInstanceId: endedId)
         try service.endGame(sessionId: sessionId, gameInstanceId: completedId)
@@ -375,7 +375,7 @@ struct GameInstanceLifecycleServiceTests {
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: MockSyncCoordinator()
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator())
         )
         try service.deleteGame(sessionId: sessionId, gameInstanceId: removeId)
         #expect(try gameRepo.instance(byId: removeId) == nil)
@@ -410,7 +410,7 @@ struct GameInstanceLifecycleServiceTests {
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: MockSyncCoordinator()
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator())
         )
         do {
             try service.deleteGame(sessionId: sessionId, gameInstanceId: gameId)

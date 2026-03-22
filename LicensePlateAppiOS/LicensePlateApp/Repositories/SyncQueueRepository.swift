@@ -110,6 +110,23 @@ final class SyncQueueRepository: ObservableObject, SyncQueueRepositoryProtocol {
         try ctx.save()
     }
 
+    func hasNonTerminalGameplayItem(forEventId eventId: String) throws -> Bool {
+        guard let ctx = modelContext else { throw SyncQueueRepositoryError.noModelContext }
+        let gameplayKind = SyncQueueItemKind.gameplayEvent.rawValue
+        var descriptor = FetchDescriptor<SyncQueueItemEntity>(
+            predicate: #Predicate<SyncQueueItemEntity> { $0.kind == gameplayKind }
+        )
+        let entities = try ctx.fetch(descriptor)
+        let nonTerminalStates: Set<String> = [
+            SyncQueueItemState.pending.rawValue,
+            SyncQueueItemState.inProgress.rawValue,
+            SyncQueueItemState.failed.rawValue
+        ]
+        return entities.contains { entity in
+            entity.payloadEventId == eventId && nonTerminalStates.contains(entity.state)
+        }
+    }
+
     // MARK: - Private
 
     private func updateState(id: String, state: SyncQueueItemState) throws {

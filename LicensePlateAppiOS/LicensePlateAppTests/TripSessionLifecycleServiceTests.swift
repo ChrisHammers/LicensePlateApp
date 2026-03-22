@@ -41,17 +41,18 @@ struct TripSessionLifecycleServiceTests {
         gameRepo.seed(game)
 
         let syncCoordinator = MockSyncCoordinator()
+        let recording = TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: syncCoordinator)
         let gameLifecycle = GameInstanceLifecycleService(
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: syncCoordinator
+            tripActivityEventRecording: recording
         )
         let service = TripSessionLifecycleService(
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: syncCoordinator,
+            tripActivityEventRecording: recording,
             gameInstanceLifecycleService: gameLifecycle
         )
 
@@ -96,17 +97,18 @@ struct TripSessionLifecycleServiceTests {
         ))
 
         let syncCoordinator = MockSyncCoordinator()
+        let recording = TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: syncCoordinator)
         let gameLifecycle = GameInstanceLifecycleService(
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: syncCoordinator
+            tripActivityEventRecording: recording
         )
         let service = TripSessionLifecycleService(
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: syncCoordinator,
+            tripActivityEventRecording: recording,
             gameInstanceLifecycleService: gameLifecycle
         )
 
@@ -151,17 +153,18 @@ struct TripSessionLifecycleServiceTests {
         try eventRepo.append(TripActivityEvent(sessionId: sessionId, kind: .tripStarted, actorId: "user1"))
 
         let syncCoordinator = MockSyncCoordinator()
+        let recording = TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: syncCoordinator)
         let gameLifecycle = GameInstanceLifecycleService(
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: syncCoordinator
+            tripActivityEventRecording: recording
         )
         let service = TripSessionLifecycleService(
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            syncCoordinator: syncCoordinator,
+            tripActivityEventRecording: recording,
             gameInstanceLifecycleService: gameLifecycle
         )
 
@@ -177,5 +180,52 @@ struct TripSessionLifecycleServiceTests {
 
         let remainingEvents = try eventRepo.events(sessionId: sessionId, limit: nil)
         #expect(remainingEvents.isEmpty)
+    }
+
+    @Test func endTripIsIdempotentWhenAlreadyEnded() async throws {
+        let sessionRepo = MockTripSessionRepository()
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "Test",
+            status: .ended,
+            createdAt: Date(),
+            createdBy: "user1",
+            startedAt: Date(),
+            endedAt: Date(),
+            endedBy: "user1",
+            participants: []
+        )
+        sessionRepo.seed(session)
+        gameRepo.seed(GameInstance(
+            id: gameId,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: CommonGameConfig(lifecycleState: .ended, configLocked: true, configLockReason: .gameStarted)
+        ))
+        let syncCoordinator = MockSyncCoordinator()
+        let recording = TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: syncCoordinator)
+        let gameLifecycle = GameInstanceLifecycleService(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            tripActivityEventRecording: recording
+        )
+        let service = TripSessionLifecycleService(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            tripActivityEventRecording: recording,
+            gameInstanceLifecycleService: gameLifecycle
+        )
+
+        try service.endTrip(sessionId: sessionId, endedBy: "user1")
+
+        #expect(eventRepo.appendedEvents().filter { $0.kind == .tripEnded }.isEmpty)
+        #expect(syncCoordinator.enqueueCallCount == 0)
     }
 }

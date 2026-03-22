@@ -3,6 +3,7 @@
 //  LicensePlateAppTests
 //
 //  Step 01 — TripActivityEventRepository: append events, derive discoveries/foundRegions from region_found/region_removed.
+//  Step 07 — appendIfAbsent idempotency. Note: repository `delete*` APIs are physical deletes for local UX; a future step may use tombstones + remote reconciliation instead.
 //
 
 import Foundation
@@ -95,5 +96,47 @@ struct TripActivityEventRepositoryTests {
         } catch {
             #expect((error as NSError).domain == "MockTripActivityEventRepository")
         }
+    }
+
+    @Test func appendIfAbsentInsertsOnce() async throws {
+        _ = try makeContainer()
+        let sessionId = UUID()
+        let id = "stable-id"
+        let event = TripActivityEvent(id: id, sessionId: sessionId, kind: .tripStarted, actorId: "u1")
+        #expect(try TripActivityEventRepository.shared.appendIfAbsent(event) == true)
+        #expect(try TripActivityEventRepository.shared.appendIfAbsent(event) == false)
+        let events = try TripActivityEventRepository.shared.events(sessionId: sessionId, limit: nil)
+        #expect(events.count == 1)
+        #expect(events[0].id == id)
+    }
+
+    @Test func appendIfAbsentThrowsOnIdCollision() async throws {
+        _ = try makeContainer()
+        let sessionId = UUID()
+        let id = "same-id"
+        let first = TripActivityEvent(id: id, sessionId: sessionId, kind: .tripStarted, actorId: "u1")
+        let conflicting = TripActivityEvent(id: id, sessionId: sessionId, kind: .tripEnded, actorId: "u1")
+        try TripActivityEventRepository.shared.appendIfAbsent(first)
+        do {
+            try TripActivityEventRepository.shared.appendIfAbsent(conflicting)
+            #expect(Bool(false), "Expected idCollision")
+        } catch TripActivityEventRepositoryError.idCollision(let cid) {
+            #expect(cid == id)
+        }
+    }
+
+    @Test func eventsSurviveNewModelContextSameContainer() async throws {
+        let schema = Schema(versionedSchema: CurrentSchema.self)
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, migrationPlan: AppMigrationPlan.self, configurations: [config])
+        let ctx1 = ModelContext(container)
+        TripActivityEventRepository.shared.setModelContext(ctx1)
+        let sessionId = UUID()
+        try TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: sessionId, kind: .tripStarted, actorId: "u1"))
+        let ctx2 = ModelContext(container)
+        TripActivityEventRepository.shared.setModelContext(ctx2)
+        let events = try TripActivityEventRepository.shared.events(sessionId: sessionId, limit: nil)
+        #expect(events.count == 1)
+        #expect(events[0].kind == .tripStarted)
     }
 }

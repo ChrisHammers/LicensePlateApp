@@ -20,4 +20,6 @@ protocol SyncQueueRepositoryProtocol: AnyObject {
     func markCancelled(id: String) throws
     func metadata(key: String) throws -> RemoteSyncMetadata?
     func saveMetadata(_ metadata: RemoteSyncMetadata) throws
+    /// True if a gameplay sync row exists for this activity event id in pending, inProgress, or failed (retry) state.
+    func hasNonTerminalGameplayItem(forEventId eventId: String) throws -> Bool
 }
