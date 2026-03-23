@@ -97,6 +97,8 @@ class AnalyticsService: AnalyticsLogging {
         case tripInviteAccepted
         case tripInviteDeclined
         case tripInviteCanceled
+        /// Step 08 — server send succeeded (no PII: trip id + name length only).
+        case tripInviteSent(tripSessionId: String, tripNameLength: Int)
 
         // Trip invite with context (Step 10.5)
         case tripInviteAcceptedWithContext(inviteTripId: String?, inviteGameCount: Int?, participantCountAfterJoin: Int?)
@@ -252,6 +254,7 @@ class AnalyticsService: AnalyticsLogging {
             case .tripInviteAccepted: return "trip_invite_accepted"
             case .tripInviteDeclined: return "trip_invite_declined"
             case .tripInviteCanceled: return "trip_invite_canceled"
+            case .tripInviteSent: return "trip_invite_sent"
             case .tripInviteAcceptedWithContext: return "trip_invite_accepted"
             case .tripInviteDeclinedWithContext: return "trip_invite_declined"
             case .participantJoinedTrip: return "participant_joined_trip"
@@ -346,6 +349,11 @@ class AnalyticsService: AnalyticsLogging {
                 return ["badge_id": badgeId]
             case .tripInvitesScreenOpened, .tripInviteAccepted, .tripInviteDeclined, .tripInviteCanceled:
                 return nil
+            case .tripInviteSent(let tripSessionId, let tripNameLength):
+                return [
+                    "invite_trip_id": tripSessionId,
+                    "trip_name_length": tripNameLength,
+                ]
             case .tripInviteAcceptedWithContext(let inviteTripId, let inviteGameCount, let participantCountAfterJoin):
                 var p: [String: Any] = [:]
                 if let id = inviteTripId { p["invite_trip_id"] = id }

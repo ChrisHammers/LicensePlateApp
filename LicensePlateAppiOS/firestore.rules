@@ -64,6 +64,30 @@ service cloud.firestore {
         (uid() == resource.data.userA || uid() == resource.data.userB);
     }
 
+    function isTripSessionMember(sessionId, userId) {
+      return exists(/databases/$(database)/documents/trip_sessions/$(sessionId)/members/$(userId));
+    }
+
+    // TRIP INVITES (mutations via Cloud Functions only)
+    match /trip_invites/{inviteId} {
+      allow read: if isSignedIn() &&
+        (uid() == resource.data.fromUserId || uid() == resource.data.toUserId);
+      allow create, update, delete: if false;
+    }
+
+    // TRIP SESSIONS — minimal metadata + authoritative roster in members (writes server-only)
+    match /trip_sessions/{sessionId} {
+      // TODO(step-08-rules-hardening): Optionally allow invite-party read access before membership, if product needs pre-accept trip metadata.
+      allow read: if isSignedIn() &&
+        (resource.data.createdBy == uid() || isTripSessionMember(sessionId, uid()));
+      allow create, update, delete: if false;
+    }
+
+    match /trip_sessions/{sessionId}/members/{memberId} {
+      allow read: if isSignedIn() && isTripSessionMember(sessionId, uid());
+      allow create, update, delete: if false;
+    }
+
     // INVITES
     match /invites/{inviteId} {
       allow read: if isSignedIn() &&

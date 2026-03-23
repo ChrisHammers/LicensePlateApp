@@ -2,87 +2,113 @@
 //  MockTripInviteRepository.swift
 //  LicensePlateAppTests
 //
-//  Step 13 — Test double for TripInviteRepositoryProtocol. In-memory invite list; configurable errors.
+//  Test double for TripInviteRepositoryProtocol. In-memory invites; configurable errors.
 //
 
+import Combine
 import Foundation
 import SwiftData
 @testable import LicensePlateApp
 
 @MainActor
 final class MockTripInviteRepository: TripInviteRepositoryProtocol {
-    private var incoming: [TripInvite] = []
-    private var outgoing: [TripInvite] = []
-    private var context: ModelContext?
+    private let inviteSnapshotSubject = PassthroughSubject<Void, Never>()
+    var inviteSnapshotSignal: AnyPublisher<Void, Never> {
+        inviteSnapshotSubject.eraseToAnyPublisher()
+    }
+
+    private var invites: [TripInvite] = []
+
     var shouldThrow = false
 
     func setModelContext(_ context: ModelContext) {
-        self.context = context
+        _ = context
     }
+
+    func startListening(userId: String) {
+        _ = userId
+    }
+
+    func stopListening() {}
 
     func getIncomingInvites(userId: String) throws -> [TripInvite] {
         if shouldThrow { throw NSError(domain: "MockTripInviteRepository", code: -1, userInfo: nil) }
-        return incoming.filter { $0.toUserId == userId }
+        let pending = TripInvite.TripInviteStatus.pending.rawValue
+        return invites
+            .filter { $0.toUserId == userId && $0.status == pending }
+            .sorted { $0.createdAt > $1.createdAt }
     }
 
     func getOutgoingInvites(userId: String) throws -> [TripInvite] {
         if shouldThrow { throw NSError(domain: "MockTripInviteRepository", code: -1, userInfo: nil) }
-        return outgoing.filter { $0.fromUserId == userId }
+        let pending = TripInvite.TripInviteStatus.pending.rawValue
+        let sent = TripInvite.TripInviteStatus.sent.rawValue
+        return invites
+            .filter { $0.fromUserId == userId && ($0.status == pending || $0.status == sent) }
+            .sorted { $0.createdAt > $1.createdAt }
     }
 
-    func acceptInvite(inviteId: String, userId: String) throws {
+    func acceptInvite(inviteId: String, userId: String) async throws {
         if shouldThrow { throw NSError(domain: "MockTripInviteRepository", code: -1, userInfo: nil) }
-        if let idx = incoming.firstIndex(where: { $0.inviteId == inviteId }) {
-            incoming[idx].status = TripInvite.TripInviteStatus.accepted.rawValue
-            incoming[idx].respondedAt = Date()
+        guard let idx = invites.firstIndex(where: { $0.inviteId == inviteId && $0.toUserId == userId }) else {
+            return
         }
+        invites[idx].statusEnum = .accepted
+        invites[idx].respondedAt = Date()
+        inviteSnapshotSubject.send()
     }
 
-    func declineInvite(inviteId: String, userId: String) throws {
+    func declineInvite(inviteId: String, userId: String) async throws {
         if shouldThrow { throw NSError(domain: "MockTripInviteRepository", code: -1, userInfo: nil) }
-        if let idx = incoming.firstIndex(where: { $0.inviteId == inviteId }) {
-            incoming[idx].status = TripInvite.TripInviteStatus.declined.rawValue
-            incoming[idx].respondedAt = Date()
+        guard let idx = invites.firstIndex(where: { $0.inviteId == inviteId && $0.toUserId == userId }) else {
+            return
         }
+        invites[idx].statusEnum = .declined
+        invites[idx].respondedAt = Date()
+        inviteSnapshotSubject.send()
     }
 
-    func cancelInvite(inviteId: String, userId: String) throws {
+    func cancelInvite(inviteId: String, userId: String) async throws {
         if shouldThrow { throw NSError(domain: "MockTripInviteRepository", code: -1, userInfo: nil) }
-        outgoing.removeAll { $0.inviteId == inviteId }
-        incoming.removeAll { $0.inviteId == inviteId }
+        guard let idx = invites.firstIndex(where: { $0.inviteId == inviteId && $0.fromUserId == userId }) else {
+            return
+        }
+        invites[idx].statusEnum = .canceled
+        invites[idx].respondedAt = Date()
+        inviteSnapshotSubject.send()
     }
 
-    func createInvite(
+    func sendTripInvite(
         tripSessionId: String,
         tripName: String,
         fromUserId: String,
         toUserId: String,
-        expiresAt: Date
-    ) throws -> TripInvite {
+        expiresAt: Date?
+    ) async throws -> String {
         if shouldThrow { throw NSError(domain: "MockTripInviteRepository", code: -1, userInfo: nil) }
+        let id = UUID().uuidString
+        let exp = expiresAt ?? Date().addingTimeInterval(86400 * 7)
         let invite = TripInvite(
-            inviteId: UUID().uuidString,
+            inviteId: id,
             tripSessionId: tripSessionId,
             tripName: tripName,
             fromUserId: fromUserId,
             toUserId: toUserId,
-            status: .sent,
+            status: .pending,
             createdAt: Date(),
-            expiresAt: expiresAt
+            expiresAt: exp
         )
-        outgoing.append(invite)
-        incoming.append(invite)
-        return invite
+        invites.append(invite)
+        inviteSnapshotSubject.send()
+        return id
     }
 
-    /// Test helper: seed incoming invites (e.g. from fixture params; caller creates TripInvite in context and passes)
-    func seedIncoming(_ invite: TripInvite) {
-        incoming.append(invite)
+    /// Seed an invite for tests (caller-owned instance).
+    func seed(_ invite: TripInvite) {
+        invites.append(invite)
     }
 
-    /// Test helper: clear
     func clear() {
-        incoming.removeAll()
-        outgoing.removeAll()
+        invites.removeAll()
     }
 }

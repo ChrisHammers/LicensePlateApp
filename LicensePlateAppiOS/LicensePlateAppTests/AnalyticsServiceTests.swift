@@ -183,6 +183,13 @@ struct AnalyticsServiceTests {
         #expect(deleted.parameters?["remaining_game_count"] as? Int == 1)
     }
 
+    @Test @MainActor func tripInviteSentEvent() async throws {
+        let sent = AnalyticsService.Event.tripInviteSent(tripSessionId: "trip-abc", tripNameLength: 12)
+        #expect(sent.name == "trip_invite_sent")
+        #expect(sent.parameters?["invite_trip_id"] as? String == "trip-abc")
+        #expect(sent.parameters?["trip_name_length"] as? Int == 12)
+    }
+
     @Test @MainActor func inviteContextEvents() async throws {
         let inviteAccepted = AnalyticsService.Event.tripInviteAcceptedWithContext(
             inviteTripId: "inv-trip-1",

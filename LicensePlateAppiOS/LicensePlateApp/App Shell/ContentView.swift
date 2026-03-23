@@ -108,6 +108,12 @@ struct ContentView: View {
 
                     // 2. Pending Invites
                     Section("Pending Invites".localized) {
+                        if let inviteError = pendingTripsViewModel.errorMessage, !inviteError.isEmpty {
+                            Text(inviteError)
+                                .font(.system(.footnote, design: .rounded))
+                                .foregroundStyle(.red)
+                                .accessibilityLabel(inviteError)
+                        }
                         if pendingTripsViewModel.incomingInvites.isEmpty && pendingTripsViewModel.outgoingInvites.isEmpty {
                             pendingInvitesEmptyCard
                         } else {
@@ -191,6 +197,7 @@ struct ContentView: View {
                   TripInviteRepository.shared.setModelContext(modelContext)
                   EntitlementService.shared.setModelContext(modelContext)
                   
+                  pendingTripsViewModel.setAuthService(authService)
                   // Start listening if user is authenticated
                   if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {
                       FriendshipRepository.shared.startListening(userId: userId)
