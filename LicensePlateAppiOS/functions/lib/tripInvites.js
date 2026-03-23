@@ -32,6 +32,8 @@ exports.sendTripInvite = functions.https.onCall(async (data, context) => {
     if (toUserId === fromUserId) {
         throw new functions.https.HttpsError("invalid-argument", "Cannot invite yourself");
     }
+    // TODO(step-08-hardening): Gate by friendship/family relationship once invite eligibility policy is finalized.
+    // TODO(step-08-hardening): Add per-user rate limiting / anti-abuse controls for invite spam prevention.
     const sessionRef = db.collection("trip_sessions").doc(tripSessionId);
     let expiresAt;
     if (typeof expiresAtMs === "number" && expiresAtMs > Date.now()) {
@@ -89,6 +91,7 @@ exports.sendTripInvite = functions.https.onCall(async (data, context) => {
             deepLink: `roadtrip-royale://invite/trip?inviteId=${inviteRef.id}`,
         });
     }
+    // TODO(step-08-ux): Wire trip invite deep-link route in iOS DeepLinkHandler + pending invites entry point.
     await (0, audit_1.writeAuditLog)({
         eventType: "AUDIT_TRIP_INVITE_SENT",
         actorId: fromUserId,
