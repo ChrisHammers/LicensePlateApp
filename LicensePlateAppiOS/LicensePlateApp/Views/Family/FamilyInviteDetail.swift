@@ -16,13 +16,17 @@ struct FamilyInviteDetail: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
     private let familyRepository = FamilyRepository.shared
-    @State private var isProcessing = false
-    @State private var hasAccepted = false
-    @State private var errorMessage: String?
-    @State private var showError = false
+    @StateObject private var viewModel: FamilyInviteDetailViewModel
     @State private var loadedFamily: Family?
     @State private var captains: [FamilyMember] = []
     @State private var isLoadingFamily = false
+
+    init(inviteId: String, familyId: String, family: Family?) {
+        self.inviteId = inviteId
+        self.familyId = familyId
+        self.family = family
+        _viewModel = StateObject(wrappedValue: FamilyInviteDetailViewModel(inviteId: inviteId, familyId: familyId))
+    }
     
     // Computed property to use passed family or loaded family
     private var displayFamily: Family? {
@@ -109,7 +113,7 @@ struct FamilyInviteDetail: View {
                                 .foregroundStyle(Color.Theme.primaryBlue)
                         }
                         
-                        if hasAccepted {
+                        if viewModel.hasAccepted {
                         VStack(spacing: 12) {
                             Text("Waiting for Captain approval".localized)
                                 .font(.system(.body, design: .rounded))
@@ -122,7 +126,7 @@ struct FamilyInviteDetail: View {
                         .padding()
                     } else {
                         Button {
-                            respondToInvite(accept: true)
+                            viewModel.respondToInvite(accept: true, onDeclineDismiss: { })
                         } label: {
                             Text("Accept".localized)
                                 .frame(maxWidth: .infinity)
@@ -131,10 +135,10 @@ struct FamilyInviteDetail: View {
                                 .foregroundColor(.white)
                                 .cornerRadius(12)
                         }
-                        .disabled(isProcessing || !authService.isOnline)
+                        .disabled(viewModel.isProcessing || !authService.isOnline)
                         
                         Button {
-                            respondToInvite(accept: false)
+                            viewModel.respondToInvite(accept: false, onDeclineDismiss: { dismiss() })
                         } label: {
                             Text("Decline".localized)
                                 .frame(maxWidth: .infinity)
@@ -143,7 +147,7 @@ struct FamilyInviteDetail: View {
                                 .foregroundColor(Color.Theme.primaryBlue)
                                 .cornerRadius(12)
                         }
-                        .disabled(isProcessing || !authService.isOnline)
+                        .disabled(viewModel.isProcessing || !authService.isOnline)
                     }
                     
                     if !authService.isOnline {
@@ -152,7 +156,7 @@ struct FamilyInviteDetail: View {
                             .foregroundStyle(Color.Theme.softBrown)
                     }
                     
-                        if let error = errorMessage {
+                        if let error = viewModel.errorMessage {
                             Text(error)
                                 .font(.system(.caption, design: .rounded))
                                 .foregroundStyle(.red)
@@ -164,15 +168,19 @@ struct FamilyInviteDetail: View {
             }
             .navigationTitle("Family Invite".localized)
             .navigationBarTitleDisplayMode(.inline)
-            .alert("Error".localized, isPresented: $showError) {
-                Button("OK".localized, role: .cancel) { }
+            .alert("Error".localized, isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )) {
+                Button("OK".localized, role: .cancel) { viewModel.errorMessage = nil }
             } message: {
-                if let error = errorMessage {
+                if let error = viewModel.errorMessage {
                     Text(error)
                 }
             }
             .onAppear {
                 familyRepository.setModelContext(modelContext)
+                viewModel.configure(authService: authService, modelContext: modelContext)
                 loadFamilyData()
             }
         }
@@ -218,43 +226,6 @@ struct FamilyInviteDetail: View {
         }
     }
     
-    private func respondToInvite(accept: Bool) {
-        guard authService.isOnline else {
-            errorMessage = "Requires network connection".localized
-            showError = true
-            return
-        }
-        
-        isProcessing = true
-        errorMessage = nil
-        
-        Task {
-            do {
-                try await familyRepository.respondToFamilyInvite(inviteId: inviteId, accept: accept)
-                
-                await MainActor.run {
-                    isProcessing = false
-                    if accept {
-                        hasAccepted = true
-                        AnalyticsService.shared.log(.familyInviteUserAccepted)
-                    } else {
-                        AnalyticsService.shared.log(.familyInviteUserDeclined)
-                        dismiss()
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    isProcessing = false
-                    errorMessage = error.localizedDescription
-                    showError = true
-                    if !accept {
-                        // If declining failed, still dismiss
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
 }
 
 #Preview {

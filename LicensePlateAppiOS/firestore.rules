@@ -60,8 +60,8 @@ service cloud.firestore {
       allow update: if isSignedIn() &&
         (uid() == resource.data.userA || uid() == resource.data.userB);
 
-      allow delete: if isSignedIn() &&
-        (uid() == resource.data.userA || uid() == resource.data.userB);
+      // Removals go through removeFriend Cloud Function (Admin SDK) for friendCount consistency
+      allow delete: if false;
     }
 
     function isTripSessionMember(sessionId, userId) {

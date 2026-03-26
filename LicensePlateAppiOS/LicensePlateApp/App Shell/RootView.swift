@@ -13,10 +13,24 @@ struct RootView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject var authService: FirebaseAuthService
+    @ObservedObject private var deepLinkHandler = DeepLinkHandler.shared
     @StateObject private var appCoordinator = AppCoordinator()
     @StateObject private var onboardingCoordinator = OnboardingCoordinator()
     
     @AppStorage("boundariesLoaded") private var boundariesLoaded = false
+
+    private var deepLinkSheetBinding: Binding<DeepLinkDestination?> {
+        Binding(
+            get: {
+                guard appCoordinator.rootView == .main,
+                      authService.currentUser != nil else {
+                    return nil
+                }
+                return deepLinkHandler.destination
+            },
+            set: { deepLinkHandler.destination = $0 }
+        )
+    }
     
     var body: some View {
         Group {
@@ -72,6 +86,16 @@ struct RootView: View {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                 boundariesLoaded = true
                 appCoordinator.transitionFromSplash()
+            }
+        }
+        .sheet(item: deepLinkSheetBinding) { destination in
+            switch destination {
+            case .friendInvite(let inviteId):
+                FriendInviteDetail(inviteId: inviteId)
+                    .environmentObject(authService)
+            case .familyInvite(let inviteId, let familyId):
+                FamilyInviteDetail(inviteId: inviteId, familyId: familyId, family: nil)
+                    .environmentObject(authService)
             }
         }
     }

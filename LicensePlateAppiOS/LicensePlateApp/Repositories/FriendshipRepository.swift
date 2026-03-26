@@ -18,6 +18,8 @@ class FriendshipRepository: ObservableObject {
     
     private let db = Firestore.firestore()
     private var modelContext: ModelContext?
+    /// Last `userId` passed to `startListening`, used to refresh `friendships` after local deletes.
+    private var lastListeningUserId: String?
     nonisolated(unsafe) private var listeners: [ListenerRegistration] = []
     
     @Published var friendships: [Friendship] = []
@@ -37,6 +39,7 @@ class FriendshipRepository: ObservableObject {
     /// Start listening to friendships for a user
     func startListening(userId: String) {
         stopListening()
+        lastListeningUserId = userId
         
         // Query where user is either userA or userB
         let queryA = db.collection("friends")
@@ -141,21 +144,6 @@ class FriendshipRepository: ObservableObject {
         getFriendships(for: userId).filter { $0.statusEnum == .accepted }
     }
     
-    /// Get pending friendships (incoming or outgoing)
-    func getPendingFriendships(for userId: String) -> [Friendship] {
-        getFriendships(for: userId).filter { $0.statusEnum == .pending }
-    }
-    
-    /// Get incoming friend requests
-    func getIncomingRequests(for userId: String) -> [Friendship] {
-        getPendingFriendships(for: userId).filter { $0.initiatedBy != userId }
-    }
-    
-    /// Get outgoing friend requests
-    func getOutgoingRequests(for userId: String) -> [Friendship] {
-        getPendingFriendships(for: userId).filter { $0.initiatedBy == userId }
-    }
-    
     // MARK: - Cloud Functions
     
     /// Send a friend invite to a user
@@ -193,6 +181,44 @@ class FriendshipRepository: ObservableObject {
             "inviteId": inviteId,
             "response": accept ? "accept" : "decline"
         ])
+    }
+
+    /// Remove an accepted friendship via Cloud Function; drops local SwiftData row when the server succeeds.
+    func removeFriend(friendshipId: String) async throws {
+        guard Auth.auth().currentUser != nil else {
+            throw NSError(domain: "FriendshipRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
+        }
+
+        let functions = Functions.functions()
+        let fn = functions.httpsCallable("removeFriend")
+
+        _ = try await fn.call([
+            "friendshipId": friendshipId
+        ])
+
+        deleteLocalFriendship(friendshipId: friendshipId)
+    }
+
+    private func deleteLocalFriendship(friendshipId: String) {
+        guard let modelContext = modelContext else { return }
+        let searchId = friendshipId
+        let descriptor = FetchDescriptor<Friendship>(
+            predicate: #Predicate<Friendship> { $0.friendshipId == searchId }
+        )
+        if let existing = try? modelContext.fetch(descriptor).first {
+            modelContext.delete(existing)
+            try? modelContext.save()
+        }
+
+        if let userId = lastListeningUserId {
+            let uid = userId
+            let refreshDescriptor = FetchDescriptor<Friendship>(
+                predicate: #Predicate<Friendship> { $0.userA == uid || $0.userB == uid }
+            )
+            if let allFriendships = try? modelContext.fetch(refreshDescriptor) {
+                friendships = allFriendships
+            }
+        }
     }
     
     deinit {

@@ -9,9 +9,18 @@ import Foundation
 import SwiftUI
 import Combine
 
-enum DeepLinkDestination: Hashable {
+enum DeepLinkDestination: Hashable, Identifiable {
     case friendInvite(inviteId: String)
     case familyInvite(inviteId: String, familyId: String)
+
+    var id: String {
+        switch self {
+        case .friendInvite(let inviteId):
+            return "friend-\(inviteId)"
+        case .familyInvite(let inviteId, let familyId):
+            return "family-\(inviteId)-\(familyId)"
+        }
+    }
 }
 
 @MainActor
@@ -21,6 +30,10 @@ class DeepLinkHandler: ObservableObject {
     static let shared = DeepLinkHandler()
     
     private init() {}
+
+    func clearDestination() {
+        destination = nil
+    }
     
     /// Parse a deep link URL
     func handleURL(_ url: URL) -> DeepLinkDestination? {

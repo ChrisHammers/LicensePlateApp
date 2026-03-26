@@ -7,6 +7,7 @@ export { createShareCode, redeemShareCode } from "./shareCodes";
 export {
   sendFriendInvite,
   respondToFriendInvite,
+  removeFriend,
 } from "./friends";
 export {
   sendTripInvite,

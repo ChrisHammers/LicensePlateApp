@@ -173,6 +173,13 @@ struct LicensePlateAppApp: App {
             RootView()
                 .environmentObject(authService)
                 .environmentObject(riskAssessmentService)
+                .onOpenURL { url in
+                    Task { @MainActor in
+                        if let dest = DeepLinkHandler.shared.handleURL(url) {
+                            DeepLinkHandler.shared.destination = dest
+                        }
+                    }
+                }
         }
         .modelContainer(sharedModelContainer)
     }

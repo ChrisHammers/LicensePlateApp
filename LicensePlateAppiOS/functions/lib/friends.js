@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.respondToFriendInvite = exports.sendFriendInvite = void 0;
+exports.removeFriend = exports.respondToFriendInvite = exports.sendFriendInvite = void 0;
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const validation_1 = require("./utils/validation");
@@ -171,6 +171,55 @@ exports.respondToFriendInvite = functions.https.onCall(async (data, context) => 
         });
     }
     await batch.commit();
+    return { success: true };
+});
+/**
+ * Remove an accepted friendship (unfriend). Updates friendCount for both users.
+ */
+exports.removeFriend = functions.https.onCall(async (data, context) => {
+    var _a, _b;
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
+    }
+    const { friendshipId } = data;
+    const userId = context.auth.uid;
+    if (!friendshipId || typeof friendshipId !== "string") {
+        throw new functions.https.HttpsError("invalid-argument", "friendshipId is required");
+    }
+    const friendshipRef = db.collection("friends").doc(friendshipId);
+    const friendshipDoc = await friendshipRef.get();
+    if (!friendshipDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "Friendship not found");
+    }
+    const fd = friendshipDoc.data();
+    const userA = fd.userA;
+    const userB = fd.userB;
+    if (userId !== userA && userId !== userB) {
+        throw new functions.https.HttpsError("permission-denied", "Not authorized to remove this friendship");
+    }
+    if (fd.status !== "accepted") {
+        throw new functions.https.HttpsError("failed-precondition", "Only accepted friendships can be removed this way");
+    }
+    const userARef = db.collection("users").doc(userA);
+    const userBRef = db.collection("users").doc(userB);
+    const [userADoc, userBDoc] = await Promise.all([
+        userARef.get(),
+        userBRef.get(),
+    ]);
+    const countA = Math.max(0, (((_a = userADoc.data()) === null || _a === void 0 ? void 0 : _a.friendCount) || 0) - 1);
+    const countB = Math.max(0, (((_b = userBDoc.data()) === null || _b === void 0 ? void 0 : _b.friendCount) || 0) - 1);
+    const batch = db.batch();
+    batch.delete(friendshipRef);
+    batch.update(userARef, { friendCount: countA });
+    batch.update(userBRef, { friendCount: countB });
+    await batch.commit();
+    await (0, audit_1.writeAuditLog)({
+        eventType: "AUDIT_FRIENDSHIP_REMOVED",
+        actorId: userId,
+        subjectType: "friendship",
+        subjectId: friendshipId,
+        metadata: { otherUserId: userId === userA ? userB : userA },
+    });
     return { success: true };
 });
 function generateFriendshipId(userA, userB) {

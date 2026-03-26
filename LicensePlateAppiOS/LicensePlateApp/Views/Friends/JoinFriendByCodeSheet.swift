@@ -12,31 +12,24 @@ struct JoinFriendByCodeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    private let familyRepository = FamilyRepository.shared
-    private let inviteRepository = InviteRepository.shared
-    @State private var shareCode = ""
-    @State private var isRedeeming = false
+    @StateObject private var viewModel = JoinFriendByCodeViewModel()
     @State private var showQRScanner = false
     @State private var scannedCode: String?
-    @State private var errorMessage: String?
-    @State private var showError = false
-    @State private var redeemedInviteId: String?
-    @State private var showInviteDetail = false
-    
+
     var body: some View {
         NavigationStack {
             ZStack {
                 Color.Theme.background
                     .ignoresSafeArea()
-                
+
                 Form {
                     Section {
-                        TextField("Enter Share Code".localized, text: $shareCode)
+                        TextField("Enter Share Code".localized, text: $viewModel.shareCode)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                            .onChange(of: scannedCode) { oldValue, newValue in
+                            .onChange(of: scannedCode) { _, newValue in
                                 if let code = newValue {
-                                    shareCode = extractCode(from: code)
+                                    viewModel.shareCode = extractCode(from: code)
                                 }
                             }
                     } header: {
@@ -48,7 +41,7 @@ struct JoinFriendByCodeSheet: View {
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
                     }
-                    
+
                     Section {
                         Button {
                             requestCameraPermissionAndScan()
@@ -61,8 +54,8 @@ struct JoinFriendByCodeSheet: View {
                             }
                         }
                     }
-                    
-                    if let error = errorMessage {
+
+                    if let error = viewModel.errorMessage {
                         Section {
                             Text(error)
                                 .foregroundStyle(.red)
@@ -71,11 +64,11 @@ struct JoinFriendByCodeSheet: View {
                     }
                 }
                 .formStyle(.grouped)
-                
-                if isRedeeming {
+
+                if viewModel.isRedeeming {
                     Color.black.opacity(0.3)
                         .ignoresSafeArea()
-                    
+
                     ProgressView()
                         .scaleEffect(1.5)
                         .tint(.white)
@@ -93,49 +86,45 @@ struct JoinFriendByCodeSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Send Request".localized) {
-                        redeemCode()
+                        viewModel.redeemCode()
                     }
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
-                    .disabled(shareCode.isEmpty || isRedeeming || !authService.isOnline)
+                    .disabled(viewModel.shareCode.isEmpty || viewModel.isRedeeming || !authService.isOnline)
                 }
             }
-            .alert("Error".localized, isPresented: $showError) {
+            .alert("Error".localized, isPresented: $viewModel.showError) {
                 Button("OK".localized, role: .cancel) { }
             } message: {
-                if let error = errorMessage {
+                if let error = viewModel.errorMessage {
                     Text(error)
                 }
             }
             .sheet(isPresented: $showQRScanner) {
                 QRScannerView(scannedCode: $scannedCode)
             }
-            .sheet(isPresented: $showInviteDetail) {
-                if let inviteId = redeemedInviteId {
+            .sheet(isPresented: $viewModel.showInviteDetail) {
+                if let inviteId = viewModel.redeemedInviteId {
                     FriendInviteDetail(inviteId: inviteId)
                         .environmentObject(authService)
                 }
             }
             .onAppear {
-                familyRepository.setModelContext(modelContext)
-                inviteRepository.setModelContext(modelContext)
+                viewModel.configure(authService: authService, modelContext: modelContext)
             }
         }
     }
-    
+
     private func extractCode(from scannedString: String) -> String {
-        // If it's a deep link URL, extract the code from query params
         if let url = URL(string: scannedString),
            let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
            let codeItem = components.queryItems?.first(where: { $0.name == "code" })?.value {
             return codeItem
         }
-        
-        // If it's just a code, return as-is
         return scannedString
     }
-    
+
     private func requestCameraPermissionAndScan() {
         Task {
             let hasPermission = await QRCodeService.shared.requestCameraPermission()
@@ -145,42 +134,8 @@ struct JoinFriendByCodeSheet: View {
                 }
             } else {
                 await MainActor.run {
-                    errorMessage = "Camera permission is required to scan QR codes".localized
-                    showError = true
-                }
-            }
-        }
-    }
-    
-    private func redeemCode() {
-        let trimmedCode = shareCode.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedCode.isEmpty else { return }
-        guard authService.isOnline else {
-            errorMessage = "Requires network connection".localized
-            showError = true
-            return
-        }
-        
-        isRedeeming = true
-        errorMessage = nil
-        
-        Task {
-            do {
-                let inviteId = try await familyRepository.redeemShareCode(code: trimmedCode)
-                
-                await MainActor.run {
-                    isRedeeming = false
-                    redeemedInviteId = inviteId
-                    AnalyticsService.shared.log(.shareCodeUsed(type: "friend"))
-                    // Show invite detail sheet
-                    showInviteDetail = true
-                }
-            } catch {
-                await MainActor.run {
-                    isRedeeming = false
-                    errorMessage = error.localizedDescription
-                    showError = true
-                    print("❌ Friend code redemption error: \(error.localizedDescription)")
+                    viewModel.errorMessage = "Camera permission is required to scan QR codes".localized
+                    viewModel.showError = true
                 }
             }
         }
@@ -191,4 +146,3 @@ struct JoinFriendByCodeSheet: View {
     JoinFriendByCodeSheet()
         .environmentObject(FirebaseAuthService())
 }
-
