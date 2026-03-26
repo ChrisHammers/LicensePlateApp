@@ -99,6 +99,9 @@ class AnalyticsService: AnalyticsLogging {
         case tripInviteCanceled
         /// Step 08 — server send succeeded (no PII: trip id + name length only).
         case tripInviteSent(tripSessionId: String, tripNameLength: Int)
+        case tripInviteSendFailed(tripSessionId: String, error: String)
+        case tripInviteReceivedViewed(inviteId: String?)
+        case tripParticipantsViewed(tripSessionId: String)
 
         // Trip invite with context (Step 10.5)
         case tripInviteAcceptedWithContext(inviteTripId: String?, inviteGameCount: Int?, participantCountAfterJoin: Int?)
@@ -260,6 +263,9 @@ class AnalyticsService: AnalyticsLogging {
             case .tripInviteDeclined: return "trip_invite_declined"
             case .tripInviteCanceled: return "trip_invite_canceled"
             case .tripInviteSent: return "trip_invite_sent"
+            case .tripInviteSendFailed: return "trip_invite_send_failed"
+            case .tripInviteReceivedViewed: return "trip_invite_received_viewed"
+            case .tripParticipantsViewed: return "trip_participants_viewed"
             case .tripInviteAcceptedWithContext: return "trip_invite_accepted"
             case .tripInviteDeclinedWithContext: return "trip_invite_declined"
             case .participantJoinedTrip: return "participant_joined_trip"
@@ -361,6 +367,18 @@ class AnalyticsService: AnalyticsLogging {
                     "invite_trip_id": tripSessionId,
                     "trip_name_length": tripNameLength,
                 ]
+            case .tripInviteSendFailed(let tripSessionId, let error):
+                return [
+                    "invite_trip_id": tripSessionId,
+                    "error": error,
+                ]
+            case .tripInviteReceivedViewed(let inviteId):
+                if let inviteId {
+                    return ["invite_id": inviteId]
+                }
+                return nil
+            case .tripParticipantsViewed(let tripSessionId):
+                return ["trip_session_id": tripSessionId]
             case .tripInviteAcceptedWithContext(let inviteTripId, let inviteGameCount, let participantCountAfterJoin):
                 var p: [String: Any] = [:]
                 if let id = inviteTripId { p["invite_trip_id"] = id }

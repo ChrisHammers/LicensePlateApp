@@ -32,6 +32,7 @@ final class CombinedTripSetupViewModel: ObservableObject {
     @Published var trackMyLocationDuringTrip: Bool = true
     @Published var showMyActiveTripOnLargeMap: Bool = true
     @Published var showMyActiveTripOnSmallMap: Bool = true
+    @Published var selectedPassengerIds: Set<String> = []
 
     @Published private(set) var errorMessage: String?
     @Published private(set) var isCreating: Bool = false
@@ -40,17 +41,20 @@ final class CombinedTripSetupViewModel: ObservableObject {
 
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
+    private let tripInviteRepository: TripInviteRepositoryProtocol
     private let lifecycleService: TripSessionLifecycleServiceProtocol
     private let authService: FirebaseAuthService
 
     init(
         tripSessionRepository: TripSessionRepositoryProtocol,
         gameInstanceRepository: GameInstanceRepositoryProtocol,
+        tripInviteRepository: TripInviteRepositoryProtocol = TripInviteRepository.shared,
         lifecycleService: TripSessionLifecycleServiceProtocol = TripSessionLifecycleService.shared,
         authService: FirebaseAuthService
     ) {
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
+        self.tripInviteRepository = tripInviteRepository
         self.lifecycleService = lifecycleService
         self.authService = authService
     }
@@ -190,6 +194,29 @@ final class CombinedTripSetupViewModel: ObservableObject {
             try lifecycleService.startTrip(sessionId: sessionId, actorId: createdBy)
         }
         return try tripSessionRepository.session(byId: sessionId) ?? session
+    }
+
+    /// Sends invites selected during setup. This is best effort and does not block creation success.
+    func sendSetupInvites(for session: TripSession) async {
+        guard !selectedPassengerIds.isEmpty else { return }
+        guard let fromUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else { return }
+
+        for toUserId in selectedPassengerIds {
+            do {
+                _ = try await tripInviteRepository.sendTripInvite(
+                    tripSessionId: session.id.uuidString,
+                    tripName: session.name,
+                    fromUserId: fromUserId,
+                    toUserId: toUserId,
+                    expiresAt: nil
+                )
+            } catch {
+                AnalyticsService.shared.log(.tripInviteSendFailed(
+                    tripSessionId: session.id.uuidString,
+                    error: error.localizedDescription
+                ))
+            }
+        }
     }
 
     private static func defaultTripName(from date: Date) -> String {

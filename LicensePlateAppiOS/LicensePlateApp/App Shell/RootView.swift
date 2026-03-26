@@ -96,6 +96,9 @@ struct RootView: View {
             case .familyInvite(let inviteId, let familyId):
                 FamilyInviteDetail(inviteId: inviteId, familyId: familyId, family: nil)
                     .environmentObject(authService)
+            case .tripInvite(_):
+                PendingTripsView()
+                    .environmentObject(authService)
             }
         }
     }

@@ -10,9 +10,11 @@ import SwiftData
 
 struct CombinedTripSetupView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var authService: FirebaseAuthService
 
     @StateObject private var viewModel: CombinedTripSetupViewModel
     var onCreated: (TripSession) -> Void
+    @State private var isShowingPassengerSelector = false
 
     init(
         viewModel: CombinedTripSetupViewModel,
@@ -93,6 +95,21 @@ struct CombinedTripSetupView: View {
                     Text(msg)
                 }
             }
+            .sheet(isPresented: $isShowingPassengerSelector) {
+                InvitePlayersView(
+                    viewModel: InvitePlayersViewModel(
+                        mode: .setupSelection,
+                        tripSessionId: UUID(),
+                        tripName: viewModel.tripName,
+                        selectedUserIds: viewModel.selectedPassengerIds,
+                        authService: authService
+                    ),
+                    title: "Passenger List".localized
+                ) { selected in
+                    viewModel.selectedPassengerIds = selected
+                }
+                .environmentObject(authService)
+            }
         }
     }
 
@@ -132,7 +149,7 @@ struct CombinedTripSetupView: View {
     private var tripParticipationSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Who's on this trip?".localized)
+                Text("Passenger List".localized)
                     .font(.system(.headline, design: .rounded))
                     .foregroundStyle(Color.Theme.primaryBlue)
 
@@ -141,6 +158,30 @@ struct CombinedTripSetupView: View {
                     .foregroundStyle(Color.Theme.softBrown)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel("Your trip starts with you. Invite friends or family anytime to play together.".localized)
+
+                Button {
+                    FeedbackService.shared.buttonTap()
+                    isShowingPassengerSelector = true
+                } label: {
+                    HStack {
+                        Label("Passenger List".localized, systemImage: "person.2.fill")
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                        Spacer()
+                        Text(viewModel.selectedPassengerIds.isEmpty ? "Optional".localized : "%d selected".localized(viewModel.selectedPassengerIds.count))
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.Theme.background)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Passenger List".localized)
+                .accessibilityHint("Select friends or family to invite after trip creation".localized)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
@@ -356,6 +397,7 @@ struct CombinedTripSetupView: View {
         viewModel.clearError()
         do {
             let session = try viewModel.createTrip()
+            Task { await viewModel.sendSetupInvites(for: session) }
             FeedbackService.shared.actionSuccess()
             onCreated(session)
             dismiss()
@@ -408,24 +450,30 @@ private struct GameTypeRow: View {
 // MARK: - Previews
 
 #Preview("Combined Trip Setup") {
-    CombinedTripSetupView(
+    let auth = FirebaseAuthService()
+    auth.currentUser = AppUser(id: "preview-user", userName: "Preview", firebaseUID: "preview-user")
+    return CombinedTripSetupView(
         viewModel: CombinedTripSetupViewModel(
             tripSessionRepository: TripSessionRepository.shared,
             gameInstanceRepository: GameInstanceRepository.shared,
-            authService: FirebaseAuthService()
+            authService: auth
         ),
         onCreated: { _ in }
     )
+    .environmentObject(auth)
     .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self, TripActivityEventEntity.self], inMemory: true)
 }
 
 #Preview("Combined Trip Setup - With name") {
+    let auth = FirebaseAuthService()
+    auth.currentUser = AppUser(id: "preview-user", userName: "Preview", firebaseUID: "preview-user")
     let vm = CombinedTripSetupViewModel(
         tripSessionRepository: TripSessionRepository.shared,
         gameInstanceRepository: GameInstanceRepository.shared,
-        authService: FirebaseAuthService()
+        authService: auth
     )
     vm.tripName = "Weekend Road Trip"
     return CombinedTripSetupView(viewModel: vm, onCreated: { _ in })
+        .environmentObject(auth)
         .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self, TripActivityEventEntity.self], inMemory: true)
 }

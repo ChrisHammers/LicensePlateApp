@@ -254,6 +254,32 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
         return try ctx.fetch(descriptor)
     }
 
+    func getInvites(forTripSessionId tripSessionId: String) throws -> [TripInvite] {
+        guard let ctx = modelContext else { throw TripInviteRepositoryError.noModelContext }
+        let searchTripSessionId = tripSessionId
+        var descriptor = FetchDescriptor<TripInvite>(
+            predicate: #Predicate<TripInvite> { invite in
+                invite.tripSessionId == searchTripSessionId
+            }
+        )
+        descriptor.sortBy = [SortDescriptor(\.createdAt, order: .reverse)]
+        return try ctx.fetch(descriptor)
+    }
+
+    func hasPendingInvite(tripSessionId: String, toUserId: String) throws -> Bool {
+        guard let ctx = modelContext else { throw TripInviteRepositoryError.noModelContext }
+        let searchTripSessionId = tripSessionId
+        let searchToUserId = toUserId
+        let pending = TripInvite.TripInviteStatus.pending.rawValue
+        var descriptor = FetchDescriptor<TripInvite>(
+            predicate: #Predicate<TripInvite> { invite in
+                invite.tripSessionId == searchTripSessionId && invite.toUserId == searchToUserId && invite.status == pending
+            }
+        )
+        descriptor.fetchLimit = 1
+        return try ctx.fetch(descriptor).first != nil
+    }
+
     // MARK: - Cloud Functions
 
     func acceptInvite(inviteId: String, userId: String) async throws {

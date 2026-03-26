@@ -197,6 +197,15 @@ struct AnalyticsServiceTests {
         #expect(sent.name == "trip_invite_sent")
         #expect(sent.parameters?["invite_trip_id"] as? String == "trip-abc")
         #expect(sent.parameters?["trip_name_length"] as? Int == 12)
+
+        let failed = AnalyticsService.Event.tripInviteSendFailed(tripSessionId: "trip-abc", error: "network")
+        #expect(failed.name == "trip_invite_send_failed")
+        #expect(failed.parameters?["invite_trip_id"] as? String == "trip-abc")
+        #expect(failed.parameters?["error"] as? String == "network")
+
+        let viewed = AnalyticsService.Event.tripParticipantsViewed(tripSessionId: "trip-abc")
+        #expect(viewed.name == "trip_participants_viewed")
+        #expect(viewed.parameters?["trip_session_id"] as? String == "trip-abc")
     }
 
     @Test @MainActor func inviteContextEvents() async throws {

@@ -175,5 +175,10 @@ final class PendingTripsViewModel: ObservableObject {
     func onAppear() {
         AnalyticsService.shared.log(.tripInvitesScreenOpened)
         loadIfNeeded()
+        if let firstIncoming = incomingInvites.first {
+            AnalyticsService.shared.log(.tripInviteReceivedViewed(inviteId: firstIncoming.inviteId))
+        } else {
+            AnalyticsService.shared.log(.tripInviteReceivedViewed(inviteId: nil))
+        }
     }
 }

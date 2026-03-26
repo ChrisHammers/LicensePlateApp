@@ -48,6 +48,22 @@ final class MockTripInviteRepository: TripInviteRepositoryProtocol {
             .sorted { $0.createdAt > $1.createdAt }
     }
 
+    func getInvites(forTripSessionId tripSessionId: String) throws -> [TripInvite] {
+        if shouldThrow { throw NSError(domain: "MockTripInviteRepository", code: -1, userInfo: nil) }
+        return invites
+            .filter { $0.tripSessionId == tripSessionId }
+            .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    func hasPendingInvite(tripSessionId: String, toUserId: String) throws -> Bool {
+        if shouldThrow { throw NSError(domain: "MockTripInviteRepository", code: -1, userInfo: nil) }
+        return invites.contains {
+            $0.tripSessionId == tripSessionId
+                && $0.toUserId == toUserId
+                && $0.statusEnum == .pending
+        }
+    }
+
     func acceptInvite(inviteId: String, userId: String) async throws {
         if shouldThrow { throw NSError(domain: "MockTripInviteRepository", code: -1, userInfo: nil) }
         guard let idx = invites.firstIndex(where: { $0.inviteId == inviteId && $0.toUserId == userId }) else {

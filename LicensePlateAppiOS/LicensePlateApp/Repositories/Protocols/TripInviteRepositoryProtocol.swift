@@ -21,6 +21,8 @@ protocol TripInviteRepositoryProtocol: AnyObject {
 
     func getIncomingInvites(userId: String) throws -> [TripInvite]
     func getOutgoingInvites(userId: String) throws -> [TripInvite]
+    func getInvites(forTripSessionId tripSessionId: String) throws -> [TripInvite]
+    func hasPendingInvite(tripSessionId: String, toUserId: String) throws -> Bool
 
     func acceptInvite(inviteId: String, userId: String) async throws
     func declineInvite(inviteId: String, userId: String) async throws

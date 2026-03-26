@@ -14,6 +14,7 @@ struct TripSessionView: View {
     @EnvironmentObject private var authService: FirebaseAuthService
     @StateObject private var viewModel: TripSessionViewModel
     @State private var showTripSettings = false
+    @State private var showPassengerList = false
 
     init(sessionId: UUID) {
         self.sessionId = sessionId
@@ -54,6 +55,20 @@ struct TripSessionView: View {
         List {
             Section {
                 tripStatusRow(session: session)
+                Button {
+                    FeedbackService.shared.buttonTap()
+                    showPassengerList = true
+                } label: {
+                    HStack {
+                        Text("Passenger List".localized)
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                        Spacer()
+                        Text("\(session.participants.count)")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                }
             } header: {
                 Text("Trip".localized)
             }
@@ -114,6 +129,10 @@ struct TripSessionView: View {
                 }
             )
             .environmentObject(authService)
+        }
+        .sheet(isPresented: $showPassengerList) {
+            TripParticipantsView(sessionId: session.id)
+                .environmentObject(authService)
         }
         .onChange(of: showTripSettings) { _, isPresented in
             if !isPresented {
