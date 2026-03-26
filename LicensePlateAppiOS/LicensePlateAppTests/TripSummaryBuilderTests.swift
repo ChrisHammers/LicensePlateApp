@@ -48,7 +48,10 @@ struct TripSummaryBuilderTests {
         #expect(summary.games[0].discoveryCount == 0)
         #expect(summary.games[0].gameMode == .collaborative)
         #expect(summary.games[0].teamSummary == nil)
-        #expect(summary.participantContributions.isEmpty)
+        #expect(summary.rankedParticipants.count == 1)
+        #expect(summary.rankedParticipants[0].contribution.participantId == "user1")
+        #expect(summary.rankedParticipants[0].contribution.weightedScore == 0)
+        #expect(summary.rankedParticipants[0].rank == 1)
         #expect(summary.discoveryProjection == nil)
     }
 
@@ -95,10 +98,11 @@ struct TripSummaryBuilderTests {
         #expect(summary.totalDiscoveryCount == 2)
         #expect(summary.games[0].discoveryCount == 2)
         #expect(summary.games[0].gameMode == .collaborative)
-        #expect(summary.participantContributions.count == 1)
-        #expect(summary.participantContributions[0].participantId == "user1")
-        #expect(summary.participantContributions[0].discoveryCount == 2)
-        #expect(summary.participantContributions[0].weightedScore == 2.0)
+        #expect(summary.rankedParticipants.count == 1)
+        #expect(summary.rankedParticipants[0].contribution.participantId == "user1")
+        #expect(summary.rankedParticipants[0].contribution.discoveryCount == 2)
+        #expect(summary.rankedParticipants[0].contribution.weightedScore == 2.0)
+        #expect(summary.rankedParticipants[0].rank == 1)
         #expect(summary.discoveryProjection != nil)
         #expect(summary.discoveryProjection!.targetSummaries.count == 2)
     }
@@ -277,7 +281,7 @@ struct TripSummaryBuilderTests {
         #expect(projection.targetSummaries.count == 2)
         let rowIds = Set(projection.targetSummaries.map(\.id))
         #expect(rowIds == Set(["\(gameId1.uuidString)_CA", "\(gameId2.uuidString)_CA"]))
-        let byUser = Dictionary(uniqueKeysWithValues: summary.participantContributions.map { ($0.participantId, $0.firstFindCount) })
+        let byUser = Dictionary(uniqueKeysWithValues: summary.rankedParticipants.map { ($0.contribution.participantId, $0.contribution.firstFindCount) })
         #expect(byUser["u1"] == 1)
         #expect(byUser["u2"] == 1)
     }

@@ -105,6 +105,9 @@ final class TravelLogViewModel: ObservableObject {
             )
             selectedSummary = summary
             AnalyticsService.shared.log(.tripSummaryViewed(sessionId: sessionId.uuidString))
+            if summary.hasCompetitiveGame {
+                AnalyticsService.shared.log(.tripSummaryCompetitiveRankingsPresented(tripSessionId: sessionId.uuidString))
+            }
         } catch {
             errorMessage = error.localizedDescription
         }

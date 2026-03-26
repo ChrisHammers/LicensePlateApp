@@ -25,7 +25,7 @@ struct TripSummaryView: View {
             VStack(alignment: .leading, spacing: 24) {
                 headerSection
                 statsSection
-                if !summary.participantContributions.isEmpty {
+                if !summary.rankedParticipants.isEmpty {
                     participantsSection
                 }
                 if !summary.games.isEmpty {
@@ -61,7 +61,7 @@ struct TripSummaryView: View {
 
     /// Collects all participant IDs from the summary and fetches display names from UserRepository.
     private func loadParticipantDisplayNames() async {
-        var ids: Set<String> = Set(summary.participantContributions.map(\.participantId))
+        var ids: Set<String> = Set(summary.rankedParticipants.map(\.contribution.participantId))
         if let projection = summary.discoveryProjection {
             for target in projection.targetSummaries {
                 if let first = target.firstFinderParticipantId { ids.insert(first) }
@@ -195,22 +195,42 @@ struct TripSummaryView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel("Scores and finds combine all games on this trip.".localized)
             }
-            ForEach(summary.participantContributions, id: \.participantId) { contrib in
-                HStack {
-                    Text(participantDisplayNames[contrib.participantId] ?? contrib.participantId)
+            ForEach(summary.rankedParticipants) { row in
+                let c = row.contribution
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    if summary.hasCompetitiveGame {
+                        Text("Rank #%d".localized(row.rank))
+                            .font(.system(.caption, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                            .frame(minWidth: 56, alignment: .leading)
+                        if row.isTiedOnScore {
+                            Text("Tied".localized)
+                                .font(.system(.caption2, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                        }
+                    }
+                    Text(participantDisplayNames[c.participantId] ?? c.participantId)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .font(.system(.subheadline, design: .rounded))
                         .foregroundStyle(Color.Theme.primaryBlue)
-                    Spacer()
-                    Text("\(contrib.discoveryCount) found".localized)
+                    Spacer(minLength: 4)
+                    if summary.hasCompetitiveGame {
+                        Text("%d first finds".localized(c.firstFindCount))
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    Text("\(c.discoveryCount) found".localized)
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
-                    Text(String(format: "%.1f", contrib.weightedScore))
+                    Text(String(format: "%.1f", c.weightedScore))
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                 }
                 .padding(.vertical, 4)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(participantRowAccessibilityLabel(row: row))
             }
         }
         .padding()
@@ -219,6 +239,20 @@ struct TripSummaryView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.Theme.cardBackground)
         )
+    }
+
+    private func participantRowAccessibilityLabel(row: RankedParticipantContribution) -> String {
+        let c = row.contribution
+        let name = participantDisplayNames[c.participantId] ?? c.participantId
+        var parts: [String] = [name]
+        if summary.hasCompetitiveGame {
+            parts.append("Rank #%d".localized(row.rank))
+            if row.isTiedOnScore { parts.append("Tied".localized) }
+            parts.append("%d first finds".localized(c.firstFindCount))
+        }
+        parts.append("\(c.discoveryCount) found".localized)
+        parts.append(String(format: "%.1f", c.weightedScore))
+        return parts.joined(separator: ", ")
     }
 
     private var gamesSection: some View {
@@ -362,5 +396,11 @@ struct TripSummaryView: View {
 #Preview("Collaborative — two finders, one region") {
     NavigationStack {
         TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryCollaborativeTwoFindersOneRegion(), onDismiss: nil)
+    }
+}
+
+#Preview("Competitive — tied standings") {
+    NavigationStack {
+        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryCompetitiveTied(), onDismiss: nil)
     }
 }

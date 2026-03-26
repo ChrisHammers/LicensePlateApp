@@ -146,6 +146,15 @@ struct AnalyticsServiceTests {
         #expect(combinedStarted.parameters?["trip_session_id"] as? String == "trip-1")
         #expect(combinedStarted.parameters?["combined_game_count"] as? Int == 2)
         #expect(combinedStarted.parameters?["combined_game_types"] as? String == "license_plate,other")
+
+        let compSummary = AnalyticsService.Event.tripSummaryCompetitiveRankingsPresented(tripSessionId: "t-1")
+        #expect(compSummary.name == "trip_summary_competitive_rankings_presented")
+        #expect(compSummary.parameters?["trip_session_id"] as? String == "t-1")
+
+        let compStandings = AnalyticsService.Event.competitiveInGameStandingsPresented(tripSessionId: "t-2", gameInstanceId: "g-2")
+        #expect(compStandings.name == "competitive_in_game_standings_presented")
+        #expect(compStandings.parameters?["trip_session_id"] as? String == "t-2")
+        #expect(compStandings.parameters?["game_instance_id"] as? String == "g-2")
     }
 
     @Test @MainActor func tripSessionCreatedAndGameInstanceEndedParameters() async throws {

@@ -95,7 +95,7 @@ struct TravelLogViewModelTests {
         #expect(viewModel.selectedSummary?.sessionId == sessionId)
         #expect(viewModel.selectedSummary?.tripName == "New Flow Trip")
         #expect(viewModel.selectedSummary?.totalDiscoveryCount == 0)
-        #expect(viewModel.selectedSummary?.participantContributions.isEmpty == true)
+        #expect(viewModel.selectedSummary?.rankedParticipants.isEmpty == true)
     }
 
     @Test func openSummaryWithEventsBuildsSummaryWithDiscoveries() async throws {

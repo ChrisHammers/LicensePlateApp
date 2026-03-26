@@ -48,10 +48,15 @@ enum TripSummaryBuilder {
             ))
         }
 
-        let participantContributions = ParticipantContributionBuilder.contributionSummary(
+        let rawContributions = ParticipantContributionBuilder.contributionSummary(
             discoveries: discoveries,
             credits: credits
         )
+        let mergedContributions = TripRosterContributionMerge.merge(
+            roster: session.participants,
+            contributions: rawContributions
+        )
+        let rankedParticipants = TripParticipantRanking.rankContributions(mergedContributions)
 
         let discoveryProjection: DiscoveryCreditProjection? = discoveries.isEmpty ? nil : DiscoveryCreditProjectionService.project(
             discoveries: discoveries,
@@ -70,7 +75,7 @@ enum TripSummaryBuilder {
             gameCount: gameCount,
             totalDiscoveryCount: totalDiscoveryCount,
             games: gameItems,
-            participantContributions: participantContributions,
+            rankedParticipants: rankedParticipants,
             discoveryProjection: discoveryProjection,
             locationMetadata: nil
         )

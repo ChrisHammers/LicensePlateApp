@@ -120,7 +120,7 @@ enum DiscoveryRulesEngine {
         let isShared = GameModeRulesEngine.creditType(for: mode) == .shared
         var allCredits: [GameCredit] = []
         for (_, targetDiscoveries) in discoveriesByTarget {
-            let sorted = targetDiscoveries.sorted { $0.discoveredAt < $1.discoveredAt }
+            let sorted = targetDiscoveries.sorted(by: Self.discoveryCreditOrder)
             guard let discovery = isShared ? sorted.last : sorted.first else { continue }
             let existing = isShared ? Array(sorted.dropLast()) : Array(sorted.dropFirst())
             let credits = GameCreditCalculator.credits(
@@ -132,6 +132,17 @@ enum DiscoveryRulesEngine {
             allCredits.append(contentsOf: credits)
         }
         return allCredits
+    }
+
+    /// Same ordering as `TripActivityEventDiscoveryReplay` flattened discoveries: `discoveredAt`, `targetId`, `id`.
+    static func discoveryCreditOrder(_ a: GameDiscovery, _ b: GameDiscovery) -> Bool {
+        if a.discoveredAt != b.discoveredAt {
+            return a.discoveredAt < b.discoveredAt
+        }
+        if a.targetId != b.targetId {
+            return a.targetId < b.targetId
+        }
+        return a.id < b.id
     }
 
     private static func riskFlags(from context: DiscoveryActionContext?, discovery: GameDiscovery) -> [RiskFlag] {

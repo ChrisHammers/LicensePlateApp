@@ -198,6 +198,31 @@ struct DiscoveryRulesEngineTests {
         #expect(credits.isEmpty)
     }
 
+    @Test func creditsForDiscoveriesCompetitiveSameTimestampUsesIdTieBreak() async throws {
+        let sameTime = Date(timeIntervalSince1970: 1_700_000_000)
+        let dLateId = GameDiscovery(
+            id: "z",
+            gameInstanceId: gameInstanceId,
+            participantId: "user1",
+            targetId: "region-1",
+            discoveredAt: sameTime,
+            inputMethod: .list
+        )
+        let dEarlyId = GameDiscovery(
+            id: "a",
+            gameInstanceId: gameInstanceId,
+            participantId: "user2",
+            targetId: "region-1",
+            discoveredAt: sameTime,
+            inputMethod: .list
+        )
+        let byTarget = ["region-1": [dLateId, dEarlyId]]
+        let credits = DiscoveryRulesEngine.creditsForDiscoveries(mode: .competitive, discoveriesByTarget: byTarget)
+        #expect(credits.count == 1)
+        #expect(credits[0].participantId == "user2")
+        #expect(credits[0].discoveryId == "a")
+    }
+
     @Test func creditsForDiscoveriesCollaborativeAppliesGameTeamsToCredits() async throws {
         let teams = [
             TripTeam(id: "t1", name: "One", participantUserIds: ["user1"]),

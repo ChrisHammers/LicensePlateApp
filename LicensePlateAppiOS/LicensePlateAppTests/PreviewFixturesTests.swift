@@ -92,6 +92,12 @@ struct PreviewFixturesTests {
         let dup = PreviewSummaryFixtures.tripSummaryDuplicateRegionAcrossGames()
         #expect(dup.tripMode == .multiplayer)
         #expect(dup.games.allSatisfy { $0.gameMode == .collaborative })
+
+        let compTied = PreviewSummaryFixtures.tripSummaryCompetitiveTied()
+        #expect(compTied.hasCompetitiveGame == true)
+        #expect(compTied.rankedParticipants.count == 2)
+        #expect(compTied.rankedParticipants[0].rank == 1)
+        #expect(compTied.rankedParticipants[1].rank == 1)
     }
 
     @Test("MockFactories build complete graph")

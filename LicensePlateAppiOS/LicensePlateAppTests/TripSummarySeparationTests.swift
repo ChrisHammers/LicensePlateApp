@@ -36,6 +36,7 @@ struct TripSummarySeparationTests {
         let summary = TripSummaryBuilder.build(session: session, games: [game], discoveries: [], credits: [])
         #expect(summary.tripMode == .multiplayer)
         #expect(summary.games[0].gameMode == .competitive)
+        #expect(summary.hasCompetitiveGame == true)
     }
 
     @Test func soloTripCanHaveCollaborativeGame() async throws {
@@ -57,6 +58,7 @@ struct TripSummarySeparationTests {
         let summary = TripSummaryBuilder.build(session: session, games: [game], discoveries: [], credits: [])
         #expect(summary.tripMode == .solo)
         #expect(summary.games[0].gameMode == .collaborative)
+        #expect(summary.hasCompetitiveGame == false)
     }
 
     @Test func tripModeLocalizedDisplayNameIsNonEmpty() async throws {

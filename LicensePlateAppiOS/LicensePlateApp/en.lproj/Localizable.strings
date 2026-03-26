@@ -664,3 +664,12 @@
 "Sign in to remove a find." = "Sign in to remove a find.";
 "You don’t have a find to remove for this region." = "You don’t have a find to remove for this region.";
 "You can’t remove this find." = "You can’t remove this find.";
+
+// Step 11 — Competitive rankings & in-game standings
+"Rank #%d" = "Rank #%d";
+"Tied" = "Tied";
+"First finds" = "First finds";
+"Standings" = "Standings";
+"Your duplicate attempts" = "Your duplicate attempts";
+"No duplicate attempts yet" = "No duplicate attempts yet";
+"%d first finds" = "%d first finds";

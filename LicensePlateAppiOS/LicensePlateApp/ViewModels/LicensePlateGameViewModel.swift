@@ -24,6 +24,10 @@ final class LicensePlateGameViewModel: ObservableObject {
     /// Latest persisted game instance (refresh after lifecycle or config changes).
     @Published private(set) var game: GameInstance
     @Published private(set) var foundRegions: [FoundRegion] = []
+    /// Competitive mode: ranked standings for this game instance (roster merged).
+    @Published private(set) var competitiveStandings: [RankedParticipantContribution] = []
+    /// Competitive: current user’s `discoveryRejected` duplicate attempts for this game.
+    @Published private(set) var myDuplicateRejections: [CompetitiveDuplicateAttempt] = []
     @Published var rejectedDuplicateMessage: String?
     @Published var rejectedInvalidParticipantMessage: String?
     @Published private(set) var errorMessage: String?
@@ -39,6 +43,7 @@ final class LicensePlateGameViewModel: ObservableObject {
     private let gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
     private let tripActivityEventRecording: TripActivityEventRecordingProtocol
     private let authService: FirebaseAuthService
+    private var didLogCompetitiveStandingsExposure = false
 
     var isTripCreator: Bool {
         let currentUserID = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
@@ -91,22 +96,83 @@ final class LicensePlateGameViewModel: ObservableObject {
         self.tripActivityEventRecording = tripActivityEventRecording
         self.authService = authService
         self.foundRegions = (try? tripActivityEventRepository.foundRegions(sessionId: session.id, gameInstanceId: game.id)) ?? []
+        refreshCompetitiveProjections()
     }
 
     func refreshSession() {
         if let session = try? tripSessionRepository.session(byId: sessionId) {
             currentSession = session
         }
+        refreshCompetitiveProjections()
     }
 
     func refreshGame() {
         if let updated = try? gameInstanceRepository.instance(byId: game.id) {
             game = updated
         }
+        refreshCompetitiveProjections()
     }
 
     func refreshFoundRegions() {
         foundRegions = (try? tripActivityEventRepository.foundRegions(sessionId: sessionId, gameInstanceId: game.id)) ?? []
+        refreshCompetitiveProjections()
+    }
+
+    /// Rebuilds competitive standings and duplicate-rejection history from the event log.
+    func refreshCompetitiveProjections() {
+        guard game.commonConfig.gameMode == .competitive else {
+            competitiveStandings = []
+            myDuplicateRejections = []
+            return
+        }
+
+        let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+
+        guard let discoveries = try? tripActivityEventRepository.discoveries(sessionId: sessionId, gameInstanceId: game.id) else {
+            competitiveStandings = []
+            myDuplicateRejections = []
+            return
+        }
+
+        let byTarget = Dictionary(grouping: discoveries, by: \.targetId)
+        let credits = DiscoveryRulesEngine.creditsForDiscoveries(
+            mode: game.commonConfig.gameMode,
+            discoveriesByTarget: byTarget,
+            teams: game.teams
+        )
+        let raw = ParticipantContributionBuilder.contributionSummary(discoveries: discoveries, credits: credits)
+        let merged = TripRosterContributionMerge.merge(roster: currentSession.participants, contributions: raw)
+        competitiveStandings = TripParticipantRanking.rankContributions(merged)
+
+        if let allEvents = try? tripActivityEventRepository.events(sessionId: sessionId, limit: nil) {
+            let gidStr = game.id.uuidString
+            let rejected = allEvents
+                .filter { $0.kind == .discoveryRejected }
+                .filter { $0.payload?[TripActivityEventPayloadKey.gameInstanceId] == gidStr }
+                .filter { $0.payload?[TripActivityEventPayloadKey.rejectionReason] == DiscoveryOutcome.rejectedDuplicate.rawValue }
+                .filter { event in
+                    let pid = event.payload?[TripActivityEventPayloadKey.participantId] ?? event.actorId ?? ""
+                    return !uid.isEmpty && pid == uid
+                }
+                .sorted { $0.timestamp > $1.timestamp }
+            myDuplicateRejections = rejected.map {
+                CompetitiveDuplicateAttempt(
+                    id: $0.id,
+                    targetId: $0.payload?[TripActivityEventPayloadKey.regionId] ?? "",
+                    timestamp: $0.timestamp
+                )
+            }
+        } else {
+            myDuplicateRejections = []
+        }
+
+        if currentSession.mode == .multiplayer, !didLogCompetitiveStandingsExposure {
+            AnalyticsService.shared.log(.competitiveInGameStandingsPresented(
+                tripSessionId: sessionId.uuidString,
+                gameInstanceId: game.id.uuidString
+            ))
+            didLogCompetitiveStandingsExposure = true
+        }
     }
 
     func startTrip() throws {
@@ -243,6 +309,7 @@ final class LicensePlateGameViewModel: ObservableObject {
                 participantId: participantId.isEmpty ? nil : participantId,
                 mode: game.commonConfig.gameMode.rawValue
             ))
+            refreshCompetitiveProjections()
             return .rejectedDuplicate(message: rejectedDuplicateMessage ?? "")
         }
 

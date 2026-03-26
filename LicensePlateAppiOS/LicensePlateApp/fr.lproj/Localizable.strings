@@ -635,3 +635,12 @@
 "You don’t have a find to remove for this region." = "Vous n’avez pas de découverte à retirer pour cette région.";
 "You can’t remove this find." = "Vous ne pouvez pas retirer cette découverte.";
 
+// Step 11 — Competitive rankings & in-game standings
+"Rank #%d" = "Rang n° %d";
+"Tied" = "Égalité";
+"First finds" = "Premières découvertes";
+"Standings" = "Classement";
+"Your duplicate attempts" = "Vos tentatives en double";
+"No duplicate attempts yet" = "Aucune tentative en double pour l’instant";
+"%d first finds" = "%d premières découvertes";
+

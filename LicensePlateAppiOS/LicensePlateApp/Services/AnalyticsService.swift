@@ -133,6 +133,11 @@ class AnalyticsService: AnalyticsLogging {
         case tripSummaryViewedGameSection(sessionId: String)
         case tripSummaryViewedParticipantSection(sessionId: String)
         case tripSummaryViewedMapRecap(sessionId: String)
+        /// Step 11 — Travel log summary includes at least one competitive game (rankings section).
+        case tripSummaryCompetitiveRankingsPresented(tripSessionId: String)
+        /// Step 11 — In-game competitive standings first shown (multiplayer).
+        case competitiveInGameStandingsPresented(tripSessionId: String, gameInstanceId: String)
+
         case travelLogFiltered(filterKey: String, filterValue: String)
         case travelLogSorted(sortKey: String)
 
@@ -272,6 +277,8 @@ class AnalyticsService: AnalyticsLogging {
             case .tripSummaryViewedGameSection: return "trip_summary_viewed_game_section"
             case .tripSummaryViewedParticipantSection: return "trip_summary_viewed_participant_section"
             case .tripSummaryViewedMapRecap: return "trip_summary_viewed_map_recap"
+            case .tripSummaryCompetitiveRankingsPresented: return "trip_summary_competitive_rankings_presented"
+            case .competitiveInGameStandingsPresented: return "competitive_in_game_standings_presented"
             case .travelLogFiltered: return "travel_log_filtered"
             case .travelLogSorted: return "travel_log_sorted"
             case .tripSessionCreated: return "trip_session_created"
@@ -399,6 +406,10 @@ class AnalyticsService: AnalyticsLogging {
                 return ["session_id": sessionId]
             case .tripSummaryViewedGameSection(let sessionId), .tripSummaryViewedParticipantSection(let sessionId), .tripSummaryViewedMapRecap(let sessionId):
                 return ["session_id": sessionId]
+            case .tripSummaryCompetitiveRankingsPresented(let tripSessionId):
+                return ["trip_session_id": tripSessionId]
+            case .competitiveInGameStandingsPresented(let tripSessionId, let gameInstanceId):
+                return ["trip_session_id": tripSessionId, "game_instance_id": gameInstanceId]
             case .travelLogFiltered(let filterKey, let filterValue):
                 return ["filter_key": filterKey, "filter_value": filterValue]
             case .travelLogSorted(let sortKey):

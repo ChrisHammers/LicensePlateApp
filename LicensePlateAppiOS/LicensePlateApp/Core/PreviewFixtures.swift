@@ -327,14 +327,14 @@ enum PreviewSummaryFixtures {
                     teamSummary: nil
                 )
             ],
-            participantContributions: [
+            rankedParticipants: TripParticipantRanking.rankContributions([
                 ParticipantContribution(
                     participantId: PreviewConstants.userId1,
                     discoveryCount: 12,
                     weightedScore: 12,
                     firstFindCount: 12
                 )
-            ],
+            ]),
             discoveryProjection: nil,
             locationMetadata: nil
         )
@@ -389,14 +389,14 @@ enum PreviewSummaryFixtures {
                     teamSummary: nil
                 )
             ],
-            participantContributions: [
+            rankedParticipants: TripParticipantRanking.rankContributions([
                 ParticipantContribution(
                     participantId: PreviewConstants.userId1,
                     discoveryCount: 25,
                     weightedScore: 25,
                     firstFindCount: 25
                 )
-            ],
+            ]),
             discoveryProjection: nil,
             locationMetadata: nil
         )
@@ -461,7 +461,7 @@ enum PreviewSummaryFixtures {
                     teamSummary: nil
                 )
             ],
-            participantContributions: [
+            rankedParticipants: TripParticipantRanking.rankContributions([
                 ParticipantContribution(
                     participantId: PreviewConstants.userId1,
                     discoveryCount: 1,
@@ -474,7 +474,7 @@ enum PreviewSummaryFixtures {
                     weightedScore: 1.0,
                     firstFindCount: 1
                 )
-            ],
+            ]),
             discoveryProjection: projection,
             locationMetadata: nil
         )
@@ -519,7 +519,7 @@ enum PreviewSummaryFixtures {
                     teamSummary: nil
                 )
             ],
-            participantContributions: [
+            rankedParticipants: TripParticipantRanking.rankContributions([
                 ParticipantContribution(
                     participantId: PreviewConstants.userId1,
                     discoveryCount: 1,
@@ -532,8 +532,54 @@ enum PreviewSummaryFixtures {
                     weightedScore: 0.5,
                     firstFindCount: 0
                 )
-            ],
+            ]),
             discoveryProjection: projection,
+            locationMetadata: nil
+        )
+    }
+
+    /// Competitive multiplayer: tied weighted score (rank 1,1); `hasCompetitiveGame` true for summary UI.
+    static func tripSummaryCompetitiveTied() -> TripSummary {
+        let gid = PreviewConstants.gameInstanceId1
+        return TripSummary(
+            sessionId: PreviewConstants.sessionIdCollaborative,
+            tripName: "Competitive Weekend",
+            tripMode: .multiplayer,
+            status: .ended,
+            endedAt: PreviewConstants.fixedDateEnded,
+            startedAt: PreviewConstants.fixedDate,
+            participantCount: 2,
+            gameCount: 1,
+            totalDiscoveryCount: 4,
+            games: [
+                TripSummaryGameItem(
+                    gameInstanceId: gid,
+                    definitionId: GameType.licensePlate.rawValue,
+                    discoveryCount: 4,
+                    startedAt: PreviewConstants.fixedDate,
+                    endedAt: PreviewConstants.fixedDateEnded,
+                    firstDiscoveries: [],
+                    completionGoal: 50,
+                    progressDescription: "4 / 50 US states",
+                    gameMode: .competitive,
+                    teamSummary: nil
+                )
+            ],
+            rankedParticipants: TripParticipantRanking.rankContributions([
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId1,
+                    discoveryCount: 2,
+                    weightedScore: 2.0,
+                    firstFindCount: 2
+                ),
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId2,
+                    discoveryCount: 2,
+                    weightedScore: 2.0,
+                    firstFindCount: 2
+                )
+            ]),
+            discoveryProjection: nil,
             locationMetadata: nil
         )
     }

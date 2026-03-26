@@ -634,3 +634,12 @@
 "Sign in to remove a find." = "Inicia sesión para quitar un hallazgo.";
 "You don’t have a find to remove for this region." = "No tienes un hallazgo que quitar en esta región.";
 "You can’t remove this find." = "No puedes quitar este hallazgo.";
+
+// Step 11 — Competitive rankings & in-game standings
+"Rank #%d" = "Puesto n.º %d";
+"Tied" = "Empate";
+"First finds" = "Primeros hallazgos";
+"Standings" = "Clasificación";
+"Your duplicate attempts" = "Tus intentos duplicados";
+"No duplicate attempts yet" = "Aún no hay intentos duplicados";
+"%d first finds" = "%d primeros hallazgos";

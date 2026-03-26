@@ -41,10 +41,15 @@ struct TripSummary: Sendable {
     var totalDiscoveryCount: Int
     /// Per-game breakdown.
     var games: [TripSummaryGameItem]
-    /// Participant contributions (discovery count, score, first finds).
-    var participantContributions: [ParticipantContribution]
+    /// Roster-merged participant rows with competition rank and score ties (Step 11).
+    var rankedParticipants: [RankedParticipantContribution]
     /// Target-level discovery details (first finder, labels) for UI.
     var discoveryProjection: DiscoveryCreditProjection?
     /// Optional location metadata for future map recap.
     var locationMetadata: [String: String]?
+
+    /// True when any game on the trip is competitive (for summary UI: ranks, first-finds column).
+    var hasCompetitiveGame: Bool {
+        games.contains { $0.gameMode == .competitive }
+    }
 }
