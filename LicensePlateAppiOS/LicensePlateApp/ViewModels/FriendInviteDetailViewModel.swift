@@ -8,7 +8,10 @@ import SwiftData
 import Combine
 
 @MainActor
+final class FriendInviteDetailViewModel: ObservableObject {
     let inviteId: String
+
+    @Published var isProcessing = false
     @Published var hasAccepted = false
     @Published var errorMessage: String?
     @Published var user: AppUser?
