@@ -57,7 +57,18 @@ struct DiscoveryCreditProjectionServiceTests {
         #expect(result.targetSummaries.count == 1)
         #expect(result.targetSummaries[0].firstFinderParticipantId == "user1")
         #expect(Set(result.targetSummaries[0].allFinderParticipantIds) == Set(["user1", "user2"]))
-        #expect(result.targetSummaries[0].summaryLabel == "2 finders")
+        #expect(result.targetSummaries[0].summaryLabel == "%d finders".localized(2))
+    }
+
+    @Test func projectTwoDiscoveriesSameTargetCompetitiveUsesFirstFinderLabel() async throws {
+        let gameId = UUID()
+        let base = Date()
+        let d1 = makeDiscovery(participantId: "user1", targetId: "us-ca", gameInstanceId: gameId, discoveredAt: base)
+        let d2 = makeDiscovery(participantId: "user2", targetId: "us-ca", gameInstanceId: gameId, discoveredAt: base.addingTimeInterval(10))
+        let modes = [gameId: GameMode.competitive]
+        let result = DiscoveryCreditProjectionService.project(discoveries: [d1, d2], credits: nil, gameModeByInstanceId: modes)
+        #expect(result.targetSummaries.count == 1)
+        #expect(result.targetSummaries[0].summaryLabel == "Found by %@".localized("user1"))
     }
 
     @Test func projectWithCreditsUsesWeightsForParticipantScores() async throws {

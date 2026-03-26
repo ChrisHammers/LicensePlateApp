@@ -656,3 +656,11 @@
 "1 game" = "1 game";
 "Status: %@" = "Status: %@";
 "Inviter: %@" = "Inviter: %@";
+
+// Step 10 — Collaborative mode / discovery replay
+"Discovery highlights" = "Discovery highlights";
+"Found by %@" = "Found by %@";
+"%d finders" = "%d finders";
+"Sign in to remove a find." = "Sign in to remove a find.";
+"You don’t have a find to remove for this region." = "You don’t have a find to remove for this region.";
+"You can’t remove this find." = "You can’t remove this find.";

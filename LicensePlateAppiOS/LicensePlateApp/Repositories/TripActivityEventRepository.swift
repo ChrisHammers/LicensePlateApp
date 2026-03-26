@@ -107,75 +107,12 @@ final class TripActivityEventRepository: ObservableObject, TripActivityEventRepo
 
     func discoveries(sessionId: UUID, gameInstanceId: UUID?) throws -> [GameDiscovery] {
         let allEvents = try events(sessionId: sessionId, limit: nil)
-        let discoveryEvents = allEvents.filter { $0.kind == .regionFound || $0.kind == .regionRemoved }
-        var byKey: [String: (TripActivityEvent, [String: String])] = [:]
-        for event in discoveryEvents {
-            let payload = event.payload ?? [:]
-            guard let regionId = payload[TripActivityEventPayloadKey.regionId] else { continue }
-            if let filterGid = gameInstanceId,
-               let payloadGid = payload[TripActivityEventPayloadKey.gameInstanceId],
-               UUID(uuidString: payloadGid) != filterGid {
-                continue
-            }
-            guard let stateKey = Self.discoveryReplayStateKey(regionId: regionId, payload: payload, gameInstanceFilter: gameInstanceId) else {
-                continue
-            }
-            if event.kind == .regionRemoved {
-                byKey.removeValue(forKey: stateKey)
-            } else {
-                byKey[stateKey] = (event, payload)
-            }
-        }
-        return byKey.values.sorted { ($0.0.timestamp) < ($1.0.timestamp) }.compactMap { event, payload in
-            let targetId = payload[TripActivityEventPayloadKey.regionId] ?? ""
-            guard !targetId.isEmpty else { return nil }
-            guard let gid = Self.resolvedGameInstanceId(payload: payload, gameInstanceFilter: gameInstanceId) else {
-                return nil
-            }
-            let participantId = payload[TripActivityEventPayloadKey.participantId] ?? event.actorId ?? ""
-            let inputMethod = FoundRegion.InputMethod(rawValue: payload[TripActivityEventPayloadKey.inputMethod] ?? FoundRegion.InputMethod.list.rawValue) ?? .list
-            return GameDiscovery(
-                gameInstanceId: gid,
-                participantId: participantId,
-                targetId: targetId,
-                discoveredAt: event.timestamp,
-                inputMethod: inputMethod,
-                location: nil
-            )
-        }
+        return TripActivityEventDiscoveryReplay.replay(events: allEvents, gameInstanceFilter: gameInstanceId).discoveries
     }
 
     func foundRegions(sessionId: UUID, gameInstanceId: UUID?) throws -> [FoundRegion] {
         let allEvents = try events(sessionId: sessionId, limit: nil)
-        let discoveryEvents = allEvents.filter { $0.kind == .regionFound || $0.kind == .regionRemoved }
-        var byKey: [String: (TripActivityEvent, [String: String])] = [:]
-        for event in discoveryEvents {
-            let payload = event.payload ?? [:]
-            guard let regionId = payload[TripActivityEventPayloadKey.regionId] else { continue }
-            if let filterGid = gameInstanceId,
-               let payloadGid = payload[TripActivityEventPayloadKey.gameInstanceId],
-               UUID(uuidString: payloadGid) != filterGid {
-                continue
-            }
-            guard let stateKey = Self.discoveryReplayStateKey(regionId: regionId, payload: payload, gameInstanceFilter: gameInstanceId) else {
-                continue
-            }
-            if event.kind == .regionRemoved {
-                byKey.removeValue(forKey: stateKey)
-            } else {
-                byKey[stateKey] = (event, payload)
-            }
-        }
-        return byKey.values.sorted { ($0.0.timestamp) < ($1.0.timestamp) }.map { event, payload in
-            let inputMethod = FoundRegion.InputMethod(rawValue: payload[TripActivityEventPayloadKey.inputMethod] ?? FoundRegion.InputMethod.list.rawValue) ?? .list
-            return FoundRegion(
-                regionID: payload[TripActivityEventPayloadKey.regionId] ?? "",
-                foundAt: event.timestamp,
-                inputMethod: inputMethod,
-                foundBy: payload[TripActivityEventPayloadKey.participantId] ?? event.actorId,
-                foundAtLocation: nil
-            )
-        }
+        return TripActivityEventDiscoveryReplay.replay(events: allEvents, gameInstanceFilter: gameInstanceId).foundRegions
     }
 
     func deleteEvents(sessionId: UUID, gameInstanceId: UUID?) throws {
@@ -252,28 +189,6 @@ final class TripActivityEventRepository: ObservableObject, TripActivityEventRepo
         )
     }
 
-    /// Replay key for region_found / region_removed: one game ⇒ `regionId` only; all games ⇒ `gameInstanceId_regionId` so two games can both track the same target id.
-    private static func discoveryReplayStateKey(
-        regionId: String,
-        payload: [String: String],
-        gameInstanceFilter: UUID?
-    ) -> String? {
-        if gameInstanceFilter != nil {
-            return regionId
-        }
-        guard let gidStr = payload[TripActivityEventPayloadKey.gameInstanceId],
-              UUID(uuidString: gidStr) != nil else {
-            return nil
-        }
-        return "\(gidStr)_\(regionId)"
-    }
-
-    private static func resolvedGameInstanceId(payload: [String: String], gameInstanceFilter: UUID?) -> UUID? {
-        if let s = payload[TripActivityEventPayloadKey.gameInstanceId], let u = UUID(uuidString: s) {
-            return u
-        }
-        return gameInstanceFilter
-    }
 }
 
 enum TripActivityEventRepositoryError: Error, LocalizedError {

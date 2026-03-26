@@ -38,7 +38,7 @@ struct ParticipantDiscoveryResolverTests {
         let result = ParticipantDiscoveryResolver.summary(discoveries: [discovery])
         #expect(result.firstFinderParticipantId == "user1")
         #expect(result.allFinderParticipantIds == ["user1"])
-        #expect(result.summaryLabel == "Found by user1")
+        #expect(result.summaryLabel == "Found by %@".localized("user1"))
     }
 
     @Test func summaryMultipleFindersOrderByDiscoveredAt() async throws {
@@ -46,24 +46,32 @@ struct ParticipantDiscoveryResolverTests {
         let d1 = makeDiscovery(participantId: "user2", discoveredAt: base.addingTimeInterval(10))
         let d2 = makeDiscovery(participantId: "user1", discoveredAt: base)
         let d3 = makeDiscovery(participantId: "user3", discoveredAt: base.addingTimeInterval(5))
-        let result = ParticipantDiscoveryResolver.summary(discoveries: [d1, d2, d3])
+        let result = ParticipantDiscoveryResolver.summary(discoveries: [d1, d2, d3], gameMode: .collaborative)
         #expect(result.firstFinderParticipantId == "user1")
         #expect(result.allFinderParticipantIds == ["user1", "user3", "user2"])
-        #expect(result.summaryLabel == "3 finders")
+        #expect(result.summaryLabel == "%d finders".localized(3))
     }
 
     @Test func summaryTwoFindersLabel() async throws {
         let d1 = makeDiscovery(participantId: "alice")
         let d2 = makeDiscovery(participantId: "bob")
-        let result = ParticipantDiscoveryResolver.summary(discoveries: [d1, d2])
+        let result = ParticipantDiscoveryResolver.summary(discoveries: [d1, d2], gameMode: .collaborative)
         #expect(result.allFinderParticipantIds.count == 2)
-        #expect(result.summaryLabel == "2 finders")
+        #expect(result.summaryLabel == "%d finders".localized(2))
     }
 
     @Test func summarySingleFinderLabelFormat() async throws {
         let discovery = makeDiscovery(participantId: "alice")
         let result = ParticipantDiscoveryResolver.summary(discoveries: [discovery])
-        #expect(result.summaryLabel.hasPrefix("Found by "))
-        #expect(result.summaryLabel.contains("alice"))
+        #expect(result.summaryLabel == "Found by %@".localized("alice"))
+    }
+
+    @Test func summaryCompetitiveMultipleFindersEmphasizesFirstFinderInLabel() async throws {
+        let base = Date()
+        let d1 = makeDiscovery(participantId: "user1", discoveredAt: base)
+        let d2 = makeDiscovery(participantId: "user2", discoveredAt: base.addingTimeInterval(1))
+        let result = ParticipantDiscoveryResolver.summary(discoveries: [d1, d2], gameMode: .competitive)
+        #expect(result.allFinderParticipantIds == ["user1", "user2"])
+        #expect(result.summaryLabel == "Found by %@".localized("user1"))
     }
 }

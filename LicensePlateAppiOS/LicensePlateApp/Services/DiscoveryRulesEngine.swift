@@ -17,7 +17,7 @@ enum DiscoveryRulesEngine {
     /// - Parameters:
     ///   - mode: Game mode (from GameInstance.commonConfig.gameMode).
     ///   - tripMode: Trip participation derived from `TripSession` roster (`TripSession.mode`). Solo trips must not accept finds from multiple distinct participants for the same target.
-    ///   - existingDiscoveriesForTarget: Discoveries already recorded for this target (0 or 1 with current repo replay).
+    ///   - existingDiscoveriesForTarget: Discoveries already recorded for this target (replay supports multiple finders per target).
     ///   - candidateParticipantId: Participant making the new find.
     ///   - candidateTargetId: Target being found (e.g. region id).
     ///   - gameInstanceId: Game instance id.

@@ -8,6 +8,7 @@
 import Foundation
 
 /// A single discovery in a game (e.g. a region found). Uses existing FoundRegion.InputMethod for input type.
+/// When built from event replay, `id` is the originating `region_found` `TripActivityEvent.id` (stable for unfind and credits).
 struct GameDiscovery: Codable, Identifiable, Sendable {
     var id: String
     /// Game instance this discovery belongs to.

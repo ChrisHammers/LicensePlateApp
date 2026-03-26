@@ -252,13 +252,16 @@ final class LicensePlateGameViewModel: ObservableObject {
 
         let countBeforeUniqueFound = foundRegions.count
 
+        let discoveryEventId = UUID().uuidString
         var payload: [String: String] = [
             TripActivityEventPayloadKey.regionId: regionID,
             TripActivityEventPayloadKey.gameInstanceId: game.id.uuidString,
             TripActivityEventPayloadKey.participantId: participantId,
-            TripActivityEventPayloadKey.inputMethod: inputMethod.rawValue
+            TripActivityEventPayloadKey.inputMethod: inputMethod.rawValue,
+            TripActivityEventPayloadKey.discoveryEventId: discoveryEventId
         ]
         let event = TripActivityEvent(
+            id: discoveryEventId,
             sessionId: sessionId,
             kind: .regionFound,
             actorId: participantId.isEmpty ? nil : participantId,
@@ -300,20 +303,49 @@ final class LicensePlateGameViewModel: ObservableObject {
     }
 
     func removeDiscovery(regionID: String) {
+        refreshSession()
+        let participantId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        guard !participantId.isEmpty else {
+            errorMessage = "Sign in to remove a find.".localized
+            objectWillChange.send()
+            return
+        }
+
+        let discoveries = (try? tripActivityEventRepository.discoveries(sessionId: sessionId, gameInstanceId: game.id)) ?? []
+        let forTarget = discoveries.filter { $0.targetId == regionID }
+        let mine = forTarget.filter { $0.participantId == participantId }
+        guard let toRemove = mine.max(by: { $0.discoveredAt < $1.discoveredAt }) else {
+            errorMessage = "You don’t have a find to remove for this region.".localized
+            objectWillChange.send()
+            return
+        }
+
+        guard GameModeRulesEngine.canParticipantUnfind(
+            mode: game.commonConfig.gameMode,
+            participantId: participantId,
+            discovery: toRemove,
+            allDiscoveriesForTarget: forTarget
+        ) else {
+            errorMessage = "You can’t remove this find.".localized
+            objectWillChange.send()
+            return
+        }
+
         var payload: [String: String] = [
             TripActivityEventPayloadKey.regionId: regionID,
-            TripActivityEventPayloadKey.gameInstanceId: game.id.uuidString
+            TripActivityEventPayloadKey.gameInstanceId: game.id.uuidString,
+            TripActivityEventPayloadKey.removedDiscoveryEventId: toRemove.id
         ]
         let event = TripActivityEvent(sessionId: sessionId, kind: .regionRemoved, payload: payload)
         do {
             try tripActivityEventRecording.recordForSync(event)
-            let participantId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
             AnalyticsService.shared.log(.discoveryUnfind(
                 tripId: sessionId.uuidString,
                 gameInstanceId: game.id.uuidString,
                 targetId: regionID,
                 participantId: participantId
             ))
+            errorMessage = nil
             refreshFoundRegions()
         } catch {
             errorMessage = error.localizedDescription

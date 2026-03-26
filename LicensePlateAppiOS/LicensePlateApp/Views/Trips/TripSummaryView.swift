@@ -82,6 +82,12 @@ struct TripSummaryView: View {
             return "Found by %@".localized(participantDisplayNames[firstId] ?? firstId)
         }
         if target.allFinderParticipantIds.count > 1 {
+            if let gid = target.gameInstanceId,
+               let mode = summary.games.first(where: { $0.gameInstanceId == gid })?.gameMode,
+               GameModeRulesEngine.displayFirstFinderProminently(mode: mode),
+               let firstId = target.firstFinderParticipantId {
+                return "Found by %@".localized(participantDisplayNames[firstId] ?? firstId)
+            }
             return "%d finders".localized(target.allFinderParticipantIds.count)
         }
         return target.summaryLabel
@@ -265,9 +271,10 @@ struct TripSummaryView: View {
 
     private func firstDiscoveriesSection(projection: DiscoveryCreditProjection) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("First discoveries".localized)
+            Text("Discovery highlights".localized)
                 .font(.system(.headline, design: .rounded))
                 .foregroundStyle(Color.Theme.primaryBlue)
+                .accessibilityAddTraits(.isHeader)
             if summary.gameCount > 1 {
                 Text("Scores and finds combine all games on this trip.".localized)
                     .font(.system(.caption2, design: .rounded))
@@ -296,7 +303,7 @@ struct TripSummaryView: View {
                 }
                 .padding(.vertical, 4)
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel(firstDiscoveryAccessibilityLabel(for: target))
+                .accessibilityLabel(discoveryHighlightAccessibilityLabel(for: target))
             }
         }
         .padding()
@@ -307,7 +314,7 @@ struct TripSummaryView: View {
         )
     }
 
-    private func firstDiscoveryAccessibilityLabel(for target: TargetDiscoverySummary) -> String {
+    private func discoveryHighlightAccessibilityLabel(for target: TargetDiscoverySummary) -> String {
         var parts: [String] = [regionName(for: target.targetId), foundByLabel(for: target)]
         if let gameLabel = gameContextLabel(for: target) {
             parts.append("Game".localized + ": " + gameLabel)
@@ -346,8 +353,14 @@ struct TripSummaryView: View {
     }
 }
 
-#Preview("First discoveries — same region, two games") {
+#Preview("Discovery highlights — same region, two games") {
     NavigationStack {
         TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryDuplicateRegionAcrossGames(), onDismiss: nil)
+    }
+}
+
+#Preview("Collaborative — two finders, one region") {
+    NavigationStack {
+        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryCollaborativeTwoFindersOneRegion(), onDismiss: nil)
     }
 }

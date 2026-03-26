@@ -89,13 +89,18 @@ final class PendingTripsViewModel: ObservableObject {
         guard let userId = currentUserId else { return }
         FeedbackService.shared.buttonTap()
         errorMessage = nil
-        Task {
+        Task { @MainActor in
             do {
                 try await tripInviteRepository.acceptInvite(inviteId: invite.inviteId, userId: userId)
+                let participantCountAfterJoin: Int? = {
+                    guard let uuid = UUID(uuidString: invite.tripSessionId),
+                          let session = try? TripSessionRepository.shared.session(byId: uuid) else { return nil }
+                    return session.participants.count
+                }()
                 AnalyticsService.shared.log(.tripInviteAcceptedWithContext(
                     inviteTripId: invite.tripSessionId,
                     inviteGameCount: gameCountForAnalytics(invite: invite),
-                    participantCountAfterJoin: nil
+                    participantCountAfterJoin: participantCountAfterJoin
                 ))
                 FeedbackService.shared.actionSuccess()
                 loadInvites(userId: userId)

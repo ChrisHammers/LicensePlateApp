@@ -627,3 +627,10 @@
 "Status: %@" = "Estado: %@";
 "Inviter: %@" = "Invitador: %@";
 
+// Step 10 — Collaborative mode / discovery replay
+"Discovery highlights" = "Aspectos destacados de los hallazgos";
+"Found by %@" = "Encontrado por %@";
+"%d finders" = "%d personas";
+"Sign in to remove a find." = "Inicia sesión para quitar un hallazgo.";
+"You don’t have a find to remove for this region." = "No tienes un hallazgo que quitar en esta región.";
+"You can’t remove this find." = "No puedes quitar este hallazgo.";

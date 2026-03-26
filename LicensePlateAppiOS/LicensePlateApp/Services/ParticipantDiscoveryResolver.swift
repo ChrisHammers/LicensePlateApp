@@ -21,17 +21,24 @@ struct ParticipantDiscoverySummary: Sendable {
 enum ParticipantDiscoveryResolver {
 
     /// Builds a summary from discoveries for one target (e.g. same targetId). Sorts by discoveredAt for first-finder and order.
-    static func summary(discoveries: [GameDiscovery]) -> ParticipantDiscoverySummary {
+    /// - Parameter gameMode: Drives label emphasis via `GameModeRulesEngine.displayFirstFinderProminently` (competitive vs collaborative).
+    static func summary(discoveries: [GameDiscovery], gameMode: GameMode = .collaborative) -> ParticipantDiscoverySummary {
         let sorted = discoveries.sorted { $0.discoveredAt < $1.discoveredAt }
         let allIds = sorted.map(\.participantId)
         let firstId = allIds.first
         let label: String
         if allIds.isEmpty {
             label = ""
+        } else if GameModeRulesEngine.displayFirstFinderProminently(mode: gameMode) {
+            if let id = firstId {
+                label = "Found by %@".localized(id)
+            } else {
+                label = ""
+            }
         } else if allIds.count == 1, let id = firstId {
-            label = "Found by \(id)"
+            label = "Found by %@".localized(id)
         } else {
-            label = "\(allIds.count) finders"
+            label = "%d finders".localized(allIds.count)
         }
         return ParticipantDiscoverySummary(
             firstFinderParticipantId: firstId,

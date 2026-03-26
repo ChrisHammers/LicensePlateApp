@@ -479,6 +479,64 @@ enum PreviewSummaryFixtures {
             locationMetadata: nil
         )
     }
+
+    /// Multiplayer collaborative: same region found by two participants (discovery highlights).
+    static func tripSummaryCollaborativeTwoFindersOneRegion() -> TripSummary {
+        let gid = PreviewConstants.gameInstanceId1
+        let projection = DiscoveryCreditProjection(
+            participantScores: [],
+            targetSummaries: [
+                TargetDiscoverySummary(
+                    gameInstanceId: gid,
+                    targetId: "us-tx",
+                    firstFinderParticipantId: PreviewConstants.userId1,
+                    allFinderParticipantIds: [PreviewConstants.userId1, PreviewConstants.userId2],
+                    summaryLabel: "%d finders".localized(2)
+                )
+            ]
+        )
+        return TripSummary(
+            sessionId: PreviewConstants.sessionIdCollaborative,
+            tripName: "Family Trip",
+            tripMode: .multiplayer,
+            status: .ended,
+            endedAt: PreviewConstants.fixedDateEnded,
+            startedAt: PreviewConstants.fixedDate,
+            participantCount: 2,
+            gameCount: 1,
+            totalDiscoveryCount: 2,
+            games: [
+                TripSummaryGameItem(
+                    gameInstanceId: gid,
+                    definitionId: GameType.licensePlate.rawValue,
+                    discoveryCount: 2,
+                    startedAt: PreviewConstants.fixedDate,
+                    endedAt: PreviewConstants.fixedDateEnded,
+                    firstDiscoveries: projection.targetSummaries,
+                    completionGoal: 50,
+                    progressDescription: "2 / 50 US states",
+                    gameMode: .collaborative,
+                    teamSummary: nil
+                )
+            ],
+            participantContributions: [
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId1,
+                    discoveryCount: 1,
+                    weightedScore: 0.5,
+                    firstFindCount: 1
+                ),
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId2,
+                    discoveryCount: 1,
+                    weightedScore: 0.5,
+                    firstFindCount: 0
+                )
+            ],
+            discoveryProjection: projection,
+            locationMetadata: nil
+        )
+    }
 }
 
 // MARK: - PreviewInviteFixtures (TripInvite is @Model — use in preview with modelContainer and insert)

@@ -20,6 +20,7 @@ enum TripSummaryBuilder {
         let participantCount = session.participants.count
         let gameCount = games.count
         let totalDiscoveryCount = discoveries.count
+        let gameModeByInstanceId = Dictionary(uniqueKeysWithValues: games.map { ($0.id, $0.commonConfig.gameMode) })
 
         var gameItems: [TripSummaryGameItem] = []
         for game in games {
@@ -29,7 +30,8 @@ enum TripSummaryBuilder {
             }
             let projection = DiscoveryCreditProjectionService.project(
                 discoveries: gameDiscoveries,
-                credits: gameCredits.isEmpty ? nil : gameCredits
+                credits: gameCredits.isEmpty ? nil : gameCredits,
+                gameModeByInstanceId: gameModeByInstanceId
             )
             let (completionGoal, progressDescription) = Self.progressFromGame(game, discoveryCount: gameDiscoveries.count)
             gameItems.append(TripSummaryGameItem(
@@ -53,7 +55,8 @@ enum TripSummaryBuilder {
 
         let discoveryProjection: DiscoveryCreditProjection? = discoveries.isEmpty ? nil : DiscoveryCreditProjectionService.project(
             discoveries: discoveries,
-            credits: credits.isEmpty ? nil : credits
+            credits: credits.isEmpty ? nil : credits,
+            gameModeByInstanceId: gameModeByInstanceId
         )
 
         return TripSummary(

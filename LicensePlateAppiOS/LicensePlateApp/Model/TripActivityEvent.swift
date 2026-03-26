@@ -30,6 +30,10 @@ enum TripActivityEventPayloadKey {
     static let rejectionReason = "rejectionReason"
     static let participantCount = "participantCount"
     static let gameMode = "gameMode"
+    /// `region_removed` only: id of the `region_found` `TripActivityEvent` being undone (same as that event’s `id`). Required for partial unfind when multiple finders share a target; omit for legacy “clear all finds for this region”.
+    static let removedDiscoveryEventId = "removedDiscoveryEventId"
+    /// Optional duplicate of the `region_found` event’s `id` (for sync/debug); replay uses `TripActivityEvent.id` as `GameDiscovery.id` regardless.
+    static let discoveryEventId = "discoveryEventId"
 }
 
 /// A single event in the trip lifecycle. Room for analytics and audit.

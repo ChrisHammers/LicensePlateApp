@@ -43,12 +43,15 @@ enum DiscoveryCreditProjectionService {
     /// - Parameters:
     ///   - discoveries: All discoveries (e.g. for a game instance).
     ///   - credits: Optional precomputed credits; when provided, participant scores use these weights.
+    /// - Parameters:
+    ///   - gameModeByInstanceId: Per-game `GameMode` for target labels; defaults to collaborative when a game id is missing.
     /// - Returns: Participant score summaries and per-target discovery summaries for UI.
     static func project(
         discoveries: [GameDiscovery],
-        credits: [GameCredit]? = nil
+        credits: [GameCredit]? = nil,
+        gameModeByInstanceId: [UUID: GameMode]? = nil
     ) -> DiscoveryCreditProjection {
-        let targetSummaries = buildTargetSummaries(discoveries: discoveries)
+        let targetSummaries = buildTargetSummaries(discoveries: discoveries, gameModeByInstanceId: gameModeByInstanceId)
         let participantScores = buildParticipantScores(discoveries: discoveries, credits: credits)
         return DiscoveryCreditProjection(
             participantScores: participantScores,
@@ -56,13 +59,17 @@ enum DiscoveryCreditProjectionService {
         )
     }
 
-    private static func buildTargetSummaries(discoveries: [GameDiscovery]) -> [TargetDiscoverySummary] {
+    private static func buildTargetSummaries(
+        discoveries: [GameDiscovery],
+        gameModeByInstanceId: [UUID: GameMode]?
+    ) -> [TargetDiscoverySummary] {
         let byGameTarget = Dictionary(grouping: discoveries) { d in
             "\(d.gameInstanceId.uuidString)_\(d.targetId)"
         }
         return byGameTarget.values.compactMap { targetDiscoveries -> TargetDiscoverySummary? in
             guard let first = targetDiscoveries.first else { return nil }
-            let summary = ParticipantDiscoveryResolver.summary(discoveries: targetDiscoveries)
+            let mode = gameModeByInstanceId?[first.gameInstanceId] ?? .collaborative
+            let summary = ParticipantDiscoveryResolver.summary(discoveries: targetDiscoveries, gameMode: mode)
             return TargetDiscoverySummary(
                 gameInstanceId: first.gameInstanceId,
                 targetId: first.targetId,

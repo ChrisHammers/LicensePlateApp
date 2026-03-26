@@ -63,6 +63,71 @@ struct TripActivityEventRepositoryTests {
         #expect(regions[0].regionID == "TX")
     }
 
+    /// Step 10 — Same game, same region, two finders: both discoveries replay; one FoundRegion row.
+    @Test func discoveriesSameGameSameRegion_twoParticipants_bothReplayed() async throws {
+        let ctx = try makeContainer()
+        let sessionId = UUID()
+        let gameId = UUID()
+        let list = FoundRegion.InputMethod.list.rawValue
+        let id1 = "evt-find-1"
+        let id2 = "evt-find-2"
+        try TripActivityEventRepository.shared.append(TripActivityEvent(id: id1, sessionId: sessionId, kind: .regionFound, actorId: "user1", payload: [
+            TripActivityEventPayloadKey.regionId: "CA",
+            TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+            TripActivityEventPayloadKey.participantId: "user1",
+            TripActivityEventPayloadKey.inputMethod: list
+        ]))
+        try TripActivityEventRepository.shared.append(TripActivityEvent(id: id2, sessionId: sessionId, kind: .regionFound, actorId: "user2", payload: [
+            TripActivityEventPayloadKey.regionId: "CA",
+            TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+            TripActivityEventPayloadKey.participantId: "user2",
+            TripActivityEventPayloadKey.inputMethod: list
+        ]))
+        let discoveries = try TripActivityEventRepository.shared.discoveries(sessionId: sessionId, gameInstanceId: gameId)
+        #expect(discoveries.count == 2)
+        #expect(Set(discoveries.map(\.id)) == Set([id1, id2]))
+        let regions = try TripActivityEventRepository.shared.foundRegions(sessionId: sessionId, gameInstanceId: gameId)
+        #expect(regions.count == 1)
+        #expect(regions[0].regionID == "CA")
+        #expect(regions[0].foundBy == "user1")
+    }
+
+    /// Step 10 — Targeted region_removed removes one find; legacy removal clears the rest.
+    @Test func regionRemovedWithDiscoveryEventId_removesOnlyThatFind() async throws {
+        let ctx = try makeContainer()
+        let sessionId = UUID()
+        let gameId = UUID()
+        let list = FoundRegion.InputMethod.list.rawValue
+        let id1 = "evt-a"
+        let id2 = "evt-b"
+        try TripActivityEventRepository.shared.append(TripActivityEvent(id: id1, sessionId: sessionId, kind: .regionFound, actorId: "user1", payload: [
+            TripActivityEventPayloadKey.regionId: "CA",
+            TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+            TripActivityEventPayloadKey.participantId: "user1",
+            TripActivityEventPayloadKey.inputMethod: list
+        ]))
+        try TripActivityEventRepository.shared.append(TripActivityEvent(id: id2, sessionId: sessionId, kind: .regionFound, actorId: "user2", payload: [
+            TripActivityEventPayloadKey.regionId: "CA",
+            TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+            TripActivityEventPayloadKey.participantId: "user2",
+            TripActivityEventPayloadKey.inputMethod: list
+        ]))
+        try TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: sessionId, kind: .regionRemoved, payload: [
+            TripActivityEventPayloadKey.regionId: "CA",
+            TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+            TripActivityEventPayloadKey.removedDiscoveryEventId: id1
+        ]))
+        var discoveries = try TripActivityEventRepository.shared.discoveries(sessionId: sessionId, gameInstanceId: gameId)
+        #expect(discoveries.count == 1)
+        #expect(discoveries[0].id == id2)
+        try TripActivityEventRepository.shared.append(TripActivityEvent(sessionId: sessionId, kind: .regionRemoved, payload: [
+            TripActivityEventPayloadKey.regionId: "CA",
+            TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString
+        ]))
+        discoveries = try TripActivityEventRepository.shared.discoveries(sessionId: sessionId, gameInstanceId: gameId)
+        #expect(discoveries.isEmpty)
+    }
+
     /// Step 6.9.5 — Two games can both have the same region id; unfiltered load must return two discoveries with distinct game ids.
     @Test func discoveriesAllGames_twoGamesSameRegionId_bothReplayed() async throws {
         let ctx = try makeContainer()

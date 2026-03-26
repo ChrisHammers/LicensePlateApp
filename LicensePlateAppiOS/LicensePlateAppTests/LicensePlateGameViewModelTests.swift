@@ -115,7 +115,9 @@ struct LicensePlateGameViewModelTests {
             return
         }
         #expect(viewModel.foundRegions.contains { $0.regionID == "CA" })
-        #expect(eventRepo.appendedEvents().contains { $0.kind == .regionFound && $0.payload?[TripActivityEventPayloadKey.regionId] == "CA" })
+        let regionFound = eventRepo.appendedEvents().last { $0.kind == .regionFound && $0.payload?[TripActivityEventPayloadKey.regionId] == "CA" }
+        #expect(regionFound != nil)
+        #expect(regionFound?.payload?[TripActivityEventPayloadKey.discoveryEventId] == regionFound?.id)
     }
 
     @Test func submitDiscoveryWhenOtherParticipantAlreadyFoundSoloReturnsRejectedInvalidParticipant() async throws {
@@ -182,12 +184,16 @@ struct LicensePlateGameViewModelTests {
         sessionRepo.seed(session)
         let gameRepo = MockGameInstanceRepository()
         let eventRepo = MockTripActivityEventRepository()
-        try eventRepo.append(TripActivityEvent(sessionId: sessionId, kind: .regionFound, payload: [
+        let findEventId = UUID().uuidString
+        try eventRepo.append(TripActivityEvent(id: findEventId, sessionId: sessionId, kind: .regionFound, actorId: "user1", payload: [
             TripActivityEventPayloadKey.regionId: "CA",
-            TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString
+            TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+            TripActivityEventPayloadKey.participantId: "user1",
+            TripActivityEventPayloadKey.inputMethod: FoundRegion.InputMethod.list.rawValue
         ]))
         let lifecycleService = MockTripSessionLifecycleService()
         let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: "user1", userName: "U", firebaseUID: "user1")
 
         let viewModel = LicensePlateGameViewModel(
             session: session,
@@ -203,7 +209,139 @@ struct LicensePlateGameViewModelTests {
         #expect(viewModel.foundRegions.contains { $0.regionID == "CA" })
         viewModel.removeDiscovery(regionID: "CA")
         #expect(!viewModel.foundRegions.contains { $0.regionID == "CA" })
-        #expect(eventRepo.appendedEvents().contains { $0.kind == .regionRemoved })
+        let removed = eventRepo.appendedEvents().last { $0.kind == .regionRemoved }
+        #expect(removed != nil)
+        #expect(removed?.payload?[TripActivityEventPayloadKey.removedDiscoveryEventId] == findEventId)
+    }
+
+    @Test func submitDiscoveryCollaborativeMultiplayerSecondFinderAppendsAndReplayShowsTwo() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "Family",
+            status: .active,
+            createdAt: Date(),
+            createdBy: "user1",
+            startedAt: Date(),
+            participants: [
+                TripParticipant(userId: "user1", role: .owner, joinedAt: Date()),
+                TripParticipant(userId: "user2", role: .member, joinedAt: Date())
+            ]
+        )
+        var game = makeGame(sessionId: sessionId, lifecycleState: .started)
+        game.id = gameId
+        game.commonConfig.gameMode = .collaborative
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let lifecycleService = MockTripSessionLifecycleService()
+        let recording = TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator())
+
+        let auth1 = FirebaseAuthService()
+        auth1.currentUser = AppUser(id: "user1", userName: "A", firebaseUID: "user1")
+        let vm1 = LicensePlateGameViewModel(
+            session: session,
+            game: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: lifecycleService,
+            tripActivityEventRecording: recording,
+            authService: auth1
+        )
+        guard case .success = vm1.submitDiscovery(regionID: "us-ca", inputMethod: .list) else {
+            Issue.record("Expected first find success")
+            return
+        }
+
+        let auth2 = FirebaseAuthService()
+        auth2.currentUser = AppUser(id: "user2", userName: "B", firebaseUID: "user2")
+        let vm2 = LicensePlateGameViewModel(
+            session: session,
+            game: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: lifecycleService,
+            tripActivityEventRecording: recording,
+            authService: auth2
+        )
+        guard case .success = vm2.submitDiscovery(regionID: "us-ca", inputMethod: .list) else {
+            Issue.record("Expected second collaborative find success")
+            return
+        }
+
+        let discoveries = try eventRepo.discoveries(sessionId: sessionId, gameInstanceId: gameId)
+        #expect(discoveries.count == 2)
+        #expect(Set(discoveries.map(\.participantId)) == Set(["user1", "user2"]))
+        #expect(vm2.foundRegions.contains { $0.regionID == "us-ca" })
+    }
+
+    @Test func removeDiscoveryCollaborativeRemovesOnlyCurrentUserFind() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "Family",
+            status: .active,
+            createdAt: Date(),
+            createdBy: "user1",
+            startedAt: Date(),
+            participants: [
+                TripParticipant(userId: "user1", role: .owner, joinedAt: Date()),
+                TripParticipant(userId: "user2", role: .member, joinedAt: Date())
+            ]
+        )
+        var game = makeGame(sessionId: sessionId, lifecycleState: .started)
+        game.id = gameId
+        game.commonConfig.gameMode = .collaborative
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let id1 = "find-user1"
+        let id2 = "find-user2"
+        try eventRepo.append(TripActivityEvent(id: id1, sessionId: sessionId, kind: .regionFound, actorId: "user1", payload: [
+            TripActivityEventPayloadKey.regionId: "us-ca",
+            TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+            TripActivityEventPayloadKey.participantId: "user1",
+            TripActivityEventPayloadKey.inputMethod: FoundRegion.InputMethod.list.rawValue
+        ]))
+        try eventRepo.append(TripActivityEvent(id: id2, sessionId: sessionId, kind: .regionFound, actorId: "user2", payload: [
+            TripActivityEventPayloadKey.regionId: "us-ca",
+            TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+            TripActivityEventPayloadKey.participantId: "user2",
+            TripActivityEventPayloadKey.inputMethod: FoundRegion.InputMethod.list.rawValue
+        ]))
+
+        let lifecycleService = MockTripSessionLifecycleService()
+        let recording = TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator())
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: "user1", userName: "A", firebaseUID: "user1")
+
+        let viewModel = LicensePlateGameViewModel(
+            session: session,
+            game: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: lifecycleService,
+            tripActivityEventRecording: recording,
+            authService: auth
+        )
+
+        #expect(viewModel.foundRegions.contains { $0.regionID == "us-ca" })
+        viewModel.removeDiscovery(regionID: "us-ca")
+
+        let discoveries = try eventRepo.discoveries(sessionId: sessionId, gameInstanceId: gameId)
+        #expect(discoveries.count == 1)
+        #expect(discoveries[0].participantId == "user2")
+        #expect(viewModel.foundRegions.contains { $0.regionID == "us-ca" })
+        #expect(viewModel.foundRegions.first?.foundBy == "user2")
     }
 
     @Test func updateTripNameWhenSaveThrowsSetsErrorMessageAndKeepsInMemoryName() async throws {

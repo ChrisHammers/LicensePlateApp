@@ -63,6 +63,10 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
     nonisolated(unsafe) private var inviteListeners: [ListenerRegistration] = []
     /// Listener registrations keyed by `tripSessionId`; accessed from MainActor handlers and `stopListening`.
     nonisolated(unsafe) private var memberListeners: [String: ListenerRegistration] = [:]
+    /// Per-session member count after last Firestore `members` snapshot (for `participantJoinedTrip` deltas).
+    private var lastMemberDocCountBySession: [String: Int] = [:]
+    /// First snapshot per session establishes baseline without logging join (avoids noise on initial listener attach).
+    private var memberSnapshotBaselineApplied: Set<String> = []
 
     private let inviteSnapshotSubject = PassthroughSubject<Void, Never>()
     var inviteSnapshotSignal: AnyPublisher<Void, Never> {
@@ -199,6 +203,23 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
 
             let participant = TripParticipant(userId: memberUserId, role: role, joinedAt: joinedAt)
             try? tripSessionRepository.addParticipant(sessionId: sessionUUID, participant: participant)
+        }
+
+        let newCount = snapshot.documents.count
+        if !memberSnapshotBaselineApplied.contains(sessionId) {
+            memberSnapshotBaselineApplied.insert(sessionId)
+            lastMemberDocCountBySession[sessionId] = newCount
+        } else {
+            let previous = lastMemberDocCountBySession[sessionId] ?? newCount
+            lastMemberDocCountBySession[sessionId] = newCount
+            if newCount > previous {
+                let participantCountAfterJoin = (try? tripSessionRepository.session(byId: sessionUUID))?.participants.count ?? newCount
+                AnalyticsService.shared.log(.participantJoinedTrip(
+                    tripId: sessionId,
+                    participantCountAfterJoin: participantCountAfterJoin,
+                    teamCountAfterJoin: nil
+                ))
+            }
         }
         // TODO(step-future-trip-sync): If local TripSession does not exist yet, materialize from backend when full trip sync lands.
     }
