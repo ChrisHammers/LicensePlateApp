@@ -397,7 +397,10 @@ struct CombinedTripSetupView: View {
         viewModel.clearError()
         do {
             let session = try viewModel.createTrip()
-            Task { await viewModel.sendSetupInvites(for: session) }
+            Task {
+                await viewModel.publishCanonicalToRemote(session: session)
+                await viewModel.sendSetupInvites(for: session)
+            }
             FeedbackService.shared.actionSuccess()
             onCreated(session)
             dismiss()

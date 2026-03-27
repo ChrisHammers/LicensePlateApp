@@ -196,6 +196,17 @@ final class CombinedTripSetupViewModel: ObservableObject {
         return try tripSessionRepository.session(byId: sessionId) ?? session
     }
 
+    /// Publishes session + games to Firestore so invitees can bootstrap. Best effort.
+    func publishCanonicalToRemote(session: TripSession) async {
+        do {
+            try await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: session.id)
+        } catch {
+            #if DEBUG
+            print("CombinedTripSetupViewModel: publishCanonicalToRemote failed: \(error)")
+            #endif
+        }
+    }
+
     /// Sends invites selected during setup. This is best effort and does not block creation success.
     func sendSetupInvites(for session: TripSession) async {
         guard !selectedPassengerIds.isEmpty else { return }

@@ -57,7 +57,7 @@ struct TripParticipantsViewModelTests {
         #expect(vm.tripName == "Road Trip")
         #expect(vm.passengers.count == 2)
         #expect(vm.passengers.first?.isCreator == true)
-        #expect(vm.pendingInvites.count == 1)
-        #expect(vm.pendingInvites.first?.toUserId == "pending-user")
+        #expect(vm.pendingInviteRows.count == 1)
+        #expect(vm.pendingInviteRows.first?.inviteeDisplayName == "name-pending-user")
     }
 }

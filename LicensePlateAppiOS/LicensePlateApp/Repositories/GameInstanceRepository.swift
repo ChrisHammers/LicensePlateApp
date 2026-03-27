@@ -31,6 +31,37 @@ final class GameInstanceRepository: ObservableObject, GameInstanceRepositoryProt
         try ctx.save()
     }
 
+    func upsert(instance: GameInstance) throws {
+        guard let ctx = modelContext else { throw GameInstanceRepositoryError.noModelContext }
+        let id = instance.id.uuidString
+        let descriptor = FetchDescriptor<GameInstanceEntity>(
+            predicate: #Predicate<GameInstanceEntity> { $0.id == id }
+        )
+        if let existing = try ctx.fetch(descriptor).first {
+            let updated = GameInstanceMapper.toEntity(instance)
+            existing.definitionId = updated.definitionId
+            existing.sessionId = updated.sessionId
+            existing.startedAt = updated.startedAt
+            existing.endedAt = updated.endedAt
+            existing.ruleSetData = updated.ruleSetData
+            existing.commonConfigData = updated.commonConfigData
+            existing.gameSpecificPayloadType = updated.gameSpecificPayloadType
+            existing.gameSpecificPayloadVersion = updated.gameSpecificPayloadVersion
+            existing.gameSpecificPayloadData = updated.gameSpecificPayloadData
+            existing.teamsData = updated.teamsData
+        } else {
+            ctx.insert(GameInstanceMapper.toEntity(instance))
+        }
+        try ctx.save()
+    }
+
+    func replaceGamesForSession(sessionId: UUID, instances: [GameInstance]) throws {
+        try deleteForSession(sessionId: sessionId)
+        for instance in instances {
+            try create(instance: instance)
+        }
+    }
+
     // MARK: - Fetch
 
     func fetchByTripSession(sessionId: UUID) throws -> [GameInstance] {

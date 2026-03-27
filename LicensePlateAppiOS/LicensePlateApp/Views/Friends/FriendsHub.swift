@@ -304,11 +304,9 @@ struct FriendRow: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Theme.primaryBlue)
 
-                    if let userId = otherUserId {
-                        Text(userId)
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
-                    }
+                    Text("Loading profile…".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
                 }
             }
 

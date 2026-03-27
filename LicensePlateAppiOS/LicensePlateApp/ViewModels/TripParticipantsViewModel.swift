@@ -17,10 +17,18 @@ struct PassengerDisplayRow: Identifiable, Equatable {
     var id: String { userId }
 }
 
+struct PendingTripInviteDisplayRow: Identifiable, Equatable {
+    let inviteId: String
+    let inviteeDisplayName: String
+    let statusLabel: String
+
+    var id: String { inviteId }
+}
+
 @MainActor
 final class TripParticipantsViewModel: ObservableObject {
     @Published private(set) var passengers: [PassengerDisplayRow] = []
-    @Published private(set) var pendingInvites: [TripInvite] = []
+    @Published private(set) var pendingInviteRows: [PendingTripInviteDisplayRow] = []
     @Published private(set) var tripName: String = ""
     @Published var errorMessage: String?
 
@@ -65,7 +73,7 @@ final class TripParticipantsViewModel: ObservableObject {
         do {
             guard let session = try tripSessionRepository.session(byId: sessionId) else {
                 passengers = []
-                pendingInvites = []
+                pendingInviteRows = []
                 tripName = ""
                 return
             }
@@ -73,10 +81,11 @@ final class TripParticipantsViewModel: ObservableObject {
             tripName = session.name
             let participantIds = Set(session.participants.map(\.userId))
             let displayNames = await displayNamesProvider(participantIds)
+            let unknown = "Unknown user".localized
             passengers = session.participants.map { participant in
                 PassengerDisplayRow(
                     userId: participant.userId,
-                    displayName: displayNames[participant.userId] ?? participant.userId,
+                    displayName: displayNames[participant.userId] ?? unknown,
                     roleLabel: participant.role == .owner ? "Creator".localized : "Passenger".localized,
                     isCreator: participant.role == .owner
                 )
@@ -86,7 +95,17 @@ final class TripParticipantsViewModel: ObservableObject {
             }
 
             let invites = try tripInviteRepository.getInvites(forTripSessionId: sessionId.uuidString)
-            pendingInvites = invites.filter { $0.statusEnum == .pending || $0.statusEnum == .sent }
+            let pending = invites.filter { $0.statusEnum == .pending || $0.statusEnum == .sent }
+            let pendingIds = Set(pending.compactMap(\.toUserId))
+            let pendingNameMap = await displayNamesProvider(pendingIds)
+            let unknownUser = "Unknown user".localized
+            pendingInviteRows = pending.map { inv in
+                PendingTripInviteDisplayRow(
+                    inviteId: inv.inviteId,
+                    inviteeDisplayName: inv.toUserId.flatMap { pendingNameMap[$0] } ?? unknownUser,
+                    statusLabel: inv.statusEnum.rawValue.capitalized
+                )
+            }
         } catch {
             errorMessage = error.localizedDescription
         }

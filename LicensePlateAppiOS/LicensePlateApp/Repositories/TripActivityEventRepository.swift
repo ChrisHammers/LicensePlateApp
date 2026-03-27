@@ -15,6 +15,8 @@ protocol TripActivityEventRepositoryProtocol: AnyObject {
     /// Inserts the event if no row exists with the same `id`. Returns `true` if inserted. If a row exists with the same `id`, returns `false` when session, kind, actor, and payload match; otherwise throws `idCollision`.
     @discardableResult
     func appendIfAbsent(_ event: TripActivityEvent) throws -> Bool
+    func importEventsIfAbsent(_ events: [TripActivityEvent]) throws
+    func event(byId id: String) throws -> TripActivityEvent?
     func events(sessionId: UUID, limit: Int?) throws -> [TripActivityEvent]
     func discoveries(sessionId: UUID, gameInstanceId: UUID?) throws -> [GameDiscovery]
     func foundRegions(sessionId: UUID, gameInstanceId: UUID?) throws -> [FoundRegion]
@@ -89,6 +91,18 @@ final class TripActivityEventRepository: ObservableObject, TripActivityEventRepo
         ctx.insert(entity)
         try ctx.save()
         return true
+    }
+
+    func importEventsIfAbsent(_ events: [TripActivityEvent]) throws {
+        for event in events {
+            _ = try appendIfAbsent(event)
+        }
+    }
+
+    func event(byId id: String) throws -> TripActivityEvent? {
+        guard let ctx = modelContext else { throw TripActivityEventRepositoryError.noModelContext }
+        guard let entity = try Self.fetchEntity(id: id, context: ctx) else { return nil }
+        return entityToEvent(entity)
     }
 
     func events(sessionId: UUID, limit: Int?) throws -> [TripActivityEvent] {

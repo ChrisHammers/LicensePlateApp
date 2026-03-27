@@ -49,9 +49,13 @@ struct PendingTripsViewModelTests {
         let viewModel = PendingTripsViewModel(
             tripInviteRepository: mock,
             authService: auth(for: userId),
-            gameInstanceRepository: MockGameInstanceRepository()
+            gameInstanceRepository: MockGameInstanceRepository(),
+            resolveInviteDisplayNames: { ids in
+                Dictionary(uniqueKeysWithValues: ids.map { ($0, "dn-\($0)") })
+            }
         )
         viewModel.loadInvites(userId: userId)
+        try await Task.sleep(nanoseconds: 50_000_000)
 
         #expect(viewModel.incomingInvites.count == 1)
         #expect(viewModel.incomingInvites.first?.tripName == "Incoming Trip")
@@ -78,7 +82,8 @@ struct PendingTripsViewModelTests {
         let viewModel = PendingTripsViewModel(
             tripInviteRepository: mock,
             authService: auth(for: userId),
-            gameInstanceRepository: MockGameInstanceRepository()
+            gameInstanceRepository: MockGameInstanceRepository(),
+            resolveInviteDisplayNames: { _ in [:] }
         )
         viewModel.loadInvites(userId: userId)
         #expect(viewModel.incomingInvites.count == 1)
@@ -108,7 +113,8 @@ struct PendingTripsViewModelTests {
         let viewModel = PendingTripsViewModel(
             tripInviteRepository: mock,
             authService: auth(for: userId),
-            gameInstanceRepository: MockGameInstanceRepository()
+            gameInstanceRepository: MockGameInstanceRepository(),
+            resolveInviteDisplayNames: { _ in [:] }
         )
         viewModel.loadInvites(userId: userId)
         viewModel.decline(invite: viewModel.incomingInvites[0])
@@ -135,7 +141,8 @@ struct PendingTripsViewModelTests {
         let viewModel = PendingTripsViewModel(
             tripInviteRepository: mock,
             authService: auth(for: userId),
-            gameInstanceRepository: MockGameInstanceRepository()
+            gameInstanceRepository: MockGameInstanceRepository(),
+            resolveInviteDisplayNames: { _ in [:] }
         )
         viewModel.loadInvites(userId: userId)
         #expect(viewModel.outgoingInvites.count == 1)
@@ -160,29 +167,35 @@ struct PendingTripsViewModelTests {
         )
 
         let gameRepo = MockGameInstanceRepository()
-        var g1 = GameInstance(
+        let g1 = GameInstance(
+            id: UUID(),
             definitionId: GameType.licensePlate.rawValue,
             sessionId: sessionId,
             ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
             commonConfig: CommonGameConfig(lifecycleState: .started, configLocked: true, configLockReason: .gameStarted)
         )
-        g1.id = UUID()
-        var g2 = GameInstance(
+        let g2 = GameInstance(
+            id: UUID(),
             definitionId: GameType.roadSignBingo.rawValue,
             sessionId: sessionId,
             ruleSet: GameRuleSet(gameDefinitionId: "road_sign_bingo"),
             commonConfig: CommonGameConfig(lifecycleState: .started, configLocked: true, configLockReason: .gameStarted)
         )
-        g2.id = UUID()
         gameRepo.seed(g1)
         gameRepo.seed(g2)
 
+        let inviteRepo = MockTripInviteRepository()
+        inviteRepo.seed(invite)
         let viewModel = PendingTripsViewModel(
-            tripInviteRepository: MockTripInviteRepository(),
+            tripInviteRepository: inviteRepo,
             authService: auth(for: userId),
-            gameInstanceRepository: gameRepo
+            gameInstanceRepository: gameRepo,
+            resolveInviteDisplayNames: { ["other": "Friend Name"] }
         )
-        let snapshot = viewModel.displaySnapshot(for: invite)
+        viewModel.loadInvites(userId: userId)
+        try await Task.sleep(nanoseconds: 50_000_000)
+        let snapshot = viewModel.displaySnapshot(for: invite, isIncoming: true)
         #expect(snapshot.gamesOnTripLine == "%d games".localized(2))
+        #expect(snapshot.counterpartyLine.contains("Friend Name"))
     }
 }

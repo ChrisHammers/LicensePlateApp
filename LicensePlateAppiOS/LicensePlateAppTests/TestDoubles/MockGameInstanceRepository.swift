@@ -28,6 +28,23 @@ final class MockGameInstanceRepository: GameInstanceRepositoryProtocol {
         bySession[instance.sessionId] = list
     }
 
+    func upsert(instance: GameInstance) throws {
+        if shouldThrow { throw NSError(domain: "MockGameInstanceRepository", code: -1, userInfo: nil) }
+        if instances[instance.id] != nil {
+            try update(instance: instance)
+        } else {
+            try create(instance: instance)
+        }
+    }
+
+    func replaceGamesForSession(sessionId: UUID, instances newInstances: [GameInstance]) throws {
+        if shouldThrow { throw NSError(domain: "MockGameInstanceRepository", code: -1, userInfo: nil) }
+        try deleteForSession(sessionId: sessionId)
+        for instance in newInstances {
+            try create(instance: instance)
+        }
+    }
+
     func fetchByTripSession(sessionId: UUID) throws -> [GameInstance] {
         if shouldThrow { throw NSError(domain: "MockGameInstanceRepository", code: -1, userInfo: nil) }
         return bySession[sessionId] ?? []

@@ -12,10 +12,13 @@ import Foundation
 final class PendingTripsViewModel: ObservableObject {
     @Published private(set) var incomingInvites: [TripInvite] = []
     @Published private(set) var outgoingInvites: [TripInvite] = []
+    /// Resolved display names for invite from/to user ids (trip invite UI).
+    @Published private(set) var inviteCounterpartyDisplayNames: [String: String] = [:]
     @Published var isLoading = false
     @Published var errorMessage: String?
 
     private let tripInviteRepository: TripInviteRepositoryProtocol
+    private let resolveInviteDisplayNames: (Set<String>) async -> [String: String]
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private var authService: FirebaseAuthService
     private var cancellables = Set<AnyCancellable>()
@@ -25,16 +28,27 @@ final class PendingTripsViewModel: ObservableObject {
     init(
         tripInviteRepository: TripInviteRepositoryProtocol,
         authService: FirebaseAuthService,
-        gameInstanceRepository: GameInstanceRepositoryProtocol = GameInstanceRepository.shared
+        gameInstanceRepository: GameInstanceRepositoryProtocol = GameInstanceRepository.shared,
+        resolveInviteDisplayNames: @escaping (Set<String>) async -> [String: String] = { ids in
+            await UserRepository.shared.displayNames(forUserIds: ids)
+        }
     ) {
         self.tripInviteRepository = tripInviteRepository
         self.authService = authService
         self.gameInstanceRepository = gameInstanceRepository
+        self.resolveInviteDisplayNames = resolveInviteDisplayNames
     }
 
-    /// Snapshot for UI: inviter/status and optional local game count.
-    func displaySnapshot(for invite: TripInvite) -> InviteDisplaySnapshot {
-        InviteDisplaySnapshot.make(from: invite, localGameCount: localGameCount(for: invite.tripSessionId))
+    /// Snapshot for UI: counterparty line, status and optional local game count.
+    func displaySnapshot(for invite: TripInvite, isIncoming: Bool) -> InviteDisplaySnapshot {
+        let counterpartyId: String? = isIncoming ? invite.fromUserId : invite.toUserId
+        let name = counterpartyId.flatMap { inviteCounterpartyDisplayNames[$0] }
+        return InviteDisplaySnapshot.make(
+            from: invite,
+            localGameCount: localGameCount(for: invite.tripSessionId),
+            counterpartyDisplayName: name,
+            isIncoming: isIncoming
+        )
     }
 
     private func localGameCount(for tripSessionId: String) -> Int? {
@@ -79,6 +93,13 @@ final class PendingTripsViewModel: ObservableObject {
             if let repo = tripInviteRepository as? TripInviteRepository {
                 repo.refreshPublishedInvites(userId: userId)
             }
+            let ids = Set(
+                incomingInvites.map(\.fromUserId) + outgoingInvites.compactMap(\.toUserId)
+            )
+            Task { @MainActor in
+                let names = await resolveInviteDisplayNames(ids)
+                inviteCounterpartyDisplayNames = names
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -92,6 +113,9 @@ final class PendingTripsViewModel: ObservableObject {
         Task { @MainActor in
             do {
                 try await tripInviteRepository.acceptInvite(inviteId: invite.inviteId, userId: userId)
+                if let uuid = UUID(uuidString: invite.tripSessionId) {
+                    try? await TripCanonicalRemoteSyncService.shared.bootstrapMemberSession(sessionId: uuid)
+                }
                 let participantCountAfterJoin: Int? = {
                     guard let uuid = UUID(uuidString: invite.tripSessionId),
                           let session = try? TripSessionRepository.shared.session(byId: uuid) else { return nil }

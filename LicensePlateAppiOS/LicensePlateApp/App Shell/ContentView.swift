@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import Combine
 import CoreLocation
 import AVFoundation
 import UserNotifications
@@ -120,7 +121,7 @@ struct ContentView: View {
                             ForEach(pendingTripsViewModel.incomingInvites, id: \.inviteId) { invite in
                                 PendingInviteCard(
                                     invite: invite,
-                                    snapshot: pendingTripsViewModel.displaySnapshot(for: invite),
+                                    snapshot: pendingTripsViewModel.displaySnapshot(for: invite, isIncoming: true),
                                     isIncoming: true,
                                     onAccept: { pendingTripsViewModel.accept(invite: invite) },
                                     onDecline: { pendingTripsViewModel.decline(invite: invite) },
@@ -132,7 +133,7 @@ struct ContentView: View {
                             ForEach(pendingTripsViewModel.outgoingInvites, id: \.inviteId) { invite in
                                 PendingInviteCard(
                                     invite: invite,
-                                    snapshot: pendingTripsViewModel.displaySnapshot(for: invite),
+                                    snapshot: pendingTripsViewModel.displaySnapshot(for: invite, isIncoming: false),
                                     isIncoming: false,
                                     onAccept: nil,
                                     onDecline: nil,
@@ -205,6 +206,9 @@ struct ContentView: View {
                   }
                   pendingTripsViewModel.loadIfNeeded()
                   activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
+                }
+                .onReceive(TripCanonicalRemoteSyncService.shared.hydrationSignal) { _ in
+                    activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
                 }
                 .onAppear {
                   pendingTripsViewModel.setAuthService(authService)
@@ -471,7 +475,7 @@ private struct PendingInviteCard: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 6) {
-                Label(snapshot.inviterLine, systemImage: "person")
+                Label(snapshot.counterpartyLine, systemImage: "person")
                     .font(.system(.footnote, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
                 if let games = snapshot.gamesOnTripLine {

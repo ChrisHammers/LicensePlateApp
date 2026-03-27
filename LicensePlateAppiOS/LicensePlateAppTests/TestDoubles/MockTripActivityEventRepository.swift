@@ -38,6 +38,17 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
         return true
     }
 
+    func importEventsIfAbsent(_ events: [TripActivityEvent]) throws {
+        for event in events {
+            _ = try appendIfAbsent(event)
+        }
+    }
+
+    func event(byId id: String) throws -> TripActivityEvent? {
+        if shouldThrow { throw NSError(domain: "MockTripActivityEventRepository", code: -1, userInfo: nil) }
+        return events.first { $0.id == id }
+    }
+
     func events(sessionId: UUID, limit: Int?) throws -> [TripActivityEvent] {
         if shouldThrow { throw NSError(domain: "MockTripActivityEventRepository", code: -1, userInfo: nil) }
         var list = events.filter { $0.sessionId == sessionId }.sorted { $0.timestamp < $1.timestamp }

@@ -48,20 +48,22 @@ struct TripParticipantsView: View {
                 }
 
                 Section("Pending Invites".localized) {
-                    if viewModel.pendingInvites.isEmpty {
+                    if viewModel.pendingInviteRows.isEmpty {
                         Text("No pending invites".localized)
                             .font(.system(.body, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
                     } else {
-                        ForEach(viewModel.pendingInvites, id: \.inviteId) { invite in
+                        ForEach(viewModel.pendingInviteRows) { row in
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(invite.toUserId ?? "Unknown".localized)
+                                Text(row.inviteeDisplayName)
                                     .font(.system(.body, design: .rounded))
                                     .foregroundStyle(Color.Theme.primaryBlue)
-                                Text(invite.statusEnum.rawValue.capitalized)
+                                Text(row.statusLabel)
                                     .font(.system(.caption, design: .rounded))
                                     .foregroundStyle(Color.Theme.softBrown)
                             }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("\(row.inviteeDisplayName), \(row.statusLabel)")
                         }
                     }
                 }

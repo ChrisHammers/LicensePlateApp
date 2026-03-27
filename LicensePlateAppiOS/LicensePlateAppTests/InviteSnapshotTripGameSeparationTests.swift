@@ -37,7 +37,7 @@ struct InviteSnapshotTripGameSeparationTests {
         #expect(snapshot.gamesOnTripLine != nil)
         #expect(snapshot.gamesOnTripLine == "%d games".localized(3))
         #expect(snapshot.tripName == "Test Trip")
-        #expect(!snapshot.inviterLine.contains("3"))
+        #expect(!snapshot.counterpartyLine.contains("3"))
     }
 
     @Test func singleGameUsesSingularLocalizedString() {

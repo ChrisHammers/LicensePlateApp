@@ -120,6 +120,9 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
             reg.remove()
         }
         memberListeners.removeAll()
+        Task { @MainActor in
+            TripCanonicalRemoteSyncService.shared.removeAllIncrementalListeners()
+        }
     }
 
     private func handleInviteSnapshot(snapshot: QuerySnapshot?, error: Error?, userId: String) {
@@ -176,6 +179,9 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
         for id in memberListeners.keys where !sessionIds.contains(id) {
             memberListeners[id]?.remove()
             memberListeners.removeValue(forKey: id)
+            if let uuid = UUID(uuidString: id) {
+                TripCanonicalRemoteSyncService.shared.removeIncrementalListeners(sessionId: uuid)
+            }
         }
 
         for sessionId in sessionIds where memberListeners[sessionId] == nil {
@@ -194,34 +200,53 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
     private func handleMembersSnapshot(sessionId: String, snapshot: QuerySnapshot?) {
         guard let snapshot, let sessionUUID = UUID(uuidString: sessionId) else { return }
 
-        for doc in snapshot.documents {
-            let memberUserId = doc.documentID
-            let data = doc.data()
-            let roleStr = (data["role"] as? String) ?? "member"
-            let role = TripParticipantRole(rawValue: roleStr) ?? .member
-            let joinedAt = TripInviteFirestoreMapper.timestampDate(data["joinedAt"]) ?? Date()
-
-            let participant = TripParticipant(userId: memberUserId, role: role, joinedAt: joinedAt)
-            try? tripSessionRepository.addParticipant(sessionId: sessionUUID, participant: participant)
-        }
-
-        let newCount = snapshot.documents.count
-        if !memberSnapshotBaselineApplied.contains(sessionId) {
-            memberSnapshotBaselineApplied.insert(sessionId)
-            lastMemberDocCountBySession[sessionId] = newCount
-        } else {
-            let previous = lastMemberDocCountBySession[sessionId] ?? newCount
-            lastMemberDocCountBySession[sessionId] = newCount
-            if newCount > previous {
-                let participantCountAfterJoin = (try? tripSessionRepository.session(byId: sessionUUID))?.participants.count ?? newCount
-                AnalyticsService.shared.log(.participantJoinedTrip(
-                    tripId: sessionId,
-                    participantCountAfterJoin: participantCountAfterJoin,
-                    teamCountAfterJoin: nil
-                ))
+        Task { @MainActor in
+            if (try? tripSessionRepository.session(byId: sessionUUID)) == nil {
+                do {
+                    try await TripCanonicalRemoteSyncService.shared.bootstrapMemberSession(sessionId: sessionUUID)
+                } catch {
+                    #if DEBUG
+                    print("TripInviteRepository: bootstrapMemberSession failed: \(error)")
+                    #endif
+                }
             }
+
+            for doc in snapshot.documents {
+                let memberUserId = doc.documentID
+                let data = doc.data()
+                let roleStr = (data["role"] as? String) ?? "member"
+                let role = TripParticipantRole(rawValue: roleStr) ?? .member
+                let joinedAt = TripInviteFirestoreMapper.timestampDate(data["joinedAt"]) ?? Date()
+
+                let participant = TripParticipant(userId: memberUserId, role: role, joinedAt: joinedAt)
+                do {
+                    try tripSessionRepository.addParticipant(sessionId: sessionUUID, participant: participant)
+                } catch {
+                    #if DEBUG
+                    print("TripInviteRepository: addParticipant failed: \(error)")
+                    #endif
+                }
+            }
+
+            let newCount = snapshot.documents.count
+            if !memberSnapshotBaselineApplied.contains(sessionId) {
+                memberSnapshotBaselineApplied.insert(sessionId)
+                lastMemberDocCountBySession[sessionId] = newCount
+            } else {
+                let previous = lastMemberDocCountBySession[sessionId] ?? newCount
+                lastMemberDocCountBySession[sessionId] = newCount
+                if newCount > previous {
+                    let participantCountAfterJoin = (try? tripSessionRepository.session(byId: sessionUUID))?.participants.count ?? newCount
+                    AnalyticsService.shared.log(.participantJoinedTrip(
+                        tripId: sessionId,
+                        participantCountAfterJoin: participantCountAfterJoin,
+                        teamCountAfterJoin: nil
+                    ))
+                }
+            }
+
+            try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionUUID)
         }
-        // TODO(step-future-trip-sync): If local TripSession does not exist yet, materialize from backend when full trip sync lands.
     }
 
     // MARK: - Queries

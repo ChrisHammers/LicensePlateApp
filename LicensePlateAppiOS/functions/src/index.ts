@@ -15,6 +15,12 @@ export {
   cancelTripInvite,
 } from "./tripInvites";
 export {
+  publishTripCanonicalState,
+  appendTripActivityEvent,
+  fetchTripBootstrapForMember,
+  markTripCancelledRemote,
+} from "./tripSessionCanonical";
+export {
   createFamily,
   sendFamilyInvite,
   respondToFamilyInvite_UserStep,

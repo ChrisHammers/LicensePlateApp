@@ -676,3 +676,10 @@
 
 // Step 12 — Trip dashboard (competitive trip-wide leaderboard)
 "Trip leaderboard" = "Trip leaderboard";
+
+// Step 12.5 — Joiner sync & display names
+"Unknown user" = "Unknown user";
+"Unknown player" = "Unknown player";
+"From: %@" = "From: %@";
+"To: %@" = "To: %@";
+"Loading profile…" = "Loading profile…";

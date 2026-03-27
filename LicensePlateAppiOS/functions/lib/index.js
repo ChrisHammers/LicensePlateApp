@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.writeAuditLog = exports.onAuthUserDeleted = exports.expireInvitesAndCodes = exports.inactivateFamily = exports.changeFamilyMemberRole = exports.removeFamilyMember = exports.approveFamilyJoinRequest_CaptainStep = exports.respondToFamilyInvite_UserStep = exports.sendFamilyInvite = exports.createFamily = exports.cancelTripInvite = exports.respondToTripInvite = exports.sendTripInvite = exports.removeFriend = exports.respondToFriendInvite = exports.sendFriendInvite = exports.redeemShareCode = exports.createShareCode = void 0;
+exports.writeAuditLog = exports.onAuthUserDeleted = exports.expireInvitesAndCodes = exports.inactivateFamily = exports.changeFamilyMemberRole = exports.removeFamilyMember = exports.approveFamilyJoinRequest_CaptainStep = exports.respondToFamilyInvite_UserStep = exports.sendFamilyInvite = exports.createFamily = exports.markTripCancelledRemote = exports.fetchTripBootstrapForMember = exports.appendTripActivityEvent = exports.publishTripCanonicalState = exports.cancelTripInvite = exports.respondToTripInvite = exports.sendTripInvite = exports.removeFriend = exports.respondToFriendInvite = exports.sendFriendInvite = exports.redeemShareCode = exports.createShareCode = void 0;
 const admin = require("firebase-admin");
 admin.initializeApp();
 // Export all functions
@@ -15,6 +15,11 @@ var tripInvites_1 = require("./tripInvites");
 Object.defineProperty(exports, "sendTripInvite", { enumerable: true, get: function () { return tripInvites_1.sendTripInvite; } });
 Object.defineProperty(exports, "respondToTripInvite", { enumerable: true, get: function () { return tripInvites_1.respondToTripInvite; } });
 Object.defineProperty(exports, "cancelTripInvite", { enumerable: true, get: function () { return tripInvites_1.cancelTripInvite; } });
+var tripSessionCanonical_1 = require("./tripSessionCanonical");
+Object.defineProperty(exports, "publishTripCanonicalState", { enumerable: true, get: function () { return tripSessionCanonical_1.publishTripCanonicalState; } });
+Object.defineProperty(exports, "appendTripActivityEvent", { enumerable: true, get: function () { return tripSessionCanonical_1.appendTripActivityEvent; } });
+Object.defineProperty(exports, "fetchTripBootstrapForMember", { enumerable: true, get: function () { return tripSessionCanonical_1.fetchTripBootstrapForMember; } });
+Object.defineProperty(exports, "markTripCancelledRemote", { enumerable: true, get: function () { return tripSessionCanonical_1.markTripCancelledRemote; } });
 var family_1 = require("./family");
 Object.defineProperty(exports, "createFamily", { enumerable: true, get: function () { return family_1.createFamily; } });
 Object.defineProperty(exports, "sendFamilyInvite", { enumerable: true, get: function () { return family_1.sendFamilyInvite; } });

@@ -1,0 +1,397 @@
+/**
+ * Trip session canonical sync — server-authoritative writes (Step 12.5).
+ * Clients read games/activity_events when trip_sessions member; all writes via these callables.
+ */
+
+import * as functions from "firebase-functions";
+import * as admin from "firebase-admin";
+import { writeAuditLog } from "./audit";
+
+const db = admin.firestore();
+
+const MAX_BOOTSTRAP_EVENTS = 2500;
+
+function tsToSeconds(value: admin.firestore.Timestamp | undefined | null): number {
+  if (!value) {
+    return 0;
+  }
+  return value.seconds + value.nanoseconds / 1e9;
+}
+
+function secondsToTimestamp(sec: number | undefined | null): admin.firestore.Timestamp | null {
+  if (sec == null || typeof sec !== "number" || Number.isNaN(sec)) {
+    return null;
+  }
+  return admin.firestore.Timestamp.fromMillis(Math.round(sec * 1000));
+}
+
+function sessionRef(sessionId: string) {
+  return db.collection("trip_sessions").doc(sessionId);
+}
+
+async function assertTripMember(sessionId: string, userId: string): Promise<void> {
+  const memberRef = sessionRef(sessionId).collection("members").doc(userId);
+  const snap = await memberRef.get();
+  if (!snap.exists) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Not a member of this trip session"
+    );
+  }
+}
+
+async function assertTripOwner(sessionId: string, userId: string): Promise<void> {
+  const memberRef = sessionRef(sessionId).collection("members").doc(userId);
+  const snap = await memberRef.get();
+  if (!snap.exists) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Not a member of this trip session"
+    );
+  }
+  const role = (snap.data()?.role as string) || "member";
+  if (role !== "owner") {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Only the trip owner can publish canonical state"
+    );
+  }
+}
+
+function gameDocToWire(id: string, d: admin.firestore.DocumentData): Record<string, unknown> {
+  return {
+    id,
+    definitionId: d.definitionId,
+    sessionId: d.sessionId,
+    startedAt: tsToSeconds(d.startedAt),
+    endedAt: d.endedAt ? tsToSeconds(d.endedAt) : null,
+    ruleSetDataBase64: d.ruleSetDataBase64 ?? null,
+    commonConfigDataBase64: d.commonConfigDataBase64 ?? null,
+    gameSpecificPayloadType: d.gameSpecificPayloadType ?? null,
+    gameSpecificPayloadVersion: d.gameSpecificPayloadVersion ?? null,
+    gameSpecificPayloadDataBase64: d.gameSpecificPayloadDataBase64 ?? null,
+    teamsDataBase64: d.teamsDataBase64 ?? null,
+  };
+}
+
+function eventDocToWire(id: string, d: admin.firestore.DocumentData): Record<string, unknown> {
+  return {
+    id,
+    sessionId: d.sessionId,
+    kind: d.kind,
+    timestamp: tsToSeconds(d.timestamp),
+    actorId: d.actorId ?? null,
+    payload: d.payload ?? null,
+  };
+}
+
+/**
+ * Publish full session + games snapshot (owner only).
+ */
+export const publishTripCanonicalState = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
+  }
+  const userId = context.auth.uid;
+  const tripSessionId = data?.tripSessionId as string | undefined;
+  const session = data?.session as Record<string, unknown> | undefined;
+  const games = data?.games as Record<string, unknown>[] | undefined;
+
+  if (!tripSessionId || typeof tripSessionId !== "string") {
+    throw new functions.https.HttpsError("invalid-argument", "tripSessionId is required");
+  }
+  if (!session || typeof session !== "object") {
+    throw new functions.https.HttpsError("invalid-argument", "session is required");
+  }
+  if (!Array.isArray(games)) {
+    throw new functions.https.HttpsError("invalid-argument", "games array is required");
+  }
+
+  const sessionIdFromPayload = session.id as string;
+  if (sessionIdFromPayload !== tripSessionId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "session.id must match tripSessionId"
+    );
+  }
+
+  await assertTripOwner(tripSessionId, userId);
+
+  const ref = sessionRef(tripSessionId);
+  const gamesCol = ref.collection("games");
+
+  const existingGames = await gamesCol.get();
+  const incomingIds = new Set(games.map((g) => String(g.id)));
+
+  let batch = db.batch();
+  let ops = 0;
+
+  const commitIfNeeded = async () => {
+    if (ops >= 400) {
+      await batch.commit();
+      batch = db.batch();
+      ops = 0;
+    }
+  };
+
+  for (const doc of existingGames.docs) {
+    if (!incomingIds.has(doc.id)) {
+      batch.delete(doc.ref);
+      ops += 1;
+      await commitIfNeeded();
+    }
+  }
+
+  const canonicalCreatedAt = secondsToTimestamp(session.createdAt as number);
+  if (!canonicalCreatedAt) {
+    throw new functions.https.HttpsError("invalid-argument", "session.createdAt is required");
+  }
+  const canonicalStartedAt = secondsToTimestamp(session.startedAt as number | undefined);
+  const canonicalEndedAt = secondsToTimestamp(session.endedAt as number | undefined);
+
+  batch.set(
+    ref,
+    {
+      name: session.name,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      syncVersion: admin.firestore.FieldValue.increment(1),
+      canonicalStatus: session.status,
+      canonicalCreatedAt,
+      canonicalStartedAt,
+      canonicalEndedAt,
+      canonicalEndedBy: session.endedBy ?? null,
+      canonicalParticipants: Array.isArray(session.participants) ? session.participants : [],
+    },
+    { merge: true }
+  );
+  ops += 1;
+  await commitIfNeeded();
+
+  for (const g of games) {
+    const gid = String(g.id);
+    const gameRef = gamesCol.doc(gid);
+    const startedAt = secondsToTimestamp(g.startedAt as number);
+    if (!startedAt) {
+      throw new functions.https.HttpsError("invalid-argument", "each game.startedAt is required");
+    }
+    const endedAt = secondsToTimestamp(g.endedAt as number | undefined);
+
+    batch.set(gameRef, {
+      definitionId: g.definitionId,
+      sessionId: g.sessionId,
+      startedAt,
+      endedAt,
+      ruleSetDataBase64: g.ruleSetDataBase64 ?? null,
+      commonConfigDataBase64: g.commonConfigDataBase64 ?? null,
+      gameSpecificPayloadType: g.gameSpecificPayloadType ?? null,
+      gameSpecificPayloadVersion: g.gameSpecificPayloadVersion ?? null,
+      gameSpecificPayloadDataBase64: g.gameSpecificPayloadDataBase64 ?? null,
+      teamsDataBase64: g.teamsDataBase64 ?? null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    ops += 1;
+    await commitIfNeeded();
+  }
+
+  if (ops > 0) {
+    await batch.commit();
+  }
+
+  const parent = await ref.get();
+  const syncVersion = (parent.data()?.syncVersion as number) ?? 0;
+
+  await writeAuditLog({
+    eventType: "AUDIT_TRIP_CANONICAL_PUBLISHED",
+    actorId: userId,
+    subjectType: "trip_session",
+    subjectId: tripSessionId,
+    metadata: { gameCount: games.length, syncVersion },
+  });
+
+  return { success: true, syncVersion };
+});
+
+/**
+ * Append one activity event (idempotent set). Any trip member may call.
+ */
+export const appendTripActivityEvent = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
+  }
+  const userId = context.auth.uid;
+  const tripSessionId = data?.tripSessionId as string | undefined;
+  const event = data?.event as Record<string, unknown> | undefined;
+
+  if (!tripSessionId) {
+    throw new functions.https.HttpsError("invalid-argument", "tripSessionId is required");
+  }
+  if (!event || typeof event !== "object") {
+    throw new functions.https.HttpsError("invalid-argument", "event is required");
+  }
+
+  await assertTripMember(tripSessionId, userId);
+
+  const eventId = event.id as string;
+  const sessionIdInEvent = event.sessionId as string;
+  if (!eventId || !sessionIdInEvent) {
+    throw new functions.https.HttpsError("invalid-argument", "event.id and event.sessionId required");
+  }
+  if (sessionIdInEvent !== tripSessionId) {
+    throw new functions.https.HttpsError("invalid-argument", "event.sessionId must match tripSessionId");
+  }
+  const kind = event.kind as string;
+  if (!kind) {
+    throw new functions.https.HttpsError("invalid-argument", "event.kind is required");
+  }
+
+  const ts = secondsToTimestamp(event.timestamp as number);
+  if (!ts) {
+    throw new functions.https.HttpsError("invalid-argument", "event.timestamp is required");
+  }
+
+  const eventRef = sessionRef(tripSessionId).collection("activity_events").doc(eventId);
+
+  await eventRef.set(
+    {
+      sessionId: sessionIdInEvent,
+      kind,
+      timestamp: ts,
+      actorId: event.actorId ?? null,
+      payload: event.payload ?? null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  await sessionRef(tripSessionId).update({
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return { success: true };
+});
+
+/**
+ * Full read for a member: session wire + games + events (capped).
+ */
+export const fetchTripBootstrapForMember = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
+  }
+  const userId = context.auth.uid;
+  const tripSessionId = data?.tripSessionId as string | undefined;
+  if (!tripSessionId) {
+    throw new functions.https.HttpsError("invalid-argument", "tripSessionId is required");
+  }
+
+  await assertTripMember(tripSessionId, userId);
+
+  const ref = sessionRef(tripSessionId);
+  const parentSnap = await ref.get();
+  if (!parentSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Trip session not found");
+  }
+
+  const p = parentSnap.data()!;
+
+  const sessionWire: Record<string, unknown> = {
+    id: tripSessionId,
+    name: p.name ?? "",
+    status: (p.canonicalStatus as string) ?? "created",
+    createdAt: tsToSeconds(p.canonicalCreatedAt),
+    createdBy: p.createdBy ?? null,
+    startedAt: p.canonicalStartedAt ? tsToSeconds(p.canonicalStartedAt) : null,
+    endedAt: p.canonicalEndedAt ? tsToSeconds(p.canonicalEndedAt) : null,
+    endedBy: p.canonicalEndedBy ?? null,
+    participants: Array.isArray(p.canonicalParticipants) ? p.canonicalParticipants : [],
+  };
+
+  const gamesSnap = await ref.collection("games").get();
+  const games = gamesSnap.docs.map((doc) => gameDocToWire(doc.id, doc.data()));
+
+  const eventsQ = await ref
+    .collection("activity_events")
+    .orderBy("timestamp", "asc")
+    .limit(MAX_BOOTSTRAP_EVENTS + 1)
+    .get();
+
+  let nextEventCursor: string | null = null;
+  const eventDocs = eventsQ.docs;
+  const limited = eventDocs.length > MAX_BOOTSTRAP_EVENTS ? eventDocs.slice(0, MAX_BOOTSTRAP_EVENTS) : eventDocs;
+  if (eventDocs.length > MAX_BOOTSTRAP_EVENTS) {
+    nextEventCursor = limited[limited.length - 1].id;
+  }
+
+  const events = limited.map((doc) => eventDocToWire(doc.id, doc.data()));
+
+  const syncVersion = (p.syncVersion as number) ?? 0;
+
+  return {
+    session: sessionWire,
+    games,
+    events,
+    syncVersion,
+    nextEventCursor,
+  };
+});
+
+/** Owner: mark remote cancelled and remove games/events for joiner convergence. */
+export const markTripCancelledRemote = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
+  }
+  const userId = context.auth.uid;
+  const tripSessionId = data?.tripSessionId as string | undefined;
+  if (!tripSessionId) {
+    throw new functions.https.HttpsError("invalid-argument", "tripSessionId is required");
+  }
+
+  await assertTripOwner(tripSessionId, userId);
+
+  const ref = sessionRef(tripSessionId);
+
+  const deleteInBatches = async (coll: admin.firestore.CollectionReference) => {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const snap = await coll.limit(400).get();
+      if (snap.empty) {
+        break;
+      }
+      let b = db.batch();
+      let c = 0;
+      for (const doc of snap.docs) {
+        b.delete(doc.ref);
+        c += 1;
+        if (c >= 400) {
+          await b.commit();
+          b = db.batch();
+          c = 0;
+        }
+      }
+      if (c > 0) {
+        await b.commit();
+      }
+    }
+  };
+
+  await deleteInBatches(ref.collection("games"));
+  await deleteInBatches(ref.collection("activity_events"));
+
+  await ref.set(
+    {
+      canonicalStatus: "cancelled",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      syncVersion: admin.firestore.FieldValue.increment(1),
+    },
+    { merge: true }
+  );
+
+  await writeAuditLog({
+    eventType: "AUDIT_TRIP_CANCELLED_REMOTE",
+    actorId: userId,
+    subjectType: "trip_session",
+    subjectId: tripSessionId,
+    metadata: {},
+  });
+
+  return { success: true };
+});

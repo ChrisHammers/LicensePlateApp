@@ -63,6 +63,9 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         let tripStartedEvent = TripActivityEvent(sessionId: sessionId, kind: .tripStarted, actorId: actorId)
         try tripActivityEventRecording.recordForSync(tripStartedEvent)
         AnalyticsService.shared.log(.tripSessionStarted(tripId: sessionId.uuidString, tripActiveGameCount: games.count))
+        Task { @MainActor in
+            try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionId)
+        }
     }
 
     func endTrip(sessionId: UUID, endedBy: String?) throws {
@@ -83,12 +86,18 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         let tripEndedEvent = TripActivityEvent(sessionId: sessionId, kind: .tripEnded, actorId: endedBy)
         try tripActivityEventRecording.recordForSync(tripEndedEvent)
         AnalyticsService.shared.log(.tripSessionEnded(tripId: sessionId.uuidString))
+        Task { @MainActor in
+            try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionId)
+        }
     }
 
     /// Cancels the trip (soft delete UX): marks session cancelled, clears local games and all session events so scores/progress are removed.
     func cancelSession(sessionId: UUID, cancelledBy: String?) throws {
         guard var session = try tripSessionRepository.session(byId: sessionId) else {
             throw TripSessionLifecycleServiceError.sessionNotFound(sessionId)
+        }
+        Task { @MainActor in
+            try? await TripCanonicalRemoteSyncService.shared.markTripCancelledRemote(sessionId: sessionId)
         }
         session.status = .cancelled
         session.endedAt = Date()

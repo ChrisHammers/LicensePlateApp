@@ -75,16 +75,39 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     }
 
     func processPendingSyncItems() async {
+        let pending = (try? repository.fetchPending(limit: 50)) ?? []
+        let retryDue = (try? repository.fetchFailedRetryDue()) ?? []
+        let candidates = Dictionary(uniqueKeysWithValues: (pending + retryDue).map { ($0.id, $0) }).values.sorted { $0.createdAt < $1.createdAt }
+
+        for item in candidates where item.kind == .gameplayEvent {
+            guard let sessionStr = item.payloadSessionId,
+                  let eventId = item.payloadEventId,
+                  UUID(uuidString: sessionStr) != nil else {
+                try? repository.markCancelled(id: item.id)
+                continue
+            }
+            do {
+                try repository.markInProgress(id: item.id)
+                guard let event = try TripActivityEventRepository.shared.event(byId: eventId) else {
+                    try? repository.markCompleted(id: item.id)
+                    continue
+                }
+                try await TripCanonicalRemoteSyncService.shared.appendEventToRemote(event)
+                try? repository.markCompleted(id: item.id)
+            } catch {
+                let attempts = max(item.attemptCount, 0) + 1
+                let delaySeconds = min(pow(2.0, Double(attempts - 1)) * 60.0, 3600.0)
+                let nextRetryAt = Date().addingTimeInterval(delaySeconds)
+                try? repository.markFailed(id: item.id, nextRetryAt: nextRetryAt)
+            }
+        }
+
         guard let userSyncExecutor else { return }
         let now = Date()
         if let last = lastProcessPendingRunAt, now.timeIntervalSince(last) < processPendingMinInterval {
             return
         }
         lastProcessPendingRunAt = now
-
-        let pending = (try? repository.fetchPending(limit: 50)) ?? []
-        let retryDue = (try? repository.fetchFailedRetryDue()) ?? []
-        let candidates = Dictionary(uniqueKeysWithValues: (pending + retryDue).map { ($0.id, $0) }).values.sorted { $0.createdAt < $1.createdAt }
 
         for item in candidates where item.kind == .userProfile {
             guard let userIdData = item.payloadData,

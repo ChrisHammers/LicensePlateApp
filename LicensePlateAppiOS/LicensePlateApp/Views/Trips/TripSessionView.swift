@@ -209,7 +209,7 @@ private struct TripSessionLeaderboardSection: View {
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
                     }
-                    Text(displayNames[c.participantId] ?? c.participantId)
+                    Text(displayNames[c.participantId] ?? "Unknown player".localized)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .font(.system(.subheadline, design: .rounded))
@@ -262,7 +262,7 @@ private struct TripSessionLeaderboardSection: View {
 
     private func leaderboardRowAccessibilityLabel(row: RankedParticipantContribution) -> String {
         let c = row.contribution
-        let name = displayNames[c.participantId] ?? c.participantId
+        let name = displayNames[c.participantId] ?? "Unknown player".localized
         var parts: [String] = [name]
         parts.append("Rank #%d".localized(row.rank))
         if row.isTiedOnScore { parts.append("Tied".localized) }

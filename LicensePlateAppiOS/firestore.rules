@@ -88,6 +88,17 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Trip canonical games & events (read by members; writes via Cloud Functions only)
+    match /trip_sessions/{sessionId}/games/{gameId} {
+      allow read: if isSignedIn() && isTripSessionMember(sessionId, uid());
+      allow create, update, delete: if false;
+    }
+
+    match /trip_sessions/{sessionId}/activity_events/{eventId} {
+      allow read: if isSignedIn() && isTripSessionMember(sessionId, uid());
+      allow create, update, delete: if false;
+    }
+
     // INVITES
     match /invites/{inviteId} {
       allow read: if isSignedIn() &&

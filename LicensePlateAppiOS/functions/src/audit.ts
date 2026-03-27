@@ -5,7 +5,7 @@ const db = admin.firestore();
 export interface AuditLogData {
   eventType: string;
   actorId: string;
-  subjectType: "user" | "family" | "invite" | "friendship";
+  subjectType: "user" | "family" | "invite" | "friendship" | "trip_session";
   subjectId: string;
   metadata?: Record<string, any>;
   ipHash?: string;
