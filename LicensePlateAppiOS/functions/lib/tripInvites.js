@@ -35,6 +35,11 @@ exports.sendTripInvite = functions.https.onCall(async (data, context) => {
     // TODO(step-08-hardening): Gate by friendship/family relationship once invite eligibility policy is finalized.
     // TODO(step-08-hardening): Add per-user rate limiting / anti-abuse controls for invite spam prevention.
     const sessionRef = db.collection("trip_sessions").doc(tripSessionId);
+    const recipientMemberRef = sessionRef.collection("members").doc(toUserId);
+    const recipientMemberSnap = await recipientMemberRef.get();
+    if (recipientMemberSnap.exists) {
+        throw new functions.https.HttpsError("failed-precondition", "User is already a participant in this trip");
+    }
     let expiresAt;
     if (typeof expiresAtMs === "number" && expiresAtMs > Date.now()) {
         expiresAt = admin.firestore.Timestamp.fromMillis(expiresAtMs);
