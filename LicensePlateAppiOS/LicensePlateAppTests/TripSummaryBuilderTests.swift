@@ -285,4 +285,51 @@ struct TripSummaryBuilderTests {
         #expect(byUser["u1"] == 1)
         #expect(byUser["u2"] == 1)
     }
+
+    /// Step 12 — `build(session:games:discoveries:)` uses same credits as explicit `creditsForTripSummary`.
+    @Test func buildWithDiscoveriesOnlyMatchesExplicitCreditsPath() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "Credits path",
+            status: .ended,
+            createdAt: Date(),
+            participants: [TripParticipant(userId: "user1", role: .owner)]
+        )
+        let game = GameInstance(
+            id: gameId,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: GameType.licensePlate.rawValue)
+        )
+        let d1 = GameDiscovery(
+            gameInstanceId: gameId,
+            participantId: "user1",
+            targetId: "CA",
+            inputMethod: .list
+        )
+        let d2 = GameDiscovery(
+            gameInstanceId: gameId,
+            participantId: "user1",
+            targetId: "TX",
+            inputMethod: .list
+        )
+        let discoveries = [d1, d2]
+        let explicitCredits = TripSummaryBuilder.creditsForTripSummary(games: [game], discoveries: discoveries)
+        let viaOverload = TripSummaryBuilder.build(session: session, games: [game], discoveries: discoveries)
+        let viaExplicit = TripSummaryBuilder.build(session: session, games: [game], discoveries: discoveries, credits: explicitCredits)
+        #expect(viaOverload.rankedParticipants.count == viaExplicit.rankedParticipants.count)
+        for i in viaOverload.rankedParticipants.indices {
+            #expect(viaOverload.rankedParticipants[i].rank == viaExplicit.rankedParticipants[i].rank)
+            #expect(viaOverload.rankedParticipants[i].isTiedOnScore == viaExplicit.rankedParticipants[i].isTiedOnScore)
+            let a = viaOverload.rankedParticipants[i].contribution
+            let b = viaExplicit.rankedParticipants[i].contribution
+            #expect(a.participantId == b.participantId)
+            #expect(a.discoveryCount == b.discoveryCount)
+            #expect(a.weightedScore == b.weightedScore)
+            #expect(a.firstFindCount == b.firstFindCount)
+        }
+        #expect(viaOverload.totalDiscoveryCount == viaExplicit.totalDiscoveryCount)
+    }
 }

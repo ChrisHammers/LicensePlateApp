@@ -226,4 +226,90 @@ struct TripSessionViewModelTests {
         #expect(viewModel.errorMessage != nil)
         #expect(gameLifecycle.startGameCallCount == 0)
     }
+
+    // MARK: - Step 12 Trip dashboard competitive leaderboard
+
+    @Test func loadPopulatesTripLeaderboardWhenMultiplayerAndCompetitiveGame() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "Competitive Trip",
+            status: .active,
+            createdAt: Date(),
+            createdBy: "user1",
+            startedAt: Date(),
+            participants: [
+                TripParticipant(userId: "user1", role: .owner, joinedAt: Date()),
+                TripParticipant(userId: "user2", role: .member, joinedAt: Date())
+            ]
+        )
+        var game = GameInstance(
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: GameType.licensePlate.rawValue),
+            commonConfig: CommonGameConfig(lifecycleState: .started, gameMode: .competitive)
+        )
+        game.id = gameId
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        gameRepo.seed(game)
+        let eventRepo = MockTripActivityEventRepository()
+        try eventRepo.append(TripActivityEvent(sessionId: sessionId, kind: .regionFound, actorId: "user1", payload: [
+            TripActivityEventPayloadKey.regionId: "us-ca",
+            TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+            TripActivityEventPayloadKey.participantId: "user1",
+            TripActivityEventPayloadKey.inputMethod: FoundRegion.InputMethod.list.rawValue
+        ]))
+        try eventRepo.append(TripActivityEvent(sessionId: sessionId, kind: .regionFound, actorId: "user2", payload: [
+            TripActivityEventPayloadKey.regionId: "us-ny",
+            TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+            TripActivityEventPayloadKey.participantId: "user2",
+            TripActivityEventPayloadKey.inputMethod: FoundRegion.InputMethod.list.rawValue
+        ]))
+
+        let viewModel = TripSessionViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo
+        )
+        viewModel.load()
+
+        #expect(viewModel.showsTripCompetitiveLeaderboard == true)
+        #expect(viewModel.tripLeaderboardRows.count == 2)
+        let byId = Dictionary(uniqueKeysWithValues: viewModel.tripLeaderboardRows.map { ($0.contribution.participantId, $0) })
+        #expect(byId["user1"]?.contribution.weightedScore == 1.0)
+        #expect(byId["user2"]?.contribution.weightedScore == 1.0)
+        #expect(byId["user1"]?.rank == 1)
+        #expect(byId["user2"]?.rank == 1)
+        #expect(byId["user1"]?.isTiedOnScore == true)
+        #expect(byId["user2"]?.isTiedOnScore == true)
+    }
+
+    @Test func loadHidesTripLeaderboardWhenOnlyCollaborativeGames() async throws {
+        let sessionId = UUID()
+        let session = makeSession(id: sessionId, name: "Collab")
+        var game = makeGame(sessionId: sessionId)
+        game.commonConfig.gameMode = .collaborative
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        gameRepo.seed(game)
+        let eventRepo = MockTripActivityEventRepository()
+
+        let viewModel = TripSessionViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo
+        )
+        viewModel.load()
+
+        #expect(viewModel.showsTripCompetitiveLeaderboard == false)
+        #expect(viewModel.tripLeaderboardRows.isEmpty)
+    }
 }

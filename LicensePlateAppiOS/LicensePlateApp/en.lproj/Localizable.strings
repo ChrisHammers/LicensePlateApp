@@ -673,3 +673,6 @@
 "Your duplicate attempts" = "Your duplicate attempts";
 "No duplicate attempts yet" = "No duplicate attempts yet";
 "%d first finds" = "%d first finds";
+
+// Step 12 — Trip dashboard (competitive trip-wide leaderboard)
+"Trip leaderboard" = "Trip leaderboard";

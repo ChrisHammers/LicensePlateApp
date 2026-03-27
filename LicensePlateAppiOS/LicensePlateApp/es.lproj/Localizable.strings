@@ -643,3 +643,6 @@
 "Your duplicate attempts" = "Tus intentos duplicados";
 "No duplicate attempts yet" = "Aún no hay intentos duplicados";
 "%d first finds" = "%d primeros hallazgos";
+
+// Step 12 — Trip dashboard (competitive trip-wide leaderboard)
+"Trip leaderboard" = "Clasificación del viaje";

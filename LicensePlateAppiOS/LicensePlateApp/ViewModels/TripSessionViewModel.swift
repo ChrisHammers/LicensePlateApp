@@ -29,6 +29,10 @@ final class TripSessionViewModel: ObservableObject {
 
     @Published private(set) var session: TripSession?
     @Published private(set) var gameRowItems: [GameRowItem] = []
+    /// Trip-wide competitive standings (same projection as Travel Log summary). Empty when not applicable or unavailable.
+    @Published private(set) var tripLeaderboardRows: [RankedParticipantContribution] = []
+    /// True when the trip has at least one competitive game and leaderboard rows were built successfully.
+    @Published private(set) var showsTripCompetitiveLeaderboard: Bool = false
     @Published var errorMessage: String?
 
     private let sessionId: UUID
@@ -36,6 +40,7 @@ final class TripSessionViewModel: ObservableObject {
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol?
     private let gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
+    private var didLogTripDashboardLeaderboard = false
 
     init(
         sessionId: UUID,
@@ -53,6 +58,8 @@ final class TripSessionViewModel: ObservableObject {
 
     func load() {
         errorMessage = nil
+        showsTripCompetitiveLeaderboard = false
+        tripLeaderboardRows = []
         do {
             guard let s = try tripSessionRepository.session(byId: sessionId) else {
                 session = nil
@@ -90,10 +97,41 @@ final class TripSessionViewModel: ObservableObject {
                 ))
             }
             gameRowItems = rows
+
+            refreshTripLeaderboard(session: s, games: games)
         } catch {
             errorMessage = error.localizedDescription
             session = nil
             gameRowItems = []
+            showsTripCompetitiveLeaderboard = false
+            tripLeaderboardRows = []
+        }
+    }
+
+    /// Trip-wide leaderboard from canonical `TripSummaryBuilder` path (competitive games only).
+    private func refreshTripLeaderboard(session: TripSession, games: [GameInstance]) {
+        guard games.contains(where: { $0.commonConfig.gameMode == .competitive }) else {
+            showsTripCompetitiveLeaderboard = false
+            tripLeaderboardRows = []
+            return
+        }
+        guard let eventRepo = tripActivityEventRepository else {
+            showsTripCompetitiveLeaderboard = false
+            tripLeaderboardRows = []
+            return
+        }
+        do {
+            let discoveries = try eventRepo.discoveries(sessionId: sessionId, gameInstanceId: nil)
+            let summary = TripSummaryBuilder.build(session: session, games: games, discoveries: discoveries)
+            tripLeaderboardRows = summary.rankedParticipants
+            showsTripCompetitiveLeaderboard = true
+            if session.mode == .multiplayer, !didLogTripDashboardLeaderboard {
+                AnalyticsService.shared.log(.tripDashboardCompetitiveLeaderboardPresented(tripSessionId: sessionId.uuidString))
+                didLogTripDashboardLeaderboard = true
+            }
+        } catch {
+            showsTripCompetitiveLeaderboard = false
+            tripLeaderboardRows = []
         }
     }
 
@@ -104,6 +142,8 @@ final class TripSessionViewModel: ObservableObject {
                 errorMessage = nil
                 self.session = nil
                 gameRowItems = []
+                showsTripCompetitiveLeaderboard = false
+                tripLeaderboardRows = []
                 return
             }
             if session.status == .ended || session.status == .cancelled {

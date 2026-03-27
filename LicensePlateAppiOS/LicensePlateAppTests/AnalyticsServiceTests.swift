@@ -155,6 +155,10 @@ struct AnalyticsServiceTests {
         #expect(compStandings.name == "competitive_in_game_standings_presented")
         #expect(compStandings.parameters?["trip_session_id"] as? String == "t-2")
         #expect(compStandings.parameters?["game_instance_id"] as? String == "g-2")
+
+        let tripDash = AnalyticsService.Event.tripDashboardCompetitiveLeaderboardPresented(tripSessionId: "t-3")
+        #expect(tripDash.name == "trip_dashboard_competitive_leaderboard_presented")
+        #expect(tripDash.parameters?["trip_session_id"] as? String == "t-3")
     }
 
     @Test @MainActor func tripSessionCreatedAndGameInstanceEndedParameters() async throws {

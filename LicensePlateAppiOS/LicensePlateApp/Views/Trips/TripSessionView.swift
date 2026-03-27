@@ -26,6 +26,12 @@ struct TripSessionView: View {
         ))
     }
 
+    /// Preview / tests: inject a pre-configured view model (e.g. mocks).
+    init(sessionId: UUID, viewModel: TripSessionViewModel) {
+        self.sessionId = sessionId
+        _viewModel = StateObject(wrappedValue: viewModel)
+    }
+
     var body: some View {
         Group {
             if let session = viewModel.session {
@@ -71,6 +77,13 @@ struct TripSessionView: View {
                 }
             } header: {
                 Text("Trip".localized)
+            }
+
+            if viewModel.showsTripCompetitiveLeaderboard, !viewModel.tripLeaderboardRows.isEmpty {
+                TripSessionLeaderboardSection(
+                    gameRowCount: viewModel.gameRowItems.count,
+                    rows: viewModel.tripLeaderboardRows
+                )
             }
 
             Section {
@@ -174,6 +187,92 @@ struct TripSessionView: View {
     }
 }
 
+// MARK: - Trip-wide competitive leaderboard (Step 12)
+
+private struct TripSessionLeaderboardSection: View {
+    let gameRowCount: Int
+    let rows: [RankedParticipantContribution]
+    @State private var displayNames: [String: String] = [:]
+
+    var body: some View {
+        Section {
+            ForEach(rows) { row in
+                let c = row.contribution
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("Rank #%d".localized(row.rank))
+                        .font(.system(.caption, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                        .frame(minWidth: 56, alignment: .leading)
+                    if row.isTiedOnScore {
+                        Text("Tied".localized)
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    Text(displayNames[c.participantId] ?? c.participantId)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    Spacer(minLength: 4)
+                    Text("%d first finds".localized(c.firstFindCount))
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                    Text("\(c.discoveryCount) found".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                    Text(String(format: "%.1f", c.weightedScore))
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                }
+                .padding(.vertical, 4)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(leaderboardRowAccessibilityLabel(row: row))
+                .listRowBackground(Color.Theme.cardBackground)
+            }
+        } header: {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Trip leaderboard".localized)
+                    .font(.system(.subheadline, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .accessibilityAddTraits(.isHeader)
+                if gameRowCount > 1 {
+                    Text("Scores and finds combine all games on this trip.".localized)
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown.opacity(0.9))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel("Scores and finds combine all games on this trip.".localized)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .textCase(nil)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Trip leaderboard".localized)
+        .task(id: leaderboardTaskIdentity) {
+            let ids = Set(rows.map(\.contribution.participantId))
+            displayNames = await UserRepository.shared.displayNames(forUserIds: ids)
+        }
+    }
+
+    private var leaderboardTaskIdentity: String {
+        rows.map { "\($0.contribution.participantId):\($0.rank):\($0.contribution.weightedScore)" }.joined(separator: "|")
+    }
+
+    private func leaderboardRowAccessibilityLabel(row: RankedParticipantContribution) -> String {
+        let c = row.contribution
+        let name = displayNames[c.participantId] ?? c.participantId
+        var parts: [String] = [name]
+        parts.append("Rank #%d".localized(row.rank))
+        if row.isTiedOnScore { parts.append("Tied".localized) }
+        parts.append("%d first finds".localized(c.firstFindCount))
+        parts.append("\(c.discoveryCount) found".localized)
+        parts.append(String(format: "%.1f", c.weightedScore))
+        return parts.joined(separator: ", ")
+    }
+}
+
 private struct GameRowView: View {
     let item: GameRowItem
 
@@ -220,4 +319,16 @@ private struct GameRowView: View {
             .environmentObject(MainCoordinator())
             .environmentObject(FirebaseAuthService())
     }
+}
+
+#Preview("Trip leaderboard — tied standings") {
+    List {
+        TripSessionLeaderboardSection(
+            gameRowCount: 2,
+            rows: PreviewSummaryFixtures.tripSummaryCompetitiveTied().rankedParticipants
+        )
+    }
+    .listStyle(.insetGrouped)
+    .scrollContentBackground(.hidden)
+    .background(Color.Theme.background)
 }

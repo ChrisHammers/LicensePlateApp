@@ -10,6 +10,29 @@ import Foundation
 
 enum TripSummaryBuilder {
 
+    /// Per-game credits for trip-wide summary / Travel Log / trip dashboard — same rules as `DiscoveryRulesEngine.creditsForDiscoveries` per `GameInstance`.
+    static func creditsForTripSummary(games: [GameInstance], discoveries: [GameDiscovery]) -> [GameCredit] {
+        var allCredits: [GameCredit] = []
+        allCredits.reserveCapacity(discoveries.count)
+        for game in games {
+            let gameDiscoveries = discoveries.filter { $0.gameInstanceId == game.id }
+            let discoveriesByTarget = Dictionary(grouping: gameDiscoveries, by: \.targetId)
+            let gameCredits = DiscoveryRulesEngine.creditsForDiscoveries(
+                mode: game.commonConfig.gameMode,
+                discoveriesByTarget: discoveriesByTarget,
+                teams: game.teams
+            )
+            allCredits.append(contentsOf: gameCredits)
+        }
+        return allCredits
+    }
+
+    /// Build summary by deriving credits from discoveries (Travel Log and trip dashboard entry point).
+    static func build(session: TripSession, games: [GameInstance], discoveries: [GameDiscovery]) -> TripSummary {
+        let credits = creditsForTripSummary(games: games, discoveries: discoveries)
+        return build(session: session, games: games, discoveries: discoveries, credits: credits)
+    }
+
     /// Build a rich summary for a completed trip. Use discoveries and credits from TripActivityEventRepository (and computed credits).
     static func build(
         session: TripSession,
