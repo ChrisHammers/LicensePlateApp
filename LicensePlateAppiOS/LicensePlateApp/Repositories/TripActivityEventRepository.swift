@@ -125,6 +125,7 @@ final class TripActivityEventRepository: ObservableObject, TripActivityEventRepo
             try ctx.save()
             return true
         }
+        #if DEBUG
         if DebugPersistenceFlags.shouldForceFailure(for: .append) {
             throw DebugForcedPersistenceError.append
         }
