@@ -10,6 +10,7 @@ import Testing
 @testable import LicensePlateApp
 
 @Suite("GameplayAppendCallableResponseParser")
+@MainActor
 struct GameplayAppendCallableResponseParserTests {
 
     @Test func legacySuccessAccepted() throws {
