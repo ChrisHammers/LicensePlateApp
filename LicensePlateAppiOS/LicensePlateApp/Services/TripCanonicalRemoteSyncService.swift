@@ -55,10 +55,7 @@ private enum TripCanonicalFirestoreFields {
             return nil
         }
         let ts = timestampSeconds(data["timestamp"]) ?? 0
-        var payload: [String: String]?
-        if let p = data["payload"] as? [String: String] {
-            payload = p
-        }
+        let payload = stringPayloadFromFirestore(data["payload"])
         return TripActivityEventWireDTO(
             id: documentId,
             sessionId: sessionId,
@@ -67,6 +64,34 @@ private enum TripCanonicalFirestoreFields {
             actorId: data["actorId"] as? String,
             payload: payload
         )
+    }
+
+    /// Firestore returns `payload` as `[String: Any]` (e.g. `Int64` values); cast to `[String: String]` always failed, so
+    /// `region_found` merged with `payload == nil` and discovery replay skipped every peer find.
+    private static func stringPayloadFromFirestore(_ value: Any?) -> [String: String]? {
+        if value == nil { return nil }
+        if let p = value as? [String: String] { return p }
+        guard let dict = value as? [String: Any] else { return nil }
+        var out: [String: String] = [:]
+        for (k, v) in dict {
+            if v is NSNull { continue }
+            if let s = v as? String {
+                out[k] = s
+            } else if let n = v as? NSNumber {
+                out[k] = n.stringValue
+            } else if let n = v as? Int {
+                out[k] = String(n)
+            } else if let n = v as? Int64 {
+                out[k] = String(n)
+            } else if let n = v as? Double {
+                out[k] = String(n)
+            } else if let b = v as? Bool {
+                out[k] = b ? "true" : "false"
+            } else {
+                out[k] = String(describing: v)
+            }
+        }
+        return out.isEmpty ? nil : out
     }
 
     private static func timestampSeconds(_ value: Any?) -> Double? {
@@ -152,6 +177,8 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
             "session": sessionObj,
             "games": gamesArr,
         ])
+        // Creators never call `bootstrapMemberSession`; without listeners they miss peers’ `activity_events`.
+        startIncrementalListeningIfNeeded(sessionId: sessionId)
     }
 
     func appendEventToRemote(_ event: TripActivityEvent) async throws -> GameplayEventAppendOutcome {
@@ -232,7 +259,8 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     private func applyEventsSnapshot(sessionId: UUID, snapshot: QuerySnapshot) {
         var changed = false
         for doc in snapshot.documents {
-            guard let wire = TripCanonicalFirestoreFields.eventWire(documentId: doc.documentID, data: doc.data()),
+            let data = doc.data()
+            guard let wire = TripCanonicalFirestoreFields.eventWire(documentId: doc.documentID, data: data),
                   let event = TripCanonicalMapper.domainEvent(from: wire),
                   event.sessionId == sessionId else { continue }
             do {

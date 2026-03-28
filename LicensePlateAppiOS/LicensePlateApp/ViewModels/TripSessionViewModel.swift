@@ -41,6 +41,7 @@ final class TripSessionViewModel: ObservableObject {
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol?
     private let gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
     private var didLogTripDashboardLeaderboard = false
+    private var cancellables = Set<AnyCancellable>()
 
     init(
         sessionId: UUID,
@@ -54,6 +55,17 @@ final class TripSessionViewModel: ObservableObject {
         self.gameInstanceRepository = gameInstanceRepository
         self.tripActivityEventRepository = tripActivityEventRepository
         self.gameInstanceLifecycleService = gameInstanceLifecycleService
+
+        TripCanonicalRemoteSyncService.shared.hydrationSignal
+            .filter { [weak self] hydratedId in
+                guard let self else { return false }
+                return hydratedId == self.sessionId
+            }
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.load()
+            }
+            .store(in: &cancellables)
     }
 
     func load() {
@@ -67,6 +79,9 @@ final class TripSessionViewModel: ObservableObject {
                 return
             }
             session = s
+            if s.mode == .multiplayer {
+                TripCanonicalRemoteSyncService.shared.startIncrementalListeningIfNeeded(sessionId: sessionId)
+            }
             let games = (try? gameInstanceRepository.fetchByTripSession(sessionId: sessionId)) ?? []
             var rows: [GameRowItem] = []
             for game in games {

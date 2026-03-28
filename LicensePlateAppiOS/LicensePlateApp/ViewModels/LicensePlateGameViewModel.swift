@@ -118,6 +118,25 @@ final class LicensePlateGameViewModel: ObservableObject {
                 Task { await self.applyFairnessResolution(info) }
             }
             .store(in: &cancellables)
+
+        // `ContentView` only reloads the active-trip list on hydration; game UI must refresh too.
+        TripCanonicalRemoteSyncService.shared.hydrationSignal
+            .filter { [weak self] hydratedId in
+                guard let self else { return false }
+                return hydratedId == self.sessionId
+            }
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.refreshSession()
+                self.refreshGame()
+                self.refreshFoundRegions()
+            }
+            .store(in: &cancellables)
+
+        if currentSession.mode == .multiplayer {
+            TripCanonicalRemoteSyncService.shared.startIncrementalListeningIfNeeded(sessionId: sessionId)
+        }
     }
 
     func clearFairnessToast() {

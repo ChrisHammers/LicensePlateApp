@@ -51,7 +51,8 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: appCoordinator.rootView)
         .onChange(of: scenePhase) { newPhase in
-            if newPhase == .active && authService.isOnline {
+            guard newPhase == .active else { return }
+            if authService.isOnline {
                 Task { await SyncCoordinator.shared.processPendingSyncItems() }
             }
         }

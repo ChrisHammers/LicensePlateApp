@@ -104,7 +104,12 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                     ))
                 case let .superseded(localId, rejection):
                     try TripActivityEventRepository.shared.deleteEvent(id: localId)
-                    try TripActivityEventRepository.shared.importEventsIfAbsent([rejection])
+                    var imported: [TripActivityEvent] = []
+                    if let canonical = CompetitiveSupersedeCanonicalDiscovery.regionFoundEvent(from: rejection) {
+                        imported.append(canonical)
+                    }
+                    imported.append(rejection)
+                    try TripActivityEventRepository.shared.importEventsIfAbsent(imported)
                     let tripName = (try? TripSessionRepository.shared.session(byId: sessionUUID))?.name ?? ""
                     if let info = Self.fairnessResolutionInfo(
                         sessionId: sessionUUID,
