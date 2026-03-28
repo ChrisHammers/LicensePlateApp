@@ -8,6 +8,7 @@ exports.markTripCancelledRemote = exports.fetchTripBootstrapForMember = exports.
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const audit_1 = require("./audit");
+const gameplayEventResolver_1 = require("./gameplayEventResolver");
 const db = admin.firestore();
 const MAX_BOOTSTRAP_EVENTS = 2500;
 function tsToSeconds(value) {
@@ -208,19 +209,21 @@ exports.appendTripActivityEvent = functions.https.onCall(async (data, context) =
     if (!ts) {
         throw new functions.https.HttpsError("invalid-argument", "event.timestamp is required");
     }
-    const eventRef = sessionRef(tripSessionId).collection("activity_events").doc(eventId);
-    await eventRef.set({
+    const wire = {
+        id: eventId,
         sessionId: sessionIdInEvent,
         kind,
-        timestamp: ts,
+        timestamp: event.timestamp,
         actorId: (_a = event.actorId) !== null && _a !== void 0 ? _a : null,
         payload: (_b = event.payload) !== null && _b !== void 0 ? _b : null,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
-    await sessionRef(tripSessionId).update({
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    return { success: true };
+    };
+    const result = await (0, gameplayEventResolver_1.resolveGameplayAppendTransaction)(db, tripSessionId, userId, wire);
+    return {
+        success: true,
+        resolution: result.resolution,
+        appliedEventId: result.appliedEventId,
+        rejectionEvent: result.rejectionEvent,
+    };
 });
 /**
  * Full read for a member: session wire + games + events (capped).

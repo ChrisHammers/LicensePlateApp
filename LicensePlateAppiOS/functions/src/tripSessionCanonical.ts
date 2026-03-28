@@ -6,6 +6,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
+import { resolveGameplayAppendTransaction, type WireEventInput } from "./gameplayEventResolver";
 
 const db = admin.firestore();
 
@@ -249,25 +250,23 @@ export const appendTripActivityEvent = functions.https.onCall(async (data, conte
     throw new functions.https.HttpsError("invalid-argument", "event.timestamp is required");
   }
 
-  const eventRef = sessionRef(tripSessionId).collection("activity_events").doc(eventId);
+  const wire: WireEventInput = {
+    id: eventId,
+    sessionId: sessionIdInEvent,
+    kind,
+    timestamp: event.timestamp as number,
+    actorId: (event.actorId as string) ?? null,
+    payload: (event.payload as Record<string, unknown>) ?? null,
+  };
 
-  await eventRef.set(
-    {
-      sessionId: sessionIdInEvent,
-      kind,
-      timestamp: ts,
-      actorId: event.actorId ?? null,
-      payload: event.payload ?? null,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
+  const result = await resolveGameplayAppendTransaction(db, tripSessionId, userId, wire);
 
-  await sessionRef(tripSessionId).update({
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-
-  return { success: true };
+  return {
+    success: true,
+    resolution: result.resolution,
+    appliedEventId: result.appliedEventId,
+    rejectionEvent: result.rejectionEvent,
+  };
 });
 
 /**
