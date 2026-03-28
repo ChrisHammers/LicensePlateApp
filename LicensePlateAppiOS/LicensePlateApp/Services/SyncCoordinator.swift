@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import FirebaseFunctions
 
 @MainActor
 protocol SyncCoordinatorProtocol: AnyObject {
@@ -82,7 +83,7 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         for item in candidates where item.kind == .gameplayEvent {
             guard let sessionStr = item.payloadSessionId,
                   let eventId = item.payloadEventId,
-                  UUID(uuidString: sessionStr) != nil else {
+                  let sessionUUID = UUID(uuidString: sessionStr) else {
                 try? repository.markCancelled(id: item.id)
                 continue
             }
@@ -92,13 +93,49 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                     try? repository.markCompleted(id: item.id)
                     continue
                 }
-                try await TripCanonicalRemoteSyncService.shared.appendEventToRemote(event)
+                let outcome = try await TripCanonicalRemoteSyncService.shared.appendEventToRemote(event)
+                let gameIdStr = event.payload?[TripActivityEventPayloadKey.gameInstanceId] ?? ""
+                switch outcome {
+                case .accepted:
+                    AnalyticsService.shared.log(.gameplayEventServerAccepted(
+                        tripSessionId: sessionUUID.uuidString,
+                        gameInstanceId: gameIdStr,
+                        eventKind: event.kind.rawValue
+                    ))
+                case let .superseded(localId, rejection):
+                    try TripActivityEventRepository.shared.deleteEvent(id: localId)
+                    try TripActivityEventRepository.shared.importEventsIfAbsent([rejection])
+                    let tripName = (try? TripSessionRepository.shared.session(byId: sessionUUID))?.name ?? ""
+                    if let info = Self.fairnessResolutionInfo(
+                        sessionId: sessionUUID,
+                        tripName: tripName,
+                        rejection: rejection
+                    ) {
+                        TripCanonicalRemoteSyncService.shared.publishFairnessResolution(info)
+                    }
+                    AnalyticsService.shared.log(.gameplayEventServerSuperseded(
+                        tripSessionId: sessionUUID.uuidString,
+                        gameInstanceId: gameIdStr,
+                        serverRejectionEventId: rejection.id,
+                        reason: rejection.payload?[TripActivityEventPayloadKey.rejectionReason] ?? ""
+                    ))
+                }
                 try? repository.markCompleted(id: item.id)
             } catch {
-                let attempts = max(item.attemptCount, 0) + 1
-                let delaySeconds = min(pow(2.0, Double(attempts - 1)) * 60.0, 3600.0)
-                let nextRetryAt = Date().addingTimeInterval(delaySeconds)
-                try? repository.markFailed(id: item.id, nextRetryAt: nextRetryAt)
+                if Self.isPermanentGameplaySyncFailure(error) {
+                    AnalyticsService.shared.log(.gameplayEventServerRejected(
+                        tripSessionId: sessionUUID.uuidString,
+                        eventKind: (try? TripActivityEventRepository.shared.event(byId: eventId))?.kind.rawValue ?? "",
+                        errorCode: (error as NSError).code,
+                        errorDomain: (error as NSError).domain
+                    ))
+                    try? repository.markCancelled(id: item.id)
+                } else {
+                    let attempts = max(item.attemptCount, 0) + 1
+                    let delaySeconds = min(pow(2.0, Double(attempts - 1)) * 60.0, 3600.0)
+                    let nextRetryAt = Date().addingTimeInterval(delaySeconds)
+                    try? repository.markFailed(id: item.id, nextRetryAt: nextRetryAt)
+                }
             }
         }
 
@@ -129,5 +166,44 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                 try? repository.markFailed(id: item.id, nextRetryAt: nextRetryAt)
             }
         }
+    }
+
+    private static func isPermanentGameplaySyncFailure(_ error: Error) -> Bool {
+        let ns = error as NSError
+        guard ns.domain == FunctionsErrorDomain else { return false }
+        guard let code = FunctionsErrorCode(rawValue: ns.code) else { return false }
+        switch code {
+        case .failedPrecondition, .permissionDenied, .alreadyExists, .notFound, .invalidArgument:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func fairnessResolutionInfo(
+        sessionId: UUID,
+        tripName: String,
+        rejection: TripActivityEvent
+    ) -> FairnessResolutionInfo? {
+        guard rejection.kind == .discoveryRejected,
+              let gidStr = rejection.payload?[TripActivityEventPayloadKey.gameInstanceId],
+              let gid = UUID(uuidString: gidStr),
+              let regionId = rejection.payload?[TripActivityEventPayloadKey.regionId],
+              let reason = rejection.payload?[TripActivityEventPayloadKey.rejectionReason] else {
+            return nil
+        }
+        let firstFinder = rejection.payload?[TripActivityEventPayloadKey.firstFinderParticipantId] ?? ""
+        guard reason == DiscoveryOutcome.serverRejectedLateCompetitive.rawValue
+            || reason == DiscoveryOutcome.rejectedInvalidParticipant.rawValue else {
+            return nil
+        }
+        return FairnessResolutionInfo(
+            tripSessionId: sessionId,
+            gameInstanceId: gid,
+            tripSessionName: tripName,
+            regionId: regionId,
+            firstFinderParticipantId: firstFinder,
+            rejectionReasonRaw: reason
+        )
     }
 }

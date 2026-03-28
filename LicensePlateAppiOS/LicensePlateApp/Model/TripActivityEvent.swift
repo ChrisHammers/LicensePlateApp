@@ -34,6 +34,13 @@ enum TripActivityEventPayloadKey {
     static let removedDiscoveryEventId = "removedDiscoveryEventId"
     /// Optional duplicate of the `region_found` event’s `id` (for sync/debug); replay uses `TripActivityEvent.id` as `GameDiscovery.id` regardless.
     static let discoveryEventId = "discoveryEventId"
+    /// Server `srvrej_*` rejection: id of the client’s attempted `region_found`.
+    static let clientAttemptEventId = "clientAttemptEventId"
+    static let firstFinderParticipantId = "firstFinderParticipantId"
+    static let firstFinderDiscoveredAt = "firstFinderDiscoveredAt"
+    static let firstFinderEventId = "firstFinderEventId"
+    static let serverResolvedAt = "serverResolvedAt"
+    static let clientClaimedAt = "clientClaimedAt"
 }
 
 /// A single event in the trip lifecycle. Room for analytics and audit.

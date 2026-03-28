@@ -20,6 +20,8 @@ enum DiscoveryOutcome: String, Codable, Sendable, CaseIterable {
     case rejectedDuplicate = "rejected_duplicate"
     /// Solo trip but discovery attributed to another participant; treat as invalid access / corrupted data; do not append.
     case rejectedInvalidParticipant = "rejected_invalid_participant"
+    /// Server rejected a competitive `region_found` after sync (another finder won); audit + fairness UI.
+    case serverRejectedLateCompetitive = "server_rejected_late_competitive"
 }
 
 /// Result of the rules engine evaluation for a single discovery submission.
@@ -33,7 +35,7 @@ struct DiscoveryEvaluationResult: Sendable {
     /// When true, the event should be appended; when false (rejected_duplicate / rejected_invalid_participant), do not append.
     var shouldAppendEvent: Bool {
         switch outcome {
-        case .rejectedDuplicate, .rejectedInvalidParticipant:
+        case .rejectedDuplicate, .rejectedInvalidParticipant, .serverRejectedLateCompetitive:
             return false
         default:
             return true

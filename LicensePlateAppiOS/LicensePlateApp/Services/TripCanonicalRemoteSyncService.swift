@@ -80,7 +80,7 @@ private enum TripCanonicalFirestoreFields {
 @MainActor
 protocol TripCanonicalRemoteSyncing: AnyObject {
     func publishFullSession(sessionId: UUID) async throws
-    func appendEventToRemote(_ event: TripActivityEvent) async throws
+    func appendEventToRemote(_ event: TripActivityEvent) async throws -> GameplayEventAppendOutcome
     func bootstrapMemberSession(sessionId: UUID) async throws
     func startIncrementalListeningIfNeeded(sessionId: UUID)
     func markTripCancelledRemote(sessionId: UUID) async throws
@@ -107,6 +107,17 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     /// Emits session id after successful bootstrap or incremental merge worth a UI refresh.
     var hydrationSignal: AnyPublisher<UUID, Never> {
         hydrationSubject.eraseToAnyPublisher()
+    }
+
+    private let fairnessResolutionSubject = PassthroughSubject<FairnessResolutionInfo, Never>()
+    /// Step 13 — after sync reconciles a superseded local find (VM subscribes for toast).
+    var fairnessResolutionSignal: AnyPublisher<FairnessResolutionInfo, Never> {
+        fairnessResolutionSubject.eraseToAnyPublisher()
+    }
+
+    /// Called by `SyncCoordinator` after applying server fairness reconciliation locally.
+    func publishFairnessResolution(_ info: FairnessResolutionInfo) {
+        fairnessResolutionSubject.send(info)
     }
 
     init(
@@ -143,14 +154,15 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
         ])
     }
 
-    func appendEventToRemote(_ event: TripActivityEvent) async throws {
+    func appendEventToRemote(_ event: TripActivityEvent) async throws -> GameplayEventAppendOutcome {
         let wire = TripCanonicalMapper.wireEvent(from: event)
         let eventObj = try TripCanonicalSyncJSON.jsonObject(encodable: wire)
         let fn = functions.httpsCallable("appendTripActivityEvent")
-        _ = try await fn.call([
+        let result = try await fn.call([
             "tripSessionId": event.sessionId.uuidString,
             "event": eventObj,
         ])
+        return try GameplayAppendCallableResponseParser.outcome(from: result.data, uploadedEventId: event.id)
     }
 
     func bootstrapMemberSession(sessionId: UUID) async throws {

@@ -26,6 +26,8 @@ protocol TripActivityEventRepositoryProtocol: AnyObject {
     /// Remove every persisted event whose payload references this game (e.g. game_started, discoveries). Used when removing a game instance from a trip.
     /// Physical delete is intentional for local UX; future tombstone/reconciliation may supersede.
     func deleteAllEventsForGame(sessionId: UUID, gameInstanceId: UUID) throws
+    /// Single-event delete (e.g. server superseded a local `region_found` after sync). Step 13 fairness path.
+    func deleteEvent(id: String) throws
 }
 
 @MainActor
@@ -171,6 +173,13 @@ final class TripActivityEventRepository: ObservableObject, TripActivityEventRepo
                   payload[TripActivityEventPayloadKey.gameInstanceId] == gidStr else { continue }
             ctx.delete(entity)
         }
+        try ctx.save()
+    }
+
+    func deleteEvent(id: String) throws {
+        guard let ctx = modelContext else { throw TripActivityEventRepositoryError.noModelContext }
+        guard let entity = try Self.fetchEntity(id: id, context: ctx) else { return }
+        ctx.delete(entity)
         try ctx.save()
     }
 

@@ -8,6 +8,12 @@
 import Foundation
 import Combine
 
+/// Server fairness messaging after sync (Step 13).
+struct FairnessToastState: Equatable {
+    var title: String
+    var message: String
+}
+
 /// Result of submitting a discovery (mark found).
 enum DiscoverySubmitResult {
     case success
@@ -33,6 +39,8 @@ final class LicensePlateGameViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
     /// Editable license-plate scope while Game Settings sheet is open; persisted when user taps Done.
     @Published private(set) var licensePlateScopeDraft: LicensePlateScopeSettingsDraft?
+    /// Step 13 — server rejected a late competitive find after sync; show alert then clear.
+    @Published private(set) var fairnessToast: FairnessToastState?
 
     let sessionId: UUID
 
@@ -44,6 +52,7 @@ final class LicensePlateGameViewModel: ObservableObject {
     private let tripActivityEventRecording: TripActivityEventRecordingProtocol
     private let authService: FirebaseAuthService
     private var didLogCompetitiveStandingsExposure = false
+    private var cancellables = Set<AnyCancellable>()
 
     var isTripCreator: Bool {
         let currentUserID = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
@@ -96,6 +105,38 @@ final class LicensePlateGameViewModel: ObservableObject {
         self.tripActivityEventRecording = tripActivityEventRecording
         self.authService = authService
         self.foundRegions = (try? tripActivityEventRepository.foundRegions(sessionId: session.id, gameInstanceId: game.id)) ?? []
+        refreshCompetitiveProjections()
+
+        TripCanonicalRemoteSyncService.shared.fairnessResolutionSignal
+            .filter { [weak self] info in
+                guard let self else { return false }
+                return info.tripSessionId == self.sessionId && info.gameInstanceId == self.game.id
+            }
+            .receive(on: RunLoop.main)
+            .sink { [weak self] info in
+                guard let self else { return }
+                Task { await self.applyFairnessResolution(info) }
+            }
+            .store(in: &cancellables)
+    }
+
+    func clearFairnessToast() {
+        fairnessToast = nil
+    }
+
+    private func applyFairnessResolution(_ info: FairnessResolutionInfo) async {
+        let regionName = PlateRegion.all.first(where: { $0.id == info.regionId })?.name ?? info.regionId
+        let names = await UserRepository.shared.displayNames(forUserIds: [info.firstFinderParticipantId])
+        let firstName = names[info.firstFinderParticipantId] ?? info.firstFinderParticipantId
+        let tripName = info.tripSessionName
+        let message: String
+        if info.rejectionReasonRaw == DiscoveryOutcome.serverRejectedLateCompetitive.rawValue {
+            message = "Fairness late competitive body %@ %@ %@".localized(regionName, firstName, tripName)
+        } else {
+            message = "Fairness invalid participant body %@ %@".localized(regionName, tripName)
+        }
+        fairnessToast = FairnessToastState(title: "Fairness update".localized, message: message)
+        refreshFoundRegions()
         refreshCompetitiveProjections()
     }
 

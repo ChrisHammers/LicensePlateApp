@@ -39,6 +39,9 @@
 "Cancel" = "Annuler";
 "Only the first finder gets credit in competitive mode." = "Seul le premier qui trouve obtient des points en mode compétitif.";
 "Tap to dismiss" = "Appuyez pour fermer";
+"Fairness update" = "Mise à jour d’équité";
+"Fairness late competitive body %@ %@ %@" = "Il a été déterminé que vous avez trouvé %@ après %@ dans %@.";
+"Fairness invalid participant body %@ %@" = "Une découverte n’a pas pu être confirmée pour %@ sur le voyage %@.";
 
 // Voice Recognition
 "Speech Recognition Needed" = "Reconnaissance Vocale Nécessaire";

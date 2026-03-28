@@ -91,6 +91,11 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
         }
     }
 
+    func deleteEvent(id: String) throws {
+        if shouldThrow { throw NSError(domain: "MockTripActivityEventRepository", code: -1, userInfo: nil) }
+        events.removeAll { $0.id == id }
+    }
+
     /// Test helper: appended events (e.g. to assert trip_started, game_started)
     func appendedEvents() -> [TripActivityEvent] {
         events

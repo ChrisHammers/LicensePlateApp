@@ -151,6 +151,19 @@ struct LicensePlateGameView: View {
                 Text(msg)
             }
         }
+        .alert("Fairness update".localized, isPresented: Binding(
+            get: { viewModel.fairnessToast != nil },
+            set: { if !$0 { viewModel.clearFairnessToast() } }
+        )) {
+            Button("OK".localized, role: .cancel) {
+                viewModel.clearFairnessToast()
+            }
+        } message: {
+            if let toast = viewModel.fairnessToast {
+                Text(toast.message)
+                    .accessibilityLabel(toast.message)
+            }
+        }
         // Step 11: Unusual Activity modal suppressed (risk still logged to analytics). Non-blocking options: toast/banner, inline hint, or settings summary.
         // .alert("Unusual Activity".localized, isPresented: $showRiskAdvisoryMessage) {
         //     Button("OK".localized, role: .cancel) {}
@@ -2388,4 +2401,25 @@ private struct RegionMapView: View {
         .environmentObject(authService)
         .environmentObject(RiskAssessmentService(analytics: nil))
 }
+
+#if DEBUG
+#Preview("Fairness alert (Step 13)") {
+    struct FairnessAlertPreviewShell: View {
+        @State private var showAlert = true
+        var body: some View {
+            Color.Theme.background
+                .ignoresSafeArea()
+                .alert("Fairness update".localized, isPresented: $showAlert) {
+                    Button("OK".localized, role: .cancel) { showAlert = false }
+                } message: {
+                    Text("Fairness late competitive body %@ %@ %@".localized("California", "Alex", "Road trip"))
+                        .accessibilityLabel(
+                            "Fairness late competitive body %@ %@ %@".localized("California", "Alex", "Road trip")
+                        )
+                }
+        }
+    }
+    return FairnessAlertPreviewShell()
+}
+#endif
 

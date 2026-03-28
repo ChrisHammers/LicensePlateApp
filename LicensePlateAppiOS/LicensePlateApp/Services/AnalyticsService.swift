@@ -188,6 +188,11 @@ class AnalyticsService: AnalyticsLogging {
         case discoveryRejectedInvalidParticipant(tripId: String, gameInstanceId: String, targetId: String, participantId: String?, tripParticipantCount: Int, gameMode: String)
         case discoveryUnfind(tripId: String, gameInstanceId: String, targetId: String, participantId: String?)
 
+        // Step 13 — Cloud gameplay resolver / sync
+        case gameplayEventServerAccepted(tripSessionId: String, gameInstanceId: String, eventKind: String)
+        case gameplayEventServerSuperseded(tripSessionId: String, gameInstanceId: String, serverRejectionEventId: String, reason: String)
+        case gameplayEventServerRejected(tripSessionId: String, eventKind: String, errorCode: Int, errorDomain: String)
+
         // Persistence (Step 05)
         case persistenceSaveFailed(context: String, error: String)
         case persistenceRetryTapped(context: String)
@@ -330,6 +335,9 @@ class AnalyticsService: AnalyticsLogging {
             case .discoveryRejectedDuplicate: return "discovery_rejected_duplicate"
             case .discoveryRejectedInvalidParticipant: return "discovery_rejected_invalid_participant"
             case .discoveryUnfind: return "discovery_unfind"
+            case .gameplayEventServerAccepted: return "gameplay_event_server_accepted"
+            case .gameplayEventServerSuperseded: return "gameplay_event_server_superseded"
+            case .gameplayEventServerRejected: return "gameplay_event_server_rejected"
             case .persistenceSaveFailed: return "persistence_save_failed"
             case .persistenceRetryTapped: return "persistence_retry_tapped"
             }
@@ -522,6 +530,26 @@ class AnalyticsService: AnalyticsLogging {
                 var p: [String: Any] = ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId]
                 if let id = participantId { p["participant_id"] = id }
                 return p
+            case .gameplayEventServerAccepted(let tripSessionId, let gameInstanceId, let eventKind):
+                return [
+                    "trip_session_id": tripSessionId,
+                    "game_instance_id": gameInstanceId,
+                    "event_kind": eventKind
+                ]
+            case .gameplayEventServerSuperseded(let tripSessionId, let gameInstanceId, let serverRejectionEventId, let reason):
+                return [
+                    "trip_session_id": tripSessionId,
+                    "game_instance_id": gameInstanceId,
+                    "server_rejection_event_id": serverRejectionEventId,
+                    "reason": reason
+                ]
+            case .gameplayEventServerRejected(let tripSessionId, let eventKind, let errorCode, let errorDomain):
+                return [
+                    "trip_session_id": tripSessionId,
+                    "event_kind": eventKind,
+                    "error_code": errorCode,
+                    "error_domain": errorDomain
+                ]
             case .persistenceSaveFailed(let context, let error):
                 return ["context": context, "error": error]
             case .persistenceRetryTapped(let context):

@@ -226,6 +226,30 @@ struct AnalyticsServiceTests {
 
     @Test @MainActor func errorEventParameters() async throws {
         let buildFailed = AnalyticsService.Event.analyticsPropertyBuildFailed(eventName: "test_event", error: "decode failed")
+
+        let gameplayAccepted = AnalyticsService.Event.gameplayEventServerAccepted(
+            tripSessionId: "t1",
+            gameInstanceId: "g1",
+            eventKind: "region_found"
+        )
+        #expect(gameplayAccepted.parameters?["trip_session_id"] as? String == "t1")
+        #expect(gameplayAccepted.parameters?["event_kind"] as? String == "region_found")
+
+        let gameplaySuperseded = AnalyticsService.Event.gameplayEventServerSuperseded(
+            tripSessionId: "t1",
+            gameInstanceId: "g1",
+            serverRejectionEventId: "srvrej_x",
+            reason: "server_rejected_late_competitive"
+        )
+        #expect(gameplaySuperseded.parameters?["server_rejection_event_id"] as? String == "srvrej_x")
+
+        let gameplayRejected = AnalyticsService.Event.gameplayEventServerRejected(
+            tripSessionId: "t1",
+            eventKind: "region_found",
+            errorCode: 9,
+            errorDomain: "FIRFunctionsErrorDomain"
+        )
+        #expect(gameplayRejected.parameters?["error_code"] as? Int == 9)
         #expect(buildFailed.name == "analytics_property_build_failed")
         #expect(buildFailed.parameters?["error"] as? String == "decode failed")
     }
