@@ -28,6 +28,8 @@ final class GameInstanceEntity {
     var gameSpecificPayloadData: Data?
     /// Step 6.9.1 — Encoded [TripTeam] for this game. Nil when empty.
     var teamsData: Data?
+    /// Step 13.2 — Latest fairness-banner ack (rejection event time); local + synced via Firebase subdoc per user.
+    var fairnessUiLastAckAt: Date?
 
     init(
         id: String,
@@ -40,7 +42,8 @@ final class GameInstanceEntity {
         gameSpecificPayloadType: String? = nil,
         gameSpecificPayloadVersion: String? = nil,
         gameSpecificPayloadData: Data? = nil,
-        teamsData: Data? = nil
+        teamsData: Data? = nil,
+        fairnessUiLastAckAt: Date? = nil
     ) {
         self.id = id
         self.definitionId = definitionId
@@ -53,5 +56,6 @@ final class GameInstanceEntity {
         self.gameSpecificPayloadVersion = gameSpecificPayloadVersion
         self.gameSpecificPayloadData = gameSpecificPayloadData
         self.teamsData = teamsData
+        self.fairnessUiLastAckAt = fairnessUiLastAckAt
     }
 }

@@ -29,6 +29,8 @@ final class GameInstance {
     var gameSpecificPayloadData: Data?
     /// Step 6.9.1 — Teams for this game (e.g. for team-based scoring). Empty when not using teams.
     var teams: [TripTeam]
+    /// Step 13.2 — Fairness toast watermark (max acknowledged `discovery_rejected` event time); device + Firebase.
+    var fairnessUiLastAckAt: Date?
 
     init(
         id: UUID = UUID(),
@@ -41,7 +43,8 @@ final class GameInstance {
         gameSpecificPayloadType: String? = nil,
         gameSpecificPayloadVersion: String? = nil,
         gameSpecificPayloadData: Data? = nil,
-        teams: [TripTeam] = []
+        teams: [TripTeam] = [],
+        fairnessUiLastAckAt: Date? = nil
     ) {
         self.id = id
         self.definitionId = definitionId
@@ -54,6 +57,7 @@ final class GameInstance {
         self.gameSpecificPayloadVersion = gameSpecificPayloadVersion
         self.gameSpecificPayloadData = gameSpecificPayloadData
         self.teams = teams
+        self.fairnessUiLastAckAt = fairnessUiLastAckAt
     }
 
     /// Decodes LicensePlateGameConfig from gameSpecificPayloadData when definitionId is license_plate. Returns nil otherwise.

@@ -815,7 +815,7 @@ struct LicensePlateGameView: View {
         }
     }
 
-    /// Vertical overlap between stacked fairness banners (newest at top, older peek below).
+    /// Vertical overlap between stacked fairness banners (oldest at top, newer peek below).
     private static let fairnessToastStackOverlap: CGFloat = 44
 
     @ViewBuilder private var fairnessToastBanner: some View {

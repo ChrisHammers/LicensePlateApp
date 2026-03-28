@@ -39,8 +39,18 @@ final class MockGameInstanceRepository: GameInstanceRepositoryProtocol {
 
     func replaceGamesForSession(sessionId: UUID, instances newInstances: [GameInstance]) throws {
         if shouldThrow { throw NSError(domain: "MockGameInstanceRepository", code: -1, userInfo: nil) }
+        let prior = (bySession[sessionId] ?? []).reduce(into: [UUID: Date]()) { dict, g in
+            if let w = g.fairnessUiLastAckAt { dict[g.id] = w }
+        }
         try deleteForSession(sessionId: sessionId)
-        for instance in newInstances {
+        for var instance in newInstances {
+            if let w = prior[instance.id] {
+                if let inc = instance.fairnessUiLastAckAt {
+                    instance.fairnessUiLastAckAt = max(w, inc)
+                } else {
+                    instance.fairnessUiLastAckAt = w
+                }
+            }
             try create(instance: instance)
         }
     }

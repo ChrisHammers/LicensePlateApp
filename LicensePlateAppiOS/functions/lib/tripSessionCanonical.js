@@ -4,11 +4,12 @@
  * Clients read games/activity_events when trip_sessions member; all writes via these callables.
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.markTripCancelledRemote = exports.fetchTripBootstrapForMember = exports.appendTripActivityEvent = exports.publishTripCanonicalState = void 0;
+exports.markTripCancelledRemote = exports.fetchTripBootstrapForMember = exports.updateFairnessAckWatermark = exports.appendTripActivityEvent = exports.publishTripCanonicalState = void 0;
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const audit_1 = require("./audit");
 const gameplayEventResolver_1 = require("./gameplayEventResolver");
+const fairnessWatermarkMerge_1 = require("./fairnessWatermarkMerge");
 const db = admin.firestore();
 const MAX_BOOTSTRAP_EVENTS = 2500;
 function tsToSeconds(value) {
@@ -224,6 +225,44 @@ exports.appendTripActivityEvent = functions.https.onCall(async (data, context) =
         appliedEventId: result.appliedEventId,
         rejectionEvent: result.rejectionEvent,
     };
+});
+/**
+ * Per-user fairness UI watermark (Step 13.2): max lastAckAt in Unix seconds.
+ * Stored under games/{gameId}/fairness_ack_watermarks/{userId} so publishTripCanonicalState does not clobber it.
+ */
+exports.updateFairnessAckWatermark = functions.https.onCall(async (data, context) => {
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
+    }
+    const userId = context.auth.uid;
+    const tripSessionId = data === null || data === void 0 ? void 0 : data.tripSessionId;
+    const gameInstanceId = data === null || data === void 0 ? void 0 : data.gameInstanceId;
+    const lastAckAtSeconds = data === null || data === void 0 ? void 0 : data.lastAckAtSeconds;
+    if (!tripSessionId || !gameInstanceId) {
+        throw new functions.https.HttpsError("invalid-argument", "tripSessionId and gameInstanceId are required");
+    }
+    if (lastAckAtSeconds == null || typeof lastAckAtSeconds !== "number" || Number.isNaN(lastAckAtSeconds)) {
+        throw new functions.https.HttpsError("invalid-argument", "lastAckAtSeconds is required");
+    }
+    await assertTripMember(tripSessionId, userId);
+    const ref = sessionRef(tripSessionId)
+        .collection("games")
+        .doc(gameInstanceId)
+        .collection("fairness_ack_watermarks")
+        .doc(userId);
+    const mergedSeconds = await db.runTransaction(async (tx) => {
+        var _a;
+        const snap = await tx.get(ref);
+        const existingTs = snap.exists ? (_a = snap.data()) === null || _a === void 0 ? void 0 : _a.lastAckAt : undefined;
+        const existingSec = existingTs ? tsToSeconds(existingTs) : 0;
+        const next = (0, fairnessWatermarkMerge_1.mergeFairnessAckSeconds)(existingSec, lastAckAtSeconds);
+        tx.set(ref, {
+            lastAckAt: secondsToTimestamp(next),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        return next;
+    });
+    return { success: true, lastAckAtSeconds: mergedSeconds };
 });
 /**
  * Full read for a member: session wire + games + events (capped).

@@ -49,6 +49,13 @@ final class GameInstanceRepository: ObservableObject, GameInstanceRepositoryProt
             existing.gameSpecificPayloadVersion = updated.gameSpecificPayloadVersion
             existing.gameSpecificPayloadData = updated.gameSpecificPayloadData
             existing.teamsData = updated.teamsData
+            if let inc = instance.fairnessUiLastAckAt {
+                if let ex = existing.fairnessUiLastAckAt {
+                    existing.fairnessUiLastAckAt = max(ex, inc)
+                } else {
+                    existing.fairnessUiLastAckAt = inc
+                }
+            }
         } else {
             ctx.insert(GameInstanceMapper.toEntity(instance))
         }
@@ -56,8 +63,28 @@ final class GameInstanceRepository: ObservableObject, GameInstanceRepositoryProt
     }
 
     func replaceGamesForSession(sessionId: UUID, instances: [GameInstance]) throws {
+        guard let ctx = modelContext else { throw GameInstanceRepositoryError.noModelContext }
+        let sid = sessionId.uuidString
+        let descriptor = FetchDescriptor<GameInstanceEntity>(
+            predicate: #Predicate<GameInstanceEntity> { $0.sessionId == sid }
+        )
+        let prior = try ctx.fetch(descriptor)
+        var watermarkByGameId: [String: Date] = [:]
+        for entity in prior {
+            if let w = entity.fairnessUiLastAckAt {
+                watermarkByGameId[entity.id] = w
+            }
+        }
         try deleteForSession(sessionId: sessionId)
-        for instance in instances {
+        for var instance in instances {
+            let key = instance.id.uuidString
+            if let w = watermarkByGameId[key] {
+                if let inc = instance.fairnessUiLastAckAt {
+                    instance.fairnessUiLastAckAt = max(w, inc)
+                } else {
+                    instance.fairnessUiLastAckAt = w
+                }
+            }
             try create(instance: instance)
         }
     }
@@ -150,6 +177,7 @@ final class GameInstanceRepository: ObservableObject, GameInstanceRepositoryProt
         entity.gameSpecificPayloadType = updated.gameSpecificPayloadType
         entity.gameSpecificPayloadVersion = updated.gameSpecificPayloadVersion
         entity.gameSpecificPayloadData = updated.gameSpecificPayloadData
+        entity.fairnessUiLastAckAt = instance.fairnessUiLastAckAt
         try ctx.save()
     }
 

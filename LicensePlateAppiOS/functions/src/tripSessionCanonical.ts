@@ -7,6 +7,7 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
 import { resolveGameplayAppendTransaction, type WireEventInput } from "./gameplayEventResolver";
+import { mergeFairnessAckSeconds } from "./fairnessWatermarkMerge";
 
 const db = admin.firestore();
 
@@ -267,6 +268,56 @@ export const appendTripActivityEvent = functions.https.onCall(async (data, conte
     appliedEventId: result.appliedEventId,
     rejectionEvent: result.rejectionEvent,
   };
+});
+
+/**
+ * Per-user fairness UI watermark (Step 13.2): max lastAckAt in Unix seconds.
+ * Stored under games/{gameId}/fairness_ack_watermarks/{userId} so publishTripCanonicalState does not clobber it.
+ */
+export const updateFairnessAckWatermark = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
+  }
+  const userId = context.auth.uid;
+  const tripSessionId = data?.tripSessionId as string | undefined;
+  const gameInstanceId = data?.gameInstanceId as string | undefined;
+  const lastAckAtSeconds = data?.lastAckAtSeconds as number | undefined;
+
+  if (!tripSessionId || !gameInstanceId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "tripSessionId and gameInstanceId are required"
+    );
+  }
+  if (lastAckAtSeconds == null || typeof lastAckAtSeconds !== "number" || Number.isNaN(lastAckAtSeconds)) {
+    throw new functions.https.HttpsError("invalid-argument", "lastAckAtSeconds is required");
+  }
+
+  await assertTripMember(tripSessionId, userId);
+
+  const ref = sessionRef(tripSessionId)
+    .collection("games")
+    .doc(gameInstanceId)
+    .collection("fairness_ack_watermarks")
+    .doc(userId);
+
+  const mergedSeconds = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const existingTs = snap.exists ? (snap.data()?.lastAckAt as admin.firestore.Timestamp | undefined) : undefined;
+    const existingSec = existingTs ? tsToSeconds(existingTs) : 0;
+    const next = mergeFairnessAckSeconds(existingSec, lastAckAtSeconds);
+    tx.set(
+      ref,
+      {
+        lastAckAt: secondsToTimestamp(next),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    return next;
+  });
+
+  return { success: true, lastAckAtSeconds: mergedSeconds };
 });
 
 /**

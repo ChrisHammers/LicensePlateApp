@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.writeAuditLog = exports.onAuthUserDeleted = exports.expireInvitesAndCodes = exports.inactivateFamily = exports.changeFamilyMemberRole = exports.removeFamilyMember = exports.approveFamilyJoinRequest_CaptainStep = exports.respondToFamilyInvite_UserStep = exports.sendFamilyInvite = exports.createFamily = exports.markTripCancelledRemote = exports.fetchTripBootstrapForMember = exports.appendTripActivityEvent = exports.publishTripCanonicalState = exports.cancelTripInvite = exports.respondToTripInvite = exports.sendTripInvite = exports.removeFriend = exports.respondToFriendInvite = exports.sendFriendInvite = exports.redeemShareCode = exports.createShareCode = void 0;
+exports.writeAuditLog = exports.onAuthUserDeleted = exports.expireInvitesAndCodes = exports.inactivateFamily = exports.changeFamilyMemberRole = exports.removeFamilyMember = exports.approveFamilyJoinRequest_CaptainStep = exports.respondToFamilyInvite_UserStep = exports.sendFamilyInvite = exports.createFamily = exports.updateFairnessAckWatermark = exports.markTripCancelledRemote = exports.fetchTripBootstrapForMember = exports.appendTripActivityEvent = exports.publishTripCanonicalState = exports.cancelTripInvite = exports.respondToTripInvite = exports.sendTripInvite = exports.removeFriend = exports.respondToFriendInvite = exports.sendFriendInvite = exports.redeemShareCode = exports.createShareCode = void 0;
 const admin = require("firebase-admin");
 admin.initializeApp();
 // Export all functions
@@ -20,6 +20,7 @@ Object.defineProperty(exports, "publishTripCanonicalState", { enumerable: true, 
 Object.defineProperty(exports, "appendTripActivityEvent", { enumerable: true, get: function () { return tripSessionCanonical_1.appendTripActivityEvent; } });
 Object.defineProperty(exports, "fetchTripBootstrapForMember", { enumerable: true, get: function () { return tripSessionCanonical_1.fetchTripBootstrapForMember; } });
 Object.defineProperty(exports, "markTripCancelledRemote", { enumerable: true, get: function () { return tripSessionCanonical_1.markTripCancelledRemote; } });
+Object.defineProperty(exports, "updateFairnessAckWatermark", { enumerable: true, get: function () { return tripSessionCanonical_1.updateFairnessAckWatermark; } });
 var family_1 = require("./family");
 Object.defineProperty(exports, "createFamily", { enumerable: true, get: function () { return family_1.createFamily; } });
 Object.defineProperty(exports, "sendFamilyInvite", { enumerable: true, get: function () { return family_1.sendFamilyInvite; } });

@@ -83,6 +83,12 @@ final class SchemaVersion14Marker {
     init() {}
 }
 
+@Model
+final class SchemaVersion15Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
 // MARK: - Schema Version 1 (Initial)
 // Initial schema with Trip and AppUser
 
@@ -424,7 +430,7 @@ enum SchemaVersion12: VersionedSchema {
             ShareCode.self,
             SchemaVersion3Marker.self,
             TripSessionEntity.self,
-            GameInstanceEntity.self,
+            SchemaVersion12.GameInstanceEntity.self,
             SchemaVersion4Marker.self,
             GameScoreSnapshotEntity.self,
             SchemaVersion5Marker.self,
@@ -440,6 +446,48 @@ enum SchemaVersion12: VersionedSchema {
             SchemaVersion11Marker.self,
             SchemaVersion12Marker.self
         ]
+    }
+
+    /// Frozen **V12–V14** game row: `teamsData`, **no** `fairnessUiLastAckAt`. Keeps checksums stable while top-level `GameInstanceEntity` evolves.
+    @Model
+    final class GameInstanceEntity {
+        var id: String
+        var definitionId: String
+        var sessionId: String
+        var startedAt: Date
+        var endedAt: Date?
+        var ruleSetData: Data?
+        var commonConfigData: Data?
+        var gameSpecificPayloadType: String?
+        var gameSpecificPayloadVersion: String?
+        var gameSpecificPayloadData: Data?
+        var teamsData: Data?
+
+        init(
+            id: String,
+            definitionId: String,
+            sessionId: String,
+            startedAt: Date,
+            endedAt: Date? = nil,
+            ruleSetData: Data? = nil,
+            commonConfigData: Data? = nil,
+            gameSpecificPayloadType: String? = nil,
+            gameSpecificPayloadVersion: String? = nil,
+            gameSpecificPayloadData: Data? = nil,
+            teamsData: Data? = nil
+        ) {
+            self.id = id
+            self.definitionId = definitionId
+            self.sessionId = sessionId
+            self.startedAt = startedAt
+            self.endedAt = endedAt
+            self.ruleSetData = ruleSetData
+            self.commonConfigData = commonConfigData
+            self.gameSpecificPayloadType = gameSpecificPayloadType
+            self.gameSpecificPayloadVersion = gameSpecificPayloadVersion
+            self.gameSpecificPayloadData = gameSpecificPayloadData
+            self.teamsData = teamsData
+        }
     }
 }
 
@@ -460,7 +508,7 @@ enum SchemaVersion13: VersionedSchema {
             ShareCode.self,
             SchemaVersion3Marker.self,
             TripSessionEntity.self,
-            GameInstanceEntity.self,
+            SchemaVersion12.GameInstanceEntity.self,
             SchemaVersion4Marker.self,
             GameScoreSnapshotEntity.self,
             SchemaVersion5Marker.self,
@@ -497,7 +545,7 @@ enum SchemaVersion14: VersionedSchema {
             ShareCode.self,
             SchemaVersion3Marker.self,
             TripSessionEntity.self,
-            GameInstanceEntity.self,
+            SchemaVersion12.GameInstanceEntity.self,
             SchemaVersion4Marker.self,
             GameScoreSnapshotEntity.self,
             SchemaVersion5Marker.self,
@@ -518,10 +566,49 @@ enum SchemaVersion14: VersionedSchema {
     }
 }
 
+// MARK: - Schema Version 15 (Step 13.2 — GameInstanceEntity.fairnessUiLastAckAt)
+enum SchemaVersion15: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(15, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            SchemaVersion7Marker.self,
+            SchemaVersion8Marker.self,
+            TripActivityEventEntity.self,
+            SchemaVersion9Marker.self,
+            SchemaVersion10Marker.self,
+            SyncQueueItemEntity.self,
+            RemoteSyncMetadataEntity.self,
+            SchemaVersion11Marker.self,
+            SchemaVersion12Marker.self,
+            SchemaVersion13Marker.self,
+            SchemaVersion14Marker.self,
+            SchemaVersion15Marker.self
+        ]
+    }
+}
+
 // MARK: - Migration Plan
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self, SchemaVersion11.self, SchemaVersion12.self, SchemaVersion13.self, SchemaVersion14.self]
+        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self, SchemaVersion11.self, SchemaVersion12.self, SchemaVersion13.self, SchemaVersion14.self, SchemaVersion15.self]
     }
 
     static var stages: [MigrationStage] {
@@ -538,12 +625,13 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             .lightweight(fromVersion: SchemaVersion10.self, toVersion: SchemaVersion11.self),
             .lightweight(fromVersion: SchemaVersion11.self, toVersion: SchemaVersion12.self),
             .lightweight(fromVersion: SchemaVersion12.self, toVersion: SchemaVersion13.self),
-            .lightweight(fromVersion: SchemaVersion13.self, toVersion: SchemaVersion14.self)
+            .lightweight(fromVersion: SchemaVersion13.self, toVersion: SchemaVersion14.self),
+            .lightweight(fromVersion: SchemaVersion14.self, toVersion: SchemaVersion15.self)
         ]
     }
 }
 
 // MARK: - Current Schema
-// V14: Step 6.10 — TripSessionEntity.mode and TripInvite.tripMode removed; trip participation derived from roster.
-typealias CurrentSchema = SchemaVersion14
+// V15: Step 13.2 — fairness UI watermark on GameInstanceEntity (SwiftData + Firebase subdoc sync).
+typealias CurrentSchema = SchemaVersion15
 

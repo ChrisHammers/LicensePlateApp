@@ -25,7 +25,8 @@ enum GameInstanceMapper {
             gameSpecificPayloadType: instance.gameSpecificPayloadType,
             gameSpecificPayloadVersion: instance.gameSpecificPayloadVersion,
             gameSpecificPayloadData: instance.gameSpecificPayloadData,
-            teamsData: teamsData
+            teamsData: teamsData,
+            fairnessUiLastAckAt: instance.fairnessUiLastAckAt
         )
     }
 
@@ -55,7 +56,8 @@ enum GameInstanceMapper {
             gameSpecificPayloadType: entity.gameSpecificPayloadType,
             gameSpecificPayloadVersion: entity.gameSpecificPayloadVersion,
             gameSpecificPayloadData: entity.gameSpecificPayloadData,
-            teams: teams
+            teams: teams,
+            fairnessUiLastAckAt: entity.fairnessUiLastAckAt
         )
     }
 

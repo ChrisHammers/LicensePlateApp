@@ -160,6 +160,89 @@ struct GameInstanceRepositoryTests {
         #expect(loaded?.teams.first { $0.name == "Team B" }?.participantUserIds == ["user3"])
     }
 
+    /// Step 13.2 — Upsert from “remote” shape without watermark preserves existing SwiftData watermark.
+    @Test func upsertPreservesFairnessUiLastAckWhenIncomingOmitsIt() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = GameInstanceRepository.shared
+        repo.setModelContext(context)
+
+        let sessionId = UUID()
+        let ack = Date(timeIntervalSince1970: 1_700_000_000)
+        var instance = GameInstance(
+            definitionId: "license_plate",
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            fairnessUiLastAckAt: ack
+        )
+        try repo.create(instance: instance)
+
+        var remoteSynced = try #require(try repo.instance(byId: instance.id))
+        remoteSynced.fairnessUiLastAckAt = nil
+        try repo.upsert(instance: remoteSynced)
+
+        let loaded = try #require(try repo.instance(byId: instance.id))
+        #expect(loaded.fairnessUiLastAckAt == ack)
+    }
+
+    /// Step 13.2 — Upsert uses max when both sides carry a watermark.
+    @Test func upsertMergesFairnessUiLastAckToGreaterTimestamp() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = GameInstanceRepository.shared
+        repo.setModelContext(context)
+
+        let sessionId = UUID()
+        let older = Date(timeIntervalSince1970: 1_000)
+        let newer = Date(timeIntervalSince1970: 2_000)
+        var instance = GameInstance(
+            definitionId: "license_plate",
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            fairnessUiLastAckAt: older
+        )
+        try repo.create(instance: instance)
+
+        var bump = try #require(try repo.instance(byId: instance.id))
+        bump.fairnessUiLastAckAt = newer
+        try repo.upsert(instance: bump)
+
+        let loaded = try #require(try repo.instance(byId: instance.id))
+        #expect(loaded.fairnessUiLastAckAt == newer)
+    }
+
+    /// Step 13.2 — Bootstrap-style replace keeps per-game fairness watermark when wire games omit it.
+    @Test func replaceGamesForSessionPreservesFairnessUiLastAckAt() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = GameInstanceRepository.shared
+        repo.setModelContext(context)
+
+        let sessionId = UUID()
+        let gameId = UUID()
+        let ack = Date(timeIntervalSince1970: 1_800_000_000)
+        let instance = GameInstance(
+            id: gameId,
+            definitionId: "license_plate",
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            fairnessUiLastAckAt: ack
+        )
+        try repo.create(instance: instance)
+
+        let replacement = GameInstance(
+            id: gameId,
+            definitionId: "license_plate",
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            fairnessUiLastAckAt: nil
+        )
+        try repo.replaceGamesForSession(sessionId: sessionId, instances: [replacement])
+
+        let loaded = try #require(try repo.instance(byId: gameId))
+        #expect(loaded.fairnessUiLastAckAt == ack)
+    }
+
     /// Step 05 — Failure: update throws instanceNotFound when instance was never created.
     @Test func updateThrowsInstanceNotFoundWhenInstanceMissing() async throws {
         let container = try makeContainer()

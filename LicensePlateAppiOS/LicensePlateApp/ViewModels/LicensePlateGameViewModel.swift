@@ -46,7 +46,7 @@ final class LicensePlateGameViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
     /// Editable license-plate scope while Game Settings sheet is open; persisted when user taps Done.
     @Published private(set) var licensePlateScopeDraft: LicensePlateScopeSettingsDraft?
-    /// Step 13 — server rejected a late competitive find; stacked banners (newest first) in `LicensePlateGameView`.
+    /// Step 13 — server rejected a late competitive find; stacked banners (oldest at top) in `LicensePlateGameView`.
     @Published private(set) var fairnessToasts: [FairnessToastState] = []
 
     let sessionId: UUID
@@ -140,12 +140,20 @@ final class LicensePlateGameViewModel: ObservableObject {
                 self.refreshSession()
                 self.refreshGame()
                 self.refreshFoundRegions()
-                self.presentFairnessToastIfNewRemoteRejection()
+                Task {
+                    await self.mergeFairnessUiAckFromRemoteIfNeeded()
+                    await self.applyFairnessToastBacklogFromEventLog()
+                }
             }
             .store(in: &cancellables)
 
         if currentSession.mode == .multiplayer {
             TripCanonicalRemoteSyncService.shared.startIncrementalListeningIfNeeded(sessionId: sessionId)
+        }
+
+        Task {
+            await mergeFairnessUiAckFromRemoteIfNeeded()
+            await applyFairnessToastBacklogFromEventLog()
         }
     }
 
@@ -153,10 +161,94 @@ final class LicensePlateGameViewModel: ObservableObject {
         fairnessToasts.removeAll { $0.id == id }
     }
 
-    /// Callable supersede path and per-rejection hydration: append one banner; dedupes by `sourceRejectionEventId`.
-    private func appendFairnessToastForResolution(_ info: FairnessResolutionInfo, refreshAfter: Bool = true) async {
+    /// Merges Firebase `fairness_ack_watermarks` into SwiftData (multiplayer competitive only).
+    private func mergeFairnessUiAckFromRemoteIfNeeded() async {
+        guard currentSession.mode == .multiplayer else { return }
+        guard game.commonConfig.gameMode == .competitive else { return }
+        let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        guard !uid.isEmpty else { return }
+        let remote = try? await FairnessAckWatermarkRemoteService.shared.fetchWatermark(
+            tripSessionId: sessionId,
+            gameInstanceId: game.id,
+            userId: uid
+        )
+        let local = game.fairnessUiLastAckAt
+        let merged = [local, remote].compactMap { $0 }.max()
+        guard let m = merged else { return }
+
+        let localDiffers = game.fairnessUiLastAckAt.map { $0 != m } ?? true
+        if localDiffers {
+            game.fairnessUiLastAckAt = m
+            try? gameInstanceRepository.update(instance: game)
+            objectWillChange.send()
+        }
+
+        let shouldPush: Bool
+        if let r = remote {
+            shouldPush = m > r
+        } else {
+            shouldPush = true
+        }
+        if shouldPush {
+            do {
+                try await FairnessAckWatermarkRemoteService.shared.pushWatermark(
+                    tripSessionId: sessionId,
+                    gameInstanceId: game.id,
+                    lastAckAt: m
+                )
+            } catch {
+                #if DEBUG
+                print("LicensePlateGameViewModel: push fairness watermark failed \(error)")
+                #endif
+            }
+        }
+    }
+
+    private func advanceFairnessWatermark(forRejectionEventIds ids: [String]) async {
+        guard game.commonConfig.gameMode == .competitive else { return }
+        guard !ids.isEmpty else { return }
+        let dates = ids.compactMap { id -> Date? in
+            guard let ev = try? tripActivityEventRepository.event(byId: id) else { return nil }
+            return ev.timestamp
+        }
+        guard let maxTs = dates.max() else { return }
+        let prior = game.fairnessUiLastAckAt ?? .distantPast
+        guard maxTs > prior else { return }
+        game.fairnessUiLastAckAt = maxTs
+        do {
+            try gameInstanceRepository.update(instance: game)
+        } catch {
+            #if DEBUG
+            print("LicensePlateGameViewModel: persist fairness watermark failed \(error)")
+            #endif
+            return
+        }
+        guard currentSession.mode == .multiplayer else { return }
+        let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        guard !uid.isEmpty else { return }
+        do {
+            try await FairnessAckWatermarkRemoteService.shared.pushWatermark(
+                tripSessionId: sessionId,
+                gameInstanceId: game.id,
+                lastAckAt: maxTs
+            )
+        } catch {
+            #if DEBUG
+            print("LicensePlateGameViewModel: push fairness watermark after ack failed \(error)")
+            #endif
+        }
+    }
+
+    /// Returns `true` if a new toast row was appended.
+    private func appendFairnessToastContentIfNew(_ info: FairnessResolutionInfo) async -> Bool {
         if let id = info.sourceRejectionEventId {
-            guard !shownFairnessRejectionEventIds.contains(id) else { return }
+            guard !shownFairnessRejectionEventIds.contains(id) else { return false }
+            if let ev = try? tripActivityEventRepository.event(byId: id),
+               let c = game.fairnessUiLastAckAt,
+               !(ev.timestamp > c) {
+                shownFairnessRejectionEventIds.insert(id)
+                return false
+            }
             shownFairnessRejectionEventIds.insert(id)
         }
         let regionName = PlateRegion.all.first(where: { $0.id == info.regionId })?.name ?? info.regionId
@@ -170,39 +262,57 @@ final class LicensePlateGameViewModel: ObservableObject {
             message = "Fairness invalid participant body %@ %@".localized(regionName, tripName)
         }
         fairnessToasts.append(FairnessToastState(title: "Region selection order resolution".localized, message: message))
+        return true
+    }
+
+    /// Callable supersede path and per-rejection hydration: append one banner; dedupes by `sourceRejectionEventId`.
+    private func appendFairnessToastForResolution(_ info: FairnessResolutionInfo, refreshAfter: Bool = true) async {
+        let appended = await appendFairnessToastContentIfNew(info)
+        guard appended else { return }
         if refreshAfter {
             refreshFoundRegions()
             refreshCompetitiveProjections()
         }
+        if let id = info.sourceRejectionEventId {
+            await advanceFairnessWatermark(forRejectionEventIds: [id])
+        }
     }
 
-    /// Firestore can merge a peer’s winning find + server `discovery_rejected` before local sync returns; stacked banners for each not-yet-shown fairness rejection (newest first).
-    private func presentFairnessToastIfNewRemoteRejection() {
+    /// Firestore can merge a peer’s winning find + server `discovery_rejected` before local sync returns; stacked banners oldest-first.
+    internal func applyFairnessToastBacklogFromEventLog() async {
         guard game.commonConfig.gameMode == .competitive else { return }
         let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
         guard !uid.isEmpty else { return }
         guard let allEvents = try? tripActivityEventRepository.events(sessionId: sessionId, limit: nil) else { return }
         let gid = game.id.uuidString
         let tripName = currentSession.name
+        let cutoff = game.fairnessUiLastAckAt
         let candidates = allEvents.filter { event in
             guard event.kind == .discoveryRejected, let p = event.payload else { return false }
             guard p[TripActivityEventPayloadKey.gameInstanceId] == gid else { return false }
             let attempter = p[TripActivityEventPayloadKey.participantId] ?? event.actorId ?? ""
             guard attempter == uid else { return false }
+            if let c = cutoff, !(event.timestamp > c) { return false }
             guard !shownFairnessRejectionEventIds.contains(event.id) else { return false }
             return FairnessResolutionInfo(rejection: event, sessionId: sessionId, tripSessionName: tripName) != nil
         }
-        let ordered = candidates.sorted { $0.timestamp > $1.timestamp }
+        let ordered = candidates.sorted { $0.timestamp < $1.timestamp }
         let infos: [FairnessResolutionInfo] = ordered.compactMap {
             FairnessResolutionInfo(rejection: $0, sessionId: sessionId, tripSessionName: tripName)
         }
         guard !infos.isEmpty else { return }
-        Task {
-            for info in infos {
-                await appendFairnessToastForResolution(info, refreshAfter: false)
+        var newIds: [String] = []
+        for info in infos {
+            if await appendFairnessToastContentIfNew(info) {
+                if let id = info.sourceRejectionEventId {
+                    newIds.append(id)
+                }
             }
-            refreshFoundRegions()
-            refreshCompetitiveProjections()
+        }
+        refreshFoundRegions()
+        refreshCompetitiveProjections()
+        if !newIds.isEmpty {
+            await advanceFairnessWatermark(forRejectionEventIds: newIds)
         }
     }
 
