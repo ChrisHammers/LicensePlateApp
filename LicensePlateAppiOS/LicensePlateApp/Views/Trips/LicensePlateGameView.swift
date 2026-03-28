@@ -164,7 +164,7 @@ struct LicensePlateGameView: View {
                 fairnessToastBanner
                 riskAdvisoryBanner
             }
-            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: viewModel.fairnessToast?.id)
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: viewModel.fairnessToasts.count)
         }
         .onAppear {
             FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: appPlaySoundEffects)
@@ -815,32 +815,42 @@ struct LicensePlateGameView: View {
         }
     }
 
+    /// Vertical overlap between stacked fairness banners (newest at top, older peek below).
+    private static let fairnessToastStackOverlap: CGFloat = 44
+
     @ViewBuilder private var fairnessToastBanner: some View {
-        if let toast = viewModel.fairnessToast {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(toast.title)
-                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
-                    .foregroundStyle(.primary)
-                Text(toast.message)
-                    .font(.system(.subheadline, design: .rounded))
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(spacing: -Self.fairnessToastStackOverlap) {
+            ForEach(Array(viewModel.fairnessToasts.enumerated()), id: \.element.id) { index, toast in
+                fairnessToastCard(toast)
+                    .zIndex(Double(viewModel.fairnessToasts.count - index))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Color.Theme.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .gameToastBannerShadow()
-            .padding(.horizontal, 20)
-            .padding(.top, 8)
-            .onTapGesture {
-                viewModel.clearFairnessToast()
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(toast.title). \(toast.message)")
-            .accessibilityHint("Tap to dismiss".localized)
         }
+        .padding(.top, 8)
+    }
+
+    @ViewBuilder private func fairnessToastCard(_ toast: FairnessToastState) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(toast.title)
+                .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                .foregroundStyle(.primary)
+            Text(toast.message)
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(Color.Theme.primaryBlue)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.Theme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .gameToastBannerShadow()
+        .padding(.horizontal, 20)
+        .onTapGesture {
+            viewModel.clearFairnessToast(id: toast.id)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(toast.title). \(toast.message)")
+        .accessibilityHint("Tap to dismiss".localized)
     }
 
     /// Review-level modal is intentionally deferred; only toast and inline hint are shown for now. No hard blocking. Step 11.6.

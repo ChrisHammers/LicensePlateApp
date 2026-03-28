@@ -8,7 +8,7 @@
 import Foundation
 import Combine
 
-/// Server fairness messaging after sync (Step 13); shown as a non-blocking banner in-game.
+/// Server fairness messaging after sync (Step 13); stacked non-blocking banners in-game.
 struct FairnessToastState: Equatable, Identifiable {
     let id: UUID
     var title: String
@@ -46,8 +46,8 @@ final class LicensePlateGameViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
     /// Editable license-plate scope while Game Settings sheet is open; persisted when user taps Done.
     @Published private(set) var licensePlateScopeDraft: LicensePlateScopeSettingsDraft?
-    /// Step 13 — server rejected a late competitive find; non-blocking toast in `LicensePlateGameView`.
-    @Published private(set) var fairnessToast: FairnessToastState?
+    /// Step 13 — server rejected a late competitive find; stacked banners (newest first) in `LicensePlateGameView`.
+    @Published private(set) var fairnessToasts: [FairnessToastState] = []
 
     let sessionId: UUID
 
@@ -124,7 +124,7 @@ final class LicensePlateGameViewModel: ObservableObject {
             .receive(on: RunLoop.main)
             .sink { [weak self] info in
                 guard let self else { return }
-                Task { await self.applyFairnessResolution(info) }
+                Task { await self.appendFairnessToastForResolution(info) }
             }
             .store(in: &cancellables)
 
@@ -149,11 +149,12 @@ final class LicensePlateGameViewModel: ObservableObject {
         }
     }
 
-    func clearFairnessToast() {
-        fairnessToast = nil
+    func clearFairnessToast(id: UUID) {
+        fairnessToasts.removeAll { $0.id == id }
     }
 
-    private func applyFairnessResolution(_ info: FairnessResolutionInfo) async {
+    /// Callable supersede path and per-rejection hydration: append one banner; dedupes by `sourceRejectionEventId`.
+    private func appendFairnessToastForResolution(_ info: FairnessResolutionInfo, refreshAfter: Bool = true) async {
         if let id = info.sourceRejectionEventId {
             guard !shownFairnessRejectionEventIds.contains(id) else { return }
             shownFairnessRejectionEventIds.insert(id)
@@ -168,12 +169,14 @@ final class LicensePlateGameViewModel: ObservableObject {
         } else {
             message = "Fairness invalid participant body %@ %@".localized(regionName, tripName)
         }
-        fairnessToast = FairnessToastState(title: "Region selection order resolution".localized, message: message)
-        refreshFoundRegions()
-        refreshCompetitiveProjections()
+        fairnessToasts.append(FairnessToastState(title: "Region selection order resolution".localized, message: message))
+        if refreshAfter {
+            refreshFoundRegions()
+            refreshCompetitiveProjections()
+        }
     }
 
-    /// Firestore can merge a peer’s winning find + server `discovery_rejected` before local sync returns; show the same toast as the callable supersede path.
+    /// Firestore can merge a peer’s winning find + server `discovery_rejected` before local sync returns; stacked banners for each not-yet-shown fairness rejection (newest first).
     private func presentFairnessToastIfNewRemoteRejection() {
         guard game.commonConfig.gameMode == .competitive else { return }
         let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
@@ -189,12 +192,18 @@ final class LicensePlateGameViewModel: ObservableObject {
             guard !shownFairnessRejectionEventIds.contains(event.id) else { return false }
             return FairnessResolutionInfo(rejection: event, sessionId: sessionId, tripSessionName: tripName) != nil
         }
-        guard let newest = candidates.max(by: { $0.timestamp < $1.timestamp }),
-              let info = FairnessResolutionInfo(rejection: newest, sessionId: sessionId, tripSessionName: tripName) else { return }
-        // Avoid re-alerting on a cold open for an old rejection (dedupe set is per VM lifetime).
-        //let maxAge: TimeInterval = 300
-        //guard Date().timeIntervalSince(newest.timestamp) < maxAge else { return }
-        Task { await applyFairnessResolution(info) }
+        let ordered = candidates.sorted { $0.timestamp > $1.timestamp }
+        let infos: [FairnessResolutionInfo] = ordered.compactMap {
+            FairnessResolutionInfo(rejection: $0, sessionId: sessionId, tripSessionName: tripName)
+        }
+        guard !infos.isEmpty else { return }
+        Task {
+            for info in infos {
+                await appendFairnessToastForResolution(info, refreshAfter: false)
+            }
+            refreshFoundRegions()
+            refreshCompetitiveProjections()
+        }
     }
 
     func refreshSession() {
