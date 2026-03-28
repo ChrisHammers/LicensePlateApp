@@ -34,5 +34,6 @@ final class TripActivityEventRecordingService: TripActivityEventRecordingProtoco
     func recordForSync(_ event: TripActivityEvent) throws {
         _ = try tripActivityEventRepository.appendIfAbsent(event)
         try syncCoordinator.ensureGameplayEventEnqueued(sessionId: event.sessionId, eventId: event.id)
+        syncCoordinator.scheduleDebouncedGameplaySyncFlushIfOnline()
     }
 }

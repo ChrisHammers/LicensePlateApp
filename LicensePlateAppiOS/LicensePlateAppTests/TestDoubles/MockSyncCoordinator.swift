@@ -21,6 +21,7 @@ final class MockSyncCoordinator: SyncCoordinatorProtocol {
     var enqueueUserProfileCallCount = 0
     var enqueueUserProfileIds: [String] = []
     var processPendingCallCount = 0
+    var scheduleDebouncedGameplaySyncFlushCallCount = 0
 
     func enqueueForSync(sessionId: UUID, eventId: String) throws {
         if let err = pendingEnqueueForSyncError {
@@ -56,6 +57,7 @@ final class MockSyncCoordinator: SyncCoordinatorProtocol {
         enqueueUserProfileCallCount = 0
         enqueueUserProfileIds.removeAll()
         processPendingCallCount = 0
+        scheduleDebouncedGameplaySyncFlushCallCount = 0
     }
 
     func enqueueUserProfileSync(userId: String) throws {
@@ -65,5 +67,9 @@ final class MockSyncCoordinator: SyncCoordinatorProtocol {
 
     func processPendingSyncItems() async {
         processPendingCallCount += 1
+    }
+
+    func scheduleDebouncedGameplaySyncFlushIfOnline() {
+        scheduleDebouncedGameplaySyncFlushCallCount += 1
     }
 }

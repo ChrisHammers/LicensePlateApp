@@ -71,6 +71,7 @@ struct RootView: View {
             EntitlementService.shared.setModelContext(modelContext)
             let syncCoordinator = SyncCoordinator.shared
             syncCoordinator.setUserSyncExecutor(UserSyncExecutor(authService: authService, userRepository: UserRepository.shared))
+            syncCoordinator.setGameplaySyncOnlineProvider { authService.isOnline }
             authService.setSyncCoordinator(syncCoordinator)
             let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
             if let userId = userId {

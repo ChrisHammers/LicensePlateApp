@@ -15,6 +15,8 @@ protocol SyncCoordinatorProtocol: AnyObject {
     func ensureGameplayEventEnqueued(sessionId: UUID, eventId: String) throws
     func enqueueUserProfileSync(userId: String) throws
     func processPendingSyncItems() async
+    /// Debounced flush after gameplay enqueue; no-op when offline (see `setGameplaySyncOnlineProvider`).
+    func scheduleDebouncedGameplaySyncFlushIfOnline()
 }
 
 @MainActor
@@ -22,10 +24,19 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
 
     static let shared = SyncCoordinator(repository: SyncQueueRepository.shared)
 
+    /// Delay after the last `scheduleDebouncedGameplaySyncFlushIfOnline` before running `processPendingSyncItems` when online.
+    static let gameplaySyncDebounceNanoseconds: UInt64 = 650_000_000
+
     private let repository: SyncQueueRepositoryProtocol
     private var userSyncExecutor: UserSyncExecutorProtocol?
     private var lastProcessPendingRunAt: Date?
     private let processPendingMinInterval: TimeInterval = 30
+
+    /// Defaults to `false` until `RootView` wires `authService.isOnline`, so tests and early launch do not upload while “offline.”
+    private var gameplaySyncOnlineProvider: () -> Bool = { false }
+    private var gameplayDebouncedFlushTask: Task<Void, Never>?
+    private var gameplayFlushInProgress = false
+    private var pendingAnotherGameplayFlush = false
 
     init(repository: SyncQueueRepositoryProtocol, userSyncExecutor: UserSyncExecutorProtocol? = nil) {
         self.repository = repository
@@ -34,6 +45,21 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
 
     func setUserSyncExecutor(_ executor: UserSyncExecutorProtocol) {
         userSyncExecutor = executor
+    }
+
+    func setGameplaySyncOnlineProvider(_ provider: @escaping () -> Bool) {
+        gameplaySyncOnlineProvider = provider
+    }
+
+    func scheduleDebouncedGameplaySyncFlushIfOnline() {
+        gameplayDebouncedFlushTask?.cancel()
+        let debounce = Self.gameplaySyncDebounceNanoseconds
+        gameplayDebouncedFlushTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: debounce)
+            guard let self, !Task.isCancelled else { return }
+            guard self.gameplaySyncOnlineProvider() else { return }
+            await self.processPendingSyncItems()
+        }
     }
 
     func enqueueForSync(sessionId: UUID, eventId: String) throws {
@@ -76,6 +102,25 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     }
 
     func processPendingSyncItems() async {
+        if gameplayFlushInProgress {
+            pendingAnotherGameplayFlush = true
+            return
+        }
+        gameplayFlushInProgress = true
+        defer {
+            gameplayFlushInProgress = false
+            let needsAnother = pendingAnotherGameplayFlush
+            pendingAnotherGameplayFlush = false
+            if needsAnother {
+                Task { [weak self] in
+                    await self?.processPendingSyncItems()
+                }
+            }
+        }
+        await processPendingSyncItemsBody()
+    }
+
+    private func processPendingSyncItemsBody() async {
         let pending = (try? repository.fetchPending(limit: 50)) ?? []
         let retryDue = (try? repository.fetchFailedRetryDue()) ?? []
         let candidates = Dictionary(uniqueKeysWithValues: (pending + retryDue).map { ($0.id, $0) }).values.sorted { $0.createdAt < $1.createdAt }

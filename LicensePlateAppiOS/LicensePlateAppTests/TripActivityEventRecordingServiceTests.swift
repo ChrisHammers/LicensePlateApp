@@ -61,10 +61,24 @@ struct TripActivityEventRecordingServiceTests {
             #expect((error as NSError).domain == "Test")
         }
         #expect(eventRepo.appendedEvents().count == 1)
+        #expect(sync.scheduleDebouncedGameplaySyncFlushCallCount == 0)
 
         try recording.recordForSync(event)
         #expect(eventRepo.appendedEvents().count == 1)
         #expect(sync.enqueueCallCount == 1)
         #expect(sync.enqueueEventIds == ["e1"])
+        #expect(sync.scheduleDebouncedGameplaySyncFlushCallCount == 1)
+    }
+
+    @Test func recordForSyncSchedulesDebouncedFlushOncePerSuccessfulCall() throws {
+        let eventRepo = MockTripActivityEventRepository()
+        let sync = MockSyncCoordinator()
+        let recording = TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: sync)
+        let sessionId = UUID()
+        let event = TripActivityEvent(sessionId: sessionId, kind: .tripStarted, actorId: "u1")
+        try recording.recordForSync(event)
+        #expect(sync.scheduleDebouncedGameplaySyncFlushCallCount == 1)
+        try recording.recordForSync(event)
+        #expect(sync.scheduleDebouncedGameplaySyncFlushCallCount == 2)
     }
 }
