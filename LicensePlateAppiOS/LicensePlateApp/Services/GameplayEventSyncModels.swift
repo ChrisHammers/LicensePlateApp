@@ -22,6 +22,33 @@ struct FairnessResolutionInfo: Sendable, Equatable {
     var regionId: String
     var firstFinderParticipantId: String
     var rejectionReasonRaw: String
+    /// Firestore / sync path dedupe for the same server `discovery_rejected` doc.
+    var sourceRejectionEventId: String?
+}
+
+extension FairnessResolutionInfo {
+    /// Builds from a server-authored `discovery_rejected` (callable supersede or listener merge).
+    init?(rejection: TripActivityEvent, sessionId: UUID, tripSessionName: String) {
+        guard rejection.kind == .discoveryRejected,
+              let gidStr = rejection.payload?[TripActivityEventPayloadKey.gameInstanceId],
+              let gid = UUID(uuidString: gidStr),
+              let regionId = rejection.payload?[TripActivityEventPayloadKey.regionId],
+              let reason = rejection.payload?[TripActivityEventPayloadKey.rejectionReason] else {
+            return nil
+        }
+        let firstFinder = rejection.payload?[TripActivityEventPayloadKey.firstFinderParticipantId] ?? ""
+        guard reason == DiscoveryOutcome.serverRejectedLateCompetitive.rawValue
+            || reason == DiscoveryOutcome.rejectedInvalidParticipant.rawValue else {
+            return nil
+        }
+        self.tripSessionId = sessionId
+        self.gameInstanceId = gid
+        self.tripSessionName = tripSessionName
+        self.regionId = regionId
+        self.firstFinderParticipantId = firstFinder
+        self.rejectionReasonRaw = reason
+        self.sourceRejectionEventId = rejection.id
+    }
 }
 
 enum GameplayAppendCallableResponseParser {

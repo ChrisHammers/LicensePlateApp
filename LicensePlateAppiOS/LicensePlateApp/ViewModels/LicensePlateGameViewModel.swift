@@ -53,6 +53,8 @@ final class LicensePlateGameViewModel: ObservableObject {
     private let authService: FirebaseAuthService
     private var didLogCompetitiveStandingsExposure = false
     private var cancellables = Set<AnyCancellable>()
+    /// Dedupes fairness alert when the same `discovery_rejected` arrives via sync and Firestore listener.
+    private var shownFairnessRejectionEventIds = Set<String>()
 
     var isTripCreator: Bool {
         let currentUserID = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
@@ -131,6 +133,7 @@ final class LicensePlateGameViewModel: ObservableObject {
                 self.refreshSession()
                 self.refreshGame()
                 self.refreshFoundRegions()
+                self.presentFairnessToastIfNewRemoteRejection()
             }
             .store(in: &cancellables)
 
@@ -144,6 +147,10 @@ final class LicensePlateGameViewModel: ObservableObject {
     }
 
     private func applyFairnessResolution(_ info: FairnessResolutionInfo) async {
+        if let id = info.sourceRejectionEventId {
+            guard !shownFairnessRejectionEventIds.contains(id) else { return }
+            shownFairnessRejectionEventIds.insert(id)
+        }
         let regionName = PlateRegion.all.first(where: { $0.id == info.regionId })?.name ?? info.regionId
         let names = await UserRepository.shared.displayNames(forUserIds: [info.firstFinderParticipantId])
         let firstName = names[info.firstFinderParticipantId] ?? info.firstFinderParticipantId
@@ -157,6 +164,30 @@ final class LicensePlateGameViewModel: ObservableObject {
         fairnessToast = FairnessToastState(title: "Fairness update".localized, message: message)
         refreshFoundRegions()
         refreshCompetitiveProjections()
+    }
+
+    /// Firestore can merge a peer’s winning find + server `discovery_rejected` before local sync returns; show the same toast as the callable supersede path.
+    private func presentFairnessToastIfNewRemoteRejection() {
+        guard game.commonConfig.gameMode == .competitive else { return }
+        let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        guard !uid.isEmpty else { return }
+        guard let allEvents = try? tripActivityEventRepository.events(sessionId: sessionId, limit: nil) else { return }
+        let gid = game.id.uuidString
+        let tripName = currentSession.name
+        let candidates = allEvents.filter { event in
+            guard event.kind == .discoveryRejected, let p = event.payload else { return false }
+            guard p[TripActivityEventPayloadKey.gameInstanceId] == gid else { return false }
+            let attempter = p[TripActivityEventPayloadKey.participantId] ?? event.actorId ?? ""
+            guard attempter == uid else { return false }
+            guard !shownFairnessRejectionEventIds.contains(event.id) else { return false }
+            return FairnessResolutionInfo(rejection: event, sessionId: sessionId, tripSessionName: tripName) != nil
+        }
+        guard let newest = candidates.max(by: { $0.timestamp < $1.timestamp }),
+              let info = FairnessResolutionInfo(rejection: newest, sessionId: sessionId, tripSessionName: tripName) else { return }
+        // Avoid re-alerting on a cold open for an old rejection (dedupe set is per VM lifetime).
+        let maxAge: TimeInterval = 300
+        guard Date().timeIntervalSince(newest.timestamp) < maxAge else { return }
+        Task { await applyFairnessResolution(info) }
     }
 
     func refreshSession() {

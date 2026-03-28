@@ -111,11 +111,7 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                     imported.append(rejection)
                     try TripActivityEventRepository.shared.importEventsIfAbsent(imported)
                     let tripName = (try? TripSessionRepository.shared.session(byId: sessionUUID))?.name ?? ""
-                    if let info = Self.fairnessResolutionInfo(
-                        sessionId: sessionUUID,
-                        tripName: tripName,
-                        rejection: rejection
-                    ) {
+                    if let info = FairnessResolutionInfo(rejection: rejection, sessionId: sessionUUID, tripSessionName: tripName) {
                         TripCanonicalRemoteSyncService.shared.publishFairnessResolution(info)
                     }
                     AnalyticsService.shared.log(.gameplayEventServerSuperseded(
@@ -185,30 +181,4 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         }
     }
 
-    private static func fairnessResolutionInfo(
-        sessionId: UUID,
-        tripName: String,
-        rejection: TripActivityEvent
-    ) -> FairnessResolutionInfo? {
-        guard rejection.kind == .discoveryRejected,
-              let gidStr = rejection.payload?[TripActivityEventPayloadKey.gameInstanceId],
-              let gid = UUID(uuidString: gidStr),
-              let regionId = rejection.payload?[TripActivityEventPayloadKey.regionId],
-              let reason = rejection.payload?[TripActivityEventPayloadKey.rejectionReason] else {
-            return nil
-        }
-        let firstFinder = rejection.payload?[TripActivityEventPayloadKey.firstFinderParticipantId] ?? ""
-        guard reason == DiscoveryOutcome.serverRejectedLateCompetitive.rawValue
-            || reason == DiscoveryOutcome.rejectedInvalidParticipant.rawValue else {
-            return nil
-        }
-        return FairnessResolutionInfo(
-            tripSessionId: sessionId,
-            gameInstanceId: gid,
-            tripSessionName: tripName,
-            regionId: regionId,
-            firstFinderParticipantId: firstFinder,
-            rejectionReasonRaw: reason
-        )
-    }
 }
