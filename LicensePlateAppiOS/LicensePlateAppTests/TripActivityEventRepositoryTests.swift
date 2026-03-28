@@ -190,6 +190,33 @@ struct TripActivityEventRepositoryTests {
         }
     }
 
+    /// Remote snapshot may normalize `actorId` (Firebase UID) and payload vs what was recorded locally.
+    @Test func reconcileRemoteActivityEvent_mergesSameIdWhenSessionAndKindMatch() async throws {
+        _ = try makeContainer()
+        let sessionId = UUID()
+        let gameId = UUID()
+        let eid = "discovery-evt-1"
+        let localPayload: [String: String] = [
+            TripActivityEventPayloadKey.regionId: "us-ca",
+            TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+            TripActivityEventPayloadKey.participantId: "legacy-app-user-id",
+            TripActivityEventPayloadKey.inputMethod: FoundRegion.InputMethod.list.rawValue,
+            TripActivityEventPayloadKey.discoveryEventId: eid
+        ]
+        let local = TripActivityEvent(id: eid, sessionId: sessionId, kind: .regionFound, actorId: "legacy-app-user-id", payload: localPayload)
+        try TripActivityEventRepository.shared.appendIfAbsent(local)
+
+        var remotePayload = localPayload
+        remotePayload[TripActivityEventPayloadKey.participantId] = "firebase-uid-123"
+        let remote = TripActivityEvent(id: eid, sessionId: sessionId, kind: .regionFound, actorId: "firebase-uid-123", payload: remotePayload)
+        #expect(try TripActivityEventRepository.shared.reconcileRemoteActivityEvent(remote) == true)
+
+        let loaded = try TripActivityEventRepository.shared.event(byId: eid)
+        #expect(loaded?.actorId == "firebase-uid-123")
+        #expect(loaded?.payload?[TripActivityEventPayloadKey.participantId] == "firebase-uid-123")
+        #expect(try TripActivityEventRepository.shared.reconcileRemoteActivityEvent(remote) == false)
+    }
+
     @Test func eventsSurviveNewModelContextSameContainer() async throws {
         let schema = Schema(versionedSchema: CurrentSchema.self)
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)

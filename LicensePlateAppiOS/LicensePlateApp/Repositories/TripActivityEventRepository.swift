@@ -15,7 +15,11 @@ protocol TripActivityEventRepositoryProtocol: AnyObject {
     /// Inserts the event if no row exists with the same `id`. Returns `true` if inserted. If a row exists with the same `id`, returns `false` when session, kind, actor, and payload match; otherwise throws `idCollision`.
     @discardableResult
     func appendIfAbsent(_ event: TripActivityEvent) throws -> Bool
+    /// Remote canonical import (bootstrap, supersede materialization): insert or merge when `id` exists with same session and kind.
     func importEventsIfAbsent(_ events: [TripActivityEvent]) throws
+    /// Single-event variant of `importEventsIfAbsent` (e.g. Firestore activity_events listener).
+    @discardableResult
+    func reconcileRemoteActivityEvent(_ event: TripActivityEvent) throws -> Bool
     func event(byId id: String) throws -> TripActivityEvent?
     func events(sessionId: UUID, limit: Int?) throws -> [TripActivityEvent]
     func discoveries(sessionId: UUID, gameInstanceId: UUID?) throws -> [GameDiscovery]
@@ -97,8 +101,46 @@ final class TripActivityEventRepository: ObservableObject, TripActivityEventRepo
 
     func importEventsIfAbsent(_ events: [TripActivityEvent]) throws {
         for event in events {
-            _ = try appendIfAbsent(event)
+            _ = try reconcileRemoteActivityEvent(event)
         }
+    }
+
+    @discardableResult
+    func reconcileRemoteActivityEvent(_ event: TripActivityEvent) throws -> Bool {
+        guard let ctx = modelContext else { throw TripActivityEventRepositoryError.noModelContext }
+        if let existingEntity = try Self.fetchEntity(id: event.id, context: ctx) {
+            let existing = entityToEvent(existingEntity)
+            guard existing.sessionId == event.sessionId, existing.kind == event.kind else {
+                throw TripActivityEventRepositoryError.idCollision(id: event.id)
+            }
+            let payloadData = event.payload.flatMap { try? JSONEncoder().encode($0) }
+            if Self.timestampsEffectivelyEqual(existingEntity.timestamp, event.timestamp),
+               existingEntity.actorId == event.actorId,
+               existingEntity.payloadData == payloadData {
+                return false
+            }
+            existingEntity.timestamp = event.timestamp
+            existingEntity.actorId = event.actorId
+            existingEntity.payloadData = payloadData
+            try ctx.save()
+            return true
+        }
+        if DebugPersistenceFlags.shouldForceFailure(for: .append) {
+            throw DebugForcedPersistenceError.append
+        }
+        #endif
+        let payloadData = event.payload.flatMap { try? JSONEncoder().encode($0) }
+        let entity = TripActivityEventEntity(
+            id: event.id,
+            sessionId: event.sessionId.uuidString,
+            kind: event.kind.rawValue,
+            timestamp: event.timestamp,
+            actorId: event.actorId,
+            payloadData: payloadData
+        )
+        ctx.insert(entity)
+        try ctx.save()
+        return true
     }
 
     func event(byId id: String) throws -> TripActivityEvent? {
@@ -197,6 +239,11 @@ final class TripActivityEventRepository: ObservableObject, TripActivityEventRepo
         case (let x?, nil), (nil, let x?): return x.isEmpty
         case (let x?, let y?): return x == y
         }
+    }
+
+    /// Firestore round-trip vs local `Date` can differ by a fraction of a second.
+    private static func timestampsEffectivelyEqual(_ a: Date, _ b: Date) -> Bool {
+        abs(a.timeIntervalSince1970 - b.timeIntervalSince1970) < 0.002
     }
 
     private func entityToEvent(_ entity: TripActivityEventEntity) -> TripActivityEvent {

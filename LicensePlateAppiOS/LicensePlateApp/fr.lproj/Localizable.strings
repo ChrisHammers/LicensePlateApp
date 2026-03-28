@@ -39,7 +39,7 @@
 "Cancel" = "Annuler";
 "Only the first finder gets credit in competitive mode." = "Seul le premier qui trouve obtient des points en mode compétitif.";
 "Tap to dismiss" = "Appuyez pour fermer";
-"Fairness update" = "Mise à jour d’équité";
+"Region selection order resolution" = "Résolution de l’ordre de sélection des régions";
 "Fairness late competitive body %@ %@ %@" = "Il a été déterminé que vous avez trouvé %@ après %@ dans %@.";
 "Fairness invalid participant body %@ %@" = "Une découverte n’a pas pu être confirmée pour %@ sur le voyage %@.";
 

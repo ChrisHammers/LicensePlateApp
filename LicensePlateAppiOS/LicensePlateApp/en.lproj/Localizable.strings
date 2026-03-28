@@ -39,7 +39,7 @@
 "Cancel" = "Cancel";
 "Only the first finder gets credit in competitive mode." = "Only the first finder gets credit in competitive mode.";
 "Tap to dismiss" = "Tap to dismiss";
-"Fairness update" = "Fairness update";
+"Region selection order resolution" = "Region Selection Order Resolution";
 "Fairness late competitive body %@ %@ %@" = "It was determined you found %@ after %@ in %@.";
 "Fairness invalid participant body %@ %@" = "A find could not be confirmed for %@ on trip %@.";
 

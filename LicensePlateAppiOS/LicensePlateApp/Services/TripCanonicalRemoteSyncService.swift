@@ -264,12 +264,12 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
                   let event = TripCanonicalMapper.domainEvent(from: wire),
                   event.sessionId == sessionId else { continue }
             do {
-                if try tripActivityEventRepository.appendIfAbsent(event) {
+                if try tripActivityEventRepository.reconcileRemoteActivityEvent(event) {
                     changed = true
                 }
             } catch {
                 #if DEBUG
-                print("TripCanonicalRemoteSyncService: append event failed \(error)")
+                print("TripCanonicalRemoteSyncService: reconcile activity event failed \(error)")
                 #endif
             }
         }

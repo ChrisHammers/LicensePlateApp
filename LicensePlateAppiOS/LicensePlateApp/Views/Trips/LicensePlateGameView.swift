@@ -151,19 +151,6 @@ struct LicensePlateGameView: View {
                 Text(msg)
             }
         }
-        .alert("Fairness update".localized, isPresented: Binding(
-            get: { viewModel.fairnessToast != nil },
-            set: { if !$0 { viewModel.clearFairnessToast() } }
-        )) {
-            Button("OK".localized, role: .cancel) {
-                viewModel.clearFairnessToast()
-            }
-        } message: {
-            if let toast = viewModel.fairnessToast {
-                Text(toast.message)
-                    .accessibilityLabel(toast.message)
-            }
-        }
         // Step 11: Unusual Activity modal suppressed (risk still logged to analytics). Non-blocking options: toast/banner, inline hint, or settings summary.
         // .alert("Unusual Activity".localized, isPresented: $showRiskAdvisoryMessage) {
         //     Button("OK".localized, role: .cancel) {}
@@ -174,8 +161,10 @@ struct LicensePlateGameView: View {
             VStack(spacing: 8) {
                 rejectedInvalidParticipantBanner
                 rejectedDuplicateBanner
+                fairnessToastBanner
                 riskAdvisoryBanner
             }
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: viewModel.fairnessToast?.id)
         }
         .onAppear {
             FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: appPlaySoundEffects)
@@ -795,6 +784,7 @@ struct LicensePlateGameView: View {
                 .padding(.vertical, 10)
                 .background(Color.Theme.cardBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .gameToastBannerShadow()
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
                 .onTapGesture {
@@ -814,6 +804,7 @@ struct LicensePlateGameView: View {
                 .padding(.vertical, 10)
                 .background(Color.Theme.cardBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .gameToastBannerShadow()
                 .padding(.horizontal, 20)
                 .padding(.top, 8)
                 .onTapGesture {
@@ -821,6 +812,34 @@ struct LicensePlateGameView: View {
                 }
                 .accessibilityLabel(message)
                 .accessibilityHint("Tap to dismiss".localized)
+        }
+    }
+
+    @ViewBuilder private var fairnessToastBanner: some View {
+        if let toast = viewModel.fairnessToast {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(toast.title)
+                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(toast.message)
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(Color.Theme.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .gameToastBannerShadow()
+            .padding(.horizontal, 20)
+            .padding(.top, 8)
+            .onTapGesture {
+                viewModel.clearFairnessToast()
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(toast.title). \(toast.message)")
+            .accessibilityHint("Tap to dismiss".localized)
         }
     }
 
@@ -845,6 +864,7 @@ struct LicensePlateGameView: View {
                     .padding(.vertical, 10)
                     .background(Color.Theme.cardBackground)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .gameToastBannerShadow()
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
                     .onTapGesture {
@@ -2298,6 +2318,15 @@ private struct RegionAppleMapView: View {
     }
 }
 
+private extension View {
+    /// Stronger layered shadow so top toast/banners read clearly over map and list.
+    func gameToastBannerShadow() -> some View {
+        self
+            .shadow(color: .black.opacity(0.16), radius: 5, x: 0, y: 2)
+            .shadow(color: .black.opacity(0.28), radius: 22, x: 0, y: 12)
+    }
+}
+
 // Unified wrapper for full screen map view that switches between providers
 private struct FullScreenMapView: View {
     let enabledCountries: [PlateRegion.Country]
@@ -2403,13 +2432,13 @@ private struct RegionMapView: View {
 }
 
 #if DEBUG
-#Preview("Fairness alert (Step 13)") {
+#Preview("Region selection order resolution (Step 13)") {
     struct FairnessAlertPreviewShell: View {
         @State private var showAlert = true
         var body: some View {
             Color.Theme.background
                 .ignoresSafeArea()
-                .alert("Fairness update".localized, isPresented: $showAlert) {
+                .alert("Region selection order resolution".localized, isPresented: $showAlert) {
                     Button("OK".localized, role: .cancel) { showAlert = false }
                 } message: {
                     Text("Fairness late competitive body %@ %@ %@".localized("California", "Alex", "Road trip"))

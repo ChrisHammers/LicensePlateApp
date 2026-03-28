@@ -8,10 +8,17 @@
 import Foundation
 import Combine
 
-/// Server fairness messaging after sync (Step 13).
-struct FairnessToastState: Equatable {
+/// Server fairness messaging after sync (Step 13); shown as a non-blocking banner in-game.
+struct FairnessToastState: Equatable, Identifiable {
+    let id: UUID
     var title: String
     var message: String
+
+    init(title: String, message: String) {
+        self.id = UUID()
+        self.title = title
+        self.message = message
+    }
 }
 
 /// Result of submitting a discovery (mark found).
@@ -39,7 +46,7 @@ final class LicensePlateGameViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
     /// Editable license-plate scope while Game Settings sheet is open; persisted when user taps Done.
     @Published private(set) var licensePlateScopeDraft: LicensePlateScopeSettingsDraft?
-    /// Step 13 — server rejected a late competitive find after sync; show alert then clear.
+    /// Step 13 — server rejected a late competitive find; non-blocking toast in `LicensePlateGameView`.
     @Published private(set) var fairnessToast: FairnessToastState?
 
     let sessionId: UUID
@@ -161,7 +168,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         } else {
             message = "Fairness invalid participant body %@ %@".localized(regionName, tripName)
         }
-        fairnessToast = FairnessToastState(title: "Fairness update".localized, message: message)
+        fairnessToast = FairnessToastState(title: "Region selection order resolution".localized, message: message)
         refreshFoundRegions()
         refreshCompetitiveProjections()
     }
@@ -185,8 +192,8 @@ final class LicensePlateGameViewModel: ObservableObject {
         guard let newest = candidates.max(by: { $0.timestamp < $1.timestamp }),
               let info = FairnessResolutionInfo(rejection: newest, sessionId: sessionId, tripSessionName: tripName) else { return }
         // Avoid re-alerting on a cold open for an old rejection (dedupe set is per VM lifetime).
-        let maxAge: TimeInterval = 300
-        guard Date().timeIntervalSince(newest.timestamp) < maxAge else { return }
+        //let maxAge: TimeInterval = 300
+        //guard Date().timeIntervalSince(newest.timestamp) < maxAge else { return }
         Task { await applyFairnessResolution(info) }
     }
 

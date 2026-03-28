@@ -190,7 +190,7 @@ struct PendingTripsViewModelTests {
             tripInviteRepository: inviteRepo,
             authService: auth(for: userId),
             gameInstanceRepository: gameRepo,
-            resolveInviteDisplayNames: { ["other": "Friend Name"] }
+            resolveInviteDisplayNames: { _ in ["other": "Friend Name"] }
         )
         viewModel.loadInvites(userId: userId)
         try await Task.sleep(nanoseconds: 50_000_000)

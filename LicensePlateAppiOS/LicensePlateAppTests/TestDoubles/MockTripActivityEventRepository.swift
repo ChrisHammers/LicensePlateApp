@@ -40,8 +40,28 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
 
     func importEventsIfAbsent(_ events: [TripActivityEvent]) throws {
         for event in events {
-            _ = try appendIfAbsent(event)
+            _ = try reconcileRemoteActivityEvent(event)
         }
+    }
+
+    @discardableResult
+    func reconcileRemoteActivityEvent(_ event: TripActivityEvent) throws -> Bool {
+        if shouldThrow { throw NSError(domain: "MockTripActivityEventRepository", code: -1, userInfo: nil) }
+        if let idx = events.firstIndex(where: { $0.id == event.id }) {
+            let existing = events[idx]
+            guard existing.sessionId == event.sessionId, existing.kind == event.kind else {
+                throw TripActivityEventRepositoryError.idCollision(id: event.id)
+            }
+            if existing.timestamp == event.timestamp,
+               existing.actorId == event.actorId,
+               existing.payload == event.payload {
+                return false
+            }
+            events[idx] = event
+            return true
+        }
+        events.append(event)
+        return true
     }
 
     func event(byId id: String) throws -> TripActivityEvent? {
