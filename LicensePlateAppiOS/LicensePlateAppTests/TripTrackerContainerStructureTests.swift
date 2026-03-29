@@ -75,7 +75,8 @@ struct TripTrackerContainerStructureTests {
             tripSessionRepository: sessionRepo,
             tripActivityEventRepository: eventRepo,
             gameInstanceRepository: gameRepo,
-            lifecycleService: lifecycle
+            lifecycleService: lifecycle,
+            participationService: MockTripParticipationService()
         )
 
         let resolved = viewModel.session(for: session.id)
@@ -104,7 +105,8 @@ struct TripTrackerContainerStructureTests {
             tripSessionRepository: sessionRepo,
             tripActivityEventRepository: eventRepo,
             gameInstanceRepository: gameRepo,
-            lifecycleService: lifecycle
+            lifecycleService: lifecycle,
+            participationService: MockTripParticipationService()
         )
 
         #expect(viewModel.sessionAndGame(sessionId: session.id, gameId: game.id) != nil)

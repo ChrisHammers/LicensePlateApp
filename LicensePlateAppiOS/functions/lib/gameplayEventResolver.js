@@ -4,7 +4,7 @@
  * Parity with DiscoveryRulesEngine + TripActivityEventDiscoveryReplay (Swift).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.KIND_REGION_REMOVED = exports.KIND_REGION_FOUND = exports.PK = void 0;
+exports.KIND_PARTICIPANT_LEFT = exports.KIND_REGION_REMOVED = exports.KIND_REGION_FOUND = exports.PK = void 0;
 exports.replayDiscoveriesFromDocs = replayDiscoveriesFromDocs;
 exports.evaluateDiscoverySubmission = evaluateDiscoverySubmission;
 exports.resolveGameplayAppendTransaction = resolveGameplayAppendTransaction;
@@ -29,6 +29,7 @@ exports.PK = {
 };
 exports.KIND_REGION_FOUND = "region_found";
 exports.KIND_REGION_REMOVED = "region_removed";
+exports.KIND_PARTICIPANT_LEFT = "participant_left";
 const KIND_DISCOVERY_REJECTED = "discovery_rejected";
 const REJECTION_SERVER_LATE_COMPETITIVE = "server_rejected_late_competitive";
 const REJECTION_INVALID_PARTICIPANT = "rejected_invalid_participant";
@@ -164,6 +165,15 @@ function rosterHasUser(participants, userId) {
     }
     return false;
 }
+/** Remove one user from Firestore `canonicalParticipants` array (wire shape uses `userId`). */
+function filterCanonicalParticipantsRemoveUser(participants, userId) {
+    return participants.filter((p) => {
+        if (p && typeof p === "object" && "userId" in p) {
+            return String(p.userId) !== userId;
+        }
+        return true;
+    });
+}
 /** Exported for unit tests (parity with Swift DiscoveryRulesEngine). */
 function evaluateDiscoverySubmission(gameMode, tripMode, existingForTarget, candidateParticipantId) {
     if (existingForTarget.length === 0)
@@ -224,20 +234,17 @@ async function resolveGameplayAppendTransaction(db, tripSessionId, userId, event
     const eventRef = ref.collection("activity_events").doc(event.id);
     const kind = event.kind;
     return db.runTransaction(async (tx) => {
+        var _a;
         const sessionSnap = await tx.get(ref);
         if (!sessionSnap.exists) {
             throw new functions.https.HttpsError("not-found", "Trip session not found");
         }
         const sessionData = sessionSnap.data();
-        const participants = Array.isArray(sessionData.canonicalParticipants) ? sessionData.canonicalParticipants : [];
-        if (!rosterHasUser(participants, userId)) {
-            throw new functions.https.HttpsError("permission-denied", "Not a member of this trip session");
-        }
-        const tripMode = tripModeFromRoster(participants);
         const existingEventSnap = await tx.get(eventRef);
         const incomingTs = secondsToTimestamp(event.timestamp);
         const incomingPayload = stringifyPayload(event.payload || undefined);
         const normalizedActor = userId;
+        // Idempotency before roster check so participant_left retries succeed after roster/members update.
         if (existingEventSnap.exists) {
             const ed = existingEventSnap.data();
             const sameKind = ed.kind === kind;
@@ -252,6 +259,11 @@ async function resolveGameplayAppendTransaction(db, tripSessionId, userId, event
                 throw new functions.https.HttpsError("already-exists", "event id collision");
             }
         }
+        const participants = Array.isArray(sessionData.canonicalParticipants) ? sessionData.canonicalParticipants : [];
+        if (!rosterHasUser(participants, userId)) {
+            throw new functions.https.HttpsError("permission-denied", "Not a member of this trip session");
+        }
+        const tripMode = tripModeFromRoster(participants);
         const eventsQuery = ref.collection("activity_events").orderBy("timestamp", "asc").limit(MAX_EVENTS_POLICY);
         const eventsSnap = await tx.get(eventsQuery);
         const eventDocs = eventsSnap.docs;
@@ -286,7 +298,7 @@ async function resolveGameplayAppendTransaction(db, tripSessionId, userId, event
             try {
                 cfg = parseCommonConfig(gameData.commonConfigDataBase64);
             }
-            catch (_a) {
+            catch (_b) {
                 throw new functions.https.HttpsError("failed-precondition", "invalid game config");
             }
             if (cfg.lifecycleState !== "started") {
@@ -365,7 +377,7 @@ async function resolveGameplayAppendTransaction(db, tripSessionId, userId, event
             try {
                 cfg = parseCommonConfig(gameSnap.data().commonConfigDataBase64);
             }
-            catch (_b) {
+            catch (_c) {
                 throw new functions.https.HttpsError("failed-precondition", "invalid game config");
             }
             const gameMode = cfg.gameMode;
@@ -432,6 +444,29 @@ async function resolveGameplayAppendTransaction(db, tripSessionId, userId, event
             }
             normalizeAndWrite(incomingPayload);
             return { success: true, resolution: "passthrough", appliedEventId: event.id };
+        }
+        if (kind === exports.KIND_PARTICIPANT_LEFT) {
+            const participantId = incomingPayload[exports.PK.participantId] || "";
+            if (participantId !== userId) {
+                throw new functions.https.HttpsError("permission-denied", "participantId must match caller");
+            }
+            const memberRef = ref.collection("members").doc(userId);
+            const memberSnap = await tx.get(memberRef);
+            if (!memberSnap.exists) {
+                throw new functions.https.HttpsError("failed-precondition", "Member record missing for this trip");
+            }
+            const role = ((_a = memberSnap.data()) === null || _a === void 0 ? void 0 : _a.role) || "member";
+            if (role === "owner") {
+                throw new functions.https.HttpsError("failed-precondition", "Trip owner cannot leave via participant_left; end or cancel the trip instead");
+            }
+            const nextParticipants = filterCanonicalParticipantsRemoveUser(participants, userId);
+            tx.update(ref, {
+                canonicalParticipants: nextParticipants,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            tx.delete(memberRef);
+            normalizeAndWrite(Object.assign(Object.assign({}, incomingPayload), { [exports.PK.participantId]: userId }));
+            return { success: true, resolution: "accepted", appliedEventId: event.id };
         }
         normalizeAndWrite(incomingPayload);
         return { success: true, resolution: "passthrough", appliedEventId: event.id };

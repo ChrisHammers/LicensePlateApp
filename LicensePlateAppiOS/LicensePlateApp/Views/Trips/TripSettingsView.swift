@@ -11,9 +11,11 @@ struct TripSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var viewModel: TripSettingsViewModel
     var onTripDeleted: () -> Void
+    var onTripLeft: () -> Void
 
     @State private var showEndTripConfirmation = false
     @State private var showDeleteConfirmation = false
+    @State private var showLeaveTripConfirmation = false
     @State private var retryAction: (() -> Void)?
 
     private var dateFormatter: DateFormatter {
@@ -183,6 +185,27 @@ struct TripSettingsView: View {
 
             Divider()
 
+            if viewModel.canLeaveTrip {
+                Button {
+                    showLeaveTripConfirmation = true
+                } label: {
+                    HStack {
+                        Text("Leave Trip".localized)
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.red)
+                        Spacer()
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Leave Trip".localized)
+                .accessibilityHint("Remove yourself from this trip. Changes sync when online.".localized)
+
+                Divider()
+            }
+
             Button {
                 showDeleteConfirmation = true
             } label: {
@@ -231,6 +254,25 @@ struct TripSettingsView: View {
         } message: {
             Text("This will delete the trip and all scores will be removed.".localized)
         }
+        .alert("Leave Trip".localized, isPresented: $showLeaveTripConfirmation) {
+            Button("Cancel".localized, role: .cancel) {}
+            Button("Leave Trip".localized, role: .destructive) {
+                do {
+                    try viewModel.leaveTrip()
+                    dismiss()
+                    onTripLeft()
+                } catch {
+                    viewModel.setError(error.localizedDescription)
+                    retryAction = {
+                        try? viewModel.leaveTrip()
+                        dismiss()
+                        onTripLeft()
+                    }
+                }
+            }
+        } message: {
+            Text("You will leave this trip on this device right away. If you are offline, leaving the trip will sync when you are back online.".localized)
+        }
     }
 }
 
@@ -253,7 +295,36 @@ struct TripSettingsView: View {
                 lifecycleService: TripSessionLifecycleService.shared,
                 authService: auth
             ),
-            onTripDeleted: {}
+            onTripDeleted: {},
+            onTripLeft: {}
+        )
+    }
+}
+
+#Preview("Passenger trip settings") {
+    let session = TripSession(
+        name: "Shared Trip",
+        status: .active,
+        createdAt: Date(),
+        createdBy: "owner1",
+        startedAt: Date(),
+        participants: [
+            TripParticipant(userId: "owner1", role: .owner, joinedAt: Date()),
+            TripParticipant(userId: "u2", role: .member, joinedAt: Date())
+        ]
+    )
+    let auth = FirebaseAuthService()
+    auth.currentUser = AppUser(id: "u2", userName: "Passenger", firebaseUID: "u2")
+    return NavigationStack {
+        TripSettingsView(
+            viewModel: TripSettingsViewModel(
+                session: session,
+                tripSessionRepository: TripSessionRepository.shared,
+                lifecycleService: TripSessionLifecycleService.shared,
+                authService: auth
+            ),
+            onTripDeleted: {},
+            onTripLeft: {}
         )
     }
 }

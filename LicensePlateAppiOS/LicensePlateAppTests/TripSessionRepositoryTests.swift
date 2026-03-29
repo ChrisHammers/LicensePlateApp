@@ -234,4 +234,33 @@ struct TripSessionRepositoryTests {
         #expect(loaded?.participants.count == 2)
         #expect(loaded?.participants.first { $0.userId == "user1" }?.teamId == team1.id)
     }
+
+    /// Step 14 — Active list hides trips with a pending voluntary leave row for that user.
+    @Test func loadActiveSessionsExcludesPendingLeaveForUser() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = TripSessionRepository.shared
+        repo.setModelContext(context)
+        PendingTripLeaveRepository.shared.setModelContext(context)
+
+        let session = TripSession(
+            name: "Shared",
+            status: .active,
+            createdAt: Date(),
+            createdBy: "owner1",
+            startedAt: Date(),
+            participants: [
+                TripParticipant(userId: "owner1", role: .owner, joinedAt: Date()),
+                TripParticipant(userId: "joiner1", role: .member, joinedAt: Date())
+            ]
+        )
+        try repo.create(session: session)
+
+        var forJoiner = try repo.loadActiveSessions(userId: "joiner1")
+        #expect(forJoiner.count == 1)
+
+        try PendingTripLeaveRepository.shared.insertPending(sessionId: session.id, userId: "joiner1")
+        forJoiner = try repo.loadActiveSessions(userId: "joiner1")
+        #expect(forJoiner.isEmpty)
+    }
 }

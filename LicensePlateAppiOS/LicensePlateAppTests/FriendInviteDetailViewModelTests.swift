@@ -3,17 +3,16 @@
 //  LicensePlateAppTests
 //
 
-import XCTest
+import Testing
 @testable import LicensePlateApp
 
-final class FriendInviteDetailViewModelTests: XCTestCase {
+@MainActor
+struct FriendInviteDetailViewModelTests {
 
-    @MainActor
-    func testStoresInviteId() {
-        var vm: FriendInviteDetailViewModel? = FriendInviteDetailViewModel(inviteId: "invite-123")
-        XCTAssertEqual(vm?.inviteId, "invite-123")
-        XCTAssertFalse(vm?.hasAccepted ?? true)
-        XCTAssertNil(vm?.user)
-        vm = nil
+    @Test func storesInviteId() {
+        let vm = FriendInviteDetailViewModel(inviteId: "invite-123")
+        #expect(vm.inviteId == "invite-123")
+        #expect(!vm.hasAccepted)
+        #expect(vm.user == nil)
     }
 }

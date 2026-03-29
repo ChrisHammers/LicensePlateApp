@@ -89,6 +89,12 @@ final class SchemaVersion15Marker {
     init() {}
 }
 
+@Model
+final class SchemaVersion16Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
 // MARK: - Schema Version 1 (Initial)
 // Initial schema with Trip and AppUser
 
@@ -605,10 +611,51 @@ enum SchemaVersion15: VersionedSchema {
     }
 }
 
+// MARK: - Schema Version 16 (Step 14 — PendingTripLeaveEntity for offline leave / sync)
+enum SchemaVersion16: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(16, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            SchemaVersion7Marker.self,
+            SchemaVersion8Marker.self,
+            TripActivityEventEntity.self,
+            SchemaVersion9Marker.self,
+            SchemaVersion10Marker.self,
+            SyncQueueItemEntity.self,
+            RemoteSyncMetadataEntity.self,
+            SchemaVersion11Marker.self,
+            SchemaVersion12Marker.self,
+            SchemaVersion13Marker.self,
+            SchemaVersion14Marker.self,
+            SchemaVersion15Marker.self,
+            PendingTripLeaveEntity.self,
+            SchemaVersion16Marker.self
+        ]
+    }
+}
+
 // MARK: - Migration Plan
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self, SchemaVersion11.self, SchemaVersion12.self, SchemaVersion13.self, SchemaVersion14.self, SchemaVersion15.self]
+        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self, SchemaVersion11.self, SchemaVersion12.self, SchemaVersion13.self, SchemaVersion14.self, SchemaVersion15.self, SchemaVersion16.self]
     }
 
     static var stages: [MigrationStage] {
@@ -626,12 +673,13 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             .lightweight(fromVersion: SchemaVersion11.self, toVersion: SchemaVersion12.self),
             .lightweight(fromVersion: SchemaVersion12.self, toVersion: SchemaVersion13.self),
             .lightweight(fromVersion: SchemaVersion13.self, toVersion: SchemaVersion14.self),
-            .lightweight(fromVersion: SchemaVersion14.self, toVersion: SchemaVersion15.self)
+            .lightweight(fromVersion: SchemaVersion14.self, toVersion: SchemaVersion15.self),
+            .lightweight(fromVersion: SchemaVersion15.self, toVersion: SchemaVersion16.self)
         ]
     }
 }
 
 // MARK: - Current Schema
-// V15: Step 13.2 — fairness UI watermark on GameInstanceEntity (SwiftData + Firebase subdoc sync).
-typealias CurrentSchema = SchemaVersion15
+// V16: Step 14 — pending trip leave rows (offline leave until server reconciles).
+typealias CurrentSchema = SchemaVersion16
 

@@ -67,8 +67,11 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
         descriptor.sortBy = [SortDescriptor(\.startedAt, order: .reverse)]
         var entities = try ctx.fetch(descriptor)
         if let uid = userId {
+            let pendingLeaveSessions = (try? PendingTripLeaveRepository.shared.sessionIdsPendingLeave(userId: uid)) ?? []
             entities = entities.filter { entity in
-                entity.createdBy == uid || participantIds(from: entity.participantsData).contains(uid)
+                guard let uuid = UUID(uuidString: entity.id) else { return false }
+                if pendingLeaveSessions.contains(uuid) { return false }
+                return entity.createdBy == uid || participantIds(from: entity.participantsData).contains(uid)
             }
         }
         return entities.map { TripSessionPersistence.toDomain($0) }

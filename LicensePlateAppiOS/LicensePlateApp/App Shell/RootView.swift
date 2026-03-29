@@ -68,6 +68,7 @@ struct RootView: View {
             TripActivityEventRepository.shared.setModelContext(modelContext)
             SyncQueueRepository.shared.setModelContext(modelContext)
             TripInviteRepository.shared.setModelContext(modelContext)
+            PendingTripLeaveRepository.shared.setModelContext(modelContext)
             EntitlementService.shared.setModelContext(modelContext)
             let syncCoordinator = SyncCoordinator.shared
             syncCoordinator.setUserSyncExecutor(UserSyncExecutor(authService: authService, userRepository: UserRepository.shared))
@@ -83,6 +84,7 @@ struct RootView: View {
             if authService.isOnline {
                 Task { await SyncCoordinator.shared.processPendingSyncItems() }
             }
+            TripParticipationService.shared.bindAuthService(authService)
         }
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {

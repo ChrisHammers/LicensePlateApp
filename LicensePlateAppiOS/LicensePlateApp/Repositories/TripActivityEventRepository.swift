@@ -114,9 +114,10 @@ final class TripActivityEventRepository: ObservableObject, TripActivityEventRepo
                 throw TripActivityEventRepositoryError.idCollision(id: event.id)
             }
             let payloadData = event.payload.flatMap { try? JSONEncoder().encode($0) }
+            // Compare payload semantically: JSONEncoder key order for `[String: String]` is not stable across decode/round-trips, so raw `Data` equality can falsely claim a merge is still needed.
             if Self.timestampsEffectivelyEqual(existingEntity.timestamp, event.timestamp),
                existingEntity.actorId == event.actorId,
-               existingEntity.payloadData == payloadData {
+               Self.payloadsEqual(existing.payload, event.payload) {
                 return false
             }
             existingEntity.timestamp = event.timestamp

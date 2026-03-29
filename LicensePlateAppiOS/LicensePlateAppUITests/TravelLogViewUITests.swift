@@ -19,7 +19,7 @@ final class TravelLogViewUITests: XCTestCase {
         app.launch()
 
         // Tap toolbar map button to open Travel Log sheet
-        let mapButton = app.buttons["Travel Log Invites"]
+        let mapButton = app.buttons["Travel Log"]
         XCTAssertTrue(mapButton.waitForExistence(timeout: 8), "Toolbar map button (Travel Log) should exist")
         mapButton.tap()
 

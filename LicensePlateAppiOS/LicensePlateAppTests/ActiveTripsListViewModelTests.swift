@@ -36,7 +36,8 @@ struct ActiveTripsListViewModelTests {
             tripSessionRepository: sessionRepo,
             tripActivityEventRepository: eventRepo,
             gameInstanceRepository: gameRepo,
-            lifecycleService: lifecycleService
+            lifecycleService: lifecycleService,
+            participationService: MockTripParticipationService()
         )
 
         viewModel.load(userId: "user1")
@@ -58,7 +59,8 @@ struct ActiveTripsListViewModelTests {
             tripSessionRepository: sessionRepo,
             tripActivityEventRepository: eventRepo,
             gameInstanceRepository: gameRepo,
-            lifecycleService: lifecycleService
+            lifecycleService: lifecycleService,
+            participationService: MockTripParticipationService()
         )
 
         viewModel.load(userId: "user1")
@@ -76,12 +78,14 @@ struct ActiveTripsListViewModelTests {
         let gameRepo = MockGameInstanceRepository()
         let lifecycleService = MockTripSessionLifecycleService()
         lifecycleService.shouldThrow = true
+        let participation = MockTripParticipationService()
 
         let viewModel = ActiveTripsListViewModel(
             tripSessionRepository: sessionRepo,
             tripActivityEventRepository: eventRepo,
             gameInstanceRepository: gameRepo,
-            lifecycleService: lifecycleService
+            lifecycleService: lifecycleService,
+            participationService: participation
         )
         viewModel.load(userId: "user1")
         #expect(viewModel.items.count == 1)
@@ -92,6 +96,7 @@ struct ActiveTripsListViewModelTests {
         #expect(viewModel.pendingDeleteSessionIds.count == 1)
         #expect(viewModel.pendingDeleteSessionIds[0] == session.id)
         #expect(viewModel.pendingUserId == "user1")
+        #expect(participation.initiateLeaveTripCallCount == 0)
     }
 
     @Test func retryLastDeleteWhenStillFailingKeepsErrorMessage() async throws {
@@ -107,7 +112,8 @@ struct ActiveTripsListViewModelTests {
             tripSessionRepository: sessionRepo,
             tripActivityEventRepository: eventRepo,
             gameInstanceRepository: gameRepo,
-            lifecycleService: lifecycleService
+            lifecycleService: lifecycleService,
+            participationService: MockTripParticipationService()
         )
         viewModel.load(userId: "user1")
         viewModel.deleteSessions(at: IndexSet(integer: 0), userId: "user1")
@@ -132,7 +138,8 @@ struct ActiveTripsListViewModelTests {
             tripSessionRepository: sessionRepo,
             tripActivityEventRepository: eventRepo,
             gameInstanceRepository: gameRepo,
-            lifecycleService: lifecycleService
+            lifecycleService: lifecycleService,
+            participationService: MockTripParticipationService()
         )
         viewModel.load(userId: "user1")
         viewModel.deleteSessions(at: IndexSet(integer: 0), userId: "user1")
@@ -158,7 +165,8 @@ struct ActiveTripsListViewModelTests {
             tripSessionRepository: sessionRepo,
             tripActivityEventRepository: eventRepo,
             gameInstanceRepository: gameRepo,
-            lifecycleService: lifecycleService
+            lifecycleService: lifecycleService,
+            participationService: MockTripParticipationService()
         )
         viewModel.load(userId: "user1")
         #expect(viewModel.errorMessage != nil)
@@ -182,7 +190,8 @@ struct ActiveTripsListViewModelTests {
             tripSessionRepository: sessionRepo,
             tripActivityEventRepository: eventRepo,
             gameInstanceRepository: gameRepo,
-            lifecycleService: lifecycleService
+            lifecycleService: lifecycleService,
+            participationService: MockTripParticipationService()
         )
 
         let result = viewModel.session(for: session.id)
@@ -202,7 +211,8 @@ struct ActiveTripsListViewModelTests {
             tripSessionRepository: sessionRepo,
             tripActivityEventRepository: eventRepo,
             gameInstanceRepository: gameRepo,
-            lifecycleService: lifecycleService
+            lifecycleService: lifecycleService,
+            participationService: MockTripParticipationService()
         )
 
         let result = viewModel.session(for: UUID())
@@ -231,7 +241,8 @@ struct ActiveTripsListViewModelTests {
             tripSessionRepository: sessionRepo,
             tripActivityEventRepository: eventRepo,
             gameInstanceRepository: gameRepo,
-            lifecycleService: lifecycleService
+            lifecycleService: lifecycleService,
+            participationService: MockTripParticipationService()
         )
 
         let result = viewModel.sessionAndGame(sessionId: session.id, gameId: game.id)
@@ -251,7 +262,8 @@ struct ActiveTripsListViewModelTests {
             tripSessionRepository: sessionRepo,
             tripActivityEventRepository: eventRepo,
             gameInstanceRepository: gameRepo,
-            lifecycleService: lifecycleService
+            lifecycleService: lifecycleService,
+            participationService: MockTripParticipationService()
         )
 
         let result = viewModel.sessionAndGame(sessionId: UUID(), gameId: UUID())
@@ -271,11 +283,76 @@ struct ActiveTripsListViewModelTests {
             tripSessionRepository: sessionRepo,
             tripActivityEventRepository: eventRepo,
             gameInstanceRepository: gameRepo,
-            lifecycleService: lifecycleService
+            lifecycleService: lifecycleService,
+            participationService: MockTripParticipationService()
         )
 
         let result = viewModel.sessionAndGame(sessionId: session.id, gameId: UUID())
 
         #expect(result == nil)
+    }
+
+    @Test func deleteSessionsWhenUserIsNotCreatorCallsLeaveNotCancel() async throws {
+        let sessionId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "Shared",
+            status: .active,
+            createdAt: Date(),
+            createdBy: "owner1",
+            startedAt: Date(),
+            participants: [
+                TripParticipant(userId: "owner1", role: .owner, joinedAt: Date()),
+                TripParticipant(userId: "joiner1", role: .member, joinedAt: Date())
+            ]
+        )
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let eventRepo = MockTripActivityEventRepository()
+        let gameRepo = MockGameInstanceRepository()
+        let lifecycleService = MockTripSessionLifecycleService()
+        let participation = MockTripParticipationService()
+
+        let viewModel = ActiveTripsListViewModel(
+            tripSessionRepository: sessionRepo,
+            tripActivityEventRepository: eventRepo,
+            gameInstanceRepository: gameRepo,
+            lifecycleService: lifecycleService,
+            participationService: participation
+        )
+        viewModel.load(userId: "joiner1")
+        #expect(viewModel.items.count == 1)
+
+        viewModel.deleteSessions(at: IndexSet(integer: 0), userId: "joiner1")
+
+        #expect(viewModel.errorMessage == nil)
+        #expect(lifecycleService.cancelSessionCallCount == 0)
+        #expect(participation.initiateLeaveTripCallCount == 1)
+        #expect(participation.lastLeaveSessionId == sessionId)
+        #expect(participation.lastLeaveUserId == "joiner1")
+        // Mock leave does not mutate MockTripSessionRepository; list may still show the trip until a real leave runs.
+    }
+
+    @Test func deleteSessionsWhenUserIsCreatorCallsCancelNotLeave() async throws {
+        let session = makeSession(name: "Mine")
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let eventRepo = MockTripActivityEventRepository()
+        let gameRepo = MockGameInstanceRepository()
+        let lifecycleService = MockTripSessionLifecycleService()
+        let participation = MockTripParticipationService()
+
+        let viewModel = ActiveTripsListViewModel(
+            tripSessionRepository: sessionRepo,
+            tripActivityEventRepository: eventRepo,
+            gameInstanceRepository: gameRepo,
+            lifecycleService: lifecycleService,
+            participationService: participation
+        )
+        viewModel.load(userId: "user1")
+        viewModel.deleteSessions(at: IndexSet(integer: 0), userId: "user1")
+
+        #expect(lifecycleService.cancelSessionCallCount == 1)
+        #expect(participation.initiateLeaveTripCallCount == 0)
     }
 }

@@ -29,7 +29,7 @@ final class PendingTripsViewUITests: XCTestCase {
         app.launch()
 
         // Open Travel Log via toolbar map button; sheet shows "Travel Log" title or empty state
-        let mapButton = app.buttons["Travel Log Invites"]
+        let mapButton = app.buttons["Travel Log"]
         XCTAssertTrue(mapButton.waitForExistence(timeout: 8), "Travel Log toolbar button should exist")
         mapButton.tap()
         let travelLogTitle = app.navigationBars["Travel Log"].firstMatch

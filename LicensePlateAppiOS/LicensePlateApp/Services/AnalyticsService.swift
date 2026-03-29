@@ -108,6 +108,12 @@ class AnalyticsService: AnalyticsLogging {
         case tripInviteDeclinedWithContext(inviteTripId: String?, inviteGameCount: Int?)
         case participantJoinedTrip(tripId: String, participantCountAfterJoin: Int, teamCountAfterJoin: Int?)
         case participantLeftTrip(tripId: String)
+        /// Step 14 — non-owner initiated voluntary leave (local + queued sync).
+        case tripParticipantLeaveInitiated(tripSessionId: String, offline: Bool)
+        /// Step 14 — `participant_left` accepted by `appendTripActivityEvent`.
+        case tripParticipantLeaveServerCompleted(tripSessionId: String)
+        /// Step 14 — Firestore `members` snapshot no longer includes this user; local roster aligned.
+        case tripParticipantLeaveReconciled(tripSessionId: String)
         case participantRemovedFromTrip(tripId: String, actorParticipantId: String?)
 
         // Combined games (Step 06)
@@ -277,6 +283,9 @@ class AnalyticsService: AnalyticsLogging {
             case .tripInviteDeclinedWithContext: return "trip_invite_declined"
             case .participantJoinedTrip: return "participant_joined_trip"
             case .participantLeftTrip: return "participant_left_trip"
+            case .tripParticipantLeaveInitiated: return "trip_participant_leave_initiated"
+            case .tripParticipantLeaveServerCompleted: return "trip_participant_leave_server_completed"
+            case .tripParticipantLeaveReconciled: return "trip_participant_leave_reconciled"
             case .participantRemovedFromTrip: return "participant_removed_from_trip"
             case .combinedTripSetupOpened: return "combined_trip_setup_opened"
             case .combinedTripCreated: return "combined_trip_created"
@@ -407,6 +416,12 @@ class AnalyticsService: AnalyticsLogging {
                 return p
             case .participantLeftTrip(let tripId):
                 return ["trip_session_id": tripId]
+            case .tripParticipantLeaveInitiated(let tripSessionId, let offline):
+                return ["trip_session_id": tripSessionId, "offline": offline]
+            case .tripParticipantLeaveServerCompleted(let tripSessionId):
+                return ["trip_session_id": tripSessionId]
+            case .tripParticipantLeaveReconciled(let tripSessionId):
+                return ["trip_session_id": tripSessionId]
             case .participantRemovedFromTrip(let tripId, let actorParticipantId):
                 var p: [String: Any] = ["trip_session_id": tripId]
                 if let id = actorParticipantId { p["actor_participant_id"] = id }

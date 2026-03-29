@@ -126,7 +126,7 @@ struct TripSessionView: View {
                         .foregroundStyle(Color.Theme.primaryBlue)
                 }
                 .accessibilityLabel("Trip settings".localized)
-                .accessibilityHint("Trip name, start or end trip, or delete trip".localized)
+                .accessibilityHint("Trip name, start or end trip, delete trip, or leave trip if you are a passenger".localized)
             }
         }
         .sheet(isPresented: $showTripSettings) {
@@ -138,6 +138,9 @@ struct TripSessionView: View {
                     authService: authService
                 ),
                 onTripDeleted: {
+                    coordinator.pop()
+                },
+                onTripLeft: {
                     coordinator.pop()
                 }
             )

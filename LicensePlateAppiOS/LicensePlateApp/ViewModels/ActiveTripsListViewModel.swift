@@ -20,11 +20,14 @@ final class ActiveTripsListViewModel: ObservableObject {
 
     @Published private(set) var items: [ActiveListItem] = []
     @Published private(set) var errorMessage: String? = nil
+    /// Step 14 — Shown when the user has a pending trip leave waiting to sync.
+    @Published private(set) var pendingLeaveSyncHint: String? = nil
 
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let lifecycleService: TripSessionLifecycleServiceProtocol
+    private let participationService: TripParticipationServiceProtocol
 
     /// Session IDs that failed to delete; retry uses these.
     private(set) var pendingDeleteSessionIds: [UUID] = []
@@ -34,16 +37,26 @@ final class ActiveTripsListViewModel: ObservableObject {
         tripSessionRepository: TripSessionRepositoryProtocol,
         tripActivityEventRepository: TripActivityEventRepositoryProtocol,
         gameInstanceRepository: GameInstanceRepositoryProtocol,
-        lifecycleService: TripSessionLifecycleServiceProtocol
+        lifecycleService: TripSessionLifecycleServiceProtocol,
+        participationService: TripParticipationServiceProtocol = TripParticipationService.shared
     ) {
         self.tripSessionRepository = tripSessionRepository
         self.tripActivityEventRepository = tripActivityEventRepository
         self.gameInstanceRepository = gameInstanceRepository
         self.lifecycleService = lifecycleService
+        self.participationService = participationService
     }
 
     func load(userId: String?) {
         errorMessage = nil
+        if let uid = userId {
+            let pending = (try? PendingTripLeaveRepository.shared.sessionIdsPendingLeave(userId: uid)) ?? []
+            pendingLeaveSyncHint = pending.isEmpty
+                ? nil
+                : "Some trip changes will sync when you are back online.".localized
+        } else {
+            pendingLeaveSyncHint = nil
+        }
         do {
             let sessions = try tripSessionRepository.loadActiveSessions(userId: userId)
             let sorted = sessions.sorted { ($0.startedAt ?? .distantPast) > ($1.startedAt ?? .distantPast) }
@@ -69,17 +82,24 @@ final class ActiveTripsListViewModel: ObservableObject {
         pendingDeleteSessionIds = []
         pendingUserId = nil
 
+        guard let uid = userId else { return }
+
         do {
             for sessionId in sessionIds {
-                try lifecycleService.cancelSession(sessionId: sessionId, cancelledBy: userId)
+                guard let session = try tripSessionRepository.session(byId: sessionId) else { continue }
+                if session.createdBy == uid {
+                    try lifecycleService.cancelSession(sessionId: sessionId, cancelledBy: uid)
+                } else {
+                    try participationService.initiateLeaveTrip(sessionId: sessionId, userId: uid)
+                }
             }
             load(userId: userId)
         } catch {
             pendingDeleteSessionIds = sessionIds
             pendingUserId = userId
-            if let uid = userId { load(userId: uid) }
+            load(userId: uid)
             errorMessage = error.localizedDescription
-            AnalyticsService.shared.log(.persistenceSaveFailed(context: "active_list_delete", error: error.localizedDescription))
+            AnalyticsService.shared.log(.persistenceSaveFailed(context: "active_list_delete_or_leave", error: error.localizedDescription))
         }
     }
 
@@ -95,7 +115,12 @@ final class ActiveTripsListViewModel: ObservableObject {
 
         do {
             for sessionId in ids {
-                try lifecycleService.cancelSession(sessionId: sessionId, cancelledBy: userId)
+                guard let session = try tripSessionRepository.session(byId: sessionId) else { continue }
+                if session.createdBy == userId {
+                    try lifecycleService.cancelSession(sessionId: sessionId, cancelledBy: userId)
+                } else {
+                    try participationService.initiateLeaveTrip(sessionId: sessionId, userId: userId)
+                }
             }
             load(userId: userId)
         } catch {
@@ -103,7 +128,7 @@ final class ActiveTripsListViewModel: ObservableObject {
             pendingUserId = userId
             load(userId: userId)
             errorMessage = error.localizedDescription
-            AnalyticsService.shared.log(.persistenceSaveFailed(context: "active_list_delete", error: error.localizedDescription))
+            AnalyticsService.shared.log(.persistenceSaveFailed(context: "active_list_delete_or_leave", error: error.localizedDescription))
         }
     }
 

@@ -62,6 +62,8 @@ final class LicensePlateGameViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     /// Dedupes fairness alert when the same `discovery_rejected` arrives via sync and Firestore listener.
     private var shownFairnessRejectionEventIds = Set<String>()
+    /// Prevents interleaved `applyFairnessToastBacklogFromEventLog` runs (init `Task` vs tests / hydration) from splitting backlog work and advancing the watermark to only the first rejection.
+    private var isApplyingFairnessToastBacklog = false
 
     var isTripCreator: Bool {
         let currentUserID = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
@@ -280,6 +282,9 @@ final class LicensePlateGameViewModel: ObservableObject {
 
     /// Firestore can merge a peer’s winning find + server `discovery_rejected` before local sync returns; stacked banners oldest-first.
     internal func applyFairnessToastBacklogFromEventLog() async {
+        guard !isApplyingFairnessToastBacklog else { return }
+        isApplyingFairnessToastBacklog = true
+        defer { isApplyingFairnessToastBacklog = false }
         guard game.commonConfig.gameMode == .competitive else { return }
         let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
         guard !uid.isEmpty else { return }

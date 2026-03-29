@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import FirebaseAuth
 import FirebaseFunctions
 
 @MainActor
@@ -147,6 +148,13 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                         gameInstanceId: gameIdStr,
                         eventKind: event.kind.rawValue
                     ))
+                    if event.kind == .participantLeft {
+                        let pid = event.payload?[TripActivityEventPayloadKey.participantId] ?? event.actorId ?? ""
+                        if let uid = Auth.auth().currentUser?.uid, pid == uid {
+                            try? PendingTripLeaveRepository.shared.deletePending(sessionId: sessionUUID, userId: uid)
+                            AnalyticsService.shared.log(.tripParticipantLeaveServerCompleted(tripSessionId: sessionUUID.uuidString))
+                        }
+                    }
                 case let .superseded(localId, rejection):
                     try TripActivityEventRepository.shared.deleteEvent(id: localId)
                     var imported: [TripActivityEvent] = []

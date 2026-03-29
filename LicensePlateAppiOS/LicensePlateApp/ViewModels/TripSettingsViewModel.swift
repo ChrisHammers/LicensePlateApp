@@ -19,6 +19,7 @@ final class TripSettingsViewModel: ObservableObject {
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let lifecycleService: TripSessionLifecycleServiceProtocol
     private let authService: FirebaseAuthService
+    private let participationService: TripParticipationServiceProtocol
 
     var isTripCreator: Bool {
         let currentUserID = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
@@ -26,17 +27,28 @@ final class TripSettingsViewModel: ObservableObject {
         return currentSession.createdBy == id
     }
 
+    /// Step 14 — Passengers can leave; owners use end/delete trip.
+    var canLeaveTrip: Bool {
+        guard !isTripCreator else { return false }
+        let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+        guard let uid else { return false }
+        guard currentSession.status == .active || currentSession.status == .created else { return false }
+        return currentSession.participants.contains { $0.userId == uid }
+    }
+
     init(
         session: TripSession,
         tripSessionRepository: TripSessionRepositoryProtocol,
         lifecycleService: TripSessionLifecycleServiceProtocol,
-        authService: FirebaseAuthService
+        authService: FirebaseAuthService,
+        participationService: TripParticipationServiceProtocol = TripParticipationService.shared
     ) {
         self.sessionId = session.id
         self.currentSession = session
         self.tripSessionRepository = tripSessionRepository
         self.lifecycleService = lifecycleService
         self.authService = authService
+        self.participationService = participationService
     }
 
     func refreshSession() {
@@ -61,6 +73,13 @@ final class TripSettingsViewModel: ObservableObject {
     func deleteTrip() throws {
         let cancelledBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
         try lifecycleService.cancelSession(sessionId: sessionId, cancelledBy: cancelledBy)
+        refreshSession()
+    }
+
+    /// Step 14 — Voluntary leave for non-owners; queues `participant_left` sync.
+    func leaveTrip() throws {
+        let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        try participationService.initiateLeaveTrip(sessionId: sessionId, userId: uid)
         refreshSession()
     }
 

@@ -74,11 +74,16 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
     }
 
     private let tripSessionRepository: TripSessionRepository
+    private let pendingTripLeaveRepository: PendingTripLeaveRepositoryProtocol
 
     @Published private(set) var tripInvites: [TripInvite] = []
 
-    init(tripSessionRepository: TripSessionRepository = .shared) {
+    init(
+        tripSessionRepository: TripSessionRepository = .shared,
+        pendingTripLeaveRepository: PendingTripLeaveRepositoryProtocol = PendingTripLeaveRepository.shared
+    ) {
         self.tripSessionRepository = tripSessionRepository
+        self.pendingTripLeaveRepository = pendingTripLeaveRepository
     }
 
     func setModelContext(_ context: ModelContext) {
@@ -211,8 +216,14 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
                 }
             }
 
+            let currentUid = Auth.auth().currentUser?.uid
             for doc in snapshot.documents {
                 let memberUserId = doc.documentID
+                if let me = currentUid, memberUserId == me {
+                    if (try? pendingTripLeaveRepository.hasPending(sessionId: sessionUUID, userId: me)) == true {
+                        continue
+                    }
+                }
                 let data = doc.data()
                 let roleStr = (data["role"] as? String) ?? "member"
                 let role = TripParticipantRole(rawValue: roleStr) ?? .member
@@ -226,6 +237,18 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
                     print("TripInviteRepository: addParticipant failed: \(error)")
                     #endif
                 }
+            }
+
+            let remoteMemberIds = Set(snapshot.documents.map(\.documentID))
+            if let me = currentUid,
+               memberSnapshotBaselineApplied.contains(sessionId),
+               !snapshot.metadata.hasPendingWrites,
+               !remoteMemberIds.contains(me),
+               let session = try? tripSessionRepository.session(byId: sessionUUID),
+               session.participants.contains(where: { $0.userId == me }) {
+                try? tripSessionRepository.removeParticipant(sessionId: sessionUUID, userId: me)
+                try? pendingTripLeaveRepository.deletePending(sessionId: sessionUUID, userId: me)
+                AnalyticsService.shared.log(.tripParticipantLeaveReconciled(tripSessionId: sessionId))
             }
 
             let newCount = snapshot.documents.count
@@ -245,7 +268,11 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
                 }
             }
 
-            try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionUUID)
+            if let session = try? tripSessionRepository.session(byId: sessionUUID),
+               let uid = Auth.auth().currentUser?.uid,
+               session.createdBy == uid {
+                try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionUUID)
+            }
         }
     }
 
