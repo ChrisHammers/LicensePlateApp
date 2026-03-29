@@ -69,7 +69,9 @@ struct TripParticipationServiceTests {
         #expect(reloaded?.participants.contains { $0.userId == "joiner1" } == false)
 
         let events = try TripActivityEventRepository.shared.events(sessionId: sessionId, limit: nil)
-        #expect(events.contains { $0.kind == .participantLeft })
+        let left = events.first { $0.kind == .participantLeft }
+        #expect(left != nil)
+        #expect(left?.payload?[TripActivityEventPayloadKey.leaveReason] == "voluntary")
         let pending = try SyncQueueRepository.shared.fetchPending(limit: 10)
         #expect(!pending.isEmpty)
     }

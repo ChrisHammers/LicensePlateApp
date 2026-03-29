@@ -5,6 +5,8 @@ import {
   replayDiscoveriesFromDocs,
   KIND_REGION_FOUND,
   KIND_REGION_REMOVED,
+  KIND_PARTICIPANT_INVITED,
+  KIND_PARTICIPANT_JOINED,
 } from "./gameplayEventResolver";
 
 /** Plain shape compatible with replay (avoids firebase-admin init in vitest). */
@@ -60,6 +62,13 @@ describe("evaluateDiscoverySubmission", () => {
 
   it("solo other participant is rejected_invalid_participant", () => {
     expect(evaluateDiscoverySubmission("competitive", "solo", existingOther, "u2")).toBe("rejected_invalid_participant");
+  });
+});
+
+describe("trip lifecycle event kind constants", () => {
+  it("uses stable strings for server-only invite/join activity kinds", () => {
+    expect(KIND_PARTICIPANT_INVITED).toBe("participant_invited");
+    expect(KIND_PARTICIPANT_JOINED).toBe("participant_joined");
   });
 });
 

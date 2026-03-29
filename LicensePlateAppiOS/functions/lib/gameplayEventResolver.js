@@ -4,10 +4,11 @@
  * Parity with DiscoveryRulesEngine + TripActivityEventDiscoveryReplay (Swift).
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.KIND_PARTICIPANT_LEFT = exports.KIND_REGION_REMOVED = exports.KIND_REGION_FOUND = exports.PK = void 0;
+exports.KIND_PARTICIPANT_JOINED = exports.KIND_PARTICIPANT_INVITED = exports.KIND_PARTICIPANT_LEFT = exports.KIND_REGION_REMOVED = exports.KIND_REGION_FOUND = exports.PK = void 0;
 exports.replayDiscoveriesFromDocs = replayDiscoveriesFromDocs;
 exports.evaluateDiscoverySubmission = evaluateDiscoverySubmission;
 exports.resolveGameplayAppendTransaction = resolveGameplayAppendTransaction;
+exports.runOwnerRemoveParticipantTransaction = runOwnerRemoveParticipantTransaction;
 const admin = require("firebase-admin");
 const functions = require("firebase-functions");
 const MAX_EVENTS_POLICY = 2500;
@@ -26,11 +27,21 @@ exports.PK = {
     clientClaimedAt: "clientClaimedAt",
     gameMode: "gameMode",
     participantCount: "participantCount",
+    leaveReason: "leaveReason",
+    initiatedByUserId: "initiatedByUserId",
+    fromUserId: "fromUserId",
+    toUserId: "toUserId",
+    inviteId: "inviteId",
+    inviteMethod: "inviteMethod",
 };
 exports.KIND_REGION_FOUND = "region_found";
 exports.KIND_REGION_REMOVED = "region_removed";
 exports.KIND_PARTICIPANT_LEFT = "participant_left";
+exports.KIND_PARTICIPANT_INVITED = "participant_invited";
+exports.KIND_PARTICIPANT_JOINED = "participant_joined";
 const KIND_DISCOVERY_REJECTED = "discovery_rejected";
+/** Appended only by Cloud Functions / trusted paths — not via appendTripActivityEvent from clients. */
+const CLIENT_FORBIDDEN_KINDS = new Set([exports.KIND_PARTICIPANT_INVITED, exports.KIND_PARTICIPANT_JOINED]);
 const REJECTION_SERVER_LATE_COMPETITIVE = "server_rejected_late_competitive";
 const REJECTION_INVALID_PARTICIPANT = "rejected_invalid_participant";
 function sessionRef(db, sessionId) {
@@ -157,14 +168,6 @@ function tripModeFromRoster(participants) {
     }
     return ids.size > 1 ? "multiplayer" : "solo";
 }
-function rosterHasUser(participants, userId) {
-    for (const p of participants) {
-        if (p && typeof p === "object" && "userId" in p && String(p.userId) === userId) {
-            return true;
-        }
-    }
-    return false;
-}
 /** Remove one user from Firestore `canonicalParticipants` array (wire shape uses `userId`). */
 function filterCanonicalParticipantsRemoveUser(participants, userId) {
     return participants.filter((p) => {
@@ -239,7 +242,6 @@ async function resolveGameplayAppendTransaction(db, tripSessionId, userId, event
         if (!sessionSnap.exists) {
             throw new functions.https.HttpsError("not-found", "Trip session not found");
         }
-        const sessionData = sessionSnap.data();
         const existingEventSnap = await tx.get(eventRef);
         const incomingTs = secondsToTimestamp(event.timestamp);
         const incomingPayload = stringifyPayload(event.payload || undefined);
@@ -259,10 +261,26 @@ async function resolveGameplayAppendTransaction(db, tripSessionId, userId, event
                 throw new functions.https.HttpsError("already-exists", "event id collision");
             }
         }
-        const participants = Array.isArray(sessionData.canonicalParticipants) ? sessionData.canonicalParticipants : [];
-        if (!rosterHasUser(participants, userId)) {
+        if (CLIENT_FORBIDDEN_KINDS.has(kind)) {
+            throw new functions.https.HttpsError("permission-denied", "This event kind cannot be submitted by clients");
+        }
+        const callerMemberSnap = await tx.get(ref.collection("members").doc(userId));
+        if (!callerMemberSnap.exists) {
             throw new functions.https.HttpsError("permission-denied", "Not a member of this trip session");
         }
+        const memSnap = await tx.get(ref.collection("members").limit(64));
+        const participants = memSnap.docs.map((d) => {
+            var _a;
+            const data = d.data();
+            const joinedAt = data.joinedAt;
+            return {
+                userId: d.id,
+                role: data.role || "member",
+                joinedAt: joinedAt ? tsToSeconds(joinedAt) : 0,
+                leftAt: null,
+                teamId: (_a = data.teamId) !== null && _a !== void 0 ? _a : null,
+            };
+        });
         const tripMode = tripModeFromRoster(participants);
         const eventsQuery = ref.collection("activity_events").orderBy("timestamp", "asc").limit(MAX_EVENTS_POLICY);
         const eventsSnap = await tx.get(eventsQuery);
@@ -465,11 +483,83 @@ async function resolveGameplayAppendTransaction(db, tripSessionId, userId, event
                 updatedAt: admin.firestore.FieldValue.serverTimestamp(),
             });
             tx.delete(memberRef);
-            normalizeAndWrite(Object.assign(Object.assign({}, incomingPayload), { [exports.PK.participantId]: userId }));
+            const leavePayload = Object.assign(Object.assign({}, incomingPayload), { [exports.PK.participantId]: userId, [exports.PK.leaveReason]: incomingPayload[exports.PK.leaveReason] || "voluntary" });
+            normalizeAndWrite(leavePayload);
             return { success: true, resolution: "accepted", appliedEventId: event.id };
         }
         normalizeAndWrite(incomingPayload);
         return { success: true, resolution: "passthrough", appliedEventId: event.id };
+    });
+}
+/**
+ * Owner removes another member (kick). Writes `participant_left` with leaveReason=kicked (server-only).
+ */
+async function runOwnerRemoveParticipantTransaction(db, tripSessionId, ownerUserId, removedUserId) {
+    if (removedUserId === ownerUserId) {
+        throw new functions.https.HttpsError("invalid-argument", "Cannot remove yourself via this API");
+    }
+    const ref = sessionRef(db, tripSessionId);
+    const kickEventId = `kick_${removedUserId}`;
+    return db.runTransaction(async (tx) => {
+        var _a, _b;
+        const ownerSnap = await tx.get(ref.collection("members").doc(ownerUserId));
+        if (!ownerSnap.exists) {
+            throw new functions.https.HttpsError("permission-denied", "Not a trip member");
+        }
+        const ownerRole = ((_a = ownerSnap.data()) === null || _a === void 0 ? void 0 : _a.role) || "member";
+        if (ownerRole !== "owner") {
+            throw new functions.https.HttpsError("permission-denied", "Only the trip owner can remove participants");
+        }
+        const removedRef = ref.collection("members").doc(removedUserId);
+        const removedSnap = await tx.get(removedRef);
+        if (!removedSnap.exists) {
+            return { success: true, appliedEventId: kickEventId };
+        }
+        const removedRole = ((_b = removedSnap.data()) === null || _b === void 0 ? void 0 : _b.role) || "member";
+        if (removedRole === "owner") {
+            throw new functions.https.HttpsError("failed-precondition", "Cannot remove trip owner");
+        }
+        const sessionSnap = await tx.get(ref);
+        if (!sessionSnap.exists) {
+            throw new functions.https.HttpsError("not-found", "Trip session not found");
+        }
+        const memSnap = await tx.get(ref.collection("members").limit(64));
+        const rosterFromMembers = memSnap.docs.map((d) => {
+            var _a;
+            const data = d.data();
+            const joinedAt = data.joinedAt;
+            return {
+                userId: d.id,
+                role: data.role || "member",
+                joinedAt: joinedAt ? tsToSeconds(joinedAt) : 0,
+                leftAt: null,
+                teamId: (_a = data.teamId) !== null && _a !== void 0 ? _a : null,
+            };
+        });
+        const nextParticipants = filterCanonicalParticipantsRemoveUser(rosterFromMembers, removedUserId);
+        const eventRef = ref.collection("activity_events").doc(kickEventId);
+        const existingKick = await tx.get(eventRef);
+        const nowTs = admin.firestore.Timestamp.now();
+        if (!existingKick.exists) {
+            tx.set(eventRef, {
+                sessionId: tripSessionId,
+                kind: exports.KIND_PARTICIPANT_LEFT,
+                timestamp: nowTs,
+                actorId: ownerUserId,
+                payload: {
+                    [exports.PK.participantId]: removedUserId,
+                    [exports.PK.leaveReason]: "kicked",
+                    [exports.PK.initiatedByUserId]: ownerUserId,
+                },
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+        }
+        tx.update(ref, {
+            canonicalParticipants: nextParticipants,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        tx.delete(removedRef);
+        return { success: true, appliedEventId: kickEventId };
     });
 }
 //# sourceMappingURL=gameplayEventResolver.js.map

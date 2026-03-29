@@ -10,6 +10,8 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
 import { getFCMToken, sendPushNotification } from "./utils/notifications";
+import { KIND_PARTICIPANT_INVITED, KIND_PARTICIPANT_JOINED, PK } from "./gameplayEventResolver";
+import { syncCanonicalParticipantsFromMembers } from "./tripSessionCanonical";
 
 const db = admin.firestore();
 
@@ -110,18 +112,35 @@ export const sendTripInvite = functions.https.onCall(async (data, context) => {
   }
 
   const inviteRef = db.collection("trip_invites").doc();
+  const inviteMethod = typeof method === "string" ? method : "search";
   batch.set(inviteRef, {
     tripSessionId,
     tripName,
     fromUserId,
     toUserId,
     status: "pending",
-    method: typeof method === "string" ? method : "search",
+    method: inviteMethod,
     expiresAt,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
+  const invEvRef = sessionRef.collection("activity_events").doc(`inv_${inviteRef.id}`);
+  batch.set(invEvRef, {
+    sessionId: tripSessionId,
+    kind: KIND_PARTICIPANT_INVITED,
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    actorId: fromUserId,
+    payload: {
+      [PK.fromUserId]: fromUserId,
+      [PK.toUserId]: toUserId,
+      [PK.inviteId]: inviteRef.id,
+      [PK.inviteMethod]: inviteMethod,
+    },
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
   await batch.commit();
+  await syncCanonicalParticipantsFromMembers(tripSessionId);
 
   const fcmToken = await getFCMToken(toUserId);
   if (fcmToken) {
@@ -219,21 +238,34 @@ export const respondToTripInvite = functions.https.onCall(
 
     if (response === "accept") {
       const tripSessionId = inviteData.tripSessionId as string;
-      const memberRef = db
-        .collection("trip_sessions")
-        .doc(tripSessionId)
-        .collection("members")
-        .doc(userId);
+      const sessionDocRef = db.collection("trip_sessions").doc(tripSessionId);
+      const memberRef = sessionDocRef.collection("members").doc(userId);
       batch.set(memberRef, {
         role: "member",
         joinedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      batch.update(db.collection("trip_sessions").doc(tripSessionId), {
+      batch.update(sessionDocRef, {
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      const joinEvRef = sessionDocRef.collection("activity_events").doc(`join_${inviteId}`);
+      batch.set(joinEvRef, {
+        sessionId: tripSessionId,
+        kind: KIND_PARTICIPANT_JOINED,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        actorId: userId,
+        payload: {
+          [PK.participantId]: userId,
+          [PK.inviteId]: inviteId,
+          [PK.fromUserId]: inviteData.fromUserId as string,
+        },
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
 
     await batch.commit();
+    if (response === "accept") {
+      await syncCanonicalParticipantsFromMembers(inviteData.tripSessionId as string);
+    }
 
     await writeAuditLog({
       eventType:

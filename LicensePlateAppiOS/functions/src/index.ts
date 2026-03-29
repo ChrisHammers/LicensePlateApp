@@ -20,6 +20,7 @@ export {
   fetchTripBootstrapForMember,
   markTripCancelledRemote,
   updateFairnessAckWatermark,
+  removeTripParticipantAsOwner,
 } from "./tripSessionCanonical";
 export {
   createFamily,

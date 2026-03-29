@@ -94,7 +94,10 @@ final class TripParticipationService: TripParticipationServiceProtocol {
             sessionId: sessionId,
             kind: .participantLeft,
             actorId: userId,
-            payload: [TripActivityEventPayloadKey.participantId: userId]
+            payload: [
+                TripActivityEventPayloadKey.participantId: userId,
+                TripActivityEventPayloadKey.leaveReason: "voluntary",
+            ]
         )
         try tripActivityEventRecording.recordForSync(event)
     }

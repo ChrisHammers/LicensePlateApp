@@ -12,6 +12,8 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const audit_1 = require("./audit");
 const notifications_1 = require("./utils/notifications");
+const gameplayEventResolver_1 = require("./gameplayEventResolver");
+const tripSessionCanonical_1 = require("./tripSessionCanonical");
 const db = admin.firestore();
 const DEFAULT_INVITE_DAYS = 7;
 exports.sendTripInvite = functions.https.onCall(async (data, context) => {
@@ -76,17 +78,33 @@ exports.sendTripInvite = functions.https.onCall(async (data, context) => {
         });
     }
     const inviteRef = db.collection("trip_invites").doc();
+    const inviteMethod = typeof method === "string" ? method : "search";
     batch.set(inviteRef, {
         tripSessionId,
         tripName,
         fromUserId,
         toUserId,
         status: "pending",
-        method: typeof method === "string" ? method : "search",
+        method: inviteMethod,
         expiresAt,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    const invEvRef = sessionRef.collection("activity_events").doc(`inv_${inviteRef.id}`);
+    batch.set(invEvRef, {
+        sessionId: tripSessionId,
+        kind: gameplayEventResolver_1.KIND_PARTICIPANT_INVITED,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        actorId: fromUserId,
+        payload: {
+            [gameplayEventResolver_1.PK.fromUserId]: fromUserId,
+            [gameplayEventResolver_1.PK.toUserId]: toUserId,
+            [gameplayEventResolver_1.PK.inviteId]: inviteRef.id,
+            [gameplayEventResolver_1.PK.inviteMethod]: inviteMethod,
+        },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     await batch.commit();
+    await (0, tripSessionCanonical_1.syncCanonicalParticipantsFromMembers)(tripSessionId);
     const fcmToken = await (0, notifications_1.getFCMToken)(toUserId);
     if (fcmToken) {
         await (0, notifications_1.sendPushNotification)(fcmToken, "New trip invite", "You have been invited to a trip", {
@@ -145,20 +163,33 @@ exports.respondToTripInvite = functions.https.onCall(async (data, context) => {
     });
     if (response === "accept") {
         const tripSessionId = inviteData.tripSessionId;
-        const memberRef = db
-            .collection("trip_sessions")
-            .doc(tripSessionId)
-            .collection("members")
-            .doc(userId);
+        const sessionDocRef = db.collection("trip_sessions").doc(tripSessionId);
+        const memberRef = sessionDocRef.collection("members").doc(userId);
         batch.set(memberRef, {
             role: "member",
             joinedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-        batch.update(db.collection("trip_sessions").doc(tripSessionId), {
+        batch.update(sessionDocRef, {
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        const joinEvRef = sessionDocRef.collection("activity_events").doc(`join_${inviteId}`);
+        batch.set(joinEvRef, {
+            sessionId: tripSessionId,
+            kind: gameplayEventResolver_1.KIND_PARTICIPANT_JOINED,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            actorId: userId,
+            payload: {
+                [gameplayEventResolver_1.PK.participantId]: userId,
+                [gameplayEventResolver_1.PK.inviteId]: inviteId,
+                [gameplayEventResolver_1.PK.fromUserId]: inviteData.fromUserId,
+            },
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
     }
     await batch.commit();
+    if (response === "accept") {
+        await (0, tripSessionCanonical_1.syncCanonicalParticipantsFromMembers)(inviteData.tripSessionId);
+    }
     await (0, audit_1.writeAuditLog)({
         eventType: response === "accept"
             ? "AUDIT_TRIP_INVITE_ACCEPTED"

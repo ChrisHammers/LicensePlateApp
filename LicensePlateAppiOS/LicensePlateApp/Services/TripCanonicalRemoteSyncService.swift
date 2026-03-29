@@ -109,6 +109,8 @@ protocol TripCanonicalRemoteSyncing: AnyObject {
     func bootstrapMemberSession(sessionId: UUID) async throws
     func startIncrementalListeningIfNeeded(sessionId: UUID)
     func markTripCancelledRemote(sessionId: UUID) async throws
+    /// Owner-only: remove a participant (kick). Server writes `participant_left` with `leaveReason=kicked`.
+    func removeParticipantAsOwner(sessionId: UUID, removedUserId: String) async throws
 }
 
 @MainActor
@@ -281,6 +283,14 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     func markTripCancelledRemote(sessionId: UUID) async throws {
         let fn = functions.httpsCallable("markTripCancelledRemote")
         _ = try await fn.call(["tripSessionId": sessionId.uuidString])
+    }
+
+    func removeParticipantAsOwner(sessionId: UUID, removedUserId: String) async throws {
+        let fn = functions.httpsCallable("removeTripParticipantAsOwner")
+        _ = try await fn.call([
+            "tripSessionId": sessionId.uuidString,
+            "removedUserId": removedUserId,
+        ])
     }
 
     func removeIncrementalListeners(sessionId: UUID) {

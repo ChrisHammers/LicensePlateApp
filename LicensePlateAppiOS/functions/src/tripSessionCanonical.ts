@@ -6,7 +6,11 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
-import { resolveGameplayAppendTransaction, type WireEventInput } from "./gameplayEventResolver";
+import {
+  resolveGameplayAppendTransaction,
+  runOwnerRemoveParticipantTransaction,
+  type WireEventInput,
+} from "./gameplayEventResolver";
 import { mergeFairnessAckSeconds } from "./fairnessWatermarkMerge";
 
 const db = admin.firestore();
@@ -87,6 +91,39 @@ function eventDocToWire(id: string, d: admin.firestore.DocumentData): Record<str
   };
 }
 
+/** Wire participant rows matching iOS `TripParticipantWireItem` (authoritative source: `members`). */
+function wireParticipantsFromMemberDocs(docs: admin.firestore.QueryDocumentSnapshot[]): unknown[] {
+  return docs
+    .map((d) => {
+      const data = d.data();
+      const joinedAt = data.joinedAt as admin.firestore.Timestamp | undefined;
+      return {
+        userId: d.id,
+        role: (data.role as string) || "member",
+        joinedAt: joinedAt ? tsToSeconds(joinedAt) : 0,
+        leftAt: null,
+        teamId: (data.teamId as string) ?? null,
+      };
+    })
+    .sort((a, b) => String(a.userId).localeCompare(String(b.userId)));
+}
+
+/**
+ * Rebuild `canonicalParticipants` on the session doc from `members` (server-only; avoids client clobber).
+ */
+export async function syncCanonicalParticipantsFromMembers(tripSessionId: string): Promise<void> {
+  const ref = sessionRef(tripSessionId);
+  const membersSnap = await ref.collection("members").get();
+  const participants = wireParticipantsFromMemberDocs(membersSnap.docs);
+  await ref.set(
+    {
+      canonicalParticipants: participants,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
 /**
  * Publish full session + games snapshot (owner only).
  */
@@ -162,7 +199,6 @@ export const publishTripCanonicalState = functions.https.onCall(async (data, con
       canonicalStartedAt,
       canonicalEndedAt,
       canonicalEndedBy: session.endedBy ?? null,
-      canonicalParticipants: Array.isArray(session.participants) ? session.participants : [],
     },
     { merge: true }
   );
@@ -197,6 +233,20 @@ export const publishTripCanonicalState = functions.https.onCall(async (data, con
 
   if (ops > 0) {
     await batch.commit();
+  }
+
+  const membersAfterPublish = await ref.collection("members").get();
+  if (membersAfterPublish.empty) {
+    const fromClient = Array.isArray(session.participants) ? session.participants : [];
+    await ref.set(
+      {
+        canonicalParticipants: fromClient,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } else {
+    await syncCanonicalParticipantsFromMembers(tripSessionId);
   }
 
   const parent = await ref.get();
@@ -343,6 +393,13 @@ export const fetchTripBootstrapForMember = functions.https.onCall(async (data, c
 
   const p = parentSnap.data()!;
 
+  const membersSnap = await ref.collection("members").get();
+  const participantsWire = !membersSnap.empty
+    ? wireParticipantsFromMemberDocs(membersSnap.docs)
+    : Array.isArray(p.canonicalParticipants)
+      ? p.canonicalParticipants
+      : [];
+
   const sessionWire: Record<string, unknown> = {
     id: tripSessionId,
     name: p.name ?? "",
@@ -352,7 +409,7 @@ export const fetchTripBootstrapForMember = functions.https.onCall(async (data, c
     startedAt: p.canonicalStartedAt ? tsToSeconds(p.canonicalStartedAt) : null,
     endedAt: p.canonicalEndedAt ? tsToSeconds(p.canonicalEndedAt) : null,
     endedBy: p.canonicalEndedBy ?? null,
-    participants: Array.isArray(p.canonicalParticipants) ? p.canonicalParticipants : [],
+    participants: participantsWire,
   };
 
   const gamesSnap = await ref.collection("games").get();
@@ -382,6 +439,37 @@ export const fetchTripBootstrapForMember = functions.https.onCall(async (data, c
     syncVersion,
     nextEventCursor,
   };
+});
+
+/**
+ * Owner removes another participant (kick). Writes `participant_left` with leaveReason=kicked.
+ */
+export const removeTripParticipantAsOwner = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
+  }
+  const userId = context.auth.uid;
+  const tripSessionId = data?.tripSessionId as string | undefined;
+  const removedUserId = data?.removedUserId as string | undefined;
+  if (!tripSessionId || typeof tripSessionId !== "string") {
+    throw new functions.https.HttpsError("invalid-argument", "tripSessionId is required");
+  }
+  if (!removedUserId || typeof removedUserId !== "string") {
+    throw new functions.https.HttpsError("invalid-argument", "removedUserId is required");
+  }
+
+  await assertTripOwner(tripSessionId, userId);
+  await runOwnerRemoveParticipantTransaction(db, tripSessionId, userId, removedUserId);
+
+  await writeAuditLog({
+    eventType: "AUDIT_TRIP_PARTICIPANT_REMOVED",
+    actorId: userId,
+    subjectType: "trip_session",
+    subjectId: tripSessionId,
+    metadata: { removedUserId },
+  });
+
+  return { success: true };
 });
 
 /** Owner: mark remote cancelled and remove games/events for joiner convergence. */

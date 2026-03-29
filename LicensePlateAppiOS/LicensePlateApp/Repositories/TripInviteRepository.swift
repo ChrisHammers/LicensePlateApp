@@ -217,6 +217,8 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
             }
 
             let currentUid = Auth.auth().currentUser?.uid
+            var mergedParticipants: [TripParticipant] = []
+            mergedParticipants.reserveCapacity(snapshot.documents.count)
             for doc in snapshot.documents {
                 let memberUserId = doc.documentID
                 if let me = currentUid, memberUserId == me {
@@ -228,13 +230,17 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
                 let roleStr = (data["role"] as? String) ?? "member"
                 let role = TripParticipantRole(rawValue: roleStr) ?? .member
                 let joinedAt = TripInviteFirestoreMapper.timestampDate(data["joinedAt"]) ?? Date()
+                mergedParticipants.append(TripParticipant(userId: memberUserId, role: role, joinedAt: joinedAt))
+            }
+            mergedParticipants.sort { $0.userId < $1.userId }
 
-                let participant = TripParticipant(userId: memberUserId, role: role, joinedAt: joinedAt)
+            if var session = try? tripSessionRepository.session(byId: sessionUUID) {
+                session.participants = mergedParticipants
                 do {
-                    try tripSessionRepository.addParticipant(sessionId: sessionUUID, participant: participant)
+                    try tripSessionRepository.save(session: session)
                 } catch {
                     #if DEBUG
-                    print("TripInviteRepository: addParticipant failed: \(error)")
+                    print("TripInviteRepository: save session after members merge failed: \(error)")
                     #endif
                 }
             }
@@ -243,10 +249,7 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
             if let me = currentUid,
                memberSnapshotBaselineApplied.contains(sessionId),
                !snapshot.metadata.hasPendingWrites,
-               !remoteMemberIds.contains(me),
-               let session = try? tripSessionRepository.session(byId: sessionUUID),
-               session.participants.contains(where: { $0.userId == me }) {
-                try? tripSessionRepository.removeParticipant(sessionId: sessionUUID, userId: me)
+               !remoteMemberIds.contains(me) {
                 try? pendingTripLeaveRepository.deletePending(sessionId: sessionUUID, userId: me)
                 AnalyticsService.shared.log(.tripParticipantLeaveReconciled(tripSessionId: sessionId))
             }
@@ -266,12 +269,6 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
                         teamCountAfterJoin: nil
                     ))
                 }
-            }
-
-            if let session = try? tripSessionRepository.session(byId: sessionUUID),
-               let uid = Auth.auth().currentUser?.uid,
-               session.createdBy == uid {
-                try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionUUID)
             }
         }
     }

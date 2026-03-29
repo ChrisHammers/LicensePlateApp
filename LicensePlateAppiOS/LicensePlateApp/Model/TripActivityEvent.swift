@@ -15,6 +15,8 @@ enum TripActivityEventKind: String, Codable, CaseIterable, Sendable {
     case regionRemoved = "region_removed"
     case discoveryRejected = "discovery_rejected"
     case participantJoined = "participant_joined"
+    /// Server-written when an invite is sent (`sendTripInvite`).
+    case participantInvited = "participant_invited"
     case participantLeft = "participant_left"
     case gameStarted = "game_started"
     case gameEnded = "game_ended"
@@ -41,6 +43,14 @@ enum TripActivityEventPayloadKey {
     static let firstFinderEventId = "firstFinderEventId"
     static let serverResolvedAt = "serverResolvedAt"
     static let clientClaimedAt = "clientClaimedAt"
+    /// `participant_left`: `voluntary` | `kicked`
+    static let leaveReason = "leaveReason"
+    /// `participant_left` when kicked: owner who removed the member
+    static let initiatedByUserId = "initiatedByUserId"
+    static let fromUserId = "fromUserId"
+    static let toUserId = "toUserId"
+    static let inviteId = "inviteId"
+    static let inviteMethod = "inviteMethod"
 }
 
 /// A single event in the trip lifecycle. Room for analytics and audit.
