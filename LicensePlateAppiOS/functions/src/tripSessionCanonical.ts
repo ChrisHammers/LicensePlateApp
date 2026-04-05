@@ -35,6 +35,62 @@ function sessionRef(sessionId: string) {
   return db.collection("trip_sessions").doc(sessionId);
 }
 
+/**
+ * Combined setup may call `publishTripCanonicalState` before `sendTripInvite` creates `members/{owner}`.
+ * When the publish payload's `createdBy` matches the authenticated uid, seed the owner member row.
+ */
+async function ensureOwnerMemberIfCreatorPayload(
+  tripSessionId: string,
+  userId: string,
+  session: Record<string, unknown>
+): Promise<void> {
+  const createdBy = session.createdBy as string | undefined;
+  if (!createdBy || createdBy !== userId) {
+    return;
+  }
+  const memberRef = sessionRef(tripSessionId).collection("members").doc(userId);
+  if ((await memberRef.get()).exists) {
+    return;
+  }
+  await memberRef.set(
+    {
+      role: "owner",
+      joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+/**
+ * If the trip doc already has `createdBy` (e.g. after an invite) but `members/{uid}` is missing,
+ * allow the creator to be seeded so `appendTripActivityEvent` can proceed (client/sync race).
+ */
+async function ensureOwnerMemberIfTripDocCreatedByMatches(
+  tripSessionId: string,
+  userId: string
+): Promise<void> {
+  const ref = sessionRef(tripSessionId);
+  const memberRef = ref.collection("members").doc(userId);
+  if ((await memberRef.get()).exists) {
+    return;
+  }
+  const parent = await ref.get();
+  if (!parent.exists) {
+    return;
+  }
+  const createdBy = parent.data()?.createdBy as string | undefined;
+  if (!createdBy || createdBy !== userId) {
+    return;
+  }
+  await memberRef.set(
+    {
+      role: "owner",
+      joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
 async function assertTripMember(sessionId: string, userId: string): Promise<void> {
   const memberRef = sessionRef(sessionId).collection("members").doc(userId);
   const snap = await memberRef.get();
@@ -154,6 +210,7 @@ export const publishTripCanonicalState = functions.https.onCall(async (data, con
     );
   }
 
+  await ensureOwnerMemberIfCreatorPayload(tripSessionId, userId, session);
   await assertTripOwner(tripSessionId, userId);
 
   const ref = sessionRef(tripSessionId);
@@ -188,20 +245,22 @@ export const publishTripCanonicalState = functions.https.onCall(async (data, con
   const canonicalStartedAt = secondsToTimestamp(session.startedAt as number | undefined);
   const canonicalEndedAt = secondsToTimestamp(session.endedAt as number | undefined);
 
-  batch.set(
-    ref,
-    {
-      name: session.name,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      syncVersion: admin.firestore.FieldValue.increment(1),
-      canonicalStatus: session.status,
-      canonicalCreatedAt,
-      canonicalStartedAt,
-      canonicalEndedAt,
-      canonicalEndedBy: session.endedBy ?? null,
-    },
-    { merge: true }
-  );
+  const parentFields: Record<string, unknown> = {
+    name: session.name,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    syncVersion: admin.firestore.FieldValue.increment(1),
+    canonicalStatus: session.status,
+    canonicalCreatedAt,
+    canonicalStartedAt,
+    canonicalEndedAt,
+    canonicalEndedBy: session.endedBy ?? null,
+  };
+  const createdByWire = session.createdBy as string | undefined;
+  if (typeof createdByWire === "string" && createdByWire.length > 0) {
+    parentFields.createdBy = createdByWire;
+  }
+
+  batch.set(ref, parentFields, { merge: true });
   ops += 1;
   await commitIfNeeded();
 
@@ -281,6 +340,7 @@ export const appendTripActivityEvent = functions.https.onCall(async (data, conte
     throw new functions.https.HttpsError("invalid-argument", "event is required");
   }
 
+  await ensureOwnerMemberIfTripDocCreatedByMatches(tripSessionId, userId);
   await assertTripMember(tripSessionId, userId);
 
   const eventId = event.id as string;

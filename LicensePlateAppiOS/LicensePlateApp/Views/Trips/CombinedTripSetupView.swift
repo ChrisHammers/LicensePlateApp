@@ -398,8 +398,9 @@ struct CombinedTripSetupView: View {
         do {
             let session = try viewModel.createTrip()
             Task {
-                await viewModel.publishCanonicalToRemote(session: session)
+                // Invites seed `members/{owner}` on Firestore before canonical publish (callable requires owner member).
                 await viewModel.sendSetupInvites(for: session)
+                await viewModel.publishCanonicalToRemote(session: session)
             }
             FeedbackService.shared.actionSuccess()
             onCreated(session)

@@ -130,6 +130,9 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     private var incrementalGameListeners: [String: ListenerRegistration] = [:]
     private var incrementalEventListeners: [String: ListenerRegistration] = [:]
 
+    /// Serializes concurrent `publishFullSession` for the same trip (`startTrip` vs combined setup publish).
+    private var publishTailBySessionId: [UUID: (UUID, Task<Void, Error>)] = [:]
+
     private let hydrationSubject = PassthroughSubject<UUID, Never>()
     /// Emits session id after successful bootstrap or incremental merge worth a UI refresh.
     var hydrationSignal: AnyPublisher<UUID, Never> {
@@ -160,6 +163,26 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     }
 
     func publishFullSession(sessionId: UUID) async throws {
+        let sid = sessionId
+        let chainId = UUID()
+        let predecessor = publishTailBySessionId[sid]?.1
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            if let predecessor {
+                _ = try? await predecessor.value
+            }
+            try await self.publishFullSessionBody(sessionId: sid)
+        }
+        publishTailBySessionId[sid] = (chainId, task)
+        defer {
+            if publishTailBySessionId[sid]?.0 == chainId {
+                publishTailBySessionId[sid] = nil
+            }
+        }
+        try await task.value
+    }
+
+    private func publishFullSessionBody(sessionId: UUID) async throws {
         guard let session = try tripSessionRepository.session(byId: sessionId) else {
             throw TripCanonicalRemoteSyncError.sessionNotFoundLocally
         }
