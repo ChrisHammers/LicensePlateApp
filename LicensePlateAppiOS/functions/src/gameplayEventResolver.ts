@@ -29,6 +29,10 @@ export const PK = {
   toUserId: "toUserId",
   inviteId: "inviteId",
   inviteMethod: "inviteMethod",
+  /** Unix seconds when server accepted this `region_found` (tie-break after client timestamp). */
+  serverCommittedAt: "serverCommittedAt",
+  /** `discovery_rejected`: `region_found` doc id voided by server_rejected_superseded_by_earlier_timestamp. */
+  supersededRegionFoundEventId: "supersededRegionFoundEventId",
 } as const;
 
 export const KIND_REGION_FOUND = "region_found";
@@ -36,13 +40,14 @@ export const KIND_REGION_REMOVED = "region_removed";
 export const KIND_PARTICIPANT_LEFT = "participant_left";
 export const KIND_PARTICIPANT_INVITED = "participant_invited";
 export const KIND_PARTICIPANT_JOINED = "participant_joined";
-const KIND_DISCOVERY_REJECTED = "discovery_rejected";
+export const KIND_DISCOVERY_REJECTED = "discovery_rejected";
 
 /** Appended only by Cloud Functions / trusted paths — not via appendTripActivityEvent from clients. */
 const CLIENT_FORBIDDEN_KINDS = new Set<string>([KIND_PARTICIPANT_INVITED, KIND_PARTICIPANT_JOINED]);
 
 const REJECTION_SERVER_LATE_COMPETITIVE = "server_rejected_late_competitive";
 const REJECTION_INVALID_PARTICIPANT = "rejected_invalid_participant";
+export const REJECTION_SUPERSEDED_BY_EARLIER_TIMESTAMP = "server_rejected_superseded_by_earlier_timestamp";
 
 export type AppendResolution = "accepted" | "superseded" | "passthrough";
 
@@ -92,6 +97,15 @@ interface DiscoveryRow {
   targetId: string;
   discoveredAt: admin.firestore.Timestamp;
   inputMethod: string;
+  /** Unix seconds from payload; 0 = legacy / missing (sorts last for tie-break). */
+  serverCommittedAtSec: number;
+}
+
+function parseServerCommittedAtSec(payload: Record<string, string>): number {
+  const s = payload[PK.serverCommittedAt];
+  if (!s) return 0;
+  const n = parseInt(s, 10);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function bucketKey(gameInstanceId: string, regionId: string): string {
@@ -102,12 +116,34 @@ function compareDiscovery(a: DiscoveryRow, b: DiscoveryRow): number {
   const as = a.discoveredAt.seconds + a.discoveredAt.nanoseconds / 1e9;
   const bs = b.discoveredAt.seconds + b.discoveredAt.nanoseconds / 1e9;
   if (as !== bs) return as - bs;
+  const aSrv = a.serverCommittedAtSec > 0 ? a.serverCommittedAtSec : Number.MAX_SAFE_INTEGER;
+  const bSrv = b.serverCommittedAtSec > 0 ? b.serverCommittedAtSec : Number.MAX_SAFE_INTEGER;
+  if (aSrv !== bSrv) return aSrv - bSrv;
   if (a.targetId !== b.targetId) return a.targetId < b.targetId ? -1 : 1;
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
+/** Negative if incoming wins (strictly earlier ordering). */
+function compareIncomingVsIncumbent(
+  incumbent: DiscoveryRow,
+  incomingClientTsSec: number,
+  incomingServerCommittedSec: number,
+  incomingId: string
+): number {
+  const incCli = incumbent.discoveredAt.seconds + incumbent.discoveredAt.nanoseconds / 1e9;
+  if (incomingClientTsSec !== incCli) return incomingClientTsSec - incCli;
+  const incSrv =
+    incumbent.serverCommittedAtSec > 0 ? incumbent.serverCommittedAtSec : Number.MAX_SAFE_INTEGER;
+  const inSrv =
+    incomingServerCommittedSec > 0 ? incomingServerCommittedSec : Number.MAX_SAFE_INTEGER;
+  if (inSrv !== incSrv) return inSrv - incSrv;
+  if (incomingId < incumbent.id) return -1;
+  if (incomingId > incumbent.id) return 1;
+  return 0;
+}
+
 /**
- * Replay region_found / region_removed into active discoveries (Swift parity).
+ * Replay region_found / region_removed / server supersede rejections into active discoveries (Swift parity).
  */
 export function replayDiscoveriesFromDocs(
   docs: admin.firestore.QueryDocumentSnapshot[],
@@ -119,13 +155,24 @@ export function replayDiscoveriesFromDocs(
     .map((d) => {
       const data = d.data();
       const kind = data.kind as string;
-      if (kind !== KIND_REGION_FOUND && kind !== KIND_REGION_REMOVED) return null;
+      if (
+        kind !== KIND_REGION_FOUND &&
+        kind !== KIND_REGION_REMOVED &&
+        kind !== KIND_DISCOVERY_REJECTED
+      ) {
+        return null;
+      }
       const ts = data.timestamp as admin.firestore.Timestamp | undefined;
       if (!ts) return null;
       const payload = stringifyPayload(data.payload as Record<string, unknown>);
-      const regionId = payload[PK.regionId];
-      if (!regionId) return null;
+      const regionId = payload[PK.regionId] || "";
       let gid = payload[PK.gameInstanceId];
+      if (kind === KIND_DISCOVERY_REJECTED) {
+        if (payload[PK.rejectionReason] !== REJECTION_SUPERSEDED_BY_EARLIER_TIMESTAMP) return null;
+        if (!payload[PK.supersededRegionFoundEventId] || !regionId) return null;
+      } else if (!regionId) {
+        return null;
+      }
       if (!gid && gameInstanceFilter) gid = gameInstanceFilter;
       if (!gid) return null;
       if (gameInstanceFilter && gid !== gameInstanceFilter) return null;
@@ -159,9 +206,10 @@ export function replayDiscoveriesFromDocs(
         targetId: row.regionId,
         discoveredAt: row.timestamp,
         inputMethod,
+        serverCommittedAtSec: parseServerCommittedAtSec(row.payload),
       });
       buckets.set(key, list);
-    } else {
+    } else if (row.kind === KIND_REGION_REMOVED) {
       const removedId = row.payload[PK.removedDiscoveryEventId];
       if (removedId) {
         const list = buckets.get(key);
@@ -175,6 +223,17 @@ export function replayDiscoveriesFromDocs(
         }
       } else {
         buckets.delete(key);
+      }
+    } else if (row.kind === KIND_DISCOVERY_REJECTED) {
+      const voidId = row.payload[PK.supersededRegionFoundEventId];
+      const list = buckets.get(key);
+      if (list && voidId) {
+        const idx = list.findIndex((x) => x.id === voidId);
+        if (idx >= 0) {
+          list.splice(idx, 1);
+          if (list.length === 0) buckets.delete(key);
+          else buckets.set(key, list);
+        }
       }
     }
   }
@@ -395,6 +454,61 @@ export async function resolveGameplayAppendTransaction(
       const existingForTarget = buckets.get(key) || [];
 
       const outcome = evaluateDiscoverySubmission(gameMode, tripMode, existingForTarget, userId);
+
+      if (outcome === "rejected_duplicate" && gameMode === "competitive" && tripMode === "multiplayer") {
+        const others = existingForTarget.filter((d) => d.participantId !== userId);
+        if (others.length > 0) {
+          const nowTsEarly = admin.firestore.Timestamp.now();
+          const nowSecEarly = nowTsEarly.seconds;
+          const incomingCliSec = event.timestamp;
+          const sortedOthers = [...others].sort(compareDiscovery);
+          const bestIncumbent = sortedOthers[0];
+          if (compareIncomingVsIncumbent(bestIncumbent, incomingCliSec, nowSecEarly, event.id) < 0) {
+            for (const displaced of sortedOthers) {
+              const supRejId = `srvrej_sup_${displaced.id}`;
+              const supRef = ref.collection("activity_events").doc(supRejId);
+              const existingSup = await tx.get(supRef);
+              if (!existingSup.exists) {
+                const discoveredSec = Math.floor(tsToSeconds(displaced.discoveredAt));
+                const supPayload: Record<string, string> = {
+                  [PK.regionId]: regionId,
+                  [PK.gameInstanceId]: gameInstanceId,
+                  [PK.participantId]: displaced.participantId,
+                  [PK.supersededRegionFoundEventId]: displaced.id,
+                  [PK.rejectionReason]: REJECTION_SUPERSEDED_BY_EARLIER_TIMESTAMP,
+                  [PK.clientClaimedAt]: String(discoveredSec),
+                  [PK.serverResolvedAt]: String(nowSecEarly),
+                  [PK.firstFinderParticipantId]: userId,
+                  [PK.firstFinderEventId]: event.id,
+                  [PK.firstFinderDiscoveredAt]: String(Math.floor(event.timestamp)),
+                  [PK.clientAttemptEventId]: displaced.id,
+                };
+                if (incomingPayload[PK.inputMethod]) {
+                  supPayload[PK.inputMethod] = incomingPayload[PK.inputMethod]!;
+                }
+                supPayload[PK.gameMode] = gameMode;
+                supPayload[PK.participantCount] = String(participants.length);
+                tx.set(supRef, {
+                  sessionId: tripSessionId,
+                  kind: KIND_DISCOVERY_REJECTED,
+                  timestamp: nowTsEarly,
+                  actorId: displaced.participantId,
+                  payload: supPayload,
+                  updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+              }
+            }
+            tx.update(ref, { updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+            const mergedPayload: Record<string, string> = {
+              ...incomingPayload,
+              [PK.participantId]: userId,
+              [PK.serverCommittedAt]: String(nowSecEarly),
+            };
+            normalizeAndWrite(mergedPayload);
+            return { success: true, resolution: "accepted", appliedEventId: event.id };
+          }
+        }
+      }
 
       if (outcome === "rejected_duplicate" || outcome === "rejected_invalid_participant") {
         const rejId = serverRejectionDocId(event.id);

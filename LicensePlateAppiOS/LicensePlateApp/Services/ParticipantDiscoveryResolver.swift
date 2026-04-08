@@ -23,7 +23,7 @@ enum ParticipantDiscoveryResolver {
     /// Builds a summary from discoveries for one target (e.g. same targetId). Sorts by discoveredAt for first-finder and order.
     /// - Parameter gameMode: Drives label emphasis via `GameModeRulesEngine.displayFirstFinderProminently` (competitive vs collaborative).
     static func summary(discoveries: [GameDiscovery], gameMode: GameMode = .collaborative) -> ParticipantDiscoverySummary {
-        let sorted = discoveries.sorted { $0.discoveredAt < $1.discoveredAt }
+        let sorted = discoveries.sorted { GameDiscovery.orderingAscending($0, $1) }
         let allIds = sorted.map(\.participantId)
         let firstId = allIds.first
         let label: String

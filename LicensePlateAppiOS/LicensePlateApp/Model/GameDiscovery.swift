@@ -18,6 +18,8 @@ struct GameDiscovery: Codable, Identifiable, Sendable {
     /// Target id (e.g. regionID for license-plate game).
     var targetId: String
     var discoveredAt: Date
+    /// Server accept time for `region_found` (secondary sort when `discoveredAt` ties). Nil for legacy/local-only.
+    var serverCommittedAt: Date?
     /// How it was discovered (list, voice, etc.).
     var inputMethod: FoundRegion.InputMethod
     /// Optional location at discovery time.
@@ -33,6 +35,7 @@ struct GameDiscovery: Codable, Identifiable, Sendable {
         participantId: String,
         targetId: String,
         discoveredAt: Date = .now,
+        serverCommittedAt: Date? = nil,
         inputMethod: FoundRegion.InputMethod,
         location: LocationData? = nil,
         riskFlag: String? = nil,
@@ -43,6 +46,7 @@ struct GameDiscovery: Codable, Identifiable, Sendable {
         self.participantId = participantId
         self.targetId = targetId
         self.discoveredAt = discoveredAt
+        self.serverCommittedAt = serverCommittedAt
         self.inputMethod = inputMethod
         self.location = location
         self.riskFlag = riskFlag
@@ -61,5 +65,21 @@ struct GameDiscovery: Codable, Identifiable, Sendable {
 
     var riskFlagCount: Int {
         riskFlags?.count ?? 0
+    }
+
+    /// Primary: client `discoveredAt`; secondary: `serverCommittedAt` (nil = sort after concrete times); tertiary: `id`.
+    static func orderingAscending(_ a: GameDiscovery, _ b: GameDiscovery) -> Bool {
+        if a.discoveredAt != b.discoveredAt {
+            return a.discoveredAt < b.discoveredAt
+        }
+        let aSec = a.serverCommittedAt?.timeIntervalSince1970 ?? Double.greatestFiniteMagnitude
+        let bSec = b.serverCommittedAt?.timeIntervalSince1970 ?? Double.greatestFiniteMagnitude
+        if aSec != bSec {
+            return aSec < bSec
+        }
+        if a.targetId != b.targetId {
+            return a.targetId < b.targetId
+        }
+        return a.id < b.id
     }
 }

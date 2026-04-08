@@ -134,15 +134,9 @@ enum DiscoveryRulesEngine {
         return allCredits
     }
 
-    /// Same ordering as `TripActivityEventDiscoveryReplay` flattened discoveries: `discoveredAt`, `targetId`, `id`.
+    /// Same ordering as `TripActivityEventDiscoveryReplay` flattened discoveries (client time, server commit, ids).
     static func discoveryCreditOrder(_ a: GameDiscovery, _ b: GameDiscovery) -> Bool {
-        if a.discoveredAt != b.discoveredAt {
-            return a.discoveredAt < b.discoveredAt
-        }
-        if a.targetId != b.targetId {
-            return a.targetId < b.targetId
-        }
-        return a.id < b.id
+        GameDiscovery.orderingAscending(a, b)
     }
 
     private static func riskFlags(from context: DiscoveryActionContext?, discovery: GameDiscovery) -> [RiskFlag] {

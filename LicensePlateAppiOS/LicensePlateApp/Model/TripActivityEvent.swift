@@ -43,6 +43,10 @@ enum TripActivityEventPayloadKey {
     static let firstFinderEventId = "firstFinderEventId"
     static let serverResolvedAt = "serverResolvedAt"
     static let clientClaimedAt = "clientClaimedAt"
+    /// Unix seconds when server accepted this `region_found` (secondary ordering vs same client timestamp).
+    static let serverCommittedAt = "serverCommittedAt"
+    /// Server `discovery_rejected`: `region_found` id removed by `server_rejected_superseded_by_earlier_timestamp`.
+    static let supersededRegionFoundEventId = "supersededRegionFoundEventId"
     /// `participant_left`: `voluntary` | `kicked`
     static let leaveReason = "leaveReason"
     /// `participant_left` when kicked: owner who removed the member

@@ -264,7 +264,8 @@ final class LicensePlateGameViewModel: ObservableObject {
         let firstName = names[info.firstFinderParticipantId] ?? info.firstFinderParticipantId
         let tripName = info.tripSessionName
         let message: String
-        if info.rejectionReasonRaw == DiscoveryOutcome.serverRejectedLateCompetitive.rawValue {
+        if info.rejectionReasonRaw == DiscoveryOutcome.serverRejectedLateCompetitive.rawValue
+            || info.rejectionReasonRaw == DiscoveryOutcome.serverRejectedSupersededByEarlierTimestamp.rawValue {
             message = "Fairness late competitive body %@ %@ %@".localized(regionName, firstName, tripName)
         } else {
             message = "Fairness invalid participant body %@ %@".localized(regionName, tripName)

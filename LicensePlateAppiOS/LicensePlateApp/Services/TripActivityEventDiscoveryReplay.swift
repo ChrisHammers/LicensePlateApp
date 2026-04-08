@@ -5,11 +5,18 @@
 //  Step 10 — Pure replay of region_found / region_removed into active discoveries per (gameInstanceId, regionId).
 //  Multi-finder: multiple region_found for the same target append; region_removed with removedDiscoveryEventId removes one find.
 //  Legacy region_removed (no removedDiscoveryEventId) clears all finds for that (game, region).
+//  discovery_rejected with server_rejected_superseded_by_earlier_timestamp removes the referenced region_found (server parity).
 //
 
 import Foundation
 
 enum TripActivityEventDiscoveryReplay {
+
+    private static let replayKinds: Set<TripActivityEventKind> = [
+        .regionFound,
+        .regionRemoved,
+        .discoveryRejected,
+    ]
 
     /// Replays discovery-related events in chronological order.
     /// - Parameters:
@@ -20,43 +27,62 @@ enum TripActivityEventDiscoveryReplay {
         events: [TripActivityEvent],
         gameInstanceFilter: UUID?
     ) -> (discoveries: [GameDiscovery], foundRegions: [FoundRegion]) {
-        let discoveryEvents = events.filter { $0.kind == .regionFound || $0.kind == .regionRemoved }
+        let discoveryEvents = events
+            .filter { replayKinds.contains($0.kind) }
+            .sorted { $0.timestamp < $1.timestamp }
         var buckets: [String: [GameDiscovery]] = [:]
 
         for event in discoveryEvents {
             let payload = event.payload ?? [:]
-            guard let regionId = payload[TripActivityEventPayloadKey.regionId], !regionId.isEmpty else { continue }
-            guard let gameInstanceId = resolvedGameInstanceId(payload: payload, gameInstanceFilter: gameInstanceFilter) else {
-                continue
-            }
-            if let filter = gameInstanceFilter, gameInstanceId != filter {
-                continue
-            }
-            let key = bucketKey(gameInstanceId: gameInstanceId, regionId: regionId)
-
             switch event.kind {
             case .regionFound:
+                guard let regionId = payload[TripActivityEventPayloadKey.regionId], !regionId.isEmpty else { continue }
+                guard let gameInstanceId = resolvedGameInstanceId(payload: payload, gameInstanceFilter: gameInstanceFilter) else {
+                    continue
+                }
+                if let filter = gameInstanceFilter, gameInstanceId != filter {
+                    continue
+                }
+                let key = bucketKey(gameInstanceId: gameInstanceId, regionId: regionId)
                 let discovery = makeDiscovery(from: event, gameInstanceId: gameInstanceId, regionId: regionId)
                 buckets[key, default: []].append(discovery)
             case .regionRemoved:
+                guard let regionId = payload[TripActivityEventPayloadKey.regionId], !regionId.isEmpty else { continue }
+                guard let gameInstanceId = resolvedGameInstanceId(payload: payload, gameInstanceFilter: gameInstanceFilter) else {
+                    continue
+                }
+                if let filter = gameInstanceFilter, gameInstanceId != filter {
+                    continue
+                }
+                let key = bucketKey(gameInstanceId: gameInstanceId, regionId: regionId)
                 if let removedId = payload[TripActivityEventPayloadKey.removedDiscoveryEventId], !removedId.isEmpty {
                     removeDiscovery(withEventId: removedId, from: &buckets)
                 } else {
                     buckets.removeValue(forKey: key)
                 }
+            case .discoveryRejected:
+                guard payload[TripActivityEventPayloadKey.rejectionReason]
+                    == DiscoveryOutcome.serverRejectedSupersededByEarlierTimestamp.rawValue else {
+                    continue
+                }
+                guard let voidId = payload[TripActivityEventPayloadKey.supersededRegionFoundEventId], !voidId.isEmpty else {
+                    continue
+                }
+                guard let regionId = payload[TripActivityEventPayloadKey.regionId], !regionId.isEmpty else { continue }
+                guard let gameInstanceId = resolvedGameInstanceId(payload: payload, gameInstanceFilter: gameInstanceFilter) else {
+                    continue
+                }
+                if let filter = gameInstanceFilter, gameInstanceId != filter {
+                    continue
+                }
+                removeDiscovery(withEventId: voidId, from: &buckets)
             default:
                 break
             }
         }
 
         let allDiscoveries = buckets.values.flatMap { $0 }.sorted {
-            if $0.discoveredAt != $1.discoveredAt {
-                return $0.discoveredAt < $1.discoveredAt
-            }
-            if $0.targetId != $1.targetId {
-                return $0.targetId < $1.targetId
-            }
-            return $0.id < $1.id
+            GameDiscovery.orderingAscending($0, $1)
         }
 
         let regions = aggregateFoundRegions(from: buckets)
@@ -80,12 +106,18 @@ enum TripActivityEventDiscoveryReplay {
         let inputMethod = FoundRegion.InputMethod(
             rawValue: payload[TripActivityEventPayloadKey.inputMethod] ?? FoundRegion.InputMethod.list.rawValue
         ) ?? .list
+        var serverCommittedAt: Date?
+        if let s = payload[TripActivityEventPayloadKey.serverCommittedAt],
+           let sec = TimeInterval(s) {
+            serverCommittedAt = Date(timeIntervalSince1970: sec)
+        }
         return GameDiscovery(
             id: event.id,
             gameInstanceId: gameInstanceId,
             participantId: participantId,
             targetId: regionId,
             discoveredAt: event.timestamp,
+            serverCommittedAt: serverCommittedAt,
             inputMethod: inputMethod,
             location: nil
         )
@@ -109,7 +141,7 @@ enum TripActivityEventDiscoveryReplay {
     private static func aggregateFoundRegions(from buckets: [String: [GameDiscovery]]) -> [FoundRegion] {
         var result: [FoundRegion] = []
         for (_, list) in buckets where !list.isEmpty {
-            let sorted = list.sorted { $0.discoveredAt < $1.discoveredAt }
+            let sorted = list.sorted { GameDiscovery.orderingAscending($0, $1) }
             guard let first = sorted.first else { continue }
             result.append(
                 FoundRegion(

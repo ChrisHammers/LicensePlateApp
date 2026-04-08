@@ -22,6 +22,8 @@ enum DiscoveryOutcome: String, Codable, Sendable, CaseIterable {
     case rejectedInvalidParticipant = "rejected_invalid_participant"
     /// Server rejected a competitive `region_found` after sync (another finder won); audit + fairness UI.
     case serverRejectedLateCompetitive = "server_rejected_late_competitive"
+    /// Server voided this find: another participant had an earlier client timestamp (or same timestamp with earlier commit).
+    case serverRejectedSupersededByEarlierTimestamp = "server_rejected_superseded_by_earlier_timestamp"
 }
 
 /// Result of the rules engine evaluation for a single discovery submission.
@@ -35,7 +37,8 @@ struct DiscoveryEvaluationResult: Sendable {
     /// When true, the event should be appended; when false (rejected_duplicate / rejected_invalid_participant), do not append.
     var shouldAppendEvent: Bool {
         switch outcome {
-        case .rejectedDuplicate, .rejectedInvalidParticipant, .serverRejectedLateCompetitive:
+        case .rejectedDuplicate, .rejectedInvalidParticipant, .serverRejectedLateCompetitive,
+             .serverRejectedSupersededByEarlierTimestamp:
             return false
         default:
             return true

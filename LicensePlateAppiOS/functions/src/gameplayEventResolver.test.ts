@@ -5,8 +5,10 @@ import {
   replayDiscoveriesFromDocs,
   KIND_REGION_FOUND,
   KIND_REGION_REMOVED,
+  KIND_DISCOVERY_REJECTED,
   KIND_PARTICIPANT_INVITED,
   KIND_PARTICIPANT_JOINED,
+  REJECTION_SUPERSEDED_BY_EARLIER_TIMESTAMP,
 } from "./gameplayEventResolver";
 
 /** Plain shape compatible with replay (avoids firebase-admin init in vitest). */
@@ -41,6 +43,7 @@ describe("evaluateDiscoverySubmission", () => {
       targetId: "r1",
       discoveredAt: mockTs(100),
       inputMethod: "list",
+      serverCommittedAtSec: 0,
     },
   ];
 
@@ -118,5 +121,39 @@ describe("replayDiscoveriesFromDocs", () => {
     const buckets = replayDiscoveriesFromDocs(docs, gid);
     const key = `${gid}|CA`;
     expect(buckets.get(key)?.map((d) => d.id)).toEqual(["e1"]);
+  });
+
+  it("supersede rejection removes later region_found by id (timestamp-first)", () => {
+    const docs = [
+      mockDoc("early", KIND_REGION_FOUND, 100, {
+        gameInstanceId: gid,
+        regionId: "CA",
+        participantId: "u1",
+        inputMethod: "list",
+        serverCommittedAt: "2000",
+      }),
+      mockDoc("late", KIND_REGION_FOUND, 200, {
+        gameInstanceId: gid,
+        regionId: "CA",
+        participantId: "u2",
+        inputMethod: "list",
+        serverCommittedAt: "1000",
+      }),
+      mockDoc("suprej", KIND_DISCOVERY_REJECTED, 300, {
+        gameInstanceId: gid,
+        regionId: "CA",
+        participantId: "u2",
+        rejectionReason: REJECTION_SUPERSEDED_BY_EARLIER_TIMESTAMP,
+        supersededRegionFoundEventId: "late",
+        firstFinderParticipantId: "u1",
+        firstFinderEventId: "early",
+        firstFinderDiscoveredAt: "100",
+        clientAttemptEventId: "late",
+      }),
+    ];
+    const buckets = replayDiscoveriesFromDocs(docs, gid);
+    const key = `${gid}|CA`;
+    expect(buckets.get(key)?.length).toBe(1);
+    expect(buckets.get(key)?.[0]?.participantId).toBe("u1");
   });
 });
