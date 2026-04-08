@@ -656,3 +656,24 @@
 "From: %@" = "De: %@";
 "To: %@" = "Para: %@";
 "Loading profile…" = "Cargando perfil…";
+
+// Lifetime stats (profile)
+"profile.lifetime_stats.title" = "Estadísticas de viajes";
+"profile.lifetime_stats.updating" = "Actualizando estadísticas";
+"profile.lifetime_stats.updating.a11y" = "Actualizando estadísticas";
+"profile.lifetime_stats.error_title" = "No se pudieron actualizar las estadísticas";
+"profile.lifetime_stats.retry" = "Reintentar";
+"profile.lifetime_stats.empty" = "Aún no hay viajes completados o las estadísticas siguen cargando.";
+"profile.lifetime_stats.completed_trips" = "Viajes completados";
+"profile.lifetime_stats.completed_trips.a11y" = "Tu total de viajes completados.";
+"profile.lifetime_stats.games_played" = "Partidas jugadas";
+"profile.lifetime_stats.games_played.a11y" = "Total de partidas en tus viajes completados.";
+"profile.lifetime_stats.discoveries" = "Tus hallazgos";
+"profile.lifetime_stats.discoveries.a11y" = "Tus hallazgos en viajes completados.";
+"profile.lifetime_stats.weighted_score" = "Puntuación ponderada";
+"profile.lifetime_stats.weighted_score.a11y" = "Tu puntuación ponderada combinada según los resúmenes de viaje.";
+"profile.lifetime_stats.family_trips" = "Viajes solo en familia";
+"profile.lifetime_stats.family_trips.a11y" = "Viajes finalizados en los que todos los que siguen en el viaje eran de tu familia.";
+"trip_settings.leave_trip_impact" = "Saldrás de este viaje en este dispositivo de inmediato. Si estás sin conexión, la salida se sincronizará cuando vuelvas a estar en línea. Después de salir, este viaje ya no cuenta para tus estadísticas de por vida y no aparecerá en tu registro de viajes cuando termine la sincronización.";
+"error.family_lookup_no_context" = "Los datos de familia aún no están disponibles. Inténtalo de nuevo en un momento.";
+"error.lifetime_stats_no_context" = "Las estadísticas aún no están disponibles. Inténtalo de nuevo en un momento.";

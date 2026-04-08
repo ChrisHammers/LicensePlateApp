@@ -271,7 +271,7 @@ struct TripSettingsView: View {
                 }
             }
         } message: {
-            Text("You will leave this trip on this device right away. If you are offline, leaving the trip will sync when you are back online.".localized)
+            Text("trip_settings.leave_trip_impact".localized)
         }
     }
 }

@@ -87,6 +87,7 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         try tripActivityEventRecording.recordForSync(tripEndedEvent)
         AnalyticsService.shared.log(.tripSessionEnded(tripId: sessionId.uuidString))
         Task { @MainActor in
+            LifetimeStatsCoordinator.shared.scheduleLifetimeStatsRefresh()
             try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionId)
         }
     }
@@ -106,6 +107,9 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         try tripActivityEventRepository.deleteEvents(sessionId: sessionId, gameInstanceId: nil)
         try gameInstanceRepository.deleteForSession(sessionId: sessionId)
         AnalyticsService.shared.log(.tripSessionCancelled(tripId: sessionId.uuidString))
+        Task { @MainActor in
+            LifetimeStatsCoordinator.shared.scheduleLifetimeStatsRefresh()
+        }
     }
 }
 

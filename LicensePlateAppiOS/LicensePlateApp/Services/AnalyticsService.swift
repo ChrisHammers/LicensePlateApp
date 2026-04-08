@@ -152,6 +152,13 @@ class AnalyticsService: AnalyticsLogging {
         case travelLogFiltered(filterKey: String, filterValue: String)
         case travelLogSorted(sortKey: String)
 
+        /// Profile lifetime stats — emitted from `LifetimeStatsCoordinator` only (no PII).
+        case lifetimeStatsRecomputeStarted
+        case lifetimeStatsRecomputeSucceeded(completedTripCount: Int, familyOnlyTripCount: Int)
+        case lifetimeStatsRecomputeFailed(error: String)
+        /// User tapped retry on profile stats error row (`LifetimeStatsProfileViewModel` only).
+        case lifetimeStatsProfileRetryTapped
+
         // Lifecycle (Step 10.5)
         case tripSessionCreated(tripId: String, tripStatus: String, tripParticipantCount: Int?, tripActiveGameCount: Int?, tripSource: String?)
         case tripSessionStarted(tripId: String, tripActiveGameCount: Int?)
@@ -304,6 +311,10 @@ class AnalyticsService: AnalyticsLogging {
             case .tripDashboardCompetitiveLeaderboardPresented: return "trip_dashboard_competitive_leaderboard_presented"
             case .travelLogFiltered: return "travel_log_filtered"
             case .travelLogSorted: return "travel_log_sorted"
+            case .lifetimeStatsRecomputeStarted: return "lifetime_stats_recompute_started"
+            case .lifetimeStatsRecomputeSucceeded: return "lifetime_stats_recompute_succeeded"
+            case .lifetimeStatsRecomputeFailed: return "lifetime_stats_recompute_failed"
+            case .lifetimeStatsProfileRetryTapped: return "lifetime_stats_profile_retry_tapped"
             case .tripSessionCreated: return "trip_session_created"
             case .tripSessionStarted: return "trip_session_started"
             case .tripSessionEnded: return "trip_session_ended"
@@ -460,6 +471,17 @@ class AnalyticsService: AnalyticsLogging {
                 return ["filter_key": filterKey, "filter_value": filterValue]
             case .travelLogSorted(let sortKey):
                 return ["sort_key": sortKey]
+            case .lifetimeStatsRecomputeStarted:
+                return nil
+            case .lifetimeStatsRecomputeSucceeded(let completedTripCount, let familyOnlyTripCount):
+                return [
+                    "completed_trip_count": completedTripCount,
+                    "family_only_trip_count": familyOnlyTripCount
+                ]
+            case .lifetimeStatsRecomputeFailed(let error):
+                return ["error_type": error]
+            case .lifetimeStatsProfileRetryTapped:
+                return nil
             case .travelLogOpened:
                 return nil
             case .tripSessionCreated(let tripId, let tripStatus, let tripParticipantCount, let tripActiveGameCount, let tripSource):

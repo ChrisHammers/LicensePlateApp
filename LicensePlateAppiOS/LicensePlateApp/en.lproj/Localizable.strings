@@ -686,3 +686,24 @@
 "From: %@" = "From: %@";
 "To: %@" = "To: %@";
 "Loading profile…" = "Loading profile…";
+
+// Lifetime stats (profile)
+"profile.lifetime_stats.title" = "Trip statistics";
+"profile.lifetime_stats.updating" = "Updating statistics";
+"profile.lifetime_stats.updating.a11y" = "Updating statistics";
+"profile.lifetime_stats.error_title" = "Couldn’t update statistics";
+"profile.lifetime_stats.retry" = "Try again";
+"profile.lifetime_stats.empty" = "No completed trips yet, or statistics are still loading.";
+"profile.lifetime_stats.completed_trips" = "Completed trips";
+"profile.lifetime_stats.completed_trips.a11y" = "Your total count of completed trips.";
+"profile.lifetime_stats.games_played" = "Games played";
+"profile.lifetime_stats.games_played.a11y" = "Total games across your completed trips.";
+"profile.lifetime_stats.discoveries" = "Your discoveries";
+"profile.lifetime_stats.discoveries.a11y" = "Your discovery count across completed trips.";
+"profile.lifetime_stats.weighted_score" = "Weighted score";
+"profile.lifetime_stats.weighted_score.a11y" = "Your combined weighted score from trip summaries.";
+"profile.lifetime_stats.family_trips" = "Family-only trips";
+"profile.lifetime_stats.family_trips.a11y" = "Ended trips where everyone still on the trip was in your family.";
+"trip_settings.leave_trip_impact" = "You will leave this trip on this device right away. If you are offline, leaving will sync when you are back online. After you leave, this trip no longer counts toward your lifetime statistics and won’t appear in your travel log once sync completes.";
+"error.family_lookup_no_context" = "Family data isn’t available yet. Try again in a moment.";
+"error.lifetime_stats_no_context" = "Statistics aren’t available yet. Try again in a moment.";

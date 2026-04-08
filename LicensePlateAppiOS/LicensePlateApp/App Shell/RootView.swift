@@ -69,7 +69,10 @@ struct RootView: View {
             SyncQueueRepository.shared.setModelContext(modelContext)
             TripInviteRepository.shared.setModelContext(modelContext)
             PendingTripLeaveRepository.shared.setModelContext(modelContext)
+            UserLifetimeStatsRepository.shared.setModelContext(modelContext)
+            FamilyMemberUserIdsRepository.shared.setModelContext(modelContext)
             EntitlementService.shared.setModelContext(modelContext)
+            LifetimeStatsCoordinator.shared.authService = authService
             let syncCoordinator = SyncCoordinator.shared
             syncCoordinator.setUserSyncExecutor(UserSyncExecutor(authService: authService, userRepository: UserRepository.shared))
             syncCoordinator.setGameplaySyncOnlineProvider { authService.isOnline }

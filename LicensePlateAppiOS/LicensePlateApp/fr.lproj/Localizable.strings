@@ -657,3 +657,23 @@
 "To: %@" = "À : %@";
 "Loading profile…" = "Chargement du profil…";
 
+// Lifetime stats (profile)
+"profile.lifetime_stats.title" = "Statistiques de trajets";
+"profile.lifetime_stats.updating" = "Mise à jour des statistiques";
+"profile.lifetime_stats.updating.a11y" = "Mise à jour des statistiques";
+"profile.lifetime_stats.error_title" = "Impossible de mettre à jour les statistiques";
+"profile.lifetime_stats.retry" = "Réessayer";
+"profile.lifetime_stats.empty" = "Pas encore de trajets terminés, ou les statistiques se chargent encore.";
+"profile.lifetime_stats.completed_trips" = "Trajets terminés";
+"profile.lifetime_stats.completed_trips.a11y" = "Votre nombre total de trajets terminés.";
+"profile.lifetime_stats.games_played" = "Parties jouées";
+"profile.lifetime_stats.games_played.a11y" = "Nombre total de parties sur vos trajets terminés.";
+"profile.lifetime_stats.discoveries" = "Vos découvertes";
+"profile.lifetime_stats.discoveries.a11y" = "Vos découvertes sur les trajets terminés.";
+"profile.lifetime_stats.weighted_score" = "Score pondéré";
+"profile.lifetime_stats.weighted_score.a11y" = "Votre score pondéré combiné d’après les récapitulatifs de trajet.";
+"profile.lifetime_stats.family_trips" = "Trajets famille uniquement";
+"profile.lifetime_stats.family_trips.a11y" = "Trajets terminés où tous les participants encore présents faisaient partie de votre famille.";
+"trip_settings.leave_trip_impact" = "Vous quitterez ce trajet sur cet appareil immédiatement. Hors ligne, la sortie se synchronisera lorsque vous serez de nouveau en ligne. Après votre départ, ce trajet ne compte plus dans vos statistiques à vie et n’apparaîtra plus dans votre carnet de voyage une fois la synchronisation terminée.";
+"error.family_lookup_no_context" = "Les données famille ne sont pas encore disponibles. Réessayez dans un instant.";
+"error.lifetime_stats_no_context" = "Les statistiques ne sont pas encore disponibles. Réessayez dans un instant.";
