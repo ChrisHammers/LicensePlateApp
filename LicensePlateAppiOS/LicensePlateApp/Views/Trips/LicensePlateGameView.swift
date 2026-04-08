@@ -194,6 +194,7 @@ struct LicensePlateGameView: View {
             viewModel.refreshSession()
             viewModel.refreshGame()
             viewModel.refreshFoundRegions()
+            Task { await viewModel.refreshFairnessUiAfterNavigationOrReconnect() }
             // Request location permission when view appears
             if locationManager.authorizationStatus == .notDetermined {
                 locationManager.requestAuthorization()

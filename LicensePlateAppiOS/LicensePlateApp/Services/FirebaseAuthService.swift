@@ -63,7 +63,11 @@ class FirebaseAuthService: ObservableObject {
     private weak var syncCoordinator: SyncCoordinatorProtocol?
     private var authStateListener: AuthStateDidChangeListenerHandle?
     private let networkMonitor = NetworkMonitor()
-    
+    private var networkReachabilityCancellables = Set<AnyCancellable>()
+
+    /// Published mirror of reachability so SwiftUI can react when connectivity returns (see `processPendingSyncItems` on reconnect).
+    @Published private(set) var isNetworkReachable: Bool
+
     // Store location delegates to prevent deallocation
     var activeLocationDelegates: [OneTimeLocationDelegate] = []
     
@@ -71,12 +75,24 @@ class FirebaseAuthService: ObservableObject {
     private var lastLoginTrackingTime: Date?
     
     init() {
+        isNetworkReachable = networkMonitor.isConnected
         // Observe auth state changes
         authStateListener = auth.addStateDidChangeListener { [weak self] auth, user in
             Task { @MainActor in
                 await self?.handleAuthStateChange(user)
             }
         }
+        networkMonitor.$isConnected
+            .receive(on: RunLoop.main)
+            .sink { [weak self] connected in
+                guard let self else { return }
+                let wasReachable = self.isNetworkReachable
+                self.isNetworkReachable = connected
+                if !wasReachable && connected {
+                    Task { await SyncCoordinator.shared.processPendingSyncItems() }
+                }
+            }
+            .store(in: &networkReachabilityCancellables)
     }
     
     deinit {
@@ -94,10 +110,9 @@ class FirebaseAuthService: ObservableObject {
     }
     
     // MARK: - Network Status
-    
-    var isOnline: Bool {
-        networkMonitor.isConnected
-    }
+
+    /// Same as `isNetworkReachable`; kept for existing call sites (`isOnline` reads).
+    var isOnline: Bool { isNetworkReachable }
     
     /// Returns info about a restored Firebase user (from Keychain) if they exist and are not anonymous.
     /// Use this on onboarding to offer "Sign in as existing user" when a previous session was restored.

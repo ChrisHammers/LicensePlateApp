@@ -163,6 +163,12 @@ final class LicensePlateGameViewModel: ObservableObject {
         fairnessToasts.removeAll { $0.id == id }
     }
 
+    /// Re-merge fairness watermark and scan `discovery_rejected` backlog when returning to the game or after sync (no app restart).
+    func refreshFairnessUiAfterNavigationOrReconnect() async {
+        await mergeFairnessUiAckFromRemoteIfNeeded()
+        await applyFairnessToastBacklogFromEventLog()
+    }
+
     /// Merges Firebase `fairness_ack_watermarks` into SwiftData (multiplayer competitive only).
     private func mergeFairnessUiAckFromRemoteIfNeeded() async {
         guard currentSession.mode == .multiplayer else { return }
