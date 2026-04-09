@@ -24,11 +24,13 @@ class NetworkMonitor: ObservableObject {
     @Published var isConnected = true
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "NetworkMonitor")
-    
+
     init() {
         monitor.pathUpdateHandler = { [weak self] path in
+            // Read `path` only inside the handler (NWPath lifetime).
+            let satisfied = path.status == .satisfied
             Task { @MainActor in
-                self?.isConnected = path.status == .satisfied
+                self?.isConnected = satisfied
             }
         }
         monitor.start(queue: queue)
@@ -64,8 +66,10 @@ class FirebaseAuthService: ObservableObject {
     private var authStateListener: AuthStateDidChangeListenerHandle?
     private let networkMonitor = NetworkMonitor()
     private var networkReachabilityCancellables = Set<AnyCancellable>()
+    /// When false, unsatisfied→satisfied transitions do not schedule gameplay sync (avoids flushing before `RootView` wires repos + `setSyncCoordinator`).
+    private var gameplaySyncFlushOnReachabilityRegainedEnabled = false
 
-    /// Published mirror of reachability so SwiftUI can react when connectivity returns (see `processPendingSyncItems` on reconnect).
+    /// Published mirror of reachability so SwiftUI can react when connectivity returns.
     @Published private(set) var isNetworkReachable: Bool
 
     // Store location delegates to prevent deallocation
@@ -83,13 +87,15 @@ class FirebaseAuthService: ObservableObject {
             }
         }
         networkMonitor.$isConnected
+            .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] connected in
                 guard let self else { return }
                 let wasReachable = self.isNetworkReachable
                 self.isNetworkReachable = connected
+                guard self.gameplaySyncFlushOnReachabilityRegainedEnabled else { return }
                 if !wasReachable && connected {
-                    Task { await SyncCoordinator.shared.processPendingSyncItems() }
+                    SyncCoordinator.shared.scheduleDebouncedGameplaySyncFlushIfOnline()
                 }
             }
             .store(in: &networkReachabilityCancellables)
@@ -107,6 +113,7 @@ class FirebaseAuthService: ObservableObject {
 
     func setSyncCoordinator(_ coordinator: SyncCoordinatorProtocol) {
         self.syncCoordinator = coordinator
+        gameplaySyncFlushOnReachabilityRegainedEnabled = true
     }
     
     // MARK: - Network Status

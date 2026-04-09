@@ -76,6 +76,7 @@ struct RootView: View {
             let syncCoordinator = SyncCoordinator.shared
             syncCoordinator.setUserSyncExecutor(UserSyncExecutor(authService: authService, userRepository: UserRepository.shared))
             syncCoordinator.setGameplaySyncOnlineProvider { authService.isOnline }
+            // Enables reachability false→true → debounced gameplay queue flush (after repos have ModelContext).
             authService.setSyncCoordinator(syncCoordinator)
             let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
             if let userId = userId {
