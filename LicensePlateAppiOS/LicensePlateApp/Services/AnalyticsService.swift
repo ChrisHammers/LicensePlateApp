@@ -205,6 +205,8 @@ class AnalyticsService: AnalyticsLogging {
         case gameplayEventServerAccepted(tripSessionId: String, gameInstanceId: String, eventKind: String)
         case gameplayEventServerSuperseded(tripSessionId: String, gameInstanceId: String, serverRejectionEventId: String, reason: String)
         case gameplayEventServerRejected(tripSessionId: String, eventKind: String, errorCode: Int, errorDomain: String)
+        /// Client-side `appendTripActivityEvent` did not complete within the coordinator timeout (transient; queue will retry).
+        case gameplayEventAppendTimedOut(tripSessionId: String, gameInstanceId: String, eventKind: String, attemptCount: Int, timeoutSeconds: Int)
 
         // Persistence (Step 05)
         case persistenceSaveFailed(context: String, error: String)
@@ -358,6 +360,7 @@ class AnalyticsService: AnalyticsLogging {
             case .gameplayEventServerAccepted: return "gameplay_event_server_accepted"
             case .gameplayEventServerSuperseded: return "gameplay_event_server_superseded"
             case .gameplayEventServerRejected: return "gameplay_event_server_rejected"
+            case .gameplayEventAppendTimedOut: return "gameplay_event_append_timed_out"
             case .persistenceSaveFailed: return "persistence_save_failed"
             case .persistenceRetryTapped: return "persistence_retry_tapped"
             }
@@ -586,6 +589,14 @@ class AnalyticsService: AnalyticsLogging {
                     "event_kind": eventKind,
                     "error_code": errorCode,
                     "error_domain": errorDomain
+                ]
+            case .gameplayEventAppendTimedOut(let tripSessionId, let gameInstanceId, let eventKind, let attemptCount, let timeoutSeconds):
+                return [
+                    "trip_session_id": tripSessionId,
+                    "game_instance_id": gameInstanceId,
+                    "event_kind": eventKind,
+                    "attempt_count": attemptCount,
+                    "timeout_seconds": timeoutSeconds
                 ]
             case .persistenceSaveFailed(let context, let error):
                 return ["context": context, "error": error]

@@ -250,6 +250,19 @@ struct AnalyticsServiceTests {
             errorDomain: "FIRFunctionsErrorDomain"
         )
         #expect(gameplayRejected.parameters?["error_code"] as? Int == 9)
+
+        let appendTimedOut = AnalyticsService.Event.gameplayEventAppendTimedOut(
+            tripSessionId: "t1",
+            gameInstanceId: "g1",
+            eventKind: "region_found",
+            attemptCount: 2,
+            timeoutSeconds: 45
+        )
+        #expect(appendTimedOut.name == "gameplay_event_append_timed_out")
+        #expect(appendTimedOut.parameters?["trip_session_id"] as? String == "t1")
+        #expect(appendTimedOut.parameters?["game_instance_id"] as? String == "g1")
+        #expect(appendTimedOut.parameters?["attempt_count"] as? Int == 2)
+        #expect(appendTimedOut.parameters?["timeout_seconds"] as? Int == 45)
         #expect(buildFailed.name == "analytics_property_build_failed")
         #expect(buildFailed.parameters?["error"] as? String == "decode failed")
     }

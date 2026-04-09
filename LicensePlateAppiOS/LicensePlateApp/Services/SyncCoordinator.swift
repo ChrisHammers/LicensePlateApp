@@ -9,6 +9,14 @@ import Foundation
 import FirebaseAuth
 import FirebaseFunctions
 
+/// Thrown when `appendTripActivityEvent` does not complete within `SyncCoordinator.gameplayAppendRemoteTimeoutNanoseconds` (wedging guard).
+private struct GameplayAppendRemoteTimedOutError: Error {}
+
+private enum GameplayAppendRaceFirst {
+    case done(Result<GameplayEventAppendOutcome, Error>)
+    case timedOut
+}
+
 @MainActor
 protocol SyncCoordinatorProtocol: AnyObject {
     func enqueueForSync(sessionId: UUID, eventId: String) throws
@@ -27,6 +35,9 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
 
     /// Delay after the last `scheduleDebouncedGameplaySyncFlushIfOnline` before running `processPendingSyncItems` when online.
     static let gameplaySyncDebounceNanoseconds: UInt64 = 650_000_000
+
+    /// Upper bound on a single `appendEventToRemote` await so a hung `httpsCallable` cannot block all later flushes.
+    static let gameplayAppendRemoteTimeoutNanoseconds: UInt64 = 45_000_000_000
 
     private let repository: SyncQueueRepositoryProtocol
     private var userSyncExecutor: UserSyncExecutorProtocol?
@@ -139,7 +150,7 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                     try? repository.markCompleted(id: item.id)
                     continue
                 }
-                let outcome = try await TripCanonicalRemoteSyncService.shared.appendEventToRemote(event)
+                let outcome = try await Self.appendEventToRemoteRespectingTimeout(event: event)
                 let gameIdStr = event.payload?[TripActivityEventPayloadKey.gameInstanceId] ?? ""
                 switch outcome {
                 case .accepted:
@@ -178,15 +189,28 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                 }
                 try? repository.markCompleted(id: item.id)
             } catch {
+                let resolvedEvent = try? TripActivityEventRepository.shared.event(byId: eventId)
+                let eventKind = resolvedEvent?.kind.rawValue ?? ""
+                let gameIdStr = resolvedEvent?.payload?[TripActivityEventPayloadKey.gameInstanceId] ?? ""
                 if Self.isPermanentGameplaySyncFailure(error) {
                     AnalyticsService.shared.log(.gameplayEventServerRejected(
                         tripSessionId: sessionUUID.uuidString,
-                        eventKind: (try? TripActivityEventRepository.shared.event(byId: eventId))?.kind.rawValue ?? "",
+                        eventKind: eventKind,
                         errorCode: (error as NSError).code,
                         errorDomain: (error as NSError).domain
                     ))
                     try? repository.markCancelled(id: item.id)
                 } else {
+                    if error is GameplayAppendRemoteTimedOutError {
+                        let timeoutSec = max(Int(Self.gameplayAppendRemoteTimeoutNanoseconds / 1_000_000_000), 1)
+                        AnalyticsService.shared.log(.gameplayEventAppendTimedOut(
+                            tripSessionId: sessionUUID.uuidString,
+                            gameInstanceId: gameIdStr,
+                            eventKind: eventKind,
+                            attemptCount: item.attemptCount,
+                            timeoutSeconds: timeoutSec
+                        ))
+                    }
                     let attempts = max(item.attemptCount, 0) + 1
                     let delaySeconds = min(pow(2.0, Double(attempts - 1)) * 60.0, 3600.0)
                     let nextRetryAt = Date().addingTimeInterval(delaySeconds)
@@ -220,6 +244,36 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                 let delaySeconds = min(pow(2.0, Double(attempts - 1)) * 60.0, 3600.0)
                 let nextRetryAt = Date().addingTimeInterval(delaySeconds)
                 try? repository.markFailed(id: item.id, nextRetryAt: nextRetryAt)
+            }
+        }
+    }
+
+    private static func appendEventToRemoteRespectingTimeout(event: TripActivityEvent) async throws -> GameplayEventAppendOutcome {
+        try await withThrowingTaskGroup(of: GameplayAppendRaceFirst.self) { group in
+            group.addTask {
+                do {
+                    let outcome = try await TripCanonicalRemoteSyncService.shared.appendEventToRemote(event)
+                    return .done(.success(outcome))
+                } catch {
+                    return .done(.failure(error))
+                }
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: Self.gameplayAppendRemoteTimeoutNanoseconds)
+                return .timedOut
+            }
+            guard let first = try await group.next() else {
+                throw GameplayAppendRemoteTimedOutError()
+            }
+            group.cancelAll()
+            while (try? await group.next()) != nil {}
+            switch first {
+            case .timedOut:
+                throw GameplayAppendRemoteTimedOutError()
+            case .done(.success(let outcome)):
+                return outcome
+            case .done(.failure(let error)):
+                throw error
             }
         }
     }
