@@ -150,6 +150,24 @@ final class SyncQueueRepository: ObservableObject, SyncQueueRepositoryProtocol {
         }
     }
 
+    func resetStuckInProgressSyncItemsToPending() throws {
+        guard let ctx = modelContext else { throw SyncQueueRepositoryError.noModelContext }
+        let inProgressState = SyncQueueItemState.inProgress.rawValue
+        let descriptor = FetchDescriptor<SyncQueueItemEntity>(
+            predicate: #Predicate<SyncQueueItemEntity> { $0.state == inProgressState }
+        )
+        let stuck = try ctx.fetch(descriptor)
+        guard !stuck.isEmpty else { return }
+        let pendingState = SyncQueueItemState.pending.rawValue
+        let now = Date()
+        for entity in stuck {
+            entity.state = pendingState
+            entity.nextRetryAt = nil
+            entity.updatedAt = now
+        }
+        try ctx.save()
+    }
+
     // MARK: - Private
 
     private func updateState(id: String, state: SyncQueueItemState) throws {

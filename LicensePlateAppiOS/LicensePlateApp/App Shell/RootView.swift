@@ -67,6 +67,7 @@ struct RootView: View {
             TravelLogRepository.shared.setModelContext(modelContext)
             TripActivityEventRepository.shared.setModelContext(modelContext)
             SyncQueueRepository.shared.setModelContext(modelContext)
+            try? SyncQueueRepository.shared.resetStuckInProgressSyncItemsToPending()
             TripInviteRepository.shared.setModelContext(modelContext)
             PendingTripLeaveRepository.shared.setModelContext(modelContext)
             UserLifetimeStatsRepository.shared.setModelContext(modelContext)

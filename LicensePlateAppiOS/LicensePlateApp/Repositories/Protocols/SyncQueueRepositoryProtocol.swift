@@ -30,6 +30,8 @@ protocol SyncQueueRepositoryProtocol: AnyObject {
     func hasNonTerminalGameplayItem(forEventId eventId: String) throws -> Bool
     /// True if any gameplay row is still `pending`, or `failed` with retry due (used to chain backlog drain passes).
     func hasPendingOrRetryDueGameplayItems() throws -> Bool
+    /// After cold start / kill during upload, rows can be stuck `inProgress` and never match `fetchPending`. Clears them to `pending`.
+    func resetStuckInProgressSyncItemsToPending() throws
 }
 
 extension SyncQueueRepositoryProtocol {

@@ -48,6 +48,32 @@ struct SyncQueueRepositoryTests {
         #expect(pending[0].payloadEventId == "evt-1")
     }
 
+    @Test func resetStuckInProgressSyncItemsToPendingRecoversRows() async throws {
+        _ = try makeContext()
+        let repo = SyncQueueRepository.shared
+        let id = UUID().uuidString
+        let item = SyncQueueItem(
+            id: id,
+            kind: .gameplayEvent,
+            state: .pending,
+            attemptCount: 0,
+            createdAt: .now,
+            updatedAt: .now,
+            payloadSessionId: UUID().uuidString,
+            payloadEventId: "evt-stuck"
+        )
+        try repo.enqueue(item)
+        try repo.markInProgress(id: id)
+        #expect(try repo.fetchPending(limit: 10).isEmpty)
+
+        try repo.resetStuckInProgressSyncItemsToPending()
+        let pending = try repo.fetchPending(limit: 10)
+        #expect(pending.count == 1)
+        #expect(pending[0].id == id)
+        #expect(pending[0].state == .pending)
+        #expect(pending[0].nextRetryAt == nil)
+    }
+
     @Test func markInProgressThenCompleted() async throws {
         _ = try makeContext()
         let repo = SyncQueueRepository.shared
