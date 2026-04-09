@@ -39,6 +39,9 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     /// Upper bound on a single `appendEventToRemote` await so a hung `httpsCallable` cannot block all later flushes.
     static let gameplayAppendRemoteTimeoutNanoseconds: UInt64 = 45_000_000_000
 
+    /// Max extra `fetchPending()` passes per `processPendingSyncItems` so large offline backlogs drain without another user action.
+    private static let maxGameplayBacklogDrainPasses = 10
+
     private let repository: SyncQueueRepositoryProtocol
     private var userSyncExecutor: UserSyncExecutorProtocol?
     private var lastProcessPendingRunAt: Date?
@@ -133,90 +136,109 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     }
 
     private func processPendingSyncItemsBody() async {
-        let pending = (try? repository.fetchPending(limit: 50)) ?? []
-        let retryDue = (try? repository.fetchFailedRetryDue()) ?? []
-        let candidates = Dictionary(uniqueKeysWithValues: (pending + retryDue).map { ($0.id, $0) }).values.sorted { $0.createdAt < $1.createdAt }
+        var gameplayDrainPass = 0
+        while gameplayDrainPass < Self.maxGameplayBacklogDrainPasses {
+            let pending = (try? repository.fetchPending()) ?? []
+            let retryDue = (try? repository.fetchFailedRetryDue()) ?? []
+            let candidates = Dictionary(uniqueKeysWithValues: (pending + retryDue).map { ($0.id, $0) }).values.sorted { $0.createdAt < $1.createdAt }
 
-        for item in candidates where item.kind == .gameplayEvent {
-            guard let sessionStr = item.payloadSessionId,
-                  let eventId = item.payloadEventId,
-                  let sessionUUID = UUID(uuidString: sessionStr) else {
-                try? repository.markCancelled(id: item.id)
-                continue
+            let gameplayItems = candidates.filter { $0.kind == .gameplayEvent }
+            if gameplayItems.isEmpty {
+                break
             }
-            do {
-                try repository.markInProgress(id: item.id)
-                guard let event = try TripActivityEventRepository.shared.event(byId: eventId) else {
-                    try? repository.markCompleted(id: item.id)
+
+            for item in gameplayItems {
+                guard let sessionStr = item.payloadSessionId,
+                      let eventId = item.payloadEventId,
+                      let sessionUUID = UUID(uuidString: sessionStr) else {
+                    try? repository.markCancelled(id: item.id)
                     continue
                 }
-                let outcome = try await Self.appendEventToRemoteRespectingTimeout(event: event)
-                let gameIdStr = event.payload?[TripActivityEventPayloadKey.gameInstanceId] ?? ""
-                switch outcome {
-                case .accepted:
-                    AnalyticsService.shared.log(.gameplayEventServerAccepted(
-                        tripSessionId: sessionUUID.uuidString,
-                        gameInstanceId: gameIdStr,
-                        eventKind: event.kind.rawValue
-                    ))
-                    if event.kind == .participantLeft {
-                        let pid = event.payload?[TripActivityEventPayloadKey.participantId] ?? event.actorId ?? ""
-                        if !pid.isEmpty {
-                            try? PendingTripLeaveRepository.shared.deletePending(sessionId: sessionUUID, userId: pid)
-                            if Auth.auth().currentUser?.uid == pid {
-                                AnalyticsService.shared.log(.tripParticipantLeaveServerCompleted(tripSessionId: sessionUUID.uuidString))
-                            }
-                        }
+                do {
+                    try repository.markInProgress(id: item.id)
+                    guard let event = try TripActivityEventRepository.shared.event(byId: eventId) else {
+                        try? repository.markCompleted(id: item.id)
+                        continue
                     }
-                case let .superseded(localId, rejection):
-                    try TripActivityEventRepository.shared.deleteEvent(id: localId)
-                    var imported: [TripActivityEvent] = []
-                    if let canonical = CompetitiveSupersedeCanonicalDiscovery.regionFoundEvent(from: rejection) {
-                        imported.append(canonical)
-                    }
-                    imported.append(rejection)
-                    try TripActivityEventRepository.shared.importEventsIfAbsent(imported)
-                    let tripName = (try? TripSessionRepository.shared.session(byId: sessionUUID))?.name ?? ""
-                    if let info = FairnessResolutionInfo(rejection: rejection, sessionId: sessionUUID, tripSessionName: tripName) {
-                        TripCanonicalRemoteSyncService.shared.publishFairnessResolution(info)
-                    }
-                    AnalyticsService.shared.log(.gameplayEventServerSuperseded(
-                        tripSessionId: sessionUUID.uuidString,
-                        gameInstanceId: gameIdStr,
-                        serverRejectionEventId: rejection.id,
-                        reason: rejection.payload?[TripActivityEventPayloadKey.rejectionReason] ?? ""
-                    ))
-                }
-                try? repository.markCompleted(id: item.id)
-            } catch {
-                let resolvedEvent = try? TripActivityEventRepository.shared.event(byId: eventId)
-                let eventKind = resolvedEvent?.kind.rawValue ?? ""
-                let gameIdStr = resolvedEvent?.payload?[TripActivityEventPayloadKey.gameInstanceId] ?? ""
-                if Self.isPermanentGameplaySyncFailure(error) {
-                    AnalyticsService.shared.log(.gameplayEventServerRejected(
-                        tripSessionId: sessionUUID.uuidString,
-                        eventKind: eventKind,
-                        errorCode: (error as NSError).code,
-                        errorDomain: (error as NSError).domain
-                    ))
-                    try? repository.markCancelled(id: item.id)
-                } else {
-                    if error is GameplayAppendRemoteTimedOutError {
-                        let timeoutSec = max(Int(Self.gameplayAppendRemoteTimeoutNanoseconds / 1_000_000_000), 1)
-                        AnalyticsService.shared.log(.gameplayEventAppendTimedOut(
+                    let outcome = try await Self.appendEventToRemoteRespectingTimeout(event: event)
+                    let gameIdStr = event.payload?[TripActivityEventPayloadKey.gameInstanceId] ?? ""
+                    switch outcome {
+                    case .accepted:
+                        AnalyticsService.shared.log(.gameplayEventServerAccepted(
                             tripSessionId: sessionUUID.uuidString,
                             gameInstanceId: gameIdStr,
-                            eventKind: eventKind,
-                            attemptCount: item.attemptCount,
-                            timeoutSeconds: timeoutSec
+                            eventKind: event.kind.rawValue
+                        ))
+                        if event.kind == .participantLeft {
+                            let pid = event.payload?[TripActivityEventPayloadKey.participantId] ?? event.actorId ?? ""
+                            if !pid.isEmpty {
+                                try? PendingTripLeaveRepository.shared.deletePending(sessionId: sessionUUID, userId: pid)
+                                if Auth.auth().currentUser?.uid == pid {
+                                    AnalyticsService.shared.log(.tripParticipantLeaveServerCompleted(tripSessionId: sessionUUID.uuidString))
+                                }
+                            }
+                        }
+                    case let .superseded(localId, rejection):
+                        try TripActivityEventRepository.shared.deleteEvent(id: localId)
+                        var imported: [TripActivityEvent] = []
+                        if let canonical = CompetitiveSupersedeCanonicalDiscovery.regionFoundEvent(from: rejection) {
+                            imported.append(canonical)
+                        }
+                        imported.append(rejection)
+                        try TripActivityEventRepository.shared.importEventsIfAbsent(imported)
+                        let tripName = (try? TripSessionRepository.shared.session(byId: sessionUUID))?.name ?? ""
+                        if let info = FairnessResolutionInfo(rejection: rejection, sessionId: sessionUUID, tripSessionName: tripName) {
+                            TripCanonicalRemoteSyncService.shared.publishFairnessResolution(info)
+                        }
+                        AnalyticsService.shared.log(.gameplayEventServerSuperseded(
+                            tripSessionId: sessionUUID.uuidString,
+                            gameInstanceId: gameIdStr,
+                            serverRejectionEventId: rejection.id,
+                            reason: rejection.payload?[TripActivityEventPayloadKey.rejectionReason] ?? ""
                         ))
                     }
-                    let attempts = max(item.attemptCount, 0) + 1
-                    let delaySeconds = min(pow(2.0, Double(attempts - 1)) * 60.0, 3600.0)
-                    let nextRetryAt = Date().addingTimeInterval(delaySeconds)
-                    try? repository.markFailed(id: item.id, nextRetryAt: nextRetryAt)
+                    try? repository.markCompleted(id: item.id)
+                } catch {
+                    let resolvedEvent = try? TripActivityEventRepository.shared.event(byId: eventId)
+                    let eventKind = resolvedEvent?.kind.rawValue ?? ""
+                    let gameIdStr = resolvedEvent?.payload?[TripActivityEventPayloadKey.gameInstanceId] ?? ""
+                    if Self.isPermanentGameplaySyncFailure(error) {
+                        AnalyticsService.shared.log(.gameplayEventServerRejected(
+                            tripSessionId: sessionUUID.uuidString,
+                            eventKind: eventKind,
+                            errorCode: (error as NSError).code,
+                            errorDomain: (error as NSError).domain
+                        ))
+                        try? repository.markCancelled(id: item.id)
+                    } else {
+                        if error is GameplayAppendRemoteTimedOutError {
+                            let timeoutSec = max(Int(Self.gameplayAppendRemoteTimeoutNanoseconds / 1_000_000_000), 1)
+                            AnalyticsService.shared.log(.gameplayEventAppendTimedOut(
+                                tripSessionId: sessionUUID.uuidString,
+                                gameInstanceId: gameIdStr,
+                                eventKind: eventKind,
+                                attemptCount: item.attemptCount,
+                                timeoutSeconds: timeoutSec
+                            ))
+                        }
+                        let attempts = max(item.attemptCount, 0) + 1
+                        let delaySeconds = min(pow(2.0, Double(attempts - 1)) * 60.0, 3600.0)
+                        let nextRetryAt = Date().addingTimeInterval(delaySeconds)
+                        try? repository.markFailed(id: item.id, nextRetryAt: nextRetryAt)
+                    }
                 }
             }
+
+            gameplayDrainPass += 1
+            let moreGameplay = (try? repository.hasPendingOrRetryDueGameplayItems()) ?? false
+            if !moreGameplay {
+                break
+            }
+        }
+
+        if gameplayDrainPass >= Self.maxGameplayBacklogDrainPasses,
+           (try? repository.hasPendingOrRetryDueGameplayItems()) ?? false {
+            pendingAnotherGameplayFlush = true
         }
 
         guard let userSyncExecutor else { return }
@@ -226,7 +248,11 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         }
         lastProcessPendingRunAt = now
 
-        for item in candidates where item.kind == .userProfile {
+        let pendingForProfile = (try? repository.fetchPending()) ?? []
+        let retryDueForProfile = (try? repository.fetchFailedRetryDue()) ?? []
+        let profileCandidates = Dictionary(uniqueKeysWithValues: (pendingForProfile + retryDueForProfile).map { ($0.id, $0) }).values.sorted { $0.createdAt < $1.createdAt }
+
+        for item in profileCandidates where item.kind == .userProfile {
             guard let userIdData = item.payloadData,
                   let userId = String(data: userIdData, encoding: .utf8),
                   !userId.isEmpty else {

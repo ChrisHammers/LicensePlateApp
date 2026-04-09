@@ -72,6 +72,31 @@ struct SyncCoordinatorTests {
         #expect(pending[0].payloadData.flatMap { String(data: $0, encoding: .utf8) } == "user-123")
     }
 
+    @Test func hasPendingOrRetryDueGameplayItemsReflectsQueue() async throws {
+        let ctx = try makeContext()
+        let repo = SyncQueueRepository.shared
+        repo.setModelContext(ctx)
+        let coordinator = SyncCoordinator(repository: repo)
+
+        #expect(try repo.hasPendingOrRetryDueGameplayItems() == false)
+
+        let sessionId = UUID()
+        try coordinator.enqueueForSync(sessionId: sessionId, eventId: "e-drain-test")
+        #expect(try repo.hasPendingOrRetryDueGameplayItems() == true)
+
+        let pending = try repo.fetchPending(limit: 1)
+        try repo.markCompleted(id: pending[0].id)
+        #expect(try repo.hasPendingOrRetryDueGameplayItems() == false)
+
+        try coordinator.enqueueForSync(sessionId: sessionId, eventId: "e-drain-test-2")
+        let pending2 = try repo.fetchPending(limit: 1)
+        try repo.markFailed(id: pending2[0].id, nextRetryAt: Date().addingTimeInterval(3600))
+        #expect(try repo.hasPendingOrRetryDueGameplayItems() == false)
+
+        try repo.markFailed(id: pending2[0].id, nextRetryAt: Date().addingTimeInterval(-60))
+        #expect(try repo.hasPendingOrRetryDueGameplayItems() == true)
+    }
+
     @Test func processPendingSyncItemsCompletesUserProfileItem() async throws {
         let ctx = try makeContext()
         let repo = SyncQueueRepository.shared
