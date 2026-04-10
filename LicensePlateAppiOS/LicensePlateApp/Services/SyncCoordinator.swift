@@ -39,6 +39,12 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     /// Upper bound on a single `appendEventToRemote` await so a hung `httpsCallable` cannot block all later flushes.
     static let gameplayAppendRemoteTimeoutNanoseconds: UInt64 = 45_000_000_000
 
+    /// After transient `game not found`, wait before flushing so `publishFullSession` can create `games/{id}` on Firestore.
+    private static let gameplayGameNotFoundRetryDelayNanoseconds: UInt64 = 3_500_000_000
+
+    /// Max retries for transient `game not found` before treating like a permanent sync failure.
+    private static let gameplayGameNotFoundMaxAttempts = 10
+
     /// Max extra `fetchPending()` passes per `processPendingSyncItems` so large offline backlogs drain without another user action.
     private static let maxGameplayBacklogDrainPasses = 10
 
@@ -135,6 +141,14 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         await processPendingSyncItemsBody()
     }
 
+    /// Wakes the queue after `nextRetryAt` for transient `game not found` (no user action required).
+    private func scheduleProcessPendingAfterGameplayRetryDelay() {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: Self.gameplayGameNotFoundRetryDelayNanoseconds)
+            await self?.processPendingSyncItems()
+        }
+    }
+
     private func processPendingSyncItemsBody() async {
         var gameplayDrainPass = 0
         while gameplayDrainPass < Self.maxGameplayBacklogDrainPasses {
@@ -202,6 +216,25 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                     let resolvedEvent = try? TripActivityEventRepository.shared.event(byId: eventId)
                     let eventKind = resolvedEvent?.kind.rawValue ?? ""
                     let gameIdStr = resolvedEvent?.payload?[TripActivityEventPayloadKey.gameInstanceId] ?? ""
+                    if Self.isTransientGameNotFoundGameplayFailure(error) {
+                        if item.attemptCount < Self.gameplayGameNotFoundMaxAttempts {
+                            Task { @MainActor in
+                                try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionUUID)
+                            }
+                            let nextRetryAt = Date().addingTimeInterval(3)
+                            try? repository.markFailed(id: item.id, nextRetryAt: nextRetryAt)
+                            scheduleProcessPendingAfterGameplayRetryDelay()
+                            continue
+                        }
+                        AnalyticsService.shared.log(.gameplayEventServerRejected(
+                            tripSessionId: sessionUUID.uuidString,
+                            eventKind: eventKind,
+                            errorCode: (error as NSError).code,
+                            errorDomain: (error as NSError).domain
+                        ))
+                        try? repository.markCancelled(id: item.id)
+                        continue
+                    }
                     if Self.isPermanentGameplaySyncFailure(error) {
                         AnalyticsService.shared.log(.gameplayEventServerRejected(
                             tripSessionId: sessionUUID.uuidString,
@@ -314,6 +347,14 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         default:
             return false
         }
+    }
+
+    /// `appendTripActivityEvent` before `games/{id}` exists (publish still in flight or failed). Retry, do not cancel the queue row.
+    private static func isTransientGameNotFoundGameplayFailure(_ error: Error) -> Bool {
+        let ns = error as NSError
+        guard ns.domain == FunctionsErrorDomain else { return false }
+        guard let code = FunctionsErrorCode(rawValue: ns.code), code == .failedPrecondition else { return false }
+        return ns.localizedDescription.lowercased().contains("game not found")
     }
 
 }

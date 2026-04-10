@@ -209,6 +209,10 @@ final class TripSessionViewModel: ObservableObject {
             if let startGameError {
                 errorMessage = startGameError
             }
+            // Runtime-proven: server `appendTripActivityEvent` returns "game not found" until `games/{id}` exists on Firestore (publishTripCanonicalState).
+            Task { @MainActor in
+                try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionId)
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
