@@ -11,11 +11,14 @@ import Combine
 /// Server fairness messaging after sync (Step 13); stacked non-blocking banners in-game.
 struct FairnessToastState: Equatable, Identifiable {
     let id: UUID
+    /// `TripActivityEvent.id` for `discovery_rejected` when present; used for tap-to-ack watermark.
+    let sourceRejectionEventId: String?
     var title: String
     var message: String
 
-    init(title: String, message: String) {
+    init(sourceRejectionEventId: String?, title: String, message: String) {
         self.id = UUID()
+        self.sourceRejectionEventId = sourceRejectionEventId
         self.title = title
         self.message = message
     }
@@ -62,7 +65,7 @@ final class LicensePlateGameViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     /// Dedupes fairness alert when the same `discovery_rejected` arrives via sync and Firestore listener.
     private var shownFairnessRejectionEventIds = Set<String>()
-    /// Prevents interleaved `applyFairnessToastBacklogFromEventLog` runs (init `Task` vs tests / hydration) from splitting backlog work and advancing the watermark to only the first rejection.
+    /// Prevents interleaved `applyFairnessToastBacklogFromEventLog(` init `Task` vs tests / hydration) from splitting backlog work and advancing the watermark to only the first rejection.) and runs from duplicating toast rows.
     private var isApplyingFairnessToastBacklog = false
 
     var isTripCreator: Bool {
@@ -160,7 +163,17 @@ final class LicensePlateGameViewModel: ObservableObject {
     }
 
     func clearFairnessToast(id: UUID) {
+        guard let toast = fairnessToasts.first(where: { $0.id == id }) else { return }
         fairnessToasts.removeAll { $0.id == id }
+        guard let sourceRejectionEventId = toast.sourceRejectionEventId else { return }
+        shownFairnessRejectionEventIds.insert(sourceRejectionEventId)
+        Task { await advanceFairnessWatermark(forRejectionEventIds: [sourceRejectionEventId]) }
+    }
+
+    /// Clears in-game fairness banners and session dedupe after trip end/cancel or game reset.
+    private func clearFairnessToastUIState() {
+        fairnessToasts = []
+        shownFairnessRejectionEventIds.removeAll()
     }
 
     /// Re-merge fairness watermark and scan `discovery_rejected` backlog when returning to the game or after sync (no app restart).
@@ -270,7 +283,11 @@ final class LicensePlateGameViewModel: ObservableObject {
         } else {
             message = "Fairness invalid participant body %@ %@".localized(regionName, tripName)
         }
-        fairnessToasts.append(FairnessToastState(title: "Region selection order resolution".localized, message: message))
+        fairnessToasts.append(FairnessToastState(
+            sourceRejectionEventId: info.sourceRejectionEventId,
+            title: "Region selection order resolution".localized,
+            message: message
+        ))
         return true
     }
 
@@ -281,9 +298,6 @@ final class LicensePlateGameViewModel: ObservableObject {
         if refreshAfter {
             refreshFoundRegions()
             refreshCompetitiveProjections()
-        }
-        if let id = info.sourceRejectionEventId {
-            await advanceFairnessWatermark(forRejectionEventIds: [id])
         }
     }
 
@@ -313,19 +327,11 @@ final class LicensePlateGameViewModel: ObservableObject {
             FairnessResolutionInfo(rejection: $0, sessionId: sessionId, tripSessionName: tripName)
         }
         guard !infos.isEmpty else { return }
-        var newIds: [String] = []
         for info in infos {
-            if await appendFairnessToastContentIfNew(info) {
-                if let id = info.sourceRejectionEventId {
-                    newIds.append(id)
-                }
-            }
+            _ = await appendFairnessToastContentIfNew(info)
         }
         refreshFoundRegions()
         refreshCompetitiveProjections()
-        if !newIds.isEmpty {
-            await advanceFairnessWatermark(forRejectionEventIds: newIds)
-        }
     }
 
     func refreshSession() {
@@ -416,6 +422,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         try lifecycleService.endTrip(sessionId: sessionId, endedBy: endedBy)
         refreshSession()
         refreshGame()
+        clearFairnessToastUIState()
     }
 
     func startGame() throws {
@@ -436,6 +443,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         refreshGame()
         refreshFoundRegions()
         foundRegions = []
+        clearFairnessToastUIState()
     }
 
     /// Cancels the trip session (UI: Delete trip); clears games and events via `TripSessionLifecycleService`.
@@ -444,6 +452,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         try lifecycleService.cancelSession(sessionId: sessionId, cancelledBy: cancelledBy)
         refreshSession()
         refreshGame()
+        clearFairnessToastUIState()
     }
 
     /// Removes this game instance from the trip (multi-game only). Pop the game screen after success.

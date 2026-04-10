@@ -781,7 +781,7 @@ struct LicensePlateGameViewModelTests {
         #expect(viewModel.fairnessToasts[2].message.contains("California"))
     }
 
-    @Test func applyFairnessToastBacklogAdvancesLocalWatermarkToMaxRejectionTimestamp() async throws {
+    @Test func applyFairnessToastBacklogDoesNotAdvanceWatermarkUntilToastTapAck() async throws {
         let sessionId = UUID()
         let gameId = UUID()
         let session = makeSession(id: sessionId, startedAt: Date())
@@ -827,7 +827,194 @@ struct LicensePlateGameViewModelTests {
 
         await viewModel.applyFairnessToastBacklogFromEventLog()
 
+        #expect(viewModel.fairnessToasts.count == 2)
         let persisted = try #require(try gameRepo.instance(byId: gameId))
-        #expect(persisted.fairnessUiLastAckAt == t2)
+        #expect(persisted.fairnessUiLastAckAt == nil)
+
+        let toastId = try #require(viewModel.fairnessToasts.last?.id)
+        viewModel.clearFairnessToast(id: toastId)
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        let persistedAfterAck = try #require(try gameRepo.instance(byId: gameId))
+        #expect(persistedAfterAck.fairnessUiLastAckAt == t2)
+    }
+
+    @Test func fairnessToastBacklogReshowsOnReenterUntilAck() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = makeSession(id: sessionId, startedAt: Date())
+        var game = makeCompetitiveStartedGame(gameId: gameId, sessionId: sessionId)
+        game.fairnessUiLastAckAt = nil
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        gameRepo.seed(game)
+        let eventRepo = MockTripActivityEventRepository()
+        try eventRepo.append(TripActivityEvent(
+            id: "rej-only",
+            sessionId: sessionId,
+            kind: .discoveryRejected,
+            timestamp: Date(timeIntervalSince1970: 1_500),
+            actorId: "user1",
+            payload: fairnessLateCompetitivePayload(gameId: gameId, regionId: "us-or", participantId: "user1", firstFinder: "user2")
+        ))
+
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: "user1", userName: "U", firebaseUID: "user1")
+
+        let vmFirstEntry = LicensePlateGameViewModel(
+            session: session,
+            game: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: MockTripSessionLifecycleService(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
+            authService: auth
+        )
+        await vmFirstEntry.applyFairnessToastBacklogFromEventLog()
+        try await Task.sleep(nanoseconds: 300_000_000)
+        #expect(vmFirstEntry.fairnessToasts.count == 1)
+
+        let vmSecondEntry = LicensePlateGameViewModel(
+            session: session,
+            game: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: MockTripSessionLifecycleService(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
+            authService: auth
+        )
+        // Init schedules backlog apply asynchronously; wait so we assert after it runs (avoids racing `isApplyingFairnessToastBacklog`).
+        try await Task.sleep(nanoseconds: 300_000_000)
+        #expect(vmSecondEntry.fairnessToasts.count == 1)
+    }
+
+    @Test func endTripClearsFairnessToasts() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = makeSession(id: sessionId, startedAt: Date())
+        var game = makeCompetitiveStartedGame(gameId: gameId, sessionId: sessionId)
+        game.fairnessUiLastAckAt = nil
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        gameRepo.seed(game)
+        let eventRepo = MockTripActivityEventRepository()
+        try eventRepo.append(TripActivityEvent(
+            id: "rej-end",
+            sessionId: sessionId,
+            kind: .discoveryRejected,
+            timestamp: Date(timeIntervalSince1970: 900),
+            actorId: "user1",
+            payload: fairnessLateCompetitivePayload(gameId: gameId, regionId: "us-ut", participantId: "user1", firstFinder: "user2")
+        ))
+
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: "user1", userName: "U", firebaseUID: "user1")
+        let viewModel = LicensePlateGameViewModel(
+            session: session,
+            game: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: MockTripSessionLifecycleService(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
+            authService: auth
+        )
+
+        await viewModel.applyFairnessToastBacklogFromEventLog()
+        #expect(viewModel.fairnessToasts.count == 1)
+
+        try viewModel.endTrip()
+        #expect(viewModel.fairnessToasts.isEmpty)
+    }
+
+    @Test func deleteTripClearsFairnessToasts() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = makeSession(id: sessionId, startedAt: Date())
+        var game = makeCompetitiveStartedGame(gameId: gameId, sessionId: sessionId)
+        game.fairnessUiLastAckAt = nil
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        gameRepo.seed(game)
+        let eventRepo = MockTripActivityEventRepository()
+        try eventRepo.append(TripActivityEvent(
+            id: "rej-cancel",
+            sessionId: sessionId,
+            kind: .discoveryRejected,
+            timestamp: Date(timeIntervalSince1970: 800),
+            actorId: "user1",
+            payload: fairnessLateCompetitivePayload(gameId: gameId, regionId: "us-nv", participantId: "user1", firstFinder: "user2")
+        ))
+
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: "user1", userName: "U", firebaseUID: "user1")
+        let viewModel = LicensePlateGameViewModel(
+            session: session,
+            game: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: MockTripSessionLifecycleService(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
+            authService: auth
+        )
+
+        await viewModel.applyFairnessToastBacklogFromEventLog()
+        #expect(viewModel.fairnessToasts.count == 1)
+
+        try viewModel.deleteTrip()
+        #expect(viewModel.fairnessToasts.isEmpty)
+    }
+
+    @Test func resetGameClearsFairnessToasts() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = makeSession(id: sessionId, startedAt: Date())
+        var game = makeCompetitiveStartedGame(gameId: gameId, sessionId: sessionId)
+        game.fairnessUiLastAckAt = nil
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        gameRepo.seed(game)
+        let eventRepo = MockTripActivityEventRepository()
+        try eventRepo.append(TripActivityEvent(
+            id: "rej-reset",
+            sessionId: sessionId,
+            kind: .discoveryRejected,
+            timestamp: Date(timeIntervalSince1970: 700),
+            actorId: "user1",
+            payload: fairnessLateCompetitivePayload(gameId: gameId, regionId: "us-id", participantId: "user1", firstFinder: "user2")
+        ))
+
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: "user1", userName: "U", firebaseUID: "user1")
+        let mockGameLifecycle = MockGameInstanceLifecycleService()
+        let viewModel = LicensePlateGameViewModel(
+            session: session,
+            game: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: MockTripSessionLifecycleService(),
+            gameInstanceLifecycleService: mockGameLifecycle,
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
+            authService: auth
+        )
+
+        await viewModel.applyFairnessToastBacklogFromEventLog()
+        #expect(viewModel.fairnessToasts.count == 1)
+
+        try viewModel.resetGame()
+        #expect(viewModel.fairnessToasts.isEmpty)
+        #expect(mockGameLifecycle.resetGameCallCount == 1)
     }
 }
