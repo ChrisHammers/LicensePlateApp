@@ -12,6 +12,7 @@ struct TripSummaryView: View {
     var onDismiss: (() -> Void)?
 
     @State private var participantDisplayNames: [String: String] = [:]
+    @State private var showAllDiscoveryHighlights = false
 
     private let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -20,11 +21,15 @@ struct TripSummaryView: View {
         return f
     }()
 
+    /// Collapsed row count for discovery highlights (expand via control below).
+    private var discoveryHighlightsCollapsedLimit: Int { 20 }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 headerSection
                 statsSection
+                recapIncompleteBanner
                 if !summary.rankedParticipants.isEmpty {
                     participantsSection
                 }
@@ -82,13 +87,22 @@ struct TripSummaryView: View {
             return "Found by %@".localized(participantDisplayNames[firstId] ?? firstId)
         }
         if target.allFinderParticipantIds.count > 1 {
-            if let gid = target.gameInstanceId,
-               let mode = summary.games.first(where: { $0.gameInstanceId == gid })?.gameMode,
-               GameModeRulesEngine.displayFirstFinderProminently(mode: mode),
+            let mode: GameMode? = {
+                guard let gid = target.gameInstanceId else { return nil }
+                return summary.games.first(where: { $0.gameInstanceId == gid })?.gameMode
+            }()
+            let effectiveMode = mode ?? .collaborative
+            if GameModeRulesEngine.displayFirstFinderProminently(mode: effectiveMode),
                let firstId = target.firstFinderParticipantId {
                 return "Found by %@".localized(participantDisplayNames[firstId] ?? firstId)
             }
-            return "%d finders".localized(target.allFinderParticipantIds.count)
+            if effectiveMode == .competitive {
+                return "%d finders".localized(target.allFinderParticipantIds.count)
+            }
+            return ParticipantDiscoveryResolver.collaborativeMultiFinderDisplayLabel(
+                orderedParticipantIds: target.allFinderParticipantIds,
+                displayNames: participantDisplayNames
+            )
         }
         return target.summaryLabel
     }
@@ -160,6 +174,30 @@ struct TripSummaryView: View {
                 + ", \(tripStatusLabel(summary.status))"
                 + ", \(summary.participantCount) participants, \(summary.gameCount) games, \(summary.totalDiscoveryCount) discoveries"
         )
+    }
+
+    @ViewBuilder
+    private var recapIncompleteBanner: some View {
+        if summary.unassignedDiscoveryCount > 0 {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "info.circle.fill")
+                    .font(.system(.title3))
+                    .foregroundStyle(Color.Theme.primaryBlue.opacity(0.75))
+                    .accessibilityHidden(true)
+                Text("Some discoveries are not tied to a game on this recap.".localized)
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.Theme.cardBackground)
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Some discoveries are not tied to a game on this recap.".localized)
+        }
     }
 
     private func tripStatusLabel(_ status: TripSessionState) -> String {
@@ -304,7 +342,12 @@ struct TripSummaryView: View {
     }
 
     private func firstDiscoveriesSection(projection: DiscoveryCreditProjection) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let summaries = projection.targetSummaries
+        let limit = discoveryHighlightsCollapsedLimit
+        let isTruncating = summaries.count > limit && !showAllDiscoveryHighlights
+        let visible: [TargetDiscoverySummary] = isTruncating ? Array(summaries.prefix(limit)) : summaries
+
+        return VStack(alignment: .leading, spacing: 12) {
             Text("Discovery highlights".localized)
                 .font(.system(.headline, design: .rounded))
                 .foregroundStyle(Color.Theme.primaryBlue)
@@ -316,7 +359,7 @@ struct TripSummaryView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel("Scores and finds combine all games on this trip.".localized)
             }
-            ForEach(Array(projection.targetSummaries.prefix(20))) { target in
+            ForEach(visible) { target in
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
                         Text(regionName(for: target.targetId))
@@ -338,6 +381,26 @@ struct TripSummaryView: View {
                 .padding(.vertical, 4)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(discoveryHighlightAccessibilityLabel(for: target))
+            }
+            if summaries.count > limit {
+                Button {
+                    FeedbackService.shared.buttonTap()
+                    showAllDiscoveryHighlights.toggle()
+                } label: {
+                    Text(
+                        isTruncating
+                            ? "Show all discovery highlights".localized
+                            : "Show fewer discovery highlights".localized
+                    )
+                    .font(.system(.subheadline, design: .rounded))
+                    .fontWeight(.medium)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                }
+                .accessibilityHint(
+                    isTruncating
+                        ? "More discovery highlights are hidden. Expand to show all.".localized
+                        : "Collapses the discovery highlights list.".localized
+                )
             }
         }
         .padding()
@@ -402,5 +465,17 @@ struct TripSummaryView: View {
 #Preview("Competitive — tied standings") {
     NavigationStack {
         TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryCompetitiveTied(), onDismiss: nil)
+    }
+}
+
+#Preview("Collaborative — three finders, one region") {
+    NavigationStack {
+        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryCollaborativeThreeFindersOneRegion(), onDismiss: nil)
+    }
+}
+
+#Preview("Discovery highlights — show all control") {
+    NavigationStack {
+        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryManyDiscoveryHighlights(), onDismiss: nil)
     }
 }

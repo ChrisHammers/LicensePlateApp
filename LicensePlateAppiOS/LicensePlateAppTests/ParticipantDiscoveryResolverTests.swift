@@ -74,4 +74,46 @@ struct ParticipantDiscoveryResolverTests {
         #expect(result.allFinderParticipantIds == ["user1", "user2"])
         #expect(result.summaryLabel == "Found by %@".localized("user1"))
     }
+
+    // MARK: - Step 15 collaborative recap labels
+
+    @Test func collaborativeMultiFinderDisplayLabelTwoNames() async throws {
+        let label = ParticipantDiscoveryResolver.collaborativeMultiFinderDisplayLabel(
+            orderedParticipantIds: ["a", "b"],
+            displayNames: ["a": "Ann", "b": "Bob"]
+        )
+        #expect(label == "Found by %@ and %@".localized("Ann", "Bob"))
+    }
+
+    @Test func collaborativeMultiFinderDisplayLabelThreeNames() async throws {
+        let label = ParticipantDiscoveryResolver.collaborativeMultiFinderDisplayLabel(
+            orderedParticipantIds: ["a", "b", "c"],
+            displayNames: ["a": "Ann", "b": "Bob", "c": "Cam"]
+        )
+        #expect(label == "Found by %@, %@, and %@".localized("Ann", "Bob", "Cam"))
+    }
+
+    @Test func collaborativeMultiFinderDisplayLabelFourUsesOthersCount() async throws {
+        let label = ParticipantDiscoveryResolver.collaborativeMultiFinderDisplayLabel(
+            orderedParticipantIds: ["a", "b", "c", "d"],
+            displayNames: [:]
+        )
+        #expect(label == "Found by %@, %@, and %d others".localized("a", "b", 2))
+    }
+
+    @Test func collaborativeMultiFinderDisplayLabelFallsBackToRawIds() async throws {
+        let label = ParticipantDiscoveryResolver.collaborativeMultiFinderDisplayLabel(
+            orderedParticipantIds: ["uid-x", "uid-y"],
+            displayNames: [:]
+        )
+        #expect(label == "Found by %@ and %@".localized("uid-x", "uid-y"))
+    }
+
+    @Test func collaborativeMultiFinderDisplayLabelSingleFinder() async throws {
+        let label = ParticipantDiscoveryResolver.collaborativeMultiFinderDisplayLabel(
+            orderedParticipantIds: ["solo"],
+            displayNames: ["solo": "Sam"]
+        )
+        #expect(label == "Found by %@".localized("Sam"))
+    }
 }

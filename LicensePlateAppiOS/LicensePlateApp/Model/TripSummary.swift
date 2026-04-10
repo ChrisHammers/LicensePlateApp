@@ -52,4 +52,14 @@ struct TripSummary: Sendable {
     var hasCompetitiveGame: Bool {
         games.contains { $0.gameMode == .competitive }
     }
+
+    /// Discoveries attributed to a known `GameInstance` row on this recap (sum of per-game counts).
+    var assignedDiscoveryCount: Int {
+        games.reduce(0) { $0 + $1.discoveryCount }
+    }
+
+    /// Events exist for games not present in `games` (e.g. deleted instance); recap may omit per-game detail for these.
+    var unassignedDiscoveryCount: Int {
+        max(0, totalDiscoveryCount - assignedDiscoveryCount)
+    }
 }

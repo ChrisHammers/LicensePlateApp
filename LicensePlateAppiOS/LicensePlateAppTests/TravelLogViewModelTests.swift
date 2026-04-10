@@ -137,4 +137,73 @@ struct TravelLogViewModelTests {
         #expect(viewModel.selectedSummary?.tripName == "Trip With Plates")
         #expect(viewModel.selectedSummary?.totalDiscoveryCount == 2)
     }
+
+    // MARK: - Step 15 recap errors & projections
+
+    @Test func openSummaryFailureSetsSummaryErrorWithoutClearingListError() async throws {
+        let mockTrip = MockTripSessionRepository()
+        let mockGame = MockGameInstanceRepository()
+        let mockEvents = MockTripActivityEventRepository()
+        let mockLog = MockTravelLogRepository()
+
+        let sessionId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "Fails Fetch",
+            status: .ended,
+            createdAt: Date().addingTimeInterval(-200),
+            endedAt: Date().addingTimeInterval(-100),
+            participants: [TripParticipant(userId: "u1", role: .owner)]
+        )
+        mockTrip.seed(session)
+        mockGame.shouldThrow = true
+
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: mockLog,
+            tripSessionRepository: mockTrip,
+            gameInstanceRepository: mockGame,
+            tripActivityEventRepository: mockEvents,
+            authService: FirebaseAuthService()
+        )
+        viewModel.errorMessage = "List load failed"
+
+        viewModel.openSummary(sessionId: sessionId)
+
+        #expect(viewModel.summaryErrorMessage != nil)
+        #expect(viewModel.selectedSummary == nil)
+        #expect(viewModel.errorMessage == "List load failed")
+    }
+
+    @Test func clearSelectionClearsSummaryError() async throws {
+        let mockTrip = MockTripSessionRepository()
+        let mockGame = MockGameInstanceRepository()
+        let mockEvents = MockTripActivityEventRepository()
+        let mockLog = MockTravelLogRepository()
+
+        let sessionId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "X",
+            status: .ended,
+            createdAt: Date(),
+            endedAt: Date(),
+            participants: [TripParticipant(userId: "u1", role: .owner)]
+        )
+        mockTrip.seed(session)
+        mockGame.shouldThrow = true
+
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: mockLog,
+            tripSessionRepository: mockTrip,
+            gameInstanceRepository: mockGame,
+            tripActivityEventRepository: mockEvents,
+            authService: FirebaseAuthService()
+        )
+        viewModel.openSummary(sessionId: sessionId)
+        #expect(viewModel.summaryErrorMessage != nil)
+
+        viewModel.clearSelection()
+        #expect(viewModel.summaryErrorMessage == nil)
+        #expect(viewModel.selectedSummary == nil)
+    }
 }

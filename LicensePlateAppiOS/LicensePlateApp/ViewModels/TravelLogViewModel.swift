@@ -13,8 +13,13 @@ final class TravelLogViewModel: ObservableObject {
     @Published private(set) var entries: [TravelLogEntry] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    /// Recap sheet / `openSummary` only; kept separate from Travel Log list `errorMessage`.
+    @Published var summaryErrorMessage: String?
     @Published var selectedSummary: TripSummary?
     @Published var isLoadingSummary = false
+
+    /// Avoid duplicate section analytics if `onAppear` fires more than once for the same recap.
+    private var recapSectionAnalyticsLoggedSessionId: UUID?
 
     private let travelLogRepository: TravelLogRepositoryProtocol
     private let tripSessionRepository: TripSessionRepositoryProtocol
@@ -75,30 +80,56 @@ final class TravelLogViewModel: ObservableObject {
         FeedbackService.shared.buttonTap()
         isLoadingSummary = true
         selectedSummary = nil
-        errorMessage = nil
+        summaryErrorMessage = nil
+        recapSectionAnalyticsLoggedSessionId = nil
         defer { isLoadingSummary = false }
 
         do {
             guard let session = try tripSessionRepository.session(byId: sessionId) else {
-                errorMessage = "Trip not found".localized
+                summaryErrorMessage = "Trip not found".localized
                 return
             }
             let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
             let discoveries = try tripActivityEventRepository.discoveries(sessionId: sessionId, gameInstanceId: nil)
             let summary = TripSummaryBuilder.build(session: session, games: games, discoveries: discoveries)
             selectedSummary = summary
+            if summary.unassignedDiscoveryCount > 0 {
+                AnalyticsService.shared.log(
+                    .summaryProjectionMismatch(
+                        sessionId: sessionId.uuidString,
+                        error: "unassigned_discovery_count=\(summary.unassignedDiscoveryCount)"
+                    )
+                )
+            }
             AnalyticsService.shared.log(.tripSummaryViewed(sessionId: sessionId.uuidString))
             if summary.hasCompetitiveGame {
                 AnalyticsService.shared.log(.tripSummaryCompetitiveRankingsPresented(tripSessionId: sessionId.uuidString))
             }
         } catch {
-            errorMessage = error.localizedDescription
+            summaryErrorMessage = error.localizedDescription
         }
     }
 
     func clearSelection() {
         selectedSummary = nil
-        errorMessage = nil
+        summaryErrorMessage = nil
+        recapSectionAnalyticsLoggedSessionId = nil
+    }
+
+    /// When the recap sheet is on screen — logs section-level analytics once per session presentation.
+    func onRecapSheetAppeared(summary: TripSummary) {
+        if recapSectionAnalyticsLoggedSessionId == summary.sessionId { return }
+        recapSectionAnalyticsLoggedSessionId = summary.sessionId
+        let sid = summary.sessionId.uuidString
+        if !summary.games.isEmpty {
+            AnalyticsService.shared.log(.tripSummaryViewedGameSection(sessionId: sid))
+        }
+        if !summary.rankedParticipants.isEmpty {
+            AnalyticsService.shared.log(.tripSummaryViewedParticipantSection(sessionId: sid))
+        }
+        if let meta = summary.locationMetadata, !meta.isEmpty {
+            AnalyticsService.shared.log(.tripSummaryViewedMapRecap(sessionId: sid))
+        }
     }
 
     /// Call when Travel Log screen is shown (e.g. onAppear).

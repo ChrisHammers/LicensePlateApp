@@ -107,6 +107,30 @@ struct TripSummaryBuilderTests {
         #expect(summary.discoveryProjection!.targetSummaries.count == 2)
     }
 
+    /// Step 15 — Orphan events (no matching `GameInstance` row): totals vs per-game assignment diverge.
+    @Test func buildWithDiscoveriesButEmptyGamesUnassignedDiscoveryCount() async throws {
+        let sessionId = UUID()
+        let missingGameId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "Orphan events",
+            status: .ended,
+            createdAt: Date().addingTimeInterval(-100),
+            endedAt: Date(),
+            participants: [TripParticipant(userId: "user1", role: .owner)]
+        )
+        let d = GameDiscovery(
+            gameInstanceId: missingGameId,
+            participantId: "user1",
+            targetId: "CA",
+            inputMethod: .list
+        )
+        let summary = TripSummaryBuilder.build(session: session, games: [], discoveries: [d])
+        #expect(summary.totalDiscoveryCount == 1)
+        #expect(summary.assignedDiscoveryCount == 0)
+        #expect(summary.unassignedDiscoveryCount == 1)
+    }
+
     // MARK: - Step 07.5 Per-game config
 
     @Test func buildWithLicensePlateConfigIncludesCompletionGoalAndProgressDescription() async throws {

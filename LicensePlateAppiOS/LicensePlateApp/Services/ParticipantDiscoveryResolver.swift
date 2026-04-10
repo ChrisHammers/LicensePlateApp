@@ -46,4 +46,28 @@ enum ParticipantDiscoveryResolver {
             summaryLabel: label
         )
     }
+
+    /// Step 15 — Recap: collaborative multi-finder line with display names (`displayNames` falls back to raw ids).
+    static func collaborativeMultiFinderDisplayLabel(
+        orderedParticipantIds: [String],
+        displayNames: [String: String]
+    ) -> String {
+        guard orderedParticipantIds.count >= 2 else {
+            if let id = orderedParticipantIds.first {
+                let name = displayNames[id] ?? id
+                return "Found by %@".localized(name)
+            }
+            return ""
+        }
+        let names = orderedParticipantIds.map { displayNames[$0] ?? $0 }
+        switch names.count {
+        case 2:
+            return "Found by %@ and %@".localized(names[0], names[1])
+        case 3:
+            return "Found by %@, %@, and %@".localized(names[0], names[1], names[2])
+        default:
+            let otherCount = names.count - 2
+            return "Found by %@, %@, and %d others".localized(names[0], names[1], otherCount)
+        }
+    }
 }

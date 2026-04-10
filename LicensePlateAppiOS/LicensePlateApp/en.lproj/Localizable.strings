@@ -667,6 +667,15 @@
 "Sign in to remove a find." = "Sign in to remove a find.";
 "You don’t have a find to remove for this region." = "You don’t have a find to remove for this region.";
 "You can’t remove this find." = "You can’t remove this find.";
+"Found by %@ and %@" = "Found by %1$@ and %2$@";
+"Found by %@, %@, and %@" = "Found by %1$@, %2$@, and %3$@";
+"Found by %@, %@, and %d others" = "Found by %1$@, %2$@, and %3$d others";
+"Some discoveries are not tied to a game on this recap." = "Some discoveries are not tied to a game on this recap.";
+"Show all discovery highlights" = "Show all discovery highlights";
+"Show fewer discovery highlights" = "Show fewer discovery highlights";
+"More discovery highlights are hidden. Expand to show all." = "More discovery highlights are hidden. Expand to show all.";
+"Collapses the discovery highlights list." = "Collapses the discovery highlights list.";
+"Loading…" = "Loading…";
 
 // Step 11 — Competitive rankings & in-game standings
 "Rank #%d" = "Rank #%d";

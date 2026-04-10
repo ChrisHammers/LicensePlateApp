@@ -637,6 +637,15 @@
 "Sign in to remove a find." = "Connectez-vous pour retirer une découverte.";
 "You don’t have a find to remove for this region." = "Vous n’avez pas de découverte à retirer pour cette région.";
 "You can’t remove this find." = "Vous ne pouvez pas retirer cette découverte.";
+"Found by %@ and %@" = "Trouvé par %1$@ et %2$@";
+"Found by %@, %@, and %@" = "Trouvé par %1$@, %2$@ et %3$@";
+"Found by %@, %@, and %d others" = "Trouvé par %1$@, %2$@ et %3$d autres";
+"Some discoveries are not tied to a game on this recap." = "Certaines découvertes ne sont pas liées à une partie dans ce récapitulatif.";
+"Show all discovery highlights" = "Afficher tous les faits marquants";
+"Show fewer discovery highlights" = "Afficher moins de faits marquants";
+"More discovery highlights are hidden. Expand to show all." = "D’autres faits marquants sont masqués. Développez pour tout afficher.";
+"Collapses the discovery highlights list." = "Réduit la liste des faits marquants.";
+"Loading…" = "Chargement…";
 
 // Step 11 — Competitive rankings & in-game standings
 "Rank #%d" = "Rang n° %d";

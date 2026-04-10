@@ -538,6 +538,120 @@ enum PreviewSummaryFixtures {
         )
     }
 
+    /// Collaborative: three finders on one region — recap uses multi-name attribution line.
+    static func tripSummaryCollaborativeThreeFindersOneRegion() -> TripSummary {
+        let gid = PreviewConstants.gameInstanceId1
+        let projection = DiscoveryCreditProjection(
+            participantScores: [],
+            targetSummaries: [
+                TargetDiscoverySummary(
+                    gameInstanceId: gid,
+                    targetId: "us-tx",
+                    firstFinderParticipantId: PreviewConstants.userId1,
+                    allFinderParticipantIds: [PreviewConstants.userId1, PreviewConstants.userId2, PreviewConstants.userId3],
+                    summaryLabel: "%d finders".localized(3)
+                )
+            ]
+        )
+        return TripSummary(
+            sessionId: PreviewConstants.sessionIdCollaborative,
+            tripName: "Three Finder Trip",
+            tripMode: .multiplayer,
+            status: .ended,
+            endedAt: PreviewConstants.fixedDateEnded,
+            startedAt: PreviewConstants.fixedDate,
+            participantCount: 3,
+            gameCount: 1,
+            totalDiscoveryCount: 3,
+            games: [
+                TripSummaryGameItem(
+                    gameInstanceId: gid,
+                    definitionId: GameType.licensePlate.rawValue,
+                    discoveryCount: 3,
+                    startedAt: PreviewConstants.fixedDate,
+                    endedAt: PreviewConstants.fixedDateEnded,
+                    firstDiscoveries: projection.targetSummaries,
+                    completionGoal: 50,
+                    progressDescription: "3 / 50 US states",
+                    gameMode: .collaborative,
+                    teamSummary: nil
+                )
+            ],
+            rankedParticipants: TripParticipantRanking.rankContributions([
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId1,
+                    discoveryCount: 1,
+                    weightedScore: 1.0 / 3.0,
+                    firstFindCount: 1
+                ),
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId2,
+                    discoveryCount: 1,
+                    weightedScore: 1.0 / 3.0,
+                    firstFindCount: 0
+                ),
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId3,
+                    discoveryCount: 1,
+                    weightedScore: 1.0 / 3.0,
+                    firstFindCount: 0
+                )
+            ]),
+            discoveryProjection: projection,
+            locationMetadata: nil
+        )
+    }
+
+    /// Many highlight rows to exercise show-all / show-less in recap (Step 15).
+    static func tripSummaryManyDiscoveryHighlights() -> TripSummary {
+        let gid = PreviewConstants.gameInstanceId1
+        let targetRows: [TargetDiscoverySummary] = (0..<22).map { i in
+            TargetDiscoverySummary(
+                gameInstanceId: gid,
+                targetId: "us-\(i)",
+                firstFinderParticipantId: PreviewConstants.userId1,
+                allFinderParticipantIds: [PreviewConstants.userId1],
+                summaryLabel: "Found by \(PreviewConstants.userId1)"
+            )
+        }
+        let projection = DiscoveryCreditProjection(participantScores: [], targetSummaries: targetRows)
+        return TripSummary(
+            sessionId: PreviewConstants.sessionIdCollaborative,
+            tripName: "Long highlights",
+            tripMode: .solo,
+            status: .ended,
+            endedAt: PreviewConstants.fixedDateEnded,
+            startedAt: PreviewConstants.fixedDate,
+            participantCount: 1,
+            gameCount: 1,
+            totalDiscoveryCount: 22,
+            games: [
+                TripSummaryGameItem(
+                    gameInstanceId: gid,
+                    definitionId: GameType.licensePlate.rawValue,
+                    discoveryCount: 22,
+                    startedAt: PreviewConstants.fixedDate,
+                    endedAt: PreviewConstants.fixedDateEnded,
+                    firstDiscoveries: targetRows,
+                    completionGoal: 50,
+                    progressDescription: "22 / 50 US states",
+                    gameMode: .collaborative,
+                    teamSummary: nil
+                )
+            ],
+            rankedParticipants: TripParticipantRanking.rankContributions([
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId1,
+                    discoveryCount: 22,
+                    weightedScore: 22,
+                    firstFindCount: 22
+                )
+            ]),
+            discoveryProjection: projection,
+            locationMetadata: nil
+        )
+    }
+
     /// Competitive multiplayer: tied weighted score (rank 1,1); `hasCompetitiveGame` true for summary UI.
     static func tripSummaryCompetitiveTied() -> TripSummary {
         let gid = PreviewConstants.gameInstanceId1
