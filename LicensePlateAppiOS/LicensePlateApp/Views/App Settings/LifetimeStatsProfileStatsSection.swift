@@ -14,6 +14,7 @@ struct LifetimeStatsProfileStatsSection: View {
         LifetimeStatsProfileStatsSectionContent(
             stats: viewModel.stats,
             isRecomputing: viewModel.isRecomputing,
+            isPendingServerSync: viewModel.isPendingServerSync,
             lastError: viewModel.lastError,
             onRetry: { viewModel.retryRefresh() }
         )
@@ -24,11 +25,26 @@ struct LifetimeStatsProfileStatsSection: View {
 struct LifetimeStatsProfileStatsSectionContent: View {
     let stats: UserLifetimeStats?
     let isRecomputing: Bool
+    let isPendingServerSync: Bool
     let lastError: String?
     let onRetry: () -> Void
 
     var body: some View {
         Section {
+            if isPendingServerSync {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                        .accessibilityHidden(true)
+                    Text("profile.lifetime_stats.pending_sync".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                }
+                .padding(.vertical, 4)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("profile.lifetime_stats.pending_sync.a11y".localized)
+            }
+
             if isRecomputing {
                 HStack(spacing: 12) {
                     ProgressView()
@@ -129,6 +145,7 @@ struct LifetimeStatsProfileStatsSectionContent: View {
         LifetimeStatsProfileStatsSectionContent(
             stats: nil,
             isRecomputing: true,
+            isPendingServerSync: false,
             lastError: nil,
             onRetry: {}
         )
@@ -148,6 +165,7 @@ struct LifetimeStatsProfileStatsSectionContent: View {
                 lastComputedAt: Date()
             ),
             isRecomputing: false,
+            isPendingServerSync: true,
             lastError: nil,
             onRetry: {}
         )
@@ -160,6 +178,7 @@ struct LifetimeStatsProfileStatsSectionContent: View {
         LifetimeStatsProfileStatsSectionContent(
             stats: nil,
             isRecomputing: false,
+            isPendingServerSync: false,
             lastError: "Network unavailable",
             onRetry: {}
         )

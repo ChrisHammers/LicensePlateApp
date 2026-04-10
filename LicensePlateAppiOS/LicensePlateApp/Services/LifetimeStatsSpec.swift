@@ -30,7 +30,9 @@ enum LifetimeStatsSpec {
     ///
     /// **Failure**: Errors are typed, surfaced to the profile VM (`lastError`); no silent `try?` on the user-facing refresh path.
 
-    // MARK: - Optional cloud (post-MVP)
+    // MARK: - Public cloud aggregate
 
-    /// A Firestore mirror of `UserLifetimeStatsEntity` may be added later; it must reuse the same domain shape and propagate failures to the coordinator policy — see `UserLifetimeStatsCloudMirrorStub`.
+    /// Authoritative public totals live in Firestore `public_lifetime_stats` (server-written). The app reads via
+    /// `PublicLifetimeStatsRepository` and keeps a SwiftData cache; `UserLifetimeStatsEntity` remains the offline
+    /// / repair projection from `LifetimeStatsRecomputeEngine`.
 }

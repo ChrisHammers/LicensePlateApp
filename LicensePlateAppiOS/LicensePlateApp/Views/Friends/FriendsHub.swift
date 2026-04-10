@@ -269,6 +269,7 @@ struct FriendRow: View {
     var onRemoveRequested: () -> Void
     @EnvironmentObject var authService: FirebaseAuthService
     @Environment(\.modelContext) private var modelContext
+    @ObservedObject private var publicLifetimeStatsRepository = PublicLifetimeStatsRepository.shared
     @State private var user: AppUser?
 
     private var otherUserId: String? {
@@ -298,6 +299,15 @@ struct FriendRow: View {
                     Text("@\(user.userName)")
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
+
+                    if let oid = otherUserId, let stats = publicLifetimeStatsRepository.snapshot(forUserId: oid) {
+                        Text("friends.public_lifetime_stats.trips_line".localized(stats.totalCompletedTrips))
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown.opacity(0.85))
+                            .accessibilityLabel(
+                                "friends.public_lifetime_stats.trips_line.a11y".localized(stats.totalCompletedTrips)
+                            )
+                    }
                 } else {
                     Text("Friend".localized)
                         .font(.system(.body, design: .rounded))
@@ -332,12 +342,18 @@ struct FriendRow: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabelText)
         .task {
+            if let oid = otherUserId {
+                publicLifetimeStatsRepository.ensureObservingFriend(userId: oid)
+            }
             await loadUser()
         }
     }
 
     private var accessibilityLabelText: String {
         if let user = user {
+            if let oid = otherUserId, let stats = publicLifetimeStatsRepository.snapshot(forUserId: oid) {
+                return "\(user.displayName), @\(user.userName), \("friends.public_lifetime_stats.trips_line".localized(stats.totalCompletedTrips))"
+            }
             return "\(user.displayName), @\(user.userName)"
         }
         return "Friend".localized

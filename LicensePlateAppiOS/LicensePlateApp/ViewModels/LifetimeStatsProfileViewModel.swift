@@ -12,6 +12,7 @@ import Combine
 final class LifetimeStatsProfileViewModel: ObservableObject {
     @Published private(set) var stats: UserLifetimeStats?
     @Published private(set) var isRecomputing = false
+    @Published private(set) var isPendingServerSync = false
     @Published private(set) var lastError: String?
 
     private let userId: String
@@ -27,6 +28,7 @@ final class LifetimeStatsProfileViewModel: ObservableObject {
                 guard let self else { return }
                 stats = coordinator.stats
                 isRecomputing = coordinator.isRecomputing
+                isPendingServerSync = coordinator.isPendingServerSync
                 lastError = coordinator.lastError
             }
             .store(in: &cancellables)
@@ -36,6 +38,7 @@ final class LifetimeStatsProfileViewModel: ObservableObject {
     private func syncFromCoordinator() {
         stats = coordinator.stats
         isRecomputing = coordinator.isRecomputing
+        isPendingServerSync = coordinator.isPendingServerSync
         lastError = coordinator.lastError
     }
 
@@ -49,7 +52,7 @@ final class LifetimeStatsProfileViewModel: ObservableObject {
 
     func retryRefresh() {
         coordinator.clearError()
-        coordinator.requestRefresh(userId: userId)
+        coordinator.requestFallbackRecompute(userId: userId)
         AnalyticsService.shared.log(.lifetimeStatsProfileRetryTapped)
     }
 }

@@ -704,6 +704,11 @@
 "profile.lifetime_stats.weighted_score.a11y" = "Your combined weighted score from trip summaries.";
 "profile.lifetime_stats.family_trips" = "Family-only trips";
 "profile.lifetime_stats.family_trips.a11y" = "Ended trips where everyone still on the trip was in your family.";
+"profile.lifetime_stats.pending_sync" = "Updating on server… numbers below may be from this device until sync finishes.";
+"profile.lifetime_stats.pending_sync.a11y" = "Lifetime statistics are pending server sync.";
+"friends.public_lifetime_stats.trips_line" = "%d completed trips";
+"friends.public_lifetime_stats.trips_line.a11y" = "%d completed trips on the public leaderboard.";
+"family.member.public_stats_line" = "%d trips";
 "trip_settings.leave_trip_impact" = "You will leave this trip on this device right away. If you are offline, leaving will sync when you are back online. After you leave, this trip no longer counts toward your lifetime statistics and won’t appear in your travel log once sync completes.";
 "error.family_lookup_no_context" = "Family data isn’t available yet. Try again in a moment.";
 "error.lifetime_stats_no_context" = "Statistics aren’t available yet. Try again in a moment.";

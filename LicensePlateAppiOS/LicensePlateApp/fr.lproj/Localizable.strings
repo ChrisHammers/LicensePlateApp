@@ -674,6 +674,11 @@
 "profile.lifetime_stats.weighted_score.a11y" = "Votre score pondéré combiné d’après les récapitulatifs de trajet.";
 "profile.lifetime_stats.family_trips" = "Trajets famille uniquement";
 "profile.lifetime_stats.family_trips.a11y" = "Trajets terminés où tous les participants encore présents faisaient partie de votre famille.";
+"profile.lifetime_stats.pending_sync" = "Mise à jour sur le serveur… les chiffres ci-dessous peuvent provenir de cet appareil jusqu’à la fin de la synchro.";
+"profile.lifetime_stats.pending_sync.a11y" = "Les statistiques à vie sont en attente de synchronisation serveur.";
+"friends.public_lifetime_stats.trips_line" = "%d trajets terminés";
+"friends.public_lifetime_stats.trips_line.a11y" = "%d trajets terminés dans les statistiques publiques.";
+"family.member.public_stats_line" = "%d trajets";
 "trip_settings.leave_trip_impact" = "Vous quitterez ce trajet sur cet appareil immédiatement. Hors ligne, la sortie se synchronisera lorsque vous serez de nouveau en ligne. Après votre départ, ce trajet ne compte plus dans vos statistiques à vie et n’apparaîtra plus dans votre carnet de voyage une fois la synchronisation terminée.";
 "error.family_lookup_no_context" = "Les données famille ne sont pas encore disponibles. Réessayez dans un instant.";
 "error.lifetime_stats_no_context" = "Les statistiques ne sont pas encore disponibles. Réessayez dans un instant.";

@@ -34,4 +34,5 @@ export {
 export { expireInvitesAndCodes } from "./expiration";
 export { onAuthUserDeleted } from "./auth";
 export { writeAuditLog } from "./audit";
+export { onTripEndedUpdatePublicLifetimeStats } from "./publicLifetimeStatsOnTripEnded";
 

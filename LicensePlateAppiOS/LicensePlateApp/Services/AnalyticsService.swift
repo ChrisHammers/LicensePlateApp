@@ -158,6 +158,12 @@ class AnalyticsService: AnalyticsLogging {
         case lifetimeStatsRecomputeFailed(error: String)
         /// User tapped retry on profile stats error row (`LifetimeStatsProfileViewModel` only).
         case lifetimeStatsProfileRetryTapped
+        /// Firestore listener applied a `public_lifetime_stats` document (length only, no uid).
+        case publicLifetimeStatsListenerUpdated(userIdLength: Int)
+        /// Shown when UI displays the pending-server-sync state (surface key, no PII).
+        case lifetimeStatsPendingSyncShown(surface: String)
+        /// Local `LifetimeStatsRecomputeEngine` path ran for offline / explicit retry.
+        case lifetimeStatsFallbackRecomputeUsed(reason: String)
 
         // Lifecycle (Step 10.5)
         case tripSessionCreated(tripId: String, tripStatus: String, tripParticipantCount: Int?, tripActiveGameCount: Int?, tripSource: String?)
@@ -317,6 +323,9 @@ class AnalyticsService: AnalyticsLogging {
             case .lifetimeStatsRecomputeSucceeded: return "lifetime_stats_recompute_succeeded"
             case .lifetimeStatsRecomputeFailed: return "lifetime_stats_recompute_failed"
             case .lifetimeStatsProfileRetryTapped: return "lifetime_stats_profile_retry_tapped"
+            case .publicLifetimeStatsListenerUpdated: return "public_lifetime_stats_listener_updated"
+            case .lifetimeStatsPendingSyncShown: return "lifetime_stats_pending_sync_shown"
+            case .lifetimeStatsFallbackRecomputeUsed: return "lifetime_stats_fallback_recompute_used"
             case .tripSessionCreated: return "trip_session_created"
             case .tripSessionStarted: return "trip_session_started"
             case .tripSessionEnded: return "trip_session_ended"
@@ -485,6 +494,12 @@ class AnalyticsService: AnalyticsLogging {
                 return ["error_type": error]
             case .lifetimeStatsProfileRetryTapped:
                 return nil
+            case .publicLifetimeStatsListenerUpdated(let userIdLength):
+                return ["user_id_length": userIdLength]
+            case .lifetimeStatsPendingSyncShown(let surface):
+                return ["surface": surface]
+            case .lifetimeStatsFallbackRecomputeUsed(let reason):
+                return ["reason": reason]
             case .travelLogOpened:
                 return nil
             case .tripSessionCreated(let tripId, let tripStatus, let tripParticipantCount, let tripActiveGameCount, let tripSource):

@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import FirebaseAuth
 
 @MainActor
 protocol TripSessionLifecycleServiceProtocol: AnyObject {
@@ -87,7 +88,10 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         try tripActivityEventRecording.recordForSync(tripEndedEvent)
         AnalyticsService.shared.log(.tripSessionEnded(tripId: sessionId.uuidString))
         Task { @MainActor in
-            LifetimeStatsCoordinator.shared.scheduleLifetimeStatsRefresh()
+            let uid = endedBy ?? Auth.auth().currentUser?.uid
+            if let uid {
+                LifetimeStatsCoordinator.shared.onLocalTripEnded(userId: uid)
+            }
             try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionId)
         }
     }
@@ -107,9 +111,6 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         try tripActivityEventRepository.deleteEvents(sessionId: sessionId, gameInstanceId: nil)
         try gameInstanceRepository.deleteForSession(sessionId: sessionId)
         AnalyticsService.shared.log(.tripSessionCancelled(tripId: sessionId.uuidString))
-        Task { @MainActor in
-            LifetimeStatsCoordinator.shared.scheduleLifetimeStatsRefresh()
-        }
     }
 }
 

@@ -22,7 +22,8 @@ enum CombinedGameAssembler {
         let types = config.availableEnabledTypes
         guard !types.isEmpty else { return [] }
 
-        let startedAt = session.startedAt ?? Date()
+        /// Row creation time only; canonical “game started” time is set in `GameInstanceLifecycleService.startGame`.
+        let gameAssemblyStartedAt = Date()
 
         let defaultLPConfig = LicensePlateGameConfig(
             selectedCountriesRawValues: [
@@ -58,7 +59,7 @@ enum CombinedGameAssembler {
             return GameInstance(
                 definitionId: gameType.rawValue,
                 sessionId: session.id,
-                startedAt: startedAt,
+                startedAt: gameAssemblyStartedAt,
                 endedAt: session.endedAt,
                 ruleSet: gameType.defaultRuleSet(),
                 commonConfig: commonConfig,

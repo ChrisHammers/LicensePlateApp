@@ -68,9 +68,6 @@ final class ActiveTripsListViewModel: ObservableObject {
                 list.append(ActiveListItem(session: session, rollup: rollup))
             }
             items = list
-            Task { @MainActor in
-                LifetimeStatsCoordinator.shared.scheduleDebouncedLifetimeStatsRefresh()
-            }
         } catch {
             errorMessage = error.localizedDescription
             items = []

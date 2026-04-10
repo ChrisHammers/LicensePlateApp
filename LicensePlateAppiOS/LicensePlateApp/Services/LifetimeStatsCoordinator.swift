@@ -2,7 +2,7 @@
 //  LifetimeStatsCoordinator.swift
 //  LicensePlateApp
 //
-//  MainActor: snapshot fetch via repos, single-flight refresh, background compute, persist, published UI state.
+//  MainActor: server-first public lifetime stats (Firestore listener + cache), local recompute as offline / repair fallback.
 //
 
 import Foundation
@@ -14,10 +14,11 @@ final class LifetimeStatsCoordinator: ObservableObject {
 
     static let shared = LifetimeStatsCoordinator()
 
-    /// Set once from app bootstrap (`RootView.task`); same lifetime as other global services.
     var authService: FirebaseAuthService?
 
     @Published private(set) var stats: UserLifetimeStats?
+    @Published private(set) var isPendingServerSync: Bool = false
+    /// True only while a full local recompute (fallback) is running.
     @Published private(set) var isRecomputing = false
     @Published private(set) var lastError: String?
 
@@ -26,9 +27,12 @@ final class LifetimeStatsCoordinator: ObservableObject {
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
     private let userLifetimeStatsRepository: UserLifetimeStatsRepository
     private let familyMemberUserIdsRepository: FamilyMemberUserIdsRepository
+    let publicLifetimeStatsRepository: PublicLifetimeStatsRepository
 
+    private var boundProfileUserId: String?
     private var pendingUserId: String?
-    private var debounceTask: Task<Void, Never>?
+    private var awaitingServerAfterLocalTripEnd = false
+    private var cancellables = Set<AnyCancellable>()
 
     private static let archivedTripFetchLimit = 50_000
 
@@ -37,52 +41,65 @@ final class LifetimeStatsCoordinator: ObservableObject {
         gameInstanceRepository: GameInstanceRepositoryProtocol = GameInstanceRepository.shared,
         tripActivityEventRepository: TripActivityEventRepositoryProtocol = TripActivityEventRepository.shared,
         userLifetimeStatsRepository: UserLifetimeStatsRepository = .shared,
-        familyMemberUserIdsRepository: FamilyMemberUserIdsRepository = .shared
+        familyMemberUserIdsRepository: FamilyMemberUserIdsRepository = .shared,
+        publicLifetimeStatsRepository: PublicLifetimeStatsRepository = .shared
     ) {
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
         self.tripActivityEventRepository = tripActivityEventRepository
         self.userLifetimeStatsRepository = userLifetimeStatsRepository
         self.familyMemberUserIdsRepository = familyMemberUserIdsRepository
+        self.publicLifetimeStatsRepository = publicLifetimeStatsRepository
+
+        publicLifetimeStatsRepository.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshDisplayedStats()
+            }
+            .store(in: &cancellables)
     }
 
-    /// Load persisted row only (fast path for profile).
     func loadCachedStats(forUserId userId: String) {
         lastError = nil
         do {
-            stats = try userLifetimeStatsRepository.fetch(forUserId: userId)
+            _ = try userLifetimeStatsRepository.fetch(forUserId: userId)
         } catch {
             lastError = error.localizedDescription
-            stats = nil
         }
+        _ = try? publicLifetimeStatsRepository.cachedStatsFromDisk(forUserId: userId)
+        refreshDisplayedStats()
     }
 
     func onProfileAppear(userId: String) {
+        boundProfileUserId = userId
+        publicLifetimeStatsRepository.setProfileUserId(userId)
+        publicLifetimeStatsRepository.ensureObservingProfileUser(userId)
         loadCachedStats(forUserId: userId)
-        requestRefresh(userId: userId)
+        if authService?.isOnline == false {
+            requestFallbackRecompute(userId: userId)
+        }
     }
 
     func clearError() {
         lastError = nil
     }
 
-    /// Uses `authService` to resolve the signed-in user id.
-    func scheduleLifetimeStatsRefresh() {
-        guard let uid = authService?.currentUser?.firebaseUID ?? authService?.currentUser?.id else { return }
-        requestRefresh(userId: uid)
-    }
-
-    func scheduleDebouncedLifetimeStatsRefresh() {
-        debounceTask?.cancel()
-        debounceTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            guard !Task.isCancelled else { return }
-            scheduleLifetimeStatsRefresh()
+    /// Local gameplay ended while online: server aggregate updates asynchronously.
+    func onLocalTripEnded(userId: String) {
+        let selfId = authService?.currentUser?.firebaseUID ?? authService?.currentUser?.id
+        guard selfId == userId else { return }
+        publicLifetimeStatsRepository.ensureObservingProfileUser(userId)
+        guard userId == boundProfileUserId else { return }
+        awaitingServerAfterLocalTripEnd = true
+        if authService?.isOnline == false {
+            requestFallbackRecompute(userId: userId)
         }
+        refreshDisplayedStats()
+        AnalyticsService.shared.log(.lifetimeStatsPendingSyncShown(surface: "trip_end"))
     }
 
-    /// Single-flight with pending coalesce for the same or subsequent user id.
-    func requestRefresh(userId: String) {
+    /// Full local recompute (offline repair / explicit retry). Not the hot path when online.
+    func requestFallbackRecompute(userId: String) {
         if isRecomputing {
             pendingUserId = userId
             return
@@ -96,7 +113,7 @@ final class LifetimeStatsCoordinator: ObservableObject {
                 isRecomputing = false
                 if let next = pendingUserId {
                     pendingUserId = nil
-                    requestRefresh(userId: next)
+                    requestFallbackRecompute(userId: next)
                 }
             }
             do {
@@ -105,14 +122,14 @@ final class LifetimeStatsCoordinator: ObservableObject {
                     try LifetimeStatsRecomputeEngine.compute(input)
                 }.value
                 try userLifetimeStatsRepository.upsert(userId: userId, stats: computed)
-                stats = computed
-                UserLifetimeStatsCloudMirrorStub.scheduleUploadIfNeeded(userId: userId, stats: computed)
                 AnalyticsService.shared.log(
                     .lifetimeStatsRecomputeSucceeded(
                         completedTripCount: computed.totalCompletedTrips,
                         familyOnlyTripCount: computed.familyOnlyTripsCount
                     )
                 )
+                AnalyticsService.shared.log(.lifetimeStatsFallbackRecomputeUsed(reason: "offline_or_retry"))
+                refreshDisplayedStats()
             } catch is CancellationError {
                 // ignore
             } catch {
@@ -121,6 +138,42 @@ final class LifetimeStatsCoordinator: ObservableObject {
                     .lifetimeStatsRecomputeFailed(error: String(describing: type(of: error)))
                 )
             }
+        }
+    }
+
+    /// Backward-compatible name for view models (runs local recompute).
+    func requestRefresh(userId: String) {
+        requestFallbackRecompute(userId: userId)
+    }
+
+    private func refreshDisplayedStats() {
+        guard let uid = boundProfileUserId else {
+            stats = nil
+            isPendingServerSync = false
+            return
+        }
+        let liveServer = publicLifetimeStatsRepository.snapshot(forUserId: uid)
+        let diskServer = try? publicLifetimeStatsRepository.cachedStatsFromDisk(forUserId: uid)
+        let serverStats = liveServer ?? diskServer
+        let local = try? userLifetimeStatsRepository.fetch(forUserId: uid)
+        let serverDate = serverStats?.lastComputedAt
+
+        if liveServer != nil {
+            awaitingServerAfterLocalTripEnd = false
+        }
+
+        isPendingServerSync = LifetimeStatsPendingSyncState.shouldShowPending(
+            isAwaitingServerAfterLocalTripEnd: awaitingServerAfterLocalTripEnd,
+            local: local,
+            serverDocumentUpdatedAt: serverDate
+        )
+
+        if isPendingServerSync, let local {
+            stats = local
+        } else if let serverStats {
+            stats = serverStats
+        } else {
+            stats = local
         }
     }
 

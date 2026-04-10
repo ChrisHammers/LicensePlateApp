@@ -331,6 +331,11 @@ struct FamilyDashboard: View {
                     // InviteRepository will be set up in ViewModel
                 }
             }
+            .onChange(of: viewModel.members.map(\.userId).sorted().joined(separator: ",")) { _, _ in
+                PublicLifetimeStatsRepository.shared.updateFamilyPinnedUserIds(
+                    Set(viewModel.members.map(\.userId))
+                )
+            }
             .onDisappear {
                 // Stop listening when view disappears to prevent permission errors
                 FamilyRepository.shared.stopListening()
@@ -341,14 +346,26 @@ struct FamilyDashboard: View {
 
 struct FamilyMemberRow: View {
     let member: FamilyMember
-    
+    @ObservedObject private var publicLifetimeStatsRepository = PublicLifetimeStatsRepository.shared
+
+    private var memberSubtitle: String {
+        let role = member.roleEnum.displayName
+        if let stats = publicLifetimeStatsRepository.snapshot(forUserId: member.userId) {
+            return "\(role) · \("family.member.public_stats_line".localized(stats.totalCompletedTrips))"
+        }
+        return role
+    }
+
     var body: some View {
         if let user = member.user {
             UserIdentityRowView(
                 user: user,
-                subtitle: member.roleEnum.displayName,
+                subtitle: memberSubtitle,
                 avatarSize: 50
             )
+            .task {
+                publicLifetimeStatsRepository.ensureObservingFriend(userId: member.userId)
+            }
         } else {
             HStack {
                 Circle()

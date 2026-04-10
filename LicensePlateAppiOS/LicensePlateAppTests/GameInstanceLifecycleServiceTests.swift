@@ -198,10 +198,12 @@ struct GameInstanceLifecycleServiceTests {
             startedAt: Date(),
             participants: []
         ))
+        let assemblyStartedAt = Date().addingTimeInterval(-86_400)
         gameRepo.seed(GameInstance(
             id: gameId,
             definitionId: GameType.licensePlate.rawValue,
             sessionId: sessionId,
+            startedAt: assemblyStartedAt,
             ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
             commonConfig: CommonGameConfig(lifecycleState: .created, configLocked: false, configLockReason: .none)
         ))
@@ -213,6 +215,7 @@ struct GameInstanceLifecycleServiceTests {
         )
         try service.startGame(sessionId: sessionId, gameInstanceId: gameId)
         let game = try gameRepo.instance(byId: gameId)
+        #expect(game?.startedAt ?? .distantPast > assemblyStartedAt)
         #expect(game?.commonConfig.lifecycleState == .started)
         #expect(game?.commonConfig.configLocked == true)
         #expect(game?.commonConfig.configLockReason == .gameStarted)
@@ -237,10 +240,12 @@ struct GameInstanceLifecycleServiceTests {
             startedAt: Date(),
             participants: []
         ))
+        let priorStartedAt = Date().addingTimeInterval(-120)
         gameRepo.seed(GameInstance(
             id: gameId,
             definitionId: GameType.licensePlate.rawValue,
             sessionId: sessionId,
+            startedAt: priorStartedAt,
             ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
             commonConfig: CommonGameConfig(lifecycleState: .started, configLocked: true, configLockReason: .gameStarted)
         ))
@@ -254,6 +259,7 @@ struct GameInstanceLifecycleServiceTests {
         try service.startGame(sessionId: sessionId, gameInstanceId: gameId)
         #expect(eventRepo.appendedEvents().filter { $0.kind == .gameStarted }.count == 0)
         #expect(sync.enqueueCallCount == 0)
+        #expect(try gameRepo.instance(byId: gameId)?.startedAt == priorStartedAt)
     }
 
     @Test func endGameSetsEndedAndAppendsGameEnded() async throws {

@@ -101,15 +101,17 @@ struct CombinedGameAssemblerTests {
         #expect(instances[0].id != instances2[0].id)
     }
 
-    @Test func usesSessionStartedAtForInstanceStartedAt() async throws {
-        let started = Date().addingTimeInterval(-3600)
-        let session = makeSession(startedAt: started)
+    @Test func instanceStartedAtIsAssemblyTimeNotTripStartedAt() async throws {
+        let tripStarted = Date().addingTimeInterval(-3600)
+        let session = makeSession(startedAt: tripStarted)
+        let before = Date()
 
         let config = CombinedGameConfiguration(enabledGameTypes: [.licensePlate])
         let instances = CombinedGameAssembler.assemble(session: session, config: config)
 
         #expect(instances.count == 1)
-        #expect(instances[0].startedAt == started)
+        #expect(instances[0].startedAt >= before)
+        #expect(instances[0].startedAt != tripStarted)
     }
 
     @Test func licensePlateConfigOverloadNormalizesTerritoriesForCountrySet() async throws {

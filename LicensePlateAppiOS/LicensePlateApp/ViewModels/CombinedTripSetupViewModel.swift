@@ -166,6 +166,7 @@ final class CombinedTripSetupViewModel: ObservableObject {
             includeCanadianTerritories: includeCanadianTerritories,
             includeDC: includeDC
         )
+        //TODO need to not haradcode this and inform when unselecting we need atleast 1 game?
         let lpConfig = CombinedGameAssembler.licensePlateConfig(from: countryList, territoryOptions: territoryOpts)
         let instances = CombinedGameAssembler.assemble(
             session: session,

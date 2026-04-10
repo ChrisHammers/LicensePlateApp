@@ -86,6 +86,7 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
         if game.commonConfig.lifecycleState == .started && game.commonConfig.configLocked {
             return
         }
+        game.startedAt = Date()
         game.commonConfig.lifecycleState = .started
         game.commonConfig.configLocked = true
         game.commonConfig.configLockReason = .gameStarted

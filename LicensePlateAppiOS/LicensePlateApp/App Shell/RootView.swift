@@ -71,6 +71,7 @@ struct RootView: View {
             TripInviteRepository.shared.setModelContext(modelContext)
             PendingTripLeaveRepository.shared.setModelContext(modelContext)
             UserLifetimeStatsRepository.shared.setModelContext(modelContext)
+            PublicLifetimeStatsRepository.shared.setModelContext(modelContext)
             FamilyMemberUserIdsRepository.shared.setModelContext(modelContext)
             EntitlementService.shared.setModelContext(modelContext)
             LifetimeStatsCoordinator.shared.authService = authService
@@ -83,6 +84,8 @@ struct RootView: View {
             if let userId = userId {
                 FriendshipRepository.shared.startListening(userId: userId)
                 InviteRepository.shared.startListening(userId: userId)
+                PublicLifetimeStatsRepository.shared.setProfileUserId(userId)
+                PublicLifetimeStatsRepository.shared.ensureObservingProfileUser(userId)
             }
             EntitlementService.shared.setCurrentUserId(userId)
             await RevenueCatEntitlementBridge.shared.identify(userId: userId)

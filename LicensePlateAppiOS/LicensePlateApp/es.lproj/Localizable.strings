@@ -674,6 +674,11 @@
 "profile.lifetime_stats.weighted_score.a11y" = "Tu puntuación ponderada combinada según los resúmenes de viaje.";
 "profile.lifetime_stats.family_trips" = "Viajes solo en familia";
 "profile.lifetime_stats.family_trips.a11y" = "Viajes finalizados en los que todos los que siguen en el viaje eran de tu familia.";
+"profile.lifetime_stats.pending_sync" = "Actualizando en el servidor… los números pueden ser de este dispositivo hasta que termine la sincronización.";
+"profile.lifetime_stats.pending_sync.a11y" = "Las estadísticas de por vida están pendientes de sincronizar con el servidor.";
+"friends.public_lifetime_stats.trips_line" = "%d viajes completados";
+"friends.public_lifetime_stats.trips_line.a11y" = "%d viajes completados en las estadísticas públicas.";
+"family.member.public_stats_line" = "%d viajes";
 "trip_settings.leave_trip_impact" = "Saldrás de este viaje en este dispositivo de inmediato. Si estás sin conexión, la salida se sincronizará cuando vuelvas a estar en línea. Después de salir, este viaje ya no cuenta para tus estadísticas de por vida y no aparecerá en tu registro de viajes cuando termine la sincronización.";
 "error.family_lookup_no_context" = "Los datos de familia aún no están disponibles. Inténtalo de nuevo en un momento.";
 "error.lifetime_stats_no_context" = "Las estadísticas aún no están disponibles. Inténtalo de nuevo en un momento.";
