@@ -165,6 +165,11 @@ class AnalyticsService: AnalyticsLogging {
         /// Local `LifetimeStatsRecomputeEngine` path ran for offline / explicit retry.
         case lifetimeStatsFallbackRecomputeUsed(reason: String)
 
+        // Step 16 — `user_progression` (emitted from `UserProgressionService` only)
+        case progressionSnapshotApplied(totalXp: Int, acceptedRegionFindCount: Int, competitiveFirstPlaceFinishes: Int)
+        case progressionMilestoneEverCompetitiveFirstPlace
+        case progressionXpAwarded(delta: Int, reason: String)
+
         // Lifecycle (Step 10.5)
         case tripSessionCreated(tripId: String, tripStatus: String, tripParticipantCount: Int?, tripActiveGameCount: Int?, tripSource: String?)
         case tripSessionStarted(tripId: String, tripActiveGameCount: Int?)
@@ -326,6 +331,9 @@ class AnalyticsService: AnalyticsLogging {
             case .publicLifetimeStatsListenerUpdated: return "public_lifetime_stats_listener_updated"
             case .lifetimeStatsPendingSyncShown: return "lifetime_stats_pending_sync_shown"
             case .lifetimeStatsFallbackRecomputeUsed: return "lifetime_stats_fallback_recompute_used"
+            case .progressionSnapshotApplied: return "progression_snapshot_applied"
+            case .progressionMilestoneEverCompetitiveFirstPlace: return "progression_milestone_ever_competitive_first_place"
+            case .progressionXpAwarded: return "progression_xp_awarded"
             case .tripSessionCreated: return "trip_session_created"
             case .tripSessionStarted: return "trip_session_started"
             case .tripSessionEnded: return "trip_session_ended"
@@ -500,6 +508,16 @@ class AnalyticsService: AnalyticsLogging {
                 return ["surface": surface]
             case .lifetimeStatsFallbackRecomputeUsed(let reason):
                 return ["reason": reason]
+            case .progressionSnapshotApplied(let totalXp, let acceptedRegionFindCount, let competitiveFirstPlaceFinishes):
+                return [
+                    "total_xp": totalXp,
+                    "accepted_region_find_count": acceptedRegionFindCount,
+                    "competitive_first_place_finishes": competitiveFirstPlaceFinishes
+                ]
+            case .progressionMilestoneEverCompetitiveFirstPlace:
+                return nil
+            case .progressionXpAwarded(let delta, let reason):
+                return ["delta": delta, "reason": reason]
             case .travelLogOpened:
                 return nil
             case .tripSessionCreated(let tripId, let tripStatus, let tripParticipantCount, let tripActiveGameCount, let tripSource):

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onTripEndedUpdatePublicLifetimeStats = exports.writeAuditLog = exports.onAuthUserDeleted = exports.expireInvitesAndCodes = exports.inactivateFamily = exports.changeFamilyMemberRole = exports.removeFamilyMember = exports.approveFamilyJoinRequest_CaptainStep = exports.respondToFamilyInvite_UserStep = exports.sendFamilyInvite = exports.createFamily = exports.removeTripParticipantAsOwner = exports.updateFairnessAckWatermark = exports.markTripCancelledRemote = exports.fetchTripBootstrapForMember = exports.appendTripActivityEvent = exports.publishTripCanonicalState = exports.cancelTripInvite = exports.respondToTripInvite = exports.sendTripInvite = exports.removeFriend = exports.respondToFriendInvite = exports.sendFriendInvite = exports.redeemShareCode = exports.createShareCode = void 0;
+exports.onActivityEventUpdateUserProgression = exports.onTripEndedUpdatePublicLifetimeStats = exports.writeAuditLog = exports.onAuthUserDeleted = exports.expireInvitesAndCodes = exports.inactivateFamily = exports.changeFamilyMemberRole = exports.removeFamilyMember = exports.approveFamilyJoinRequest_CaptainStep = exports.respondToFamilyInvite_UserStep = exports.sendFamilyInvite = exports.createFamily = exports.removeTripParticipantAsOwner = exports.updateFairnessAckWatermark = exports.markTripCancelledRemote = exports.fetchTripBootstrapForMember = exports.appendTripActivityEvent = exports.publishTripCanonicalState = exports.cancelTripInvite = exports.respondToTripInvite = exports.sendTripInvite = exports.removeFriend = exports.respondToFriendInvite = exports.sendFriendInvite = exports.redeemShareCode = exports.createShareCode = void 0;
 const admin = require("firebase-admin");
 admin.initializeApp();
 // Export all functions
@@ -38,4 +38,6 @@ var audit_1 = require("./audit");
 Object.defineProperty(exports, "writeAuditLog", { enumerable: true, get: function () { return audit_1.writeAuditLog; } });
 var publicLifetimeStatsOnTripEnded_1 = require("./publicLifetimeStatsOnTripEnded");
 Object.defineProperty(exports, "onTripEndedUpdatePublicLifetimeStats", { enumerable: true, get: function () { return publicLifetimeStatsOnTripEnded_1.onTripEndedUpdatePublicLifetimeStats; } });
+var progressionOnActivityEvent_1 = require("./progressionOnActivityEvent");
+Object.defineProperty(exports, "onActivityEventUpdateUserProgression", { enumerable: true, get: function () { return progressionOnActivityEvent_1.onActivityEventUpdateUserProgression; } });
 //# sourceMappingURL=index.js.map

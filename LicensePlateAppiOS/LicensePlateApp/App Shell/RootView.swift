@@ -50,6 +50,13 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: appCoordinator.rootView)
+        .onChange(of: authService.currentUser?.firebaseUID ?? authService.currentUser?.id) { _, newUserId in
+            UserProgressionRepository.shared.stopListening()
+            UserProgressionService.shared.resetForSignOut()
+            if let newUserId, !newUserId.isEmpty {
+                UserProgressionRepository.shared.startListening(userId: newUserId)
+            }
+        }
         .onChange(of: scenePhase) { newPhase in
             guard newPhase == .active else { return }
             if authService.isOnline {
@@ -86,6 +93,7 @@ struct RootView: View {
                 InviteRepository.shared.startListening(userId: userId)
                 PublicLifetimeStatsRepository.shared.setProfileUserId(userId)
                 PublicLifetimeStatsRepository.shared.ensureObservingProfileUser(userId)
+                UserProgressionRepository.shared.startListening(userId: userId)
             }
             EntitlementService.shared.setCurrentUserId(userId)
             await RevenueCatEntitlementBridge.shared.identify(userId: userId)

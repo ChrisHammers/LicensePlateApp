@@ -48,6 +48,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // User progression (XP / milestones; writes via Cloud Functions only)
+    match /user_progression/{userId} {
+      allow read: if isSignedIn() && uid() == userId;
+      allow write: if false;
+    }
+
     // USERNAME INDEX (write via Cloud Function / transaction)
     match /usernames/{usernameLower} {
       allow read: if isSignedIn();
