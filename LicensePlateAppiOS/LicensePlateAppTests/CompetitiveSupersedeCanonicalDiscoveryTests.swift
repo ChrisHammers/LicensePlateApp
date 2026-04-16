@@ -20,7 +20,7 @@ struct CompetitiveSupersedeCanonicalDiscoveryTests {
             payload: [
                 TripActivityEventPayloadKey.regionId: "CA",
                 TripActivityEventPayloadKey.gameInstanceId: UUID().uuidString,
-                TripActivityEventPayloadKey.rejectionReason: DiscoveryOutcome.serverRejectedLateCompetitive.rawValue,
+                TripActivityEventPayloadKey.rejectionReason: DiscoveryRejectionReason.serverRejectedLateCompetitive.rawValue,
             ]
         )
         #expect(CompetitiveSupersedeCanonicalDiscovery.regionFoundEvent(from: rejection) == nil)
@@ -39,7 +39,7 @@ struct CompetitiveSupersedeCanonicalDiscoveryTests {
             payload: [
                 TripActivityEventPayloadKey.regionId: "TX",
                 TripActivityEventPayloadKey.gameInstanceId: gid.uuidString,
-                TripActivityEventPayloadKey.rejectionReason: DiscoveryOutcome.serverRejectedLateCompetitive.rawValue,
+                TripActivityEventPayloadKey.rejectionReason: DiscoveryRejectionReason.serverRejectedLateCompetitive.rawValue,
                 TripActivityEventPayloadKey.firstFinderEventId: "winner-found-1",
                 TripActivityEventPayloadKey.firstFinderParticipantId: "alice",
                 TripActivityEventPayloadKey.firstFinderDiscoveredAt: String(Int(ts)),

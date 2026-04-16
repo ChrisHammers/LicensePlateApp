@@ -163,7 +163,7 @@ struct LicensePlateGameViewModelTests {
         #expect(eventRepo.appendedEvents().contains {
             $0.kind == .discoveryRejected
             && $0.payload?[TripActivityEventPayloadKey.regionId] == "CA"
-            && $0.payload?[TripActivityEventPayloadKey.rejectionReason] == DiscoveryOutcome.rejectedInvalidParticipant.rawValue
+            && $0.payload?[TripActivityEventPayloadKey.rejectionReason] == DiscoveryRejectionReason.rejectedInvalidParticipant.rawValue
             && $0.payload?[TripActivityEventPayloadKey.participantCount] == "1"
         })
         #expect(!eventRepo.appendedEvents().contains {
@@ -335,7 +335,7 @@ struct LicensePlateGameViewModelTests {
 
         let rejections = eventRepo.appendedEvents().filter { $0.kind == .discoveryRejected }
         #expect(rejections.count == 1)
-        #expect(rejections[0].payload?[TripActivityEventPayloadKey.rejectionReason] == DiscoveryOutcome.rejectedDuplicate.rawValue)
+        #expect(rejections[0].payload?[TripActivityEventPayloadKey.rejectionReason] == DiscoveryRejectionReason.rejectedDuplicate.rawValue)
 
         let discoveries = try eventRepo.discoveries(sessionId: sessionId, gameInstanceId: gameId)
         #expect(discoveries.count == 1)
@@ -666,7 +666,7 @@ struct LicensePlateGameViewModelTests {
             TripActivityEventPayloadKey.regionId: regionId,
             TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
             TripActivityEventPayloadKey.participantId: participantId,
-            TripActivityEventPayloadKey.rejectionReason: DiscoveryOutcome.serverRejectedLateCompetitive.rawValue,
+            TripActivityEventPayloadKey.rejectionReason: DiscoveryRejectionReason.serverRejectedLateCompetitive.rawValue,
             TripActivityEventPayloadKey.firstFinderParticipantId: firstFinder,
         ]
     }

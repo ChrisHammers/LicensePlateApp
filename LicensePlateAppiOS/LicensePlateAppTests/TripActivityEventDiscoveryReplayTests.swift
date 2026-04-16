@@ -49,7 +49,7 @@ struct TripActivityEventDiscoveryReplayTests {
                     TripActivityEventPayloadKey.gameInstanceId: gid.uuidString,
                     TripActivityEventPayloadKey.regionId: "CA",
                     TripActivityEventPayloadKey.participantId: "u2",
-                    TripActivityEventPayloadKey.rejectionReason: DiscoveryOutcome.serverRejectedSupersededByEarlierTimestamp.rawValue,
+                    TripActivityEventPayloadKey.rejectionReason: DiscoveryRejectionReason.serverRejectedSupersededByEarlierTimestamp.rawValue,
                     TripActivityEventPayloadKey.supersededRegionFoundEventId: "late",
                     TripActivityEventPayloadKey.firstFinderParticipantId: "u1",
                 ]

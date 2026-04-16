@@ -62,7 +62,7 @@ enum TripActivityEventDiscoveryReplay {
                 }
             case .discoveryRejected:
                 guard payload[TripActivityEventPayloadKey.rejectionReason]
-                    == DiscoveryOutcome.serverRejectedSupersededByEarlierTimestamp.rawValue else {
+                    == DiscoveryRejectionReason.serverRejectedSupersededByEarlierTimestamp.rawValue else {
                     continue
                 }
                 guard let voidId = payload[TripActivityEventPayloadKey.supersededRegionFoundEventId], !voidId.isEmpty else {

@@ -277,8 +277,8 @@ final class LicensePlateGameViewModel: ObservableObject {
         let firstName = names[info.firstFinderParticipantId] ?? info.firstFinderParticipantId
         let tripName = info.tripSessionName
         let message: String
-        if info.rejectionReasonRaw == DiscoveryOutcome.serverRejectedLateCompetitive.rawValue
-            || info.rejectionReasonRaw == DiscoveryOutcome.serverRejectedSupersededByEarlierTimestamp.rawValue {
+        if info.rejectionReasonRaw == DiscoveryRejectionReason.serverRejectedLateCompetitive.rawValue
+            || info.rejectionReasonRaw == DiscoveryRejectionReason.serverRejectedSupersededByEarlierTimestamp.rawValue {
             message = "Fairness late competitive body %@ %@ %@".localized(regionName, firstName, tripName)
         } else {
             message = "Fairness invalid participant body %@ %@".localized(regionName, tripName)
@@ -384,7 +384,7 @@ final class LicensePlateGameViewModel: ObservableObject {
             let rejected = allEvents
                 .filter { $0.kind == .discoveryRejected }
                 .filter { $0.payload?[TripActivityEventPayloadKey.gameInstanceId] == gidStr }
-                .filter { $0.payload?[TripActivityEventPayloadKey.rejectionReason] == DiscoveryOutcome.rejectedDuplicate.rawValue }
+                .filter { $0.payload?[TripActivityEventPayloadKey.rejectionReason] == DiscoveryRejectionReason.rejectedDuplicate.rawValue }
                 .filter { event in
                     let pid = event.payload?[TripActivityEventPayloadKey.participantId] ?? event.actorId ?? ""
                     return !uid.isEmpty && pid == uid

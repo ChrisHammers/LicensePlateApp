@@ -75,6 +75,8 @@ struct RootView: View {
             GameInstanceRepository.shared.setModelContext(modelContext)
             TravelLogRepository.shared.setModelContext(modelContext)
             TripActivityEventRepository.shared.setModelContext(modelContext)
+            XpLedgerRepository.shared.setModelContext(modelContext)
+            DiscoveryResolutionRepository.shared.setModelContext(modelContext)
             SyncQueueRepository.shared.setModelContext(modelContext)
             try? SyncQueueRepository.shared.resetStuckInProgressSyncItemsToPending()
             TripInviteRepository.shared.setModelContext(modelContext)

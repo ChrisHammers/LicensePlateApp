@@ -37,9 +37,9 @@ extension FairnessResolutionInfo {
             return nil
         }
         let firstFinder = rejection.payload?[TripActivityEventPayloadKey.firstFinderParticipantId] ?? ""
-        guard reason == DiscoveryOutcome.serverRejectedLateCompetitive.rawValue
-            || reason == DiscoveryOutcome.rejectedInvalidParticipant.rawValue
-            || reason == DiscoveryOutcome.serverRejectedSupersededByEarlierTimestamp.rawValue else {
+        guard reason == DiscoveryRejectionReason.serverRejectedLateCompetitive.rawValue
+            || reason == DiscoveryRejectionReason.rejectedInvalidParticipant.rawValue
+            || reason == DiscoveryRejectionReason.serverRejectedSupersededByEarlierTimestamp.rawValue else {
             return nil
         }
         self.tripSessionId = sessionId

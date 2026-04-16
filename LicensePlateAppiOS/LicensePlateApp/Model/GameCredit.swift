@@ -16,7 +16,7 @@ enum GameCreditType: String, Codable, CaseIterable, Sendable {
 }
 
 /// Attribution for a single discovery. Supports both collaborative (shared) and competitive (per-participant) scoring.
-struct GameCredit: Codable, Identifiable, Sendable {
+struct GameCredit: Codable, Identifiable, Sendable, Equatable {
     /// Stable id for this credit record.
     var id: String
     /// Discovery this credit applies to.

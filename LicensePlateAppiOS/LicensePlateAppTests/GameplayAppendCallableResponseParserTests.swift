@@ -33,7 +33,7 @@ struct GameplayAppendCallableResponseParserTests {
                 "timestamp": 1_700_000_000.0,
                 "actorId": "user-b",
                 "payload": [
-                    "rejectionReason": DiscoveryOutcome.serverRejectedLateCompetitive.rawValue,
+                    "rejectionReason": DiscoveryRejectionReason.serverRejectedLateCompetitive.rawValue,
                     "regionId": "CA",
                     "gameInstanceId": "660e8400-e29b-41d4-a716-446655440001",
                     "participantId": "user-b",

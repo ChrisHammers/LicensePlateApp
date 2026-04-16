@@ -107,6 +107,12 @@ final class SchemaVersion18Marker {
     init() {}
 }
 
+@Model
+final class SchemaVersion19Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
 // MARK: - Schema Version 1 (Initial)
 // Initial schema with Trip and AppUser
 
@@ -756,10 +762,60 @@ enum SchemaVersion18: VersionedSchema {
     }
 }
 
+// MARK: - Schema Version 19 (XP ledger + discovery resolution)
+// Local append-only XP ledger and post-reconciliation discovery rows.
+
+enum SchemaVersion19: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(19, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            SchemaVersion7Marker.self,
+            SchemaVersion8Marker.self,
+            TripActivityEventEntity.self,
+            SchemaVersion9Marker.self,
+            SchemaVersion10Marker.self,
+            SyncQueueItemEntity.self,
+            RemoteSyncMetadataEntity.self,
+            SchemaVersion11Marker.self,
+            SchemaVersion12Marker.self,
+            SchemaVersion13Marker.self,
+            SchemaVersion14Marker.self,
+            SchemaVersion15Marker.self,
+            PendingTripLeaveEntity.self,
+            SchemaVersion16Marker.self,
+            UserLifetimeStatsEntity.self,
+            SchemaVersion17Marker.self,
+            PublicLifetimeStatsCacheEntity.self,
+            SchemaVersion18Marker.self,
+            XpLedgerEventEntity.self,
+            DiscoveryResolutionEntity.self,
+            SchemaVersion19Marker.self
+        ]
+    }
+}
+
 // MARK: - Migration Plan
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self, SchemaVersion11.self, SchemaVersion12.self, SchemaVersion13.self, SchemaVersion14.self, SchemaVersion15.self, SchemaVersion16.self, SchemaVersion17.self, SchemaVersion18.self]
+        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self, SchemaVersion11.self, SchemaVersion12.self, SchemaVersion13.self, SchemaVersion14.self, SchemaVersion15.self, SchemaVersion16.self, SchemaVersion17.self, SchemaVersion18.self, SchemaVersion19.self]
     }
 
     static var stages: [MigrationStage] {
@@ -780,12 +836,13 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             .lightweight(fromVersion: SchemaVersion14.self, toVersion: SchemaVersion15.self),
             .lightweight(fromVersion: SchemaVersion15.self, toVersion: SchemaVersion16.self),
             .lightweight(fromVersion: SchemaVersion16.self, toVersion: SchemaVersion17.self),
-            .lightweight(fromVersion: SchemaVersion17.self, toVersion: SchemaVersion18.self)
+            .lightweight(fromVersion: SchemaVersion17.self, toVersion: SchemaVersion18.self),
+            .lightweight(fromVersion: SchemaVersion18.self, toVersion: SchemaVersion19.self)
         ]
     }
 }
 
 // MARK: - Current Schema
-// V18: Public lifetime stats listener cache (`PublicLifetimeStatsCacheEntity`).
-typealias CurrentSchema = SchemaVersion18
+// V19: XP ledger (`XpLedgerEventEntity`) + discovery resolution (`DiscoveryResolutionEntity`).
+typealias CurrentSchema = SchemaVersion19
 
