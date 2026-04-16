@@ -22,6 +22,7 @@ final class TripActivityEventRecordingService: TripActivityEventRecordingProtoco
 
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
     private let syncCoordinator: SyncCoordinatorProtocol
+    private weak var progressionAppendObserver: ProgressionLocalAppendObserving?
 
     init(
         tripActivityEventRepository: TripActivityEventRepositoryProtocol,
@@ -31,9 +32,16 @@ final class TripActivityEventRecordingService: TripActivityEventRecordingProtoco
         self.syncCoordinator = syncCoordinator
     }
 
+    func setProgressionAppendObserver(_ observer: ProgressionLocalAppendObserving?) {
+        progressionAppendObserver = observer
+    }
+
     func recordForSync(_ event: TripActivityEvent) throws {
-        _ = try tripActivityEventRepository.appendIfAbsent(event)
+        let didInsert = try tripActivityEventRepository.appendIfAbsent(event)
         try syncCoordinator.ensureGameplayEventEnqueued(sessionId: event.sessionId, eventId: event.id)
         syncCoordinator.scheduleDebouncedGameplaySyncFlushIfOnline()
+        if didInsert {
+            progressionAppendObserver?.progressionDidCommitLocalActivityEvent(event)
+        }
     }
 }

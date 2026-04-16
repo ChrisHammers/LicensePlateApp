@@ -194,6 +194,7 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                         }
                     case let .superseded(localId, rejection):
                         try TripActivityEventRepository.shared.deleteEvent(id: localId)
+                        UserProgressionService.shared.handleLocalEventRemoved(id: localId)
                         var imported: [TripActivityEvent] = []
                         if let canonical = CompetitiveSupersedeCanonicalDiscovery.regionFoundEvent(from: rejection) {
                             imported.append(canonical)

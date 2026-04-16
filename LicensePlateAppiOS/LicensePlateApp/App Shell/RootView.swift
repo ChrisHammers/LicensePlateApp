@@ -51,10 +51,12 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.3), value: appCoordinator.rootView)
         .onChange(of: authService.currentUser?.firebaseUID ?? authService.currentUser?.id) { _, newUserId in
+            TripActivityEventRecordingService.shared.setProgressionAppendObserver(nil)
             UserProgressionRepository.shared.stopListening()
             UserProgressionService.shared.resetForSignOut()
             if let newUserId, !newUserId.isEmpty {
                 UserProgressionRepository.shared.startListening(userId: newUserId)
+                TripActivityEventRecordingService.shared.setProgressionAppendObserver(UserProgressionService.shared)
             }
         }
         .onChange(of: scenePhase) { newPhase in
@@ -94,6 +96,7 @@ struct RootView: View {
                 PublicLifetimeStatsRepository.shared.setProfileUserId(userId)
                 PublicLifetimeStatsRepository.shared.ensureObservingProfileUser(userId)
                 UserProgressionRepository.shared.startListening(userId: userId)
+                TripActivityEventRecordingService.shared.setProgressionAppendObserver(UserProgressionService.shared)
             }
             EntitlementService.shared.setCurrentUserId(userId)
             await RevenueCatEntitlementBridge.shared.identify(userId: userId)

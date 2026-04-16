@@ -78,6 +78,27 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
         return list
     }
 
+    func sessionIdsRelevantToProgression(forUserId userId: String) throws -> Set<UUID> {
+        if shouldThrow { throw NSError(domain: "MockTripActivityEventRepository", code: -1, userInfo: nil) }
+        var ids = Set<UUID>()
+        for event in events {
+            switch event.kind {
+            case .gameEnded:
+                ids.insert(event.sessionId)
+            case .regionFound:
+                let payloadPid = event.payload?[TripActivityEventPayloadKey.participantId] ?? ""
+                if !payloadPid.isEmpty, payloadPid == userId {
+                    ids.insert(event.sessionId)
+                } else if event.actorId == userId {
+                    ids.insert(event.sessionId)
+                }
+            default:
+                break
+            }
+        }
+        return ids
+    }
+
     func discoveries(sessionId: UUID, gameInstanceId: UUID?) throws -> [GameDiscovery] {
         let allEvents = try events(sessionId: sessionId, limit: nil)
         return TripActivityEventDiscoveryReplay.replay(events: allEvents, gameInstanceFilter: gameInstanceId).discoveries

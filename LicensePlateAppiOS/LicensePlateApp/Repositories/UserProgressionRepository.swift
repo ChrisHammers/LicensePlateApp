@@ -18,6 +18,9 @@ final class UserProgressionRepository: ObservableObject {
     private var listener: ListenerRegistration?
     private var boundUserId: String?
 
+    /// User id currently bound to `user_progression` listener (for local pending recompute).
+    private(set) var currentObservedUserId: String?
+
     @Published private(set) var snapshot: UserProgressionSnapshot?
 
     private init() {}
@@ -27,6 +30,7 @@ final class UserProgressionRepository: ObservableObject {
         if boundUserId == userId, listener != nil { return }
         stopListening()
         boundUserId = userId
+        currentObservedUserId = userId
 
         let ref = db.collection("user_progression").document(userId)
         listener = ref.addSnapshotListener { [weak self] docSnap, error in
@@ -56,6 +60,7 @@ final class UserProgressionRepository: ObservableObject {
         listener?.remove()
         listener = nil
         boundUserId = nil
+        currentObservedUserId = nil
         snapshot = nil
     }
 
@@ -65,12 +70,17 @@ final class UserProgressionRepository: ObservableObject {
         let competitiveFirstPlaceFinishes = intValue(data["competitiveFirstPlaceFinishes"])
         let everCompetitiveFirstPlace = boolValue(data["everCompetitiveFirstPlace"])
         let lastUpdatedAt = (data["lastUpdatedAt"] as? Timestamp)?.dateValue()
+        let appliedIds: Set<String> = {
+            guard let raw = data["appliedProgressionEvents"] as? [String: Any] else { return [] }
+            return Set(raw.keys)
+        }()
         return UserProgressionSnapshot(
             totalXp: totalXp,
             acceptedRegionFindCount: acceptedRegionFindCount,
             competitiveFirstPlaceFinishes: competitiveFirstPlaceFinishes,
             everCompetitiveFirstPlace: everCompetitiveFirstPlace,
-            lastUpdatedAt: lastUpdatedAt
+            lastUpdatedAt: lastUpdatedAt,
+            appliedProgressionEventIds: appliedIds
         )
     }
 

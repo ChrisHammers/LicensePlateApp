@@ -22,6 +22,8 @@ protocol TripActivityEventRepositoryProtocol: AnyObject {
     func reconcileRemoteActivityEvent(_ event: TripActivityEvent) throws -> Bool
     func event(byId id: String) throws -> TripActivityEvent?
     func events(sessionId: UUID, limit: Int?) throws -> [TripActivityEvent]
+    /// Distinct session IDs that have `game_ended` or a `region_found` attributed to `userId` (actor or payload participant).
+    func sessionIdsRelevantToProgression(forUserId userId: String) throws -> Set<UUID>
     func discoveries(sessionId: UUID, gameInstanceId: UUID?) throws -> [GameDiscovery]
     func foundRegions(sessionId: UUID, gameInstanceId: UUID?) throws -> [FoundRegion]
     /// Remove all events for a session (or discovery-related events for one game when gameInstanceId is provided). Used for reset game / cancel session cleanup.
@@ -163,6 +165,35 @@ final class TripActivityEventRepository: ObservableObject, TripActivityEventRepo
         }
         let entities = try ctx.fetch(descriptor)
         return entities.map { entityToEvent($0) }
+    }
+
+    func sessionIdsRelevantToProgression(forUserId userId: String) throws -> Set<UUID> {
+        guard let ctx = modelContext else { throw TripActivityEventRepositoryError.noModelContext }
+        var descriptor = FetchDescriptor<TripActivityEventEntity>(
+            predicate: #Predicate<TripActivityEventEntity> { e in
+                e.kind == "region_found" || e.kind == "game_ended"
+            }
+        )
+        let entities = try ctx.fetch(descriptor)
+        var sessions = Set<UUID>()
+        for entity in entities {
+            guard let sid = UUID(uuidString: entity.sessionId) else { continue }
+            let event = entityToEvent(entity)
+            switch event.kind {
+            case .gameEnded:
+                sessions.insert(sid)
+            case .regionFound:
+                let payloadPid = event.payload?[TripActivityEventPayloadKey.participantId] ?? ""
+                if !payloadPid.isEmpty, payloadPid == userId {
+                    sessions.insert(sid)
+                } else if event.actorId == userId {
+                    sessions.insert(sid)
+                }
+            default:
+                break
+            }
+        }
+        return sessions
     }
 
     func discoveries(sessionId: UUID, gameInstanceId: UUID?) throws -> [GameDiscovery] {
