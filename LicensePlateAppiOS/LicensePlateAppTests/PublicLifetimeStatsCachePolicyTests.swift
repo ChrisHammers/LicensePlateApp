@@ -23,10 +23,12 @@ struct PublicLifetimeStatsCachePolicyTests {
 
     @Test func evictsOldestWhenOverCap() {
         let t0 = Date(timeIntervalSince1970: 0)
-        let t1 = Date(timeIntervalSince1970: 100)
         let friends = Set((0..<50).map { "u\($0)" })
         var records: [(String, Date)] = []
-        for (i, uid) in friends.enumerated() {
+        // Deterministic ordering: Set enumeration order is undefined, so assign
+        // lastAccessedAt by stable friend id (u0 oldest, u49 newest).
+        for i in 0..<50 {
+            let uid = "u\(i)"
             records.append((uid, t0.addingTimeInterval(TimeInterval(i))))
         }
         let victims = PublicLifetimeStatsCachePolicy.friendUserIdsToEvict(
