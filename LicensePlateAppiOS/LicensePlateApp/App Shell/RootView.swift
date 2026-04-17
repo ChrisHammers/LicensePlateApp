@@ -56,7 +56,7 @@ struct RootView: View {
             UserProgressionService.shared.resetForSignOut()
             if let newUserId, !newUserId.isEmpty {
                 UserProgressionRepository.shared.startListening(userId: newUserId)
-                TripActivityEventRecordingService.shared.setProgressionAppendObserver(UserProgressionService.shared)
+                TripActivityEventRecordingService.shared.setProgressionAppendObserver(ProgressionAppendObserverChain.shared)
             }
         }
         .onChange(of: scenePhase) { newPhase in
@@ -98,7 +98,7 @@ struct RootView: View {
                 PublicLifetimeStatsRepository.shared.setProfileUserId(userId)
                 PublicLifetimeStatsRepository.shared.ensureObservingProfileUser(userId)
                 UserProgressionRepository.shared.startListening(userId: userId)
-                TripActivityEventRecordingService.shared.setProgressionAppendObserver(UserProgressionService.shared)
+                TripActivityEventRecordingService.shared.setProgressionAppendObserver(ProgressionAppendObserverChain.shared)
             }
             EntitlementService.shared.setCurrentUserId(userId)
             await RevenueCatEntitlementBridge.shared.identify(userId: userId)

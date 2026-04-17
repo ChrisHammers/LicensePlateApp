@@ -183,6 +183,9 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                             gameInstanceId: gameIdStr,
                             eventKind: event.kind.rawValue
                         ))
+                        if event.kind == .regionFound {
+                            GameplayXpSyncSupport.applyResolutionForAcceptedGameplayEvent(event, sessionId: sessionUUID)
+                        }
                         if event.kind == .participantLeft {
                             let pid = event.payload?[TripActivityEventPayloadKey.participantId] ?? event.actorId ?? ""
                             if !pid.isEmpty {
@@ -193,6 +196,14 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                             }
                         }
                     case let .superseded(localId, rejection):
+                        if event.kind == .regionFound {
+                            GameplayXpSyncSupport.applyResolutionForSupersededRegionFound(
+                                sessionId: sessionUUID,
+                                supersededLocalId: localId,
+                                uploadedRegionFound: event,
+                                rejection: rejection
+                            )
+                        }
                         try TripActivityEventRepository.shared.deleteEvent(id: localId)
                         UserProgressionService.shared.handleLocalEventRemoved(id: localId)
                         var imported: [TripActivityEvent] = []

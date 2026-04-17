@@ -1,0 +1,61 @@
+//
+//  XpFeedProjectionBuilder.swift
+//  LicensePlateApp
+//
+//  Feed/snackbar lines from ledger rows.
+//
+
+import Foundation
+
+enum XpFeedProjectionBuilder {
+
+    /// Maps ledger rows to feed lines sorted by `createdAt`.
+    static func lines(
+        from ledgerEvents: [XpLedgerEvent],
+        itemTitle: (String) -> String
+    ) -> [XpFeedProjection] {
+        let sorted = ledgerEvents.sorted {
+            if $0.createdAt != $1.createdAt { return $0.createdAt < $1.createdAt }
+            return $0.id < $1.id
+        }
+        return sorted.compactMap { row in
+            line(from: row, itemTitle: itemTitle)
+        }
+    }
+
+    private static func line(from row: XpLedgerEvent, itemTitle: (String) -> String) -> XpFeedProjection? {
+        let name = itemTitle(row.itemId)
+        let state: XpFeedLineState = row.status == .provisional ? .provisional : .final
+        let (title, subtitle, xpText): (String, String?, String)
+        switch row.grantKind {
+        case .provisionalDiscoveryXp:
+            title = "%@ found".localized(name)
+            subtitle = "Pending resolution".localized
+            xpText = "+%d XP pending".localized(row.xpDelta)
+        case .reconciliationAdjustment:
+            title = "%@ resolved".localized(name)
+            subtitle = row.reasonCode.rawValue.replacingOccurrences(of: "_", with: " ")
+            xpText = row.xpDelta >= 0
+                ? "+%d XP".localized(row.xpDelta)
+                : "%d XP".localized(row.xpDelta)
+        case .finalDiscoveryAward:
+            title = "%@ found".localized(name)
+            subtitle = nil
+            xpText = "+%d XP".localized(row.xpDelta)
+        default:
+            title = name
+            subtitle = row.grantKind.rawValue
+            xpText = "%d XP".localized(row.xpDelta)
+        }
+        return XpFeedProjection(
+            id: row.id,
+            sourceEventId: row.sourceEventId,
+            itemId: row.itemId,
+            title: title,
+            subtitle: subtitle,
+            xpDisplayText: xpText,
+            state: state,
+            createdAt: row.createdAt
+        )
+    }
+}

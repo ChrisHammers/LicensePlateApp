@@ -8,7 +8,7 @@
 import Foundation
 
 /// Summary for UI: who found a target and how to display it. Game-agnostic (works off participantId and discoveredAt).
-struct ParticipantDiscoverySummary: Sendable {
+struct ParticipantDiscoverySummary: Sendable, Equatable {
     /// First finder by discovery time (for display priority).
     var firstFinderParticipantId: String?
     /// All finder participant ids, ordered by discoveredAt ascending.
