@@ -39,6 +39,9 @@ struct TripSummaryView: View {
                 if let projection = summary.discoveryProjection, !projection.targetSummaries.isEmpty {
                     firstDiscoveriesSection(projection: projection)
                 }
+                if !summary.xpRecapLines.isEmpty {
+                    xpRecapSection
+                }
                 if summary.locationMetadata != nil && !summary.locationMetadata!.isEmpty {
                     mapRecapPlaceholder
                 }
@@ -219,6 +222,55 @@ struct TripSummaryView: View {
                 .font(.system(.caption, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
         }
+    }
+
+    private func xpRecapLineAccessibility(_ line: XpFeedProjection) -> String {
+        var parts: [String] = [line.title]
+        if let s = line.subtitle, !s.isEmpty { parts.append(s) }
+        parts.append(line.xpDisplayText)
+        return parts.joined(separator: ", ")
+    }
+
+    private var xpRecapSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("tripSummary.xp_recap.title".localized)
+                .font(.system(.headline, design: .rounded))
+                .foregroundStyle(Color.Theme.primaryBlue)
+                .accessibilityAddTraits(.isHeader)
+            Text("tripSummary.xp_recap.subtitle".localized)
+                .font(.system(.caption2, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(summary.xpRecapLines) { line in
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(line.title)
+                        .font(.system(.subheadline, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    if let sub = line.subtitle, !sub.isEmpty {
+                        Text(sub)
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    Text(line.xpDisplayText)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                    Text(line.state == .provisional ? "tripSummary.xp_recap.state.provisional".localized : "tripSummary.xp_recap.state.final".localized)
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown.opacity(0.85))
+                }
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(xpRecapLineAccessibility(line))
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+        )
     }
 
     private var participantsSection: some View {

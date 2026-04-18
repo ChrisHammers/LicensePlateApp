@@ -32,4 +32,8 @@ protocol XpLedgerRepositoryProtocol: AnyObject {
         includingStatuses: Set<XpLedgerStatus>
     ) throws -> Int
     func hasBaseDiscoveryForUniquenessKey(_ key: String) throws -> Bool
+    /// All ledger rows for this user (any session/game), sorted by `createdAt` then `id`.
+    func ledgerEvents(userId: String) throws -> [XpLedgerEvent]
+    /// Ledger rows for this user scoped to one trip session, sorted by `createdAt` then `id`.
+    func ledgerEvents(userId: String, sessionId: UUID) throws -> [XpLedgerEvent]
 }

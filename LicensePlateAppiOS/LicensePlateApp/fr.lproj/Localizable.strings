@@ -691,3 +691,28 @@
 "trip_settings.leave_trip_impact" = "Vous quitterez ce trajet sur cet appareil immédiatement. Hors ligne, la sortie se synchronisera lorsque vous serez de nouveau en ligne. Après votre départ, ce trajet ne compte plus dans vos statistiques à vie et n’apparaîtra plus dans votre carnet de voyage une fois la synchronisation terminée.";
 "error.family_lookup_no_context" = "Les données famille ne sont pas encore disponibles. Réessayez dans un instant.";
 "error.lifetime_stats_no_context" = "Les statistiques ne sont pas encore disponibles. Réessayez dans un instant.";
+
+"xp.row.detail.pending_resolution" = "Résolution compétitive en attente";
+"xp.row.pill.pending" = "+%d XP en attente";
+"xp.row.pill.final" = "+%d XP";
+"xp.row.detail.final_award" = "Récompense finale : +%d XP";
+"xp.row.a11y.pending_competitive" = "Résolution compétitive en attente";
+"xp.pending.badge.short" = "En attente";
+"xp.pending.badge.a11y" = "Résolution compétitive en attente";
+"xp.discovery.badge.accepted_late" = "Un autre joueur l’a trouvé un peu plus tôt — récompense finale : +4 XP";
+"xp.discovery.badge.adjusted_after_sync" = "Ajusté après synchronisation (score final au classement).";
+
+"profile.xp.section_title" = "XP et progression";
+"profile.xp.server_total" = "XP synchronisée (compte)";
+"profile.xp.server_total_loading" = "L’XP synchronisée apparaîtra lorsque vous serez en ligne.";
+"profile.xp.pending_ledger_line" = "Sur cet appareil : +%d XP encore en attente de résolution compétitive.";
+"profile.xp.pending_section.a11y" = "XP compétitive en attente sur cet appareil";
+"profile.xp.rank_band_title" = "Progression dans la bande actuelle (visuel)";
+"profile.xp.rank_band.a11y" = "Progression visuelle dans la bande d’XP actuelle";
+"profile.xp.rank_band.a11y.value" = "%d XP synchronisés, %d en attente sur l’appareil";
+"profile.xp.pending_overlay_caption" = "La barre jaune est uniquement indicative : pas de déblocage tant que la synchro n’est pas faite.";
+
+"tripSummary.xp_recap.title" = "XP et ajustements";
+"tripSummary.xp_recap.subtitle" = "D’après le registre XP du trajet sur cet appareil.";
+"tripSummary.xp_recap.state.provisional" = "En attente";
+"tripSummary.xp_recap.state.final" = "Final";

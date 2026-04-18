@@ -238,4 +238,61 @@ struct XpLedgerRepositoryTests {
         )
         #expect(netFinalOnly == 10)
     }
+
+    @Test func ledgerEventsByUserIdReturnsAllRowsForUser() throws {
+        _ = try makeContext()
+        let s1 = UUID()
+        let s2 = UUID()
+        let g1 = UUID()
+        let g2 = UUID()
+        let k1 = XpLedgerKeyBuilder.uniquenessKey(
+            userId: "u9",
+            sessionId: s1,
+            gameInstanceId: g1,
+            itemId: "CA",
+            xpCategory: .baseRegionDiscovery
+        ).storageString
+        let k2 = XpLedgerKeyBuilder.uniquenessKey(
+            userId: "u9",
+            sessionId: s2,
+            gameInstanceId: g2,
+            itemId: "WA",
+            xpCategory: .baseRegionDiscovery
+        ).storageString
+        try XpLedgerRepository.shared.append(
+            XpLedgerEvent(
+                userId: "u9",
+                sessionId: s1,
+                gameInstanceId: g1,
+                sourceEventId: "e1",
+                sourceEventType: "region_found",
+                itemId: "CA",
+                grantKind: .provisionalDiscoveryXp,
+                status: .provisional,
+                xpDelta: 10,
+                reasonCode: .discoveryClaimPendingResolution,
+                xpUniquenessKey: k1
+            )
+        )
+        try XpLedgerRepository.shared.append(
+            XpLedgerEvent(
+                userId: "u9",
+                sessionId: s2,
+                gameInstanceId: g2,
+                sourceEventId: "e2",
+                sourceEventType: "region_found",
+                itemId: "WA",
+                grantKind: .finalDiscoveryAward,
+                status: .final,
+                xpDelta: 10,
+                reasonCode: .soloNewDiscovery,
+                xpUniquenessKey: k2
+            )
+        )
+        let all = try XpLedgerRepository.shared.ledgerEvents(userId: "u9")
+        #expect(all.count == 2)
+        let scoped = try XpLedgerRepository.shared.ledgerEvents(userId: "u9", sessionId: s1)
+        #expect(scoped.count == 1)
+        #expect(scoped[0].itemId == "CA")
+    }
 }

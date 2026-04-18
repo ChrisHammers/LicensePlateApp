@@ -142,6 +142,8 @@ class AnalyticsService: AnalyticsLogging {
         case tripSummaryViewedGameSection(sessionId: String)
         case tripSummaryViewedParticipantSection(sessionId: String)
         case tripSummaryViewedMapRecap(sessionId: String)
+        /// Travel log recap XP ledger section shown (Step XP 03).
+        case tripSummaryViewedXpRecap(sessionId: String)
         /// Step 11 — Travel log summary includes at least one competitive game (rankings section).
         case tripSummaryCompetitiveRankingsPresented(tripSessionId: String)
         /// Step 11 — In-game competitive standings first shown (multiplayer).
@@ -319,6 +321,7 @@ class AnalyticsService: AnalyticsLogging {
             case .tripSummaryViewedGameSection: return "trip_summary_viewed_game_section"
             case .tripSummaryViewedParticipantSection: return "trip_summary_viewed_participant_section"
             case .tripSummaryViewedMapRecap: return "trip_summary_viewed_map_recap"
+            case .tripSummaryViewedXpRecap: return "trip_summary_viewed_xp_recap"
             case .tripSummaryCompetitiveRankingsPresented: return "trip_summary_competitive_rankings_presented"
             case .competitiveInGameStandingsPresented: return "competitive_in_game_standings_presented"
             case .tripDashboardCompetitiveLeaderboardPresented: return "trip_dashboard_competitive_leaderboard_presented"
@@ -479,7 +482,7 @@ class AnalyticsService: AnalyticsLogging {
                 return ["trip_session_id": tripId, "combined_game_count": combinedGameCount, "combined_game_types": combinedGameTypes.joined(separator: ",")]
             case .tripSummaryViewed(let sessionId):
                 return ["session_id": sessionId]
-            case .tripSummaryViewedGameSection(let sessionId), .tripSummaryViewedParticipantSection(let sessionId), .tripSummaryViewedMapRecap(let sessionId):
+            case .tripSummaryViewedGameSection(let sessionId), .tripSummaryViewedParticipantSection(let sessionId), .tripSummaryViewedMapRecap(let sessionId), .tripSummaryViewedXpRecap(let sessionId):
                 return ["session_id": sessionId]
             case .tripSummaryCompetitiveRankingsPresented(let tripSessionId):
                 return ["trip_session_id": tripSessionId]

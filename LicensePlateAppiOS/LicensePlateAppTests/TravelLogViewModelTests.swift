@@ -206,4 +206,76 @@ struct TravelLogViewModelTests {
         #expect(viewModel.summaryErrorMessage == nil)
         #expect(viewModel.selectedSummary == nil)
     }
+
+    @Test func openSummaryAttachesXpRecapLinesFromLedger() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let uid = "ledger_recap_user"
+
+        let session = TripSession(
+            id: sessionId,
+            name: "Ledger recap trip",
+            status: .ended,
+            createdAt: Date().addingTimeInterval(-200),
+            endedAt: Date().addingTimeInterval(-100),
+            participants: [TripParticipant(userId: uid, role: .owner)]
+        )
+        let lpData = try JSONEncoder().encode(LicensePlateGameConfig())
+        let game = GameInstance(
+            id: gameId,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: CommonGameConfig(lifecycleState: .completed, gameMode: .collaborative),
+            gameSpecificPayloadType: "license_plate",
+            gameSpecificPayloadVersion: "1",
+            gameSpecificPayloadData: lpData
+        )
+
+        let mockTrip = MockTripSessionRepository()
+        mockTrip.seed(session)
+        let mockGame = MockGameInstanceRepository()
+        mockGame.seed(game)
+        let mockEvents = MockTripActivityEventRepository()
+
+        let mockLedger = MockXpLedgerRepository()
+        let key = XpLedgerKeyBuilder.uniquenessKey(
+            userId: uid,
+            sessionId: sessionId,
+            gameInstanceId: gameId,
+            itemId: "us-ny",
+            xpCategory: .baseRegionDiscovery
+        ).storageString
+        try mockLedger.append(
+            XpLedgerEvent(
+                userId: uid,
+                sessionId: sessionId,
+                gameInstanceId: gameId,
+                sourceEventId: "ev1",
+                sourceEventType: "region_found",
+                itemId: "us-ny",
+                grantKind: .provisionalDiscoveryXp,
+                status: .provisional,
+                xpDelta: 10,
+                reasonCode: .discoveryClaimPendingResolution,
+                xpUniquenessKey: key
+            )
+        )
+
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: uid, userName: "U", firebaseUID: uid)
+
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: MockTravelLogRepository(),
+            tripSessionRepository: mockTrip,
+            gameInstanceRepository: mockGame,
+            tripActivityEventRepository: mockEvents,
+            authService: auth,
+            xpLedger: mockLedger
+        )
+        viewModel.openSummary(sessionId: sessionId)
+
+        #expect(viewModel.selectedSummary != nil)
+        #expect(viewModel.selectedSummary?.xpRecapLines.isEmpty == false)
+    }
 }

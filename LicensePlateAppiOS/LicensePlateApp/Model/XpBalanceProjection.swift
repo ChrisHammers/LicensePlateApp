@@ -14,6 +14,7 @@ struct XpBalanceProjection: Sendable, Equatable {
     var gameInstanceId: UUID
 
     /// Net XP across all ledger rows for this scope (append-only; includes provisional + final adjustments).
+    /// Note: name is historical; this is **not** “final-only” XP — use `displayXp` / row `status` filters in UI when splitting pending vs settled.
     var totalXpFinal: Int
     /// Sum of ledger `xpDelta` for rows with `status == .provisional`.
     var totalXpProvisional: Int

@@ -51,12 +51,18 @@ final class LicensePlateGameViewModel: ObservableObject {
     @Published private(set) var licensePlateScopeDraft: LicensePlateScopeSettingsDraft?
     /// Step 13 — server rejected a late competitive find; stacked banners (oldest at top) in `LicensePlateGameView`.
     @Published private(set) var fairnessToasts: [FairnessToastState] = []
+    /// Ledger-driven per-region read models for the current viewer (Step XP 03).
+    @Published private(set) var discoveryProjectionsByItemId: [String: DiscoveryUiProjection] = [:]
+    /// Pre-built row copy/accessibility for list/map (derived from `discoveryProjectionsByItemId`).
+    @Published private(set) var plateRowPresentationsByRegionId: [String: RegionPlateRowPresentation] = [:]
 
     let sessionId: UUID
 
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
+    private let xpLedger: XpLedgerRepositoryProtocol
+    private let discoveryResolutionRepository: DiscoveryResolutionRepositoryProtocol
     private let lifecycleService: TripSessionLifecycleServiceProtocol
     private let gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
     private let tripActivityEventRecording: TripActivityEventRecordingProtocol
@@ -84,6 +90,22 @@ final class LicensePlateGameViewModel: ObservableObject {
         isTripContainerActive && game.commonConfig.lifecycleState == .started
     }
 
+    /// Count of regions shown as found in the scoped board (projection-first when available).
+    var displayFoundCountForHeader: Int {
+        if !plateRowPresentationsByRegionId.isEmpty {
+            return plateRowPresentationsByRegionId.values.filter(\.isVisuallyFound).count
+        }
+        return foundRegions.count
+    }
+
+    /// Region ids shown as found on map/list (projection-first when available).
+    var displayFoundRegionIDsForMap: [String] {
+        if !plateRowPresentationsByRegionId.isEmpty {
+            return plateRowPresentationsByRegionId.filter { $0.value.isVisuallyFound }.map(\.key)
+        }
+        return foundRegions.map(\.regionID)
+    }
+
     /// Games on this trip (for optional “remove this game” when the trip has multiple).
     var tripGameInstanceCount: Int {
         (try? gameInstanceRepository.gameCount(sessionId: sessionId)) ?? 0
@@ -106,7 +128,9 @@ final class LicensePlateGameViewModel: ObservableObject {
         lifecycleService: TripSessionLifecycleServiceProtocol,
         gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol = GameInstanceLifecycleService.shared,
         tripActivityEventRecording: TripActivityEventRecordingProtocol = TripActivityEventRecordingService.shared,
-        authService: FirebaseAuthService
+        authService: FirebaseAuthService,
+        xpLedger: XpLedgerRepositoryProtocol = XpLedgerRepository.shared,
+        discoveryResolutionRepository: DiscoveryResolutionRepositoryProtocol = DiscoveryResolutionRepository.shared
     ) {
         self.currentSession = session
         self.sessionId = session.id
@@ -114,6 +138,8 @@ final class LicensePlateGameViewModel: ObservableObject {
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
         self.tripActivityEventRepository = tripActivityEventRepository
+        self.xpLedger = xpLedger
+        self.discoveryResolutionRepository = discoveryResolutionRepository
         self.lifecycleService = lifecycleService
         self.gameInstanceLifecycleService = gameInstanceLifecycleService
         self.tripActivityEventRecording = tripActivityEventRecording
@@ -355,6 +381,8 @@ final class LicensePlateGameViewModel: ObservableObject {
 
     /// Rebuilds competitive standings and duplicate-rejection history from the event log.
     func refreshCompetitiveProjections() {
+        defer { refreshPlateProjections() }
+
         guard game.commonConfig.gameMode == .competitive else {
             competitiveStandings = []
             myDuplicateRejections = []
@@ -408,6 +436,83 @@ final class LicensePlateGameViewModel: ObservableObject {
             ))
             didLogCompetitiveStandingsExposure = true
         }
+    }
+
+    private func defaultLicensePlateGameConfig() -> LicensePlateGameConfig {
+        LicensePlateGameConfig(
+            selectedCountriesRawValues: [
+                PlateRegion.Country.unitedStates.rawValue,
+                PlateRegion.Country.canada.rawValue,
+                PlateRegion.Country.mexico.rawValue
+            ],
+            territoryOptions: LicensePlateTerritoryOptions()
+        )
+    }
+
+    /// Rebuilds `discoveryProjectionsByItemId` and row presentations from activity replay + ledger + resolutions.
+    private func refreshPlateProjections() {
+        let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        guard !uid.isEmpty else {
+            discoveryProjectionsByItemId = [:]
+            plateRowPresentationsByRegionId = [:]
+            return
+        }
+
+        guard game.definitionId == GameType.licensePlate.rawValue else {
+            discoveryProjectionsByItemId = [:]
+            plateRowPresentationsByRegionId = [:]
+            return
+        }
+
+        let lpConfig = game.licensePlateConfig() ?? defaultLicensePlateGameConfig()
+        let targetIds = LicensePlateScopeCalculator.targetRegionIds(for: lpConfig)
+        let discoveries = (try? tripActivityEventRepository.discoveries(sessionId: sessionId, gameInstanceId: game.id)) ?? []
+        let byTarget = Dictionary(grouping: discoveries, by: \.targetId)
+
+        var projections: [String: DiscoveryUiProjection] = [:]
+        var rows: [String: RegionPlateRowPresentation] = [:]
+
+        for regionId in targetIds {
+            let forItem = byTarget[regionId] ?? []
+            let ledgerRows = (try? xpLedger.ledgerEvents(
+                userId: uid,
+                sessionId: sessionId,
+                gameInstanceId: game.id,
+                itemId: regionId,
+                statuses: nil
+            )) ?? []
+            let resolutionList = (try? discoveryResolutionRepository.resolutions(
+                sessionId: sessionId,
+                gameInstanceId: game.id,
+                itemId: regionId
+            )) ?? []
+            let resolution = DiscoveryResolution.preferredLatest(in: resolutionList)
+
+            let projection = DiscoveryUiProjectionBuilder.project(
+                sessionId: sessionId,
+                gameInstanceId: game.id,
+                itemId: regionId,
+                viewerUserId: uid,
+                gameMode: game.commonConfig.gameMode,
+                discoveriesForItem: forItem,
+                resolution: resolution,
+                ledgerEventsForItem: ledgerRows,
+                lastUpdated: Date()
+            )
+            projections[regionId] = projection
+
+            let regionName = PlateRegion.all.first { $0.id == regionId }?.name ?? regionId
+            let foundFallback = foundRegions.contains { $0.regionID == regionId }
+            rows[regionId] = RegionPlateRowPresentationBuilder.build(
+                regionId: regionId,
+                regionName: regionName,
+                projection: projection,
+                foundFallback: foundFallback
+            )
+        }
+
+        discoveryProjectionsByItemId = projections
+        plateRowPresentationsByRegionId = rows
     }
 
     func startTrip() throws {

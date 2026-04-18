@@ -59,3 +59,13 @@ struct DiscoveryResolution: Identifiable, Codable, Sendable, Equatable {
         self.resolvedAtServer = resolvedAtServer
     }
 }
+
+extension DiscoveryResolution {
+    /// Latest resolution row for an item when multiple versions exist (higher `serverSequence` wins).
+    static func preferredLatest(in resolutions: [DiscoveryResolution]) -> DiscoveryResolution? {
+        resolutions.max { a, b in
+            if a.serverSequence != b.serverSequence { return a.serverSequence < b.serverSequence }
+            return a.resolutionId < b.resolutionId
+        }
+    }
+}

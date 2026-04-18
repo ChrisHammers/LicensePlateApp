@@ -691,3 +691,28 @@
 "trip_settings.leave_trip_impact" = "Saldrás de este viaje en este dispositivo de inmediato. Si estás sin conexión, la salida se sincronizará cuando vuelvas a estar en línea. Después de salir, este viaje ya no cuenta para tus estadísticas de por vida y no aparecerá en tu registro de viajes cuando termine la sincronización.";
 "error.family_lookup_no_context" = "Los datos de familia aún no están disponibles. Inténtalo de nuevo en un momento.";
 "error.lifetime_stats_no_context" = "Las estadísticas aún no están disponibles. Inténtalo de nuevo en un momento.";
+
+"xp.row.detail.pending_resolution" = "Resolución competitiva pendiente";
+"xp.row.pill.pending" = "+%d XP pendientes";
+"xp.row.pill.final" = "+%d XP";
+"xp.row.detail.final_award" = "Premio final: +%d XP";
+"xp.row.a11y.pending_competitive" = "Resolución competitiva pendiente";
+"xp.pending.badge.short" = "Pendiente";
+"xp.pending.badge.a11y" = "Resolución competitiva pendiente";
+"xp.discovery.badge.accepted_late" = "Otro jugador lo encontró un poco antes — premio final: +4 XP";
+"xp.discovery.badge.adjusted_after_sync" = "Ajustado tras sincronizar (puntuación final en la clasificación).";
+
+"profile.xp.section_title" = "XP y progreso";
+"profile.xp.server_total" = "XP sincronizada (cuenta)";
+"profile.xp.server_total_loading" = "La XP sincronizada aparecerá cuando estés en línea.";
+"profile.xp.pending_ledger_line" = "En este dispositivo: +%d XP aún pendientes de resolución competitiva.";
+"profile.xp.pending_section.a11y" = "XP competitiva pendiente en este dispositivo";
+"profile.xp.rank_band_title" = "Progreso en la banda actual (visual)";
+"profile.xp.rank_band.a11y" = "Progreso visual en la banda de XP actual";
+"profile.xp.rank_band.a11y.value" = "%d XP sincronizados, %d pendientes en el dispositivo";
+"profile.xp.pending_overlay_caption" = "La barra amarilla es solo pendiente: no desbloquea recompensas hasta sincronizar.";
+
+"tripSummary.xp_recap.title" = "XP y ajustes";
+"tripSummary.xp_recap.subtitle" = "Desde el libro mayor del viaje en este dispositivo.";
+"tripSummary.xp_recap.state.provisional" = "Pendiente";
+"tripSummary.xp_recap.state.final" = "Final";

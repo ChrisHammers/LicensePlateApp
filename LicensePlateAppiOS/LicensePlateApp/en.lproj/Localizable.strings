@@ -721,3 +721,29 @@
 "trip_settings.leave_trip_impact" = "You will leave this trip on this device right away. If you are offline, leaving will sync when you are back online. After you leave, this trip no longer counts toward your lifetime statistics and won’t appear in your travel log once sync completes.";
 "error.family_lookup_no_context" = "Family data isn’t available yet. Try again in a moment.";
 "error.lifetime_stats_no_context" = "Statistics aren’t available yet. Try again in a moment.";
+
+/* XP Ledger Step 03 — gameplay row + profile + recap */
+"xp.row.detail.pending_resolution" = "Pending competitive resolution";
+"xp.row.pill.pending" = "+%d XP pending";
+"xp.row.pill.final" = "+%d XP";
+"xp.row.detail.final_award" = "Final award: +%d XP";
+"xp.row.a11y.pending_competitive" = "Pending competitive resolution";
+"xp.pending.badge.short" = "Pending";
+"xp.pending.badge.a11y" = "Pending competitive resolution";
+"xp.discovery.badge.accepted_late" = "Another player found it slightly earlier — final award: +4 XP";
+"xp.discovery.badge.adjusted_after_sync" = "Adjusted after trip sync (final score on leaderboard).";
+
+"profile.xp.section_title" = "XP & progress";
+"profile.xp.server_total" = "Synced XP (account)";
+"profile.xp.server_total_loading" = "Synced XP will appear when you are online.";
+"profile.xp.pending_ledger_line" = "On this device: +%d XP still pending competitive resolution.";
+"profile.xp.pending_section.a11y" = "Pending competitive XP on this device";
+"profile.xp.rank_band_title" = "Progress in current band (visual)";
+"profile.xp.rank_band.a11y" = "Visual progress in current XP band";
+"profile.xp.rank_band.a11y.value" = "%d synced XP, %d pending on device";
+"profile.xp.pending_overlay_caption" = "Yellow bar is pending only — it does not unlock rewards until sync.";
+
+"tripSummary.xp_recap.title" = "XP & adjustments";
+"tripSummary.xp_recap.subtitle" = "From your trip ledger on this device. Calm messaging when scores change after sync.";
+"tripSummary.xp_recap.state.provisional" = "Pending";
+"tripSummary.xp_recap.state.final" = "Final";

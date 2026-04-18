@@ -36,6 +36,7 @@ struct UserProfileView: View {
     @State private var showAvatarPickerSheet = false
 
     @StateObject private var lifetimeStatsViewModel: LifetimeStatsProfileViewModel
+    @StateObject private var xpProgressViewModel: XpProgressViewModel
 
     // Helper function to get topmost view controller
     private func topViewController(controller: UIViewController? = nil) -> UIViewController? {
@@ -132,6 +133,7 @@ struct UserProfileView: View {
         _currentFirstName = State(initialValue: user.firstName ?? "")
         _currentLastName = State(initialValue: user.lastName ?? "")
         _lifetimeStatsViewModel = StateObject(wrappedValue: LifetimeStatsProfileViewModel(userId: user.id))
+        _xpProgressViewModel = StateObject(wrappedValue: XpProgressViewModel(userId: user.id))
     }
     
     var body: some View {
@@ -284,7 +286,9 @@ struct UserProfileView: View {
                     .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
 
                     LifetimeStatsProfileStatsSection(viewModel: lifetimeStatsViewModel)
-                    
+
+                    ProfileXpProgressSection(viewModel: xpProgressViewModel)
+
                     // Friends & Family Section
                     Section {
                         SettingNavigationRow(
@@ -615,6 +619,7 @@ struct UserProfileView: View {
             }
             .onAppear {
                 lifetimeStatsViewModel.onAppear()
+                xpProgressViewModel.refresh()
             }
             .onChange(of: user.userName) { oldValue, newValue in
                 currentUserName = newValue

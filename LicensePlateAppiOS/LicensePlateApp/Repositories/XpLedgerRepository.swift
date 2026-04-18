@@ -109,6 +109,29 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
         return try sortedDomainEvents(from: rows, statuses: nil)
     }
 
+    func ledgerEvents(userId: String) throws -> [XpLedgerEvent] {
+        guard let ctx = modelContext else { throw XpLedgerRepositoryError.noModelContext }
+        let descriptor = FetchDescriptor<XpLedgerEventEntity>(
+            predicate: #Predicate<XpLedgerEventEntity> { e in
+                e.userId == userId
+            }
+        )
+        let rows = try ctx.fetch(descriptor)
+        return try sortedDomainEvents(from: rows, statuses: nil)
+    }
+
+    func ledgerEvents(userId: String, sessionId: UUID) throws -> [XpLedgerEvent] {
+        guard let ctx = modelContext else { throw XpLedgerRepositoryError.noModelContext }
+        let sid = sessionId.uuidString
+        let descriptor = FetchDescriptor<XpLedgerEventEntity>(
+            predicate: #Predicate<XpLedgerEventEntity> { e in
+                e.userId == userId && e.sessionId == sid
+            }
+        )
+        let rows = try ctx.fetch(descriptor)
+        return try sortedDomainEvents(from: rows, statuses: nil)
+    }
+
     func netXpDelta(
         userId: String,
         sessionId: UUID,

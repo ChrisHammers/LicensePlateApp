@@ -6,7 +6,6 @@
 //
 
 import SwiftUI
-import SwiftData
 import Speech
 import AudioToolbox
 import MapKit
@@ -40,7 +39,6 @@ struct LicensePlateGameView: View {
     let authService: FirebaseAuthService
 
     @StateObject private var viewModel: LicensePlateGameViewModel
-    @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var riskAssessment: RiskAssessmentService
     @StateObject private var speechRecognizer = SpeechRecognizer(onListeningStarted: {
         FeedbackService.shared.startRecording()
@@ -179,7 +177,7 @@ struct LicensePlateGameView: View {
             if showFullScreenMap {
                 FullScreenMapView(
                     enabledCountries: gameScopedEnabledCountries,
-                    foundRegionIDs: viewModel.foundRegions.map(\.regionID),
+                    foundRegionIDs: viewModel.displayFoundRegionIDsForMap,
                     foundRegions: viewModel.foundRegions,
                     cameraPosition: $cameraPosition,
                     locationManager: locationManager,
@@ -309,12 +307,12 @@ struct LicensePlateGameView: View {
     }
 
     private var headerFoundValue: String {
-        "\(viewModel.foundRegions.count)"
+        "\(viewModel.displayFoundCountForHeader)"
     }
 
     /// Remaining count: game-scoped (game completion goal) when license-plate; else session-enabled region count.
     private var headerRemainingValue: String {
-        let foundCount = viewModel.foundRegions.count
+        let foundCount = viewModel.displayFoundCountForHeader
         if let lpConfig = viewModel.game.licensePlateConfig() {
             let goal = LicensePlateScopeCalculator.completionGoal(for: lpConfig)
             return "\(max(0, goal - foundCount))"
@@ -333,7 +331,7 @@ struct LicensePlateGameView: View {
           // Map view (game-scoped)
           RegionMapView(
               enabledCountries: gameScopedEnabledCountries,
-              foundRegionIDs: viewModel.foundRegions.map(\.regionID),
+              foundRegionIDs: viewModel.displayFoundRegionIDsForMap,
               foundRegions: viewModel.foundRegions,
               visibleCountry: visibleCountry,
               cameraPosition: $cameraPosition,
@@ -671,11 +669,12 @@ struct LicensePlateGameView: View {
              ForEach(PlateRegion.groupedByCountry(), id: \.country) { group in
                  Section(group.country.rawValue) {
                      ForEach(group.regions) { region in
-                         RegionCellView(
-                             region: region,
-                             isSelected: viewModel.foundRegions.contains(where: { $0.regionID == region.id }),
-                             toggleAction: { toggle(regionID: region.id) }
-                         )
+                        RegionCellView(
+                            region: region,
+                            presentation: viewModel.plateRowPresentationsByRegionId[region.id],
+                            isSelectedFallback: viewModel.foundRegions.contains(where: { $0.regionID == region.id }),
+                            toggleAction: { toggle(regionID: region.id) }
+                        )
                          .listRowBackground(Color.Theme.cardBackground)
                      }
                  }
@@ -697,7 +696,8 @@ struct LicensePlateGameView: View {
                     ForEach(group.regions) { region in
                         RegionCellView(
                             region: region,
-                            isSelected: viewModel.foundRegions.contains(where: { $0.regionID == region.id }),
+                            presentation: viewModel.plateRowPresentationsByRegionId[region.id],
+                            isSelectedFallback: viewModel.foundRegions.contains(where: { $0.regionID == region.id }),
                             toggleAction: { toggle(regionID: region.id) },
                             isDisabled: !viewModel.isGamePlayActive
                         )
@@ -768,7 +768,8 @@ struct LicensePlateGameView: View {
     private func toggle(regionID: String) {
         guard viewModel.isGamePlayActive else { return }
         FeedbackService.shared.toggleRegion()
-        let isCurrentlyFound = viewModel.foundRegions.contains(where: { $0.regionID == regionID })
+        let row = viewModel.plateRowPresentationsByRegionId[regionID]
+        let isCurrentlyFound = row?.isVisuallyFound ?? viewModel.foundRegions.contains(where: { $0.regionID == regionID })
         if isCurrentlyFound {
             setNotFound(regionID: regionID, usingTab: .list)
         } else {
@@ -1226,8 +1227,9 @@ struct LicensePlateGameView: View {
     }
     
     private func addRegionIfNotFound(_ region: PlateRegion) {
-        // Only add if not already found
-        if !viewModel.foundRegions.contains(where: { $0.regionID == region.id }) {
+        let row = viewModel.plateRowPresentationsByRegionId[region.id]
+        let alreadyFound = row?.isVisuallyFound ?? viewModel.foundRegions.contains(where: { $0.regionID == region.id })
+        if !alreadyFound {
             lastMatchedRegion = region
             
             // Check if user wants to skip confirmation
@@ -1356,9 +1358,14 @@ struct LicensePlateGameView: View {
 
 private struct RegionCellView: View {
     let region: PlateRegion
-    let isSelected: Bool
+    let presentation: RegionPlateRowPresentation?
+    let isSelectedFallback: Bool
     var toggleAction: () -> Void
     var isDisabled: Bool = false
+
+    private var isFound: Bool {
+        presentation?.isVisuallyFound ?? isSelectedFallback
+    }
 
     var body: some View {
         Button {
@@ -1366,39 +1373,57 @@ private struct RegionCellView: View {
                 toggleAction()
             }
         } label: {
-            HStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 Image(systemName: "licenseplate")
                     .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(Color.Theme.primaryBlue)
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(region.name)
-                        .font(.system(.body, design: .rounded))
-                        .fontWeight(.medium)
-                        .foregroundStyle(Color.Theme.primaryBlue)
-
+                    HStack(spacing: 8) {
+                        Text(region.name)
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                        if presentation?.showPendingBadge == true {
+                            XpPendingBadgeView()
+                        }
+                    }
                     Text(region.country.rawValue.localized)
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
+                    if let detail = presentation?.detailLine, !detail.isEmpty {
+                        Text(detail)
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
 
-                Spacer()
+                Spacer(minLength: 4)
 
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 22))
-                    .foregroundStyle(isSelected ? Color.Theme.accentYellow : Color.Theme.softBrown.opacity(0.4))
-                    .scaleEffect(isSelected ? 1.05 : 1.0)
-                    .accessibilityHidden(true)
+                VStack(alignment: .trailing, spacing: 6) {
+                    if let pill = presentation?.xpPillText, !pill.isEmpty {
+                        XpDeltaPillView(
+                            text: pill,
+                            isPendingStyle: presentation?.showPendingBadge == true
+                        )
+                    }
+                    Image(systemName: isFound ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 22))
+                        .foregroundStyle(isFound ? Color.Theme.accentYellow : Color.Theme.softBrown.opacity(0.4))
+                        .scaleEffect(isFound ? 1.05 : 1.0)
+                        .accessibilityHidden(true)
+                }
             }
             .padding(.vertical, 6)
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.5 : 1.0)
-        .accessibilityLabel("\(region.name), \(region.country.rawValue.localized)")
-        .accessibilityValue(isSelected ? "Found".localized : "Not found".localized)
-        .accessibilityHint(isDisabled ? "Trip must be started to mark regions".localized : "Double tap to %@ this region as found".localized(isSelected ? "unmark".localized : "mark".localized))
+        .accessibilityLabel(presentation?.accessibilityLabel ?? "\(region.name), \(region.country.rawValue.localized)")
+        .accessibilityValue(presentation?.accessibilityValue ?? (isFound ? "Found".localized : "Not found".localized))
+        .accessibilityHint(isDisabled ? "Trip must be started to mark regions".localized : "Double tap to %@ this region as found".localized(isFound ? "unmark".localized : "mark".localized))
         .accessibilityAddTraits(.isButton)
     }
 }

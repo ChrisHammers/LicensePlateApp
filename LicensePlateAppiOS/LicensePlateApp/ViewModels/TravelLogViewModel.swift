@@ -25,6 +25,7 @@ final class TravelLogViewModel: ObservableObject {
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
+    private let xpLedger: XpLedgerRepositoryProtocol
     private var authService: FirebaseAuthService
     private let usePreviewEntries: Bool
 
@@ -34,12 +35,14 @@ final class TravelLogViewModel: ObservableObject {
         gameInstanceRepository: GameInstanceRepositoryProtocol,
         tripActivityEventRepository: TripActivityEventRepositoryProtocol,
         authService: FirebaseAuthService,
+        xpLedger: XpLedgerRepositoryProtocol = XpLedgerRepository.shared,
         previewEntries: [TravelLogEntry]? = nil
     ) {
         self.travelLogRepository = travelLogRepository
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
         self.tripActivityEventRepository = tripActivityEventRepository
+        self.xpLedger = xpLedger
         self.authService = authService
         self.usePreviewEntries = previewEntries != nil
         if let entries = previewEntries {
@@ -91,7 +94,14 @@ final class TravelLogViewModel: ObservableObject {
             }
             let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
             let discoveries = try tripActivityEventRepository.discoveries(sessionId: sessionId, gameInstanceId: nil)
-            let summary = TripSummaryBuilder.build(session: session, games: games, discoveries: discoveries)
+            var summary = TripSummaryBuilder.build(session: session, games: games, discoveries: discoveries)
+            if let uid = currentUserId, !uid.isEmpty {
+                let ledgerRows = (try? xpLedger.ledgerEvents(userId: uid, sessionId: sessionId)) ?? []
+                let itemTitle: (String) -> String = { itemId in
+                    PlateRegion.all.first { $0.id == itemId }?.name ?? itemId
+                }
+                summary.xpRecapLines = XpFeedProjectionBuilder.lines(from: ledgerRows, itemTitle: itemTitle)
+            }
             selectedSummary = summary
             if summary.unassignedDiscoveryCount > 0 {
                 AnalyticsService.shared.log(
@@ -129,6 +139,9 @@ final class TravelLogViewModel: ObservableObject {
         }
         if let meta = summary.locationMetadata, !meta.isEmpty {
             AnalyticsService.shared.log(.tripSummaryViewedMapRecap(sessionId: sid))
+        }
+        if !summary.xpRecapLines.isEmpty {
+            AnalyticsService.shared.log(.tripSummaryViewedXpRecap(sessionId: sid))
         }
     }
 

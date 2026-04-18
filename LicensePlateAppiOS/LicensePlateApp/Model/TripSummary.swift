@@ -47,6 +47,8 @@ struct TripSummary: Sendable {
     var discoveryProjection: DiscoveryCreditProjection?
     /// Optional location metadata for future map recap.
     var locationMetadata: [String: String]?
+    /// Ledger-derived XP recap lines for the viewer (Travel Log detail; Step XP 03).
+    var xpRecapLines: [XpFeedProjection] = []
 
     /// True when any game on the trip is competitive (for summary UI: ranks, first-finds column).
     var hasCompetitiveGame: Bool {
