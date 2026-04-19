@@ -365,7 +365,8 @@ struct LicensePlateGameView: View {
         .padding(.bottom, 6)
     }
 
-    /// Competitive mode: standings and personal duplicate-rejection history (labels from ViewModel projection only).
+    @State private var competitivePlaySectionsContentSize: CGSize = .zero
+    
     private var competitivePlaySections: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Standings".localized)
@@ -373,66 +374,52 @@ struct LicensePlateGameView: View {
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue)
                 .accessibilityAddTraits(.isHeader)
-
-            ForEach(viewModel.competitiveStandings) { row in
-                let c = row.contribution
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("Rank #%d".localized(row.rank))
-                        .font(.system(.caption, design: .rounded))
-                        .fontWeight(.medium)
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                        .frame(minWidth: 52, alignment: .leading)
-                    if row.isTiedOnScore {
-                        Text("Tied".localized)
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
+            ScrollView {
+               // VStack(spacing: 8) {
+                    ForEach(viewModel.competitiveStandings) { row in
+                        let c = row.contribution
+                        HStack(alignment: .firstTextBaseline, spacing: 18) {
+                            Text("Rank #%d".localized(row.rank))
+                                .font(.system(.caption, design: .rounded))
+                                .fontWeight(.medium)
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                                .frame(minWidth: 52, alignment: .leading)
+                            if row.isTiedOnScore {
+                                Text("Tied".localized)
+                                    .font(.system(.caption2, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown)
+                            }
+                            Text(competitiveDisplayNames[c.participantId] ?? c.participantId)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                            Spacer(minLength: 4)
+                            Text("%d first finds".localized(c.firstFindCount))
+                                .font(.system(.caption2, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                            Text(String(format: "%.1f", c.weightedScore))
+                                .font(.system(.caption2, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                        }
+                        .padding(.bottom, 0)
+                        .background(
+                            GeometryReader { geo -> Color in
+                                DispatchQueue.main.async {
+                                    competitivePlaySectionsContentSize = geo.size
+                                    print(geo.size)
+                                }
+                                return Color.clear
+                            }
+                        )
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel(competitiveStandingAccessibility(row: row))
                     }
-                    Text(competitiveDisplayNames[c.participantId] ?? c.participantId)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                    Spacer(minLength: 4)
-                    Text("%d first finds".localized(c.firstFindCount))
-                        .font(.system(.caption2, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-                    Text(String(format: "%.1f", c.weightedScore))
-                        .font(.system(.caption2, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(competitiveStandingAccessibility(row: row))
+                
             }
-
-            Text("Your duplicate attempts".localized)
-                .font(.system(.subheadline, design: .rounded))
-                .fontWeight(.semibold)
-                .foregroundStyle(Color.Theme.primaryBlue)
-                .padding(.top, 4)
-                .accessibilityAddTraits(.isHeader)
-
-            if viewModel.myDuplicateRejections.isEmpty {
-                Text("No duplicate attempts yet".localized)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                    .accessibilityLabel("No duplicate attempts yet".localized)
-            } else {
-                ForEach(viewModel.myDuplicateRejections) { attempt in
-                    HStack {
-                        Text(competitiveRegionDisplayName(for: attempt.targetId))
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(Color.Theme.primaryBlue)
-                        Spacer()
-                        Text(attempt.timestamp.formatted(date: .abbreviated, time: .shortened))
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel(
-                        "\(competitiveRegionDisplayName(for: attempt.targetId)), \(attempt.timestamp.formatted(date: .abbreviated, time: .shortened))"
-                    )
-                }
-            }
+            .frame(
+                height: competitivePlaySectionsContentSize.height * 4
+            )
         }
         .padding(.horizontal, 32)
         .frame(maxWidth: .infinity, alignment: .leading)
