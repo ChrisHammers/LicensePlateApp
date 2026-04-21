@@ -115,9 +115,32 @@ struct ContentView: View {
             AppBackgroundView {
                 homeTripAndInvitesList
             }
-            .navigationTitle("RoadTrip Royale")
+            .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 2) {
+                        Text("RoadTrip Royale")
+                            .font(.system(.headline, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                        if let user = authService.currentUser {
+                            Text(user.displayName)
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel({
+                        let title = "RoadTrip Royale".localized
+                        if let user = authService.currentUser {
+                            return "\(title), \(user.displayName)"
+                        }
+                        return title
+                    }())
+                }
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         isShowingTravelLog = true
@@ -132,8 +155,13 @@ struct ContentView: View {
                     Button {
                         isShowingSettings = true
                     } label: {
-                        Image(systemName: "gearshape.fill")
-                            .foregroundStyle(Color.Theme.primaryBlue)
+                        if let user = authService.currentUser {
+                            AvatarView(user: user, size: 34, showRing: true)
+                        } else {
+                            Image(systemName: "person.crop.circle")
+                                .font(.system(size: 28))
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                        }
                     }
                     .accessibilityLabel("Settings".localized)
                     .accessibilityHint("Opens app settings".localized)

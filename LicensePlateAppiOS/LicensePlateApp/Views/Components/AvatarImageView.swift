@@ -7,6 +7,9 @@
 
 import SwiftUI
 
+/// Same as ``AvatarImageView``; use whichever name reads best at the call site.
+typealias AvatarView = AvatarImageView
+
 struct AvatarImageView: View {
     let avatarId: String?
     let size: CGFloat
