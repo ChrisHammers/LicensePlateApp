@@ -42,6 +42,9 @@ final class TripSessionViewModel: ObservableObject {
     private let gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
     private var didLogTripDashboardLeaderboard = false
     private var cancellables = Set<AnyCancellable>()
+    /// Throttles Firestore refreshes for trip roster profile rows (avatars / names) shown on trip dashboard surfaces.
+    private var lastRosterProfileFirestoreRefreshAt: [String: Date] = [:]
+    private let rosterProfileFirestoreRefreshCooldown: TimeInterval = 45
 
     init(
         sessionId: UUID,
@@ -79,6 +82,7 @@ final class TripSessionViewModel: ObservableObject {
                 return
             }
             session = s
+            scheduleRosterProfileRemoteRefreshIfNeeded(for: s)
             if s.mode == .multiplayer {
                 TripCanonicalRemoteSyncService.shared.startIncrementalListeningIfNeeded(sessionId: sessionId)
             }
@@ -120,6 +124,36 @@ final class TripSessionViewModel: ObservableObject {
             gameRowItems = []
             showsTripCompetitiveLeaderboard = false
             tripLeaderboardRows = []
+        }
+    }
+
+    private func rosterUserIds(for session: TripSession) -> Set<String> {
+        var ids = Set(session.participants.map(\.userId).filter { !$0.isEmpty })
+        if let createdBy = session.createdBy, !createdBy.isEmpty {
+            ids.insert(createdBy)
+        }
+        return ids
+    }
+
+    private func scheduleRosterProfileRemoteRefreshIfNeeded(for session: TripSession) {
+        let allIds = rosterUserIds(for: session)
+        guard !allIds.isEmpty else { return }
+
+        let now = Date()
+        let idsNeedingRefresh = allIds.filter { id in
+            if let last = lastRosterProfileFirestoreRefreshAt[id] {
+                return now.timeIntervalSince(last) >= rosterProfileFirestoreRefreshCooldown
+            }
+            return true
+        }
+        guard !idsNeedingRefresh.isEmpty else { return }
+
+        for id in idsNeedingRefresh {
+            lastRosterProfileFirestoreRefreshAt[id] = now
+        }
+
+        Task {
+            await UserRepository.shared.refreshUsersFromFirestoreIfPresent(userIds: Set(idsNeedingRefresh))
         }
     }
 

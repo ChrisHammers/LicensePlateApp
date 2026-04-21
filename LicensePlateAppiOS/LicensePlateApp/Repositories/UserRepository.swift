@@ -98,6 +98,24 @@ class UserRepository: ObservableObject {
         return result
     }
 
+    /// Merges latest `users/{userId}` documents into SwiftData so finder UI can escape stale local cache.
+    /// - Note: Does not delete local rows when remote doc is missing (offline / permissions).
+    func refreshUsersFromFirestoreIfPresent(userIds: Set<String>) async {
+        guard !userIds.isEmpty else { return }
+        for userId in userIds {
+            do {
+                let userDoc = try await db.collection("users").document(userId).getDocument()
+                guard userDoc.exists, let data = userDoc.data() else { continue }
+                let user = try await userFromFirestoreData(data, id: userId)
+                cacheUsers([user])
+            } catch {
+                #if DEBUG
+                print("UserRepository.refreshUsersFromFirestoreIfPresent failed for \(userId): \(error)")
+                #endif
+            }
+        }
+    }
+
     // MARK: - User Search
     
     /// Search users by username (always searchable)
@@ -589,14 +607,26 @@ class UserRepository: ObservableObject {
         guard let modelContext = modelContext else { return }
         
         for user in users {
-            let searchUserId = user.id
-            let descriptor = FetchDescriptor<AppUser>(
+            let searchId = user.id
+            let searchFirebase = user.firebaseUID ?? ""
+            let idDescriptor = FetchDescriptor<AppUser>(
                 predicate: #Predicate<AppUser> { u in
-                    u.id == searchUserId
+                    u.id == searchId
                 }
             )
-            
-            if let existing = try? modelContext.fetch(descriptor).first {
+            let firebaseDescriptor = FetchDescriptor<AppUser>(
+                predicate: #Predicate<AppUser> { u in
+                    u.firebaseUID == searchFirebase
+                }
+            )
+
+            let existingById = try? modelContext.fetch(idDescriptor).first
+            let existingByFirebase: AppUser? = {
+                guard !searchFirebase.isEmpty else { return nil }
+                return try? modelContext.fetch(firebaseDescriptor).first
+            }()
+
+            if let existing = existingById ?? existingByFirebase {
                 // Update existing
                 existing.userName = user.userName
                 existing.firstName = user.firstName
@@ -613,6 +643,9 @@ class UserRepository: ObservableObject {
                 existing.avatarId = user.avatarId
                 existing.equippedBadgeId = user.equippedBadgeId
                 existing.wasEverInFamily = user.wasEverInFamily
+                if existing.firebaseUID == nil, let f = user.firebaseUID {
+                    existing.firebaseUID = f
+                }
             } else {
                 // Insert new
                 modelContext.insert(user)

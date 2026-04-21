@@ -73,9 +73,6 @@ final class LicensePlateGameViewModel: ObservableObject {
     private var shownFairnessRejectionEventIds = Set<String>()
     /// Prevents interleaved `applyFairnessToastBacklogFromEventLog(` init `Task` vs tests / hydration) from splitting backlog work and advancing the watermark to only the first rejection.) and runs from duplicating toast rows.
     private var isApplyingFairnessToastBacklog = false
-    /// Tracks finder IDs currently being resolved for avatar/name hydration.
-    private var requestedFinderIdentityIds = Set<String>()
-
     var isTripCreator: Bool {
         let currentUserID = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
         guard let id = currentUserID else { return false }
@@ -472,17 +469,6 @@ final class LicensePlateGameViewModel: ObservableObject {
         let byTarget = Dictionary(grouping: discoveries, by: \.targetId)
         let allFinderIds = Set(discoveries.map(\.participantId).filter { !$0.isEmpty })
         let cachedIdentities = UserRepository.shared.cachedIdentityMap(forUserIds: allFinderIds)
-        let unresolvedFinderIds = allFinderIds.subtracting(Set(cachedIdentities.keys)).subtracting(requestedFinderIdentityIds)
-        if !unresolvedFinderIds.isEmpty {
-            requestedFinderIdentityIds.formUnion(unresolvedFinderIds)
-            Task { [weak self] in
-                guard let self else { return }
-                _ = await UserRepository.shared.identityMap(forUserIds: unresolvedFinderIds)
-                await MainActor.run {
-                    self.refreshPlateProjections()
-                }
-            }
-        }
 
         var projections: [String: DiscoveryUiProjection] = [:]
         var rows: [String: RegionPlateRowPresentation] = [:]
