@@ -300,7 +300,8 @@ class FamilyRepository: ObservableObject {
                 
                 if let userDoc = userDoc,
                    let data = userDoc.data(),
-                   let userName = data["username"] as? String {
+                   let userName = (data["userName"] as? String) ?? (data["username"] as? String),
+                   !userName.isEmpty {
                     
                     // Create AppUser from Firestore data
                     let user = AppUser(

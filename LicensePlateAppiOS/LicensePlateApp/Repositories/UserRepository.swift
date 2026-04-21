@@ -10,6 +10,11 @@ import SwiftData
 import FirebaseFirestore
 import Combine
 
+extension Notification.Name {
+    /// Posted after `UserRepository` merges one or more remote `users/{id}` payloads into SwiftData (`userIds` array in `userInfo`).
+    static let userProfilesMerged = Notification.Name("UserRepository.userProfilesMerged")
+}
+
 @MainActor
 class UserRepository: ObservableObject {
     static let shared = UserRepository()
@@ -100,20 +105,43 @@ class UserRepository: ObservableObject {
 
     /// Merges latest `users/{userId}` documents into SwiftData so finder UI can escape stale local cache.
     /// - Note: Does not delete local rows when remote doc is missing (offline / permissions).
+    /// Posts a single `Notification.Name.userProfilesMerged` with all successfully merged ids.
     func refreshUsersFromFirestoreIfPresent(userIds: Set<String>) async {
         guard !userIds.isEmpty else { return }
+        var mergedIds: [String] = []
         for userId in userIds {
             do {
                 let userDoc = try await db.collection("users").document(userId).getDocument()
                 guard userDoc.exists, let data = userDoc.data() else { continue }
-                let user = try await userFromFirestoreData(data, id: userId)
-                cacheUsers([user])
+                try await mergeRemoteProfileIntoCache(userId: userId, data: data)
+                mergedIds.append(userId)
             } catch {
                 #if DEBUG
                 print("UserRepository.refreshUsersFromFirestoreIfPresent failed for \(userId): \(error)")
                 #endif
             }
         }
+        postUserProfilesMergedIfNeeded(mergedIds)
+    }
+
+    /// Merges a Firestore `users/{userId}` snapshot into SwiftData (shared path for explicit fetch + pinned listeners).
+    func mergeRemoteUserDocument(userId: String, data: [String: Any]) async throws {
+        try await mergeRemoteProfileIntoCache(userId: userId, data: data)
+        postUserProfilesMergedIfNeeded([userId])
+    }
+
+    private func mergeRemoteProfileIntoCache(userId: String, data: [String: Any]) async throws {
+        let user = try await userFromFirestoreData(data, id: userId)
+        cacheUsers([user])
+    }
+
+    private func postUserProfilesMergedIfNeeded(_ userIds: [String]) {
+        guard !userIds.isEmpty else { return }
+        NotificationCenter.default.post(
+            name: .userProfilesMerged,
+            object: nil,
+            userInfo: ["userIds": userIds]
+        )
     }
 
     // MARK: - User Search
@@ -561,8 +589,8 @@ class UserRepository: ObservableObject {
     // MARK: - User Data Conversion
     
     private func userFromFirestoreData(_ data: [String: Any], id: String) async throws -> AppUser {
-        // Firestore field is "userName" (camelCase), not "username"
-        guard let userName = data["userName"] as? String else {
+        // Canonical field is `userName`; some paths historically wrote `username`.
+        guard let userName = (data["userName"] as? String) ?? (data["username"] as? String), !userName.isEmpty else {
             print("⚠️ User document \(id) missing userName field. Available fields: \(data.keys.joined(separator: ", "))")
             throw NSError(domain: "UserRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid user data: missing userName"])
         }

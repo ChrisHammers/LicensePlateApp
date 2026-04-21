@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import FirebaseAuth
 
 /// Lightweight row data for one game in the trip session list.
 struct GameRowItem: Identifiable {
@@ -42,9 +43,8 @@ final class TripSessionViewModel: ObservableObject {
     private let gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
     private var didLogTripDashboardLeaderboard = false
     private var cancellables = Set<AnyCancellable>()
-    /// Throttles Firestore refreshes for trip roster profile rows (avatars / names) shown on trip dashboard surfaces.
-    private var lastRosterProfileFirestoreRefreshAt: [String: Date] = [:]
-    private let rosterProfileFirestoreRefreshCooldown: TimeInterval = 45
+    /// One-time bootstrap merge per distinct roster (listeners handle ongoing updates).
+    private var lastRosterProfileBootstrapSignature: String?
 
     init(
         sessionId: UUID,
@@ -79,10 +79,13 @@ final class TripSessionViewModel: ObservableObject {
             guard let s = try tripSessionRepository.session(byId: sessionId) else {
                 session = nil
                 gameRowItems = []
+                lastRosterProfileBootstrapSignature = nil
+                let selfUid = Auth.auth().currentUser?.uid
+                UserProfileListenCoordinator.shared.setPinnedUsers(selfUserId: selfUid, rosterUserIds: [])
                 return
             }
             session = s
-            scheduleRosterProfileRemoteRefreshIfNeeded(for: s)
+            syncPinnedUserProfileListenersAndBootstrapRosterIfNeeded(for: s)
             if s.mode == .multiplayer {
                 TripCanonicalRemoteSyncService.shared.startIncrementalListeningIfNeeded(sessionId: sessionId)
             }
@@ -124,6 +127,9 @@ final class TripSessionViewModel: ObservableObject {
             gameRowItems = []
             showsTripCompetitiveLeaderboard = false
             tripLeaderboardRows = []
+            lastRosterProfileBootstrapSignature = nil
+            let selfUid = Auth.auth().currentUser?.uid
+            UserProfileListenCoordinator.shared.setPinnedUsers(selfUserId: selfUid, rosterUserIds: [])
         }
     }
 
@@ -135,25 +141,21 @@ final class TripSessionViewModel: ObservableObject {
         return ids
     }
 
-    private func scheduleRosterProfileRemoteRefreshIfNeeded(for session: TripSession) {
-        let allIds = rosterUserIds(for: session)
-        guard !allIds.isEmpty else { return }
+    private func syncPinnedUserProfileListenersAndBootstrapRosterIfNeeded(for session: TripSession) {
+        let roster = rosterUserIds(for: session)
+        let selfUid = Auth.auth().currentUser?.uid
+        UserProfileListenCoordinator.shared.setPinnedUsers(
+            selfUserId: selfUid,
+            rosterUserIds: roster
+        )
 
-        let now = Date()
-        let idsNeedingRefresh = allIds.filter { id in
-            if let last = lastRosterProfileFirestoreRefreshAt[id] {
-                return now.timeIntervalSince(last) >= rosterProfileFirestoreRefreshCooldown
-            }
-            return true
-        }
-        guard !idsNeedingRefresh.isEmpty else { return }
+        let signature = roster.sorted().joined(separator: "\u{1e}")
+        guard signature != lastRosterProfileBootstrapSignature else { return }
+        lastRosterProfileBootstrapSignature = signature
 
-        for id in idsNeedingRefresh {
-            lastRosterProfileFirestoreRefreshAt[id] = now
-        }
-
+        guard !roster.isEmpty else { return }
         Task {
-            await UserRepository.shared.refreshUsersFromFirestoreIfPresent(userIds: Set(idsNeedingRefresh))
+            await UserRepository.shared.refreshUsersFromFirestoreIfPresent(userIds: roster)
         }
     }
 

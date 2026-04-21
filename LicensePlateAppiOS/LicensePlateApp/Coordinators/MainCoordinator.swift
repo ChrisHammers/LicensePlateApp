@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Combine
+import FirebaseAuth
 
 /// Coordinator for main (home) trip and game navigation. Owns path; open session/game via methods.
 @MainActor
@@ -32,9 +33,15 @@ final class MainCoordinator: ObservableObject {
         if !path.isEmpty {
             path.removeLast()
         }
+        if path.isEmpty {
+            let selfUid = Auth.auth().currentUser?.uid
+            UserProfileListenCoordinator.shared.setPinnedUsers(selfUserId: selfUid, rosterUserIds: [])
+        }
     }
 
     func popToRoot() {
         path.removeAll()
+        let selfUid = Auth.auth().currentUser?.uid
+        UserProfileListenCoordinator.shared.setPinnedUsers(selfUserId: selfUid, rosterUserIds: [])
     }
 }

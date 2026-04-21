@@ -1379,6 +1379,11 @@ class FirebaseAuthService: ObservableObject {
             existingUser.phoneNumber = firestoreUser.phoneNumber
             existingUser.userImageURL = firestoreUser.userImageURL
             existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
+            existingUser.avatarColor = firestoreUser.avatarColor
+            existingUser.avatarType = firestoreUser.avatarType
+            existingUser.avatarId = firestoreUser.avatarId
+            existingUser.equippedBadgeId = firestoreUser.equippedBadgeId
+            existingUser.wasEverInFamily = firestoreUser.wasEverInFamily
             // Friends & Family fields
             existingUser.activeFamilyId = firestoreUser.activeFamilyId
             existingUser.friendCount = firestoreUser.friendCount
@@ -1390,11 +1395,21 @@ class FirebaseAuthService: ObservableObject {
             
             // Update published property
             currentUser = existingUser
+            NotificationCenter.default.post(
+                name: .userProfilesMerged,
+                object: nil,
+                userInfo: ["userIds": [firebaseUID]]
+            )
         } else {
             // User doesn't exist locally, insert it
             modelContext.insert(firestoreUser)
             try? modelContext.save()
             currentUser = firestoreUser
+            NotificationCenter.default.post(
+                name: .userProfilesMerged,
+                object: nil,
+                userInfo: ["userIds": [firebaseUID]]
+            )
         }
     }
     
@@ -1479,7 +1494,7 @@ class FirebaseAuthService: ObservableObject {
     }
     
     private func appUserFromFirestoreData(_ data: [String: Any], id: String) -> AppUser {
-        let userName = data["userName"] as? String ?? "User"
+        let userName = (data["userName"] as? String) ?? (data["username"] as? String) ?? "User"
         let firstName = data["firstName"] as? String
         let lastName = data["lastName"] as? String
         let email = data["email"] as? String

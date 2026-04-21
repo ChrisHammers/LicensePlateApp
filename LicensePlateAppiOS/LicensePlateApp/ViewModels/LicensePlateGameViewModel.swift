@@ -146,6 +146,12 @@ final class LicensePlateGameViewModel: ObservableObject {
         self.foundRegions = (try? tripActivityEventRepository.foundRegions(sessionId: session.id, gameInstanceId: game.id)) ?? []
         refreshCompetitiveProjections()
 
+        let selfUid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+        UserProfileListenCoordinator.shared.setPinnedUsers(
+            selfUserId: selfUid,
+            rosterUserIds: Self.rosterUserIds(for: session)
+        )
+
         TripCanonicalRemoteSyncService.shared.fairnessResolutionSignal
             .filter { [weak self] info in
                 guard let self else { return false }
@@ -174,6 +180,13 @@ final class LicensePlateGameViewModel: ObservableObject {
                     await self.mergeFairnessUiAckFromRemoteIfNeeded()
                     await self.applyFairnessToastBacklogFromEventLog()
                 }
+            }
+            .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: .userProfilesMerged)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.refreshPlateProjections()
             }
             .store(in: &cancellables)
 
@@ -446,6 +459,14 @@ final class LicensePlateGameViewModel: ObservableObject {
             ],
             territoryOptions: LicensePlateTerritoryOptions()
         )
+    }
+
+    private static func rosterUserIds(for session: TripSession) -> Set<String> {
+        var ids = Set(session.participants.map(\.userId).filter { !$0.isEmpty })
+        if let createdBy = session.createdBy, !createdBy.isEmpty {
+            ids.insert(createdBy)
+        }
+        return ids
     }
 
     /// Rebuilds `discoveryProjectionsByItemId` and row presentations from activity replay + ledger + resolutions.
