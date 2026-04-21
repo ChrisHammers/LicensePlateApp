@@ -73,6 +73,8 @@ final class LicensePlateGameViewModel: ObservableObject {
     private var shownFairnessRejectionEventIds = Set<String>()
     /// Prevents interleaved `applyFairnessToastBacklogFromEventLog(` init `Task` vs tests / hydration) from splitting backlog work and advancing the watermark to only the first rejection.) and runs from duplicating toast rows.
     private var isApplyingFairnessToastBacklog = false
+    /// Tracks finder IDs currently being resolved for avatar/name hydration.
+    private var requestedFinderIdentityIds = Set<String>()
 
     var isTripCreator: Bool {
         let currentUserID = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
@@ -468,6 +470,19 @@ final class LicensePlateGameViewModel: ObservableObject {
         let targetIds = LicensePlateScopeCalculator.targetRegionIds(for: lpConfig)
         let discoveries = (try? tripActivityEventRepository.discoveries(sessionId: sessionId, gameInstanceId: game.id)) ?? []
         let byTarget = Dictionary(grouping: discoveries, by: \.targetId)
+        let allFinderIds = Set(discoveries.map(\.participantId).filter { !$0.isEmpty })
+        let cachedIdentities = UserRepository.shared.cachedIdentityMap(forUserIds: allFinderIds)
+        let unresolvedFinderIds = allFinderIds.subtracting(Set(cachedIdentities.keys)).subtracting(requestedFinderIdentityIds)
+        if !unresolvedFinderIds.isEmpty {
+            requestedFinderIdentityIds.formUnion(unresolvedFinderIds)
+            Task { [weak self] in
+                guard let self else { return }
+                _ = await UserRepository.shared.identityMap(forUserIds: unresolvedFinderIds)
+                await MainActor.run {
+                    self.refreshPlateProjections()
+                }
+            }
+        }
 
         var projections: [String: DiscoveryUiProjection] = [:]
         var rows: [String: RegionPlateRowPresentation] = [:]
@@ -503,16 +518,53 @@ final class LicensePlateGameViewModel: ObservableObject {
 
             let regionName = PlateRegion.all.first { $0.id == regionId }?.name ?? regionId
             let foundFallback = foundRegions.contains { $0.regionID == regionId }
+            let orderedFinders = finderPresentations(for: forItem, identities: cachedIdentities)
+            let findersA11y = findersAccessibilityValue(orderedFinders: orderedFinders)
             rows[regionId] = RegionPlateRowPresentationBuilder.build(
                 regionId: regionId,
                 regionName: regionName,
                 projection: projection,
-                foundFallback: foundFallback
+                foundFallback: foundFallback,
+                orderedFinders: orderedFinders,
+                findersAccessibilityValue: findersA11y
             )
         }
 
         discoveryProjectionsByItemId = projections
         plateRowPresentationsByRegionId = rows
+    }
+
+    private func finderPresentations(
+        for discoveries: [GameDiscovery],
+        identities: [String: UserRepository.UserIdentitySnapshot]
+    ) -> [FinderAvatarPresentation] {
+        var seen = Set<String>()
+        let ordered = discoveries
+            .sorted(by: GameDiscovery.orderingAscending)
+            .compactMap { discovery -> FinderAvatarPresentation? in
+                let id = discovery.participantId
+                guard !id.isEmpty, !seen.contains(id) else { return nil }
+                seen.insert(id)
+                let identity = identities[id]
+                return FinderAvatarPresentation(
+                    participantId: id,
+                    displayName: identity?.displayName ?? id,
+                    avatarId: identity?.avatarId,
+                    legacyFallbackImageName: identity?.legacyFallbackImageName,
+                    foundAt: discovery.discoveredAt
+                )
+            }
+        return ordered
+    }
+
+    private func findersAccessibilityValue(orderedFinders: [FinderAvatarPresentation]) -> String? {
+        guard !orderedFinders.isEmpty else { return nil }
+        let names = orderedFinders.map(\.displayName)
+        if names.count == 1 {
+            return "finder.a11y.single".localized(names[0])
+        }
+        let joined = names.joined(separator: ", ")
+        return "finder.a11y.ordered_list".localized(joined)
     }
 
     func startTrip() throws {

@@ -716,3 +716,12 @@
 "tripSummary.xp_recap.subtitle" = "Desde el libro mayor del viaje en este dispositivo.";
 "tripSummary.xp_recap.state.provisional" = "Pendiente";
 "tripSummary.xp_recap.state.final" = "Final";
+
+"finder.a11y.single" = "Encontrado por %@";
+"finder.a11y.ordered_list" = "Orden de hallazgo: %@";
+"finder.stack.accessibility.default" = "Avatares de personas que lo encontraron";
+"finder.popover.title" = "Orden de hallazgo para %@";
+"finder.popover.subtitle" = "La primera persona aparece primero.";
+"finder.popover.row_title" = "%d. %@";
+"finder.popover.row_a11y" = "Persona %d, %@, encontrado a las %@";
+"finder.stack.accessibility.overflow" = "Y %d personas más";

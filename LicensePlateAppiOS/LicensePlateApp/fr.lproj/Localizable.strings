@@ -716,3 +716,12 @@
 "tripSummary.xp_recap.subtitle" = "D’après le registre XP du trajet sur cet appareil.";
 "tripSummary.xp_recap.state.provisional" = "En attente";
 "tripSummary.xp_recap.state.final" = "Final";
+
+"finder.a11y.single" = "Trouvé par %@";
+"finder.a11y.ordered_list" = "Ordre des découvreurs : %@";
+"finder.stack.accessibility.default" = "Avatars des découvreurs";
+"finder.popover.title" = "Ordre des découvreurs pour %@";
+"finder.popover.subtitle" = "Le premier découvreur apparaît en premier.";
+"finder.popover.row_title" = "%d. %@";
+"finder.popover.row_a11y" = "Découvreur %d, %@, trouvé à %@";
+"finder.stack.accessibility.overflow" = "Et %d découvreurs supplémentaires";

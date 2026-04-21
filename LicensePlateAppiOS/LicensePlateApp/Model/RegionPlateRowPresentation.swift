@@ -7,6 +7,15 @@
 
 import Foundation
 
+struct FinderAvatarPresentation: Equatable, Sendable, Identifiable {
+    var id: String { participantId }
+    var participantId: String
+    var displayName: String
+    var avatarId: String?
+    var legacyFallbackImageName: String?
+    var foundAt: Date
+}
+
 struct RegionPlateRowPresentation: Equatable, Sendable {
     var regionId: String
     /// True when the tile should show the found treatment (projection or fallback).
@@ -16,13 +25,24 @@ struct RegionPlateRowPresentation: Equatable, Sendable {
     var detailLine: String?
     /// Capsule text such as "+10 XP pending" or "+4 XP".
     var xpPillText: String?
+    /// Ordered by discovery time ascending (first finder first).
+    var orderedFinders: [FinderAvatarPresentation]
+    /// Accessibility-ready line describing finder order.
+    var findersAccessibilityValue: String?
     var accessibilityLabel: String
     var accessibilityValue: String
 }
 
 enum RegionPlateRowPresentationBuilder {
 
-    static func build(regionId: String, regionName: String, projection: DiscoveryUiProjection?, foundFallback: Bool) -> RegionPlateRowPresentation {
+    static func build(
+        regionId: String,
+        regionName: String,
+        projection: DiscoveryUiProjection?,
+        foundFallback: Bool,
+        orderedFinders: [FinderAvatarPresentation] = [],
+        findersAccessibilityValue: String? = nil
+    ) -> RegionPlateRowPresentation {
         let isFound = projection.map { $0.displayState == .foundVisuallyActive } ?? foundFallback
         let pending = projection.map { $0.xpPhase == .provisional || $0.syncState == .localOnly } ?? false
         let showBadge = pending && isFound
@@ -57,6 +77,9 @@ enum RegionPlateRowPresentationBuilder {
         if showBadge { valueParts.append("xp.row.a11y.pending_competitive".localized) }
         if let d = detailLine { valueParts.append(d) }
         if let pill { valueParts.append(pill) }
+        if let findersAccessibilityValue, !findersAccessibilityValue.isEmpty {
+            valueParts.append(findersAccessibilityValue)
+        }
 
         return RegionPlateRowPresentation(
             regionId: regionId,
@@ -64,6 +87,8 @@ enum RegionPlateRowPresentationBuilder {
             showPendingBadge: showBadge,
             detailLine: detailLine,
             xpPillText: pill,
+            orderedFinders: orderedFinders,
+            findersAccessibilityValue: findersAccessibilityValue,
             accessibilityLabel: a11yLabel,
             accessibilityValue: valueParts.joined(separator: ", ")
         )

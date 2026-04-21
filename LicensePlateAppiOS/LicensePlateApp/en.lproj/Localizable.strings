@@ -747,3 +747,12 @@
 "tripSummary.xp_recap.subtitle" = "From your trip ledger on this device. Calm messaging when scores change after sync.";
 "tripSummary.xp_recap.state.provisional" = "Pending";
 "tripSummary.xp_recap.state.final" = "Final";
+
+"finder.a11y.single" = "Found by %@";
+"finder.a11y.ordered_list" = "Finder order: %@";
+"finder.stack.accessibility.default" = "Finder avatars";
+"finder.popover.title" = "Finder order for %@";
+"finder.popover.subtitle" = "First finder appears first.";
+"finder.popover.row_title" = "%d. %@";
+"finder.popover.row_a11y" = "Finder %d, %@, found at %@";
+"finder.stack.accessibility.overflow" = "Plus %d more finders";

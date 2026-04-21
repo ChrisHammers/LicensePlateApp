@@ -1349,52 +1349,76 @@ private struct RegionCellView: View {
     let isSelectedFallback: Bool
     var toggleAction: () -> Void
     var isDisabled: Bool = false
+    @State private var showFinderPopover = false
 
     private var isFound: Bool {
         presentation?.isVisuallyFound ?? isSelectedFallback
     }
 
-    var body: some View {
-        Button {
-            if !isDisabled {
-                toggleAction()
-            }
-        } label: {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "licenseplate")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                    .accessibilityHidden(true)
+    private var finderEntries: [AvatarStackView.AvatarEntry] {
+        (presentation?.orderedFinders ?? []).map {
+            AvatarStackView.AvatarEntry(
+                id: $0.participantId,
+                avatarId: $0.avatarId,
+                legacyFallbackImageName: $0.legacyFallbackImageName,
+                displayName: $0.displayName
+            )
+        }
+    }
 
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(region.name)
-                            .font(.system(.body, design: .rounded))
-                            .fontWeight(.medium)
-                            .foregroundStyle(Color.Theme.primaryBlue)
-                        if presentation?.showPendingBadge == true {
-                            XpPendingBadgeView()
-                        }
-                    }
-                    Text(region.country.rawValue.localized)
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-                    if let detail = presentation?.detailLine, !detail.isEmpty {
-                        Text(detail)
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
-                            .fixedSize(horizontal: false, vertical: true)
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "licenseplate")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(Color.Theme.primaryBlue)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(region.name)
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    if presentation?.showPendingBadge == true {
+                        XpPendingBadgeView()
                     }
                 }
+                Text(region.country.rawValue.localized)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                if let detail = presentation?.detailLine, !detail.isEmpty {
+                    Text(detail)
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
 
-                Spacer(minLength: 4)
+            Spacer(minLength: 4)
 
-                VStack(alignment: .trailing, spacing: 6) {
-                    if let pill = presentation?.xpPillText, !pill.isEmpty {
-                        XpDeltaPillView(
-                            text: pill,
-                            isPendingStyle: presentation?.showPendingBadge == true
+            VStack(alignment: .trailing, spacing: 6) {
+                if let pill = presentation?.xpPillText, !pill.isEmpty {
+                    XpDeltaPillView(
+                        text: pill,
+                        isPendingStyle: presentation?.showPendingBadge == true
+                    )
+                }
+                HStack(spacing: 10) {
+                    if !finderEntries.isEmpty {
+                        AvatarStackView(
+                            entries: finderEntries,
+                            maxDisplay: 3,
+                            avatarSize: 22,
+                            overlapRatio: 0.38,
+                            accessibilityLabel: presentation?.findersAccessibilityValue ?? "finder.stack.accessibility.default".localized,
+                            onTap: { showFinderPopover = true }
                         )
+                        .popover(isPresented: $showFinderPopover) {
+                            FinderOrderPopoverView(
+                                title: "finder.popover.title".localized(region.name),
+                                finders: presentation?.orderedFinders ?? []
+                            )
+                        }
                     }
                     Image(systemName: isFound ? "checkmark.circle.fill" : "circle")
                         .font(.system(size: 22))
@@ -1403,15 +1427,72 @@ private struct RegionCellView: View {
                         .accessibilityHidden(true)
                 }
             }
-            .padding(.vertical, 6)
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, 6)
+        .contentShape(Rectangle())
+        .gesture(
+            TapGesture().onEnded {
+                if !isDisabled {
+                    toggleAction()
+                }
+            },
+            including: .gesture
+        )
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.5 : 1.0)
         .accessibilityLabel(presentation?.accessibilityLabel ?? "\(region.name), \(region.country.rawValue.localized)")
         .accessibilityValue(presentation?.accessibilityValue ?? (isFound ? "Found".localized : "Not found".localized))
         .accessibilityHint(isDisabled ? "Trip must be started to mark regions".localized : "Double tap to %@ this region as found".localized(isFound ? "unmark".localized : "mark".localized))
         .accessibilityAddTraits(.isButton)
+    }
+}
+
+private struct FinderOrderPopoverView: View {
+    let title: String
+    let finders: [FinderAvatarPresentation]
+
+    private static let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+        formatter.doesRelativeDateFormatting = true
+        return formatter
+    }()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.system(.headline, design: .rounded))
+                .foregroundStyle(Color.Theme.primaryBlue)
+            Text("finder.popover.subtitle".localized)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+            ForEach(Array(finders.enumerated()), id: \.element.id) { index, finder in
+                HStack(spacing: 10) {
+                    AvatarImageView(
+                        avatarId: finder.avatarId,
+                        size: 24,
+                        showRing: true,
+                        legacyFallbackImageName: finder.legacyFallbackImageName
+                    )
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("finder.popover.row_title".localized(index + 1, finder.displayName))
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                        Text(Self.formatter.string(from: finder.foundAt))
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("finder.popover.row_a11y".localized(index + 1, finder.displayName, Self.formatter.string(from: finder.foundAt)))
+            }
+        }
+        .padding(14)
+        .frame(minWidth: 250, maxWidth: 320)
+        /// Keep a true popover on compact width (iPhone); default is sheet adaptation.
+        .presentationCompactAdaptation(.none)
     }
 }
 

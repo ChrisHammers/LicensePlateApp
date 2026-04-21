@@ -24,6 +24,13 @@ class UserRepository: ObservableObject {
     private init() {
         // Private initializer prevents external instantiation
     }
+
+    struct UserIdentitySnapshot: Sendable {
+        var userId: String
+        var displayName: String
+        var avatarId: String?
+        var legacyFallbackImageName: String?
+    }
     
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
@@ -37,6 +44,55 @@ class UserRepository: ObservableObject {
                 result[id] = user.userName
             } else {
                 result[id] = id
+            }
+        }
+        return result
+    }
+
+    /// SwiftData-only lookup used for fast UI hydration. Missing users are omitted.
+    func cachedIdentityMap(forUserIds ids: Set<String>) -> [String: UserIdentitySnapshot] {
+        guard let modelContext, !ids.isEmpty else { return [:] }
+        var result: [String: UserIdentitySnapshot] = [:]
+        for id in ids {
+            let searchUserId = id
+            let descriptor = FetchDescriptor<AppUser>(
+                predicate: #Predicate<AppUser> { user in
+                    user.id == searchUserId || user.firebaseUID == searchUserId
+                }
+            )
+            if let user = try? modelContext.fetch(descriptor).first {
+                result[id] = UserIdentitySnapshot(
+                    userId: id,
+                    displayName: user.userName,
+                    avatarId: user.avatarId,
+                    legacyFallbackImageName: user.defaultImageName
+                )
+            }
+        }
+        return result
+    }
+
+    /// Cache-aware identity map with Firestore fallback for richer avatar/name rows.
+    func identityMap(forUserIds ids: Set<String>) async -> [String: UserIdentitySnapshot] {
+        var result = cachedIdentityMap(forUserIds: ids)
+        let missing = ids.subtracting(Set(result.keys))
+        guard !missing.isEmpty else { return result }
+
+        for id in missing {
+            if let user = try? await getUser(userId: id) {
+                result[id] = UserIdentitySnapshot(
+                    userId: id,
+                    displayName: user.userName,
+                    avatarId: user.avatarId,
+                    legacyFallbackImageName: user.defaultImageName
+                )
+            } else {
+                result[id] = UserIdentitySnapshot(
+                    userId: id,
+                    displayName: id,
+                    avatarId: nil,
+                    legacyFallbackImageName: nil
+                )
             }
         }
         return result
