@@ -18,13 +18,19 @@ struct LicensePlateGameView: View {
     enum Tab: CaseIterable, Identifiable {
         case list
         case voice
-
+        #if DEBUG
+        case progression
+        #endif
+        
         var id: Self { self }
 
         var title: String {
             switch self {
             case .list: return "List".localized
             case .voice: return "Voice".localized
+            #if DEBUG
+            case .progression: return "Progress".localized
+            #endif
             }
         }
 
@@ -32,6 +38,9 @@ struct LicensePlateGameView: View {
             switch self {
             case .list: return "list.bullet"
             case .voice: return "person.wave.2.fill"
+            #if DEBUG
+            case .progression: return "chart.bar.doc.horizontal"
+                #endif
             }
         }
     }
@@ -66,6 +75,9 @@ struct LicensePlateGameView: View {
     @State private var retryAction: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
     @State private var competitiveDisplayNames: [String: String] = [:]
+    @ObservedObject private var userProgression = UserProgressionService.shared
+    @ObservedObject private var userProgressionRepository = UserProgressionRepository.shared
+    @State private var progressionScoringNames: [String: String] = [:]
 
     @State private var cameraPosition: GMSCameraPosition = {
         // Initialize with default US position, will be updated on appear
@@ -100,6 +112,11 @@ struct LicensePlateGameView: View {
                 voiceCaptureView
                     .opacity(selectedTab == .voice ? 1 : 0)
                     .allowsHitTesting(selectedTab == .voice)
+                #if DEBUG
+                gameProgressionTab
+                    .opacity(selectedTab == .progression ? 1 : 0)
+                    .allowsHitTesting(selectedTab == .progression)
+                #endif
             }
 
             customTabBar
@@ -445,6 +462,274 @@ struct LicensePlateGameView: View {
 
     private func competitiveRegionDisplayName(for targetId: String) -> String {
         PlateRegion.all.first(where: { $0.id == targetId })?.name ?? targetId
+    }
+
+    private var gameScopedLedgerEvents: [XpLedgerEvent] {
+        viewModel.sessionLedgerEvents.filter { $0.gameInstanceId == viewModel.game.id }
+    }
+
+    private var gameProgressionTab: some View {
+        let gameLedger = gameScopedLedgerEvents
+        let lastGameLedger = gameLedger.max { $0.createdAt < $1.createdAt }
+        let netGameLedger = gameLedger.reduce(0) { $0 + $1.xpDelta }
+        let netSessionLedger = viewModel.sessionLedgerEvents.reduce(0) { $0 + $1.xpDelta }
+        let server = userProgressionRepository.snapshot
+        let effective = userProgression.effectiveTotals
+        // Match `UserProgressionService` math: server snapshot is treated as empty when the doc is missing.
+        let serverForDelta = userProgressionRepository.snapshot ?? UserProgressionSnapshot.empty
+        let globalPendingInt: Int? = effective.map { $0.totalXp - serverForDelta.totalXp }
+        let p = viewModel.sessionProgressionPending
+        let rankPreviewBase = server?.totalXp ?? 0
+        let rankPreviewTotal = rankPreviewBase + viewModel.accountLedgerProvisionalPending
+        return VStack(alignment: .leading, spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("game.progression.section_summary".localized)
+                        .font(.headline)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    progressionStatRow(
+                        label: "game.progression.server_xp".localized,
+                        value: {
+                            if let s = server {
+                                return String(s.totalXp)
+                            }
+                            return "game.progression.value_none".localized
+                        }()
+                    )
+                    progressionStatRow(
+                        label: "game.progression.last_server_update".localized,
+                        value: server?.lastUpdatedAt.map { $0.formatted(.dateTime.month().day().hour().minute()) } ?? "game.progression.value_emdash".localized
+                    )
+                    Text("game.progression.account_progression_caption".localized)
+                        .font(.caption2)
+                        .foregroundStyle(Color.Theme.softBrown)
+                    progressionStatRow(
+                        label: "game.progression.account_progression_xp".localized,
+                        value: {
+                            if let e = effective {
+                                return String(e.totalXp)
+                            }
+                            return "game.progression.value_unavailable".localized
+                        }()
+                    )
+                    progressionStatRow(
+                        label: "game.progression.account_rank_preview_xp".localized,
+                        value: String(rankPreviewTotal)
+                    )
+                    Text("game.progression.account_rank_preview_caption".localized)
+                        .font(.caption2)
+                        .foregroundStyle(Color.Theme.softBrown)
+                    progressionStatRow(
+                        label: "game.progression.global_pending_xp".localized,
+                        value: {
+                            guard let d = globalPendingInt else { return "game.progression.value_unavailable".localized }
+                            if d == 0 { return "0" }
+                            return d > 0 ? "+\(d)" : "\(d)"
+                        }()
+                    )
+                    if let e = effective, e.hasPendingLocalProgression {
+                        Text("game.progression.hint_local_pending".localized)
+                            .font(.caption2)
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    Divider()
+                    Text("game.progression.section_local_engine".localized)
+                        .font(.headline)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    Text("game.progression.local_engine_trip_caption".localized)
+                        .font(.caption2)
+                        .foregroundStyle(Color.Theme.softBrown)
+                    progressionStatRow(
+                        label: "game.progression.trip_pending_xp".localized,
+                        value: String(p.totalXp)
+                    )
+                    progressionStatRow(
+                        label: "game.progression.trip_pending_finds".localized,
+                        value: String(p.acceptedRegionFindCount)
+                    )
+                    progressionStatRow(
+                        label: "game.progression.trip_pending_first_places".localized,
+                        value: String(p.competitiveFirstPlaceFinishes)
+                    )
+                    progressionStatRow(
+                        label: "game.progression.ever_competitive_first".localized,
+                        value: p.everCompetitiveFirstPlace ? "game.progression.bool_yes".localized : "game.progression.bool_no".localized
+                    )
+                    Divider()
+                    Text("game.progression.section_ledger_projection".localized)
+                        .font(.headline)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    Text("game.progression.local_ledger_caption".localized)
+                        .font(.caption2)
+                        .foregroundStyle(Color.Theme.softBrown)
+                    if let bal = viewModel.localGameLedgerBalance {
+                        progressionStatRow(
+                            label: "game.progression.local_total_xp_game".localized,
+                            value: String(bal.displayXp)
+                        )
+                        progressionStatRow(
+                            label: "game.progression.local_provisional_xp_game".localized,
+                            value: String(bal.totalXpProvisional)
+                        )
+                        progressionStatRow(
+                            label: "game.progression.local_provisional_rows_game".localized,
+                            value: String(bal.pendingAdjustmentCount)
+                        )
+                    } else {
+                        Text("game.progression.value_unavailable".localized)
+                            .font(.caption)
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    progressionStatRow(
+                        label: "game.progression.local_provisional_xp_session".localized,
+                        value: String(viewModel.localSessionLedgerPending.provisionalSum)
+                    )
+                    Divider()
+                    Text("game.progression.section_ledger_summary".localized)
+                        .font(.headline)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    if let last = lastGameLedger {
+                        progressionStatRow(
+                            label: "game.progression.most_recent_delta".localized,
+                            value: String(format: "%+d", last.xpDelta)
+                        )
+                        progressionStatRow(
+                            label: "game.progression.most_recent_reason".localized,
+                            value: last.reasonCode.rawValue
+                        )
+                    } else {
+                        Text("game.progression.no_ledger_game".localized)
+                            .font(.caption)
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    progressionStatRow(
+                        label: "game.progression.net_ledger_xp_game".localized,
+                        value: String(format: "%+d", netGameLedger)
+                    )
+                    progressionStatRow(
+                        label: "game.progression.net_ledger_xp_session".localized,
+                        value: String(format: "%+d", netSessionLedger)
+                    )
+                    Divider()
+                    Text("game.progression.section_scoring".localized)
+                        .font(.headline)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    progressionStatRow(
+                        label: "Game mode".localized,
+                        value: viewModel.game.commonConfig.gameMode.rawValue
+                    )
+                    ForEach(viewModel.rankedScoringForCurrentGame) { row in
+                        let c = row.contribution
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Text("Rank #%d".localized(row.rank))
+                                Text(progressionScoringNames[c.participantId] ?? c.participantId)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer()
+                                Text(String(format: "%.1f", c.weightedScore))
+                                    .font(.caption2)
+                            }
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                            Text("game.progression.scoring_sub".localized(
+                                c.firstFindCount,
+                                c.discoveryCount
+                            ))
+                            .font(.caption2)
+                            .foregroundStyle(Color.Theme.softBrown)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+            }
+            Divider()
+            VStack(alignment: .leading, spacing: 8) {
+                Text("game.progression.ledger_list_title".localized)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .padding(.horizontal, 20)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        ForEach(Array(viewModel.sessionLedgerEvents.reversed())) { event in
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack {
+                                    Text(
+                                        String(format: "%+d", event.xpDelta),
+                                    )
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(event.xpDelta < 0 ? Color.red : Color.Theme.primaryBlue)
+                                    Spacer()
+                                    Text(event.status.rawValue)
+                                        .font(.caption2)
+                                        .foregroundStyle(Color.Theme.softBrown)
+                                }
+                                Text(event.itemId)
+                                    .font(.caption2)
+                                Text("game.progression.ledger_line_meta".localized(
+                                    event.grantKind.rawValue,
+                                    event.reasonCode.rawValue
+                                ))
+                                .font(.caption2)
+                                .foregroundStyle(Color.Theme.softBrown)
+                                Text("game.progression.ledger_line_ids".localized(
+                                    event.id,
+                                    event.sourceEventId
+                                ))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                if event.gameInstanceId == viewModel.game.id {
+                                    Text("game.progression.ledger_badge_game".localized)
+                                        .font(.caption2)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.Theme.cardBackground, in: Capsule())
+                                }
+                            }
+                            .font(.caption)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.Theme.cardBackground)
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 16)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color.Theme.background)
+        .onAppear { viewModel.refreshProgressionDebugState() }
+        .onChange(of: userProgression.effectiveTotals) { _, _ in
+            viewModel.refreshProgressionDebugState()
+        }
+        .onChange(of: userProgressionRepository.snapshot) { _, _ in
+            viewModel.refreshProgressionDebugState()
+        }
+        .task(id: viewModel.rankedScoringForCurrentGame.map { "\($0.id):\($0.contribution.weightedScore)" }.joined(separator: "|")) {
+            let ids = Set(viewModel.rankedScoringForCurrentGame.map(\.contribution.participantId))
+            progressionScoringNames = await UserRepository.shared.displayNames(forUserIds: ids)
+        }
+    }
+
+    private func progressionStatRow(label: String, value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(Color.Theme.softBrown)
+            Spacer()
+            Text(value)
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.Theme.primaryBlue)
+                .textSelection(.enabled)
+        }
     }
 
     // PreferenceKey to measure chip size
@@ -1262,7 +1547,7 @@ struct LicensePlateGameView: View {
 //          .frame(maxWidth: .infinity, maxHeight: .infinity)
         HStack(spacing: 16) {
             ForEach(Tab.allCases) { tab in
-                let isTabDisabled = !viewModel.isGamePlayActive
+                let isTabDisabled: Bool = !viewModel.isGamePlayActive
                 Button {
                     // Prevent switching to tabs if trip is not active
                     if isTabDisabled {

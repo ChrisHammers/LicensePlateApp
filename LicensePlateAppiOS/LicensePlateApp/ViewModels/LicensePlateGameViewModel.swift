@@ -55,6 +55,18 @@ final class LicensePlateGameViewModel: ObservableObject {
     @Published private(set) var discoveryProjectionsByItemId: [String: DiscoveryUiProjection] = [:]
     /// Pre-built row copy/accessibility for list/map (derived from `discoveryProjectionsByItemId`).
     @Published private(set) var plateRowPresentationsByRegionId: [String: RegionPlateRowPresentation] = [:]
+    /// All game modes: ranked per-participant scoring (weighted score, first finds) for this game (Progress tab).
+    @Published private(set) var rankedScoringForCurrentGame: [RankedParticipantContribution] = []
+    /// `ProgressionLocalEngine` pending for this trip session: events not yet in server `appliedProgressionEvents` (read-only local projection).
+    @Published private(set) var sessionProgressionPending: ProgressionPendingDelta = .zero
+    /// This session’s append-only XP ledger for the current user (Progress tab list).
+    @Published private(set) var sessionLedgerEvents: [XpLedgerEvent] = []
+    /// Ledger-only local XP for this user + **this game** (`XpBalanceProjectionBuilder`); net includes all row statuses, with provisional called out.
+    @Published private(set) var localGameLedgerBalance: XpBalanceProjection?
+    /// Sum of `provisional` rows on this device for **this session** (all games); pairs with `sessionLedgerEvents`.
+    @Published private(set) var localSessionLedgerPending: LedgerPendingXpTotals = LedgerPendingXpTotals.fromLedgerEvents([])
+    /// All sessions on device: sum of ledger `provisional` rows (same basis as `XpProgressViewModel` / profile rank overlay).
+    @Published private(set) var accountLedgerProvisionalPending: Int = 0
 
     let sessionId: UUID
 
@@ -391,7 +403,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         refreshCompetitiveProjections()
     }
 
-    /// Rebuilds competitive standings and duplicate-rejection history from the event log.
+    /// Rebuilds competitive standings and duplicate-rejection history from the event log; also `rankedScoringForCurrentGame` for all modes.
     func refreshCompetitiveProjections() {
         defer { refreshPlateProjections() }
 
@@ -406,6 +418,8 @@ final class LicensePlateGameViewModel: ObservableObject {
         guard let discoveries = try? tripActivityEventRepository.discoveries(sessionId: sessionId, gameInstanceId: game.id) else {
             competitiveStandings = []
             myDuplicateRejections = []
+            rankedScoringForCurrentGame = []
+            refreshProgressionDebugState()
             return
         }
 
@@ -417,37 +431,87 @@ final class LicensePlateGameViewModel: ObservableObject {
         )
         let raw = ParticipantContributionBuilder.contributionSummary(discoveries: discoveries, credits: credits)
         let merged = TripRosterContributionMerge.merge(roster: currentSession.participants, contributions: raw)
-        competitiveStandings = TripParticipantRanking.rankContributions(merged)
+        let ranked = TripParticipantRanking.rankContributions(merged)
+        rankedScoringForCurrentGame = ranked
 
-        if let allEvents = try? tripActivityEventRepository.events(sessionId: sessionId, limit: nil) {
-            let gidStr = game.id.uuidString
-            let rejected = allEvents
-                .filter { $0.kind == .discoveryRejected }
-                .filter { $0.payload?[TripActivityEventPayloadKey.gameInstanceId] == gidStr }
-                .filter { $0.payload?[TripActivityEventPayloadKey.rejectionReason] == DiscoveryRejectionReason.rejectedDuplicate.rawValue }
-                .filter { event in
-                    let pid = event.payload?[TripActivityEventPayloadKey.participantId] ?? event.actorId ?? ""
-                    return !uid.isEmpty && pid == uid
+        if game.commonConfig.gameMode == .competitive {
+            competitiveStandings = ranked
+
+            if let allEvents = try? tripActivityEventRepository.events(sessionId: sessionId, limit: nil) {
+                let gidStr = game.id.uuidString
+                let rejected = allEvents
+                    .filter { $0.kind == .discoveryRejected }
+                    .filter { $0.payload?[TripActivityEventPayloadKey.gameInstanceId] == gidStr }
+                    .filter { $0.payload?[TripActivityEventPayloadKey.rejectionReason] == DiscoveryRejectionReason.rejectedDuplicate.rawValue }
+                    .filter { event in
+                        let pid = event.payload?[TripActivityEventPayloadKey.participantId] ?? event.actorId ?? ""
+                        return !uid.isEmpty && pid == uid
+                    }
+                    .sorted { $0.timestamp > $1.timestamp }
+                myDuplicateRejections = rejected.map {
+                    CompetitiveDuplicateAttempt(
+                        id: $0.id,
+                        targetId: $0.payload?[TripActivityEventPayloadKey.regionId] ?? "",
+                        timestamp: $0.timestamp
+                    )
                 }
-                .sorted { $0.timestamp > $1.timestamp }
-            myDuplicateRejections = rejected.map {
-                CompetitiveDuplicateAttempt(
-                    id: $0.id,
-                    targetId: $0.payload?[TripActivityEventPayloadKey.regionId] ?? "",
-                    timestamp: $0.timestamp
-                )
+            } else {
+                myDuplicateRejections = []
             }
-        } else {
-            myDuplicateRejections = []
+
+            if currentSession.mode == .multiplayer, !didLogCompetitiveStandingsExposure {
+                AnalyticsService.shared.log(.competitiveInGameStandingsPresented(
+                    tripSessionId: sessionId.uuidString,
+                    gameInstanceId: game.id.uuidString
+                ))
+                didLogCompetitiveStandingsExposure = true
+            }
+        }
+        
+        refreshProgressionDebugState()
+    }
+
+    /// Recomputes local `ProgressionLocalEngine` session pending and the XP ledger for the Progress tab.
+    func refreshProgressionDebugState() {
+        let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        guard !uid.isEmpty else {
+            sessionProgressionPending = .zero
+            sessionLedgerEvents = []
+            localGameLedgerBalance = nil
+            localSessionLedgerPending = LedgerPendingXpTotals.fromLedgerEvents([])
+            accountLedgerProvisionalPending = 0
+            return
         }
 
-        if currentSession.mode == .multiplayer, !didLogCompetitiveStandingsExposure {
-            AnalyticsService.shared.log(.competitiveInGameStandingsPresented(
-                tripSessionId: sessionId.uuidString,
-                gameInstanceId: game.id.uuidString
-            ))
-            didLogCompetitiveStandingsExposure = true
+        let events = (try? tripActivityEventRepository.events(sessionId: sessionId, limit: nil)) ?? []
+        let roster = currentSession.participants.filter { $0.leftAt == nil }.map(\.userId)
+        var gamesById: [UUID: ProgressionGameSnapshot] = [:]
+        if let games = try? gameInstanceRepository.fetchByTripSession(sessionId: sessionId) {
+            gamesById = Dictionary(uniqueKeysWithValues: games.map { ($0.id, $0.progressionGameSnapshot) })
+        } else {
+            gamesById = [game.id: game.progressionGameSnapshot]
         }
+        let server = UserProgressionRepository.shared.snapshot ?? UserProgressionSnapshot.empty
+        sessionProgressionPending = ProgressionLocalEngine.pendingDeltaForSession(
+            sortedSessionEvents: events,
+            rosterUserIds: roster,
+            subjectUserId: uid,
+            serverAppliedEventIds: server.appliedProgressionEventIds,
+            gamesById: gamesById
+        )
+        let rows = (try? xpLedger.ledgerEvents(userId: uid, sessionId: sessionId)) ?? []
+        let now = Date()
+        sessionLedgerEvents = rows
+        localSessionLedgerPending = LedgerPendingXpTotals.fromLedgerEvents(rows, now: now)
+        localGameLedgerBalance = XpBalanceProjectionBuilder.build(
+            userId: uid,
+            sessionId: sessionId,
+            gameInstanceId: game.id,
+            ledgerEvents: rows,
+            now: now
+        )
+        let allUserLedger = (try? xpLedger.ledgerEvents(userId: uid)) ?? []
+        accountLedgerProvisionalPending = LedgerPendingXpTotals.fromLedgerEvents(allUserLedger, now: now).provisionalSum
     }
 
     private func defaultLicensePlateGameConfig() -> LicensePlateGameConfig {
