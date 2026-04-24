@@ -15,6 +15,7 @@ enum GameProgressionXPRewards {
     /// Extra  bonus for first time finding that plate (any mode)
     static let firstPlateFindBonusXp: Int = 15
     
+    /// Base XP for playing a game with friends (any multiplayer mode, collab)
     static let baseMultiplayerGameBonusXp: Int = 15
     /// Extra competitive bonus granted at game end to rank-1 participants.
     static let competitiveFirstPlaceFinishBonusXp: Int = 15
