@@ -8,6 +8,7 @@
 import Foundation
 
 enum XpLedgerConstants {
-    static let baseDiscoveryProvisionalOrFull: Int = 10
-    static let competitiveLateFinderNet: Int = 4
+    static let baseDiscoveryProvisionalOrFull: Int = GameProgressionXPRewards.baseDiscoveryXp
+    // Step 16.4 policy: no local clawback; late accepted remains full base XP.
+    static let competitiveLateFinderNet: Int = GameProgressionXPRewards.baseDiscoveryXp
 }

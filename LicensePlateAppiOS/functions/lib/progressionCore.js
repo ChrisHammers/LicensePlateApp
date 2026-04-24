@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.XP_PER_COMPETITIVE_FIRST_PLACE_FINISH = exports.XP_PER_ACCEPTED_REGION_FOUND = exports.KIND_GAME_ENDED = void 0;
 exports.rankContributionsSwiftParity = rankContributionsSwiftParity;
 exports.competitiveFirstPlaceParticipantIds = competitiveFirstPlaceParticipantIds;
+exports.baseRegionDiscoveryScopeKey = baseRegionDiscoveryScopeKey;
 exports.previewProgressionDeltasForActivityEvent = previewProgressionDeltasForActivityEvent;
 const gameplayEventResolver_1 = require("./gameplayEventResolver");
 const publicLifetimeStatsCore_1 = require("./publicLifetimeStatsCore");
@@ -176,6 +177,17 @@ function rankContributionsSwiftParity(items) {
 function competitiveFirstPlaceParticipantIds(mergedContributions) {
     const ranked = rankContributionsSwiftParity(mergedContributions);
     return ranked.filter((r) => r.rank === 1).map((r) => r.participantId);
+}
+/**
+ * Scoped idempotency key for base region discovery progression grants.
+ * Shape parity with client-side intent: user + trip/session + game + region + grant category.
+ */
+function baseRegionDiscoveryScopeKey(input) {
+    const gameInstanceId = payload[gameplayEventResolver_1.PK.gameInstanceId];
+    const regionId = payload[gameplayEventResolver_1.PK.regionId];
+    if (!gameInstanceId || !regionId)
+        return null;
+    return `xp_scope|v1|${input.userId}|${input.sessionId}|${gameInstanceId}|${regionId}|base_region_discovery`;
 }
 /**
  * Per-user Firestore field increments for one new activity event (caller enforces idempotency per user doc).

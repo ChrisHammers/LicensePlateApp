@@ -16,14 +16,6 @@ struct ProgressionGameSnapshot: Sendable {
     var teams: [TripTeam]
 }
 
-enum ProgressionXPConstants {
-    /// Parity with `functions/src/progressionCore.ts` `XP_PER_ACCEPTED_REGION_FOUND`.
-    static let perAcceptedRegionFound = 10
-    /// Parity with `XP_PER_COMPETITIVE_FIRST_PLACE_FINISH`.
-    static let perCompetitiveFirstPlaceFinish = 50
-    // Game Ended (20 if not first), first finder + 10, trip Ended - 150?  other than region found nothing is saved until a game/trip is ended.
-}
-
 enum ProgressionLocalEngine {
 
     /// Pending progression for one trip session: full ordered events, roster for merge, games by id.
@@ -36,17 +28,25 @@ enum ProgressionLocalEngine {
     ) -> ProgressionPendingDelta {
         guard !subjectUserId.isEmpty else { return .zero }
 
+        let orderedEvents = sortedSessionEvents.sorted(by: { $0.timestamp < $1.timestamp })
+        let firstFindEventIdByScopedKey = earliestFindEventIdByScopedKey(
+            orderedEvents: orderedEvents,
+            subjectUserId: subjectUserId
+        )
+
         var window: [TripActivityEvent] = []
         var delta = ProgressionPendingDelta.zero
 
-        for event in sortedSessionEvents.sorted(by: { $0.timestamp < $1.timestamp }) {
+        for event in orderedEvents {
             window.append(event)
 
             switch event.kind {
             case .regionFound:
                 guard !serverAppliedEventIds.contains(event.id) else { continue }
                 guard let pid = regionFoundParticipantId(event), pid == subjectUserId else { continue }
-                delta.totalXp += ProgressionXPConstants.perAcceptedRegionFound
+                guard let key = baseDiscoveryScopedKey(for: event, participantId: pid) else { continue }
+                guard firstFindEventIdByScopedKey[key] == event.id else { continue }
+                delta.totalXp += GameProgressionXPRewards.baseDiscoveryXp
                 delta.acceptedRegionFindCount += 1
 
             case .gameEnded:
@@ -71,7 +71,7 @@ enum ProgressionLocalEngine {
                 let ranked = TripParticipantRanking.rankContributions(merged)
                 let rankOnes = Set(ranked.filter { $0.rank == 1 }.map(\.contribution.participantId))
                 guard rankOnes.contains(subjectUserId) else { continue }
-                delta.totalXp += ProgressionXPConstants.perCompetitiveFirstPlaceFinish
+                delta.totalXp += GameProgressionXPRewards.competitiveFirstPlaceFinishBonusXp
                 delta.competitiveFirstPlaceFinishes += 1
                 delta.everCompetitiveFirstPlace = true
 
@@ -116,6 +116,33 @@ enum ProgressionLocalEngine {
     private static func gameInstanceUUID(from event: TripActivityEvent) -> UUID? {
         guard let s = event.payload?[TripActivityEventPayloadKey.gameInstanceId] else { return nil }
         return UUID(uuidString: s)
+    }
+
+    private static func baseDiscoveryScopedKey(for event: TripActivityEvent, participantId: String) -> String? {
+        guard let gameId = gameInstanceUUID(from: event) else { return nil }
+        guard let regionId = event.payload?[TripActivityEventPayloadKey.regionId], !regionId.isEmpty else { return nil }
+        return XpLedgerKeyBuilder.uniquenessKey(
+            userId: participantId,
+            sessionId: event.sessionId,
+            gameInstanceId: gameId,
+            itemId: regionId,
+            xpCategory: .baseRegionDiscovery
+        ).storageString
+    }
+
+    private static func earliestFindEventIdByScopedKey(
+        orderedEvents: [TripActivityEvent],
+        subjectUserId: String
+    ) -> [String: String] {
+        var firstByKey: [String: String] = [:]
+        for event in orderedEvents where event.kind == .regionFound {
+            guard let pid = regionFoundParticipantId(event), pid == subjectUserId else { continue }
+            guard let key = baseDiscoveryScopedKey(for: event, participantId: pid) else { continue }
+            if firstByKey[key] == nil {
+                firstByKey[key] = event.id
+            }
+        }
+        return firstByKey
     }
 }
 

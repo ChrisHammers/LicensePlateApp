@@ -71,6 +71,8 @@ struct LicensePlateGameView: View {
     @State private var chipHeight: CGFloat = 0
     @State private var micListeningPulseScale: CGFloat = 1.0
     @State private var showRiskAdvisoryMessage = false
+    @State private var pendingRemovalRegionID: String?
+    @State private var showRemoveFindConfirmation = false
     @State private var riskPresentationStyle: RiskPresentationStyle? = nil
     @State private var retryAction: (() -> Void)?
     @Environment(\.dismiss) private var dismiss
@@ -166,6 +168,26 @@ struct LicensePlateGameView: View {
                 Text(msg)
             }
         }
+        .alert("Remove this find?".localized, isPresented: $showRemoveFindConfirmation) {
+            Button("Cancel".localized, role: .cancel) {
+                pendingRemovalRegionID = nil
+            }
+            Button("Remove".localized, role: .destructive) {
+                guard let regionID = pendingRemovalRegionID else { return }
+                pendingRemovalRegionID = nil
+                guard viewModel.removeDiscovery(regionID: regionID) else { return }
+                withAccessibleAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {}
+                let result = riskAssessment.assessAfterDiscoveryChange(
+                    tripId: viewModel.sessionId,
+                    gameInstanceId: viewModel.game.id,
+                    foundRegions: viewModel.foundRegions,
+                    lastChange: (regionID, false, Date())
+                )
+                applyRiskPresentation(result.flags)
+            }
+        } message: {
+            Text("You’ll lose the current find, game points, and any current lifetime total tied to this discovery. You will not earn XP again by re-finding this region in this game.".localized)
+        }
         // Step 11: Unusual Activity modal suppressed (risk still logged to analytics). Non-blocking options: toast/banner, inline hint, or settings summary.
         // .alert("Unusual Activity".localized, isPresented: $showRiskAdvisoryMessage) {
         //     Button("OK".localized, role: .cancel) {}
@@ -176,6 +198,7 @@ struct LicensePlateGameView: View {
             VStack(spacing: 8) {
                 rejectedInvalidParticipantBanner
                 rejectedDuplicateBanner
+                // blockedRetapBanner — same-item retap hint disabled; removal confirmation alert remains (Step 16.4).
                 fairnessToastBanner
                 riskAdvisoryBanner
             }
@@ -1005,6 +1028,10 @@ struct LicensePlateGameView: View {
     }
 
   private func setFound(regionID: String, usingTab: FoundRegion.InputMethod) {
+        guard viewModel.canSubmitDiscoveryTap(regionID: regionID) else {
+            FeedbackService.shared.actionError()
+            return
+        }
         let result = viewModel.submitDiscovery(regionID: regionID, inputMethod: usingTab)
         switch result {
         case .rejectedDuplicate, .rejectedInvalidParticipant:
@@ -1026,15 +1053,9 @@ struct LicensePlateGameView: View {
     }
 
     private func setNotFound(regionID: String, usingTab: FoundRegion.InputMethod) {
-        viewModel.removeDiscovery(regionID: regionID)
-        withAccessibleAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {}
-        let result = riskAssessment.assessAfterDiscoveryChange(
-            tripId: viewModel.sessionId,
-            gameInstanceId: viewModel.game.id,
-            foundRegions: viewModel.foundRegions,
-            lastChange: (regionID, false, Date())
-        )
-        applyRiskPresentation(result.flags)
+        _ = usingTab
+        pendingRemovalRegionID = regionID
+        showRemoveFindConfirmation = true
     }
 
     private func toggle(regionID: String) {
@@ -1088,6 +1109,27 @@ struct LicensePlateGameView: View {
                 .accessibilityHint("Tap to dismiss".localized)
         }
     }
+
+    // Same-item post-removal retap toast (re-enable with overlay `blockedRetapBanner` when product wants inline hint again).
+     @ViewBuilder private var blockedRetapBanner: some View {
+         if let message = viewModel.blockedRetapMessage {
+             Text(message)
+                 .font(.system(.subheadline, design: .rounded))
+                 .foregroundStyle(Color.Theme.primaryBlue)
+                 .padding(.horizontal, 16)
+                 .padding(.vertical, 10)
+                 .background(Color.Theme.cardBackground)
+                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                 .gameToastBannerShadow()
+                 .padding(.horizontal, 20)
+                 .padding(.top, 8)
+                 .onTapGesture {
+                     viewModel.clearBlockedRetapMessage()
+                 }
+                 .accessibilityLabel(message)
+                 .accessibilityHint("Tap to dismiss".localized)
+         }
+     }
 
     /// Vertical overlap between stacked fairness banners (oldest at top, newer peek below).
     private static let fairnessToastStackOverlap: CGFloat = 44

@@ -214,6 +214,84 @@ struct LicensePlateGameViewModelTests {
         #expect(removed?.payload?[TripActivityEventPayloadKey.removedDiscoveryEventId] == findEventId)
     }
 
+    @Test func removalArmsCooldownAndImmediateRetapIsBlocked() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = makeSession(id: sessionId, startedAt: Date())
+        var game = makeGame(sessionId: sessionId, lifecycleState: .started)
+        game.id = gameId
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let findEventId = UUID().uuidString
+        try eventRepo.append(TripActivityEvent(id: findEventId, sessionId: sessionId, kind: .regionFound, actorId: "user1", payload: [
+            TripActivityEventPayloadKey.regionId: "CA",
+            TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+            TripActivityEventPayloadKey.participantId: "user1",
+            TripActivityEventPayloadKey.inputMethod: FoundRegion.InputMethod.list.rawValue
+        ]))
+        let cooldown = RegionRemovalCooldownService()
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: "user1", userName: "U", firebaseUID: "user1")
+        let viewModel = LicensePlateGameViewModel(
+            session: session,
+            game: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: MockTripSessionLifecycleService(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
+            regionRemovalCooldownService: cooldown,
+            authService: auth
+        )
+
+        #expect(viewModel.removeDiscovery(regionID: "CA") == true)
+        #expect(viewModel.canSubmitDiscoveryTap(regionID: "CA") == false)
+        #expect(viewModel.blockedRetapMessage == nil) // retap hint toast copy disabled; tap still blocked
+        #expect(eventRepo.appendedEvents().filter { $0.kind == .regionFound && $0.payload?[TripActivityEventPayloadKey.regionId] == "CA" }.count == 1)
+    }
+
+    @Test func tappingDifferentRegionClearsCooldownBlock() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = makeSession(id: sessionId, startedAt: Date())
+        var game = makeGame(sessionId: sessionId, lifecycleState: .started)
+        game.id = gameId
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let findEventId = UUID().uuidString
+        try eventRepo.append(TripActivityEvent(id: findEventId, sessionId: sessionId, kind: .regionFound, actorId: "user1", payload: [
+            TripActivityEventPayloadKey.regionId: "CA",
+            TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+            TripActivityEventPayloadKey.participantId: "user1",
+            TripActivityEventPayloadKey.inputMethod: FoundRegion.InputMethod.list.rawValue
+        ]))
+        let cooldown = RegionRemovalCooldownService()
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: "user1", userName: "U", firebaseUID: "user1")
+        let viewModel = LicensePlateGameViewModel(
+            session: session,
+            game: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: MockTripSessionLifecycleService(),
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator()),
+            regionRemovalCooldownService: cooldown,
+            authService: auth
+        )
+
+        #expect(viewModel.removeDiscovery(regionID: "CA") == true)
+        #expect(viewModel.canSubmitDiscoveryTap(regionID: "CA") == false)
+        #expect(viewModel.canSubmitDiscoveryTap(regionID: "NV") == true)
+        #expect(viewModel.canSubmitDiscoveryTap(regionID: "CA") == true)
+    }
+
     @Test func submitDiscoveryCollaborativeMultiplayerSecondFinderAppendsAndReplayShowsTwo() async throws {
         let sessionId = UUID()
         let gameId = UUID()

@@ -171,6 +171,8 @@ class AnalyticsService: AnalyticsLogging {
         case progressionSnapshotApplied(totalXp: Int, acceptedRegionFindCount: Int, competitiveFirstPlaceFinishes: Int)
         case progressionMilestoneEverCompetitiveFirstPlace
         case progressionXpAwarded(delta: Int, reason: String)
+        case xpGrantAwarded(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
+        case xpGrantSkippedAlreadyGranted(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
 
         // Lifecycle (Step 10.5)
         case tripSessionCreated(tripId: String, tripStatus: String, tripParticipantCount: Int?, tripActiveGameCount: Int?, tripSource: String?)
@@ -212,6 +214,8 @@ class AnalyticsService: AnalyticsLogging {
         case discoveryOutcomeRecorded(tripId: String, gameInstanceId: String, targetId: String, outcome: String, participantId: String?)
         case discoveryRejectedDuplicate(tripId: String, gameInstanceId: String, targetId: String, participantId: String?, mode: String)
         case discoveryRejectedInvalidParticipant(tripId: String, gameInstanceId: String, targetId: String, participantId: String?, tripParticipantCount: Int, gameMode: String)
+        case discoveryRemovalConfirmed(tripId: String, gameInstanceId: String, targetId: String, participantId: String?) // almost a duplicate of Unfind, but based on the cooldown service, which I basically disabled.
+        case discoveryRetapBlockedByCooldown(tripId: String, gameInstanceId: String, targetId: String)
         case discoveryUnfind(tripId: String, gameInstanceId: String, targetId: String, participantId: String?)
 
         // Step 13 — Cloud gameplay resolver / sync
@@ -337,6 +341,8 @@ class AnalyticsService: AnalyticsLogging {
             case .progressionSnapshotApplied: return "progression_snapshot_applied"
             case .progressionMilestoneEverCompetitiveFirstPlace: return "progression_milestone_ever_competitive_first_place"
             case .progressionXpAwarded: return "progression_xp_awarded"
+            case .xpGrantAwarded: return "xp_grant_awarded"
+            case .xpGrantSkippedAlreadyGranted: return "xp_grant_skipped_already_granted"
             case .tripSessionCreated: return "trip_session_created"
             case .tripSessionStarted: return "trip_session_started"
             case .tripSessionEnded: return "trip_session_ended"
@@ -376,6 +382,8 @@ class AnalyticsService: AnalyticsLogging {
             case .discoveryOutcomeRecorded: return "discovery_outcome_recorded"
             case .discoveryRejectedDuplicate: return "discovery_rejected_duplicate"
             case .discoveryRejectedInvalidParticipant: return "discovery_rejected_invalid_participant"
+            case .discoveryRemovalConfirmed: return "discovery_removal_confirmed"
+            case .discoveryRetapBlockedByCooldown: return "discovery_retap_blocked_by_cooldown"
             case .discoveryUnfind: return "discovery_unfind"
             case .gameplayEventServerAccepted: return "gameplay_event_server_accepted"
             case .gameplayEventServerSuperseded: return "gameplay_event_server_superseded"
@@ -521,6 +529,20 @@ class AnalyticsService: AnalyticsLogging {
                 return nil
             case .progressionXpAwarded(let delta, let reason):
                 return ["delta": delta, "reason": reason]
+            case .xpGrantAwarded(let tripId, let gameInstanceId, let targetId, let participantId):
+                return [
+                    "trip_session_id": tripId,
+                    "game_instance_id": gameInstanceId,
+                    "target_id": targetId,
+                    "participant_id": participantId
+                ]
+            case .xpGrantSkippedAlreadyGranted(let tripId, let gameInstanceId, let targetId, let participantId):
+                return [
+                    "trip_session_id": tripId,
+                    "game_instance_id": gameInstanceId,
+                    "target_id": targetId,
+                    "participant_id": participantId
+                ]
             case .travelLogOpened:
                 return nil
             case .tripSessionCreated(let tripId, let tripStatus, let tripParticipantCount, let tripActiveGameCount, let tripSource):
@@ -602,6 +624,12 @@ class AnalyticsService: AnalyticsLogging {
                 ]
                 if let id = participantId { p["participant_id"] = id }
                 return p
+            case .discoveryRemovalConfirmed(let tripId, let gameInstanceId, let targetId, let participantId):
+                var p: [String: Any] = ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId]
+                if let id = participantId { p["participant_id"] = id }
+                return p
+            case .discoveryRetapBlockedByCooldown(let tripId, let gameInstanceId, let targetId):
+                return ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId]
             case .discoveryUnfind(let tripId, let gameInstanceId, let targetId, let participantId):
                 var p: [String: Any] = ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId]
                 if let id = participantId { p["participant_id"] = id }

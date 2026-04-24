@@ -46,6 +46,7 @@ final class LicensePlateGameViewModel: ObservableObject {
     @Published private(set) var myDuplicateRejections: [CompetitiveDuplicateAttempt] = []
     @Published var rejectedDuplicateMessage: String?
     @Published var rejectedInvalidParticipantMessage: String?
+    @Published var blockedRetapMessage: String?
     @Published private(set) var errorMessage: String?
     /// Editable license-plate scope while Game Settings sheet is open; persisted when user taps Done.
     @Published private(set) var licensePlateScopeDraft: LicensePlateScopeSettingsDraft?
@@ -78,6 +79,7 @@ final class LicensePlateGameViewModel: ObservableObject {
     private let lifecycleService: TripSessionLifecycleServiceProtocol
     private let gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
     private let tripActivityEventRecording: TripActivityEventRecordingProtocol
+    private let regionRemovalCooldownService: RegionRemovalCooldownServiceProtocol
     private let authService: FirebaseAuthService
     private var didLogCompetitiveStandingsExposure = false
     private var cancellables = Set<AnyCancellable>()
@@ -139,6 +141,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         lifecycleService: TripSessionLifecycleServiceProtocol,
         gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol = GameInstanceLifecycleService.shared,
         tripActivityEventRecording: TripActivityEventRecordingProtocol = TripActivityEventRecordingService.shared,
+        regionRemovalCooldownService: RegionRemovalCooldownServiceProtocol = RegionRemovalCooldownService(),
         authService: FirebaseAuthService,
         xpLedger: XpLedgerRepositoryProtocol = XpLedgerRepository.shared,
         discoveryResolutionRepository: DiscoveryResolutionRepositoryProtocol = DiscoveryResolutionRepository.shared
@@ -154,6 +157,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         self.lifecycleService = lifecycleService
         self.gameInstanceLifecycleService = gameInstanceLifecycleService
         self.tripActivityEventRecording = tripActivityEventRecording
+        self.regionRemovalCooldownService = regionRemovalCooldownService
         self.authService = authService
         self.foundRegions = (try? tripActivityEventRepository.foundRegions(sessionId: session.id, gameInstanceId: game.id)) ?? []
         refreshCompetitiveProjections()
@@ -835,13 +839,42 @@ final class LicensePlateGameViewModel: ObservableObject {
         }
     }
 
-    func removeDiscovery(regionID: String) {
+    func canSubmitDiscoveryTap(regionID: String) -> Bool {
+        /// Not currently wanting to make you have to tap something else. Good boilerplate for later though.
+        if regionRemovalCooldownService.shouldBlockTap(regionId: regionID) {
+            // Inline toast/banner for this case is disabled in `LicensePlateGameView`; cooldown + removal alert remain.
+            // blockedRetapMessage = "Pick a different region before selecting this one again.".localized
+            // AnalyticsService.shared.log(.discoveryRetapBlockedByCooldown(
+            //     tripId: sessionId.uuidString,
+            //     gameInstanceId: game.id.uuidString,
+            //     targetId: regionID
+            // ))
+            // return false
+        }
+        blockedRetapMessage = nil
+        return true
+    }
+    
+    @discardableResult
+    func removeDiscoveryButtonPressed(regionID: String) -> Bool {
+        let participantId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        regionRemovalCooldownService.registerConfirmedRemoval(regionId: regionID)
+        AnalyticsService.shared.log(.discoveryRemovalConfirmed(
+            tripId: sessionId.uuidString,
+            gameInstanceId: game.id.uuidString,
+            targetId: regionID,
+            participantId: participantId
+        ))
+        return removeDiscovery(regionID: regionID)
+    }
+    
+    func removeDiscovery(regionID: String) -> Bool {
         refreshSession()
         let participantId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
         guard !participantId.isEmpty else {
             errorMessage = "Sign in to remove a find.".localized
             objectWillChange.send()
-            return
+            return false
         }
 
         let discoveries = (try? tripActivityEventRepository.discoveries(sessionId: sessionId, gameInstanceId: game.id)) ?? []
@@ -850,7 +883,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         guard let toRemove = mine.max(by: { $0.discoveredAt < $1.discoveredAt }) else {
             errorMessage = "You don’t have a find to remove for this region.".localized
             objectWillChange.send()
-            return
+            return false
         }
 
         guard GameModeRulesEngine.canParticipantUnfind(
@@ -861,7 +894,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         ) else {
             errorMessage = "You can’t remove this find.".localized
             objectWillChange.send()
-            return
+            return false
         }
 
         var payload: [String: String] = [
@@ -878,12 +911,20 @@ final class LicensePlateGameViewModel: ObservableObject {
                 targetId: regionID,
                 participantId: participantId
             ))
+            AnalyticsService.shared.log(.discoveryUnfind(
+                tripId: sessionId.uuidString,
+                gameInstanceId: game.id.uuidString,
+                targetId: regionID,
+                participantId: participantId
+            ))
             errorMessage = nil
             refreshFoundRegions()
+            return true
         } catch {
             errorMessage = error.localizedDescription
             AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_unfind", error: error.localizedDescription))
             objectWillChange.send()
+            return false
         }
     }
 
@@ -893,6 +934,10 @@ final class LicensePlateGameViewModel: ObservableObject {
 
     func clearRejectedInvalidParticipantMessage() {
         rejectedInvalidParticipantMessage = nil
+    }
+
+    func clearBlockedRetapMessage() {
+        blockedRetapMessage = nil
     }
 
     func setError(_ message: String) {

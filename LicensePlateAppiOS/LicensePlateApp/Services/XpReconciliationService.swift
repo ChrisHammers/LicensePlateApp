@@ -84,7 +84,14 @@ final class XpReconciliationService {
                 xpUniquenessKey: key,
                 metadata: [XpLedgerMetadataKey.originalDiscoveryEventId: event.id]
             )
-            _ = try xpLedger.appendBaseDiscoveryIfAbsent(soloFinal)
+            let inserted = try xpLedger.appendBaseDiscoveryIfAbsent(soloFinal)
+            logBaseGrantOutcome(
+                inserted: inserted,
+                sessionId: event.sessionId,
+                gameInstanceId: gameInstanceId,
+                regionId: regionId,
+                participantId: participantId
+            )
             return
         }
 
@@ -105,7 +112,14 @@ final class XpReconciliationService {
                 xpUniquenessKey: key,
                 metadata: [XpLedgerMetadataKey.originalDiscoveryEventId: event.id]
             )
-            _ = try xpLedger.appendBaseDiscoveryIfAbsent(provisional)
+            let inserted = try xpLedger.appendBaseDiscoveryIfAbsent(provisional)
+            logBaseGrantOutcome(
+                inserted: inserted,
+                sessionId: event.sessionId,
+                gameInstanceId: gameInstanceId,
+                regionId: regionId,
+                participantId: participantId
+            )
 
         case .collaborative:
             let finalEvent = XpLedgerEvent(
@@ -122,7 +136,14 @@ final class XpReconciliationService {
                 xpUniquenessKey: key,
                 metadata: [XpLedgerMetadataKey.originalDiscoveryEventId: event.id]
             )
-            _ = try xpLedger.appendBaseDiscoveryIfAbsent(finalEvent)
+            let inserted = try xpLedger.appendBaseDiscoveryIfAbsent(finalEvent)
+            logBaseGrantOutcome(
+                inserted: inserted,
+                sessionId: event.sessionId,
+                gameInstanceId: gameInstanceId,
+                regionId: regionId,
+                participantId: participantId
+            )
         }
     }
 
@@ -153,7 +174,8 @@ final class XpReconciliationService {
 
         let rows = try xpLedger.ledgerEvents(forUniquenessKey: baseKey)
         let currentNet = rows.reduce(0) { $0 + $1.xpDelta }
-        let delta = targetNet - currentNet
+        let rawDelta = targetNet - currentNet
+        let delta = max(GameProgressionXPRewards.minimumLocalReconciliationDelta, rawDelta)
         guard delta != 0 else { return }
 
         var meta: [String: String] = [XpLedgerMetadataKey.resolutionId: resolution.resolutionId]
@@ -181,6 +203,30 @@ final class XpReconciliationService {
         return rows.contains { row in
             row.grantKind == .reconciliationAdjustment
                 && row.metadata?[XpLedgerMetadataKey.resolutionId] == resolutionId
+        }
+    }
+
+    private func logBaseGrantOutcome(
+        inserted: Bool,
+        sessionId: UUID,
+        gameInstanceId: UUID,
+        regionId: String,
+        participantId: String
+    ) {
+        if inserted {
+            AnalyticsService.shared.log(.xpGrantAwarded(
+                tripId: sessionId.uuidString,
+                gameInstanceId: gameInstanceId.uuidString,
+                targetId: regionId,
+                participantId: participantId
+            ))
+        } else {
+            AnalyticsService.shared.log(.xpGrantSkippedAlreadyGranted(
+                tripId: sessionId.uuidString,
+                gameInstanceId: gameInstanceId.uuidString,
+                targetId: regionId,
+                participantId: participantId
+            ))
         }
     }
 }

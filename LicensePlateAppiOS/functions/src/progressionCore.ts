@@ -216,6 +216,22 @@ export type ProgressionUserDelta = {
 };
 
 /**
+ * Scoped idempotency key for base region discovery progression grants.
+ * Shape parity with client-side intent: user + trip/session + game + region + grant category.
+ */
+export function baseRegionDiscoveryScopeKey(input: {
+  userId: string;
+  sessionId: string;
+  payload: Record<string, unknown> | null | undefined;
+}): string | null {
+  const payload = stringifyPayload(input.payload);
+  const gameInstanceId = payload[PK.gameInstanceId];
+  const regionId = payload[PK.regionId];
+  if (!gameInstanceId || !regionId) return null;
+  return `xp_scope|v1|${input.userId}|${input.sessionId}|${gameInstanceId}|${regionId}|base_region_discovery`;
+}
+
+/**
  * Per-user Firestore field increments for one new activity event (caller enforces idempotency per user doc).
  */
 export function previewProgressionDeltasForActivityEvent(input: {

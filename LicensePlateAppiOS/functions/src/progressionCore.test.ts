@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as admin from "firebase-admin";
 import { KIND_REGION_FOUND, PK } from "./gameplayEventResolver";
 import {
+  baseRegionDiscoveryScopeKey,
   competitiveFirstPlaceParticipantIds,
   previewProgressionDeltasForActivityEvent,
   rankContributionsSwiftParity,
@@ -79,6 +80,18 @@ describe("progressionCore", () => {
       competitiveFirstPlaceFinishes: 0,
       awardEverCompetitiveFirstPlace: false,
     });
+  });
+
+  it("builds scoped key with user/session/game/region", () => {
+    const key = baseRegionDiscoveryScopeKey({
+      userId: "u1",
+      sessionId: "trip-1",
+      payload: {
+        [PK.gameInstanceId]: gid,
+        [PK.regionId]: "US-TX",
+      },
+    });
+    expect(key).toBe(`xp_scope|v1|u1|trip-1|${gid}|US-TX|base_region_discovery`);
   });
 
   it("game_ended collaborative yields no deltas", () => {

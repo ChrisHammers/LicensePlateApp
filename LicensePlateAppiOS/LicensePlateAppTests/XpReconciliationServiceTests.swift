@@ -144,7 +144,7 @@ struct XpReconciliationServiceTests {
         #expect(rows.reduce(0) { $0 + $1.xpDelta } == 10)
     }
 
-    @Test func consumeAcceptedLateAdjustsToNet4() throws {
+    @Test func consumeAcceptedLateDoesNotClawBackBaseXp() throws {
         _ = try makeContext()
         let sessionId = UUID()
         let gameId = UUID()
@@ -165,7 +165,7 @@ struct XpReconciliationServiceTests {
             finalOutcome: .acceptedLate,
             tripScoringOutcome: .acceptedLate,
             personalHistoryOutcome: .acceptedLate,
-            finalXpAward: 4,
+            finalXpAward: GameProgressionXPRewards.baseDiscoveryXp,
             xpReason: .competitiveLateFinder
         )
         let svc = makeService(events: events, games: games, trips: trips)
@@ -180,11 +180,11 @@ struct XpReconciliationServiceTests {
         ).storageString
         let rows = try XpLedgerRepository.shared.ledgerEvents(forUniquenessKey: key)
         let net = rows.reduce(0) { $0 + $1.xpDelta }
-        #expect(net == 4)
-        #expect(rows.contains { $0.grantKind == .reconciliationAdjustment && $0.xpDelta == -6 })
+        #expect(net == GameProgressionXPRewards.baseDiscoveryXp)
+        #expect(rows.contains { $0.grantKind == .reconciliationAdjustment && $0.xpDelta < 0 } == false)
     }
 
-    @Test func consumeRejectedDuplicateNetsToZero() throws {
+    @Test func consumeRejectedDuplicateDoesNotClawBackPreviouslyGrantedXp() throws {
         _ = try makeContext()
         let sessionId = UUID()
         let gameId = UUID()
@@ -218,8 +218,10 @@ struct XpReconciliationServiceTests {
             itemId: "TX",
             xpCategory: .baseRegionDiscovery
         ).storageString
-        let net = try XpLedgerRepository.shared.ledgerEvents(forUniquenessKey: key).reduce(0) { $0 + $1.xpDelta }
-        #expect(net == 0)
+        let rows = try XpLedgerRepository.shared.ledgerEvents(forUniquenessKey: key)
+        let net = rows.reduce(0) { $0 + $1.xpDelta }
+        #expect(net == GameProgressionXPRewards.baseDiscoveryXp)
+        #expect(rows.contains { $0.grantKind == .reconciliationAdjustment && $0.xpDelta < 0 } == false)
     }
 
     @Test func secondCompetitiveFindSameUserDoesNotMintMoreBaseXp() throws {
@@ -323,7 +325,7 @@ struct XpReconciliationServiceTests {
             finalOutcome: .acceptedLate,
             tripScoringOutcome: .acceptedLate,
             personalHistoryOutcome: .acceptedLate,
-            finalXpAward: 4,
+            finalXpAward: GameProgressionXPRewards.baseDiscoveryXp,
             xpReason: .competitiveLateFinder
         )
         let svc = makeService(events: events, games: games, trips: trips)

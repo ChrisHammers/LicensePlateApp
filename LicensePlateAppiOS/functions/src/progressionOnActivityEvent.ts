@@ -6,9 +6,31 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { KIND_REGION_FOUND } from "./gameplayEventResolver";
-import { KIND_GAME_ENDED, previewProgressionDeltasForActivityEvent } from "./progressionCore";
+import { KIND_GAME_ENDED, previewProgressionDeltasForActivityEvent, baseRegionDiscoveryScopeKey } from "./progressionCore";
 
 const db = admin.firestore();
+
+/**
+ * Reads `appliedProgressionEvents` / `appliedProgressionScopes` as a string-keyed map.
+ * Supports nested maps (preferred) and legacy top-level keys `fieldName.<id>` from older set() encoding.
+ */
+function getMergedStringKeyMap(
+  docData: Record<string, unknown>,
+  nestedFieldName: "appliedProgressionEvents" | "appliedProgressionScopes"
+): Record<string, unknown> | undefined {
+  const nested = docData[nestedFieldName];
+  if (nested !== null && nested !== undefined && !Array.isArray(nested) && typeof nested === "object") {
+    return nested as Record<string, unknown>;
+  }
+  const prefix = `${nestedFieldName}.`;
+  const synthetic: Record<string, unknown> = {};
+  for (const k of Object.keys(docData)) {
+    if (k.startsWith(prefix) && k.length > prefix.length) {
+      synthetic[k.slice(prefix.length)] = docData[k] as unknown;
+    }
+  }
+  return Object.keys(synthetic).length > 0 ? synthetic : undefined;
+}
 
 export const onActivityEventUpdateUserProgression = functions.firestore
   .document("trip_sessions/{sessionId}/activity_events/{eventId}")
@@ -25,6 +47,7 @@ export const onActivityEventUpdateUserProgression = functions.firestore
     const sessionId = context.params.sessionId as string;
     const eventId = context.params.eventId as string;
     const sessionRef = db.collection("trip_sessions").doc(sessionId);
+    const payload = data.payload as Record<string, unknown> | null | undefined;
 
     const [membersSnap, gamesSnap, eventsSnap] = await Promise.all([
       sessionRef.collection("members").get(),
@@ -36,13 +59,15 @@ export const onActivityEventUpdateUserProgression = functions.firestore
     const deltasByUser = previewProgressionDeltasForActivityEvent({
       kind,
       actorId: data.actorId as string | null | undefined,
-      payload: data.payload as Record<string, unknown> | null | undefined,
+      payload,
       memberUserIds,
       gameDocs: gamesSnap.docs,
       activityEventDocs: eventsSnap.docs,
     });
 
-    const uids = Object.keys(deltasByUser).filter((uid) => memberUserIds.includes(uid));
+    const deltaKeys = Object.keys(deltasByUser).sort();
+    const uids = deltaKeys.filter((uid) => memberUserIds.includes(uid));
+
     if (uids.length === 0) {
       return;
     }
@@ -52,32 +77,51 @@ export const onActivityEventUpdateUserProgression = functions.firestore
         db.runTransaction(async (tx) => {
           const ref = db.collection("user_progression").doc(uid);
           const doc = await tx.get(ref);
-          const applied = doc.data()?.appliedProgressionEvents as Record<string, unknown> | undefined;
+          const docData = doc.data() || {};
+          const applied = getMergedStringKeyMap(docData as Record<string, unknown>, "appliedProgressionEvents");
           if (applied && applied[eventId] != null) {
             return;
           }
+          const scopeKey =
+            kind === KIND_REGION_FOUND
+              ? baseRegionDiscoveryScopeKey({ userId: uid, sessionId, payload })
+              : null;
+          const scopesMap = getMergedStringKeyMap(docData as Record<string, unknown>, "appliedProgressionScopes");
+          const isScopedAlreadyApplied = !!(scopeKey && scopesMap && scopesMap[scopeKey] != null);
+
           const d = deltasByUser[uid];
-          if (!d) {
+          if (!d && !isScopedAlreadyApplied) {
             return;
           }
 
-          const appliedPath = `appliedProgressionEvents.${eventId}`;
           const update: Record<string, unknown> = {
-            [appliedPath]: admin.firestore.FieldValue.serverTimestamp(),
             schemaVersion: 1,
             lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            appliedProgressionEvents: {
+              [eventId]: admin.firestore.FieldValue.serverTimestamp(),
+            },
           };
+          if (scopeKey) {
+            update.appliedProgressionScopes = {
+              [scopeKey]: admin.firestore.FieldValue.serverTimestamp(),
+            };
+          }
 
-          if (d.totalXp !== 0) {
+          if (isScopedAlreadyApplied) {
+            tx.set(ref, update, { merge: true });
+            return;
+          }
+
+          if (d && d.totalXp !== 0) {
             update.totalXp = admin.firestore.FieldValue.increment(d.totalXp);
           }
-          if (d.acceptedRegionFindCount !== 0) {
+          if (d && d.acceptedRegionFindCount !== 0) {
             update.acceptedRegionFindCount = admin.firestore.FieldValue.increment(d.acceptedRegionFindCount);
           }
-          if (d.competitiveFirstPlaceFinishes !== 0) {
+          if (d && d.competitiveFirstPlaceFinishes !== 0) {
             update.competitiveFirstPlaceFinishes = admin.firestore.FieldValue.increment(d.competitiveFirstPlaceFinishes);
           }
-          if (d.awardEverCompetitiveFirstPlace) {
+          if (d && d.awardEverCompetitiveFirstPlace) {
             update.everCompetitiveFirstPlace = true;
           }
 
