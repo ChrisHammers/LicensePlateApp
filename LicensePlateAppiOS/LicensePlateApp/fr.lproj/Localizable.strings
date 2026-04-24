@@ -637,6 +637,7 @@
 "Sign in to remove a find." = "Connectez-vous pour retirer une découverte.";
 "You don’t have a find to remove for this region." = "Vous n’avez pas de découverte à retirer pour cette région.";
 "You can’t remove this find." = "Vous ne pouvez pas retirer cette découverte.";
+"By removing the current find, you lose your discovery and game points." = "En retirant la découverte actuelle, vous perdez votre découverte et les points de la partie.";
 "Found by %@ and %@" = "Trouvé par %1$@ et %2$@";
 "Found by %@, %@, and %@" = "Trouvé par %1$@, %2$@ et %3$@";
 "Found by %@, %@, and %d others" = "Trouvé par %1$@, %2$@ et %3$d autres";

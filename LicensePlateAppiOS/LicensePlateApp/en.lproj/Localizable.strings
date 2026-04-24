@@ -667,6 +667,7 @@
 "Sign in to remove a find." = "Sign in to remove a find.";
 "You don’t have a find to remove for this region." = "You don’t have a find to remove for this region.";
 "You can’t remove this find." = "You can’t remove this find.";
+"By removing the current find, you lose your discovery and game points." = "By removing the current find, you lose your discovery and game points.";
 "Found by %@ and %@" = "Found by %1$@ and %2$@";
 "Found by %@, %@, and %@" = "Found by %1$@, %2$@, and %3$@";
 "Found by %@, %@, and %d others" = "Found by %1$@, %2$@, and %3$d others";

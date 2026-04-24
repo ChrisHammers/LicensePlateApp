@@ -186,7 +186,7 @@ struct LicensePlateGameView: View {
                 applyRiskPresentation(result.flags)
             }
         } message: {
-            Text("You’ll lose the current find, game points, and any current lifetime total tied to this discovery. You will not earn XP again by re-finding this region in this game.".localized)
+            Text("By removing the current find, you lose your discovery and game points.".localized)
         }
         // Step 11: Unusual Activity modal suppressed (risk still logged to analytics). Non-blocking options: toast/banner, inline hint, or settings summary.
         // .alert("Unusual Activity".localized, isPresented: $showRiskAdvisoryMessage) {

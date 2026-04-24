@@ -637,6 +637,7 @@
 "Sign in to remove a find." = "Inicia sesión para quitar un hallazgo.";
 "You don’t have a find to remove for this region." = "No tienes un hallazgo que quitar en esta región.";
 "You can’t remove this find." = "No puedes quitar este hallazgo.";
+"By removing the current find, you lose your discovery and game points." = "Al quitar el hallazgo actual, pierdes tu descubrimiento y los puntos de la partida.";
 "Found by %@ and %@" = "Encontrado por %1$@ y %2$@";
 "Found by %@, %@, and %@" = "Encontrado por %1$@, %2$@ y %3$@";
 "Found by %@, %@, and %d others" = "Encontrado por %1$@, %2$@ y %3$d más";
