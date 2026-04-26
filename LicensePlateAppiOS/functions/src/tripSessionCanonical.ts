@@ -12,6 +12,7 @@ import {
   type WireEventInput,
 } from "./gameplayEventResolver";
 import { mergeFairnessAckSeconds } from "./fairnessWatermarkMerge";
+import { clientMetadataWrite, normalizeClientMetadata } from "./clientMetadata";
 
 const db = admin.firestore();
 
@@ -191,6 +192,7 @@ export const publishTripCanonicalState = functions.https.onCall(async (data, con
   const tripSessionId = data?.tripSessionId as string | undefined;
   const session = data?.session as Record<string, unknown> | undefined;
   const games = data?.games as Record<string, unknown>[] | undefined;
+  const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
   if (!tripSessionId || typeof tripSessionId !== "string") {
     throw new functions.https.HttpsError("invalid-argument", "tripSessionId is required");
@@ -254,6 +256,7 @@ export const publishTripCanonicalState = functions.https.onCall(async (data, con
     canonicalStartedAt,
     canonicalEndedAt,
     canonicalEndedBy: session.endedBy ?? null,
+    ...clientMetadataWrite(clientMetadata),
   };
   const createdByWire = session.createdBy as string | undefined;
   if (typeof createdByWire === "string" && createdByWire.length > 0) {
@@ -284,6 +287,7 @@ export const publishTripCanonicalState = functions.https.onCall(async (data, con
       gameSpecificPayloadVersion: g.gameSpecificPayloadVersion ?? null,
       gameSpecificPayloadDataBase64: g.gameSpecificPayloadDataBase64 ?? null,
       teamsDataBase64: g.teamsDataBase64 ?? null,
+      ...clientMetadataWrite(clientMetadata),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     ops += 1;
@@ -317,6 +321,7 @@ export const publishTripCanonicalState = functions.https.onCall(async (data, con
     subjectType: "trip_session",
     subjectId: tripSessionId,
     metadata: { gameCount: games.length, syncVersion },
+    clientMetadata,
   });
 
   return { success: true, syncVersion };
@@ -332,6 +337,7 @@ export const appendTripActivityEvent = functions.https.onCall(async (data, conte
   const userId = context.auth.uid;
   const tripSessionId = data?.tripSessionId as string | undefined;
   const event = data?.event as Record<string, unknown> | undefined;
+  const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
   if (!tripSessionId) {
     throw new functions.https.HttpsError("invalid-argument", "tripSessionId is required");
@@ -368,6 +374,7 @@ export const appendTripActivityEvent = functions.https.onCall(async (data, conte
     timestamp: event.timestamp as number,
     actorId: (event.actorId as string) ?? null,
     payload: (event.payload as Record<string, unknown>) ?? null,
+    clientMetadata,
   };
 
   const result = await resolveGameplayAppendTransaction(db, tripSessionId, userId, wire);
@@ -392,6 +399,7 @@ export const updateFairnessAckWatermark = functions.https.onCall(async (data, co
   const tripSessionId = data?.tripSessionId as string | undefined;
   const gameInstanceId = data?.gameInstanceId as string | undefined;
   const lastAckAtSeconds = data?.lastAckAtSeconds as number | undefined;
+  const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
   if (!tripSessionId || !gameInstanceId) {
     throw new functions.https.HttpsError(
@@ -420,6 +428,7 @@ export const updateFairnessAckWatermark = functions.https.onCall(async (data, co
       ref,
       {
         lastAckAt: secondsToTimestamp(next),
+        ...clientMetadataWrite(clientMetadata),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true }
@@ -511,6 +520,7 @@ export const removeTripParticipantAsOwner = functions.https.onCall(async (data, 
   const userId = context.auth.uid;
   const tripSessionId = data?.tripSessionId as string | undefined;
   const removedUserId = data?.removedUserId as string | undefined;
+  const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
   if (!tripSessionId || typeof tripSessionId !== "string") {
     throw new functions.https.HttpsError("invalid-argument", "tripSessionId is required");
   }
@@ -519,7 +529,7 @@ export const removeTripParticipantAsOwner = functions.https.onCall(async (data, 
   }
 
   await assertTripOwner(tripSessionId, userId);
-  await runOwnerRemoveParticipantTransaction(db, tripSessionId, userId, removedUserId);
+  await runOwnerRemoveParticipantTransaction(db, tripSessionId, userId, removedUserId, clientMetadata);
 
   await writeAuditLog({
     eventType: "AUDIT_TRIP_PARTICIPANT_REMOVED",
@@ -527,6 +537,7 @@ export const removeTripParticipantAsOwner = functions.https.onCall(async (data, 
     subjectType: "trip_session",
     subjectId: tripSessionId,
     metadata: { removedUserId },
+    clientMetadata,
   });
 
   return { success: true };
@@ -539,6 +550,7 @@ export const markTripCancelledRemote = functions.https.onCall(async (data, conte
   }
   const userId = context.auth.uid;
   const tripSessionId = data?.tripSessionId as string | undefined;
+  const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
   if (!tripSessionId) {
     throw new functions.https.HttpsError("invalid-argument", "tripSessionId is required");
   }
@@ -577,6 +589,7 @@ export const markTripCancelledRemote = functions.https.onCall(async (data, conte
   await ref.set(
     {
       canonicalStatus: "cancelled",
+      ...clientMetadataWrite(clientMetadata),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       syncVersion: admin.firestore.FieldValue.increment(1),
     },
@@ -589,6 +602,7 @@ export const markTripCancelledRemote = functions.https.onCall(async (data, conte
     subjectType: "trip_session",
     subjectId: tripSessionId,
     metadata: {},
+    clientMetadata,
   });
 
   return { success: true };

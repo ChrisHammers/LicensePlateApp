@@ -6,6 +6,7 @@ const admin = require("firebase-admin");
 const validation_1 = require("./utils/validation");
 const audit_1 = require("./audit");
 const notifications_1 = require("./utils/notifications");
+const clientMetadata_1 = require("./clientMetadata");
 const db = admin.firestore();
 /**
  * Send a friend invite
@@ -16,6 +17,7 @@ exports.sendFriendInvite = functions.https.onCall(async (data, context) => {
     }
     const { toUserId, method } = data;
     const fromUserId = context.auth.uid;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!toUserId) {
         throw new functions.https.HttpsError("invalid-argument", "toUserId is required");
     }
@@ -39,6 +41,7 @@ exports.sendFriendInvite = functions.https.onCall(async (data, context) => {
                 subjectType: "user",
                 subjectId: toUserId,
                 metadata: { method },
+                clientMetadata,
             });
             throw new functions.https.HttpsError("permission-denied", "User is not searchable by this method");
         }
@@ -68,15 +71,8 @@ exports.sendFriendInvite = functions.https.onCall(async (data, context) => {
     // Friend invites don't expire - set to far future date (100 years from now)
     const expiresAt = new Date();
     expiresAt.setFullYear(expiresAt.getFullYear() + 100);
-    const inviteData = {
-        type: "friend",
-        fromUserId,
-        toUserId,
-        status: "pending",
-        method: method || "search",
-        expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
+    const inviteData = Object.assign(Object.assign({ type: "friend", fromUserId,
+        toUserId, status: "pending", method: method || "search", expiresAt: admin.firestore.Timestamp.fromDate(expiresAt) }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { createdAt: admin.firestore.FieldValue.serverTimestamp() });
     const inviteRef = await db.collection("invites").add(inviteData);
     // Send push notification
     const fcmToken = await (0, notifications_1.getFCMToken)(toUserId);
@@ -93,6 +89,7 @@ exports.sendFriendInvite = functions.https.onCall(async (data, context) => {
         subjectType: "invite",
         subjectId: inviteRef.id,
         metadata: { toUserId, method },
+        clientMetadata,
     });
     return { inviteId: inviteRef.id };
 });
@@ -106,6 +103,7 @@ exports.respondToFriendInvite = functions.https.onCall(async (data, context) => 
     }
     const { inviteId, response } = data;
     const userId = context.auth.uid;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!inviteId || !response) {
         throw new functions.https.HttpsError("invalid-argument", "inviteId and response are required");
     }
@@ -128,21 +126,11 @@ exports.respondToFriendInvite = functions.https.onCall(async (data, context) => 
     }
     const batch = db.batch();
     // Update invite status
-    batch.update(inviteDoc.ref, {
-        status: response === "accept" ? "accepted" : "declined",
-        respondedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    batch.update(inviteDoc.ref, Object.assign({ status: response === "accept" ? "accepted" : "declined", respondedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
     if (response === "accept") {
         // Create friendship
         const friendshipId = generateFriendshipId(inviteData.fromUserId, inviteData.toUserId);
-        const friendshipData = {
-            userA: inviteData.fromUserId,
-            userB: inviteData.toUserId,
-            status: "accepted",
-            initiatedBy: inviteData.fromUserId,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            respondedAt: admin.firestore.FieldValue.serverTimestamp(),
-        };
+        const friendshipData = Object.assign({ userA: inviteData.fromUserId, userB: inviteData.toUserId, status: "accepted", initiatedBy: inviteData.fromUserId, createdAt: admin.firestore.FieldValue.serverTimestamp(), respondedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata));
         batch.set(db.collection("friends").doc(friendshipId), friendshipData);
         // Increment friendCount for both users (transaction)
         const fromUserRef = db.collection("users").doc(inviteData.fromUserId);
@@ -151,14 +139,15 @@ exports.respondToFriendInvite = functions.https.onCall(async (data, context) => 
         const toUserDoc = await toUserRef.get();
         const fromFriendCount = (((_a = fromUserDoc.data()) === null || _a === void 0 ? void 0 : _a.friendCount) || 0) + 1;
         const toFriendCount = (((_b = toUserDoc.data()) === null || _b === void 0 ? void 0 : _b.friendCount) || 0) + 1;
-        batch.update(fromUserRef, { friendCount: fromFriendCount });
-        batch.update(toUserRef, { friendCount: toFriendCount });
+        batch.update(fromUserRef, Object.assign({ friendCount: fromFriendCount }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
+        batch.update(toUserRef, Object.assign({ friendCount: toFriendCount }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
         await (0, audit_1.writeAuditLog)({
             eventType: "AUDIT_FRIENDSHIP_ACCEPTED",
             actorId: userId,
             subjectType: "friendship",
             subjectId: friendshipId,
             metadata: { fromUserId: inviteData.fromUserId },
+            clientMetadata,
         });
     }
     else {
@@ -168,6 +157,7 @@ exports.respondToFriendInvite = functions.https.onCall(async (data, context) => 
             subjectType: "invite",
             subjectId: inviteId,
             metadata: { fromUserId: inviteData.fromUserId },
+            clientMetadata,
         });
     }
     await batch.commit();
@@ -183,6 +173,7 @@ exports.removeFriend = functions.https.onCall(async (data, context) => {
     }
     const { friendshipId } = data;
     const userId = context.auth.uid;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!friendshipId || typeof friendshipId !== "string") {
         throw new functions.https.HttpsError("invalid-argument", "friendshipId is required");
     }
@@ -210,8 +201,8 @@ exports.removeFriend = functions.https.onCall(async (data, context) => {
     const countB = Math.max(0, (((_b = userBDoc.data()) === null || _b === void 0 ? void 0 : _b.friendCount) || 0) - 1);
     const batch = db.batch();
     batch.delete(friendshipRef);
-    batch.update(userARef, { friendCount: countA });
-    batch.update(userBRef, { friendCount: countB });
+    batch.update(userARef, Object.assign({ friendCount: countA }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
+    batch.update(userBRef, Object.assign({ friendCount: countB }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
     await batch.commit();
     await (0, audit_1.writeAuditLog)({
         eventType: "AUDIT_FRIENDSHIP_REMOVED",
@@ -219,6 +210,7 @@ exports.removeFriend = functions.https.onCall(async (data, context) => {
         subjectType: "friendship",
         subjectId: friendshipId,
         metadata: { otherUserId: userId === userA ? userB : userA },
+        clientMetadata,
     });
     return { success: true };
 });

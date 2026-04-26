@@ -4,6 +4,7 @@ exports.redeemShareCode = exports.createShareCode = void 0;
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const audit_1 = require("./audit");
+const clientMetadata_1 = require("./clientMetadata");
 const db = admin.firestore();
 /**
  * Generate a random 6-character alphanumeric code
@@ -26,6 +27,7 @@ exports.createShareCode = functions.https.onCall(async (data, context) => {
     }
     const { type, familyId } = data;
     const userId = context.auth.uid;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (type !== "friend" && type !== "family") {
         throw new functions.https.HttpsError("invalid-argument", "Type must be 'friend' or 'family'");
     }
@@ -37,14 +39,7 @@ exports.createShareCode = functions.https.onCall(async (data, context) => {
     // 15 minute TTL
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 15);
-    const codeData = {
-        type,
-        createdBy: userId,
-        code,
-        expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        isRevoked: false,
-    };
+    const codeData = Object.assign({ type, createdBy: userId, code, expiresAt: admin.firestore.Timestamp.fromDate(expiresAt), createdAt: admin.firestore.FieldValue.serverTimestamp(), isRevoked: false }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata));
     if (familyId) {
         codeData.familyId = familyId;
     }
@@ -55,6 +50,7 @@ exports.createShareCode = functions.https.onCall(async (data, context) => {
         subjectType: "invite",
         subjectId: codeRef.id,
         metadata: { type, familyId },
+        clientMetadata,
     });
     return {
         codeId: codeRef.id,
@@ -71,6 +67,7 @@ exports.redeemShareCode = functions.https.onCall(async (data, context) => {
     }
     const { code } = data;
     const userId = context.auth.uid;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!code) {
         throw new functions.https.HttpsError("invalid-argument", "Code is required");
     }
@@ -97,16 +94,7 @@ exports.redeemShareCode = functions.https.onCall(async (data, context) => {
     // Create invite
     const expiresAtInvite = new Date();
     expiresAtInvite.setMinutes(expiresAtInvite.getMinutes() + 15);
-    const inviteData = {
-        type: codeData.type,
-        fromUserId: codeData.createdBy,
-        toUserId: userId,
-        status: "pending",
-        method: "code",
-        codeId: codeDoc.id,
-        expiresAt: admin.firestore.Timestamp.fromDate(expiresAtInvite),
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
+    const inviteData = Object.assign({ type: codeData.type, fromUserId: codeData.createdBy, toUserId: userId, status: "pending", method: "code", codeId: codeDoc.id, expiresAt: admin.firestore.Timestamp.fromDate(expiresAtInvite), createdAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata));
     if (codeData.familyId) {
         inviteData.familyId = codeData.familyId;
     }
@@ -117,6 +105,7 @@ exports.redeemShareCode = functions.https.onCall(async (data, context) => {
         subjectType: "invite",
         subjectId: inviteRef.id,
         metadata: { codeId: codeDoc.id, type: codeData.type },
+        clientMetadata,
     });
     return {
         inviteId: inviteRef.id,

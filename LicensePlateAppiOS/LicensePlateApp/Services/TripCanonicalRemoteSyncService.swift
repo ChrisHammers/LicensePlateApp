@@ -201,7 +201,7 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
             "tripSessionId": sessionId.uuidString,
             "session": sessionObj,
             "games": gamesArr,
-        ])
+        ].addingClientMetadata())
         // Creators never call `bootstrapMemberSession`; without listeners they miss peers’ `activity_events`.
         startIncrementalListeningIfNeeded(sessionId: sessionId)
     }
@@ -213,13 +213,13 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
         let result = try await fn.call([
             "tripSessionId": event.sessionId.uuidString,
             "event": eventObj,
-        ])
+        ].addingClientMetadata())
         return try GameplayAppendCallableResponseParser.outcome(from: result.data, uploadedEventId: event.id)
     }
 
     func bootstrapMemberSession(sessionId: UUID) async throws {
         let fn = functions.httpsCallable("fetchTripBootstrapForMember")
-        let result = try await fn.call(["tripSessionId": sessionId.uuidString])
+        let result = try await fn.call((["tripSessionId": sessionId.uuidString] as [String: Any]).addingClientMetadata())
         guard let data = result.data as? [String: Any] else {
             throw TripCanonicalRemoteSyncError.invalidCallableResponse
         }
@@ -305,15 +305,15 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
 
     func markTripCancelledRemote(sessionId: UUID) async throws {
         let fn = functions.httpsCallable("markTripCancelledRemote")
-        _ = try await fn.call(["tripSessionId": sessionId.uuidString])
+        _ = try await fn.call((["tripSessionId": sessionId.uuidString] as [String: Any]).addingClientMetadata())
     }
 
     func removeParticipantAsOwner(sessionId: UUID, removedUserId: String) async throws {
         let fn = functions.httpsCallable("removeTripParticipantAsOwner")
-        _ = try await fn.call([
+        _ = try await fn.call(([
             "tripSessionId": sessionId.uuidString,
             "removedUserId": removedUserId,
-        ])
+        ] as [String: Any]).addingClientMetadata())
     }
 
     func removeIncrementalListeners(sessionId: UUID) {

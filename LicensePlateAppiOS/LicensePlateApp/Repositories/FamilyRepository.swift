@@ -601,9 +601,9 @@ class FamilyRepository: ObservableObject {
         let functions = Functions.functions()
         let createFamilyFunction = functions.httpsCallable("createFamily")
         
-        let result = try await createFamilyFunction.call([
+        let result = try await createFamilyFunction.call(([
             "name": name
-        ])
+        ] as [String: Any]).addingClientMetadata())
         
         guard let data = result.data as? [String: Any],
               let familyId = data["familyId"] as? String else {
@@ -622,9 +622,9 @@ class FamilyRepository: ObservableObject {
         let functions = Functions.functions()
         let redeemCodeFunction = functions.httpsCallable("redeemShareCode")
         
-        let result = try await redeemCodeFunction.call([
+        let result = try await redeemCodeFunction.call(([
             "code": code
-        ])
+        ] as [String: Any]).addingClientMetadata())
         
         guard let data = result.data as? [String: Any],
               let inviteId = data["inviteId"] as? String else {
@@ -643,11 +643,11 @@ class FamilyRepository: ObservableObject {
         let functions = Functions.functions()
         let sendInviteFunction = functions.httpsCallable("sendFamilyInvite")
         
-        let result = try await sendInviteFunction.call([
+        let result = try await sendInviteFunction.call(([
             "toUserId": toUserId,
             "familyId": familyId,
             "method": method
-        ])
+        ] as [String: Any]).addingClientMetadata())
         
         guard let data = result.data as? [String: Any],
               let inviteId = data["inviteId"] as? String else {
@@ -666,10 +666,10 @@ class FamilyRepository: ObservableObject {
         let functions = Functions.functions()
         let respondFunction = functions.httpsCallable("respondToFamilyInvite_UserStep")
         
-        _ = try await respondFunction.call([
+        _ = try await respondFunction.call(([
             "inviteId": inviteId,
             "response": accept ? "accept" : "decline"
-        ])
+        ] as [String: Any]).addingClientMetadata())
     }
     
     /// Get familyId from an invite
@@ -693,7 +693,7 @@ class FamilyRepository: ObservableObject {
             data["familyId"] = familyId
         }
         
-        let result = try await createCodeFunction.call(data)
+        let result = try await createCodeFunction.call(data.addingClientMetadata())
         
         guard let resultData = result.data as? [String: Any],
               let codeId = resultData["codeId"] as? String,
@@ -715,7 +715,8 @@ class FamilyRepository: ObservableObject {
         }
         
         try await db.collection("share_codes").document(codeId).updateData([
-            "isRevoked": true
+            "isRevoked": true,
+            "clientMetadata": ClientMetadata.current.firestoreValue
         ])
     }
     
@@ -728,11 +729,11 @@ class FamilyRepository: ObservableObject {
         let functions = Functions.functions()
         let respondFunction = functions.httpsCallable("approveFamilyJoinRequest_CaptainStep")
         
-        _ = try await respondFunction.call([
+        _ = try await respondFunction.call(([
             "familyId": familyId,
             "requestId": requestId,
             "response": approve ? "approve" : "decline"
-        ])
+        ] as [String: Any]).addingClientMetadata())
     }
     
     /// Leave family (remove current user from family)
@@ -746,10 +747,10 @@ class FamilyRepository: ObservableObject {
         let functions = Functions.functions()
         let removeFunction = functions.httpsCallable("removeFamilyMember")
         
-        _ = try await removeFunction.call([
+        _ = try await removeFunction.call(([
             "familyId": familyId,
             "memberId": userId
-        ])
+        ] as [String: Any]).addingClientMetadata())
     }
     
     /// Delete/Inactivate family (creator only) - uses Cloud Function
@@ -767,9 +768,9 @@ class FamilyRepository: ObservableObject {
         let functions = Functions.functions()
         let deleteFunction = functions.httpsCallable("inactivateFamily")
         
-        _ = try await deleteFunction.call([
+        _ = try await deleteFunction.call(([
             "familyId": familyId
-        ])
+        ] as [String: Any]).addingClientMetadata())
         
         // Manually update local SwiftData cache since listeners are stopped
         // Mark family as inactive

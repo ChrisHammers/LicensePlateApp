@@ -36,6 +36,6 @@ final class FairnessAckWatermarkRemoteService {
             "tripSessionId": tripSessionId.uuidString,
             "gameInstanceId": gameInstanceId.uuidString,
             "lastAckAtSeconds": lastAckAt.timeIntervalSince1970,
-        ])
+        ].addingClientMetadata())
     }
 }

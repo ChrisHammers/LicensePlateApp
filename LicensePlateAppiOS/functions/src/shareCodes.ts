@@ -1,6 +1,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
+import { clientMetadataWrite, normalizeClientMetadata } from "./clientMetadata";
 
 const db = admin.firestore();
 
@@ -31,6 +32,7 @@ export const createShareCode = functions.https.onCall(
 
     const { type, familyId } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (type !== "friend" && type !== "family") {
       throw new functions.https.HttpsError(
@@ -60,6 +62,7 @@ export const createShareCode = functions.https.onCall(
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       isRevoked: false,
+      ...clientMetadataWrite(clientMetadata),
     };
 
     if (familyId) {
@@ -74,6 +77,7 @@ export const createShareCode = functions.https.onCall(
       subjectType: "invite",
       subjectId: codeRef.id,
       metadata: { type, familyId },
+      clientMetadata,
     });
 
     return {
@@ -98,6 +102,7 @@ export const redeemShareCode = functions.https.onCall(
 
     const { code } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!code) {
       throw new functions.https.HttpsError(
@@ -147,6 +152,7 @@ export const redeemShareCode = functions.https.onCall(
       codeId: codeDoc.id,
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAtInvite),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...clientMetadataWrite(clientMetadata),
     };
 
     if (codeData.familyId) {
@@ -161,6 +167,7 @@ export const redeemShareCode = functions.https.onCall(
       subjectType: "invite",
       subjectId: inviteRef.id,
       metadata: { codeId: codeDoc.id, type: codeData.type },
+      clientMetadata,
     });
 
     return {

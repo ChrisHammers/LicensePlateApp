@@ -714,7 +714,8 @@ class UserRepository: ObservableObject {
 
     func clearActiveFamilyIdFromServer(firebaseUID: String) async throws {
         try await db.collection("users").document(firebaseUID).updateData([
-            "activeFamilyId": FieldValue.delete()
+            "activeFamilyId": FieldValue.delete(),
+            "clientMetadata": ClientMetadata.current.firestoreValue
         ])
     }
 }

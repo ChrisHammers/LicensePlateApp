@@ -11,6 +11,7 @@ const admin = require("firebase-admin");
 const audit_1 = require("./audit");
 const gameplayEventResolver_1 = require("./gameplayEventResolver");
 const fairnessWatermarkMerge_1 = require("./fairnessWatermarkMerge");
+const clientMetadata_1 = require("./clientMetadata");
 const db = admin.firestore();
 const MAX_BOOTSTRAP_EVENTS = 2500;
 function tsToSeconds(value) {
@@ -157,6 +158,7 @@ exports.publishTripCanonicalState = functions.https.onCall(async (data, context)
     const tripSessionId = data === null || data === void 0 ? void 0 : data.tripSessionId;
     const session = data === null || data === void 0 ? void 0 : data.session;
     const games = data === null || data === void 0 ? void 0 : data.games;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!tripSessionId || typeof tripSessionId !== "string") {
         throw new functions.https.HttpsError("invalid-argument", "tripSessionId is required");
     }
@@ -198,16 +200,9 @@ exports.publishTripCanonicalState = functions.https.onCall(async (data, context)
     }
     const canonicalStartedAt = secondsToTimestamp(session.startedAt);
     const canonicalEndedAt = secondsToTimestamp(session.endedAt);
-    const parentFields = {
-        name: session.name,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        syncVersion: admin.firestore.FieldValue.increment(1),
-        canonicalStatus: session.status,
-        canonicalCreatedAt,
+    const parentFields = Object.assign({ name: session.name, updatedAt: admin.firestore.FieldValue.serverTimestamp(), syncVersion: admin.firestore.FieldValue.increment(1), canonicalStatus: session.status, canonicalCreatedAt,
         canonicalStartedAt,
-        canonicalEndedAt,
-        canonicalEndedBy: (_a = session.endedBy) !== null && _a !== void 0 ? _a : null,
-    };
+        canonicalEndedAt, canonicalEndedBy: (_a = session.endedBy) !== null && _a !== void 0 ? _a : null }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata));
     const createdByWire = session.createdBy;
     if (typeof createdByWire === "string" && createdByWire.length > 0) {
         parentFields.createdBy = createdByWire;
@@ -223,19 +218,8 @@ exports.publishTripCanonicalState = functions.https.onCall(async (data, context)
             throw new functions.https.HttpsError("invalid-argument", "each game.startedAt is required");
         }
         const endedAt = secondsToTimestamp(g.endedAt);
-        batch.set(gameRef, {
-            definitionId: g.definitionId,
-            sessionId: g.sessionId,
-            startedAt,
-            endedAt,
-            ruleSetDataBase64: (_b = g.ruleSetDataBase64) !== null && _b !== void 0 ? _b : null,
-            commonConfigDataBase64: (_c = g.commonConfigDataBase64) !== null && _c !== void 0 ? _c : null,
-            gameSpecificPayloadType: (_d = g.gameSpecificPayloadType) !== null && _d !== void 0 ? _d : null,
-            gameSpecificPayloadVersion: (_e = g.gameSpecificPayloadVersion) !== null && _e !== void 0 ? _e : null,
-            gameSpecificPayloadDataBase64: (_f = g.gameSpecificPayloadDataBase64) !== null && _f !== void 0 ? _f : null,
-            teamsDataBase64: (_g = g.teamsDataBase64) !== null && _g !== void 0 ? _g : null,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        batch.set(gameRef, Object.assign(Object.assign({ definitionId: g.definitionId, sessionId: g.sessionId, startedAt,
+            endedAt, ruleSetDataBase64: (_b = g.ruleSetDataBase64) !== null && _b !== void 0 ? _b : null, commonConfigDataBase64: (_c = g.commonConfigDataBase64) !== null && _c !== void 0 ? _c : null, gameSpecificPayloadType: (_d = g.gameSpecificPayloadType) !== null && _d !== void 0 ? _d : null, gameSpecificPayloadVersion: (_e = g.gameSpecificPayloadVersion) !== null && _e !== void 0 ? _e : null, gameSpecificPayloadDataBase64: (_f = g.gameSpecificPayloadDataBase64) !== null && _f !== void 0 ? _f : null, teamsDataBase64: (_g = g.teamsDataBase64) !== null && _g !== void 0 ? _g : null }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
         ops += 1;
         await commitIfNeeded();
     }
@@ -261,6 +245,7 @@ exports.publishTripCanonicalState = functions.https.onCall(async (data, context)
         subjectType: "trip_session",
         subjectId: tripSessionId,
         metadata: { gameCount: games.length, syncVersion },
+        clientMetadata,
     });
     return { success: true, syncVersion };
 });
@@ -275,6 +260,7 @@ exports.appendTripActivityEvent = functions.https.onCall(async (data, context) =
     const userId = context.auth.uid;
     const tripSessionId = data === null || data === void 0 ? void 0 : data.tripSessionId;
     const event = data === null || data === void 0 ? void 0 : data.event;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!tripSessionId) {
         throw new functions.https.HttpsError("invalid-argument", "tripSessionId is required");
     }
@@ -306,6 +292,7 @@ exports.appendTripActivityEvent = functions.https.onCall(async (data, context) =
         timestamp: event.timestamp,
         actorId: (_a = event.actorId) !== null && _a !== void 0 ? _a : null,
         payload: (_b = event.payload) !== null && _b !== void 0 ? _b : null,
+        clientMetadata,
     };
     const result = await (0, gameplayEventResolver_1.resolveGameplayAppendTransaction)(db, tripSessionId, userId, wire);
     return {
@@ -327,6 +314,7 @@ exports.updateFairnessAckWatermark = functions.https.onCall(async (data, context
     const tripSessionId = data === null || data === void 0 ? void 0 : data.tripSessionId;
     const gameInstanceId = data === null || data === void 0 ? void 0 : data.gameInstanceId;
     const lastAckAtSeconds = data === null || data === void 0 ? void 0 : data.lastAckAtSeconds;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!tripSessionId || !gameInstanceId) {
         throw new functions.https.HttpsError("invalid-argument", "tripSessionId and gameInstanceId are required");
     }
@@ -345,10 +333,7 @@ exports.updateFairnessAckWatermark = functions.https.onCall(async (data, context
         const existingTs = snap.exists ? (_a = snap.data()) === null || _a === void 0 ? void 0 : _a.lastAckAt : undefined;
         const existingSec = existingTs ? tsToSeconds(existingTs) : 0;
         const next = (0, fairnessWatermarkMerge_1.mergeFairnessAckSeconds)(existingSec, lastAckAtSeconds);
-        tx.set(ref, {
-            lastAckAt: secondsToTimestamp(next),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
+        tx.set(ref, Object.assign(Object.assign({ lastAckAt: secondsToTimestamp(next) }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }), { merge: true });
         return next;
     });
     return { success: true, lastAckAtSeconds: mergedSeconds };
@@ -423,6 +408,7 @@ exports.removeTripParticipantAsOwner = functions.https.onCall(async (data, conte
     const userId = context.auth.uid;
     const tripSessionId = data === null || data === void 0 ? void 0 : data.tripSessionId;
     const removedUserId = data === null || data === void 0 ? void 0 : data.removedUserId;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!tripSessionId || typeof tripSessionId !== "string") {
         throw new functions.https.HttpsError("invalid-argument", "tripSessionId is required");
     }
@@ -430,13 +416,14 @@ exports.removeTripParticipantAsOwner = functions.https.onCall(async (data, conte
         throw new functions.https.HttpsError("invalid-argument", "removedUserId is required");
     }
     await assertTripOwner(tripSessionId, userId);
-    await (0, gameplayEventResolver_1.runOwnerRemoveParticipantTransaction)(db, tripSessionId, userId, removedUserId);
+    await (0, gameplayEventResolver_1.runOwnerRemoveParticipantTransaction)(db, tripSessionId, userId, removedUserId, clientMetadata);
     await (0, audit_1.writeAuditLog)({
         eventType: "AUDIT_TRIP_PARTICIPANT_REMOVED",
         actorId: userId,
         subjectType: "trip_session",
         subjectId: tripSessionId,
         metadata: { removedUserId },
+        clientMetadata,
     });
     return { success: true };
 });
@@ -447,6 +434,7 @@ exports.markTripCancelledRemote = functions.https.onCall(async (data, context) =
     }
     const userId = context.auth.uid;
     const tripSessionId = data === null || data === void 0 ? void 0 : data.tripSessionId;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!tripSessionId) {
         throw new functions.https.HttpsError("invalid-argument", "tripSessionId is required");
     }
@@ -477,17 +465,14 @@ exports.markTripCancelledRemote = functions.https.onCall(async (data, context) =
     };
     await deleteInBatches(ref.collection("games"));
     await deleteInBatches(ref.collection("activity_events"));
-    await ref.set({
-        canonicalStatus: "cancelled",
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        syncVersion: admin.firestore.FieldValue.increment(1),
-    }, { merge: true });
+    await ref.set(Object.assign(Object.assign({ canonicalStatus: "cancelled" }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp(), syncVersion: admin.firestore.FieldValue.increment(1) }), { merge: true });
     await (0, audit_1.writeAuditLog)({
         eventType: "AUDIT_TRIP_CANCELLED_REMOTE",
         actorId: userId,
         subjectType: "trip_session",
         subjectId: tripSessionId,
         metadata: {},
+        clientMetadata,
     });
     return { success: true };
 });

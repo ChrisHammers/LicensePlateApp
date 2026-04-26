@@ -5,6 +5,7 @@
 
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions";
+import { clientMetadataWrite, type ClientMetadata } from "./clientMetadata";
 
 const MAX_EVENTS_POLICY = 2500;
 
@@ -65,6 +66,7 @@ export interface WireEventInput {
   timestamp: number;
   actorId?: string | null;
   payload?: Record<string, unknown> | null;
+  clientMetadata?: ClientMetadata | null;
 }
 
 function sessionRef(db: admin.firestore.Firestore, sessionId: string) {
@@ -414,6 +416,7 @@ export async function resolveGameplayAppendTransaction(
           timestamp: incomingTs,
           actorId: normalizedActor,
           payload,
+          ...clientMetadataWrite(event.clientMetadata ?? null),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
         { merge: true }
@@ -494,6 +497,7 @@ export async function resolveGameplayAppendTransaction(
                   timestamp: nowTsEarly,
                   actorId: displaced.participantId,
                   payload: supPayload,
+                  ...clientMetadataWrite(event.clientMetadata ?? null),
                   updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 });
               }
@@ -552,6 +556,7 @@ export async function resolveGameplayAppendTransaction(
           timestamp: nowTs,
           actorId: userId,
           payload: rejPayload,
+          ...clientMetadataWrite(event.clientMetadata ?? null),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         tx.update(ref, { updatedAt: admin.firestore.FieldValue.serverTimestamp() });
@@ -678,6 +683,7 @@ export async function resolveGameplayAppendTransaction(
       const nextParticipants = filterCanonicalParticipantsRemoveUser(participants, userId);
       tx.update(ref, {
         canonicalParticipants: nextParticipants,
+        ...clientMetadataWrite(event.clientMetadata ?? null),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       tx.delete(memberRef);
@@ -703,7 +709,8 @@ export async function runOwnerRemoveParticipantTransaction(
   db: admin.firestore.Firestore,
   tripSessionId: string,
   ownerUserId: string,
-  removedUserId: string
+  removedUserId: string,
+  clientMetadata: ClientMetadata | null = null
 ): Promise<{ success: true; appliedEventId: string }> {
   if (removedUserId === ownerUserId) {
     throw new functions.https.HttpsError("invalid-argument", "Cannot remove yourself via this API");
@@ -759,11 +766,13 @@ export async function runOwnerRemoveParticipantTransaction(
           [PK.leaveReason]: "kicked",
           [PK.initiatedByUserId]: ownerUserId,
         },
+        ...clientMetadataWrite(clientMetadata),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
     tx.update(ref, {
       canonicalParticipants: nextParticipants,
+      ...clientMetadataWrite(clientMetadata),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     tx.delete(removedRef);

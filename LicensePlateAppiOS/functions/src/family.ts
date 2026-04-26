@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import { canAddMemberToFamily } from "./utils/validation";
 import { writeAuditLog } from "./audit";
 import { getFCMToken, sendPushNotification } from "./utils/notifications";
+import { clientMetadataWrite, normalizeClientMetadata } from "./clientMetadata";
 
 const db = admin.firestore();
 
@@ -20,6 +21,7 @@ export const createFamily = functions.https.onCall(
 
     const { name } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!name || typeof name !== "string" || name.trim().length === 0) {
       throw new functions.https.HttpsError(
@@ -49,6 +51,7 @@ export const createFamily = functions.https.onCall(
       creatorId: userId,
       status: "active",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...clientMetadataWrite(clientMetadata),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
@@ -62,6 +65,7 @@ export const createFamily = functions.https.onCall(
         canEditSettings: true,
       },
       joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...clientMetadataWrite(clientMetadata),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -69,6 +73,7 @@ export const createFamily = functions.https.onCall(
     if (!userData.isRetiredGeneral) {
       await db.collection("users").doc(userId).update({
         activeFamilyId: familyRef.id,
+        ...clientMetadataWrite(clientMetadata),
       });
     }
 
@@ -78,6 +83,7 @@ export const createFamily = functions.https.onCall(
       subjectType: "family",
       subjectId: familyRef.id,
       metadata: { name: name.trim() },
+      clientMetadata,
     });
 
     return { familyId: familyRef.id };
@@ -98,6 +104,7 @@ export const sendFamilyInvite = functions.https.onCall(
 
     const { toUserId, familyId, method } = data;
     const fromUserId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!toUserId || !familyId) {
       throw new functions.https.HttpsError(
@@ -147,6 +154,7 @@ export const sendFamilyInvite = functions.https.onCall(
         subjectType: "user",
         subjectId: toUserId,
         metadata: { familyId, reason: canAdd.reason },
+        clientMetadata,
       });
       throw new functions.https.HttpsError(
         "failed-precondition",
@@ -167,6 +175,7 @@ export const sendFamilyInvite = functions.https.onCall(
       method: method || "search",
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...clientMetadataWrite(clientMetadata),
     };
 
     const inviteRef = await db.collection("invites").add(inviteData);
@@ -193,6 +202,7 @@ export const sendFamilyInvite = functions.https.onCall(
       subjectType: "invite",
       subjectId: inviteRef.id,
       metadata: { toUserId, familyId, method },
+      clientMetadata,
     });
 
     return { inviteId: inviteRef.id };
@@ -213,6 +223,7 @@ export const respondToFamilyInvite_UserStep = functions.https.onCall(
 
     const { inviteId, response } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!inviteId || !response) {
       throw new functions.https.HttpsError(
@@ -258,6 +269,7 @@ export const respondToFamilyInvite_UserStep = functions.https.onCall(
     batch.update(inviteDoc.ref, {
       status: response === "accept" ? "accepted" : "declined",
       respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...clientMetadataWrite(clientMetadata),
     });
 
     if (response === "accept") {
@@ -268,6 +280,7 @@ export const respondToFamilyInvite_UserStep = functions.https.onCall(
         method: inviteData.method,
         status: "pending",
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        ...clientMetadataWrite(clientMetadata),
       };
 
       const requestRef = db
@@ -282,6 +295,7 @@ export const respondToFamilyInvite_UserStep = functions.https.onCall(
         subjectType: "invite",
         subjectId: inviteId,
         metadata: { familyId: inviteData.familyId },
+        clientMetadata,
       });
     }
 
@@ -305,6 +319,7 @@ export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
 
     const { familyId, requestId, response } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!familyId || !requestId || !response) {
       throw new functions.https.HttpsError(
@@ -399,6 +414,7 @@ export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
           canEditSettings: false,
         },
         joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+        ...clientMetadataWrite(clientMetadata),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       };
 
@@ -411,6 +427,7 @@ export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
       if (!targetUserData.isRetiredGeneral) {
         batch.update(db.collection("users").doc(requestData.userId), {
           activeFamilyId: familyId,
+          ...clientMetadataWrite(clientMetadata),
         });
       }
 
@@ -418,6 +435,7 @@ export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
       batch.update(requestDoc.ref, {
         status: "approved",
         resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+        ...clientMetadataWrite(clientMetadata),
       });
 
       // Send push notification
@@ -441,12 +459,14 @@ export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
         subjectType: "family",
         subjectId: familyId,
         metadata: { newMemberId: requestData.userId, role: newRole },
+        clientMetadata,
       });
     } else {
       // Decline request
       batch.update(requestDoc.ref, {
         status: "declined",
         resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+        ...clientMetadataWrite(clientMetadata),
       });
 
       await writeAuditLog({
@@ -455,6 +475,7 @@ export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
         subjectType: "family",
         subjectId: familyId,
         metadata: { requestId, userId: requestData.userId },
+        clientMetadata,
       });
     }
 
@@ -478,6 +499,7 @@ export const removeFamilyMember = functions.https.onCall(
 
     const { familyId, memberId } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!familyId || !memberId) {
       throw new functions.https.HttpsError(
@@ -539,6 +561,7 @@ export const removeFamilyMember = functions.https.onCall(
     if (userData && !userData.isRetiredGeneral) {
       batch.update(db.collection("users").doc(memberId), {
         activeFamilyId: admin.firestore.FieldValue.delete(),
+        ...clientMetadataWrite(clientMetadata),
       });
     }
 
@@ -550,6 +573,7 @@ export const removeFamilyMember = functions.https.onCall(
       subjectType: "family",
       subjectId: familyId,
       metadata: { removedMemberId: memberId, role: targetMemberRole },
+      clientMetadata,
     });
 
     return { success: true };
@@ -570,6 +594,7 @@ export const changeFamilyMemberRole = functions.https.onCall(
 
     const { familyId, memberId, newRole } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!familyId || !memberId || !newRole) {
       throw new functions.https.HttpsError(
@@ -631,6 +656,7 @@ export const changeFamilyMemberRole = functions.https.onCall(
     // Update role
     await targetMemberDoc.ref.update({
       role: newRole,
+      ...clientMetadataWrite(clientMetadata),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -640,6 +666,7 @@ export const changeFamilyMemberRole = functions.https.onCall(
       subjectType: "family",
       subjectId: familyId,
       metadata: { memberId, oldRole: currentRole, newRole },
+      clientMetadata,
     });
 
     return { success: true };
@@ -661,6 +688,7 @@ export const inactivateFamily = functions.https.onCall(
 
     const { familyId } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!familyId) {
       throw new functions.https.HttpsError(
@@ -696,6 +724,7 @@ export const inactivateFamily = functions.https.onCall(
     // Mark family as inactive
     batch.update(familyDoc.ref, {
       status: "inactive",
+      ...clientMetadataWrite(clientMetadata),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -717,6 +746,7 @@ export const inactivateFamily = functions.https.onCall(
       if (userData && !userData.isRetiredGeneral) {
         batch.update(db.collection("users").doc(memberId), {
           activeFamilyId: admin.firestore.FieldValue.delete(),
+          ...clientMetadataWrite(clientMetadata),
         });
       }
     }
@@ -732,6 +762,7 @@ export const inactivateFamily = functions.https.onCall(
         reason: "creator_inactivated",
         familyName: familyData.name,
       },
+      clientMetadata,
     });
 
     return { success: true };

@@ -346,10 +346,10 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
 
         let functions = Functions.functions()
         let fn = functions.httpsCallable("respondToTripInvite")
-        _ = try await fn.call([
+        _ = try await fn.call(([
             "inviteId": inviteId,
             "response": accept ? "accept" : "decline",
-        ])
+        ] as [String: Any]).addingClientMetadata())
     }
 
     func cancelInvite(inviteId: String, userId: String) async throws {
@@ -359,9 +359,9 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
 
         let functions = Functions.functions()
         let fn = functions.httpsCallable("cancelTripInvite")
-        _ = try await fn.call([
+        _ = try await fn.call(([
             "inviteId": inviteId,
-        ])
+        ] as [String: Any]).addingClientMetadata())
     }
 
     func sendTripInvite(
@@ -387,7 +387,7 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
 
         let functions = Functions.functions()
         let fn = functions.httpsCallable("sendTripInvite")
-        let result = try await fn.call(payload)
+        let result = try await fn.call(payload.addingClientMetadata())
 
         guard let data = result.data as? [String: Any],
               let inviteId = data["inviteId"] as? String else {

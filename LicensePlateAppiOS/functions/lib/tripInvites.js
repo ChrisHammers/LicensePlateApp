@@ -14,6 +14,7 @@ const audit_1 = require("./audit");
 const notifications_1 = require("./utils/notifications");
 const gameplayEventResolver_1 = require("./gameplayEventResolver");
 const tripSessionCanonical_1 = require("./tripSessionCanonical");
+const clientMetadata_1 = require("./clientMetadata");
 const db = admin.firestore();
 const DEFAULT_INVITE_DAYS = 7;
 exports.sendTripInvite = functions.https.onCall(async (data, context) => {
@@ -22,6 +23,7 @@ exports.sendTripInvite = functions.https.onCall(async (data, context) => {
     }
     const fromUserId = context.auth.uid;
     const { toUserId, tripSessionId, tripName, method, expiresAtMs } = data;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!toUserId || typeof toUserId !== "string") {
         throw new functions.https.HttpsError("invalid-argument", "toUserId is required");
     }
@@ -64,11 +66,7 @@ exports.sendTripInvite = functions.https.onCall(async (data, context) => {
         return { inviteId: doc.id };
     }
     const batch = db.batch();
-    batch.set(sessionRef, {
-        name: tripName,
-        createdBy: fromUserId,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    batch.set(sessionRef, Object.assign(Object.assign({ name: tripName, createdBy: fromUserId }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }), { merge: true });
     const ownerMemberRef = sessionRef.collection("members").doc(fromUserId);
     const ownerSnap = await ownerMemberRef.get();
     if (!ownerSnap.exists) {
@@ -79,30 +77,17 @@ exports.sendTripInvite = functions.https.onCall(async (data, context) => {
     }
     const inviteRef = db.collection("trip_invites").doc();
     const inviteMethod = typeof method === "string" ? method : "search";
-    batch.set(inviteRef, {
-        tripSessionId,
+    batch.set(inviteRef, Object.assign(Object.assign({ tripSessionId,
         tripName,
         fromUserId,
-        toUserId,
-        status: "pending",
-        method: inviteMethod,
-        expiresAt,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+        toUserId, status: "pending", method: inviteMethod, expiresAt }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { createdAt: admin.firestore.FieldValue.serverTimestamp() }));
     const invEvRef = sessionRef.collection("activity_events").doc(`inv_${inviteRef.id}`);
-    batch.set(invEvRef, {
-        sessionId: tripSessionId,
-        kind: gameplayEventResolver_1.KIND_PARTICIPANT_INVITED,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        actorId: fromUserId,
-        payload: {
+    batch.set(invEvRef, Object.assign(Object.assign({ sessionId: tripSessionId, kind: gameplayEventResolver_1.KIND_PARTICIPANT_INVITED, timestamp: admin.firestore.FieldValue.serverTimestamp(), actorId: fromUserId, payload: {
             [gameplayEventResolver_1.PK.fromUserId]: fromUserId,
             [gameplayEventResolver_1.PK.toUserId]: toUserId,
             [gameplayEventResolver_1.PK.inviteId]: inviteRef.id,
             [gameplayEventResolver_1.PK.inviteMethod]: inviteMethod,
-        },
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+        } }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
     await batch.commit();
     await (0, tripSessionCanonical_1.syncCanonicalParticipantsFromMembers)(tripSessionId);
     const fcmToken = await (0, notifications_1.getFCMToken)(toUserId);
@@ -121,6 +106,7 @@ exports.sendTripInvite = functions.https.onCall(async (data, context) => {
         subjectType: "invite",
         subjectId: inviteRef.id,
         metadata: { toUserId, tripSessionId, method: method || "search" },
+        clientMetadata,
     });
     return { inviteId: inviteRef.id };
 });
@@ -130,6 +116,7 @@ exports.respondToTripInvite = functions.https.onCall(async (data, context) => {
     }
     const userId = context.auth.uid;
     const { inviteId, response } = data;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!inviteId || !response) {
         throw new functions.https.HttpsError("invalid-argument", "inviteId and response are required");
     }
@@ -150,41 +137,23 @@ exports.respondToTripInvite = functions.https.onCall(async (data, context) => {
     }
     const exp = inviteData.expiresAt;
     if (exp && exp.toMillis() < Date.now()) {
-        await inviteRef.update({
-            status: "expired",
-            respondedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        await inviteRef.update(Object.assign({ status: "expired", respondedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
         throw new functions.https.HttpsError("failed-precondition", "Invite has expired");
     }
     const batch = db.batch();
-    batch.update(inviteRef, {
-        status: response === "accept" ? "accepted" : "declined",
-        respondedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    batch.update(inviteRef, Object.assign({ status: response === "accept" ? "accepted" : "declined", respondedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
     if (response === "accept") {
         const tripSessionId = inviteData.tripSessionId;
         const sessionDocRef = db.collection("trip_sessions").doc(tripSessionId);
         const memberRef = sessionDocRef.collection("members").doc(userId);
-        batch.set(memberRef, {
-            role: "member",
-            joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        batch.update(sessionDocRef, {
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+        batch.set(memberRef, Object.assign({ role: "member", joinedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
+        batch.update(sessionDocRef, Object.assign(Object.assign({}, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
         const joinEvRef = sessionDocRef.collection("activity_events").doc(`join_${inviteId}`);
-        batch.set(joinEvRef, {
-            sessionId: tripSessionId,
-            kind: gameplayEventResolver_1.KIND_PARTICIPANT_JOINED,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            actorId: userId,
-            payload: {
+        batch.set(joinEvRef, Object.assign(Object.assign({ sessionId: tripSessionId, kind: gameplayEventResolver_1.KIND_PARTICIPANT_JOINED, timestamp: admin.firestore.FieldValue.serverTimestamp(), actorId: userId, payload: {
                 [gameplayEventResolver_1.PK.participantId]: userId,
                 [gameplayEventResolver_1.PK.inviteId]: inviteId,
                 [gameplayEventResolver_1.PK.fromUserId]: inviteData.fromUserId,
-            },
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
+            } }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
     }
     await batch.commit();
     if (response === "accept") {
@@ -198,6 +167,7 @@ exports.respondToTripInvite = functions.https.onCall(async (data, context) => {
         subjectType: "invite",
         subjectId: inviteId,
         metadata: { fromUserId: inviteData.fromUserId },
+        clientMetadata,
     });
     return { success: true };
 });
@@ -207,6 +177,7 @@ exports.cancelTripInvite = functions.https.onCall(async (data, context) => {
     }
     const userId = context.auth.uid;
     const { inviteId } = data;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!inviteId || typeof inviteId !== "string") {
         throw new functions.https.HttpsError("invalid-argument", "inviteId is required");
     }
@@ -222,16 +193,14 @@ exports.cancelTripInvite = functions.https.onCall(async (data, context) => {
     if (inviteData.status !== "pending") {
         throw new functions.https.HttpsError("failed-precondition", "Invite is no longer pending");
     }
-    await inviteRef.update({
-        status: "canceled",
-        respondedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    await inviteRef.update(Object.assign({ status: "canceled", respondedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
     await (0, audit_1.writeAuditLog)({
         eventType: "AUDIT_TRIP_INVITE_CANCELED",
         actorId: userId,
         subjectType: "invite",
         subjectId: inviteId,
         metadata: { toUserId: inviteData.toUserId },
+        clientMetadata,
     });
     return { success: true };
 });

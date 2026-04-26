@@ -155,10 +155,10 @@ class FriendshipRepository: ObservableObject {
         let functions = Functions.functions()
         let sendInviteFunction = functions.httpsCallable("sendFriendInvite")
         
-        let result = try await sendInviteFunction.call([
+        let result = try await sendInviteFunction.call(([
             "toUserId": toUserId,
             "method": method
-        ])
+        ] as [String: Any]).addingClientMetadata())
         
         guard let data = result.data as? [String: Any],
               let inviteId = data["inviteId"] as? String else {
@@ -177,10 +177,10 @@ class FriendshipRepository: ObservableObject {
         let functions = Functions.functions()
         let respondFunction = functions.httpsCallable("respondToFriendInvite")
         
-        _ = try await respondFunction.call([
+        _ = try await respondFunction.call(([
             "inviteId": inviteId,
             "response": accept ? "accept" : "decline"
-        ])
+        ] as [String: Any]).addingClientMetadata())
     }
 
     /// Remove an accepted friendship via Cloud Function; drops local SwiftData row when the server succeeds.
@@ -192,9 +192,9 @@ class FriendshipRepository: ObservableObject {
         let functions = Functions.functions()
         let fn = functions.httpsCallable("removeFriend")
 
-        _ = try await fn.call([
+        _ = try await fn.call(([
             "friendshipId": friendshipId
-        ])
+        ] as [String: Any]).addingClientMetadata())
 
         deleteLocalFriendship(friendshipId: friendshipId)
     }
