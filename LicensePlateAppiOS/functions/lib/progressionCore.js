@@ -183,6 +183,7 @@ function competitiveFirstPlaceParticipantIds(mergedContributions) {
  * Shape parity with client-side intent: user + trip/session + game + region + grant category.
  */
 function baseRegionDiscoveryScopeKey(input) {
+    const payload = stringifyPayload(input.payload);
     const gameInstanceId = payload[gameplayEventResolver_1.PK.gameInstanceId];
     const regionId = payload[gameplayEventResolver_1.PK.regionId];
     if (!gameInstanceId || !regionId)
