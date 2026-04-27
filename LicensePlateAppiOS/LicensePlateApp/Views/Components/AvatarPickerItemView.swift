@@ -11,11 +11,13 @@ struct AvatarPickerItemView: View {
     let item: AvatarDisplayItem
     let isSelected: Bool
     let itemSize: CGFloat
+    let itemWidth: CGFloat
     
-    init(item: AvatarDisplayItem, isSelected: Bool, itemSize: CGFloat = 88) {
+    init(item: AvatarDisplayItem, isSelected: Bool, itemSize: CGFloat = 88, itemWidth: CGFloat = 116) {
         self.item = item
         self.isSelected = isSelected
         self.itemSize = itemSize
+        self.itemWidth = itemWidth
     }
     
     private var image: Image? {
@@ -64,7 +66,7 @@ struct AvatarPickerItemView: View {
                 .fill(isSelected ? Color.primary.opacity(0.9) : Color.clear)
                 .frame(width: 28, height: 4)
         }
-        .frame(width: 116, height: 172)
+        .frame(width: itemWidth, height: 172)
         .contentShape(Rectangle())
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint(item.isUnlocked ? "Double tap to select".localized : "Double tap for unlock options".localized)
