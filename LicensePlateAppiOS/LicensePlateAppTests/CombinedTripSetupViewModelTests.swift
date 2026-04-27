@@ -13,6 +13,20 @@ import Testing
 @MainActor
 struct CombinedTripSetupViewModelTests {
 
+    private final class StubNewTripDefaultsStore: NewTripDefaultsStoring {
+        private let snapshot: NewTripDefaults
+
+        init(snapshot: NewTripDefaults) {
+            self.snapshot = snapshot
+        }
+
+        func load() -> NewTripDefaults {
+            snapshot
+        }
+
+        func save(_ snapshot: NewTripDefaults) {}
+    }
+
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema(versionedSchema: CurrentSchema.self)
         let config = ModelConfiguration(
@@ -24,6 +38,44 @@ struct CombinedTripSetupViewModelTests {
             migrationPlan: AppMigrationPlan.self,
             configurations: [config]
         )
+    }
+
+    private func makeDefaults(startTripRightAway: Bool) -> NewTripDefaults {
+        NewTripDefaults(
+            includeUS: true,
+            includeCanada: false,
+            includeMexico: true,
+            startTripRightAway: startTripRightAway,
+            skipVoiceConfirmation: true,
+            holdToTalk: false,
+            saveLocationWhenMarkingPlates: false,
+            showMyLocationOnLargeMap: false,
+            trackMyLocationDuringTrip: false,
+            showMyActiveTripOnLargeMap: false,
+            showMyActiveTripOnSmallMap: false
+        )
+    }
+
+    @Test func initAppliesNewTripDefaults() async throws {
+        let auth = FirebaseAuthService()
+        let viewModel = CombinedTripSetupViewModel(
+            tripSessionRepository: TripSessionRepository.shared,
+            gameInstanceRepository: GameInstanceRepository.shared,
+            authService: auth,
+            newTripDefaultsStore: StubNewTripDefaultsStore(snapshot: makeDefaults(startTripRightAway: true))
+        )
+
+        #expect(viewModel.includeUS == true)
+        #expect(viewModel.includeCanada == false)
+        #expect(viewModel.includeMexico == true)
+        #expect(viewModel.startTripRightAway == true)
+        #expect(viewModel.skipVoiceConfirmation == true)
+        #expect(viewModel.holdToTalk == false)
+        #expect(viewModel.saveLocationWhenMarkingPlates == false)
+        #expect(viewModel.showMyLocationOnLargeMap == false)
+        #expect(viewModel.trackMyLocationDuringTrip == false)
+        #expect(viewModel.showMyActiveTripOnLargeMap == false)
+        #expect(viewModel.showMyActiveTripOnSmallMap == false)
     }
 
     @Test func createTripWithDefaultConfigPersistsSessionAndGameInstances() async throws {
@@ -215,6 +267,43 @@ struct CombinedTripSetupViewModelTests {
 
         let session = try viewModel.createTrip()
 
+        #expect(mockLifecycle.startTripCallCount == 1)
+        #expect(mockLifecycle.startTripSessionIds.first == session.id)
+        #expect(mockLifecycle.startTripActorIds.first == userId)
+    }
+
+    @Test func createTripUsesDefaultStartRightAwaySetting() async throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        let sessionRepo = TripSessionRepository.shared
+        let instanceRepo = GameInstanceRepository.shared
+        let eventRepo = TripActivityEventRepository.shared
+        sessionRepo.setModelContext(ctx)
+        instanceRepo.setModelContext(ctx)
+        eventRepo.setModelContext(ctx)
+
+        let auth = FirebaseAuthService()
+        let userId = "test-user"
+        let testUser = AppUser(id: userId, userName: "Test", firebaseUID: userId)
+        ctx.insert(testUser)
+        try ctx.save()
+        auth.currentUser = testUser
+
+        let mockLifecycle = MockTripSessionLifecycleService()
+        let viewModel = CombinedTripSetupViewModel(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: instanceRepo,
+            lifecycleService: mockLifecycle,
+            authService: auth,
+            newTripDefaultsStore: StubNewTripDefaultsStore(snapshot: makeDefaults(startTripRightAway: true))
+        )
+        viewModel.tripName = "My Trip"
+        viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = true
+
+        let session = try viewModel.createTrip()
+
+        #expect(viewModel.startTripRightAway == true)
         #expect(mockLifecycle.startTripCallCount == 1)
         #expect(mockLifecycle.startTripSessionIds.first == session.id)
         #expect(mockLifecycle.startTripActorIds.first == userId)

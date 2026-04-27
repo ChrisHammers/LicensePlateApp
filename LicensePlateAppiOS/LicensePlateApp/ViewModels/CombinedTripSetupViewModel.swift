@@ -53,7 +53,8 @@ final class CombinedTripSetupViewModel: ObservableObject {
         tripInviteRepository: TripInviteRepositoryProtocol = TripInviteRepository.shared,
         lifecycleService: TripSessionLifecycleServiceProtocol = TripSessionLifecycleService.shared,
         tripEntitlementGate: TripEntitlementGate = .shared,
-        authService: FirebaseAuthService
+        authService: FirebaseAuthService,
+        newTripDefaultsStore: NewTripDefaultsStoring = UserDefaultsNewTripDefaultsStore()
     ) {
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
@@ -61,6 +62,8 @@ final class CombinedTripSetupViewModel: ObservableObject {
         self.lifecycleService = lifecycleService
         self.tripEntitlementGate = tripEntitlementGate
         self.authService = authService
+
+        applyNewTripDefaults(newTripDefaultsStore.load())
     }
 
     // MARK: - Analytics (setup screen)
@@ -256,6 +259,20 @@ final class CombinedTripSetupViewModel: ObservableObject {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+
+    private func applyNewTripDefaults(_ defaults: NewTripDefaults) {
+        includeUS = defaults.includeUS
+        includeCanada = defaults.includeCanada
+        includeMexico = defaults.includeMexico
+        startTripRightAway = defaults.startTripRightAway
+        skipVoiceConfirmation = defaults.skipVoiceConfirmation
+        holdToTalk = defaults.holdToTalk
+        saveLocationWhenMarkingPlates = defaults.saveLocationWhenMarkingPlates
+        showMyLocationOnLargeMap = defaults.showMyLocationOnLargeMap
+        trackMyLocationDuringTrip = defaults.trackMyLocationDuringTrip
+        showMyActiveTripOnLargeMap = defaults.showMyActiveTripOnLargeMap
+        showMyActiveTripOnSmallMap = defaults.showMyActiveTripOnSmallMap
     }
 }
 

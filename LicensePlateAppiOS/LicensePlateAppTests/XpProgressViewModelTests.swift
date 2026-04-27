@@ -59,19 +59,7 @@ struct XpProgressViewModelTests {
             xpUniquenessKey: UUID().uuidString
         )
     }
-}
-//
-//  XpProgressViewModelTests.swift
-//  LicensePlateAppTests
-//
-
-import Foundation
-import Testing
-@testable import LicensePlateApp
-
-@MainActor
-struct XpProgressViewModelTests {
-
+    
     @Test func refreshUsesSnapshotProviderAndLedgerProvisional() throws {
         let ledger = MockXpLedgerRepository()
         let sid = UUID()
