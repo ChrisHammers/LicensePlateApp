@@ -628,7 +628,8 @@
 // Step 6.9.3 — Trip vs game lifecycle
 "Trips cannot be reset." = "Trips cannot be reset.";
 "Game reset is not available for this trip." = "Game reset is not available for this trip.";
-"This ends the trip. You won't be able to add license plates to this trip anymore." = "This ends the trip. You won't be able to add license plates to this trip anymore.";
+"This ends the trip and all open games. Make sure all participants have synced so all discoveries are counted." = "This ends the trip and all open games. Make sure all participants have synced so all discoveries are counted.";
+"This ends this game. Make sure all participants have synced so all discoveries are counted. You can start a new game." = "This ends this game. Make sure all participants have synced so all discoveries are counted. You can start a new game.";
 "Reset is not available for ended or cancelled trips." = "Reset is not available for ended or cancelled trips.";
 "This trip has ended" = "This trip has ended";
 "Trip cancelled" = "Trip cancelled";

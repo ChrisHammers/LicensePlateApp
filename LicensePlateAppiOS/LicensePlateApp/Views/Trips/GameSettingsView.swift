@@ -253,7 +253,7 @@ struct GameSettingsView: View {
                 }
             }
         } message: {
-            Text("This ends this game for this trip. You won't be able to add plates to this game until it is reset or restarted.".localized)
+            Text("This ends this game. Make sure all participants have synced so all discoveries are counted. You can start a new game.".localized)
         }
     }
 

@@ -252,7 +252,7 @@ struct TripSettingsView: View {
                 }
             }
         } message: {
-            Text("This ends the trip. You won't be able to add license plates to this trip anymore.".localized)
+            Text("This ends the trip and all open games. Make sure all participants have synced so all discoveries are counted.".localized)
         }
         .alert("Delete Trip".localized, isPresented: $showDeleteConfirmation) {
             Button("Cancel".localized, role: .cancel) {}

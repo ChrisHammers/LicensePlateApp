@@ -620,7 +620,8 @@
 // Step 6.9.3 — Trip vs game lifecycle
 "Trips cannot be reset." = "Les trajets ne peuvent pas être réinitialisés.";
 "Game reset is not available for this trip." = "La réinitialisation du jeu n’est pas disponible pour ce trajet.";
-"This ends the trip. You won't be able to add license plates to this trip anymore." = "Cela met fin au trajet. Vous ne pourrez plus ajouter de plaques à ce trajet.";
+"This ends the trip and all open games. Make sure all participants have synced so all discoveries are counted." = "Cela met fin au trajet et à tous les jeux ouverts. Assurez-vous que tous les participants ont synchronisé afin que toutes les découvertes soient comptées.";
+"This ends this game. Make sure all participants have synced so all discoveries are counted. You can start a new game." = "Cela met fin à ce jeu. Assurez-vous que tous les participants ont synchronisé afin que toutes les découvertes soient comptées. Vous pouvez commencer un nouveau jeu.";
 "Reset is not available for ended or cancelled trips." = "La réinitialisation n’est pas disponible pour les trajets terminés ou annulés.";
 "This trip has ended" = "Ce trajet est terminé";
 "Trip cancelled" = "Trajet annulé";

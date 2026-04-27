@@ -620,7 +620,8 @@
 // Step 6.9.3 — Trip vs game lifecycle
 "Trips cannot be reset." = "Los viajes no se pueden restablecer.";
 "Game reset is not available for this trip." = "No se puede restablecer el juego para este viaje.";
-"This ends the trip. You won't be able to add license plates to this trip anymore." = "Esto termina el viaje. Ya no podrás añadir matrículas a este viaje.";
+"This ends the trip and all open games. Make sure all participants have synced so all discoveries are counted." = "Esto termina el viaje y todos los juegos abiertos. Asegúrate de que todos los participantes hayan sincronizado para que se cuenten todos los descubrimientos.";
+"This ends this game. Make sure all participants have synced so all discoveries are counted. You can start a new game." = "Esto termina este juego. Asegúrate de que todos los participantes hayan sincronizado para que se cuenten todos los descubrimientos. Puedes empezar un juego nuevo.";
 "Reset is not available for ended or cancelled trips." = "No se puede restablecer en viajes finalizados o cancelados.";
 "This trip has ended" = "Este viaje ha terminado";
 "Trip cancelled" = "Viaje cancelado";
