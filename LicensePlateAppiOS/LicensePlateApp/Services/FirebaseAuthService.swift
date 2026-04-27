@@ -12,6 +12,7 @@ import UIKit
 import FirebaseAuth
 import FirebaseFirestore
 import FirebaseCore
+import FirebaseFunctions
 import AuthenticationServices
 import GoogleSignIn
 import Network
@@ -66,6 +67,7 @@ class FirebaseAuthService: ObservableObject {
     private var authStateListener: AuthStateDidChangeListenerHandle?
     private let networkMonitor = NetworkMonitor()
     private var networkReachabilityCancellables = Set<AnyCancellable>()
+    private var progressionBootstrapAttemptedUserIds: Set<String> = []
     /// When false, unsatisfied→satisfied transitions do not schedule gameplay sync (avoids flushing before `RootView` wires repos + `setSyncCoordinator`).
     private var gameplaySyncFlushOnReachabilityRegainedEnabled = false
 
@@ -1344,10 +1346,30 @@ class FirebaseAuthService: ObservableObject {
             data[key] = value
         }
         try await docRef.setData(data, merge: true)
+        await ensureUserProgressionDocumentIfPossible(userId: firebaseUID)
         
         user.lastSyncedToFirebase = .now
         user.needsSync = false
         try? modelContext?.save()
+    }
+
+    private func ensureUserProgressionDocumentIfPossible(userId: String?) async {
+        guard isOnline,
+              let userId,
+              !userId.isEmpty,
+              Auth.auth().currentUser?.uid == userId,
+              !progressionBootstrapAttemptedUserIds.contains(userId)
+        else { return }
+
+        do {
+            let fn = Functions.functions().httpsCallable("ensureUserProgressionDocument")
+            _ = try await fn.call(([:] as [String: Any]).addingClientMetadata())
+            progressionBootstrapAttemptedUserIds.insert(userId)
+        } catch {
+            #if DEBUG
+            print("⚠️ Failed to ensure user_progression document: \(error)")
+            #endif
+        }
     }
     
     /// Refresh current user data from Firestore (useful after Cloud Function updates)

@@ -241,6 +241,7 @@ class AnalyticsService: AnalyticsLogging {
         case paywallViewed(source: String?)
         case paywallDismissed
         case tripLimitHit(source: String, activeTripCount: Int, activeTripLimit: Int, tier: String)
+        case savedTripLimitHit(source: String, savedTripCount: Int, savedTripLimit: Int, tier: String)
         case purchaseStarted(packageId: String)
         case purchaseCompleted(packageId: String)
         case purchaseFailed(packageId: String?, error: String)
@@ -374,6 +375,7 @@ class AnalyticsService: AnalyticsLogging {
             case .paywallViewed: return "paywall_viewed"
             case .paywallDismissed: return "paywall_dismissed"
             case .tripLimitHit: return "trip_limit_hit"
+            case .savedTripLimitHit: return "saved_trip_limit_hit"
             case .purchaseStarted: return "purchase_started"
             case .purchaseCompleted: return "purchase_completed"
             case .purchaseFailed: return "purchase_failed"
@@ -688,6 +690,13 @@ class AnalyticsService: AnalyticsLogging {
                     "source": source,
                     "active_trip_count": activeTripCount,
                     "active_trip_limit": activeTripLimit,
+                    "tier": tier
+                ]
+            case .savedTripLimitHit(let source, let savedTripCount, let savedTripLimit, let tier):
+                return [
+                    "source": source,
+                    "saved_trip_count": savedTripCount,
+                    "saved_trip_limit": savedTripLimit,
                     "tier": tier
                 ]
             case .purchaseStarted(let packageId):

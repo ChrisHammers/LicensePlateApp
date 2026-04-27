@@ -17,6 +17,9 @@ final class TravelLogViewModel: ObservableObject {
     @Published var summaryErrorMessage: String?
     @Published var selectedSummary: TripSummary?
     @Published var isLoadingSummary = false
+    @Published private(set) var hiddenSavedTripCount = 0
+    @Published var shouldPresentSavedTripPaywall = false
+    @Published private(set) var savedTripCapKind: SavedTripCapKind = .unlimited
 
     /// Avoid duplicate section analytics if `onAppear` fires more than once for the same recap.
     private var recapSectionAnalyticsLoggedSessionId: UUID?
@@ -26,8 +29,11 @@ final class TravelLogViewModel: ObservableObject {
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
     private let xpLedger: XpLedgerRepositoryProtocol
+    private let savedTripAccessPolicy: SavedTripAccessPolicy
+    private let analytics: AnalyticsLogging
     private var authService: FirebaseAuthService
     private let usePreviewEntries: Bool
+    private var savedTripLimitAnalyticsSignature: String?
 
     init(
         travelLogRepository: TravelLogRepositoryProtocol,
@@ -36,17 +42,25 @@ final class TravelLogViewModel: ObservableObject {
         tripActivityEventRepository: TripActivityEventRepositoryProtocol,
         authService: FirebaseAuthService,
         xpLedger: XpLedgerRepositoryProtocol = XpLedgerRepository.shared,
-        previewEntries: [TravelLogEntry]? = nil
+        savedTripAccessPolicy: SavedTripAccessPolicy = .shared,
+        analytics: AnalyticsLogging = AnalyticsService.shared,
+        previewEntries: [TravelLogEntry]? = nil,
+        previewHiddenSavedTripCount: Int = 0,
+        previewSavedTripCapKind: SavedTripCapKind = .unlimited
     ) {
         self.travelLogRepository = travelLogRepository
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
         self.tripActivityEventRepository = tripActivityEventRepository
         self.xpLedger = xpLedger
+        self.savedTripAccessPolicy = savedTripAccessPolicy
+        self.analytics = analytics
         self.authService = authService
         self.usePreviewEntries = previewEntries != nil
         if let entries = previewEntries {
             self.entries = entries
+            self.hiddenSavedTripCount = previewHiddenSavedTripCount
+            self.savedTripCapKind = previewSavedTripCapKind
         }
     }
 
@@ -58,6 +72,14 @@ final class TravelLogViewModel: ObservableObject {
         authService.currentUser?.firebaseUID ?? authService.currentUser?.id
     }
 
+    var visibleSavedTripLimit: Int? {
+        savedTripAccessPolicy.visibleSavedTripLimit(for: authService.currentUser)
+    }
+
+    var isCurrentUserAnonymous: Bool {
+        savedTripCapKind == .anonymous
+    }
+
     /// Load travel log entries (ended and optionally cancelled). Call after repository context is set.
     func loadEntries(statusFilter: TravelLogStatusFilter = .endedAndCancelled) {
         if usePreviewEntries { return }
@@ -65,17 +87,55 @@ final class TravelLogViewModel: ObservableObject {
         errorMessage = nil
         let userId = currentUserId
         do {
-            entries = try travelLogRepository.getSummaryProjections(
+            let fetchedEntries = try travelLogRepository.getSummaryProjections(
                 userId: userId,
                 sortBy: .endedAtDesc,
                 limit: 100,
                 statusFilter: statusFilter
             )
+            applySavedTripCap(to: fetchedEntries)
         } catch {
             errorMessage = error.localizedDescription
             entries = []
+            hiddenSavedTripCount = 0
         }
         isLoading = false
+    }
+
+    func showSavedTripLimitPaywall() {
+        FeedbackService.shared.buttonTap()
+        shouldPresentSavedTripPaywall = true
+    }
+
+    func dismissSavedTripPaywall() {
+        shouldPresentSavedTripPaywall = false
+    }
+
+    private func applySavedTripCap(to fetchedEntries: [TravelLogEntry]) {
+        savedTripCapKind = savedTripAccessPolicy.savedTripCapKind(for: authService.currentUser)
+        guard let limit = savedTripAccessPolicy.visibleSavedTripLimit(for: authService.currentUser) else {
+            entries = fetchedEntries
+            hiddenSavedTripCount = 0
+            return
+        }
+
+        entries = Array(fetchedEntries.prefix(limit))
+        hiddenSavedTripCount = max(0, fetchedEntries.count - limit)
+        logSavedTripLimitHitIfNeeded(totalCount: fetchedEntries.count, limit: limit)
+    }
+
+    private func logSavedTripLimitHitIfNeeded(totalCount: Int, limit: Int) {
+        guard hiddenSavedTripCount > 0 else { return }
+        let tier = savedTripAccessPolicy.tierName(for: authService.currentUser)
+        let signature = "\(totalCount)-\(limit)-\(tier)"
+        guard signature != savedTripLimitAnalyticsSignature else { return }
+        savedTripLimitAnalyticsSignature = signature
+        analytics.log(.savedTripLimitHit(
+            source: "travel_log",
+            savedTripCount: totalCount,
+            savedTripLimit: limit,
+            tier: tier
+        ))
     }
 
     /// Open summary for a session: fetch session, games, discoveries from event repo; compute credits; build and set selectedSummary. Recap is built from canonical data only: TripSession, GameInstance, and TripActivityEvent-derived discoveries and credits.

@@ -75,4 +75,12 @@ struct PaywallViewModelTests {
         #expect(spy.loggedEvents.contains { $0.name == "paywall_viewed" })
         #expect(spy.loggedEvents.first { $0.name == "paywall_viewed" }?.parameters?["source"] as? String == "test")
     }
+
+    @Test @MainActor func savedTripContextUsesAnonymousSignUpCopy() async throws {
+        let vm = PaywallViewModel(bridge: MockRevenueCatBridge(tier: .guest), analytics: AnalyticsLoggingSpy())
+
+        vm.setSavedTripLimitContext(isAnonymous: true)
+
+        #expect(vm.unlockReasonTitle == "Sign up to keep more saved trips".localized)
+    }
 }

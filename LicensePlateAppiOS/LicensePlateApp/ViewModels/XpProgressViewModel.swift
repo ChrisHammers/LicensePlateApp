@@ -15,6 +15,14 @@ final class XpProgressViewModel: ObservableObject {
     @Published private(set) var lastUpdated: Date?
     @Published private(set) var lastError: String?
 
+    var displayedTotalXp: Int {
+        (serverFinalXp ?? 0) + ledgerProvisionalPending
+    }
+
+    var isUsingLocalFallback: Bool {
+        serverFinalXp == nil
+    }
+
     private let userId: String
     private let xpLedger: XpLedgerRepositoryProtocol
     private let snapshotProvider: () -> Int?

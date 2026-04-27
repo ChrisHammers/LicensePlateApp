@@ -172,3 +172,9 @@ private struct PaywallPackageRow: View {
     vm.setTripLimitContext()
     return PaywallView(viewModel: vm, onDismiss: {}, source: "trip_limit_create")
 }
+
+#Preview("Paywall - Saved Trip Limit") {
+    let vm = PaywallViewModel()
+    vm.setSavedTripLimitContext(isAnonymous: false)
+    return PaywallView(viewModel: vm, onDismiss: {}, source: "saved_trip_limit")
+}

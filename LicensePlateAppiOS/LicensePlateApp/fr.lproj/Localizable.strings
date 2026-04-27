@@ -607,6 +607,15 @@
 "Active trip limit reached" = "Limite de trajets actifs atteinte";
 "Upgrade to keep more road trips active at once." = "Passez à une offre supérieure pour garder plus de trajets actifs à la fois.";
 "You have reached your active trip limit." = "Vous avez atteint votre limite de trajets actifs.";
+"Saved trip limit reached" = "Limite de trajets enregistrés atteinte";
+"Sign up to keep more saved trips" = "Créez un compte pour garder plus de trajets enregistrés";
+"Create an account to keep more saved trips visible across devices." = "Créez un compte pour garder plus de trajets enregistrés visibles sur tous vos appareils.";
+"Upgrade to view older saved trips" = "Passez à une offre supérieure pour voir les anciens trajets enregistrés.";
+"savedTrips.hiddenCount.signUp" = "Créez un compte pour garder %d trajets enregistrés supplémentaires visibles.";
+"savedTrips.hiddenCount.upgrade" = "Passez à une offre supérieure pour voir %d anciens trajets enregistrés.";
+"Older saved trips are locked" = "Les anciens trajets enregistrés sont verrouillés";
+"View older saved trips" = "Voir les anciens trajets enregistrés";
+"Shows upgrade options for older saved trips" = "Affiche les options pour débloquer les anciens trajets enregistrés";
 
 // Step 6.9.3 — Trip vs game lifecycle
 "Trips cannot be reset." = "Les trajets ne peuvent pas être réinitialisés.";
@@ -709,6 +718,8 @@
 "profile.xp.section_title" = "XP et progression";
 "profile.xp.server_total" = "XP synchronisée (compte)";
 "profile.xp.server_total_loading" = "L’XP synchronisée apparaîtra lorsque vous serez en ligne.";
+"profile.xp.local_fallback_total" = "XP actuelle sur cet appareil";
+"profile.xp.local_fallback_note" = "L’XP synchronisée n’est pas encore disponible, cette valeur inclut donc la progression locale en attente.";
 "profile.xp.pending_ledger_line" = "Sur cet appareil : +%d XP encore en attente de résolution compétitive.";
 "profile.xp.pending_section.a11y" = "XP compétitive en attente sur cet appareil";
 "profile.xp.rank_band_title" = "Progression dans la bande actuelle (visuel)";

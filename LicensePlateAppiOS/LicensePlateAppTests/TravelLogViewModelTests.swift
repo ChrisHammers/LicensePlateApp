@@ -278,4 +278,117 @@ struct TravelLogViewModelTests {
         #expect(viewModel.selectedSummary != nil)
         #expect(viewModel.selectedSummary?.xpRecapLines.isEmpty == false)
     }
+
+    @Test func anonymousUserShowsThreeNewestSavedTripsAndHiddenCount() async throws {
+        let uid = "anon_saved_trips"
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: uid, userName: "Anon", firebaseUID: uid)
+
+        let entitlementService = EntitlementService(
+            revenueCatBridge: MockRevenueCatBridge(tier: .guest),
+            accountStateProvider: StaticAccountStateProvider(.firebaseAnonymous)
+        )
+        entitlementService.setCurrentUserId(uid)
+
+        let mockLog = MockTravelLogRepository()
+        mockLog.setSummaryProjections(Self.travelLogEntries(count: 6))
+        let analytics = AnalyticsLoggingSpy()
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: mockLog,
+            tripSessionRepository: MockTripSessionRepository(),
+            gameInstanceRepository: MockGameInstanceRepository(),
+            tripActivityEventRepository: MockTripActivityEventRepository(),
+            authService: auth,
+            savedTripAccessPolicy: SavedTripAccessPolicy(
+                entitlementService: entitlementService,
+                accountStateProvider: StaticAccountStateProvider(.firebaseAnonymous)
+            ),
+            analytics: analytics
+        )
+
+        viewModel.loadEntries(statusFilter: .endedOnly)
+
+        #expect(viewModel.entries.count == 3)
+        #expect(viewModel.hiddenSavedTripCount == 3)
+        #expect(analytics.loggedEvents.contains { $0.name == "saved_trip_limit_hit" })
+    }
+
+    @Test func signedUpFreeUserShowsFiveNewestSavedTripsAndHiddenCount() async throws {
+        let uid = "signed_saved_trips"
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: uid, userName: "Signed", firebaseUID: uid)
+
+        let entitlementService = EntitlementService(
+            revenueCatBridge: MockRevenueCatBridge(tier: .guest),
+            accountStateProvider: StaticAccountStateProvider(.signedIn)
+        )
+        entitlementService.setCurrentUserId(uid)
+
+        let mockLog = MockTravelLogRepository()
+        mockLog.setSummaryProjections(Self.travelLogEntries(count: 7))
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: mockLog,
+            tripSessionRepository: MockTripSessionRepository(),
+            gameInstanceRepository: MockGameInstanceRepository(),
+            tripActivityEventRepository: MockTripActivityEventRepository(),
+            authService: auth,
+            savedTripAccessPolicy: SavedTripAccessPolicy(
+                entitlementService: entitlementService,
+                accountStateProvider: StaticAccountStateProvider(.signedIn)
+            ),
+            analytics: AnalyticsLoggingSpy()
+        )
+
+        viewModel.loadEntries(statusFilter: .endedOnly)
+
+        #expect(viewModel.entries.count == 5)
+        #expect(viewModel.hiddenSavedTripCount == 2)
+    }
+
+    @Test func goldUserIsNotSavedTripCapped() async throws {
+        let uid = "gold_saved_trips"
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: uid, userName: "Gold", firebaseUID: uid)
+
+        let entitlementService = EntitlementService(
+            revenueCatBridge: MockRevenueCatBridge(tier: .gold),
+            accountStateProvider: StaticAccountStateProvider(.signedIn)
+        )
+        entitlementService.setCurrentUserId(uid)
+
+        let mockLog = MockTravelLogRepository()
+        mockLog.setSummaryProjections(Self.travelLogEntries(count: 7))
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: mockLog,
+            tripSessionRepository: MockTripSessionRepository(),
+            gameInstanceRepository: MockGameInstanceRepository(),
+            tripActivityEventRepository: MockTripActivityEventRepository(),
+            authService: auth,
+            savedTripAccessPolicy: SavedTripAccessPolicy(
+                entitlementService: entitlementService,
+                accountStateProvider: StaticAccountStateProvider(.signedIn)
+            ),
+            analytics: AnalyticsLoggingSpy()
+        )
+
+        viewModel.loadEntries(statusFilter: .endedOnly)
+
+        #expect(viewModel.entries.count == 7)
+        #expect(viewModel.hiddenSavedTripCount == 0)
+    }
+
+    private static func travelLogEntries(count: Int) -> [TravelLogEntry] {
+        (0..<count).map { index in
+            TravelLogEntry(
+                id: "entry-\(index)",
+                sessionId: UUID(),
+                tripName: "Trip \(index)",
+                endedAt: Date().addingTimeInterval(Double(-index * 60)),
+                summary: "\(index) regions found",
+                participantCount: 1,
+                gameCount: 1,
+                status: .ended
+            )
+        }
+    }
 }

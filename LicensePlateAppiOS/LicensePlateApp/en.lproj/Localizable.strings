@@ -615,6 +615,15 @@
 "Active trip limit reached" = "Active trip limit reached";
 "Upgrade to keep more road trips active at once." = "Upgrade to keep more road trips active at once.";
 "You have reached your active trip limit." = "You have reached your active trip limit.";
+"Saved trip limit reached" = "Saved trip limit reached";
+"Sign up to keep more saved trips" = "Sign up to keep more saved trips";
+"Create an account to keep more saved trips visible across devices." = "Create an account to keep more saved trips visible across devices.";
+"Upgrade to view older saved trips" = "Upgrade to view older saved trips.";
+"savedTrips.hiddenCount.signUp" = "Sign up to keep %d more saved trips visible.";
+"savedTrips.hiddenCount.upgrade" = "Upgrade to view %d older saved trips.";
+"Older saved trips are locked" = "Older saved trips are locked";
+"View older saved trips" = "View older saved trips";
+"Shows upgrade options for older saved trips" = "Shows upgrade options for older saved trips";
 
 // Step 6.9.3 — Trip vs game lifecycle
 "Trips cannot be reset." = "Trips cannot be reset.";
@@ -740,6 +749,8 @@
 "profile.xp.section_title" = "XP & progress";
 "profile.xp.server_total" = "Synced XP (account)";
 "profile.xp.server_total_loading" = "Synced XP will appear when you are online.";
+"profile.xp.local_fallback_total" = "Current XP on this device";
+"profile.xp.local_fallback_note" = "Synced XP is not available yet, so this includes local pending progress.";
 "profile.xp.pending_ledger_line" = "On this device: +%d XP still pending competitive resolution.";
 "profile.xp.pending_section.a11y" = "Pending competitive XP on this device";
 "profile.xp.rank_band_title" = "Progress in current band (visual)";

@@ -31,9 +31,24 @@ struct ProfileXpProgressSection: View {
                 .accessibilityLabel("profile.xp.server_total".localized)
                 .accessibilityValue("\(xp)")
             } else {
-                Text("profile.xp.server_total_loading".localized)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("profile.xp.local_fallback_total".localized)
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                        Spacer()
+                        Text("\(viewModel.displayedTotalXp)")
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    Text(viewModel.ledgerProvisionalPending > 0 ? "profile.xp.local_fallback_note".localized : "profile.xp.server_total_loading".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("profile.xp.local_fallback_total".localized)
+                .accessibilityValue("\(viewModel.displayedTotalXp)")
             }
 
             if viewModel.ledgerProvisionalPending > 0 {

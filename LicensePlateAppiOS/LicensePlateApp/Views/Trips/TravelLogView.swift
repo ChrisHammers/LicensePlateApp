@@ -11,6 +11,7 @@ import SwiftData
 struct TravelLogView: View {
     @ObservedObject var viewModel: TravelLogViewModel
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var savedTripPaywallViewModel = PaywallViewModel()
 
     private let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -97,6 +98,20 @@ struct TravelLogView: View {
                     }
                 }
             }
+            .sheet(isPresented: $viewModel.shouldPresentSavedTripPaywall, onDismiss: {
+                viewModel.dismissSavedTripPaywall()
+            }) {
+                PaywallView(
+                    viewModel: savedTripPaywallViewModel,
+                    onDismiss: {
+                        viewModel.dismissSavedTripPaywall()
+                    },
+                    source: "saved_trip_limit"
+                )
+                .onAppear {
+                    savedTripPaywallViewModel.setSavedTripLimitContext(isAnonymous: viewModel.isCurrentUserAnonymous)
+                }
+            }
         }
     }
 
@@ -132,9 +147,54 @@ struct TravelLogView: View {
                     .accessibilityLabel(accessibilityLabel(for: entry))
                     .accessibilityHint("Double tap to view trip summary".localized)
             }
+            if viewModel.hiddenSavedTripCount > 0 {
+                savedTripLimitRow
+                    .listRowBackground(Color.Theme.cardBackground)
+            }
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+    }
+
+    private var savedTripLimitRow: some View {
+        Button {
+            viewModel.showSavedTripLimitPaywall()
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "lock.fill")
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Older saved trips are locked".localized)
+                        .font(.system(.headline, design: .rounded))
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    Text(savedTripLimitMessage)
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                    Text("View older saved trips".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                }
+
+                Spacer()
+            }
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Older saved trips are locked".localized)
+        .accessibilityValue(savedTripLimitMessage)
+        .accessibilityHint("Shows upgrade options for older saved trips".localized)
+    }
+
+    private var savedTripLimitMessage: String {
+        if viewModel.isCurrentUserAnonymous {
+            return "savedTrips.hiddenCount.signUp".localized(viewModel.hiddenSavedTripCount)
+        }
+        return "savedTrips.hiddenCount.upgrade".localized(viewModel.hiddenSavedTripCount)
     }
 
     private func accessibilityLabel(for entry: TravelLogEntry) -> String {
@@ -220,6 +280,34 @@ extension TripSummary: Identifiable {
             PreviewTravelLogFixtures.travelLogEntry(),
             PreviewTravelLogFixtures.travelLogEntryWithSummaries()
         ]
+    ))
+    .environmentObject(FirebaseAuthService())
+    .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self], inMemory: true)
+}
+
+#Preview("Travel Log - Saved Trip Cap") {
+    TravelLogView(viewModel: TravelLogViewModel(
+        travelLogRepository: TravelLogRepository.shared,
+        tripSessionRepository: TripSessionRepository.shared,
+        gameInstanceRepository: GameInstanceRepository.shared,
+        tripActivityEventRepository: TripActivityEventRepository.shared,
+        authService: FirebaseAuthService(),
+        previewEntries: [
+            PreviewTravelLogFixtures.travelLogEntry(),
+            PreviewTravelLogFixtures.travelLogEntryWithSummaries(),
+            TravelLogEntry(
+                id: "preview-travel-log-3",
+                sessionId: UUID(),
+                tripName: "Weekend Drive",
+                endedAt: Date().addingTimeInterval(-86_400),
+                summary: "8 regions found",
+                participantCount: 1,
+                gameCount: 1,
+                status: .ended
+            )
+        ],
+        previewHiddenSavedTripCount: 2,
+        previewSavedTripCapKind: .anonymous
     ))
     .environmentObject(FirebaseAuthService())
     .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self], inMemory: true)

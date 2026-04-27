@@ -46,6 +46,7 @@ struct AnalyticsServiceTests {
             (.paywallViewed(source: nil), "paywall_viewed"),
             (.paywallDismissed, "paywall_dismissed"),
             (.tripLimitHit(source: "trip_limit_create", activeTripCount: 1, activeTripLimit: 1, tier: "signedUp"), "trip_limit_hit"),
+            (.savedTripLimitHit(source: "travel_log", savedTripCount: 6, savedTripLimit: 3, tier: "guest"), "saved_trip_limit_hit"),
             (.avatarPickerOpened(source: "test"), "avatar_picker_opened"),
             (.avatarSaved(avatarId: "id", source: "profile"), "avatar_saved"),
             (.notificationDeliveryFailed(error: "err"), "notification_delivery_failed"),
@@ -110,6 +111,17 @@ struct AnalyticsServiceTests {
         #expect(limitHit.parameters?["active_trip_count"] as? Int == 1)
         #expect(limitHit.parameters?["active_trip_limit"] as? Int == 1)
         #expect(limitHit.parameters?["tier"] as? String == "signedUp")
+
+        let savedTripLimitHit = AnalyticsService.Event.savedTripLimitHit(
+            source: "travel_log",
+            savedTripCount: 6,
+            savedTripLimit: 3,
+            tier: "guest"
+        )
+        #expect(savedTripLimitHit.parameters?["source"] as? String == "travel_log")
+        #expect(savedTripLimitHit.parameters?["saved_trip_count"] as? Int == 6)
+        #expect(savedTripLimitHit.parameters?["saved_trip_limit"] as? Int == 3)
+        #expect(savedTripLimitHit.parameters?["tier"] as? String == "guest")
     }
 
     @Test @MainActor func spyRecordsTypedEvents() async throws {

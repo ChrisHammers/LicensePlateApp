@@ -13,6 +13,8 @@ enum PaywallContext {
     case general
     case avatar(AvatarUnlockSource?)
     case tripLimit
+    case savedTripLimit
+    case signUpToSaveTrips
 }
 
 @MainActor
@@ -47,6 +49,12 @@ final class PaywallViewModel: ObservableObject {
         if case .tripLimit = context {
             return "Active trip limit reached".localized
         }
+        if case .savedTripLimit = context {
+            return "Saved trip limit reached".localized
+        }
+        if case .signUpToSaveTrips = context {
+            return "Sign up to keep more saved trips".localized
+        }
         guard let source = unlockContext else { return "Upgrade to Premium".localized }
         switch source {
         case .guest: return "Available to everyone".localized
@@ -67,6 +75,12 @@ final class PaywallViewModel: ObservableObject {
     var unlockReasonMessage: String {
         if case .tripLimit = context {
             return "Upgrade to keep more road trips active at once.".localized
+        }
+        if case .savedTripLimit = context {
+            return "Upgrade to view older saved trips.".localized
+        }
+        if case .signUpToSaveTrips = context {
+            return "Create an account to keep more saved trips visible across devices.".localized
         }
         guard let source = unlockContext else { return "Get more from RoadTrip Royale with premium features.".localized }
         switch source {
@@ -99,6 +113,11 @@ final class PaywallViewModel: ObservableObject {
 
     func setTripLimitContext() {
         context = .tripLimit
+        objectWillChange.send()
+    }
+
+    func setSavedTripLimitContext(isAnonymous: Bool) {
+        context = isAnonymous ? .signUpToSaveTrips : .savedTripLimit
         objectWillChange.send()
     }
 

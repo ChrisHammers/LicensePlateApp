@@ -36,4 +36,5 @@ export { onAuthUserDeleted } from "./auth";
 export { writeAuditLog } from "./audit";
 export { onTripEndedUpdatePublicLifetimeStats } from "./publicLifetimeStatsOnTripEnded";
 export { onActivityEventUpdateUserProgression } from "./progressionOnActivityEvent";
+export { ensureUserProgressionDocument } from "./progressionBootstrap";
 
