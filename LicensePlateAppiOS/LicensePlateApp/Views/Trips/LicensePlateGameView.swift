@@ -361,6 +361,10 @@ struct LicensePlateGameView: View {
         return "\(enabledRegions.count - foundCount)"
     }
 
+    private var currentUserId: String {
+        authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+    }
+
     private var header: some View {
         VStack(spacing: 16) {
 //            Text(currentSession.name)
@@ -429,7 +433,7 @@ struct LicensePlateGameView: View {
                                     .font(.system(.caption2, design: .rounded))
                                     .foregroundStyle(Color.Theme.softBrown)
                             }
-                            Text(competitiveDisplayNames[c.participantId] ?? c.participantId)
+                            Text(competitiveDisplayName(for: c.participantId))
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                                 .font(.system(.caption, design: .rounded))
@@ -473,9 +477,17 @@ struct LicensePlateGameView: View {
         viewModel.competitiveStandings.map { "\($0.contribution.participantId):\($0.rank):\($0.contribution.weightedScore)" }.joined(separator: "|")
     }
 
+    private func competitiveDisplayName(for participantId: String) -> String {
+        let name = competitiveDisplayNames[participantId] ?? participantId
+        guard !currentUserId.isEmpty, participantId == currentUserId else {
+            return name
+        }
+        return "\(name) [You]"
+    }
+
     private func competitiveStandingAccessibility(row: RankedParticipantContribution) -> String {
         let c = row.contribution
-        let name = competitiveDisplayNames[c.participantId] ?? c.participantId
+        let name = competitiveDisplayName(for: c.participantId)
         var parts = [name, "Rank #%d".localized(row.rank)]
         if row.isTiedOnScore { parts.append("Tied".localized) }
         parts.append("%d first finds".localized(c.firstFindCount))

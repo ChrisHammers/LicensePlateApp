@@ -90,7 +90,7 @@ struct TravelLogView: View {
             }
             .sheet(item: $viewModel.selectedSummary) { summary in
                 NavigationStack {
-                    TripSummaryView(summary: summary) {
+                    TripSummaryView(summary: summary, currentUserId: viewModel.currentUserId) {
                         viewModel.clearSelection()
                     }
                     .onAppear {

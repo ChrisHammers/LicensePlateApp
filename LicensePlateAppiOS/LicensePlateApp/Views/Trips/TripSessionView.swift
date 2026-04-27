@@ -82,7 +82,8 @@ struct TripSessionView: View {
             if viewModel.showsTripCompetitiveLeaderboard, !viewModel.tripLeaderboardRows.isEmpty {
                 TripSessionLeaderboardSection(
                     gameRowCount: viewModel.gameRowItems.count,
-                    rows: viewModel.tripLeaderboardRows
+                    rows: viewModel.tripLeaderboardRows,
+                    currentUserId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id
                 )
             }
 
@@ -195,6 +196,7 @@ struct TripSessionView: View {
 private struct TripSessionLeaderboardSection: View {
     let gameRowCount: Int
     let rows: [RankedParticipantContribution]
+    let currentUserId: String?
     @State private var displayNames: [String: String] = [:]
 
     var body: some View {
@@ -212,7 +214,7 @@ private struct TripSessionLeaderboardSection: View {
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
                     }
-                    Text(displayNames[c.participantId] ?? "Unknown player".localized)
+                    Text(displayName(for: c.participantId))
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .font(.system(.subheadline, design: .rounded))
@@ -263,9 +265,17 @@ private struct TripSessionLeaderboardSection: View {
         rows.map { "\($0.contribution.participantId):\($0.rank):\($0.contribution.weightedScore)" }.joined(separator: "|")
     }
 
+    private func displayName(for participantId: String) -> String {
+        let name = displayNames[participantId] ?? "Unknown player".localized
+        guard let currentUserId, !currentUserId.isEmpty, participantId == currentUserId else {
+            return name
+        }
+        return "\(name) [You]"
+    }
+
     private func leaderboardRowAccessibilityLabel(row: RankedParticipantContribution) -> String {
         let c = row.contribution
-        let name = displayNames[c.participantId] ?? "Unknown player".localized
+        let name = displayName(for: c.participantId)
         var parts: [String] = [name]
         parts.append("Rank #%d".localized(row.rank))
         if row.isTiedOnScore { parts.append("Tied".localized) }
@@ -328,7 +338,8 @@ private struct GameRowView: View {
     List {
         TripSessionLeaderboardSection(
             gameRowCount: 2,
-            rows: PreviewSummaryFixtures.tripSummaryCompetitiveTied().rankedParticipants
+            rows: PreviewSummaryFixtures.tripSummaryCompetitiveTied().rankedParticipants,
+            currentUserId: nil
         )
     }
     .listStyle(.insetGrouped)

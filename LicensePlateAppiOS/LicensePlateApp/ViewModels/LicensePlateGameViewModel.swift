@@ -94,6 +94,17 @@ final class LicensePlateGameViewModel: ObservableObject {
         return currentSession.createdBy == id
     }
 
+    private var currentUserId: String {
+        authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+    }
+
+    private func nameForParticipant(_ participantId: String, displayName: String) -> String {
+        guard !currentUserId.isEmpty, participantId == currentUserId else {
+            return displayName
+        }
+        return "\(displayName) [You]"
+    }
+
     /// Trip container is in progress (user has started the trip).
     var isTripContainerActive: Bool {
         currentSession.status == .active && currentSession.startedAt != nil
@@ -331,7 +342,10 @@ final class LicensePlateGameViewModel: ObservableObject {
         }
         let regionName = PlateRegion.all.first(where: { $0.id == info.regionId })?.name ?? info.regionId
         let names = await UserRepository.shared.displayNames(forUserIds: [info.firstFinderParticipantId])
-        let firstName = names[info.firstFinderParticipantId] ?? info.firstFinderParticipantId
+        let firstName = nameForParticipant(
+            info.firstFinderParticipantId,
+            displayName: names[info.firstFinderParticipantId] ?? info.firstFinderParticipantId
+        )
         let tripName = info.tripSessionName
         let message: String
         if info.rejectionReasonRaw == DiscoveryRejectionReason.serverRejectedLateCompetitive.rawValue
@@ -624,9 +638,10 @@ final class LicensePlateGameViewModel: ObservableObject {
                 guard !id.isEmpty, !seen.contains(id) else { return nil }
                 seen.insert(id)
                 let identity = identities[id]
+                let displayName = nameForParticipant(id, displayName: identity?.displayName ?? id)
                 return FinderAvatarPresentation(
                     participantId: id,
-                    displayName: identity?.displayName ?? id,
+                    displayName: displayName,
                     avatarId: identity?.avatarId,
                     legacyFallbackImageName: identity?.legacyFallbackImageName,
                     foundAt: discovery.discoveredAt

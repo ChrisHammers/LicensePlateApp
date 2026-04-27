@@ -9,6 +9,7 @@ import SwiftUI
 
 struct TripSummaryView: View {
     let summary: TripSummary
+    let currentUserId: String?
     var onDismiss: (() -> Void)?
 
     @State private var participantDisplayNames: [String: String] = [:]
@@ -84,10 +85,26 @@ struct TripSummaryView: View {
         PlateRegion.all.first(where: { $0.id == targetId })?.name ?? targetId
     }
 
+    private func displayName(for participantId: String) -> String {
+        let name = participantDisplayNames[participantId] ?? participantId
+        guard let currentUserId, !currentUserId.isEmpty, participantId == currentUserId else {
+            return name
+        }
+        return "\(name) [You]"
+    }
+
+    private func decoratedParticipantDisplayNames(for participantIds: [String]) -> [String: String] {
+        var names: [String: String] = [:]
+        for participantId in participantIds {
+            names[participantId] = displayName(for: participantId)
+        }
+        return names
+    }
+
     /// Resolved "found by" label using display names when available.
     private func foundByLabel(for target: TargetDiscoverySummary) -> String {
         if let firstId = target.firstFinderParticipantId, target.allFinderParticipantIds.count == 1 {
-            return "Found by %@".localized(participantDisplayNames[firstId] ?? firstId)
+            return "Found by %@".localized(displayName(for: firstId))
         }
         if target.allFinderParticipantIds.count > 1 {
             let mode: GameMode? = {
@@ -97,14 +114,14 @@ struct TripSummaryView: View {
             let effectiveMode = mode ?? .collaborative
             if GameModeRulesEngine.displayFirstFinderProminently(mode: effectiveMode),
                let firstId = target.firstFinderParticipantId {
-                return "Found by %@".localized(participantDisplayNames[firstId] ?? firstId)
+                return "Found by %@".localized(displayName(for: firstId))
             }
             if effectiveMode == .competitive {
                 return "%d finders".localized(target.allFinderParticipantIds.count)
             }
             return ParticipantDiscoveryResolver.collaborativeMultiFinderDisplayLabel(
                 orderedParticipantIds: target.allFinderParticipantIds,
-                displayNames: participantDisplayNames
+                displayNames: decoratedParticipantDisplayNames(for: target.allFinderParticipantIds)
             )
         }
         return target.summaryLabel
@@ -300,7 +317,7 @@ struct TripSummaryView: View {
                                 .foregroundStyle(Color.Theme.softBrown)
                         }
                     }
-                    Text(participantDisplayNames[c.participantId] ?? c.participantId)
+                    Text(displayName(for: c.participantId))
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .font(.system(.subheadline, design: .rounded))
@@ -333,7 +350,7 @@ struct TripSummaryView: View {
 
     private func participantRowAccessibilityLabel(row: RankedParticipantContribution) -> String {
         let c = row.contribution
-        let name = participantDisplayNames[c.participantId] ?? c.participantId
+        let name = displayName(for: c.participantId)
         var parts: [String] = [name]
         if summary.hasCompetitiveGame {
             parts.append("Rank #%d".localized(row.rank))
@@ -492,42 +509,42 @@ struct TripSummaryView: View {
 
 #Preview("Solo summary") {
     NavigationStack {
-        TripSummaryView(summary: PreviewSummaryFixtures.tripSummarySolo(), onDismiss: nil)
+        TripSummaryView(summary: PreviewSummaryFixtures.tripSummarySolo(), currentUserId: nil, onDismiss: nil)
     }
 }
 
 #Preview("Multi-game summary") {
     NavigationStack {
-        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryMultiGame(), onDismiss: nil)
+        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryMultiGame(), currentUserId: nil, onDismiss: nil)
     }
 }
 
 #Preview("Discovery highlights — same region, two games") {
     NavigationStack {
-        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryDuplicateRegionAcrossGames(), onDismiss: nil)
+        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryDuplicateRegionAcrossGames(), currentUserId: nil, onDismiss: nil)
     }
 }
 
 #Preview("Collaborative — two finders, one region") {
     NavigationStack {
-        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryCollaborativeTwoFindersOneRegion(), onDismiss: nil)
+        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryCollaborativeTwoFindersOneRegion(), currentUserId: nil, onDismiss: nil)
     }
 }
 
 #Preview("Competitive — tied standings") {
     NavigationStack {
-        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryCompetitiveTied(), onDismiss: nil)
+        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryCompetitiveTied(), currentUserId: nil, onDismiss: nil)
     }
 }
 
 #Preview("Collaborative — three finders, one region") {
     NavigationStack {
-        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryCollaborativeThreeFindersOneRegion(), onDismiss: nil)
+        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryCollaborativeThreeFindersOneRegion(), currentUserId: nil, onDismiss: nil)
     }
 }
 
 #Preview("Discovery highlights — show all control") {
     NavigationStack {
-        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryManyDiscoveryHighlights(), onDismiss: nil)
+        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryManyDiscoveryHighlights(), currentUserId: nil, onDismiss: nil)
     }
 }
