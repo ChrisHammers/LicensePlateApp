@@ -22,6 +22,10 @@ service cloud.firestore {
       return userDoc(userId).data.isRetiredGeneral == true;
     }
 
+    function userDocHasNoPrivateFields() {
+      return !request.resource.data.keys().hasAny(["deviceIdentifier", "lastLoginLocationData", "lastLoginLocations", "lastLoginLocation"]);
+    }
+
     function isFamilyMember(familyId) {
       return exists(/databases/$(database)/documents/families/$(familyId)/members/$(uid()));
     }
@@ -41,9 +45,14 @@ service cloud.firestore {
     // USERS
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && uid() == userId;
-      allow update: if isSignedIn() && uid() == userId;
+      allow create: if isSignedIn() && uid() == userId && userDocHasNoPrivateFields();
+      allow update: if isSignedIn() && uid() == userId && userDocHasNoPrivateFields();
       allow delete: if false; // handle via backend flows if needed
+    }
+
+    match /users/{userId}/private/{docId} {
+      allow read, write: if isSignedIn() && uid() == userId &&
+        docId == "lastLoginLocationData";
     }
 
     // Public lifetime stats (read-only aggregate mirror; writes via Admin SDK / Cloud Functions only)

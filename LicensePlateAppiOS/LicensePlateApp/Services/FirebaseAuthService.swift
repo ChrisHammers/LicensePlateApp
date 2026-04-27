@@ -1113,7 +1113,9 @@ class FirebaseAuthService: ObservableObject {
         lastLoginTrackingTime = .now
         
         // Always update last login date
-        user.lastDateLoggedIn = .now
+        let loginDate = Date()
+        user.lastDateLoggedIn = loginDate
+        user.lastUpdated = loginDate
         
         // Check location permission and update location if available
         let locationManager = CLLocationManager()
@@ -1124,13 +1126,26 @@ class FirebaseAuthService: ObservableObject {
             if let location = await getCurrentLocation() {
                 let loginLocation = LoginLocation(
                     latitude: location.coordinate.latitude,
-                    longitude: location.coordinate.longitude
+                    longitude: location.coordinate.longitude,
+                    timestamp: loginDate
                 )
                 
                 // Add new location and keep only last 5
                 user.lastLoginLocation.append(loginLocation)
                 if user.lastLoginLocation.count > 5 {
                     user.lastLoginLocation.removeFirst()
+                }
+
+                if isOnline, let firebaseUID = user.firebaseUID {
+                    Task {
+                        do {
+                            try await appendPrivateLoginLocation(location, timestamp: loginDate, userId: firebaseUID)
+                        } catch {
+                            #if DEBUG
+                            print("⚠️ Failed to append private login location: \(error)")
+                            #endif
+                        }
+                    }
                 }
             }
         }
@@ -1353,6 +1368,24 @@ class FirebaseAuthService: ObservableObject {
         try? modelContext?.save()
     }
 
+    private func privateLoginLocationDataRef(userId: String) -> DocumentReference {
+        db.collection("users").document(userId).collection("private").document("lastLoginLocationData")
+    }
+
+    private func appendPrivateLoginLocation(_ location: CLLocation, timestamp: Date, userId: String) async throws {
+        let locationData: [String: Any] = [
+            "latitude": location.coordinate.latitude,
+            "longitude": location.coordinate.longitude,
+            "timestamp": Timestamp(date: timestamp),
+            "clientMetadata": ClientMetadata.current.firestoreValue
+        ]
+
+        try await privateLoginLocationDataRef(userId: userId).setData([
+            "lastLoginLocations": FieldValue.arrayUnion([locationData]),
+            "updatedAt": FieldValue.serverTimestamp()
+        ], merge: true)
+    }
+
     private func ensureUserProgressionDocumentIfPossible(userId: String?) async {
         guard isOnline,
               let userId,
@@ -1469,21 +1502,11 @@ class FirebaseAuthService: ObservableObject {
             data["equippedBadgeId"] = equippedBadgeId
         }
         data["wasEverInFamily"] = user.wasEverInFamily
-        if let deviceIdentifier = user.deviceIdentifier {
-            data["deviceIdentifier"] = deviceIdentifier
-        }
+        data["deviceIdentifier"] = FieldValue.delete()
         if let lastDateLoggedIn = user.lastDateLoggedIn {
             data["lastDateLoggedIn"] = Timestamp(date: lastDateLoggedIn)
         }
-        if !user.lastLoginLocation.isEmpty {
-            data["lastLoginLocation"] = user.lastLoginLocation.map { location in
-                [
-                    "latitude": location.latitude,
-                    "longitude": location.longitude,
-                    "timestamp": Timestamp(date: location.timestamp)
-                ]
-            }
-        }
+        data["lastLoginLocation"] = FieldValue.delete()
         
         // Friends & Family fields
         if let activeFamilyId = user.activeFamilyId {
