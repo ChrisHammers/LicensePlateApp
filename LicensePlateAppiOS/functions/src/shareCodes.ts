@@ -1,7 +1,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
-import { clientMetadataWrite, normalizeClientMetadata } from "./clientMetadata";
+import { normalizeClientMetadata } from "./clientMetadata";
 
 const db = admin.firestore();
 
@@ -62,7 +62,6 @@ export const createShareCode = functions.https.onCall(
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       isRevoked: false,
-      ...clientMetadataWrite(clientMetadata),
     };
 
     if (familyId) {
@@ -152,7 +151,6 @@ export const redeemShareCode = functions.https.onCall(
       codeId: codeDoc.id,
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAtInvite),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...clientMetadataWrite(clientMetadata),
     };
 
     if (codeData.familyId) {

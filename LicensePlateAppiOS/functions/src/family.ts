@@ -3,7 +3,7 @@ import * as admin from "firebase-admin";
 import { canAddMemberToFamily } from "./utils/validation";
 import { writeAuditLog } from "./audit";
 import { getFCMToken, sendPushNotification } from "./utils/notifications";
-import { clientMetadataWrite, normalizeClientMetadata } from "./clientMetadata";
+import { normalizeClientMetadata } from "./clientMetadata";
 
 const db = admin.firestore();
 
@@ -51,7 +51,6 @@ export const createFamily = functions.https.onCall(
       creatorId: userId,
       status: "active",
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...clientMetadataWrite(clientMetadata),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
@@ -65,7 +64,6 @@ export const createFamily = functions.https.onCall(
         canEditSettings: true,
       },
       joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...clientMetadataWrite(clientMetadata),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -73,7 +71,6 @@ export const createFamily = functions.https.onCall(
     if (!userData.isRetiredGeneral) {
       await db.collection("users").doc(userId).update({
         activeFamilyId: familyRef.id,
-        ...clientMetadataWrite(clientMetadata),
       });
     }
 
@@ -175,7 +172,6 @@ export const sendFamilyInvite = functions.https.onCall(
       method: method || "search",
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...clientMetadataWrite(clientMetadata),
     };
 
     const inviteRef = await db.collection("invites").add(inviteData);
@@ -269,7 +265,6 @@ export const respondToFamilyInvite_UserStep = functions.https.onCall(
     batch.update(inviteDoc.ref, {
       status: response === "accept" ? "accepted" : "declined",
       respondedAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...clientMetadataWrite(clientMetadata),
     });
 
     if (response === "accept") {
@@ -280,7 +275,6 @@ export const respondToFamilyInvite_UserStep = functions.https.onCall(
         method: inviteData.method,
         status: "pending",
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        ...clientMetadataWrite(clientMetadata),
       };
 
       const requestRef = db
@@ -414,7 +408,6 @@ export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
           canEditSettings: false,
         },
         joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-        ...clientMetadataWrite(clientMetadata),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       };
 
@@ -427,7 +420,6 @@ export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
       if (!targetUserData.isRetiredGeneral) {
         batch.update(db.collection("users").doc(requestData.userId), {
           activeFamilyId: familyId,
-          ...clientMetadataWrite(clientMetadata),
         });
       }
 
@@ -435,7 +427,6 @@ export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
       batch.update(requestDoc.ref, {
         status: "approved",
         resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
-        ...clientMetadataWrite(clientMetadata),
       });
 
       // Send push notification
@@ -466,7 +457,6 @@ export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
       batch.update(requestDoc.ref, {
         status: "declined",
         resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
-        ...clientMetadataWrite(clientMetadata),
       });
 
       await writeAuditLog({
@@ -561,7 +551,6 @@ export const removeFamilyMember = functions.https.onCall(
     if (userData && !userData.isRetiredGeneral) {
       batch.update(db.collection("users").doc(memberId), {
         activeFamilyId: admin.firestore.FieldValue.delete(),
-        ...clientMetadataWrite(clientMetadata),
       });
     }
 
@@ -656,7 +645,6 @@ export const changeFamilyMemberRole = functions.https.onCall(
     // Update role
     await targetMemberDoc.ref.update({
       role: newRole,
-      ...clientMetadataWrite(clientMetadata),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -724,7 +712,6 @@ export const inactivateFamily = functions.https.onCall(
     // Mark family as inactive
     batch.update(familyDoc.ref, {
       status: "inactive",
-      ...clientMetadataWrite(clientMetadata),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -746,7 +733,6 @@ export const inactivateFamily = functions.https.onCall(
       if (userData && !userData.isRetiredGeneral) {
         batch.update(db.collection("users").doc(memberId), {
           activeFamilyId: admin.firestore.FieldValue.delete(),
-          ...clientMetadataWrite(clientMetadata),
         });
       }
     }

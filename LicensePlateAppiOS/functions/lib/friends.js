@@ -71,8 +71,15 @@ exports.sendFriendInvite = functions.https.onCall(async (data, context) => {
     // Friend invites don't expire - set to far future date (100 years from now)
     const expiresAt = new Date();
     expiresAt.setFullYear(expiresAt.getFullYear() + 100);
-    const inviteData = Object.assign(Object.assign({ type: "friend", fromUserId,
-        toUserId, status: "pending", method: method || "search", expiresAt: admin.firestore.Timestamp.fromDate(expiresAt) }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { createdAt: admin.firestore.FieldValue.serverTimestamp() });
+    const inviteData = {
+        type: "friend",
+        fromUserId,
+        toUserId,
+        status: "pending",
+        method: method || "search",
+        expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
     const inviteRef = await db.collection("invites").add(inviteData);
     // Send push notification
     const fcmToken = await (0, notifications_1.getFCMToken)(toUserId);
@@ -126,11 +133,21 @@ exports.respondToFriendInvite = functions.https.onCall(async (data, context) => 
     }
     const batch = db.batch();
     // Update invite status
-    batch.update(inviteDoc.ref, Object.assign({ status: response === "accept" ? "accepted" : "declined", respondedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
+    batch.update(inviteDoc.ref, {
+        status: response === "accept" ? "accepted" : "declined",
+        respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     if (response === "accept") {
         // Create friendship
         const friendshipId = generateFriendshipId(inviteData.fromUserId, inviteData.toUserId);
-        const friendshipData = Object.assign({ userA: inviteData.fromUserId, userB: inviteData.toUserId, status: "accepted", initiatedBy: inviteData.fromUserId, createdAt: admin.firestore.FieldValue.serverTimestamp(), respondedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata));
+        const friendshipData = {
+            userA: inviteData.fromUserId,
+            userB: inviteData.toUserId,
+            status: "accepted",
+            initiatedBy: inviteData.fromUserId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
         batch.set(db.collection("friends").doc(friendshipId), friendshipData);
         // Increment friendCount for both users (transaction)
         const fromUserRef = db.collection("users").doc(inviteData.fromUserId);
@@ -139,8 +156,8 @@ exports.respondToFriendInvite = functions.https.onCall(async (data, context) => 
         const toUserDoc = await toUserRef.get();
         const fromFriendCount = (((_a = fromUserDoc.data()) === null || _a === void 0 ? void 0 : _a.friendCount) || 0) + 1;
         const toFriendCount = (((_b = toUserDoc.data()) === null || _b === void 0 ? void 0 : _b.friendCount) || 0) + 1;
-        batch.update(fromUserRef, Object.assign({ friendCount: fromFriendCount }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
-        batch.update(toUserRef, Object.assign({ friendCount: toFriendCount }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
+        batch.update(fromUserRef, { friendCount: fromFriendCount });
+        batch.update(toUserRef, { friendCount: toFriendCount });
         await (0, audit_1.writeAuditLog)({
             eventType: "AUDIT_FRIENDSHIP_ACCEPTED",
             actorId: userId,
@@ -201,8 +218,8 @@ exports.removeFriend = functions.https.onCall(async (data, context) => {
     const countB = Math.max(0, (((_b = userBDoc.data()) === null || _b === void 0 ? void 0 : _b.friendCount) || 0) - 1);
     const batch = db.batch();
     batch.delete(friendshipRef);
-    batch.update(userARef, Object.assign({ friendCount: countA }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
-    batch.update(userBRef, Object.assign({ friendCount: countB }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
+    batch.update(userARef, { friendCount: countA });
+    batch.update(userBRef, { friendCount: countB });
     await batch.commit();
     await (0, audit_1.writeAuditLog)({
         eventType: "AUDIT_FRIENDSHIP_REMOVED",

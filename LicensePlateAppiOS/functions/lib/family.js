@@ -31,16 +31,29 @@ exports.createFamily = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError("failed-precondition", "User already has an active family");
     }
     // Create family
-    const familyData = Object.assign(Object.assign({ name: name.trim(), creatorId: userId, status: "active", createdAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+    const familyData = {
+        name: name.trim(),
+        creatorId: userId,
+        status: "active",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
     const familyRef = await db.collection("families").add(familyData);
     // Add creator as member with creator role
-    await familyRef.collection("members").doc(userId).set(Object.assign(Object.assign({ role: "creator", permissions: {
+    await familyRef.collection("members").doc(userId).set({
+        role: "creator",
+        permissions: {
             canInvite: true,
             canEditSettings: true,
-        }, joinedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
+        },
+        joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     // Update user's activeFamilyId (if not retired general)
     if (!userData.isRetiredGeneral) {
-        await db.collection("users").doc(userId).update(Object.assign({ activeFamilyId: familyRef.id }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
+        await db.collection("users").doc(userId).update({
+            activeFamilyId: familyRef.id,
+        });
     }
     await (0, audit_1.writeAuditLog)({
         eventType: "AUDIT_FAMILY_CREATED",
@@ -102,9 +115,16 @@ exports.sendFamilyInvite = functions.https.onCall(async (data, context) => {
     // Create invite
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 15);
-    const inviteData = Object.assign({ type: "family", fromUserId,
+    const inviteData = {
+        type: "family",
+        fromUserId,
         toUserId,
-        familyId, status: "pending", method: method || "search", expiresAt: admin.firestore.Timestamp.fromDate(expiresAt), createdAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata));
+        familyId,
+        status: "pending",
+        method: method || "search",
+        expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
     const inviteRef = await db.collection("invites").add(inviteData);
     // Send push notification
     const fcmToken = await (0, notifications_1.getFCMToken)(toUserId);
@@ -157,10 +177,19 @@ exports.respondToFamilyInvite_UserStep = functions.https.onCall(async (data, con
     }
     const batch = db.batch();
     // Update invite status
-    batch.update(inviteDoc.ref, Object.assign({ status: response === "accept" ? "accepted" : "declined", respondedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
+    batch.update(inviteDoc.ref, {
+        status: response === "accept" ? "accepted" : "declined",
+        respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     if (response === "accept") {
         // Create pending join request (awaiting captain approval)
-        const requestData = Object.assign({ userId, requestedBy: inviteData.fromUserId, method: inviteData.method, status: "pending", createdAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata));
+        const requestData = {
+            userId,
+            requestedBy: inviteData.fromUserId,
+            method: inviteData.method,
+            status: "pending",
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
         const requestRef = db
             .collection(`families/${inviteData.familyId}/pending`)
             .doc();
@@ -237,17 +266,27 @@ exports.approveFamilyJoinRequest_CaptainStep = functions.https.onCall(async (dat
             throw new functions.https.HttpsError("failed-precondition", canAdd.reason || "Cannot add user to family");
         }
         // Add member
-        const memberData = Object.assign(Object.assign({ role: newRole, permissions: {
+        const memberData = {
+            role: newRole,
+            permissions: {
                 canInvite: false,
                 canEditSettings: false,
-            }, joinedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+            },
+            joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
         batch.set(db.collection(`families/${familyId}/members`).doc(requestData.userId), memberData);
         // Update user's activeFamilyId (if not retired general)
         if (!targetUserData.isRetiredGeneral) {
-            batch.update(db.collection("users").doc(requestData.userId), Object.assign({ activeFamilyId: familyId }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
+            batch.update(db.collection("users").doc(requestData.userId), {
+                activeFamilyId: familyId,
+            });
         }
         // Update request status
-        batch.update(requestDoc.ref, Object.assign({ status: "approved", resolvedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
+        batch.update(requestDoc.ref, {
+            status: "approved",
+            resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
         // Send push notification
         const fcmToken = await (0, notifications_1.getFCMToken)(requestData.userId);
         if (fcmToken) {
@@ -268,7 +307,10 @@ exports.approveFamilyJoinRequest_CaptainStep = functions.https.onCall(async (dat
     }
     else {
         // Decline request
-        batch.update(requestDoc.ref, Object.assign({ status: "declined", resolvedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
+        batch.update(requestDoc.ref, {
+            status: "declined",
+            resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
         await (0, audit_1.writeAuditLog)({
             eventType: "family_join_request_declined",
             actorId: userId,
@@ -329,7 +371,9 @@ exports.removeFamilyMember = functions.https.onCall(async (data, context) => {
     const userDoc = await db.collection("users").doc(memberId).get();
     const userData = userDoc.data();
     if (userData && !userData.isRetiredGeneral) {
-        batch.update(db.collection("users").doc(memberId), Object.assign({ activeFamilyId: admin.firestore.FieldValue.delete() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
+        batch.update(db.collection("users").doc(memberId), {
+            activeFamilyId: admin.firestore.FieldValue.delete(),
+        });
     }
     await batch.commit();
     await (0, audit_1.writeAuditLog)({
@@ -386,7 +430,10 @@ exports.changeFamilyMemberRole = functions.https.onCall(async (data, context) =>
         throw new functions.https.HttpsError("permission-denied", "Cannot change creator or captain roles");
     }
     // Update role
-    await targetMemberDoc.ref.update(Object.assign(Object.assign({ role: newRole }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
+    await targetMemberDoc.ref.update({
+        role: newRole,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     await (0, audit_1.writeAuditLog)({
         eventType: "AUDIT_FAMILY_ROLE_CHANGED",
         actorId: userId,
@@ -426,7 +473,10 @@ exports.inactivateFamily = functions.https.onCall(async (data, context) => {
     }
     const batch = db.batch();
     // Mark family as inactive
-    batch.update(familyDoc.ref, Object.assign(Object.assign({ status: "inactive" }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
+    batch.update(familyDoc.ref, {
+        status: "inactive",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     // Get all members
     const membersSnapshot = await db
         .collection(`families/${familyId}/members`)
@@ -440,7 +490,9 @@ exports.inactivateFamily = functions.https.onCall(async (data, context) => {
         const userDoc = await db.collection("users").doc(memberId).get();
         const userData = userDoc.data();
         if (userData && !userData.isRetiredGeneral) {
-            batch.update(db.collection("users").doc(memberId), Object.assign({ activeFamilyId: admin.firestore.FieldValue.delete() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
+            batch.update(db.collection("users").doc(memberId), {
+                activeFamilyId: admin.firestore.FieldValue.delete(),
+            });
         }
     }
     await batch.commit();

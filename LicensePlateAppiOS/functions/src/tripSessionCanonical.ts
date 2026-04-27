@@ -36,6 +36,25 @@ function sessionRef(sessionId: string) {
   return db.collection("trip_sessions").doc(sessionId);
 }
 
+function setClientMetadataPrivateDoc(
+  batch: admin.firestore.WriteBatch,
+  parentRef: admin.firestore.DocumentReference,
+  userId: string,
+  clientMetadata: ReturnType<typeof normalizeClientMetadata>
+) {
+  if (!clientMetadata) return 0;
+  batch.set(
+    parentRef.collection("private").doc("client_metadata"),
+    {
+      userId,
+      clientMetadata,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+  return 1;
+}
+
 /**
  * Combined setup may call `publishTripCanonicalState` before `sendTripInvite` creates `members/{owner}`.
  * When the publish payload's `createdBy` matches the authenticated uid, seed the owner member row.
@@ -234,8 +253,9 @@ export const publishTripCanonicalState = functions.https.onCall(async (data, con
 
   for (const doc of existingGames.docs) {
     if (!incomingIds.has(doc.id)) {
+      batch.delete(doc.ref.collection("private").doc("client_metadata"));
       batch.delete(doc.ref);
-      ops += 1;
+      ops += 2;
       await commitIfNeeded();
     }
   }
@@ -256,7 +276,6 @@ export const publishTripCanonicalState = functions.https.onCall(async (data, con
     canonicalStartedAt,
     canonicalEndedAt,
     canonicalEndedBy: session.endedBy ?? null,
-    ...clientMetadataWrite(clientMetadata),
   };
   const createdByWire = session.createdBy as string | undefined;
   if (typeof createdByWire === "string" && createdByWire.length > 0) {
@@ -287,10 +306,10 @@ export const publishTripCanonicalState = functions.https.onCall(async (data, con
       gameSpecificPayloadVersion: g.gameSpecificPayloadVersion ?? null,
       gameSpecificPayloadDataBase64: g.gameSpecificPayloadDataBase64 ?? null,
       teamsDataBase64: g.teamsDataBase64 ?? null,
-      ...clientMetadataWrite(clientMetadata),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     ops += 1;
+    ops += setClientMetadataPrivateDoc(batch, gameRef, userId, clientMetadata);
     await commitIfNeeded();
   }
 
@@ -569,6 +588,8 @@ export const markTripCancelledRemote = functions.https.onCall(async (data, conte
       let b = db.batch();
       let c = 0;
       for (const doc of snap.docs) {
+        b.delete(doc.ref.collection("private").doc("client_metadata"));
+        c += 1;
         b.delete(doc.ref);
         c += 1;
         if (c >= 400) {
@@ -589,7 +610,6 @@ export const markTripCancelledRemote = functions.https.onCall(async (data, conte
   await ref.set(
     {
       canonicalStatus: "cancelled",
-      ...clientMetadataWrite(clientMetadata),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       syncVersion: admin.firestore.FieldValue.increment(1),
     },

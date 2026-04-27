@@ -10,6 +10,10 @@ service cloud.firestore {
       return request.auth.uid;
     }
 
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
     function userDoc(userId) {
       return get(/databases/$(database)/documents/users/$(userId));
     }
@@ -106,8 +110,22 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /trip_sessions/{sessionId}/games/{gameId}/private/{docId} {
+      allow get: if isSignedIn() &&
+        (isAdmin() || resource.data.userId == uid());
+      allow list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     match /trip_sessions/{sessionId}/activity_events/{eventId} {
       allow read: if isSignedIn() && isTripSessionMember(sessionId, uid());
+      allow create, update, delete: if false;
+    }
+
+    match /trip_sessions/{sessionId}/activity_events/{eventId}/private/{docId} {
+      allow get: if isSignedIn() &&
+        (isAdmin() || resource.data.userId == uid());
+      allow list: if isAdmin();
       allow create, update, delete: if false;
     }
 

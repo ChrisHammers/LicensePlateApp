@@ -11,7 +11,6 @@ exports.resolveGameplayAppendTransaction = resolveGameplayAppendTransaction;
 exports.runOwnerRemoveParticipantTransaction = runOwnerRemoveParticipantTransaction;
 const admin = require("firebase-admin");
 const functions = require("firebase-functions");
-const clientMetadata_1 = require("./clientMetadata");
 const MAX_EVENTS_POLICY = 2500;
 exports.PK = {
     regionId: "regionId",
@@ -71,6 +70,15 @@ function stringifyPayload(p) {
         out[k] = typeof v === "string" ? v : String(v);
     }
     return out;
+}
+function setClientMetadataPrivateDoc(tx, parentRef, userId, clientMetadata) {
+    if (!clientMetadata)
+        return;
+    tx.set(parentRef.collection("private").doc("client_metadata"), {
+        userId,
+        clientMetadata,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
 }
 function parseServerCommittedAtSec(payload) {
     const s = payload[exports.PK.serverCommittedAt];
@@ -294,7 +302,7 @@ async function resolveGameplayAppendTransaction(db, tripSessionId, userId, event
     const eventRef = ref.collection("activity_events").doc(event.id);
     const kind = event.kind;
     return db.runTransaction(async (tx) => {
-        var _a, _b, _c, _d;
+        var _a;
         const sessionSnap = await tx.get(ref);
         if (!sessionSnap.exists) {
             throw new functions.https.HttpsError("not-found", "Trip session not found");
@@ -343,8 +351,15 @@ async function resolveGameplayAppendTransaction(db, tripSessionId, userId, event
         const eventsSnap = await tx.get(eventsQuery);
         const eventDocs = eventsSnap.docs;
         const normalizeAndWrite = (payload) => {
-            var _a;
-            tx.set(eventRef, Object.assign(Object.assign({ sessionId: tripSessionId, kind, timestamp: incomingTs, actorId: normalizedActor, payload }, (0, clientMetadata_1.clientMetadataWrite)((_a = event.clientMetadata) !== null && _a !== void 0 ? _a : null)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }), { merge: true });
+            tx.set(eventRef, {
+                sessionId: tripSessionId,
+                kind,
+                timestamp: incomingTs,
+                actorId: normalizedActor,
+                payload,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            setClientMetadataPrivateDoc(tx, eventRef, userId, event.clientMetadata);
             tx.update(ref, { updatedAt: admin.firestore.FieldValue.serverTimestamp() });
         };
         if (kind === exports.KIND_REGION_FOUND) {
@@ -367,7 +382,7 @@ async function resolveGameplayAppendTransaction(db, tripSessionId, userId, event
             try {
                 cfg = parseCommonConfig(gameData.commonConfigDataBase64);
             }
-            catch (_e) {
+            catch (_b) {
                 throw new functions.https.HttpsError("failed-precondition", "invalid game config");
             }
             if (cfg.lifecycleState !== "started") {
@@ -411,7 +426,15 @@ async function resolveGameplayAppendTransaction(db, tripSessionId, userId, event
                                 }
                                 supPayload[exports.PK.gameMode] = gameMode;
                                 supPayload[exports.PK.participantCount] = String(participants.length);
-                                tx.set(supRef, Object.assign(Object.assign({ sessionId: tripSessionId, kind: exports.KIND_DISCOVERY_REJECTED, timestamp: nowTsEarly, actorId: displaced.participantId, payload: supPayload }, (0, clientMetadata_1.clientMetadataWrite)((_a = event.clientMetadata) !== null && _a !== void 0 ? _a : null)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
+                                tx.set(supRef, {
+                                    sessionId: tripSessionId,
+                                    kind: exports.KIND_DISCOVERY_REJECTED,
+                                    timestamp: nowTsEarly,
+                                    actorId: displaced.participantId,
+                                    payload: supPayload,
+                                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                                });
+                                setClientMetadataPrivateDoc(tx, supRef, userId, event.clientMetadata);
                             }
                         }
                         tx.update(ref, { updatedAt: admin.firestore.FieldValue.serverTimestamp() });
@@ -453,7 +476,15 @@ async function resolveGameplayAppendTransaction(db, tripSessionId, userId, event
                 }
                 rejPayload[exports.PK.gameMode] = gameMode;
                 rejPayload[exports.PK.participantCount] = String(participants.length);
-                tx.set(rejRef, Object.assign(Object.assign({ sessionId: tripSessionId, kind: exports.KIND_DISCOVERY_REJECTED, timestamp: nowTs, actorId: userId, payload: rejPayload }, (0, clientMetadata_1.clientMetadataWrite)((_b = event.clientMetadata) !== null && _b !== void 0 ? _b : null)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
+                tx.set(rejRef, {
+                    sessionId: tripSessionId,
+                    kind: exports.KIND_DISCOVERY_REJECTED,
+                    timestamp: nowTs,
+                    actorId: userId,
+                    payload: rejPayload,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+                setClientMetadataPrivateDoc(tx, rejRef, userId, event.clientMetadata);
                 tx.update(ref, { updatedAt: admin.firestore.FieldValue.serverTimestamp() });
                 const wire = eventWireFromDoc(rejId, tripSessionId, {
                     sessionId: tripSessionId,
@@ -482,7 +513,7 @@ async function resolveGameplayAppendTransaction(db, tripSessionId, userId, event
             try {
                 cfg = parseCommonConfig(gameSnap.data().commonConfigDataBase64);
             }
-            catch (_f) {
+            catch (_c) {
                 throw new functions.https.HttpsError("failed-precondition", "invalid game config");
             }
             const gameMode = cfg.gameMode;
@@ -560,12 +591,15 @@ async function resolveGameplayAppendTransaction(db, tripSessionId, userId, event
             if (!memberSnap.exists) {
                 throw new functions.https.HttpsError("failed-precondition", "Member record missing for this trip");
             }
-            const role = ((_c = memberSnap.data()) === null || _c === void 0 ? void 0 : _c.role) || "member";
+            const role = ((_a = memberSnap.data()) === null || _a === void 0 ? void 0 : _a.role) || "member";
             if (role === "owner") {
                 throw new functions.https.HttpsError("failed-precondition", "Trip owner cannot leave via participant_left; end or cancel the trip instead");
             }
             const nextParticipants = filterCanonicalParticipantsRemoveUser(participants, userId);
-            tx.update(ref, Object.assign(Object.assign({ canonicalParticipants: nextParticipants }, (0, clientMetadata_1.clientMetadataWrite)((_d = event.clientMetadata) !== null && _d !== void 0 ? _d : null)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
+            tx.update(ref, {
+                canonicalParticipants: nextParticipants,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
             tx.delete(memberRef);
             const leavePayload = Object.assign(Object.assign({}, incomingPayload), { [exports.PK.participantId]: userId, [exports.PK.leaveReason]: incomingPayload[exports.PK.leaveReason] || "voluntary" });
             normalizeAndWrite(leavePayload);
@@ -625,13 +659,24 @@ async function runOwnerRemoveParticipantTransaction(db, tripSessionId, ownerUser
         const existingKick = await tx.get(eventRef);
         const nowTs = admin.firestore.Timestamp.now();
         if (!existingKick.exists) {
-            tx.set(eventRef, Object.assign(Object.assign({ sessionId: tripSessionId, kind: exports.KIND_PARTICIPANT_LEFT, timestamp: nowTs, actorId: ownerUserId, payload: {
+            tx.set(eventRef, {
+                sessionId: tripSessionId,
+                kind: exports.KIND_PARTICIPANT_LEFT,
+                timestamp: nowTs,
+                actorId: ownerUserId,
+                payload: {
                     [exports.PK.participantId]: removedUserId,
                     [exports.PK.leaveReason]: "kicked",
                     [exports.PK.initiatedByUserId]: ownerUserId,
-                } }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
+                },
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            setClientMetadataPrivateDoc(tx, eventRef, ownerUserId, clientMetadata);
         }
-        tx.update(ref, Object.assign(Object.assign({ canonicalParticipants: nextParticipants }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
+        tx.update(ref, {
+            canonicalParticipants: nextParticipants,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
         tx.delete(removedRef);
         return { success: true, appliedEventId: kickEventId };
     });

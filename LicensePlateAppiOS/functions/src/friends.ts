@@ -3,7 +3,7 @@ import * as admin from "firebase-admin";
 import { checkFriendCap, isUserSearchable } from "./utils/validation";
 import { writeAuditLog } from "./audit";
 import { getFCMToken, sendPushNotification } from "./utils/notifications";
-import { clientMetadataWrite, normalizeClientMetadata } from "./clientMetadata";
+import { normalizeClientMetadata } from "./clientMetadata";
 
 const db = admin.firestore();
 
@@ -113,7 +113,6 @@ export const sendFriendInvite = functions.https.onCall(
       status: "pending",
       method: method || "search",
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
-      ...clientMetadataWrite(clientMetadata),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
@@ -208,7 +207,6 @@ export const respondToFriendInvite = functions.https.onCall(
     batch.update(inviteDoc.ref, {
       status: response === "accept" ? "accepted" : "declined",
       respondedAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...clientMetadataWrite(clientMetadata),
     });
 
     if (response === "accept") {
@@ -225,7 +223,6 @@ export const respondToFriendInvite = functions.https.onCall(
         initiatedBy: inviteData.fromUserId,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         respondedAt: admin.firestore.FieldValue.serverTimestamp(),
-        ...clientMetadataWrite(clientMetadata),
       };
 
       batch.set(
@@ -243,8 +240,8 @@ export const respondToFriendInvite = functions.https.onCall(
       const fromFriendCount = (fromUserDoc.data()?.friendCount || 0) + 1;
       const toFriendCount = (toUserDoc.data()?.friendCount || 0) + 1;
 
-      batch.update(fromUserRef, { friendCount: fromFriendCount, ...clientMetadataWrite(clientMetadata) });
-      batch.update(toUserRef, { friendCount: toFriendCount, ...clientMetadataWrite(clientMetadata) });
+      batch.update(fromUserRef, { friendCount: fromFriendCount });
+      batch.update(toUserRef, { friendCount: toFriendCount });
 
       await writeAuditLog({
         eventType: "AUDIT_FRIENDSHIP_ACCEPTED",
@@ -331,8 +328,8 @@ export const removeFriend = functions.https.onCall(async (data, context) => {
 
   const batch = db.batch();
   batch.delete(friendshipRef);
-  batch.update(userARef, { friendCount: countA, ...clientMetadataWrite(clientMetadata) });
-  batch.update(userBRef, { friendCount: countB, ...clientMetadataWrite(clientMetadata) });
+  batch.update(userARef, { friendCount: countA });
+  batch.update(userBRef, { friendCount: countB });
   await batch.commit();
 
   await writeAuditLog({

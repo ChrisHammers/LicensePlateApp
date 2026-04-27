@@ -66,7 +66,11 @@ exports.sendTripInvite = functions.https.onCall(async (data, context) => {
         return { inviteId: doc.id };
     }
     const batch = db.batch();
-    batch.set(sessionRef, Object.assign(Object.assign({ name: tripName, createdBy: fromUserId }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }), { merge: true });
+    batch.set(sessionRef, {
+        name: tripName,
+        createdBy: fromUserId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
     const ownerMemberRef = sessionRef.collection("members").doc(fromUserId);
     const ownerSnap = await ownerMemberRef.get();
     if (!ownerSnap.exists) {
@@ -77,17 +81,30 @@ exports.sendTripInvite = functions.https.onCall(async (data, context) => {
     }
     const inviteRef = db.collection("trip_invites").doc();
     const inviteMethod = typeof method === "string" ? method : "search";
-    batch.set(inviteRef, Object.assign(Object.assign({ tripSessionId,
+    batch.set(inviteRef, {
+        tripSessionId,
         tripName,
         fromUserId,
-        toUserId, status: "pending", method: inviteMethod, expiresAt }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { createdAt: admin.firestore.FieldValue.serverTimestamp() }));
+        toUserId,
+        status: "pending",
+        method: inviteMethod,
+        expiresAt,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     const invEvRef = sessionRef.collection("activity_events").doc(`inv_${inviteRef.id}`);
-    batch.set(invEvRef, Object.assign(Object.assign({ sessionId: tripSessionId, kind: gameplayEventResolver_1.KIND_PARTICIPANT_INVITED, timestamp: admin.firestore.FieldValue.serverTimestamp(), actorId: fromUserId, payload: {
+    batch.set(invEvRef, {
+        sessionId: tripSessionId,
+        kind: gameplayEventResolver_1.KIND_PARTICIPANT_INVITED,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        actorId: fromUserId,
+        payload: {
             [gameplayEventResolver_1.PK.fromUserId]: fromUserId,
             [gameplayEventResolver_1.PK.toUserId]: toUserId,
             [gameplayEventResolver_1.PK.inviteId]: inviteRef.id,
             [gameplayEventResolver_1.PK.inviteMethod]: inviteMethod,
-        } }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
+        },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     await batch.commit();
     await (0, tripSessionCanonical_1.syncCanonicalParticipantsFromMembers)(tripSessionId);
     const fcmToken = await (0, notifications_1.getFCMToken)(toUserId);
@@ -137,23 +154,41 @@ exports.respondToTripInvite = functions.https.onCall(async (data, context) => {
     }
     const exp = inviteData.expiresAt;
     if (exp && exp.toMillis() < Date.now()) {
-        await inviteRef.update(Object.assign({ status: "expired", respondedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
+        await inviteRef.update({
+            status: "expired",
+            respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
         throw new functions.https.HttpsError("failed-precondition", "Invite has expired");
     }
     const batch = db.batch();
-    batch.update(inviteRef, Object.assign({ status: response === "accept" ? "accepted" : "declined", respondedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
+    batch.update(inviteRef, {
+        status: response === "accept" ? "accepted" : "declined",
+        respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     if (response === "accept") {
         const tripSessionId = inviteData.tripSessionId;
         const sessionDocRef = db.collection("trip_sessions").doc(tripSessionId);
         const memberRef = sessionDocRef.collection("members").doc(userId);
-        batch.set(memberRef, Object.assign({ role: "member", joinedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
-        batch.update(sessionDocRef, Object.assign(Object.assign({}, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
+        batch.set(memberRef, {
+            role: "member",
+            joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        batch.update(sessionDocRef, {
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
         const joinEvRef = sessionDocRef.collection("activity_events").doc(`join_${inviteId}`);
-        batch.set(joinEvRef, Object.assign(Object.assign({ sessionId: tripSessionId, kind: gameplayEventResolver_1.KIND_PARTICIPANT_JOINED, timestamp: admin.firestore.FieldValue.serverTimestamp(), actorId: userId, payload: {
+        batch.set(joinEvRef, {
+            sessionId: tripSessionId,
+            kind: gameplayEventResolver_1.KIND_PARTICIPANT_JOINED,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            actorId: userId,
+            payload: {
                 [gameplayEventResolver_1.PK.participantId]: userId,
                 [gameplayEventResolver_1.PK.inviteId]: inviteId,
                 [gameplayEventResolver_1.PK.fromUserId]: inviteData.fromUserId,
-            } }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
+            },
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
     }
     await batch.commit();
     if (response === "accept") {
@@ -193,7 +228,10 @@ exports.cancelTripInvite = functions.https.onCall(async (data, context) => {
     if (inviteData.status !== "pending") {
         throw new functions.https.HttpsError("failed-precondition", "Invite is no longer pending");
     }
-    await inviteRef.update(Object.assign({ status: "canceled", respondedAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)));
+    await inviteRef.update({
+        status: "canceled",
+        respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
     await (0, audit_1.writeAuditLog)({
         eventType: "AUDIT_TRIP_INVITE_CANCELED",
         actorId: userId,

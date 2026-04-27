@@ -12,7 +12,7 @@ import { writeAuditLog } from "./audit";
 import { getFCMToken, sendPushNotification } from "./utils/notifications";
 import { KIND_PARTICIPANT_INVITED, KIND_PARTICIPANT_JOINED, PK } from "./gameplayEventResolver";
 import { syncCanonicalParticipantsFromMembers } from "./tripSessionCanonical";
-import { clientMetadataWrite, normalizeClientMetadata } from "./clientMetadata";
+import { normalizeClientMetadata } from "./clientMetadata";
 
 const db = admin.firestore();
 
@@ -99,7 +99,6 @@ export const sendTripInvite = functions.https.onCall(async (data, context) => {
     {
       name: tripName,
       createdBy: fromUserId,
-      ...clientMetadataWrite(clientMetadata),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     },
     { merge: true }
@@ -124,7 +123,6 @@ export const sendTripInvite = functions.https.onCall(async (data, context) => {
     status: "pending",
     method: inviteMethod,
     expiresAt,
-    ...clientMetadataWrite(clientMetadata),
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
@@ -140,7 +138,6 @@ export const sendTripInvite = functions.https.onCall(async (data, context) => {
       [PK.inviteId]: inviteRef.id,
       [PK.inviteMethod]: inviteMethod,
     },
-    ...clientMetadataWrite(clientMetadata),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
@@ -230,7 +227,6 @@ export const respondToTripInvite = functions.https.onCall(
       await inviteRef.update({
         status: "expired",
         respondedAt: admin.firestore.FieldValue.serverTimestamp(),
-        ...clientMetadataWrite(clientMetadata),
       });
       throw new functions.https.HttpsError(
         "failed-precondition",
@@ -242,7 +238,6 @@ export const respondToTripInvite = functions.https.onCall(
     batch.update(inviteRef, {
       status: response === "accept" ? "accepted" : "declined",
       respondedAt: admin.firestore.FieldValue.serverTimestamp(),
-      ...clientMetadataWrite(clientMetadata),
     });
 
     if (response === "accept") {
@@ -252,10 +247,8 @@ export const respondToTripInvite = functions.https.onCall(
       batch.set(memberRef, {
         role: "member",
         joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-        ...clientMetadataWrite(clientMetadata),
       });
       batch.update(sessionDocRef, {
-        ...clientMetadataWrite(clientMetadata),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       const joinEvRef = sessionDocRef.collection("activity_events").doc(`join_${inviteId}`);
@@ -269,7 +262,6 @@ export const respondToTripInvite = functions.https.onCall(
           [PK.inviteId]: inviteId,
           [PK.fromUserId]: inviteData.fromUserId as string,
         },
-        ...clientMetadataWrite(clientMetadata),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
@@ -340,7 +332,6 @@ export const cancelTripInvite = functions.https.onCall(async (data, context) => 
   await inviteRef.update({
     status: "canceled",
     respondedAt: admin.firestore.FieldValue.serverTimestamp(),
-    ...clientMetadataWrite(clientMetadata),
   });
 
   await writeAuditLog({

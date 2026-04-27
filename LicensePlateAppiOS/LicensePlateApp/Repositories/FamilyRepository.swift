@@ -715,8 +715,7 @@ class FamilyRepository: ObservableObject {
         }
         
         try await db.collection("share_codes").document(codeId).updateData([
-            "isRevoked": true,
-            "clientMetadata": ClientMetadata.current.firestoreValue
+            "isRevoked": true
         ])
     }
     

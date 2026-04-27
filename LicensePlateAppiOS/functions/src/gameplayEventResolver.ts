@@ -5,7 +5,7 @@
 
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions";
-import { clientMetadataWrite, type ClientMetadata } from "./clientMetadata";
+import type { ClientMetadata } from "./clientMetadata";
 
 const MAX_EVENTS_POLICY = 2500;
 
@@ -90,6 +90,24 @@ function stringifyPayload(p: Record<string, unknown> | null | undefined): Record
     out[k] = typeof v === "string" ? v : String(v);
   }
   return out;
+}
+
+function setClientMetadataPrivateDoc(
+  tx: admin.firestore.Transaction,
+  parentRef: admin.firestore.DocumentReference,
+  userId: string,
+  clientMetadata: ClientMetadata | null | undefined
+) {
+  if (!clientMetadata) return;
+  tx.set(
+    parentRef.collection("private").doc("client_metadata"),
+    {
+      userId,
+      clientMetadata,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
 }
 
 interface DiscoveryRow {
@@ -416,11 +434,11 @@ export async function resolveGameplayAppendTransaction(
           timestamp: incomingTs,
           actorId: normalizedActor,
           payload,
-          ...clientMetadataWrite(event.clientMetadata ?? null),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
         { merge: true }
       );
+      setClientMetadataPrivateDoc(tx, eventRef, userId, event.clientMetadata);
       tx.update(ref, { updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     };
 
@@ -497,9 +515,9 @@ export async function resolveGameplayAppendTransaction(
                   timestamp: nowTsEarly,
                   actorId: displaced.participantId,
                   payload: supPayload,
-                  ...clientMetadataWrite(event.clientMetadata ?? null),
                   updatedAt: admin.firestore.FieldValue.serverTimestamp(),
                 });
+                setClientMetadataPrivateDoc(tx, supRef, userId, event.clientMetadata);
               }
             }
             tx.update(ref, { updatedAt: admin.firestore.FieldValue.serverTimestamp() });
@@ -556,9 +574,9 @@ export async function resolveGameplayAppendTransaction(
           timestamp: nowTs,
           actorId: userId,
           payload: rejPayload,
-          ...clientMetadataWrite(event.clientMetadata ?? null),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+        setClientMetadataPrivateDoc(tx, rejRef, userId, event.clientMetadata);
         tx.update(ref, { updatedAt: admin.firestore.FieldValue.serverTimestamp() });
 
         const wire = eventWireFromDoc(rejId, tripSessionId, {
@@ -683,7 +701,6 @@ export async function resolveGameplayAppendTransaction(
       const nextParticipants = filterCanonicalParticipantsRemoveUser(participants, userId);
       tx.update(ref, {
         canonicalParticipants: nextParticipants,
-        ...clientMetadataWrite(event.clientMetadata ?? null),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       tx.delete(memberRef);
@@ -766,13 +783,12 @@ export async function runOwnerRemoveParticipantTransaction(
           [PK.leaveReason]: "kicked",
           [PK.initiatedByUserId]: ownerUserId,
         },
-        ...clientMetadataWrite(clientMetadata),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      setClientMetadataPrivateDoc(tx, eventRef, ownerUserId, clientMetadata);
     }
     tx.update(ref, {
       canonicalParticipants: nextParticipants,
-      ...clientMetadataWrite(clientMetadata),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     tx.delete(removedRef);

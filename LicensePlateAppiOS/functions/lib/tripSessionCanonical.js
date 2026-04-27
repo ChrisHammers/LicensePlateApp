@@ -29,6 +29,16 @@ function secondsToTimestamp(sec) {
 function sessionRef(sessionId) {
     return db.collection("trip_sessions").doc(sessionId);
 }
+function setClientMetadataPrivateDoc(batch, parentRef, userId, clientMetadata) {
+    if (!clientMetadata)
+        return 0;
+    batch.set(parentRef.collection("private").doc("client_metadata"), {
+        userId,
+        clientMetadata,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return 1;
+}
 /**
  * Combined setup may call `publishTripCanonicalState` before `sendTripInvite` creates `members/{owner}`.
  * When the publish payload's `createdBy` matches the authenticated uid, seed the owner member row.
@@ -189,8 +199,9 @@ exports.publishTripCanonicalState = functions.https.onCall(async (data, context)
     };
     for (const doc of existingGames.docs) {
         if (!incomingIds.has(doc.id)) {
+            batch.delete(doc.ref.collection("private").doc("client_metadata"));
             batch.delete(doc.ref);
-            ops += 1;
+            ops += 2;
             await commitIfNeeded();
         }
     }
@@ -200,9 +211,16 @@ exports.publishTripCanonicalState = functions.https.onCall(async (data, context)
     }
     const canonicalStartedAt = secondsToTimestamp(session.startedAt);
     const canonicalEndedAt = secondsToTimestamp(session.endedAt);
-    const parentFields = Object.assign({ name: session.name, updatedAt: admin.firestore.FieldValue.serverTimestamp(), syncVersion: admin.firestore.FieldValue.increment(1), canonicalStatus: session.status, canonicalCreatedAt,
+    const parentFields = {
+        name: session.name,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        syncVersion: admin.firestore.FieldValue.increment(1),
+        canonicalStatus: session.status,
+        canonicalCreatedAt,
         canonicalStartedAt,
-        canonicalEndedAt, canonicalEndedBy: (_a = session.endedBy) !== null && _a !== void 0 ? _a : null }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata));
+        canonicalEndedAt,
+        canonicalEndedBy: (_a = session.endedBy) !== null && _a !== void 0 ? _a : null,
+    };
     const createdByWire = session.createdBy;
     if (typeof createdByWire === "string" && createdByWire.length > 0) {
         parentFields.createdBy = createdByWire;
@@ -218,9 +236,21 @@ exports.publishTripCanonicalState = functions.https.onCall(async (data, context)
             throw new functions.https.HttpsError("invalid-argument", "each game.startedAt is required");
         }
         const endedAt = secondsToTimestamp(g.endedAt);
-        batch.set(gameRef, Object.assign(Object.assign({ definitionId: g.definitionId, sessionId: g.sessionId, startedAt,
-            endedAt, ruleSetDataBase64: (_b = g.ruleSetDataBase64) !== null && _b !== void 0 ? _b : null, commonConfigDataBase64: (_c = g.commonConfigDataBase64) !== null && _c !== void 0 ? _c : null, gameSpecificPayloadType: (_d = g.gameSpecificPayloadType) !== null && _d !== void 0 ? _d : null, gameSpecificPayloadVersion: (_e = g.gameSpecificPayloadVersion) !== null && _e !== void 0 ? _e : null, gameSpecificPayloadDataBase64: (_f = g.gameSpecificPayloadDataBase64) !== null && _f !== void 0 ? _f : null, teamsDataBase64: (_g = g.teamsDataBase64) !== null && _g !== void 0 ? _g : null }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp() }));
+        batch.set(gameRef, {
+            definitionId: g.definitionId,
+            sessionId: g.sessionId,
+            startedAt,
+            endedAt,
+            ruleSetDataBase64: (_b = g.ruleSetDataBase64) !== null && _b !== void 0 ? _b : null,
+            commonConfigDataBase64: (_c = g.commonConfigDataBase64) !== null && _c !== void 0 ? _c : null,
+            gameSpecificPayloadType: (_d = g.gameSpecificPayloadType) !== null && _d !== void 0 ? _d : null,
+            gameSpecificPayloadVersion: (_e = g.gameSpecificPayloadVersion) !== null && _e !== void 0 ? _e : null,
+            gameSpecificPayloadDataBase64: (_f = g.gameSpecificPayloadDataBase64) !== null && _f !== void 0 ? _f : null,
+            teamsDataBase64: (_g = g.teamsDataBase64) !== null && _g !== void 0 ? _g : null,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
         ops += 1;
+        ops += setClientMetadataPrivateDoc(batch, gameRef, userId, clientMetadata);
         await commitIfNeeded();
     }
     if (ops > 0) {
@@ -450,6 +480,8 @@ exports.markTripCancelledRemote = functions.https.onCall(async (data, context) =
             let b = db.batch();
             let c = 0;
             for (const doc of snap.docs) {
+                b.delete(doc.ref.collection("private").doc("client_metadata"));
+                c += 1;
                 b.delete(doc.ref);
                 c += 1;
                 if (c >= 400) {
@@ -465,7 +497,11 @@ exports.markTripCancelledRemote = functions.https.onCall(async (data, context) =
     };
     await deleteInBatches(ref.collection("games"));
     await deleteInBatches(ref.collection("activity_events"));
-    await ref.set(Object.assign(Object.assign({ canonicalStatus: "cancelled" }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata)), { updatedAt: admin.firestore.FieldValue.serverTimestamp(), syncVersion: admin.firestore.FieldValue.increment(1) }), { merge: true });
+    await ref.set({
+        canonicalStatus: "cancelled",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        syncVersion: admin.firestore.FieldValue.increment(1),
+    }, { merge: true });
     await (0, audit_1.writeAuditLog)({
         eventType: "AUDIT_TRIP_CANCELLED_REMOTE",
         actorId: userId,

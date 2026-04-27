@@ -1422,8 +1422,7 @@ class FirebaseAuthService: ObservableObject {
             "avatarType": user.avatarType.rawValue,
             "isUsernameManuallyChanged": user.isUsernameManuallyChanged,
             "isEmailPublic": user.isEmailPublic,
-            "isPhonePublic": user.isPhonePublic,
-            "clientMetadata": ClientMetadata.current.firestoreValue
+            "isPhonePublic": user.isPhonePublic
         ]
         
         if let firstName = user.firstName {

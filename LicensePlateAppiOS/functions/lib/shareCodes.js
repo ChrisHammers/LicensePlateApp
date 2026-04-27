@@ -39,7 +39,14 @@ exports.createShareCode = functions.https.onCall(async (data, context) => {
     // 15 minute TTL
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 15);
-    const codeData = Object.assign({ type, createdBy: userId, code, expiresAt: admin.firestore.Timestamp.fromDate(expiresAt), createdAt: admin.firestore.FieldValue.serverTimestamp(), isRevoked: false }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata));
+    const codeData = {
+        type,
+        createdBy: userId,
+        code,
+        expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        isRevoked: false,
+    };
     if (familyId) {
         codeData.familyId = familyId;
     }
@@ -94,7 +101,16 @@ exports.redeemShareCode = functions.https.onCall(async (data, context) => {
     // Create invite
     const expiresAtInvite = new Date();
     expiresAtInvite.setMinutes(expiresAtInvite.getMinutes() + 15);
-    const inviteData = Object.assign({ type: codeData.type, fromUserId: codeData.createdBy, toUserId: userId, status: "pending", method: "code", codeId: codeDoc.id, expiresAt: admin.firestore.Timestamp.fromDate(expiresAtInvite), createdAt: admin.firestore.FieldValue.serverTimestamp() }, (0, clientMetadata_1.clientMetadataWrite)(clientMetadata));
+    const inviteData = {
+        type: codeData.type,
+        fromUserId: codeData.createdBy,
+        toUserId: userId,
+        status: "pending",
+        method: "code",
+        codeId: codeDoc.id,
+        expiresAt: admin.firestore.Timestamp.fromDate(expiresAtInvite),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
     if (codeData.familyId) {
         inviteData.familyId = codeData.familyId;
     }
