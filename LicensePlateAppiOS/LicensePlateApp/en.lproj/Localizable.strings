@@ -612,6 +612,9 @@
 "Purchase failed. Please try again." = "Purchase failed. Please try again.";
 "No purchases to restore." = "No purchases to restore.";
 "Get more from RoadTrip Royale with premium features." = "Get more from RoadTrip Royale with premium features.";
+"Active trip limit reached" = "Active trip limit reached";
+"Upgrade to keep more road trips active at once." = "Upgrade to keep more road trips active at once.";
+"You have reached your active trip limit." = "You have reached your active trip limit.";
 
 // Step 6.9.3 — Trip vs game lifecycle
 "Trips cannot be reset." = "Trips cannot be reset.";

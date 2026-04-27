@@ -240,6 +240,7 @@ class AnalyticsService: AnalyticsLogging {
         // Paywall & RevenueCat (Step 09)
         case paywallViewed(source: String?)
         case paywallDismissed
+        case tripLimitHit(source: String, activeTripCount: Int, activeTripLimit: Int, tier: String)
         case purchaseStarted(packageId: String)
         case purchaseCompleted(packageId: String)
         case purchaseFailed(packageId: String?, error: String)
@@ -372,6 +373,7 @@ class AnalyticsService: AnalyticsLogging {
             case .screenView: return "screen_view"
             case .paywallViewed: return "paywall_viewed"
             case .paywallDismissed: return "paywall_dismissed"
+            case .tripLimitHit: return "trip_limit_hit"
             case .purchaseStarted: return "purchase_started"
             case .purchaseCompleted: return "purchase_completed"
             case .purchaseFailed: return "purchase_failed"
@@ -681,6 +683,13 @@ class AnalyticsService: AnalyticsLogging {
                 return nil
             case .paywallDismissed:
                 return nil
+            case .tripLimitHit(let source, let activeTripCount, let activeTripLimit, let tier):
+                return [
+                    "source": source,
+                    "active_trip_count": activeTripCount,
+                    "active_trip_limit": activeTripLimit,
+                    "tier": tier
+                ]
             case .purchaseStarted(let packageId):
                 return ["package_id": packageId]
             case .purchaseCompleted(let packageId):

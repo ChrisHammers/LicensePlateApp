@@ -78,6 +78,7 @@ final class LicensePlateGameViewModel: ObservableObject {
     private let discoveryResolutionRepository: DiscoveryResolutionRepositoryProtocol
     private let lifecycleService: TripSessionLifecycleServiceProtocol
     private let gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
+    private let tripEntitlementGate: TripEntitlementGate
     private let tripActivityEventRecording: TripActivityEventRecordingProtocol
     private let regionRemovalCooldownService: RegionRemovalCooldownServiceProtocol
     private let authService: FirebaseAuthService
@@ -140,6 +141,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         tripActivityEventRepository: TripActivityEventRepositoryProtocol,
         lifecycleService: TripSessionLifecycleServiceProtocol,
         gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol = GameInstanceLifecycleService.shared,
+        tripEntitlementGate: TripEntitlementGate = .shared,
         tripActivityEventRecording: TripActivityEventRecordingProtocol = TripActivityEventRecordingService.shared,
         regionRemovalCooldownService: RegionRemovalCooldownServiceProtocol = RegionRemovalCooldownService(),
         authService: FirebaseAuthService,
@@ -156,6 +158,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         self.discoveryResolutionRepository = discoveryResolutionRepository
         self.lifecycleService = lifecycleService
         self.gameInstanceLifecycleService = gameInstanceLifecycleService
+        self.tripEntitlementGate = tripEntitlementGate
         self.tripActivityEventRecording = tripActivityEventRecording
         self.regionRemovalCooldownService = regionRemovalCooldownService
         self.authService = authService
@@ -644,6 +647,11 @@ final class LicensePlateGameViewModel: ObservableObject {
 
     func startTrip() throws {
         let actorId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        try tripEntitlementGate.validateCanStartTrip(
+            user: authService.currentUser,
+            userId: actorId,
+            sessionId: sessionId
+        )
         try lifecycleService.startTrip(sessionId: sessionId, actorId: actorId)
         refreshSession()
         refreshGame()

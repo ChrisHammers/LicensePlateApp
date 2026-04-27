@@ -15,6 +15,7 @@ struct CombinedTripSetupView: View {
     @StateObject private var viewModel: CombinedTripSetupViewModel
     var onCreated: (TripSession) -> Void
     @State private var isShowingPassengerSelector = false
+    @StateObject private var tripLimitPaywallViewModel = PaywallViewModel()
 
     init(
         viewModel: CombinedTripSetupViewModel,
@@ -109,6 +110,19 @@ struct CombinedTripSetupView: View {
                     viewModel.selectedPassengerIds = selected
                 }
                 .environmentObject(authService)
+            }
+            .sheet(isPresented: Binding(
+                get: { viewModel.shouldPresentTripLimitPaywall },
+                set: { if !$0 { viewModel.dismissTripLimitPaywall() } }
+            )) {
+                PaywallView(
+                    viewModel: tripLimitPaywallViewModel,
+                    onDismiss: { viewModel.dismissTripLimitPaywall() },
+                    source: TripLimitGateSource.create.rawValue
+                )
+                .onAppear {
+                    tripLimitPaywallViewModel.setTripLimitContext()
+                }
             }
         }
     }
@@ -406,6 +420,11 @@ struct CombinedTripSetupView: View {
             onCreated(session)
             dismiss()
         } catch {
+            if error is TripEntitlementGateError {
+                tripLimitPaywallViewModel.setTripLimitContext()
+                FeedbackService.shared.actionError()
+                return
+            }
             viewModel.setError(error.localizedDescription)
             FeedbackService.shared.actionError()
         }

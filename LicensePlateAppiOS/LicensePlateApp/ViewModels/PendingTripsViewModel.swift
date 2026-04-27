@@ -16,10 +16,12 @@ final class PendingTripsViewModel: ObservableObject {
     @Published private(set) var inviteCounterpartyDisplayNames: [String: String] = [:]
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published private(set) var shouldPresentTripLimitPaywall = false
 
     private let tripInviteRepository: TripInviteRepositoryProtocol
     private let resolveInviteDisplayNames: (Set<String>) async -> [String: String]
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
+    private let tripEntitlementGate: TripEntitlementGate
     private var authService: FirebaseAuthService
     private var cancellables = Set<AnyCancellable>()
     /// True after we have subscribed to `inviteSnapshotSignal` once; prevents accumulating subscribers on every loadIfNeeded().
@@ -29,6 +31,7 @@ final class PendingTripsViewModel: ObservableObject {
         tripInviteRepository: TripInviteRepositoryProtocol,
         authService: FirebaseAuthService,
         gameInstanceRepository: GameInstanceRepositoryProtocol = GameInstanceRepository.shared,
+        tripEntitlementGate: TripEntitlementGate = .shared,
         resolveInviteDisplayNames: @escaping (Set<String>) async -> [String: String] = { ids in
             await UserRepository.shared.displayNames(forUserIds: ids)
         }
@@ -36,6 +39,7 @@ final class PendingTripsViewModel: ObservableObject {
         self.tripInviteRepository = tripInviteRepository
         self.authService = authService
         self.gameInstanceRepository = gameInstanceRepository
+        self.tripEntitlementGate = tripEntitlementGate
         self.resolveInviteDisplayNames = resolveInviteDisplayNames
     }
 
@@ -110,8 +114,14 @@ final class PendingTripsViewModel: ObservableObject {
         guard let userId = currentUserId else { return }
         FeedbackService.shared.buttonTap()
         errorMessage = nil
+        shouldPresentTripLimitPaywall = false
         Task { @MainActor in
             do {
+                try tripEntitlementGate.validateCanAddActiveTrip(
+                    user: authService.currentUser,
+                    userId: userId,
+                    source: .inviteAccept
+                )
                 try await tripInviteRepository.acceptInvite(inviteId: invite.inviteId, userId: userId)
                 if let uuid = UUID(uuidString: invite.tripSessionId) {
                     try? await TripCanonicalRemoteSyncService.shared.bootstrapMemberSession(sessionId: uuid)
@@ -128,11 +138,18 @@ final class PendingTripsViewModel: ObservableObject {
                 ))
                 FeedbackService.shared.actionSuccess()
                 loadInvites(userId: userId)
+            } catch is TripEntitlementGateError {
+                shouldPresentTripLimitPaywall = true
+                FeedbackService.shared.actionError()
             } catch {
                 errorMessage = error.localizedDescription
                 FeedbackService.shared.actionError()
             }
         }
+    }
+
+    func dismissTripLimitPaywall() {
+        shouldPresentTripLimitPaywall = false
     }
 
     func decline(invite: TripInvite) {

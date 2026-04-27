@@ -17,6 +17,7 @@ struct TripSettingsView: View {
     @State private var showDeleteConfirmation = false
     @State private var showLeaveTripConfirmation = false
     @State private var retryAction: (() -> Void)?
+    @StateObject private var tripLimitPaywallViewModel = PaywallViewModel()
 
     private var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
@@ -86,6 +87,19 @@ struct TripSettingsView: View {
                 Text(msg)
             }
         }
+        .sheet(isPresented: Binding(
+            get: { viewModel.shouldPresentTripLimitPaywall },
+            set: { if !$0 { viewModel.dismissTripLimitPaywall() } }
+        )) {
+            PaywallView(
+                viewModel: tripLimitPaywallViewModel,
+                onDismiss: { viewModel.dismissTripLimitPaywall() },
+                source: TripLimitGateSource.start.rawValue
+            )
+            .onAppear {
+                tripLimitPaywallViewModel.setTripLimitContext()
+            }
+        }
     }
 
     private var tripInfoContent: some View {
@@ -125,6 +139,11 @@ struct TripSettingsView: View {
                     do {
                         try viewModel.startTrip()
                     } catch {
+                        if error is TripEntitlementGateError {
+                            tripLimitPaywallViewModel.setTripLimitContext()
+                            FeedbackService.shared.actionError()
+                            return
+                        }
                         viewModel.setError(error.localizedDescription)
                         retryAction = { try? viewModel.startTrip() }
                     }

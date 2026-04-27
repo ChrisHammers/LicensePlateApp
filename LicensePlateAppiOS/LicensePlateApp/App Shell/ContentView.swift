@@ -31,6 +31,7 @@ struct ContentView: View {
         tripInviteRepository: TripInviteRepository.shared,
         authService: FirebaseAuthService()
     )
+    @StateObject private var tripLimitPaywallViewModel = PaywallViewModel()
     @StateObject private var travelLogViewModel = TravelLogViewModel(
         travelLogRepository: TravelLogRepository.shared,
         tripSessionRepository: TripSessionRepository.shared,
@@ -234,6 +235,19 @@ struct ContentView: View {
             }
             .onChange(of: isShowingCreateSheet) { _, isShowing in
                 if !isShowing { activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id) }
+            }
+            .sheet(isPresented: Binding(
+                get: { pendingTripsViewModel.shouldPresentTripLimitPaywall },
+                set: { if !$0 { pendingTripsViewModel.dismissTripLimitPaywall() } }
+            )) {
+                PaywallView(
+                    viewModel: tripLimitPaywallViewModel,
+                    onDismiss: { pendingTripsViewModel.dismissTripLimitPaywall() },
+                    source: TripLimitGateSource.inviteAccept.rawValue
+                )
+                .onAppear {
+                    tripLimitPaywallViewModel.setTripLimitContext()
+                }
             }
             .alert("Error".localized, isPresented: Binding(
                 get: { activeTripsListViewModel.errorMessage != nil },

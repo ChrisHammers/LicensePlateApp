@@ -348,4 +348,155 @@ struct CombinedTripSetupViewModelTests {
         #expect(instances.count == 1)
         #expect(instances[0].commonConfig.gameMode == .competitive)
     }
+
+    @Test func createTripBlockedWhenSignedUpUserAtActiveTripLimit() async throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        let sessionRepo = TripSessionRepository.shared
+        let instanceRepo = GameInstanceRepository.shared
+        sessionRepo.setModelContext(ctx)
+        instanceRepo.setModelContext(ctx)
+
+        let auth = FirebaseAuthService()
+        let userId = "limit-user"
+        let testUser = AppUser(id: userId, userName: "U", firebaseUID: userId)
+        ctx.insert(testUser)
+        try ctx.save()
+        auth.currentUser = testUser
+
+        try sessionRepo.create(session: TripSession(
+            id: UUID(),
+            name: "Existing",
+            status: .created,
+            createdAt: Date(),
+            createdBy: userId,
+            participants: [TripParticipant(userId: userId, role: .owner, joinedAt: Date())]
+        ))
+
+        let bridge = MockRevenueCatBridge(tier: .guest)
+        let entitlementService = EntitlementService(revenueCatBridge: bridge)
+        entitlementService.setCurrentUserId(userId)
+        let gate = TripEntitlementGate(
+            tripSessionRepository: sessionRepo,
+            entitlementService: entitlementService,
+            analytics: AnalyticsLoggingSpy()
+        )
+        let viewModel = CombinedTripSetupViewModel(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: instanceRepo,
+            tripEntitlementGate: gate,
+            authService: auth
+        )
+        viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = true
+
+        #expect(throws: TripEntitlementGateError.self) {
+            _ = try viewModel.createTrip()
+        }
+        #expect(viewModel.shouldPresentTripLimitPaywall)
+        let activeSessions = try sessionRepo.loadActiveSessions(userId: userId)
+        #expect(activeSessions.count == 1)
+    }
+
+    @Test func createTripAllowsGoldThirdActiveTripAndBlocksFourth() async throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        let sessionRepo = TripSessionRepository.shared
+        let instanceRepo = GameInstanceRepository.shared
+        sessionRepo.setModelContext(ctx)
+        instanceRepo.setModelContext(ctx)
+
+        let auth = FirebaseAuthService()
+        let userId = "gold-user"
+        let testUser = AppUser(id: userId, userName: "Gold", firebaseUID: userId)
+        ctx.insert(testUser)
+        try ctx.save()
+        auth.currentUser = testUser
+
+        for index in 1...2 {
+            try sessionRepo.create(session: TripSession(
+                id: UUID(),
+                name: "Existing \(index)",
+                status: .active,
+                createdAt: Date(),
+                createdBy: userId,
+                startedAt: Date(),
+                participants: [TripParticipant(userId: userId, role: .owner, joinedAt: Date())]
+            ))
+        }
+
+        let bridge = MockRevenueCatBridge(tier: .gold)
+        let entitlementService = EntitlementService(revenueCatBridge: bridge)
+        entitlementService.setCurrentUserId(userId)
+        let gate = TripEntitlementGate(
+            tripSessionRepository: sessionRepo,
+            entitlementService: entitlementService,
+            analytics: AnalyticsLoggingSpy()
+        )
+        let viewModel = CombinedTripSetupViewModel(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: instanceRepo,
+            tripEntitlementGate: gate,
+            authService: auth
+        )
+        viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = true
+
+        _ = try viewModel.createTrip()
+        #expect(viewModel.shouldPresentTripLimitPaywall == false)
+
+        #expect(throws: TripEntitlementGateError.self) {
+            _ = try viewModel.createTrip()
+        }
+        #expect(viewModel.shouldPresentTripLimitPaywall)
+    }
+
+    @Test func createTripAllowsRoyaleBeyondGoldLimit() async throws {
+        let container = try makeContainer()
+        let ctx = ModelContext(container)
+        let sessionRepo = TripSessionRepository.shared
+        let instanceRepo = GameInstanceRepository.shared
+        sessionRepo.setModelContext(ctx)
+        instanceRepo.setModelContext(ctx)
+
+        let auth = FirebaseAuthService()
+        let userId = "royale-user"
+        let testUser = AppUser(id: userId, userName: "Royale", firebaseUID: userId)
+        ctx.insert(testUser)
+        try ctx.save()
+        auth.currentUser = testUser
+
+        for index in 1...4 {
+            try sessionRepo.create(session: TripSession(
+                id: UUID(),
+                name: "Existing \(index)",
+                status: .active,
+                createdAt: Date(),
+                createdBy: userId,
+                startedAt: Date(),
+                participants: [TripParticipant(userId: userId, role: .owner, joinedAt: Date())]
+            ))
+        }
+
+        let bridge = MockRevenueCatBridge(tier: .royale)
+        let entitlementService = EntitlementService(revenueCatBridge: bridge)
+        entitlementService.setCurrentUserId(userId)
+        let gate = TripEntitlementGate(
+            tripSessionRepository: sessionRepo,
+            entitlementService: entitlementService,
+            analytics: AnalyticsLoggingSpy()
+        )
+        let viewModel = CombinedTripSetupViewModel(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: instanceRepo,
+            tripEntitlementGate: gate,
+            authService: auth
+        )
+        viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = true
+
+        _ = try viewModel.createTrip()
+
+        #expect(viewModel.shouldPresentTripLimitPaywall == false)
+    }
 }

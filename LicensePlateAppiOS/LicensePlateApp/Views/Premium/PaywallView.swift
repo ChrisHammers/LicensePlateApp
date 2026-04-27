@@ -13,6 +13,7 @@ struct PaywallView: View {
     /// Optional primary button (e.g. "Continue" in onboarding). When nil, only "Maybe Later" is shown.
     var primaryActionTitle: String? = nil
     var primaryAction: (() -> Void)? = nil
+    var source: String = "paywall"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -115,7 +116,7 @@ struct PaywallView: View {
             .padding(.bottom, 32)
         }
         .task {
-            await viewModel.loadOfferings(source: "paywall")
+            await viewModel.loadOfferings(source: source)
         }
     }
 }
@@ -164,4 +165,10 @@ private struct PaywallPackageRow: View {
 #Preview("Paywall - Empty") {
     let vm = PaywallViewModel()
     return PaywallView(viewModel: vm, onDismiss: {})
+}
+
+#Preview("Paywall - Trip Limit") {
+    let vm = PaywallViewModel()
+    vm.setTripLimitContext()
+    return PaywallView(viewModel: vm, onDismiss: {}, source: "trip_limit_create")
 }

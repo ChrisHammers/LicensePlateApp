@@ -45,6 +45,7 @@ struct AnalyticsServiceTests {
             (.tripInvitesScreenOpened, "trip_invites_screen_opened"),
             (.paywallViewed(source: nil), "paywall_viewed"),
             (.paywallDismissed, "paywall_dismissed"),
+            (.tripLimitHit(source: "trip_limit_create", activeTripCount: 1, activeTripLimit: 1, tier: "signedUp"), "trip_limit_hit"),
             (.avatarPickerOpened(source: "test"), "avatar_picker_opened"),
             (.avatarSaved(avatarId: "id", source: "profile"), "avatar_saved"),
             (.notificationDeliveryFailed(error: "err"), "notification_delivery_failed"),
@@ -98,6 +99,17 @@ struct AnalyticsServiceTests {
         #expect(combinedWithContext.parameters?["game_count"] as? Int == 1)
         #expect(combinedWithContext.parameters?["game_modes"] as? String == "collaborative")
         #expect(combinedWithContext.parameters?["has_teams"] as? Bool == false)
+
+        let limitHit = AnalyticsService.Event.tripLimitHit(
+            source: "trip_limit_invite_accept",
+            activeTripCount: 1,
+            activeTripLimit: 1,
+            tier: "signedUp"
+        )
+        #expect(limitHit.parameters?["source"] as? String == "trip_limit_invite_accept")
+        #expect(limitHit.parameters?["active_trip_count"] as? Int == 1)
+        #expect(limitHit.parameters?["active_trip_limit"] as? Int == 1)
+        #expect(limitHit.parameters?["tier"] as? String == "signedUp")
     }
 
     @Test @MainActor func spyRecordsTypedEvents() async throws {

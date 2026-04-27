@@ -9,6 +9,12 @@
 import Foundation
 import Combine
 
+enum PaywallContext {
+    case general
+    case avatar(AvatarUnlockSource?)
+    case tripLimit
+}
+
 @MainActor
 final class PaywallViewModel: ObservableObject {
 
@@ -19,7 +25,14 @@ final class PaywallViewModel: ObservableObject {
     @Published private(set) var isRestoring = false
 
     /// When set (e.g. from locked avatar tap), view can show contextual upsell copy.
-    var unlockContext: AvatarUnlockSource?
+    private var context: PaywallContext = .general
+
+    var unlockContext: AvatarUnlockSource? {
+        if case .avatar(let source) = context {
+            return source
+        }
+        return nil
+    }
 
     private let bridge: RevenueCatEntitlementProviding
     private let analytics: AnalyticsLogging
@@ -31,6 +44,9 @@ final class PaywallViewModel: ObservableObject {
 
     /// Unlock reason title for sheet/paywall header when presented from a locked avatar.
     var unlockReasonTitle: String {
+        if case .tripLimit = context {
+            return "Active trip limit reached".localized
+        }
         guard let source = unlockContext else { return "Upgrade to Premium".localized }
         switch source {
         case .guest: return "Available to everyone".localized
@@ -49,6 +65,9 @@ final class PaywallViewModel: ObservableObject {
 
     /// Unlock reason message for paywall body when presented from locked avatar.
     var unlockReasonMessage: String {
+        if case .tripLimit = context {
+            return "Upgrade to keep more road trips active at once.".localized
+        }
         guard let source = unlockContext else { return "Get more from RoadTrip Royale with premium features.".localized }
         switch source {
         case .signedUp: return "Create an account to use this avatar and save your progress.".localized
@@ -74,7 +93,13 @@ final class PaywallViewModel: ObservableObject {
     }
 
     func setUnlockContext(_ source: AvatarUnlockSource?) {
-        unlockContext = source
+        context = source.map { .avatar($0) } ?? .general
+        objectWillChange.send()
+    }
+
+    func setTripLimitContext() {
+        context = .tripLimit
+        objectWillChange.send()
     }
 
     func loadOfferings(source: String? = nil) async {

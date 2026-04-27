@@ -78,11 +78,19 @@ struct PendingTripsViewModelTests {
             expiresAt: Date().addingTimeInterval(86400)
         )
         mock.seed(invite)
+        let entitlementService = EntitlementService(revenueCatBridge: MockRevenueCatBridge(tier: .guest))
+        entitlementService.setCurrentUserId(userId)
+        let gate = TripEntitlementGate(
+            tripSessionRepository: MockTripSessionRepository(),
+            entitlementService: entitlementService,
+            analytics: AnalyticsLoggingSpy()
+        )
 
         let viewModel = PendingTripsViewModel(
             tripInviteRepository: mock,
             authService: auth(for: userId),
             gameInstanceRepository: MockGameInstanceRepository(),
+            tripEntitlementGate: gate,
             resolveInviteDisplayNames: { _ in [:] }
         )
         viewModel.loadInvites(userId: userId)
@@ -93,6 +101,101 @@ struct PendingTripsViewModelTests {
         viewModel.loadInvites(userId: userId)
         #expect(viewModel.incomingInvites.isEmpty)
         #expect(viewModel.errorMessage == nil)
+    }
+
+    @Test func acceptInviteBlockedAtActiveTripLimitDoesNotAccept() async throws {
+        let mock = MockTripInviteRepository()
+        let sessionRepo = MockTripSessionRepository()
+        let userId = "test-user"
+        let inviteId = UUID().uuidString
+        let invite = TripInvite(
+            inviteId: inviteId,
+            tripSessionId: UUID().uuidString,
+            tripName: "Blocked Accept",
+            fromUserId: "other",
+            toUserId: userId,
+            status: .pending,
+            createdAt: Date(),
+            expiresAt: Date().addingTimeInterval(86400)
+        )
+        mock.seed(invite)
+        sessionRepo.seed(TripSession(
+            id: UUID(),
+            name: "Existing",
+            status: .created,
+            createdAt: Date(),
+            createdBy: userId,
+            participants: [TripParticipant(userId: userId, role: .owner, joinedAt: Date())]
+        ))
+
+        let bridge = MockRevenueCatBridge(tier: .guest)
+        let entitlementService = EntitlementService(revenueCatBridge: bridge)
+        entitlementService.setCurrentUserId(userId)
+        let gate = TripEntitlementGate(
+            tripSessionRepository: sessionRepo,
+            entitlementService: entitlementService,
+            analytics: AnalyticsLoggingSpy()
+        )
+        let viewModel = PendingTripsViewModel(
+            tripInviteRepository: mock,
+            authService: auth(for: userId),
+            gameInstanceRepository: MockGameInstanceRepository(),
+            tripEntitlementGate: gate,
+            resolveInviteDisplayNames: { _ in [:] }
+        )
+        viewModel.loadInvites(userId: userId)
+
+        viewModel.accept(invite: viewModel.incomingInvites[0])
+        try await Task.sleep(nanoseconds: 150_000_000)
+
+        #expect(mock.acceptInviteCallCount == 0)
+        #expect(viewModel.shouldPresentTripLimitPaywall)
+        viewModel.loadInvites(userId: userId)
+        #expect(viewModel.incomingInvites.count == 1)
+    }
+
+    @Test func acceptInviteBelowLimitStillAccepts() async throws {
+        let mock = MockTripInviteRepository()
+        let sessionRepo = MockTripSessionRepository()
+        let userId = "gold-user"
+        let invite = TripInvite(
+            inviteId: UUID().uuidString,
+            tripSessionId: UUID().uuidString,
+            tripName: "Allowed Accept",
+            fromUserId: "other",
+            toUserId: userId,
+            status: .pending,
+            createdAt: Date(),
+            expiresAt: Date().addingTimeInterval(86400)
+        )
+        mock.seed(invite)
+        sessionRepo.seed(TripSession(id: UUID(), name: "Existing 1", status: .active, createdAt: Date(), createdBy: userId, startedAt: Date(), participants: []))
+        sessionRepo.seed(TripSession(id: UUID(), name: "Existing 2", status: .created, createdAt: Date(), createdBy: userId, participants: []))
+
+        let bridge = MockRevenueCatBridge(tier: .gold)
+        let entitlementService = EntitlementService(revenueCatBridge: bridge)
+        entitlementService.setCurrentUserId(userId)
+        let gate = TripEntitlementGate(
+            tripSessionRepository: sessionRepo,
+            entitlementService: entitlementService,
+            analytics: AnalyticsLoggingSpy()
+        )
+        let viewModel = PendingTripsViewModel(
+            tripInviteRepository: mock,
+            authService: auth(for: userId),
+            gameInstanceRepository: MockGameInstanceRepository(),
+            tripEntitlementGate: gate,
+            resolveInviteDisplayNames: { _ in [:] }
+        )
+        viewModel.loadInvites(userId: userId)
+
+        viewModel.accept(invite: viewModel.incomingInvites[0])
+        try await Task.sleep(nanoseconds: 150_000_000)
+
+        #expect(mock.acceptInviteCallCount == 1)
+        #expect(viewModel.shouldPresentTripLimitPaywall == false)
+        viewModel.loadInvites(userId: userId)
+        #expect(viewModel.incomingInvites.isEmpty)
     }
 
     @Test func declineInviteUpdatesStatusAndRefreshesList() async throws {

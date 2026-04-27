@@ -20,6 +20,7 @@ final class MockTripInviteRepository: TripInviteRepositoryProtocol {
     private var invites: [TripInvite] = []
 
     var shouldThrow = false
+    private(set) var acceptInviteCallCount = 0
 
     func setModelContext(_ context: ModelContext) {
         _ = context
@@ -66,6 +67,7 @@ final class MockTripInviteRepository: TripInviteRepositoryProtocol {
 
     func acceptInvite(inviteId: String, userId: String) async throws {
         if shouldThrow { throw NSError(domain: "MockTripInviteRepository", code: -1, userInfo: nil) }
+        acceptInviteCallCount += 1
         guard let idx = invites.firstIndex(where: { $0.inviteId == inviteId && $0.toUserId == userId }) else {
             return
         }
@@ -126,5 +128,6 @@ final class MockTripInviteRepository: TripInviteRepositoryProtocol {
 
     func clear() {
         invites.removeAll()
+        acceptInviteCallCount = 0
     }
 }

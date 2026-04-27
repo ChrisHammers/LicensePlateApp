@@ -13,11 +13,13 @@ final class TripSettingsViewModel: ObservableObject {
 
     @Published private(set) var currentSession: TripSession
     @Published private(set) var errorMessage: String?
+    @Published private(set) var shouldPresentTripLimitPaywall = false
 
     let sessionId: UUID
 
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let lifecycleService: TripSessionLifecycleServiceProtocol
+    private let tripEntitlementGate: TripEntitlementGate
     private let authService: FirebaseAuthService
     private let participationService: TripParticipationServiceProtocol
 
@@ -41,12 +43,14 @@ final class TripSettingsViewModel: ObservableObject {
         tripSessionRepository: TripSessionRepositoryProtocol,
         lifecycleService: TripSessionLifecycleServiceProtocol,
         authService: FirebaseAuthService,
+        tripEntitlementGate: TripEntitlementGate = .shared,
         participationService: TripParticipationServiceProtocol = TripParticipationService.shared
     ) {
         self.sessionId = session.id
         self.currentSession = session
         self.tripSessionRepository = tripSessionRepository
         self.lifecycleService = lifecycleService
+        self.tripEntitlementGate = tripEntitlementGate
         self.authService = authService
         self.participationService = participationService
     }
@@ -59,6 +63,17 @@ final class TripSettingsViewModel: ObservableObject {
 
     func startTrip() throws {
         let actorId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        shouldPresentTripLimitPaywall = false
+        do {
+            try tripEntitlementGate.validateCanStartTrip(
+                user: authService.currentUser,
+                userId: actorId,
+                sessionId: sessionId
+            )
+        } catch let error as TripEntitlementGateError {
+            shouldPresentTripLimitPaywall = true
+            throw error
+        }
         try lifecycleService.startTrip(sessionId: sessionId, actorId: actorId)
         refreshSession()
     }
@@ -86,6 +101,10 @@ final class TripSettingsViewModel: ObservableObject {
     func setError(_ message: String) {
         errorMessage = message
         objectWillChange.send()
+    }
+
+    func dismissTripLimitPaywall() {
+        shouldPresentTripLimitPaywall = false
     }
 
     func clearError() {

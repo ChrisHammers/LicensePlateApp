@@ -14,6 +14,7 @@ struct PendingTripsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var authService: FirebaseAuthService
     @StateObject private var viewModel: PendingTripsViewModel
+    @StateObject private var tripLimitPaywallViewModel = PaywallViewModel()
 
     init() {
         let tripRepo = TripInviteRepository.shared
@@ -97,6 +98,19 @@ struct PendingTripsView: View {
                 viewModel.setAuthService(authService)
                 viewModel.onAppear()
                 AnalyticsService.shared.logScreenView(screenName: "pending_trips")
+            }
+            .sheet(isPresented: Binding(
+                get: { viewModel.shouldPresentTripLimitPaywall },
+                set: { if !$0 { viewModel.dismissTripLimitPaywall() } }
+            )) {
+                PaywallView(
+                    viewModel: tripLimitPaywallViewModel,
+                    onDismiss: { viewModel.dismissTripLimitPaywall() },
+                    source: TripLimitGateSource.inviteAccept.rawValue
+                )
+                .onAppear {
+                    tripLimitPaywallViewModel.setTripLimitContext()
+                }
             }
         }
         .accessibilityElement(children: .contain)

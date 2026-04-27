@@ -36,6 +36,7 @@ final class CombinedTripSetupViewModel: ObservableObject {
 
     @Published private(set) var errorMessage: String?
     @Published private(set) var isCreating: Bool = false
+    @Published private(set) var shouldPresentTripLimitPaywall = false
 
     // MARK: - Dependencies
 
@@ -43,6 +44,7 @@ final class CombinedTripSetupViewModel: ObservableObject {
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let tripInviteRepository: TripInviteRepositoryProtocol
     private let lifecycleService: TripSessionLifecycleServiceProtocol
+    private let tripEntitlementGate: TripEntitlementGate
     private let authService: FirebaseAuthService
 
     init(
@@ -50,12 +52,14 @@ final class CombinedTripSetupViewModel: ObservableObject {
         gameInstanceRepository: GameInstanceRepositoryProtocol,
         tripInviteRepository: TripInviteRepositoryProtocol = TripInviteRepository.shared,
         lifecycleService: TripSessionLifecycleServiceProtocol = TripSessionLifecycleService.shared,
+        tripEntitlementGate: TripEntitlementGate = .shared,
         authService: FirebaseAuthService
     ) {
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
         self.tripInviteRepository = tripInviteRepository
         self.lifecycleService = lifecycleService
+        self.tripEntitlementGate = tripEntitlementGate
         self.authService = authService
     }
 
@@ -111,6 +115,10 @@ final class CombinedTripSetupViewModel: ObservableObject {
         errorMessage = nil
     }
 
+    func dismissTripLimitPaywall() {
+        shouldPresentTripLimitPaywall = false
+    }
+
     /// Call from the View when createTrip throws so the error alert can display the message.
     func setError(_ message: String) {
         errorMessage = message
@@ -119,6 +127,7 @@ final class CombinedTripSetupViewModel: ObservableObject {
     /// Creates TripSession (status `.created`, `startedAt` nil) and GameInstances. When `startTripRightAway`, calls `startTrip` so the session becomes `.active`, games start, and trip/game events are appended. Returns the session as persisted (reloaded) on success.
     func createTrip() throws -> TripSession {
         errorMessage = nil
+        shouldPresentTripLimitPaywall = false
         isCreating = true
         defer { isCreating = false }
 
@@ -131,6 +140,18 @@ final class CombinedTripSetupViewModel: ObservableObject {
             throw CombinedTripSetupError.noGameTypesSelected
         }
 
+        let createdBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? "unknown"
+        do {
+            try tripEntitlementGate.validateCanAddActiveTrip(
+                user: authService.currentUser,
+                userId: createdBy,
+                source: .create
+            )
+        } catch let error as TripEntitlementGateError {
+            shouldPresentTripLimitPaywall = true
+            throw error
+        }
+
         applyTerritoryGatingFromCountryToggles()
 
         let createdAt = Date()
@@ -139,7 +160,6 @@ final class CombinedTripSetupViewModel: ObservableObject {
             : tripName.trimmingCharacters(in: .whitespacesAndNewlines)
 
         let sessionId = UUID()
-        let createdBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? "unknown"
         let participant = TripParticipant(userId: createdBy, role: .owner, joinedAt: createdAt)
 
         let session = TripSession(

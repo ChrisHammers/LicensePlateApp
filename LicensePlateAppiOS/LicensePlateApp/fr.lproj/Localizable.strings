@@ -604,6 +604,9 @@
 "Purchase failed. Please try again." = "Achat échoué. Veuillez réessayer.";
 "No purchases to restore." = "Aucun achat à restaurer.";
 "Get more from RoadTrip Royale with premium features." = "Profitez davantage de RoadTrip Royale avec les fonctionnalités premium.";
+"Active trip limit reached" = "Limite de trajets actifs atteinte";
+"Upgrade to keep more road trips active at once." = "Passez à une offre supérieure pour garder plus de trajets actifs à la fois.";
+"You have reached your active trip limit." = "Vous avez atteint votre limite de trajets actifs.";
 
 // Step 6.9.3 — Trip vs game lifecycle
 "Trips cannot be reset." = "Les trajets ne peuvent pas être réinitialisés.";
