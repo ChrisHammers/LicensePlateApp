@@ -22,10 +22,7 @@ struct TravelLogView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-
+            AppBackgroundView {
                 if viewModel.isLoading {
                     ProgressView()
                         .accessibilityLabel("Loading…".localized)

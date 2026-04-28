@@ -134,11 +134,11 @@ private struct PaywallPackageRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(package.displayName)
                         .font(.system(.headline, design: .rounded))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(Color.Theme.primaryBlue)
                     if let type = package.packageType, !type.isEmpty {
                         Text(type)
                             .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.Theme.softBrown)
                     }
                 }
                 Spacer()

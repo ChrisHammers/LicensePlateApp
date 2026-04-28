@@ -26,10 +26,7 @@ struct JoinFamilySheet: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 Form {
                     Section {
                         TextField("Enter Share Code".localized, text: $shareCode)
@@ -72,6 +69,7 @@ struct JoinFamilySheet: View {
                     }
                 }
                 .formStyle(.grouped)
+                .scrollContentBackground(.hidden)
             }
             .navigationTitle("Join Family".localized)
             .navigationBarTitleDisplayMode(.inline)

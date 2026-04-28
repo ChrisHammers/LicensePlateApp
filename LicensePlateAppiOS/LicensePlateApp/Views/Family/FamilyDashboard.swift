@@ -32,10 +32,7 @@ struct FamilyDashboard: View {
     
     var body: some View {
      //   NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 if viewModel.isLoading {
                     ProgressView()
                 } else if let family = viewModel.family {
@@ -194,7 +191,7 @@ struct FamilyDashboard: View {
                                 .fontWeight(.semibold)
                                 .frame(maxWidth: .infinity)
                                 .padding()
-                                .background(Color.gray.opacity(0.2))
+                                .background(Color.Theme.cardBackground)
                                 .foregroundColor(Color.Theme.primaryBlue)
                                 .cornerRadius(12)
                             }

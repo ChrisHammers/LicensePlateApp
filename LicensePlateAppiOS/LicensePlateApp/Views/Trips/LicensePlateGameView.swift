@@ -715,7 +715,7 @@ struct LicensePlateGameView: View {
                                     event.sourceEventId
                                 ))
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Color.Theme.softBrown)
                                 if event.gameInstanceId == viewModel.game.id {
                                     Text("game.progression.ledger_badge_game".localized)
                                         .font(.caption2)
@@ -966,7 +966,7 @@ struct LicensePlateGameView: View {
                 }
             }
         } message: {
-            Text("This ends this game. Make sure all participants have synced so all discoveries are counted. You can start a new game.".localized)
+            Text("   game.".localized)
         }
     }
 
@@ -1160,7 +1160,7 @@ struct LicensePlateGameView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(toast.title)
                 .font(.system(.subheadline, design: .rounded).weight(.semibold))
-                .foregroundStyle(.primary)
+                .foregroundStyle(Color.Theme.primaryBlue)
             Text(toast.message)
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(Color.Theme.primaryBlue)

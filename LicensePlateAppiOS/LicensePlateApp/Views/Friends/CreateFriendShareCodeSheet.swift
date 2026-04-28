@@ -16,10 +16,7 @@ struct CreateFriendShareCodeSheet: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-
+            AppBackgroundView {
                 if viewModel.isGenerating {
                     ProgressView()
                         .scaleEffect(1.5)

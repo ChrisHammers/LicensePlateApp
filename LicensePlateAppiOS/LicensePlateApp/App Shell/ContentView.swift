@@ -687,10 +687,7 @@ struct DefaultSettingsView: View {
     
     var body: some View {
       NavigationStack(path: $coordinator.path) { //NavigationStack(path: Binding(get: { coordinator.path }, set: { coordinator.path = $0 })) {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 List {
                     Section {
                         VStack(spacing: 12) {
@@ -858,7 +855,6 @@ struct DefaultSettingsView: View {
             }
         }
       .environmentObject(coordinator)
-        .background(Color.Theme.background)
     }
     
     // Removed: All settings content moved to separate view files

@@ -27,10 +27,7 @@ struct FriendsHub: View {
     }
 
     var body: some View {
-        ZStack {
-            Color.Theme.background
-                .ignoresSafeArea()
-
+        AppBackgroundView {
             VStack(spacing: 0) {
                 friendsHubTabBar
                     .padding()

@@ -17,10 +17,7 @@ struct FamilyPendingApprovals: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 List {
                     if pendingRequests.isEmpty {
                         Text("No pending requests".localized)

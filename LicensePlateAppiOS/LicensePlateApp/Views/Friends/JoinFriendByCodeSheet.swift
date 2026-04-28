@@ -18,10 +18,7 @@ struct JoinFriendByCodeSheet: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-
+            AppBackgroundView {
                 Form {
                     Section {
                         TextField("Enter Share Code".localized, text: $viewModel.shareCode)
@@ -64,6 +61,7 @@ struct JoinFriendByCodeSheet: View {
                     }
                 }
                 .formStyle(.grouped)
+                .scrollContentBackground(.hidden)
 
                 if viewModel.isRedeeming {
                     Color.black.opacity(0.3)

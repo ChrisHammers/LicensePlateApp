@@ -33,11 +33,13 @@ struct TripSessionView: View {
     }
 
     var body: some View {
-        Group {
-            if let session = viewModel.session {
-                content(session: session)
-            } else {
-                TripMissingView()
+        AppBackgroundView {
+            Group {
+                if let session = viewModel.session {
+                    content(session: session)
+                } else {
+                    TripMissingView()
+                }
             }
         }
         .navigationTitle(viewModel.session?.name ?? "Trip".localized)
@@ -115,7 +117,6 @@ struct TripSessionView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        .background(Color.Theme.background)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {

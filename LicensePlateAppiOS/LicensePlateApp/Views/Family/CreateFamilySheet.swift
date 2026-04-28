@@ -20,10 +20,7 @@ struct CreateFamilySheet: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 Form {
                     Section {
                         TextField("Family Name".localized, text: $familyName)
@@ -48,6 +45,7 @@ struct CreateFamilySheet: View {
                     }
                 }
                 .formStyle(.grouped)
+                .scrollContentBackground(.hidden)
                 .disabled(isCreating)
                 
                 // Loading overlay

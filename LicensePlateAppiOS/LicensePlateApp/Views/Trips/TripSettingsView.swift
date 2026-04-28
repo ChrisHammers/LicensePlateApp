@@ -28,10 +28,7 @@ struct TripSettingsView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-
+            AppBackgroundView {
                 List {
                     Section {
                         VStack {
@@ -66,7 +63,6 @@ struct TripSettingsView: View {
                 }
             }
         }
-        .background(Color.Theme.background)
         .alert("Error".localized, isPresented: Binding(
             get: { viewModel.errorMessage != nil },
             set: { if !$0 { viewModel.clearError(); retryAction = nil } }

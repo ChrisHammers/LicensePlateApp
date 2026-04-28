@@ -20,10 +20,7 @@ struct FriendInviteDetail: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-
+            AppBackgroundView {
                 VStack(spacing: 24) {
                     if viewModel.isLoadingUser {
                         ProgressView()
@@ -90,7 +87,7 @@ struct FriendInviteDetail: View {
                             Text("Decline".localized)
                                 .frame(maxWidth: .infinity)
                                 .padding()
-                                .background(Color.gray.opacity(0.2))
+                                .background(Color.Theme.cardBackground)
                                 .foregroundColor(Color.Theme.primaryBlue)
                                 .cornerRadius(12)
                         }

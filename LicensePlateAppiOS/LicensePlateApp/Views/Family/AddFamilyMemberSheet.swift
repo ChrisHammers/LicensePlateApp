@@ -27,10 +27,7 @@ struct AddFamilyMemberSheet: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 List {
                     Section("Search".localized) {
                         TextField("Username, email, or phone".localized, text: $searchQuery)

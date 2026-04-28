@@ -12,10 +12,7 @@ struct NewTripDefaultsView: View {
     @StateObject private var viewModel = NewTripDefaultsViewModel()
 
     var body: some View {
-        ZStack {
-            Color.Theme.background
-                .ignoresSafeArea()
-
+        AppBackgroundView {
             List {
                 Section("Trip Defaults") {
                     VStack(spacing: 12) {

@@ -25,7 +25,8 @@ struct InvitePlayersView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            AppBackgroundView {
+                List {
                 if viewModel.isLoading {
                     ProgressView()
                         .frame(maxWidth: .infinity)
@@ -72,10 +73,10 @@ struct InvitePlayersView: View {
                         .accessibilityHint(candidate.isSelectable ? "Double tap to select passenger".localized : "Unavailable for invite".localized)
                     }
                 }
+                }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(Color.Theme.background)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

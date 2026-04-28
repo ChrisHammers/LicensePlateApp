@@ -32,10 +32,7 @@ struct FamilySettings: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 List {
                     // Family Name
                     if viewModel.isCaptainOrCreator {

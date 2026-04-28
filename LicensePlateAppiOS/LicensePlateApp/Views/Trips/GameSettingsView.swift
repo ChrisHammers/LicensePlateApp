@@ -62,10 +62,7 @@ struct GameSettingsView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-
+            AppBackgroundView {
                 List {
                     ForEach(SettingsSection.allCases, id: \.id) { section in
                         Section {
@@ -119,7 +116,6 @@ struct GameSettingsView: View {
                 }
             }
         }
-        .background(Color.Theme.background)
         .onAppear {
             viewModel.refreshGame()
             viewModel.beginLicensePlateScopeDraft()
@@ -154,7 +150,7 @@ struct GameSettingsView: View {
                     : "This trip has ended; game actions are unavailable.".localized
                 )
                 .font(.system(.caption, design: .rounded))
-                .foregroundStyle(Color.secondary)
+                .foregroundStyle(Color.Theme.softBrown)
                 .padding(.vertical, 8)
                 .accessibilityLabel(viewModel.currentSession.status == .cancelled
                     ? "This trip was cancelled; game actions are unavailable.".localized
@@ -163,7 +159,7 @@ struct GameSettingsView: View {
             } else if !viewModel.isTripContainerActive {
                 Text("Start the trip from trip settings before starting this game.".localized)
                     .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.secondary)
+                    .foregroundStyle(Color.Theme.softBrown)
                     .padding(.vertical, 8)
                     .accessibilityLabel("Start the trip from trip settings before starting this game.".localized)
             } else if viewModel.game.commonConfig.lifecycleState == .created {
@@ -232,7 +228,7 @@ struct GameSettingsView: View {
                         : "This game has ended. Reset it from Game actions to play again.".localized
                 )
                 .font(.system(.caption, design: .rounded))
-                .foregroundStyle(Color.secondary)
+                .foregroundStyle(Color.Theme.softBrown)
                 .padding(.vertical, 4)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityLabel(
@@ -298,7 +294,7 @@ struct GameSettingsView: View {
                     if isTripTerminalForGameReset {
                         Text("Reset is not available for ended or cancelled trips.".localized)
                             .font(.caption)
-                            .foregroundStyle(Color.secondary)
+                            .foregroundStyle(Color.Theme.softBrown)
                     }
                 }
                 .padding(.vertical, 12)
@@ -323,11 +319,11 @@ struct GameSettingsView: View {
                     if !viewModel.canRemoveThisGameInstance, viewModel.isTripCreator, !isTripTerminalForGameReset {
                         Text("Only available when the trip has more than one game.".localized)
                             .font(.caption)
-                            .foregroundStyle(Color.secondary)
+                            .foregroundStyle(Color.Theme.softBrown)
                     } else if isTripTerminalForGameReset {
                         Text("Remove game is not available for ended or cancelled trips.".localized)
                             .font(.caption)
-                            .foregroundStyle(Color.secondary)
+                            .foregroundStyle(Color.Theme.softBrown)
                     }
                 }
                 .padding(.vertical, 12)

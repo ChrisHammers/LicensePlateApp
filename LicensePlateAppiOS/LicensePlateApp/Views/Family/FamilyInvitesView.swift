@@ -20,10 +20,7 @@ struct FamilyInvitesView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 if isLoading {
                     ProgressView()
                 } else if pendingInvites.isEmpty {

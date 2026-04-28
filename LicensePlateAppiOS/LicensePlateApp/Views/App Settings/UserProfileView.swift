@@ -137,10 +137,7 @@ struct UserProfileView: View {
     }
     
     var body: some View {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 List {
                     // Profile Image Section
                     Section {
@@ -556,7 +553,7 @@ struct UserProfileView: View {
                                                         .font(.system(size: 18))
                                                         .accessibilityHidden(true)
                                                 }
-                                                .foregroundStyle(authService.isLoading ? Color.gray : Color.Theme.primaryBlue)
+                                                .foregroundStyle(authService.isLoading ? Color.Theme.softBrown.opacity(0.7) : Color.Theme.primaryBlue)
                                                 .padding(.vertical, 10)
                                                 .padding(.horizontal, 12)
                                                 .background(
@@ -902,10 +899,10 @@ private struct ProfileAvatarPickerSheet: View {
                 VStack(spacing: 8) {
                     Text("Selected".localized)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.Theme.softBrown)
                     Text(selectedAvatarDisplayName)
                         .font(.headline)
-                        .foregroundStyle(selectedAvatarDisplayName == "None".localized ? .secondary : .primary)
+                        .foregroundStyle(selectedAvatarDisplayName == "None".localized ? Color.Theme.softBrown : Color.Theme.primaryBlue)
                 }
                 
                 Spacer()

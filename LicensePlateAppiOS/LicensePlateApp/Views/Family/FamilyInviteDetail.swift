@@ -35,10 +35,7 @@ struct FamilyInviteDetail: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 ScrollView {
                     VStack(spacing: 24) {
                         // Family Name Section
@@ -143,7 +140,7 @@ struct FamilyInviteDetail: View {
                             Text("Decline".localized)
                                 .frame(maxWidth: .infinity)
                                 .padding()
-                                .background(Color.gray.opacity(0.2))
+                                .background(Color.Theme.cardBackground)
                                 .foregroundColor(Color.Theme.primaryBlue)
                                 .cornerRadius(12)
                         }

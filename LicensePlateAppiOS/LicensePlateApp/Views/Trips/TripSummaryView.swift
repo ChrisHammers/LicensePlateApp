@@ -26,30 +26,31 @@ struct TripSummaryView: View {
     private var discoveryHighlightsCollapsedLimit: Int { 20 }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                headerSection
-                statsSection
-                recapIncompleteBanner
-                if !summary.rankedParticipants.isEmpty {
-                    participantsSection
+        AppBackgroundView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    headerSection
+                    statsSection
+                    recapIncompleteBanner
+                    if !summary.rankedParticipants.isEmpty {
+                        participantsSection
+                    }
+                    if !summary.games.isEmpty {
+                        gamesSection
+                    }
+                    if let projection = summary.discoveryProjection, !projection.targetSummaries.isEmpty {
+                        firstDiscoveriesSection(projection: projection)
+                    }
+                    if !summary.xpRecapLines.isEmpty {
+                        xpRecapSection
+                    }
+                    if summary.locationMetadata != nil && !summary.locationMetadata!.isEmpty {
+                        mapRecapPlaceholder
+                    }
                 }
-                if !summary.games.isEmpty {
-                    gamesSection
-                }
-                if let projection = summary.discoveryProjection, !projection.targetSummaries.isEmpty {
-                    firstDiscoveriesSection(projection: projection)
-                }
-                if !summary.xpRecapLines.isEmpty {
-                    xpRecapSection
-                }
-                if summary.locationMetadata != nil && !summary.locationMetadata!.isEmpty {
-                    mapRecapPlaceholder
-                }
+                .padding()
             }
-            .padding()
         }
-        .background(Color.Theme.background)
         .navigationTitle(summary.tripName)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

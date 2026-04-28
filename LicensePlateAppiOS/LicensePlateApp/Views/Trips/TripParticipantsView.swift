@@ -19,7 +19,8 @@ struct TripParticipantsView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            AppBackgroundView {
+                List {
                 if let errorMessage = viewModel.errorMessage {
                     Text(errorMessage)
                         .font(.system(.footnote, design: .rounded))
@@ -67,10 +68,10 @@ struct TripParticipantsView: View {
                         }
                     }
                 }
+                }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(Color.Theme.background)
             .navigationTitle("Passenger List".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
