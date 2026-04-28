@@ -2,6 +2,7 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
 import { normalizeClientMetadata } from "./clientMetadata";
+import { enforcedCallable } from "./callableOptions";
 
 const db = admin.firestore();
 
@@ -21,7 +22,7 @@ function generateRandomCode(): string {
  * Create a share code (friend or family type)
  * TTL: 15 minutes, multi-use
  */
-export const createShareCode = functions.https.onCall(
+export const createShareCode = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -90,7 +91,7 @@ export const createShareCode = functions.https.onCall(
 /**
  * Redeem a share code and create an invite
  */
-export const redeemShareCode = functions.https.onCall(
+export const redeemShareCode = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(

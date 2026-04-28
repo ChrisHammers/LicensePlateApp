@@ -4,13 +4,14 @@ import { canAddMemberToFamily } from "./utils/validation";
 import { writeAuditLog } from "./audit";
 import { getFCMToken, sendPushNotification } from "./utils/notifications";
 import { normalizeClientMetadata } from "./clientMetadata";
+import { enforcedCallable } from "./callableOptions";
 
 const db = admin.firestore();
 
 /**
  * Create a new family
  */
-export const createFamily = functions.https.onCall(
+export const createFamily = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -90,7 +91,7 @@ export const createFamily = functions.https.onCall(
 /**
  * Send a family invite
  */
-export const sendFamilyInvite = functions.https.onCall(
+export const sendFamilyInvite = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -208,7 +209,7 @@ export const sendFamilyInvite = functions.https.onCall(
 /**
  * User accepts family invite (step 1) - creates pending request
  */
-export const respondToFamilyInvite_UserStep = functions.https.onCall(
+export const respondToFamilyInvite_UserStep = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -302,7 +303,7 @@ export const respondToFamilyInvite_UserStep = functions.https.onCall(
 /**
  * Captain approves family join request (step 2) - adds member
  */
-export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
+export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -478,7 +479,7 @@ export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
 /**
  * Remove a family member
  */
-export const removeFamilyMember = functions.https.onCall(
+export const removeFamilyMember = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -572,7 +573,7 @@ export const removeFamilyMember = functions.https.onCall(
 /**
  * Change a family member's role
  */
-export const changeFamilyMemberRole = functions.https.onCall(
+export const changeFamilyMemberRole = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -665,7 +666,7 @@ export const changeFamilyMemberRole = functions.https.onCall(
  * Inactivate a family (creator only)
  * Marks family as inactive, removes all members, and clears activeFamilyId
  */
-export const inactivateFamily = functions.https.onCall(
+export const inactivateFamily = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(

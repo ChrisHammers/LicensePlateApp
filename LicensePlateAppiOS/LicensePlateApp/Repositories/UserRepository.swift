@@ -717,5 +717,12 @@ class UserRepository: ObservableObject {
             "activeFamilyId": FieldValue.delete()
         ])
     }
+
+    func updateFCMToken(userId: String, token: String) async throws {
+        try await db.collection("users").document(userId).setData([
+            "fcmToken": token,
+            "fcmTokenUpdatedAt": FieldValue.serverTimestamp()
+        ], merge: true)
+    }
 }
 

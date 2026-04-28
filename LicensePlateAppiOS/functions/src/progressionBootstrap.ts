@@ -3,10 +3,11 @@ import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { buildProgressionBootstrapDefaults } from "./progressionBootstrapCore";
+import { enforcedCallable } from "./callableOptions";
 
 const db = admin.firestore();
 
-export const ensureUserProgressionDocument = functions.https.onCall(
+export const ensureUserProgressionDocument = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(

@@ -13,12 +13,13 @@ import { getFCMToken, sendPushNotification } from "./utils/notifications";
 import { KIND_PARTICIPANT_INVITED, KIND_PARTICIPANT_JOINED, PK } from "./gameplayEventResolver";
 import { syncCanonicalParticipantsFromMembers } from "./tripSessionCanonical";
 import { normalizeClientMetadata } from "./clientMetadata";
+import { enforcedCallable } from "./callableOptions";
 
 const db = admin.firestore();
 
 const DEFAULT_INVITE_DAYS = 7;
 
-export const sendTripInvite = functions.https.onCall(async (data, context) => {
+export const sendTripInvite = enforcedCallable(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError(
       "unauthenticated",
@@ -172,7 +173,7 @@ export const sendTripInvite = functions.https.onCall(async (data, context) => {
   return { inviteId: inviteRef.id };
 });
 
-export const respondToTripInvite = functions.https.onCall(
+export const respondToTripInvite = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -287,7 +288,7 @@ export const respondToTripInvite = functions.https.onCall(
   }
 );
 
-export const cancelTripInvite = functions.https.onCall(async (data, context) => {
+export const cancelTripInvite = enforcedCallable(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError(
       "unauthenticated",

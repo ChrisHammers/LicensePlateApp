@@ -100,7 +100,7 @@ enum AvatarCatalog {
         AvatarItem(id: "canada_moose", displayName: "Canada Moose", unlockSource: .guest),
         AvatarItem(id: "mexican_axolotl", displayName: "Mexican Axolotl", unlockSource: .guest),
         AvatarItem(id: "usa_bald_eagle", displayName: "USA Bald Eagle", unlockSource: .guest),
-        AvatarItem(id: "scout_otter", displayName: "Scout Otter", unlockSource: .guest),
+      //  AvatarItem(id: "scout_otter", displayName: "Scout Otter", unlockSource: .guest),
         AvatarItem(id: "jackrabbit", displayName: "Jackrabbit", unlockSource: .guest),
         AvatarItem(id: "turtle", displayName: "Turtle", unlockSource: .guest),
         AvatarItem(id: "dog", displayName: "Dog", unlockSource: .guest),
@@ -113,29 +113,29 @@ enum AvatarCatalog {
         AvatarItem(id: "construction_beaver", displayName: "Construction Beaver", unlockSource: .signedUp),
         AvatarItem(id: "grizzly_bear_park_ranger", displayName: "Grizzly Bear Park Ranger", unlockSource: .signedUp),
         AvatarItem(id: "dragon", displayName: "Dragon", unlockSource: .signedUp),
-        AvatarItem(id: "crossing_sign_deer", displayName: "Crossing Sign Deer", unlockSource: .signedUp),
-        AvatarItem(id: "chihuahua", displayName: "Chihuahua", unlockSource: .signedUp)
+        //AvatarItem(id: "crossing_sign_deer", displayName: "Crossing Sign Deer", unlockSource: .signedUp),
+        //AvatarItem(id: "chihuahua", displayName: "Chihuahua", unlockSource: .signedUp)
     ]
     
     // MARK: Gold (5)
     static let goldAvatars: [AvatarItem] = [
-        AvatarItem(id: "midnight_traveling_bat", displayName: "Midnight Traveling Bat", unlockSource: .gold),
-        AvatarItem(id: "frog", displayName: "Frog", unlockSource: .gold),
-        AvatarItem(id: "fish", displayName: "Fish", unlockSource: .gold),
-        AvatarItem(id: "cleaning_up_squirrel", displayName: "Cleaning-Up Squirrel", unlockSource: .gold),
-        AvatarItem(id: "hitchhiker_polar_bear", displayName: "Hitchhiker Polar Bear", unlockSource: .gold)
+      //  AvatarItem(id: "midnight_traveling_bat", displayName: "Midnight Traveling Bat", unlockSource: .gold),
+     //   AvatarItem(id: "frog", displayName: "Frog", unlockSource: .gold),
+     //   AvatarItem(id: "fish", displayName: "Fish", unlockSource: .gold),
+    //    AvatarItem(id: "cleaning_up_squirrel", displayName: "Cleaning-Up Squirrel", unlockSource: .gold),
+    //    AvatarItem(id: "hitchhiker_polar_bear", displayName: "Hitchhiker Polar Bear", unlockSource: .gold)
     ]
     
     // MARK: Family (2)
     static let familyAvatars: [AvatarItem] = [
-        AvatarItem(id: "wolf", displayName: "Wolf", unlockSource: .family),
-        AvatarItem(id: "bison", displayName: "Bison", unlockSource: .family)
+  //      AvatarItem(id: "wolf", displayName: "Wolf", unlockSource: .family),
+  //      AvatarItem(id: "bison", displayName: "Bison", unlockSource: .family)
     ]
     
     // MARK: Family Pass (2)
     static let familyPassAvatars: [AvatarItem] = [
-        AvatarItem(id: "sea_captain_octopus", displayName: "Sea Captain Octopus", unlockSource: .familyPass),
-        AvatarItem(id: "junior_scout_porcupine", displayName: "Junior Scout Porcupine", unlockSource: .familyPass)
+     //   AvatarItem(id: "sea_captain_octopus", displayName: "Sea Captain Octopus", unlockSource: .familyPass),
+    //    AvatarItem(id: "junior_scout_porcupine", displayName: "Junior Scout Porcupine", unlockSource: .familyPass)
     ]
     
     // MARK: Founder (2)

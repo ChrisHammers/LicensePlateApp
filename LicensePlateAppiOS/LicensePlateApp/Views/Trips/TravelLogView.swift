@@ -73,7 +73,6 @@ struct TravelLogView: View {
             .onAppear {
                 viewModel.loadEntries()
                 viewModel.onScreenAppeared()
-                AnalyticsService.shared.logScreenView(screenName: "travel_log")
             }
             .alert("Error".localized, isPresented: Binding(
                 get: { viewModel.summaryErrorMessage != nil },
@@ -87,7 +86,11 @@ struct TravelLogView: View {
             }
             .sheet(item: $viewModel.selectedSummary) { summary in
                 NavigationStack {
-                    TripSummaryView(summary: summary, currentUserId: viewModel.currentUserId) {
+                    TripSummaryView(
+                        summary: summary,
+                        currentUserId: viewModel.currentUserId,
+                        shouldShowAd: viewModel.shouldShowTripSummaryAd()
+                    ) {
                         viewModel.clearSelection()
                     }
                     .onAppear {
@@ -133,24 +136,30 @@ struct TravelLogView: View {
     }
 
     private var listContent: some View {
-        List {
-            ForEach(viewModel.entries) { entry in
-                TravelLogRowView(entry: entry, dateFormatter: dateFormatter)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        viewModel.openSummary(sessionId: entry.sessionId)
-                    }
-                    .listRowBackground(Color.Theme.cardBackground)
-                    .accessibilityLabel(accessibilityLabel(for: entry))
-                    .accessibilityHint("Double tap to view trip summary".localized)
+        VStack {
+            if viewModel.shouldShowTravelLogAd {
+                AdBannerView(surface: .travelLog)
             }
-            if viewModel.hiddenSavedTripCount > 0 {
-                savedTripLimitRow
-                    .listRowBackground(Color.Theme.cardBackground)
+            List {
+                
+                ForEach(viewModel.entries) { entry in
+                    TravelLogRowView(entry: entry, dateFormatter: dateFormatter)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            viewModel.openSummary(sessionId: entry.sessionId)
+                        }
+                        .listRowBackground(Color.Theme.cardBackground)
+                        .accessibilityLabel(accessibilityLabel(for: entry))
+                        .accessibilityHint("Double tap to view trip summary".localized)
+                }
+                if viewModel.hiddenSavedTripCount > 0 {
+                    savedTripLimitRow
+                        .listRowBackground(Color.Theme.cardBackground)
+                }
             }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
     }
 
     private var savedTripLimitRow: some View {
@@ -308,4 +317,9 @@ extension TripSummary: Identifiable {
     ))
     .environmentObject(FirebaseAuthService())
     .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self], inMemory: true)
+}
+
+#Preview("Travel Log - Ad Banner") {
+    AdBannerView(surface: .travelLog, isPreviewPlaceholder: true)
+        .padding()
 }

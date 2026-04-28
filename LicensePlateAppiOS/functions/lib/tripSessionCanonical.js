@@ -12,6 +12,7 @@ const audit_1 = require("./audit");
 const gameplayEventResolver_1 = require("./gameplayEventResolver");
 const fairnessWatermarkMerge_1 = require("./fairnessWatermarkMerge");
 const clientMetadata_1 = require("./clientMetadata");
+const callableOptions_1 = require("./callableOptions");
 const db = admin.firestore();
 const MAX_BOOTSTRAP_EVENTS = 2500;
 function tsToSeconds(value) {
@@ -159,7 +160,7 @@ async function syncCanonicalParticipantsFromMembers(tripSessionId) {
 /**
  * Publish full session + games snapshot (owner only).
  */
-exports.publishTripCanonicalState = functions.https.onCall(async (data, context) => {
+exports.publishTripCanonicalState = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
@@ -282,7 +283,7 @@ exports.publishTripCanonicalState = functions.https.onCall(async (data, context)
 /**
  * Append one activity event (idempotent set). Any trip member may call.
  */
-exports.appendTripActivityEvent = functions.https.onCall(async (data, context) => {
+exports.appendTripActivityEvent = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     var _a, _b;
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
@@ -336,7 +337,7 @@ exports.appendTripActivityEvent = functions.https.onCall(async (data, context) =
  * Per-user fairness UI watermark (Step 13.2): max lastAckAt in Unix seconds.
  * Stored under games/{gameId}/fairness_ack_watermarks/{userId} so publishTripCanonicalState does not clobber it.
  */
-exports.updateFairnessAckWatermark = functions.https.onCall(async (data, context) => {
+exports.updateFairnessAckWatermark = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
@@ -371,7 +372,7 @@ exports.updateFairnessAckWatermark = functions.https.onCall(async (data, context
 /**
  * Full read for a member: session wire + games + events (capped).
  */
-exports.fetchTripBootstrapForMember = functions.https.onCall(async (data, context) => {
+exports.fetchTripBootstrapForMember = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     var _a, _b, _c, _d, _e;
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
@@ -431,7 +432,7 @@ exports.fetchTripBootstrapForMember = functions.https.onCall(async (data, contex
 /**
  * Owner removes another participant (kick). Writes `participant_left` with leaveReason=kicked.
  */
-exports.removeTripParticipantAsOwner = functions.https.onCall(async (data, context) => {
+exports.removeTripParticipantAsOwner = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
@@ -458,7 +459,7 @@ exports.removeTripParticipantAsOwner = functions.https.onCall(async (data, conte
     return { success: true };
 });
 /** Owner: mark remote cancelled and remove games/events for joiner convergence. */
-exports.markTripCancelledRemote = functions.https.onCall(async (data, context) => {
+exports.markTripCancelledRemote = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }

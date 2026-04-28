@@ -812,3 +812,6 @@
 "game.progression.ledger_line_meta" = "%@ · %@";
 "game.progression.ledger_line_ids" = "Row %@ · source %@";
 "game.progression.ledger_badge_game" = "This game";
+"Sponsored message" = "Sponsored message";
+"Ready to keep playing?" = "Ready to keep playing?";
+"Your trip %@ is waiting for more plate finds." = "Your trip %@ is waiting for more plate finds.";

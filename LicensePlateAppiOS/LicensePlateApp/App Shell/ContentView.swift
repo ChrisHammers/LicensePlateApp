@@ -197,6 +197,13 @@ struct ContentView: View {
                 }
                 pendingTripsViewModel.loadIfNeeded()
                 activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
+                ReturnStreakService.shared.recordAppReturnIfNeeded()
+                for item in activeTripsListViewModel.items where item.session.status == .active {
+                    await ReminderNotificationService.shared.scheduleInactiveActiveTripReminder(
+                        sessionId: item.session.id,
+                        tripName: item.session.name
+                    )
+                }
             }
             .onReceive(TripCanonicalRemoteSyncService.shared.hydrationSignal) { _ in
                 activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)

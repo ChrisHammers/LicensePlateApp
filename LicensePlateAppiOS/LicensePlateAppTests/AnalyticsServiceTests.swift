@@ -50,6 +50,11 @@ struct AnalyticsServiceTests {
             (.avatarPickerOpened(source: "test"), "avatar_picker_opened"),
             (.avatarSaved(avatarId: "id", source: "profile"), "avatar_saved"),
             (.notificationDeliveryFailed(error: "err"), "notification_delivery_failed"),
+            (.remoteConfigFetchSucceeded, "remote_config_fetch_succeeded"),
+            (.adEligibilityEvaluated(surface: "travel_log", eligible: true, reason: "free_tier"), "ad_eligibility_evaluated"),
+            (.reviewPromptPresented(sessionId: "session-1"), "review_prompt_presented"),
+            (.reminderScheduled(sessionId: "session-1", hours: 24), "reminder_scheduled"),
+            (.returnStreakUpdated(currentStreak: 2, reason: "consecutive_return"), "return_streak_updated"),
             (.screenView(screenName: "test", screenClass: nil), "screen_view"),
             (.combinedTripCreated(gameTypes: ["lp"]), "combined_trip_created"),
             (.userSearchPerformed(queryType: "all"), "user_search_performed"),
@@ -76,6 +81,22 @@ struct AnalyticsServiceTests {
         // notification_delivery_failed
         let notifEvent = AnalyticsService.Event.notificationDeliveryFailed(error: "permission denied")
         #expect(notifEvent.parameters?["error"] as? String == "permission denied")
+
+        let adEvent = AnalyticsService.Event.adEligibilityEvaluated(surface: "travel_log", eligible: true, reason: "free_tier")
+        #expect(adEvent.parameters?["surface"] as? String == "travel_log")
+        #expect(adEvent.parameters?["eligible"] as? Bool == true)
+        #expect(adEvent.parameters?["reason"] as? String == "free_tier")
+
+        let reviewEvent = AnalyticsService.Event.reviewPromptSuppressed(reason: "cooldown", completedTripCount: 2)
+        #expect(reviewEvent.parameters?["reason"] as? String == "cooldown")
+        #expect(reviewEvent.parameters?["completed_trip_count"] as? Int == 2)
+
+        let reminderEvent = AnalyticsService.Event.reminderScheduled(sessionId: "session-1", hours: 24)
+        #expect(reminderEvent.parameters?["session_id"] as? String == "session-1")
+        #expect(reminderEvent.parameters?["hours"] as? Int == 24)
+
+        let streakEvent = AnalyticsService.Event.returnStreakUpdated(currentStreak: 3, reason: "consecutive_return")
+        #expect(streakEvent.parameters?["current_streak"] as? Int == 3)
 
         // screen_view
         let screenEvent = AnalyticsService.Event.screenView(screenName: "travel_log", screenClass: "TravelLogView")

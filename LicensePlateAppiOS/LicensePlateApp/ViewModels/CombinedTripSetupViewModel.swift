@@ -37,6 +37,7 @@ final class CombinedTripSetupViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
     @Published private(set) var isCreating: Bool = false
     @Published private(set) var shouldPresentTripLimitPaywall = false
+    @Published private(set) var shouldShowSetupAd = false
 
     // MARK: - Dependencies
 
@@ -71,6 +72,11 @@ final class CombinedTripSetupViewModel: ObservableObject {
     func logSetupScreenAppeared() {
         AnalyticsService.shared.log(.combinedTripSetupOpened)
         AnalyticsService.shared.logScreenView(screenName: "combined_trip_setup")
+        refreshAdEligibility()
+    }
+
+    func refreshAdEligibility() {
+        shouldShowSetupAd = AdEligibilityService.shared.shouldShowAd(for: .combinedTripSetup, user: authService.currentUser)
     }
 
     // MARK: - Validation

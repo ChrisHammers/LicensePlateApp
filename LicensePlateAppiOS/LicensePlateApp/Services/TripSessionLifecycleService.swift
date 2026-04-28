@@ -65,6 +65,7 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         try tripActivityEventRecording.recordForSync(tripStartedEvent)
         AnalyticsService.shared.log(.tripSessionStarted(tripId: sessionId.uuidString, tripActiveGameCount: games.count))
         Task { @MainActor in
+            await ReminderNotificationService.shared.scheduleInactiveActiveTripReminder(sessionId: sessionId, tripName: session.name)
             try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionId)
         }
     }
@@ -87,6 +88,8 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         let tripEndedEvent = TripActivityEvent(sessionId: sessionId, kind: .tripEnded, actorId: endedBy)
         try tripActivityEventRecording.recordForSync(tripEndedEvent)
         AnalyticsService.shared.log(.tripSessionEnded(tripId: sessionId.uuidString))
+        ReminderNotificationService.shared.cancelReminder(sessionId: sessionId, reason: "trip_ended")
+        ReviewPromptService.shared.considerPromptAfterTripCompleted(sessionId: sessionId)
         Task { @MainActor in
             let uid = endedBy ?? Auth.auth().currentUser?.uid
             if let uid {
@@ -111,6 +114,7 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         try tripActivityEventRepository.deleteEvents(sessionId: sessionId, gameInstanceId: nil)
         try gameInstanceRepository.deleteForSession(sessionId: sessionId)
         AnalyticsService.shared.log(.tripSessionCancelled(tripId: sessionId.uuidString))
+        ReminderNotificationService.shared.cancelReminder(sessionId: sessionId, reason: "trip_cancelled")
     }
 }
 

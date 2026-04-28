@@ -10,6 +10,7 @@ import SwiftUI
 struct TripSummaryView: View {
     let summary: TripSummary
     let currentUserId: String?
+    var shouldShowAd = false
     var onDismiss: (() -> Void)?
 
     @State private var participantDisplayNames: [String: String] = [:]
@@ -31,6 +32,9 @@ struct TripSummaryView: View {
                 VStack(alignment: .leading, spacing: 24) {
                     headerSection
                     statsSection
+                    if shouldShowAd {
+                        AdBannerView(surface: .tripSummary)
+                    }
                     recapIncompleteBanner
                     if !summary.rankedParticipants.isEmpty {
                         participantsSection
@@ -511,6 +515,12 @@ struct TripSummaryView: View {
 #Preview("Solo summary") {
     NavigationStack {
         TripSummaryView(summary: PreviewSummaryFixtures.tripSummarySolo(), currentUserId: nil, onDismiss: nil)
+    }
+}
+
+#Preview("Solo summary with ad") {
+    NavigationStack {
+        TripSummaryView(summary: PreviewSummaryFixtures.tripSummarySolo(), currentUserId: nil, shouldShowAd: true, onDismiss: nil)
     }
 }
 

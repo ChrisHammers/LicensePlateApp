@@ -780,3 +780,6 @@
 "game.progression.ledger_line_meta" = "%@ · %@";
 "game.progression.ledger_line_ids" = "Fila %@ · origen %@";
 "game.progression.ledger_badge_game" = "Este juego";
+"Sponsored message" = "Mensaje patrocinado";
+"Ready to keep playing?" = "¿Listo para seguir jugando?";
+"Your trip %@ is waiting for more plate finds." = "Tu viaje %@ espera más placas encontradas.";

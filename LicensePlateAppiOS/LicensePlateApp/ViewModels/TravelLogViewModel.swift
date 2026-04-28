@@ -20,6 +20,7 @@ final class TravelLogViewModel: ObservableObject {
     @Published private(set) var hiddenSavedTripCount = 0
     @Published var shouldPresentSavedTripPaywall = false
     @Published private(set) var savedTripCapKind: SavedTripCapKind = .unlimited
+    @Published private(set) var shouldShowTravelLogAd = false
 
     /// Avoid duplicate section analytics if `onAppear` fires more than once for the same recap.
     private var recapSectionAnalyticsLoggedSessionId: UUID?
@@ -208,5 +209,11 @@ final class TravelLogViewModel: ObservableObject {
     /// Call when Travel Log screen is shown (e.g. onAppear).
     func onScreenAppeared() {
         AnalyticsService.shared.log(.travelLogOpened)
+        AnalyticsService.shared.logScreenView(screenName: "travel_log")
+        shouldShowTravelLogAd = AdEligibilityService.shared.shouldShowAd(for: .travelLog, user: authService.currentUser)
+    }
+
+    func shouldShowTripSummaryAd() -> Bool {
+        AdEligibilityService.shared.shouldShowAd(for: .tripSummary, user: authService.currentUser)
     }
 }

@@ -7,11 +7,12 @@ const validation_1 = require("./utils/validation");
 const audit_1 = require("./audit");
 const notifications_1 = require("./utils/notifications");
 const clientMetadata_1 = require("./clientMetadata");
+const callableOptions_1 = require("./callableOptions");
 const db = admin.firestore();
 /**
  * Send a friend invite
  */
-exports.sendFriendInvite = functions.https.onCall(async (data, context) => {
+exports.sendFriendInvite = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
@@ -103,7 +104,7 @@ exports.sendFriendInvite = functions.https.onCall(async (data, context) => {
 /**
  * Respond to a friend invite (accept or decline)
  */
-exports.respondToFriendInvite = functions.https.onCall(async (data, context) => {
+exports.respondToFriendInvite = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     var _a, _b;
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
@@ -183,7 +184,7 @@ exports.respondToFriendInvite = functions.https.onCall(async (data, context) => 
 /**
  * Remove an accepted friendship (unfriend). Updates friendCount for both users.
  */
-exports.removeFriend = functions.https.onCall(async (data, context) => {
+exports.removeFriend = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     var _a, _b;
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");

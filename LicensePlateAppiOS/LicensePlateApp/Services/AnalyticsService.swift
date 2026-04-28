@@ -234,6 +234,23 @@ class AnalyticsService: AnalyticsLogging {
         case notificationDeliveredTripInvite
         case notificationDeliveryFailed(error: String)
 
+        // Step 18 — launch operations, growth, and monetization
+        case remoteConfigFetchSucceeded
+        case remoteConfigFetchFailed(error: String)
+        case crashReportingConfigured
+        case crashReportingNonFatalRecorded(context: String)
+        case adEligibilityEvaluated(surface: String, eligible: Bool, reason: String)
+        case adImpression(surface: String)
+        case adLoadFailed(surface: String, error: String)
+        case reviewPromptEligible(completedTripCount: Int)
+        case reviewPromptPresented(sessionId: String)
+        case reviewPromptSuppressed(reason: String, completedTripCount: Int)
+        case reminderScheduled(sessionId: String, hours: Int)
+        case reminderCancelled(sessionId: String, reason: String)
+        case returnStreakUpdated(currentStreak: Int, reason: String)
+        case returnStreakReset(reason: String)
+        case fcmTokenRegistered
+
         // Screen view (Step 10)
         case screenView(screenName: String, screenClass: String?)
 
@@ -371,6 +388,21 @@ class AnalyticsService: AnalyticsLogging {
             case .notificationEligibilityChecked: return "notification_eligibility_checked"
             case .notificationDeliveredTripInvite: return "notification_delivered_trip_invite"
             case .notificationDeliveryFailed: return "notification_delivery_failed"
+            case .remoteConfigFetchSucceeded: return "remote_config_fetch_succeeded"
+            case .remoteConfigFetchFailed: return "remote_config_fetch_failed"
+            case .crashReportingConfigured: return "crash_reporting_configured"
+            case .crashReportingNonFatalRecorded: return "crash_reporting_non_fatal_recorded"
+            case .adEligibilityEvaluated: return "ad_eligibility_evaluated"
+            case .adImpression: return "ad_impression"
+            case .adLoadFailed: return "ad_load_failed"
+            case .reviewPromptEligible: return "review_prompt_eligible"
+            case .reviewPromptPresented: return "review_prompt_presented"
+            case .reviewPromptSuppressed: return "review_prompt_suppressed"
+            case .reminderScheduled: return "reminder_scheduled"
+            case .reminderCancelled: return "reminder_cancelled"
+            case .returnStreakUpdated: return "return_streak_updated"
+            case .returnStreakReset: return "return_streak_reset"
+            case .fcmTokenRegistered: return "fcm_token_registered"
             case .screenView: return "screen_view"
             case .paywallViewed: return "paywall_viewed"
             case .paywallDismissed: return "paywall_dismissed"
@@ -676,6 +708,36 @@ class AnalyticsService: AnalyticsLogging {
                 return nil
             case .notificationDeliveryFailed(let error):
                 return ["error": error]
+            case .remoteConfigFetchSucceeded:
+                return nil
+            case .remoteConfigFetchFailed(let error):
+                return ["error": error]
+            case .crashReportingConfigured:
+                return nil
+            case .crashReportingNonFatalRecorded(let context):
+                return ["context": context]
+            case .adEligibilityEvaluated(let surface, let eligible, let reason):
+                return ["surface": surface, "eligible": eligible, "reason": reason]
+            case .adImpression(let surface):
+                return ["surface": surface]
+            case .adLoadFailed(let surface, let error):
+                return ["surface": surface, "error": error]
+            case .reviewPromptEligible(let completedTripCount):
+                return ["completed_trip_count": completedTripCount]
+            case .reviewPromptPresented(let sessionId):
+                return ["session_id": sessionId]
+            case .reviewPromptSuppressed(let reason, let completedTripCount):
+                return ["reason": reason, "completed_trip_count": completedTripCount]
+            case .reminderScheduled(let sessionId, let hours):
+                return ["session_id": sessionId, "hours": hours]
+            case .reminderCancelled(let sessionId, let reason):
+                return ["session_id": sessionId, "reason": reason]
+            case .returnStreakUpdated(let currentStreak, let reason):
+                return ["current_streak": currentStreak, "reason": reason]
+            case .returnStreakReset(let reason):
+                return ["reason": reason]
+            case .fcmTokenRegistered:
+                return nil
             case .screenView(let screenName, let screenClass):
                 var p: [String: Any] = ["screen_name": screenName]
                 if let screenClass = screenClass { p["screen_class"] = screenClass }

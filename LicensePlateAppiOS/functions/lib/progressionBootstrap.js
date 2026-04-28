@@ -6,8 +6,9 @@ const admin = require("firebase-admin");
 const audit_1 = require("./audit");
 const clientMetadata_1 = require("./clientMetadata");
 const progressionBootstrapCore_1 = require("./progressionBootstrapCore");
+const callableOptions_1 = require("./callableOptions");
 const db = admin.firestore();
-exports.ensureUserProgressionDocument = functions.https.onCall(async (data, context) => {
+exports.ensureUserProgressionDocument = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }

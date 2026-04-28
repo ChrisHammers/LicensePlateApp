@@ -11,6 +11,7 @@ import Foundation
 enum NotificationEligibilityKind: String, CaseIterable {
     case tripInvite
     case milestone
+    case inactiveActiveTripReminder
 }
 
 /// Result of checking whether we can show a notification of a given kind (e.g. permission granted).

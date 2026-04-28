@@ -5,6 +5,7 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const audit_1 = require("./audit");
 const clientMetadata_1 = require("./clientMetadata");
+const callableOptions_1 = require("./callableOptions");
 const db = admin.firestore();
 /**
  * Generate a random 6-character alphanumeric code
@@ -21,7 +22,7 @@ function generateRandomCode() {
  * Create a share code (friend or family type)
  * TTL: 15 minutes, multi-use
  */
-exports.createShareCode = functions.https.onCall(async (data, context) => {
+exports.createShareCode = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
@@ -68,7 +69,7 @@ exports.createShareCode = functions.https.onCall(async (data, context) => {
 /**
  * Redeem a share code and create an invite
  */
-exports.redeemShareCode = functions.https.onCall(async (data, context) => {
+exports.redeemShareCode = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }

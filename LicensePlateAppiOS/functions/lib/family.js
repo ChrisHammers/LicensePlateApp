@@ -7,11 +7,12 @@ const validation_1 = require("./utils/validation");
 const audit_1 = require("./audit");
 const notifications_1 = require("./utils/notifications");
 const clientMetadata_1 = require("./clientMetadata");
+const callableOptions_1 = require("./callableOptions");
 const db = admin.firestore();
 /**
  * Create a new family
  */
-exports.createFamily = functions.https.onCall(async (data, context) => {
+exports.createFamily = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
@@ -68,7 +69,7 @@ exports.createFamily = functions.https.onCall(async (data, context) => {
 /**
  * Send a family invite
  */
-exports.sendFamilyInvite = functions.https.onCall(async (data, context) => {
+exports.sendFamilyInvite = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
@@ -149,7 +150,7 @@ exports.sendFamilyInvite = functions.https.onCall(async (data, context) => {
 /**
  * User accepts family invite (step 1) - creates pending request
  */
-exports.respondToFamilyInvite_UserStep = functions.https.onCall(async (data, context) => {
+exports.respondToFamilyInvite_UserStep = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
@@ -209,7 +210,7 @@ exports.respondToFamilyInvite_UserStep = functions.https.onCall(async (data, con
 /**
  * Captain approves family join request (step 2) - adds member
  */
-exports.approveFamilyJoinRequest_CaptainStep = functions.https.onCall(async (data, context) => {
+exports.approveFamilyJoinRequest_CaptainStep = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
@@ -326,7 +327,7 @@ exports.approveFamilyJoinRequest_CaptainStep = functions.https.onCall(async (dat
 /**
  * Remove a family member
  */
-exports.removeFamilyMember = functions.https.onCall(async (data, context) => {
+exports.removeFamilyMember = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
@@ -389,7 +390,7 @@ exports.removeFamilyMember = functions.https.onCall(async (data, context) => {
 /**
  * Change a family member's role
  */
-exports.changeFamilyMemberRole = functions.https.onCall(async (data, context) => {
+exports.changeFamilyMemberRole = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
@@ -448,7 +449,7 @@ exports.changeFamilyMemberRole = functions.https.onCall(async (data, context) =>
  * Inactivate a family (creator only)
  * Marks family as inactive, removes all members, and clears activeFamilyId
  */
-exports.inactivateFamily = functions.https.onCall(async (data, context) => {
+exports.inactivateFamily = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }

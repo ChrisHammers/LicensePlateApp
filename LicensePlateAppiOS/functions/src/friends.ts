@@ -4,13 +4,14 @@ import { checkFriendCap, isUserSearchable } from "./utils/validation";
 import { writeAuditLog } from "./audit";
 import { getFCMToken, sendPushNotification } from "./utils/notifications";
 import { normalizeClientMetadata } from "./clientMetadata";
+import { enforcedCallable } from "./callableOptions";
 
 const db = admin.firestore();
 
 /**
  * Send a friend invite
  */
-export const sendFriendInvite = functions.https.onCall(
+export const sendFriendInvite = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -149,7 +150,7 @@ export const sendFriendInvite = functions.https.onCall(
 /**
  * Respond to a friend invite (accept or decline)
  */
-export const respondToFriendInvite = functions.https.onCall(
+export const respondToFriendInvite = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -271,7 +272,7 @@ export const respondToFriendInvite = functions.https.onCall(
 /**
  * Remove an accepted friendship (unfriend). Updates friendCount for both users.
  */
-export const removeFriend = functions.https.onCall(async (data, context) => {
+export const removeFriend = enforcedCallable(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError(
       "unauthenticated",

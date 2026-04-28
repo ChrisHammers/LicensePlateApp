@@ -780,3 +780,6 @@
 "game.progression.ledger_line_meta" = "%@ · %@";
 "game.progression.ledger_line_ids" = "Ligne %@ · source %@";
 "game.progression.ledger_badge_game" = "Cette partie";
+"Sponsored message" = "Message commandité";
+"Ready to keep playing?" = "Prêt à continuer?";
+"Your trip %@ is waiting for more plate finds." = "Votre voyage %@ attend d'autres plaques trouvées.";

@@ -15,9 +15,10 @@ const notifications_1 = require("./utils/notifications");
 const gameplayEventResolver_1 = require("./gameplayEventResolver");
 const tripSessionCanonical_1 = require("./tripSessionCanonical");
 const clientMetadata_1 = require("./clientMetadata");
+const callableOptions_1 = require("./callableOptions");
 const db = admin.firestore();
 const DEFAULT_INVITE_DAYS = 7;
-exports.sendTripInvite = functions.https.onCall(async (data, context) => {
+exports.sendTripInvite = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
@@ -127,7 +128,7 @@ exports.sendTripInvite = functions.https.onCall(async (data, context) => {
     });
     return { inviteId: inviteRef.id };
 });
-exports.respondToTripInvite = functions.https.onCall(async (data, context) => {
+exports.respondToTripInvite = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
@@ -206,7 +207,7 @@ exports.respondToTripInvite = functions.https.onCall(async (data, context) => {
     });
     return { success: true };
 });
-exports.cancelTripInvite = functions.https.onCall(async (data, context) => {
+exports.cancelTripInvite = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }

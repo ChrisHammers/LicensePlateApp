@@ -23,6 +23,10 @@
 		767F82E52EF3239800D11D3F /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = 767F82E42EF3239800D11D3F /* FirebaseFunctions */; };
 		767F82E72EF3239C00D11D3F /* FirebaseFunctionsCombine-Community in Frameworks */ = {isa = PBXBuildFile; productRef = 767F82E62EF3239C00D11D3F /* FirebaseFunctionsCombine-Community */; };
 		769546CA2EE0BA1000B0498F /* GoogleMaps in Frameworks */ = {isa = PBXBuildFile; productRef = 769546C92EE0BA1000B0498F /* GoogleMaps */; };
+		76AD18012F10000100D11D3F /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 76AD18002F10000100D11D3F /* FirebaseAppCheck */; };
+		76AD18032F10000100D11D3F /* FirebaseMessaging in Frameworks */ = {isa = PBXBuildFile; productRef = 76AD18022F10000100D11D3F /* FirebaseMessaging */; };
+		76AD18052F10000100D11D3F /* FirebaseRemoteConfig in Frameworks */ = {isa = PBXBuildFile; productRef = 76AD18042F10000100D11D3F /* FirebaseRemoteConfig */; };
+		76AD18082F10000100D11D3F /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 76AD18072F10000100D11D3F /* GoogleMobileAds */; };
 		76RC00032EF9999900D11D3F /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = 76RC00022EF9999900D11D3F /* RevenueCat */; };
 /* End PBXBuildFile section */
 
@@ -86,10 +90,13 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				76AD18012F10000100D11D3F /* FirebaseAppCheck in Frameworks */,
 				761312522ECBB27900F19D3A /* FirebaseAuth in Frameworks */,
 				761312582ECBB27900F19D3A /* FirebaseCrashlytics in Frameworks */,
+				76AD18032F10000100D11D3F /* FirebaseMessaging in Frameworks */,
 				761312602ECBB27900F19D3A /* FirebaseStorageCombine-Community in Frameworks */,
 				761312562ECBB27900F19D3A /* FirebaseCore in Frameworks */,
+				76AD18052F10000100D11D3F /* FirebaseRemoteConfig in Frameworks */,
 				767F814D2EF2056C00D11D3F /* FirebaseAnalytics in Frameworks */,
 				767F814F2EF2057000D11D3F /* FirebaseAnalyticsCore in Frameworks */,
 				7613125C2ECBB27900F19D3A /* FirebaseFirestoreCombine-Community in Frameworks */,
@@ -102,6 +109,7 @@
 				767F82E52EF3239800D11D3F /* FirebaseFunctions in Frameworks */,
 				761312542ECBB27900F19D3A /* FirebaseAuthCombine-Community in Frameworks */,
 				761312632ECBB31A00F19D3A /* GoogleSignIn in Frameworks */,
+				76AD18082F10000100D11D3F /* GoogleMobileAds in Frameworks */,
 				76RC00032EF9999900D11D3F /* RevenueCat in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -162,6 +170,7 @@
 				765D540E2EC391DA00D4FED1 /* Sources */,
 				765D540F2EC391DA00D4FED1 /* Frameworks */,
 				765D54102EC391DA00D4FED1 /* Resources */,
+				76CR18002F10000100D11D3F /* Crashlytics dSYM Upload */,
 			);
 			buildRules = (
 			);
@@ -174,16 +183,20 @@
 			packageProductDependencies = (
 				761312512ECBB27900F19D3A /* FirebaseAuth */,
 				761312532ECBB27900F19D3A /* FirebaseAuthCombine-Community */,
+				76AD18002F10000100D11D3F /* FirebaseAppCheck */,
 				761312552ECBB27900F19D3A /* FirebaseCore */,
 				761312572ECBB27900F19D3A /* FirebaseCrashlytics */,
 				761312592ECBB27900F19D3A /* FirebaseFirestore */,
 				7613125B2ECBB27900F19D3A /* FirebaseFirestoreCombine-Community */,
+				76AD18022F10000100D11D3F /* FirebaseMessaging */,
+				76AD18042F10000100D11D3F /* FirebaseRemoteConfig */,
 				7613125D2ECBB27900F19D3A /* FirebaseStorage */,
 				7613125F2ECBB27900F19D3A /* FirebaseStorageCombine-Community */,
 				761312622ECBB31A00F19D3A /* GoogleSignIn */,
 				761312642ECBB31A00F19D3A /* GoogleSignInSwift */,
 				769546C92EE0BA1000B0498F /* GoogleMaps */,
 				76381CD62EE2499D00D7B216 /* GoogleMapsUtils */,
+				76AD18072F10000100D11D3F /* GoogleMobileAds */,
 				767F814C2EF2056C00D11D3F /* FirebaseAnalytics */,
 				767F814E2EF2057000D11D3F /* FirebaseAnalyticsCore */,
 				767F82E42EF3239800D11D3F /* FirebaseFunctions */,
@@ -280,6 +293,7 @@
 				769546C82EE0BA1000B0498F /* XCRemoteSwiftPackageReference "ios-maps-sdk" */,
 				76381CD52EE2499D00D7B216 /* XCRemoteSwiftPackageReference "google-maps-ios-utils" */,
 				76RC00012EF9999900D11D3F /* XCRemoteSwiftPackageReference "purchases-ios" */,
+				76AD18062F10000100D11D3F /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 765D54132EC391DA00D4FED1 /* Products */;
@@ -316,6 +330,30 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		76CR18002F10000100D11D3F /* Crashlytics dSYM Upload */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(DWARF_DSYM_FOLDER_PATH)/$(DWARF_DSYM_FILE_NAME)",
+				"$(PROJECT_DIR)/LicensePlateApp/GoogleService-Info-Release.plist",
+			);
+			name = "Crashlytics dSYM Upload";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"$CONFIGURATION\" = \"Release\" ]; then\n  UPLOAD_SYMBOLS=\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/upload-symbols\"\n  if [ -x \"$UPLOAD_SYMBOLS\" ] && [ -n \"$DWARF_DSYM_FOLDER_PATH\" ]; then\n    \"$UPLOAD_SYMBOLS\" -gsp \"$PROJECT_DIR/LicensePlateApp/GoogleService-Info-Release.plist\" -p ios \"$DWARF_DSYM_FOLDER_PATH/$DWARF_DSYM_FILE_NAME\"\n  else\n    echo \"warning: Crashlytics upload-symbols not found; skipping dSYM upload\"\n  fi\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		765D540E2EC391DA00D4FED1 /* Sources */ = {
@@ -479,6 +517,11 @@
 		765D54362EC391DC00D4FED1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ADMOB_APP_ID = "ca-app-pub-3940256099942544~1458002511";
+				ADMOB_BANNER_SETUP_ID = "ca-app-pub-3940256099942544/2934735716";
+				ADMOB_BANNER_SUMMARY_ID = "ca-app-pub-3940256099942544/2934735716";
+				ADMOB_BANNER_TRAVEL_LOG_ID = "ca-app-pub-3940256099942544/2934735716";
+				APS_ENVIRONMENT = development;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = LicensePlateApp/LicensePlateApp.entitlements;
@@ -514,6 +557,11 @@
 		765D54372EC391DC00D4FED1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ADMOB_APP_ID = "ca-app-pub-3940256099942544~1458002511";
+				ADMOB_BANNER_SETUP_ID = "ca-app-pub-3940256099942544/2934735716";
+				ADMOB_BANNER_SUMMARY_ID = "ca-app-pub-3940256099942544/2934735716";
+				ADMOB_BANNER_TRAVEL_LOG_ID = "ca-app-pub-3940256099942544/2934735716";
+				APS_ENVIRONMENT = production;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = LicensePlateApp/LicensePlateApp.entitlements;
@@ -706,6 +754,14 @@
 				minimumVersion = 10.6.0;
 			};
 		};
+		76AD18062F10000100D11D3F /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.0.0;
+			};
+		};
 		76RC00012EF9999900D11D3F /* XCRemoteSwiftPackageReference "purchases-ios" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/RevenueCat/purchases-ios";
@@ -796,6 +852,26 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 769546C82EE0BA1000B0498F /* XCRemoteSwiftPackageReference "ios-maps-sdk" */;
 			productName = GoogleMaps;
+		};
+		76AD18002F10000100D11D3F /* FirebaseAppCheck */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 761312502ECBB27900F19D3A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAppCheck;
+		};
+		76AD18022F10000100D11D3F /* FirebaseMessaging */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 761312502ECBB27900F19D3A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseMessaging;
+		};
+		76AD18042F10000100D11D3F /* FirebaseRemoteConfig */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 761312502ECBB27900F19D3A /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseRemoteConfig;
+		};
+		76AD18072F10000100D11D3F /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 76AD18062F10000100D11D3F /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
 		};
 		76RC00022EF9999900D11D3F /* RevenueCat */ = {
 			isa = XCSwiftPackageProductDependency;

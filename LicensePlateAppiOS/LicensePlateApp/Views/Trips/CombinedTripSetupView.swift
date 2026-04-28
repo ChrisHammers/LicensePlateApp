@@ -40,11 +40,15 @@ struct CombinedTripSetupView: View {
         NavigationStack {
             AppBackgroundView {
                 List {
+                    if viewModel.shouldShowSetupAd {
+                        adSection
+                    }
                     basicInfoSection
                     tripParticipationSection
                     gamesSection
                     tripOptionsSection
                     tripSettingsSection
+                 
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
@@ -403,6 +407,15 @@ struct CombinedTripSetupView: View {
         .textCase(nil)
     }
 
+    private var adSection: some View {
+        Section {
+            AdBannerView(surface: .combinedTripSetup)
+                .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                .listRowBackground(Color.clear)
+        }
+        .textCase(nil)
+    }
+
     private func createTapped() {
         FeedbackService.shared.buttonTap()
         viewModel.clearError()
@@ -496,4 +509,9 @@ private struct GameTypeRow: View {
     return CombinedTripSetupView(viewModel: vm, onCreated: { _ in })
         .environmentObject(auth)
         .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self, TripActivityEventEntity.self], inMemory: true)
+}
+
+#Preview("Combined Trip Setup - Ad Banner") {
+    AdBannerView(surface: .combinedTripSetup, isPreviewPlaceholder: true)
+        .padding()
 }

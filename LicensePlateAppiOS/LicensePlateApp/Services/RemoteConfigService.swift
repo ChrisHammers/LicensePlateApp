@@ -1,0 +1,126 @@
+//
+//  RemoteConfigService.swift
+//  LicensePlateApp
+//
+//  Step 18 — Typed Remote Config defaults for launch-growth features.
+//
+
+import Foundation
+import Combine
+
+#if canImport(FirebaseRemoteConfig)
+import FirebaseRemoteConfig
+#endif
+
+protocol RemoteConfigValueProviding {
+    func bool(for key: RemoteConfigService.Key) -> Bool
+    func int(for key: RemoteConfigService.Key) -> Int
+}
+
+struct RemoteConfigDefaultsProvider: RemoteConfigValueProviding {
+    func bool(for key: RemoteConfigService.Key) -> Bool {
+        switch key {
+        case .adsEnabledFreeTier, .reviewPromptEnabled, .remindersEnabled, .returnStreakEnabled:
+            return true
+        case .reviewPromptMinimumCompletedTrips, .reviewPromptCooldownDays, .inactiveActiveTripReminderHours:
+            return int(for: key) != 0
+        }
+    }
+
+    func int(for key: RemoteConfigService.Key) -> Int {
+        switch key {
+        case .reviewPromptMinimumCompletedTrips:
+            return 1
+        case .reviewPromptCooldownDays:
+            return 120
+        case .inactiveActiveTripReminderHours:
+            return 24
+        case .adsEnabledFreeTier, .reviewPromptEnabled, .remindersEnabled, .returnStreakEnabled:
+            return bool(for: key) ? 1 : 0
+        }
+    }
+}
+
+@MainActor
+final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
+    enum Key: String, CaseIterable {
+        case adsEnabledFreeTier = "ads_enabled_free_tier"
+        case reviewPromptEnabled = "review_prompt_enabled"
+        case reviewPromptMinimumCompletedTrips = "review_prompt_minimum_completed_trips"
+        case reviewPromptCooldownDays = "review_prompt_cooldown_days"
+        case remindersEnabled = "reminders_enabled"
+        case inactiveActiveTripReminderHours = "inactive_active_trip_reminder_hours"
+        case returnStreakEnabled = "return_streak_enabled"
+    }
+
+    static let shared = RemoteConfigService()
+
+    private let defaults = RemoteConfigDefaultsProvider()
+
+    #if canImport(FirebaseRemoteConfig)
+    private lazy var remoteConfig: RemoteConfig = {
+        let config = RemoteConfig.remoteConfig()
+        let settings = RemoteConfigSettings()
+        #if DEBUG
+        settings.minimumFetchInterval = 0
+        #else
+        settings.minimumFetchInterval = 3_600
+        #endif
+        config.configSettings = settings
+        config.setDefaults(defaultValues as NSDictionary as! [String : NSObject])
+        return config
+    }()
+    #endif
+
+    private init() {}
+
+    func fetchAndActivate() async {
+        #if canImport(FirebaseRemoteConfig)
+        do {
+            _ = try await remoteConfig.fetchAndActivate()
+            AnalyticsService.shared.log(.remoteConfigFetchSucceeded)
+        } catch {
+            AnalyticsService.shared.log(.remoteConfigFetchFailed(error: error.localizedDescription))
+            CrashReportingService.shared.record(error: error, context: "remote_config_fetch")
+        }
+        #else
+        AnalyticsService.shared.log(.remoteConfigFetchSucceeded)
+        #endif
+    }
+
+    func bool(for key: Key) -> Bool {
+        #if canImport(FirebaseRemoteConfig)
+        return remoteConfig.configValue(forKey: key.rawValue).boolValue
+        #else
+        return defaults.bool(for: key)
+        #endif
+    }
+
+    func int(for key: Key) -> Int {
+        #if canImport(FirebaseRemoteConfig)
+        return remoteConfig.configValue(forKey: key.rawValue).numberValue.intValue
+        #else
+        return defaults.int(for: key)
+        #endif
+    }
+
+    var adsEnabledFreeTier: Bool { bool(for: .adsEnabledFreeTier) }
+    var reviewPromptEnabled: Bool { bool(for: .reviewPromptEnabled) }
+    var reviewPromptMinimumCompletedTrips: Int { max(1, int(for: .reviewPromptMinimumCompletedTrips)) }
+    var reviewPromptCooldownDays: Int { max(1, int(for: .reviewPromptCooldownDays)) }
+    var remindersEnabled: Bool { bool(for: .remindersEnabled) }
+    var inactiveActiveTripReminderHours: Int { max(1, int(for: .inactiveActiveTripReminderHours)) }
+    var returnStreakEnabled: Bool { bool(for: .returnStreakEnabled) }
+
+    private var defaultValues: [String: NSObject] {
+        [
+            Key.adsEnabledFreeTier.rawValue: defaults.bool(for: .adsEnabledFreeTier) as NSNumber,
+            Key.reviewPromptEnabled.rawValue: defaults.bool(for: .reviewPromptEnabled) as NSNumber,
+            Key.reviewPromptMinimumCompletedTrips.rawValue: defaults.int(for: .reviewPromptMinimumCompletedTrips) as NSNumber,
+            Key.reviewPromptCooldownDays.rawValue: defaults.int(for: .reviewPromptCooldownDays) as NSNumber,
+            Key.remindersEnabled.rawValue: defaults.bool(for: .remindersEnabled) as NSNumber,
+            Key.inactiveActiveTripReminderHours.rawValue: defaults.int(for: .inactiveActiveTripReminderHours) as NSNumber,
+            Key.returnStreakEnabled.rawValue: defaults.bool(for: .returnStreakEnabled) as NSNumber
+        ]
+    }
+}
