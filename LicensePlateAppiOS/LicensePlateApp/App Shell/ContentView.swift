@@ -791,6 +791,7 @@ struct DefaultSettingsView: View {
                     } header: {
                         Text("Debug – Force persistence failures".localized)
                     }
+                    .listRowBackground(Color.Theme.cardBackground)
                     .accessibilityElement(children: .contain)
                     #endif
                 }

@@ -54,6 +54,7 @@ struct AddFamilyMemberSheet: View {
                             }
                         }
                     }
+                    .listRowBackground(Color.Theme.cardBackground)
                     
                     if !searchResults.isEmpty {
                         Section("Results".localized) {
@@ -69,6 +70,7 @@ struct AddFamilyMemberSheet: View {
                                 )
                             }
                         }
+                        .listRowBackground(Color.Theme.cardBackground)
                     }
                 }
                 .listStyle(.insetGrouped)

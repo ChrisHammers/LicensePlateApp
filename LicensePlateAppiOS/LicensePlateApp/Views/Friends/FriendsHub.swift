@@ -223,6 +223,7 @@ struct FriendsHub: View {
                     }
                     .padding(.horizontal)
                 }
+                .listRowBackground(Color.clear)
             } else {
                 ForEach(viewModel.friends) { friendship in
                     FriendRow(friendship: friendship) {
@@ -230,6 +231,7 @@ struct FriendsHub: View {
                         showRemoveFriendConfirm = true
                     }
                 }
+                .listRowBackground(Color.Theme.cardBackground)
             }
         }
     }
@@ -246,6 +248,7 @@ struct FriendsHub: View {
                     }
                 }
             }
+            .listRowBackground(Color.Theme.cardBackground)
 
             Section("Outgoing".localized) {
                 if viewModel.outgoingFriendInvites.isEmpty {
@@ -257,6 +260,7 @@ struct FriendsHub: View {
                     }
                 }
             }
+            .listRowBackground(Color.Theme.cardBackground)
         }
     }
 }

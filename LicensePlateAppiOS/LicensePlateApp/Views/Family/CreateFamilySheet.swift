@@ -35,6 +35,7 @@ struct CreateFamilySheet: View {
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
                     }
+                    .listRowBackground(Color.Theme.cardBackground)
                     
                     if let error = errorMessage {
                         Section {
@@ -42,6 +43,7 @@ struct CreateFamilySheet: View {
                                 .foregroundStyle(.red)
                                 .font(.system(.caption, design: .rounded))
                         }
+                        .listRowBackground(Color.Theme.cardBackground)
                     }
                 }
                 .formStyle(.grouped)

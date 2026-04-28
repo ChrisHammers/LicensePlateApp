@@ -39,6 +39,7 @@ struct PendingTripsView: View {
                                     .font(.system(.body, design: .rounded))
                                     .foregroundStyle(.red)
                             }
+                            .listRowBackground(Color.Theme.cardBackground)
                         }
                         if !viewModel.incomingInvites.isEmpty {
                             Section("Incoming Invites".localized) {

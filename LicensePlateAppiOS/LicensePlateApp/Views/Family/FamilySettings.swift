@@ -47,6 +47,7 @@ struct FamilySettings: View {
                                 onCancel: {}
                             )
                         }
+                        .listRowBackground(Color.Theme.cardBackground)
                     }
                     
                     // Members
@@ -55,6 +56,7 @@ struct FamilySettings: View {
                             FamilyMemberSettingsRow(member: member)
                         }
                     }
+                    .listRowBackground(Color.Theme.cardBackground)
                     
                     // Leave Family (All members except creator)
                     if !viewModel.isCreator {
@@ -70,6 +72,7 @@ struct FamilySettings: View {
                         } footer: {
                             Text("You will be removed from this family and will need to be invited again to rejoin.".localized)
                         }
+                        .listRowBackground(Color.Theme.cardBackground)
                     }
                     
                     // Danger Zone (Creator only)
@@ -95,6 +98,7 @@ struct FamilySettings: View {
                         } footer: {
                             Text("This will permanently delete the family and remove all members. This action cannot be undone.".localized)
                         }
+                        .listRowBackground(Color.Theme.cardBackground)
                     }
                 }
                 .listStyle(.insetGrouped)

@@ -80,6 +80,7 @@ struct TripSessionView: View {
             } header: {
                 Text("Trip".localized)
             }
+            .listRowBackground(Color.Theme.cardBackground)
 
             if viewModel.showsTripCompetitiveLeaderboard, !viewModel.tripLeaderboardRows.isEmpty {
                 TripSessionLeaderboardSection(

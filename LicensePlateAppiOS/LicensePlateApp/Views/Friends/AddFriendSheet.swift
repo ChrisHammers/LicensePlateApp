@@ -41,6 +41,7 @@ struct AddFriendSheet: View {
                             }
                         }
                     }
+                    .listRowBackground(Color.Theme.cardBackground)
 
                     if !viewModel.searchResults.isEmpty {
                         Section("Results".localized) {
@@ -48,6 +49,7 @@ struct AddFriendSheet: View {
                                 UserSearchResultRow(result: result, viewModel: viewModel)
                             }
                         }
+                        .listRowBackground(Color.Theme.cardBackground)
                     }
                 }
                 .listStyle(.insetGrouped)

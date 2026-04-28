@@ -44,6 +44,7 @@ struct FamilyInvitesView: View {
                     List {
                         ForEach(pendingInvites) { invite in
                             FamilyInviteRow(invite: invite)
+                                .listRowBackground(Color.Theme.cardBackground)
                         }
                     }
                     .listStyle(.insetGrouped)

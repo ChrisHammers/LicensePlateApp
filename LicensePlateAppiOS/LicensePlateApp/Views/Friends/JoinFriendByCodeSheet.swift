@@ -38,6 +38,7 @@ struct JoinFriendByCodeSheet: View {
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
                     }
+                    .listRowBackground(Color.Theme.cardBackground)
 
                     Section {
                         Button {
@@ -51,6 +52,7 @@ struct JoinFriendByCodeSheet: View {
                             }
                         }
                     }
+                    .listRowBackground(Color.Theme.cardBackground)
 
                     if let error = viewModel.errorMessage {
                         Section {
@@ -58,6 +60,7 @@ struct JoinFriendByCodeSheet: View {
                                 .foregroundStyle(.red)
                                 .font(.system(.caption, design: .rounded))
                         }
+                        .listRowBackground(Color.Theme.cardBackground)
                     }
                 }
                 .formStyle(.grouped)

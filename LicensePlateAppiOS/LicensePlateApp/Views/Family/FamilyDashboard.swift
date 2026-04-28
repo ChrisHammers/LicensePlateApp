@@ -51,6 +51,7 @@ struct FamilyDashboard: View {
                             }
                             .padding(.vertical, 8)
                         }
+                        .listRowBackground(Color.Theme.cardBackground)
                         
                         // Members
                         Section("Members".localized) {
@@ -85,6 +86,7 @@ struct FamilyDashboard: View {
                                 .disabled(!authService.isOnline)
                             }
                         }
+                        .listRowBackground(Color.Theme.cardBackground)
                         
                         // Pending Invites Section
                         if viewModel.pendingFamilyInvitesCount > 0 {
@@ -103,6 +105,7 @@ struct FamilyDashboard: View {
                                     }
                                 }
                             }
+                            .listRowBackground(Color.Theme.cardBackground)
                         }
                         
                         // Pending Member Requests (for creators/captains)
@@ -119,12 +122,14 @@ struct FamilyDashboard: View {
                                         .foregroundStyle(Color.Theme.softBrown)
                                 }
                             }
+                            .listRowBackground(Color.Theme.cardBackground)
                         } else if !viewModel.pendingRequests.isEmpty {
                             Section("Pending".localized) {
                                 ForEach(viewModel.pendingRequests) { request in
                                     PendingRequestRow(request: request)
                                 }
                             }
+                            .listRowBackground(Color.Theme.cardBackground)
                         }
                         
                         // Stats placeholder
@@ -137,6 +142,7 @@ struct FamilyDashboard: View {
                             .font(.system(.body, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
                         }
+                        .listRowBackground(Color.Theme.cardBackground)
                     }
                     .listStyle(.insetGrouped)
                     .scrollContentBackground(.hidden)

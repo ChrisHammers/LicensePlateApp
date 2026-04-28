@@ -46,6 +46,7 @@ struct JoinFamilySheet: View {
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
                     }
+                    .listRowBackground(Color.Theme.cardBackground)
                     
                     Section {
                         Button {
@@ -59,6 +60,7 @@ struct JoinFamilySheet: View {
                             }
                         }
                     }
+                    .listRowBackground(Color.Theme.cardBackground)
                     
                     if let error = errorMessage {
                         Section {
@@ -66,6 +68,7 @@ struct JoinFamilySheet: View {
                                 .foregroundStyle(.red)
                                 .font(.system(.caption, design: .rounded))
                         }
+                        .listRowBackground(Color.Theme.cardBackground)
                     }
                 }
                 .formStyle(.grouped)

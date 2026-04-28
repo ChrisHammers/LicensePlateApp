@@ -27,52 +27,53 @@ struct InvitePlayersView: View {
         NavigationStack {
             AppBackgroundView {
                 List {
-                if viewModel.isLoading {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                        .listRowBackground(Color.clear)
-                } else if viewModel.candidates.isEmpty {
-                    Text("No eligible friends or family to invite yet.".localized)
-                        .font(.system(.body, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-                        .padding(.vertical, 8)
-                        .listRowBackground(Color.clear)
-                } else {
-                    ForEach(viewModel.candidates) { candidate in
-                        Button {
-                            FeedbackService.shared.buttonTap()
-                            viewModel.toggleSelection(userId: candidate.userId)
-                        } label: {
-                            HStack(spacing: 12) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(candidate.displayName)
-                                        .font(.system(.body, design: .rounded))
-                                        .foregroundStyle(Color.Theme.primaryBlue)
-                                    Text(candidate.sourceLabel)
-                                        .font(.system(.caption, design: .rounded))
-                                        .foregroundStyle(Color.Theme.softBrown)
-                                    if candidate.isAlreadyParticipant {
-                                        Text("Already a passenger".localized)
-                                            .font(.system(.caption2, design: .rounded))
-                                            .foregroundStyle(.green)
-                                    } else if candidate.hasPendingInvite {
-                                        Text("Invite pending".localized)
-                                            .font(.system(.caption2, design: .rounded))
-                                            .foregroundStyle(Color.Theme.accentYellow)
+                    if viewModel.isLoading {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .listRowBackground(Color.clear)
+                    } else if viewModel.candidates.isEmpty {
+                        Text("No eligible friends or family to invite yet.".localized)
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                            .padding(.vertical, 8)
+                            .listRowBackground(Color.clear)
+                    } else {
+                        ForEach(viewModel.candidates) { candidate in
+                            Button {
+                                FeedbackService.shared.buttonTap()
+                                viewModel.toggleSelection(userId: candidate.userId)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(candidate.displayName)
+                                            .font(.system(.body, design: .rounded))
+                                            .foregroundStyle(Color.Theme.primaryBlue)
+                                        Text(candidate.sourceLabel)
+                                            .font(.system(.caption, design: .rounded))
+                                            .foregroundStyle(Color.Theme.softBrown)
+                                        if candidate.isAlreadyParticipant {
+                                            Text("Already a passenger".localized)
+                                                .font(.system(.caption2, design: .rounded))
+                                                .foregroundStyle(.green)
+                                        } else if candidate.hasPendingInvite {
+                                            Text("Invite pending".localized)
+                                                .font(.system(.caption2, design: .rounded))
+                                                .foregroundStyle(Color.Theme.accentYellow)
+                                        }
                                     }
+                                    Spacer()
+                                    Image(systemName: viewModel.selectedUserIds.contains(candidate.userId) ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(viewModel.selectedUserIds.contains(candidate.userId) ? Color.Theme.primaryBlue : Color.Theme.softBrown)
                                 }
-                                Spacer()
-                                Image(systemName: viewModel.selectedUserIds.contains(candidate.userId) ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(viewModel.selectedUserIds.contains(candidate.userId) ? Color.Theme.primaryBlue : Color.Theme.softBrown)
                             }
+                            .buttonStyle(.plain)
+                            .disabled(!candidate.isSelectable)
+                            .opacity(candidate.isSelectable ? 1.0 : 0.65)
+                            .listRowBackground(Color.Theme.cardBackground)
+                            .accessibilityLabel(candidate.displayName)
+                            .accessibilityHint(candidate.isSelectable ? "Double tap to select passenger".localized : "Unavailable for invite".localized)
                         }
-                        .buttonStyle(.plain)
-                        .disabled(!candidate.isSelectable)
-                        .opacity(candidate.isSelectable ? 1.0 : 0.65)
-                        .accessibilityLabel(candidate.displayName)
-                        .accessibilityHint(candidate.isSelectable ? "Double tap to select passenger".localized : "Unavailable for invite".localized)
                     }
-                }
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)

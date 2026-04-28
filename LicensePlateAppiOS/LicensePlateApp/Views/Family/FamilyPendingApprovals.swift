@@ -24,6 +24,7 @@ struct FamilyPendingApprovals: View {
                             .foregroundStyle(Color.Theme.softBrown)
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding()
+                            .listRowBackground(Color.Theme.cardBackground)
                     } else {
                         ForEach(pendingRequests) { request in
                             PendingApprovalRow(
@@ -37,6 +38,7 @@ struct FamilyPendingApprovals: View {
                                 }
                             )
                             .environmentObject(authService)
+                            .listRowBackground(Color.Theme.cardBackground)
                         }
                     }
                 }

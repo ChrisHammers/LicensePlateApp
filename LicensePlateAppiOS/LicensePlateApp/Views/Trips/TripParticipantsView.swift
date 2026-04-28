@@ -21,53 +21,56 @@ struct TripParticipantsView: View {
         NavigationStack {
             AppBackgroundView {
                 List {
-                if let errorMessage = viewModel.errorMessage {
-                    Text(errorMessage)
-                        .font(.system(.footnote, design: .rounded))
-                        .foregroundStyle(.red)
-                }
+                    if let errorMessage = viewModel.errorMessage {
+                        Text(errorMessage)
+                            .font(.system(.footnote, design: .rounded))
+                            .foregroundStyle(.red)
+                            .listRowBackground(Color.Theme.cardBackground)
+                    }
 
-                Section("Passengers".localized) {
-                    ForEach(viewModel.passengers) { passenger in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(passenger.displayName)
-                                    .font(.system(.body, design: .rounded))
-                                    .foregroundStyle(Color.Theme.primaryBlue)
-                                Text(passenger.roleLabel)
-                                    .font(.system(.caption, design: .rounded))
-                                    .foregroundStyle(Color.Theme.softBrown)
-                            }
-                            Spacer()
-                            if passenger.isCreator {
-                                Text("Creator".localized)
-                                    .font(.system(.caption2, design: .rounded))
-                                    .foregroundStyle(.green)
+                    Section("Passengers".localized) {
+                        ForEach(viewModel.passengers) { passenger in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(passenger.displayName)
+                                        .font(.system(.body, design: .rounded))
+                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                    Text(passenger.roleLabel)
+                                        .font(.system(.caption, design: .rounded))
+                                        .foregroundStyle(Color.Theme.softBrown)
+                                }
+                                Spacer()
+                                if passenger.isCreator {
+                                    Text("Creator".localized)
+                                        .font(.system(.caption2, design: .rounded))
+                                        .foregroundStyle(.green)
+                                }
                             }
                         }
                     }
-                }
+                    .listRowBackground(Color.Theme.cardBackground)
 
-                Section("Pending Invites".localized) {
-                    if viewModel.pendingInviteRows.isEmpty {
-                        Text("No pending invites".localized)
-                            .font(.system(.body, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
-                    } else {
-                        ForEach(viewModel.pendingInviteRows) { row in
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(row.inviteeDisplayName)
-                                    .font(.system(.body, design: .rounded))
-                                    .foregroundStyle(Color.Theme.primaryBlue)
-                                Text(row.statusLabel)
-                                    .font(.system(.caption, design: .rounded))
-                                    .foregroundStyle(Color.Theme.softBrown)
+                    Section("Pending Invites".localized) {
+                        if viewModel.pendingInviteRows.isEmpty {
+                            Text("No pending invites".localized)
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                        } else {
+                            ForEach(viewModel.pendingInviteRows) { row in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(row.inviteeDisplayName)
+                                        .font(.system(.body, design: .rounded))
+                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                    Text(row.statusLabel)
+                                        .font(.system(.caption, design: .rounded))
+                                        .foregroundStyle(Color.Theme.softBrown)
+                                }
+                                .accessibilityElement(children: .combine)
+                                .accessibilityLabel("\(row.inviteeDisplayName), \(row.statusLabel)")
                             }
-                            .accessibilityElement(children: .combine)
-                            .accessibilityLabel("\(row.inviteeDisplayName), \(row.statusLabel)")
                         }
                     }
-                }
+                    .listRowBackground(Color.Theme.cardBackground)
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
