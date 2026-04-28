@@ -321,7 +321,7 @@ struct ContentView: View {
                         .foregroundStyle(.red)
                         .accessibilityLabel(inviteError)
                 }
-                if pendingTripsViewModel.incomingInvites.isEmpty && pendingTripsViewModel.outgoingInvites.isEmpty {
+                if pendingTripsViewModel.incomingInvites.isEmpty {
                     pendingInvitesEmptyCard
                 } else {
                     ForEach(pendingTripsViewModel.incomingInvites, id: \.inviteId) { invite in
@@ -332,18 +332,6 @@ struct ContentView: View {
                             onAccept: { pendingTripsViewModel.accept(invite: invite) },
                             onDecline: { pendingTripsViewModel.decline(invite: invite) },
                             onCancel: nil
-                        )
-                        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
-                        .listRowBackground(Color.clear)
-                    }
-                    ForEach(pendingTripsViewModel.outgoingInvites, id: \.inviteId) { invite in
-                        PendingInviteCard(
-                            invite: invite,
-                            snapshot: pendingTripsViewModel.displaySnapshot(for: invite, isIncoming: false),
-                            isIncoming: false,
-                            onAccept: nil,
-                            onDecline: nil,
-                            onCancel: (invite.statusEnum == .sent || invite.statusEnum == .pending) ? { pendingTripsViewModel.cancel(invite: invite) } : nil
                         )
                         .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
                         .listRowBackground(Color.clear)
@@ -429,7 +417,7 @@ struct ContentView: View {
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue)
             
-            Text("When someone invites you to a trip, or you invite others, they will appear here.".localized)
+            Text("When someone invites you to a trip, it will appear here.".localized)
                 .multilineTextAlignment(.center)
                 .font(.system(.footnote, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
@@ -444,22 +432,27 @@ struct ContentView: View {
         )
         .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("No pending invites. When someone invites you to a trip, or you invite others, they will appear here.".localized)
+        .accessibilityLabel("No pending invites. When someone invites you to a trip, it will appear here.".localized)
     }
 
     private var activeSessionList: some View {
         ForEach(activeTripsListViewModel.items) { item in
+            let pendingOutgoingInviteCount = outgoingPendingInviteCount(for: item.session.id)
             Button {
                 FeedbackService.shared.buttonTap()
                 mainCoordinator.openSession(item.session.id)
             } label: {
-                TripSessionRow(session: item.session, rollup: item.rollup)
+                TripSessionRow(
+                    session: item.session,
+                    rollup: item.rollup,
+                    pendingOutgoingInviteCount: pendingOutgoingInviteCount
+                )
                     .padding(.vertical, 8)
             }
             .buttonStyle(.plain)
             .listRowInsets(.init(top: 6, leading: 20, bottom: 6, trailing: 20))
             .listRowBackground(Color.clear)
-            .accessibilityLabel("Trip: %@".localized(item.session.name))
+            .accessibilityLabel(activeTripAccessibilityLabel(for: item.session, pendingOutgoingInviteCount: pendingOutgoingInviteCount))
             .accessibilityHint("Double tap to open trip".localized)
         }
         .onDelete { offsets in
@@ -471,6 +464,23 @@ struct ContentView: View {
                 FeedbackService.shared.actionError()
             }
         }
+    }
+
+    private func outgoingPendingInviteCount(for sessionId: UUID) -> Int {
+        pendingTripsViewModel.outgoingInvites.filter { invite in
+            UUID(uuidString: invite.tripSessionId) == sessionId
+                && (invite.statusEnum == .pending || invite.statusEnum == .sent)
+        }.count
+    }
+
+    private func activeTripAccessibilityLabel(for session: TripSession, pendingOutgoingInviteCount: Int) -> String {
+        guard pendingOutgoingInviteCount > 0 else {
+            return "Trip: %@".localized(session.name)
+        }
+        let pendingLine = pendingOutgoingInviteCount == 1
+            ? "1 outgoing invite pending".localized
+            : "%d outgoing invites pending".localized(pendingOutgoingInviteCount)
+        return ["Trip: %@".localized(session.name), pendingLine].joined(separator: ". ")
     }
 
     private var addTripButton: some View {

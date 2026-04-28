@@ -11,6 +11,13 @@ import SwiftUI
 struct TripSessionRow: View {
     let session: TripSession
     let rollup: TripRollup
+    let pendingOutgoingInviteCount: Int
+
+    init(session: TripSession, rollup: TripRollup, pendingOutgoingInviteCount: Int = 0) {
+        self.session = session
+        self.rollup = rollup
+        self.pendingOutgoingInviteCount = pendingOutgoingInviteCount
+    }
 
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -47,27 +54,53 @@ struct TripSessionRow: View {
         
     }
 
+    private var pendingOutgoingInviteBadgeLabel: String {
+        pendingOutgoingInviteCount == 1
+            ? "1 invite pending".localized
+            : "%d invites pending".localized(pendingOutgoingInviteCount)
+    }
+
     private var combinedAccessibilityLabel: String {
         let plateFound = rollup.primaryGameDiscoveryCount == 1
             ? "1 license plate found".localized
             : "%d license plates found".localized(rollup.primaryGameDiscoveryCount)
         let gamesLine = rollup.gameCount == 1 ? "1 game".localized : "%d games".localized(rollup.gameCount)
-        return [
+        var lines = [
             "Trip: %@".localized(session.name),
             "Trip participation: %@".localized(session.mode.localizedDisplayName),
             gamesLine,
             plateFound,
             accessibilityValue
-        ].joined(separator: ". ")
+        ]
+        if pendingOutgoingInviteCount > 0 {
+            lines.append(pendingOutgoingInviteBadgeLabel)
+        }
+        return lines.joined(separator: ". ")
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(session.name)
-                    .font(.system(.title3, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(session.name)
+                        .font(.system(.title3, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+
+                    if pendingOutgoingInviteCount > 0 {
+                        Text(pendingOutgoingInviteBadgeLabel)
+                            .font(.system(.caption2, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill(Color.Theme.accentYellow.opacity(0.25))
+                            )
+                            .accessibilityLabel(pendingOutgoingInviteBadgeLabel)
+                    }
+                }
 
                 Spacer()
 
