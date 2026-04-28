@@ -16,104 +16,106 @@ struct PaywallView: View {
     var source: String = "paywall"
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(spacing: 24) {
-                    Text(viewModel.unlockReasonTitle)
-                        .font(.system(.largeTitle, design: .rounded))
-                        .fontWeight(.bold)
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                        .accessibleHeader(viewModel.unlockReasonTitle)
-                        .multilineTextAlignment(.center)
+        AppBackgroundView {
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(spacing: 24) {
+                        Text(viewModel.unlockReasonTitle)
+                            .font(.system(.largeTitle, design: .rounded))
+                            .fontWeight(.bold)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                            .accessibleHeader(viewModel.unlockReasonTitle)
+                            .multilineTextAlignment(.center)
 
-                    Text(viewModel.unlockReasonMessage)
-                        .font(.system(.body, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
-
-                    if let message = viewModel.errorMessage {
-                        Text(message)
-                            .font(.system(.subheadline, design: .rounded))
-                            .foregroundStyle(.red)
-                            .padding(.horizontal)
-                    }
-
-                    if viewModel.isLoading {
-                        ProgressView()
-                            .padding(.vertical, 24)
-                    } else if viewModel.packages.isEmpty {
-                        Text("Premium benefits coming soon".localized)
-                            .font(.system(.subheadline, design: .rounded))
+                        Text(viewModel.unlockReasonMessage)
+                            .font(.system(.body, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(Color.Theme.cardBackground, in: RoundedRectangle(cornerRadius: 16))
+                            .multilineTextAlignment(.center)
                             .padding(.horizontal)
-                    } else {
-                        VStack(spacing: 12) {
-                            ForEach(viewModel.packages) { pkg in
-                                PaywallPackageRow(
-                                    package: pkg,
-                                    isPurchasing: viewModel.isPurchasing
-                                ) {
-                                    Task { await viewModel.purchase(packageId: pkg.id) }
+
+                        if let message = viewModel.errorMessage {
+                            Text(message)
+                                .font(.system(.subheadline, design: .rounded))
+                                .foregroundStyle(.red)
+                                .padding(.horizontal)
+                        }
+
+                        if viewModel.isLoading {
+                            ProgressView()
+                                .padding(.vertical, 24)
+                        } else if viewModel.packages.isEmpty {
+                            Text("Premium benefits coming soon".localized)
+                                .font(.system(.subheadline, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(Color.Theme.cardBackground, in: RoundedRectangle(cornerRadius: 16))
+                                .padding(.horizontal)
+                        } else {
+                            VStack(spacing: 12) {
+                                ForEach(viewModel.packages) { pkg in
+                                    PaywallPackageRow(
+                                        package: pkg,
+                                        isPurchasing: viewModel.isPurchasing
+                                    ) {
+                                        Task { await viewModel.purchase(packageId: pkg.id) }
+                                    }
                                 }
                             }
+                            .padding(.horizontal)
                         }
-                        .padding(.horizontal)
                     }
-                }
-                .padding(.vertical, 32)
-                .padding(.bottom, 24)
-            }
-
-            VStack(spacing: 16) {
-                if !viewModel.packages.isEmpty {
-                    Button {
-                        Task { await viewModel.restore() }
-                    } label: {
-                        Text("Restore Purchases".localized)
-                            .font(.system(.body, design: .rounded))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .foregroundStyle(Color.Theme.primaryBlue)
-                    }
-                    .disabled(viewModel.isRestoring)
-                    .accessibleButton(label: "Restore Purchases".localized, hint: "Restore previous purchases".localized)
+                    .padding(.vertical, 32)
+                    .padding(.bottom, 24)
                 }
 
-                if let title = primaryActionTitle, let action = primaryAction {
+                VStack(spacing: 16) {
+                    if !viewModel.packages.isEmpty {
+                        Button {
+                            Task { await viewModel.restore() }
+                        } label: {
+                            Text("Restore Purchases".localized)
+                                .font(.system(.body, design: .rounded))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                        }
+                        .disabled(viewModel.isRestoring)
+                        .accessibleButton(label: "Restore Purchases".localized, hint: "Restore previous purchases".localized)
+                    }
+
+                    if let title = primaryActionTitle, let action = primaryAction {
+                        Button {
+                            viewModel.dismiss()
+                            action()
+                        } label: {
+                            Text(title)
+                                .font(.system(.body, design: .rounded))
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(Capsule().fill(Color.Theme.primaryBlue))
+                                .foregroundStyle(.white)
+                        }
+                        .accessibleButton(label: title, hint: "Continues to next screen".localized)
+                    }
+
                     Button {
                         viewModel.dismiss()
-                        action()
+                        onDismiss()
                     } label: {
-                        Text(title)
+                        Text("Maybe Later".localized)
                             .font(.system(.body, design: .rounded))
-                            .fontWeight(.semibold)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(Capsule().fill(Color.Theme.primaryBlue))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.Theme.softBrown)
                     }
-                    .accessibleButton(label: title, hint: "Continues to next screen".localized)
+                    .accessibleButton(label: "Maybe Later".localized, hint: "Dismiss paywall".localized)
                 }
-
-                Button {
-                    viewModel.dismiss()
-                    onDismiss()
-                } label: {
-                    Text("Maybe Later".localized)
-                        .font(.system(.body, design: .rounded))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .foregroundStyle(Color.Theme.softBrown)
-                }
-                .accessibleButton(label: "Maybe Later".localized, hint: "Dismiss paywall".localized)
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+                .padding(.bottom, 32)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 16)
-            .padding(.bottom, 32)
         }
         .task {
             await viewModel.loadOfferings(source: source)

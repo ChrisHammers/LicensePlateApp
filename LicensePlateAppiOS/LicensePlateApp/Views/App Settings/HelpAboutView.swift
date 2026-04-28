@@ -29,10 +29,7 @@ struct HelpAboutView: View {
     }
     
     var body: some View {
-        ZStack {
-            Color.Theme.background
-                .ignoresSafeArea()
-            
+        AppBackgroundView {
             List {
                     Section {
                         VStack(spacing: 12) {
@@ -288,7 +285,7 @@ struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        ZStack {
+        AppBackgroundView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     Text("RoadTrip Royale".localized)
@@ -328,7 +325,6 @@ struct AboutView: View {
                 .padding()
             }
         }
-        .background(Color.Theme.background)
         .navigationTitle("About".localized)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -349,8 +345,9 @@ struct AcknowledgementsView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+        AppBackgroundView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
                 Text("Acknowledgements".localized)
                     .font(.system(.largeTitle, design: .rounded))
                     .fontWeight(.bold)
@@ -415,10 +412,10 @@ struct AcknowledgementsView: View {
                         url: "https://developer.apple.com/documentation/speech"
                     )
                 }
+                }
+                .padding()
             }
-            .padding()
         }
-        .background(Color.Theme.background)
         .navigationTitle("Acknowledgements".localized)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -464,8 +461,9 @@ struct FAQView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+        AppBackgroundView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
                 Text("Frequently Asked Questions".localized)
                     .font(.system(.largeTitle, design: .rounded))
                     .fontWeight(.bold)
@@ -505,10 +503,10 @@ struct FAQView: View {
                     question: "Do I need an internet connection?".localized,
                     answer: "RoadTrip Royale works offline! You can create trips and track license plates without an internet connection. If you sign in with an account, your data will sync to the cloud when you're online.".localized
                 )
+                }
+                .padding()
             }
-            .padding()
         }
-        .background(Color.Theme.background)
         .navigationTitle("FAQ".localized)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -553,8 +551,9 @@ struct TermsView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+        AppBackgroundView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
                 Text("Terms of Service".localized)
                     .font(.system(.largeTitle, design: .rounded))
                     .fontWeight(.bold)
@@ -613,10 +612,10 @@ struct TermsView: View {
                 Text("We reserve the right to modify these terms at any time. Continued use of the app after changes constitutes acceptance of the new terms.".localized)
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
+                }
+                .padding()
             }
-            .padding()
         }
-        .background(Color.Theme.background)
         .navigationTitle("Terms of Service".localized)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -637,8 +636,9 @@ struct PrivacyView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+        AppBackgroundView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
                 Text("Privacy Policy".localized)
                     .font(.system(.largeTitle, design: .rounded))
                     .fontWeight(.bold)
@@ -707,10 +707,10 @@ struct PrivacyView: View {
                 Text("For privacy-related questions, contact us at:\n\nEmail: hammerstechllc@gmail.com".localized)
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
+                }
+                .padding()
             }
-            .padding()
         }
-        .background(Color.Theme.background)
         .navigationTitle("Privacy Policy".localized)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)

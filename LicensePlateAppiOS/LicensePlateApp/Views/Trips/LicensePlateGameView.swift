@@ -102,28 +102,29 @@ struct LicensePlateGameView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        AppBackgroundView {
+            VStack(spacing: 0) {
+                header
 
-            // Keep both views in hierarchy to preserve scroll position
-            ZStack {
-                regionList
-                    .opacity(selectedTab == .list ? 1 : 0)
-                    .allowsHitTesting(selectedTab == .list)
-                
-                voiceCaptureView
-                    .opacity(selectedTab == .voice ? 1 : 0)
-                    .allowsHitTesting(selectedTab == .voice)
-                #if DEBUG
-                gameProgressionTab
-                    .opacity(selectedTab == .progression ? 1 : 0)
-                    .allowsHitTesting(selectedTab == .progression)
-                #endif
+                // Keep both views in hierarchy to preserve scroll position
+                ZStack {
+                    regionList
+                        .opacity(selectedTab == .list ? 1 : 0)
+                        .allowsHitTesting(selectedTab == .list)
+
+                    voiceCaptureView
+                        .opacity(selectedTab == .voice ? 1 : 0)
+                        .allowsHitTesting(selectedTab == .voice)
+                    #if DEBUG
+                    gameProgressionTab
+                        .opacity(selectedTab == .progression ? 1 : 0)
+                        .allowsHitTesting(selectedTab == .progression)
+                    #endif
+                }
+
+                customTabBar
             }
-
-            customTabBar
         }
-        .background(Color.Theme.background.ignoresSafeArea())
         .ignoresSafeArea(.all, edges: .bottom)
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(viewModel.currentSession.name)

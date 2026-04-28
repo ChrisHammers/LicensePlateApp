@@ -884,28 +884,30 @@ private struct ProfileAvatarPickerSheet: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                AvatarPickerView(
-                    items: displayItems,
-                    selectedId: $selectedId,
-                    onLockedTap: { item, source in
-                        unlockSheetPayload = AvatarUnlockSheetPayload(unlockSource: source, avatarName: item.displayName)
-                    },
-                    onSelected: nil
-                )
-                .frame(height: 196)
-                .padding()
-                
-                VStack(spacing: 8) {
-                    Text("Selected".localized)
-                        .font(.caption)
-                        .foregroundStyle(Color.Theme.softBrown)
-                    Text(selectedAvatarDisplayName)
-                        .font(.headline)
-                        .foregroundStyle(selectedAvatarDisplayName == "None".localized ? Color.Theme.softBrown : Color.Theme.primaryBlue)
+            AppBackgroundView {
+                VStack(spacing: 20) {
+                    AvatarPickerView(
+                        items: displayItems,
+                        selectedId: $selectedId,
+                        onLockedTap: { item, source in
+                            unlockSheetPayload = AvatarUnlockSheetPayload(unlockSource: source, avatarName: item.displayName)
+                        },
+                        onSelected: nil
+                    )
+                    .frame(height: 196)
+                    .padding()
+
+                    VStack(spacing: 8) {
+                        Text("Selected".localized)
+                            .font(.caption)
+                            .foregroundStyle(Color.Theme.softBrown)
+                        Text(selectedAvatarDisplayName)
+                            .font(.headline)
+                            .foregroundStyle(selectedAvatarDisplayName == "None".localized ? Color.Theme.softBrown : Color.Theme.primaryBlue)
+                    }
+
+                    Spacer()
                 }
-                
-                Spacer()
             }
             .navigationTitle("Change avatar".localized)
             .navigationBarTitleDisplayMode(.inline)
