@@ -65,6 +65,54 @@ final class SchemaVersion11Marker {
     init() {}
 }
 
+@Model
+final class SchemaVersion12Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
+@Model
+final class SchemaVersion13Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
+@Model
+final class SchemaVersion14Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
+@Model
+final class SchemaVersion15Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
+@Model
+final class SchemaVersion16Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
+@Model
+final class SchemaVersion17Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
+@Model
+final class SchemaVersion18Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
+@Model
+final class SchemaVersion19Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
 // MARK: - Schema Version 1 (Initial)
 // Initial schema with Trip and AppUser
 
@@ -124,7 +172,7 @@ enum SchemaVersion3: VersionedSchema {
 
 // MARK: - Schema Version 4 (Gameplay model foundation)
 // Added TripSessionEntity, GameInstanceEntity for new trip/session and game-instance persistence.
-// TODO: Eventually deprecate legacy Trip once UI/features migrate to TripSessionEntity.
+// Legacy Trip removed in V9; TripSessionEntity is canonical.
 enum SchemaVersion4: VersionedSchema {
     static var versionIdentifier: Schema.Version {
         Schema.Version(4, 0, 0)
@@ -388,10 +436,386 @@ enum SchemaVersion11: VersionedSchema {
     }
 }
 
+// MARK: - Schema Version 12 (Step 6.9.1 — Teams on GameInstance, remove TripSessionTeamsEntity)
+// V12: GameInstanceEntity.teamsData added; TripSessionTeamsEntity removed.
+enum SchemaVersion12: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(12, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            SchemaVersion12.GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            SchemaVersion7Marker.self,
+            SchemaVersion8Marker.self,
+            TripActivityEventEntity.self,
+            SchemaVersion9Marker.self,
+            SchemaVersion10Marker.self,
+            SyncQueueItemEntity.self,
+            RemoteSyncMetadataEntity.self,
+            SchemaVersion11Marker.self,
+            SchemaVersion12Marker.self
+        ]
+    }
+
+    /// Frozen **V12–V14** game row: `teamsData`, **no** `fairnessUiLastAckAt`. Keeps checksums stable while top-level `GameInstanceEntity` evolves.
+    @Model
+    final class GameInstanceEntity {
+        var id: String
+        var definitionId: String
+        var sessionId: String
+        var startedAt: Date
+        var endedAt: Date?
+        var ruleSetData: Data?
+        var commonConfigData: Data?
+        var gameSpecificPayloadType: String?
+        var gameSpecificPayloadVersion: String?
+        var gameSpecificPayloadData: Data?
+        var teamsData: Data?
+
+        init(
+            id: String,
+            definitionId: String,
+            sessionId: String,
+            startedAt: Date,
+            endedAt: Date? = nil,
+            ruleSetData: Data? = nil,
+            commonConfigData: Data? = nil,
+            gameSpecificPayloadType: String? = nil,
+            gameSpecificPayloadVersion: String? = nil,
+            gameSpecificPayloadData: Data? = nil,
+            teamsData: Data? = nil
+        ) {
+            self.id = id
+            self.definitionId = definitionId
+            self.sessionId = sessionId
+            self.startedAt = startedAt
+            self.endedAt = endedAt
+            self.ruleSetData = ruleSetData
+            self.commonConfigData = commonConfigData
+            self.gameSpecificPayloadType = gameSpecificPayloadType
+            self.gameSpecificPayloadVersion = gameSpecificPayloadVersion
+            self.gameSpecificPayloadData = gameSpecificPayloadData
+            self.teamsData = teamsData
+        }
+    }
+}
+
+// MARK: - Schema Version 13 (Step 6.9.2 — TripSessionEntity: remove enabledCountryRawValues; region scope on GameInstance)
+enum SchemaVersion13: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(13, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            SchemaVersion12.GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            SchemaVersion7Marker.self,
+            SchemaVersion8Marker.self,
+            TripActivityEventEntity.self,
+            SchemaVersion9Marker.self,
+            SchemaVersion10Marker.self,
+            SyncQueueItemEntity.self,
+            RemoteSyncMetadataEntity.self,
+            SchemaVersion11Marker.self,
+            SchemaVersion12Marker.self,
+            SchemaVersion13Marker.self
+        ]
+    }
+}
+
+// MARK: - Schema Version 14 (Step 6.10 — TripSessionEntity.mode removed; TripInvite.tripMode removed; participation derived)
+enum SchemaVersion14: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(14, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            SchemaVersion12.GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            SchemaVersion7Marker.self,
+            SchemaVersion8Marker.self,
+            TripActivityEventEntity.self,
+            SchemaVersion9Marker.self,
+            SchemaVersion10Marker.self,
+            SyncQueueItemEntity.self,
+            RemoteSyncMetadataEntity.self,
+            SchemaVersion11Marker.self,
+            SchemaVersion12Marker.self,
+            SchemaVersion13Marker.self,
+            SchemaVersion14Marker.self
+        ]
+    }
+}
+
+// MARK: - Schema Version 15 (Step 13.2 — GameInstanceEntity.fairnessUiLastAckAt)
+enum SchemaVersion15: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(15, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            SchemaVersion7Marker.self,
+            SchemaVersion8Marker.self,
+            TripActivityEventEntity.self,
+            SchemaVersion9Marker.self,
+            SchemaVersion10Marker.self,
+            SyncQueueItemEntity.self,
+            RemoteSyncMetadataEntity.self,
+            SchemaVersion11Marker.self,
+            SchemaVersion12Marker.self,
+            SchemaVersion13Marker.self,
+            SchemaVersion14Marker.self,
+            SchemaVersion15Marker.self
+        ]
+    }
+}
+
+// MARK: - Schema Version 16 (Step 14 — PendingTripLeaveEntity for offline leave / sync)
+enum SchemaVersion16: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(16, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            SchemaVersion7Marker.self,
+            SchemaVersion8Marker.self,
+            TripActivityEventEntity.self,
+            SchemaVersion9Marker.self,
+            SchemaVersion10Marker.self,
+            SyncQueueItemEntity.self,
+            RemoteSyncMetadataEntity.self,
+            SchemaVersion11Marker.self,
+            SchemaVersion12Marker.self,
+            SchemaVersion13Marker.self,
+            SchemaVersion14Marker.self,
+            SchemaVersion15Marker.self,
+            PendingTripLeaveEntity.self,
+            SchemaVersion16Marker.self
+        ]
+    }
+}
+
+// MARK: - Schema Version 17 (User lifetime stats cache)
+// Persisted aggregates for profile lifetime statistics (`UserLifetimeStatsEntity`).
+
+enum SchemaVersion17: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(17, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            SchemaVersion7Marker.self,
+            SchemaVersion8Marker.self,
+            TripActivityEventEntity.self,
+            SchemaVersion9Marker.self,
+            SchemaVersion10Marker.self,
+            SyncQueueItemEntity.self,
+            RemoteSyncMetadataEntity.self,
+            SchemaVersion11Marker.self,
+            SchemaVersion12Marker.self,
+            SchemaVersion13Marker.self,
+            SchemaVersion14Marker.self,
+            SchemaVersion15Marker.self,
+            PendingTripLeaveEntity.self,
+            SchemaVersion16Marker.self,
+            UserLifetimeStatsEntity.self,
+            SchemaVersion17Marker.self
+        ]
+    }
+}
+
+// MARK: - Schema Version 18 (Public lifetime stats Firestore cache)
+// Cache rows for `public_lifetime_stats` listeners (friends + family + profile).
+
+enum SchemaVersion18: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(18, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            SchemaVersion7Marker.self,
+            SchemaVersion8Marker.self,
+            TripActivityEventEntity.self,
+            SchemaVersion9Marker.self,
+            SchemaVersion10Marker.self,
+            SyncQueueItemEntity.self,
+            RemoteSyncMetadataEntity.self,
+            SchemaVersion11Marker.self,
+            SchemaVersion12Marker.self,
+            SchemaVersion13Marker.self,
+            SchemaVersion14Marker.self,
+            SchemaVersion15Marker.self,
+            PendingTripLeaveEntity.self,
+            SchemaVersion16Marker.self,
+            UserLifetimeStatsEntity.self,
+            SchemaVersion17Marker.self,
+            PublicLifetimeStatsCacheEntity.self,
+            SchemaVersion18Marker.self
+        ]
+    }
+}
+
+// MARK: - Schema Version 19 (XP ledger + discovery resolution)
+// Local append-only XP ledger and post-reconciliation discovery rows.
+
+enum SchemaVersion19: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(19, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            SchemaVersion7Marker.self,
+            SchemaVersion8Marker.self,
+            TripActivityEventEntity.self,
+            SchemaVersion9Marker.self,
+            SchemaVersion10Marker.self,
+            SyncQueueItemEntity.self,
+            RemoteSyncMetadataEntity.self,
+            SchemaVersion11Marker.self,
+            SchemaVersion12Marker.self,
+            SchemaVersion13Marker.self,
+            SchemaVersion14Marker.self,
+            SchemaVersion15Marker.self,
+            PendingTripLeaveEntity.self,
+            SchemaVersion16Marker.self,
+            UserLifetimeStatsEntity.self,
+            SchemaVersion17Marker.self,
+            PublicLifetimeStatsCacheEntity.self,
+            SchemaVersion18Marker.self,
+            XpLedgerEventEntity.self,
+            DiscoveryResolutionEntity.self,
+            SchemaVersion19Marker.self
+        ]
+    }
+}
+
 // MARK: - Migration Plan
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self, SchemaVersion11.self]
+        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self, SchemaVersion11.self, SchemaVersion12.self, SchemaVersion13.self, SchemaVersion14.self, SchemaVersion15.self, SchemaVersion16.self, SchemaVersion17.self, SchemaVersion18.self, SchemaVersion19.self]
     }
 
     static var stages: [MigrationStage] {
@@ -405,12 +829,20 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             .lightweight(fromVersion: SchemaVersion7.self, toVersion: SchemaVersion8.self),
             .lightweight(fromVersion: SchemaVersion8.self, toVersion: SchemaVersion9.self),
             .lightweight(fromVersion: SchemaVersion9.self, toVersion: SchemaVersion10.self),
-            .lightweight(fromVersion: SchemaVersion10.self, toVersion: SchemaVersion11.self)
+            .lightweight(fromVersion: SchemaVersion10.self, toVersion: SchemaVersion11.self),
+            .lightweight(fromVersion: SchemaVersion11.self, toVersion: SchemaVersion12.self),
+            .lightweight(fromVersion: SchemaVersion12.self, toVersion: SchemaVersion13.self),
+            .lightweight(fromVersion: SchemaVersion13.self, toVersion: SchemaVersion14.self),
+            .lightweight(fromVersion: SchemaVersion14.self, toVersion: SchemaVersion15.self),
+            .lightweight(fromVersion: SchemaVersion15.self, toVersion: SchemaVersion16.self),
+            .lightweight(fromVersion: SchemaVersion16.self, toVersion: SchemaVersion17.self),
+            .lightweight(fromVersion: SchemaVersion17.self, toVersion: SchemaVersion18.self),
+            .lightweight(fromVersion: SchemaVersion18.self, toVersion: SchemaVersion19.self)
         ]
     }
 }
 
 // MARK: - Current Schema
-// V11: Sync queue foundation (SyncQueueItemEntity, RemoteSyncMetadataEntity).
-typealias CurrentSchema = SchemaVersion11
+// V19: XP ledger (`XpLedgerEventEntity`) + discovery resolution (`DiscoveryResolutionEntity`).
+typealias CurrentSchema = SchemaVersion19
 

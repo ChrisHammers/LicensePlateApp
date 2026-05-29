@@ -17,8 +17,10 @@ struct RiskAssessmentResult: Sendable {
 /// Protocol for risk assessment (DI and tests).
 @MainActor
 protocol RiskAssessing: AnyObject {
+    /// Heuristic event buffers are keyed by `(tripId, gameInstanceId)` so multiple games on one trip do not share state.
     func assessAfterDiscoveryChange(
         tripId: UUID,
+        gameInstanceId: UUID,
         foundRegions: [FoundRegion],
         lastChange: (regionID: String, isAdd: Bool, at: Date)
     ) -> RiskAssessmentResult
@@ -30,7 +32,11 @@ final class RiskAssessmentService: ObservableObject, RiskAssessing {
     private let analytics: AnalyticsLogging?
     private let heuristics: DiscoverySpamHeuristicsProtocol
     private let bufferCapacity: Int
-    private var eventBuffers: [UUID: [DiscoveryChangeEvent]] = [:]
+    private var eventBuffers: [String: [DiscoveryChangeEvent]] = [:]
+
+    private static func bufferKey(tripId: UUID, gameInstanceId: UUID) -> String {
+        "\(tripId.uuidString)_\(gameInstanceId.uuidString)"
+    }
 
     init(analytics: AnalyticsLogging?, heuristics: DiscoverySpamHeuristicsProtocol = DiscoverySpamHeuristics(), bufferCapacity: Int = 50) {
         self.analytics = analytics
@@ -40,10 +46,12 @@ final class RiskAssessmentService: ObservableObject, RiskAssessing {
 
     func assessAfterDiscoveryChange(
         tripId: UUID,
+        gameInstanceId: UUID,
         foundRegions: [FoundRegion],
         lastChange: (regionID: String, isAdd: Bool, at: Date)
     ) -> RiskAssessmentResult {
-        var buffer = eventBuffers[tripId] ?? []
+        let key = Self.bufferKey(tripId: tripId, gameInstanceId: gameInstanceId)
+        var buffer = eventBuffers[key] ?? []
         buffer.append(DiscoveryChangeEvent(
             date: lastChange.at,
             regionID: lastChange.regionID,
@@ -52,7 +60,7 @@ final class RiskAssessmentService: ObservableObject, RiskAssessing {
         if buffer.count > bufferCapacity {
             buffer = Array(buffer.suffix(bufferCapacity))
         }
-        eventBuffers[tripId] = buffer
+        eventBuffers[key] = buffer
 
         let context = buildContext(tripId: tripId, foundRegions: foundRegions, lastChange: lastChange, recentEvents: buffer)
         let flags = heuristics.evaluate(context: context)

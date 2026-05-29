@@ -20,13 +20,19 @@ struct TripSummaryGameItem: Sendable {
     var completionGoal: Int?
     /// Step 07.5 — Human-readable progress (e.g. "42 / 50 US states"). Nil when config not available.
     var progressDescription: String?
+    /// Game-level collaborative vs competitive (from `GameInstance.commonConfig`).
+    var gameMode: GameMode
+    /// Short teams summary when `teams` was non-empty on the game; nil otherwise.
+    var teamSummary: String?
 }
 
 /// Rich summary of a completed trip for TripSummaryView. All optional where data may be missing (e.g. no legacy Trip).
 struct TripSummary: Sendable {
     var sessionId: UUID
     var tripName: String
-    var status: TripStatus
+    /// Trip participation: solo vs multiplayer (derived from `TripSession` roster via `TripSession.mode`).
+    var tripMode: TripMode
+    var status: TripSessionState
     var endedAt: Date?
     var startedAt: Date?
     var participantCount: Int
@@ -35,10 +41,27 @@ struct TripSummary: Sendable {
     var totalDiscoveryCount: Int
     /// Per-game breakdown.
     var games: [TripSummaryGameItem]
-    /// Participant contributions (discovery count, score, first finds).
-    var participantContributions: [ParticipantContribution]
+    /// Roster-merged participant rows with competition rank and score ties (Step 11).
+    var rankedParticipants: [RankedParticipantContribution]
     /// Target-level discovery details (first finder, labels) for UI.
     var discoveryProjection: DiscoveryCreditProjection?
     /// Optional location metadata for future map recap.
     var locationMetadata: [String: String]?
+    /// Ledger-derived XP recap lines for the viewer (Travel Log detail; Step XP 03).
+    var xpRecapLines: [XpFeedProjection] = []
+
+    /// True when any game on the trip is competitive (for summary UI: ranks, first-finds column).
+    var hasCompetitiveGame: Bool {
+        games.contains { $0.gameMode == .competitive }
+    }
+
+    /// Discoveries attributed to a known `GameInstance` row on this recap (sum of per-game counts).
+    var assignedDiscoveryCount: Int {
+        games.reduce(0) { $0 + $1.discoveryCount }
+    }
+
+    /// Events exist for games not present in `games` (e.g. deleted instance); recap may omit per-game detail for these.
+    var unassignedDiscoveryCount: Int {
+        max(0, totalDiscoveryCount - assignedDiscoveryCount)
+    }
 }

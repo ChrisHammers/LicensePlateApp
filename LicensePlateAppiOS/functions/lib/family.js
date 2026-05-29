@@ -6,16 +6,19 @@ const admin = require("firebase-admin");
 const validation_1 = require("./utils/validation");
 const audit_1 = require("./audit");
 const notifications_1 = require("./utils/notifications");
+const clientMetadata_1 = require("./clientMetadata");
+const callableOptions_1 = require("./callableOptions");
 const db = admin.firestore();
 /**
  * Create a new family
  */
-exports.createFamily = functions.https.onCall(async (data, context) => {
+exports.createFamily = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
     const { name } = data;
     const userId = context.auth.uid;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!name || typeof name !== "string" || name.trim().length === 0) {
         throw new functions.https.HttpsError("invalid-argument", "Family name is required");
     }
@@ -59,18 +62,20 @@ exports.createFamily = functions.https.onCall(async (data, context) => {
         subjectType: "family",
         subjectId: familyRef.id,
         metadata: { name: name.trim() },
+        clientMetadata,
     });
     return { familyId: familyRef.id };
 });
 /**
  * Send a family invite
  */
-exports.sendFamilyInvite = functions.https.onCall(async (data, context) => {
+exports.sendFamilyInvite = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
     const { toUserId, familyId, method } = data;
     const fromUserId = context.auth.uid;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!toUserId || !familyId) {
         throw new functions.https.HttpsError("invalid-argument", "toUserId and familyId are required");
     }
@@ -104,6 +109,7 @@ exports.sendFamilyInvite = functions.https.onCall(async (data, context) => {
             subjectType: "user",
             subjectId: toUserId,
             metadata: { familyId, reason: canAdd.reason },
+            clientMetadata,
         });
         throw new functions.https.HttpsError("failed-precondition", canAdd.reason || "Cannot add user to family");
     }
@@ -137,18 +143,20 @@ exports.sendFamilyInvite = functions.https.onCall(async (data, context) => {
         subjectType: "invite",
         subjectId: inviteRef.id,
         metadata: { toUserId, familyId, method },
+        clientMetadata,
     });
     return { inviteId: inviteRef.id };
 });
 /**
  * User accepts family invite (step 1) - creates pending request
  */
-exports.respondToFamilyInvite_UserStep = functions.https.onCall(async (data, context) => {
+exports.respondToFamilyInvite_UserStep = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
     const { inviteId, response } = data;
     const userId = context.auth.uid;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!inviteId || !response) {
         throw new functions.https.HttpsError("invalid-argument", "inviteId and response are required");
     }
@@ -193,6 +201,7 @@ exports.respondToFamilyInvite_UserStep = functions.https.onCall(async (data, con
             subjectType: "invite",
             subjectId: inviteId,
             metadata: { familyId: inviteData.familyId },
+            clientMetadata,
         });
     }
     await batch.commit();
@@ -201,12 +210,13 @@ exports.respondToFamilyInvite_UserStep = functions.https.onCall(async (data, con
 /**
  * Captain approves family join request (step 2) - adds member
  */
-exports.approveFamilyJoinRequest_CaptainStep = functions.https.onCall(async (data, context) => {
+exports.approveFamilyJoinRequest_CaptainStep = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
     const { familyId, requestId, response } = data;
     const userId = context.auth.uid;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!familyId || !requestId || !response) {
         throw new functions.https.HttpsError("invalid-argument", "familyId, requestId, and response are required");
     }
@@ -293,6 +303,7 @@ exports.approveFamilyJoinRequest_CaptainStep = functions.https.onCall(async (dat
             subjectType: "family",
             subjectId: familyId,
             metadata: { newMemberId: requestData.userId, role: newRole },
+            clientMetadata,
         });
     }
     else {
@@ -307,6 +318,7 @@ exports.approveFamilyJoinRequest_CaptainStep = functions.https.onCall(async (dat
             subjectType: "family",
             subjectId: familyId,
             metadata: { requestId, userId: requestData.userId },
+            clientMetadata,
         });
     }
     await batch.commit();
@@ -315,12 +327,13 @@ exports.approveFamilyJoinRequest_CaptainStep = functions.https.onCall(async (dat
 /**
  * Remove a family member
  */
-exports.removeFamilyMember = functions.https.onCall(async (data, context) => {
+exports.removeFamilyMember = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
     const { familyId, memberId } = data;
     const userId = context.auth.uid;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!familyId || !memberId) {
         throw new functions.https.HttpsError("invalid-argument", "familyId and memberId are required");
     }
@@ -370,18 +383,20 @@ exports.removeFamilyMember = functions.https.onCall(async (data, context) => {
         subjectType: "family",
         subjectId: familyId,
         metadata: { removedMemberId: memberId, role: targetMemberRole },
+        clientMetadata,
     });
     return { success: true };
 });
 /**
  * Change a family member's role
  */
-exports.changeFamilyMemberRole = functions.https.onCall(async (data, context) => {
+exports.changeFamilyMemberRole = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
     const { familyId, memberId, newRole } = data;
     const userId = context.auth.uid;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!familyId || !memberId || !newRole) {
         throw new functions.https.HttpsError("invalid-argument", "familyId, memberId, and newRole are required");
     }
@@ -426,6 +441,7 @@ exports.changeFamilyMemberRole = functions.https.onCall(async (data, context) =>
         subjectType: "family",
         subjectId: familyId,
         metadata: { memberId, oldRole: currentRole, newRole },
+        clientMetadata,
     });
     return { success: true };
 });
@@ -433,12 +449,13 @@ exports.changeFamilyMemberRole = functions.https.onCall(async (data, context) =>
  * Inactivate a family (creator only)
  * Marks family as inactive, removes all members, and clears activeFamilyId
  */
-exports.inactivateFamily = functions.https.onCall(async (data, context) => {
+exports.inactivateFamily = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
     const { familyId } = data;
     const userId = context.auth.uid;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!familyId) {
         throw new functions.https.HttpsError("invalid-argument", "familyId is required");
     }
@@ -489,6 +506,7 @@ exports.inactivateFamily = functions.https.onCall(async (data, context) => {
             reason: "creator_inactivated",
             familyName: familyData.name,
         },
+        clientMetadata,
     });
     return { success: true };
 });

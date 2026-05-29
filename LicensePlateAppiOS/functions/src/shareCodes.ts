@@ -1,6 +1,8 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
+import { normalizeClientMetadata } from "./clientMetadata";
+import { enforcedCallable } from "./callableOptions";
 
 const db = admin.firestore();
 
@@ -20,7 +22,7 @@ function generateRandomCode(): string {
  * Create a share code (friend or family type)
  * TTL: 15 minutes, multi-use
  */
-export const createShareCode = functions.https.onCall(
+export const createShareCode = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -31,6 +33,7 @@ export const createShareCode = functions.https.onCall(
 
     const { type, familyId } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (type !== "friend" && type !== "family") {
       throw new functions.https.HttpsError(
@@ -74,6 +77,7 @@ export const createShareCode = functions.https.onCall(
       subjectType: "invite",
       subjectId: codeRef.id,
       metadata: { type, familyId },
+      clientMetadata,
     });
 
     return {
@@ -87,7 +91,7 @@ export const createShareCode = functions.https.onCall(
 /**
  * Redeem a share code and create an invite
  */
-export const redeemShareCode = functions.https.onCall(
+export const redeemShareCode = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -98,6 +102,7 @@ export const redeemShareCode = functions.https.onCall(
 
     const { code } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!code) {
       throw new functions.https.HttpsError(
@@ -161,6 +166,7 @@ export const redeemShareCode = functions.https.onCall(
       subjectType: "invite",
       subjectId: inviteRef.id,
       metadata: { codeId: codeDoc.id, type: codeData.type },
+      clientMetadata,
     });
 
     return {

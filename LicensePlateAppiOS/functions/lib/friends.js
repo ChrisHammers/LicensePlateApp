@@ -1,21 +1,24 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.respondToFriendInvite = exports.sendFriendInvite = void 0;
+exports.removeFriend = exports.respondToFriendInvite = exports.sendFriendInvite = void 0;
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const validation_1 = require("./utils/validation");
 const audit_1 = require("./audit");
 const notifications_1 = require("./utils/notifications");
+const clientMetadata_1 = require("./clientMetadata");
+const callableOptions_1 = require("./callableOptions");
 const db = admin.firestore();
 /**
  * Send a friend invite
  */
-exports.sendFriendInvite = functions.https.onCall(async (data, context) => {
+exports.sendFriendInvite = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
     const { toUserId, method } = data;
     const fromUserId = context.auth.uid;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!toUserId) {
         throw new functions.https.HttpsError("invalid-argument", "toUserId is required");
     }
@@ -39,6 +42,7 @@ exports.sendFriendInvite = functions.https.onCall(async (data, context) => {
                 subjectType: "user",
                 subjectId: toUserId,
                 metadata: { method },
+                clientMetadata,
             });
             throw new functions.https.HttpsError("permission-denied", "User is not searchable by this method");
         }
@@ -93,19 +97,21 @@ exports.sendFriendInvite = functions.https.onCall(async (data, context) => {
         subjectType: "invite",
         subjectId: inviteRef.id,
         metadata: { toUserId, method },
+        clientMetadata,
     });
     return { inviteId: inviteRef.id };
 });
 /**
  * Respond to a friend invite (accept or decline)
  */
-exports.respondToFriendInvite = functions.https.onCall(async (data, context) => {
+exports.respondToFriendInvite = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
     var _a, _b;
     if (!context.auth) {
         throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
     }
     const { inviteId, response } = data;
     const userId = context.auth.uid;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
     if (!inviteId || !response) {
         throw new functions.https.HttpsError("invalid-argument", "inviteId and response are required");
     }
@@ -159,6 +165,7 @@ exports.respondToFriendInvite = functions.https.onCall(async (data, context) => 
             subjectType: "friendship",
             subjectId: friendshipId,
             metadata: { fromUserId: inviteData.fromUserId },
+            clientMetadata,
         });
     }
     else {
@@ -168,9 +175,61 @@ exports.respondToFriendInvite = functions.https.onCall(async (data, context) => 
             subjectType: "invite",
             subjectId: inviteId,
             metadata: { fromUserId: inviteData.fromUserId },
+            clientMetadata,
         });
     }
     await batch.commit();
+    return { success: true };
+});
+/**
+ * Remove an accepted friendship (unfriend). Updates friendCount for both users.
+ */
+exports.removeFriend = (0, callableOptions_1.enforcedCallable)(async (data, context) => {
+    var _a, _b;
+    if (!context.auth) {
+        throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
+    }
+    const { friendshipId } = data;
+    const userId = context.auth.uid;
+    const clientMetadata = (0, clientMetadata_1.normalizeClientMetadata)(data === null || data === void 0 ? void 0 : data.clientMetadata);
+    if (!friendshipId || typeof friendshipId !== "string") {
+        throw new functions.https.HttpsError("invalid-argument", "friendshipId is required");
+    }
+    const friendshipRef = db.collection("friends").doc(friendshipId);
+    const friendshipDoc = await friendshipRef.get();
+    if (!friendshipDoc.exists) {
+        throw new functions.https.HttpsError("not-found", "Friendship not found");
+    }
+    const fd = friendshipDoc.data();
+    const userA = fd.userA;
+    const userB = fd.userB;
+    if (userId !== userA && userId !== userB) {
+        throw new functions.https.HttpsError("permission-denied", "Not authorized to remove this friendship");
+    }
+    if (fd.status !== "accepted") {
+        throw new functions.https.HttpsError("failed-precondition", "Only accepted friendships can be removed this way");
+    }
+    const userARef = db.collection("users").doc(userA);
+    const userBRef = db.collection("users").doc(userB);
+    const [userADoc, userBDoc] = await Promise.all([
+        userARef.get(),
+        userBRef.get(),
+    ]);
+    const countA = Math.max(0, (((_a = userADoc.data()) === null || _a === void 0 ? void 0 : _a.friendCount) || 0) - 1);
+    const countB = Math.max(0, (((_b = userBDoc.data()) === null || _b === void 0 ? void 0 : _b.friendCount) || 0) - 1);
+    const batch = db.batch();
+    batch.delete(friendshipRef);
+    batch.update(userARef, { friendCount: countA });
+    batch.update(userBRef, { friendCount: countB });
+    await batch.commit();
+    await (0, audit_1.writeAuditLog)({
+        eventType: "AUDIT_FRIENDSHIP_REMOVED",
+        actorId: userId,
+        subjectType: "friendship",
+        subjectId: friendshipId,
+        metadata: { otherUserId: userId === userA ? userB : userA },
+        clientMetadata,
+    });
     return { success: true };
 });
 function generateFriendshipId(userA, userB) {

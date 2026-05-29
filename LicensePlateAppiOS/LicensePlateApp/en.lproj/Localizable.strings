@@ -15,6 +15,9 @@
 "Create Trip" = "Create Trip";
 "Trip: %@" = "Trip: %@";
 "Double tap to open trip" = "Double tap to open trip";
+"Session Unavailable" = "Session Unavailable";
+"We could not find this trip session." = "We could not find this trip session.";
+"Session Unavailable. We could not find this trip session." = "Session Unavailable. We could not find this trip session.";
 
 // Trip Tracking
 "List" = "List";
@@ -36,6 +39,9 @@
 "Cancel" = "Cancel";
 "Only the first finder gets credit in competitive mode." = "Only the first finder gets credit in competitive mode.";
 "Tap to dismiss" = "Tap to dismiss";
+"Region selection order resolution" = "Region Selection Order Resolution";
+"Fairness late competitive body %@ %@ %@" = "It was determined you found %@ after %@ in %@.";
+"Fairness invalid participant body %@ %@" = "A find could not be confirmed for %@ on trip %@.";
 
 // Voice Recognition
 "Speech Recognition Needed" = "Speech Recognition Needed";
@@ -159,6 +165,10 @@
 "Start Trip" = "Start Trip";
 "End Trip" = "End Trip";
 "Reset Trip" = "Reset Trip";
+"Reset Game" = "Reset Game";
+"Trip already ended" = "Trip already ended";
+"Reset is not available for ended trips." = "Reset is not available for ended trips.";
+"Only this game's progress will be reset (discoveries and game state). The trip and its dates will not be changed." = "Only this game's progress will be reset (discoveries and game state). The trip and its dates will not be changed.";
 "Delete Trip" = "Delete Trip";
 "Countries to Include" = "Countries to Include";
 "United States" = "United States";
@@ -179,6 +189,7 @@
 "Hold to Talk" = "Hold to Talk";
 "Press and hold the microphone button to record. If disabled the system will listen until you hit stop." = "Press and hold the microphone button to record. If disabled the system will listen until you hit stop.";
 "Reset" = "Reset";
+"Remove" = "Remove";
 "Delete" = "Delete";
 "This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset." = "This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset.";
 "This will delete the trip and all scores will be removed." = "This will delete the trip and all scores will be removed.";
@@ -366,6 +377,11 @@
 "Will use date and time" = "Will use date and time";
 "Create" = "Create";
 "Cancels creating a new trip" = "Cancels creating a new trip";
+"Creates the trip with selected games and options" = "Creates the trip with selected games and options";
+"Done editing changes, saves changes, and dismisses the settings view" = "Done editing changes, saves changes, and dismisses the settings view";
+"Saves new trip defaults and closes this view" = "Saves new trip defaults and closes this view";
+"Select at least one country before saving." = "Select at least one country before saving.";
+"Enable location tracking during trip first" = "Enable location tracking during trip first";
 
 // Enum Values - AppDarkMode
 "Light" = "Light";
@@ -596,4 +612,206 @@
 "Purchase failed. Please try again." = "Purchase failed. Please try again.";
 "No purchases to restore." = "No purchases to restore.";
 "Get more from RoadTrip Royale with premium features." = "Get more from RoadTrip Royale with premium features.";
+"Active trip limit reached" = "Active trip limit reached";
+"Upgrade to keep more road trips active at once." = "Upgrade to keep more road trips active at once.";
+"You have reached your active trip limit." = "You have reached your active trip limit.";
+"Saved trip limit reached" = "Saved trip limit reached";
+"Sign up to keep more saved trips" = "Sign up to keep more saved trips";
+"Create an account to keep more saved trips visible across devices." = "Create an account to keep more saved trips visible across devices.";
+"Upgrade to view older saved trips" = "Upgrade to view older saved trips.";
+"savedTrips.hiddenCount.signUp" = "Sign up to keep %d more saved trips visible.";
+"savedTrips.hiddenCount.upgrade" = "Upgrade to view %d older saved trips.";
+"Older saved trips are locked" = "Older saved trips are locked";
+"View older saved trips" = "View older saved trips";
+"Shows upgrade options for older saved trips" = "Shows upgrade options for older saved trips";
 
+// Step 6.9.3 — Trip vs game lifecycle
+"Trips cannot be reset." = "Trips cannot be reset.";
+"Game reset is not available for this trip." = "Game reset is not available for this trip.";
+"This ends the trip and all open games. Make sure all participants have synced so all discoveries are counted." = "This ends the trip and all open games. Make sure all participants have synced so all discoveries are counted.";
+"This ends this game. Make sure all participants have synced so all discoveries are counted. You can start a new game." = "This ends this game. Make sure all participants have synced so all discoveries are counted. You can start a new game.";
+"Reset is not available for ended or cancelled trips." = "Reset is not available for ended or cancelled trips.";
+"This trip has ended" = "This trip has ended";
+"Trip cancelled" = "Trip cancelled";
+"This trip was cancelled" = "This trip was cancelled";
+"This trip was cancelled." = "This trip was cancelled.";
+"Start the trip before starting games." = "Start the trip before starting games.";
+"CANCELLED" = "CANCELLED";
+"Game state: %@" = "Game state: %@";
+"Remove this game" = "Remove this game";
+"This removes only this game from the trip. The trip continues with your other games." = "This removes only this game from the trip. The trip continues with your other games.";
+"Only available when the trip has more than one game." = "Only available when the trip has more than one game.";
+"Remove game is not available for ended or cancelled trips." = "Remove game is not available for ended or cancelled trips.";
+"A trip must keep at least one game." = "A trip must keep at least one game.";
+
+// Step 6.9.6 Phase B — Travel log list + trip summary UI
+"%1$d participants · %2$d games" = "%1$d participants · %2$d games";
+"1 participant" = "1 participant";
+"%d participants" = "%d participants";
+"Trip completed · %d games" = "Trip completed · %d games";
+"Trip completed" = "Trip completed";
+"Trip participation: %@" = "Trip participation: %@";
+"Trip status: %@" = "Trip status: %@";
+"Trip participation" = "Trip participation";
+"Trip status" = "Trip status";
+"Game mode: %@" = "Game mode: %@";
+"Game mode" = "Game mode";
+"Teams: %@" = "Teams: %@";
+"Teams" = "Teams";
+"Scores and finds combine all games on this trip." = "Scores and finds combine all games on this trip.";
+"Active" = "Active";
+"Cancelled" = "Cancelled";
+
+// Step 6.9.6 Phase C — Active trip list + trip dashboard
+"%@ · %d games" = "%@ · %d games";
+"License plate progress (primary game)" = "License plate progress (primary game)";
+"%d games" = "%d games";
+"Participants: %d" = "Participants: %d";
+
+// Step 6.9.6 Phase D — Invite rows (trip vs game)
+"1 game" = "1 game";
+"Status: %@" = "Status: %@";
+"Inviter: %@" = "Inviter: %@";
+
+// Step 10 — Collaborative mode / discovery replay
+"Discovery highlights" = "Discovery highlights";
+"Found by %@" = "Found by %@";
+"%d finders" = "%d finders";
+"Sign in to remove a find." = "Sign in to remove a find.";
+"You don’t have a find to remove for this region." = "You don’t have a find to remove for this region.";
+"You can’t remove this find." = "You can’t remove this find.";
+"By removing the current find, you lose your discovery and game points." = "By removing the current find, you lose your discovery and game points.";
+"Found by %@ and %@" = "Found by %1$@ and %2$@";
+"Found by %@, %@, and %@" = "Found by %1$@, %2$@, and %3$@";
+"Found by %@, %@, and %d others" = "Found by %1$@, %2$@, and %3$d others";
+"Some discoveries are not tied to a game on this recap." = "Some discoveries are not tied to a game on this recap.";
+"Show all discovery highlights" = "Show all discovery highlights";
+"Show fewer discovery highlights" = "Show fewer discovery highlights";
+"More discovery highlights are hidden. Expand to show all." = "More discovery highlights are hidden. Expand to show all.";
+"Collapses the discovery highlights list." = "Collapses the discovery highlights list.";
+"Loading…" = "Loading…";
+
+// Step 11 — Competitive rankings & in-game standings
+"Rank #%d" = "Rank #%d";
+"Tied" = "Tied";
+"First finds" = "First finds";
+"Standings" = "Standings";
+"Your duplicate attempts" = "Your duplicate attempts";
+"No duplicate attempts yet" = "No duplicate attempts yet";
+"%d first finds" = "%d first finds";
+
+// Step 12 — Trip dashboard (competitive trip-wide leaderboard)
+"Trip leaderboard" = "Trip leaderboard";
+
+// Step 12.5 — Joiner sync & display names
+"Unknown user" = "Unknown user";
+"Unknown player" = "Unknown player";
+"From: %@" = "From: %@";
+"To: %@" = "To: %@";
+"Loading profile…" = "Loading profile…";
+
+// Lifetime stats (profile)
+"profile.lifetime_stats.title" = "Trip statistics";
+"profile.lifetime_stats.updating" = "Updating statistics";
+"profile.lifetime_stats.updating.a11y" = "Updating statistics";
+"profile.lifetime_stats.error_title" = "Couldn’t update statistics";
+"profile.lifetime_stats.retry" = "Try again";
+"profile.lifetime_stats.empty" = "No completed trips yet, or statistics are still loading.";
+"profile.lifetime_stats.completed_trips" = "Completed trips";
+"profile.lifetime_stats.completed_trips.a11y" = "Your total count of completed trips.";
+"profile.lifetime_stats.games_played" = "Games played";
+"profile.lifetime_stats.games_played.a11y" = "Total games across your completed trips.";
+"profile.lifetime_stats.discoveries" = "Your discoveries";
+"profile.lifetime_stats.discoveries.a11y" = "Your discovery count across completed trips.";
+"profile.lifetime_stats.weighted_score" = "Weighted score";
+"profile.lifetime_stats.weighted_score.a11y" = "Your combined weighted score from trip summaries.";
+"profile.lifetime_stats.family_trips" = "Family-only trips";
+"profile.lifetime_stats.family_trips.a11y" = "Ended trips where everyone still on the trip was in your family.";
+"profile.lifetime_stats.pending_sync" = "Updating on server… numbers below may be from this device until sync finishes.";
+"profile.lifetime_stats.pending_sync.a11y" = "Lifetime statistics are pending server sync.";
+"friends.public_lifetime_stats.trips_line" = "%d completed trips";
+"friends.public_lifetime_stats.trips_line.a11y" = "%d completed trips on the public leaderboard.";
+"family.member.public_stats_line" = "%d trips";
+"trip_settings.leave_trip_impact" = "You will leave this trip on this device right away. If you are offline, leaving will sync when you are back online. After you leave, this trip no longer counts toward your lifetime statistics and won’t appear in your travel log once sync completes.";
+"error.family_lookup_no_context" = "Family data isn’t available yet. Try again in a moment.";
+"error.lifetime_stats_no_context" = "Statistics aren’t available yet. Try again in a moment.";
+
+/* XP Ledger Step 03 — gameplay row + profile + recap */
+"xp.row.detail.pending_resolution" = "Pending competitive resolution";
+"xp.row.pill.pending" = "+%d XP pending";
+"xp.row.pill.final" = "+%d XP";
+"xp.row.detail.final_award" = "Final award: +%d XP";
+"xp.row.a11y.pending_competitive" = "Pending competitive resolution";
+"xp.pending.badge.short" = "Pending";
+"xp.pending.badge.a11y" = "Pending competitive resolution";
+"xp.discovery.badge.accepted_late" = "Another player found it slightly earlier — final award: +4 XP";
+"xp.discovery.badge.adjusted_after_sync" = "Adjusted after trip sync (final score on leaderboard).";
+
+"profile.xp.section_title" = "XP & progress";
+"profile.xp.server_total" = "Synced XP (account)";
+"profile.xp.server_total_loading" = "Synced XP will appear when you are online.";
+"profile.xp.local_fallback_total" = "Current XP on this device";
+"profile.xp.local_fallback_note" = "Synced XP is not available yet, so this includes local pending progress.";
+"profile.xp.pending_ledger_line" = "On this device: +%d XP still pending competitive resolution.";
+"profile.xp.pending_section.a11y" = "Pending competitive XP on this device";
+"profile.xp.rank_band_title" = "Progress in current band (visual)";
+"profile.xp.rank_band.a11y" = "Visual progress in current XP band";
+"profile.xp.rank_band.a11y.value" = "%d synced XP, %d pending on device";
+"profile.xp.pending_overlay_caption" = "Yellow bar is pending only — it does not unlock rewards until sync.";
+
+"tripSummary.xp_recap.title" = "XP & adjustments";
+"tripSummary.xp_recap.subtitle" = "From your trip ledger on this device. Calm messaging when scores change after sync.";
+"tripSummary.xp_recap.state.provisional" = "Pending";
+"tripSummary.xp_recap.state.final" = "Final";
+
+"finder.a11y.single" = "Found by %@";
+"finder.a11y.ordered_list" = "Finder order: %@";
+"finder.stack.accessibility.default" = "Finder avatars";
+"finder.popover.title" = "Finder order for %@";
+"finder.popover.subtitle" = "First finder appears first.";
+"finder.popover.row_title" = "%d. %@";
+"finder.popover.row_a11y" = "Finder %d, %@, found at %@";
+"finder.stack.accessibility.overflow" = "Plus %d more finders";
+
+/* License plate game — Progress tab (XP, ledger, scoring) */
+"game.progression.section_summary" = "Account & XP";
+"game.progression.server_xp" = "Server XP (Firestore)";
+"game.progression.value_none" = "— (no document)";
+"game.progression.last_server_update" = "Server last updated";
+"game.progression.value_emdash" = "—";
+"game.progression.account_progression_caption" = "Last Firestore totals plus trip activity not yet in the server’s applied progression set (`UserProgressionService`). Offline, the server portion is whatever snapshot this device last had (or zero if none).";
+"game.progression.account_progression_xp" = "Account XP (client progression)";
+"game.progression.account_rank_preview_xp" = "Profile rank preview (server + ledger provisional)";
+"game.progression.account_rank_preview_caption" = "Matches the profile band overlay (`ProjectedRankProgressView`). Visual-only; not the same formula as account progression XP above.";
+"game.progression.value_unavailable" = "—";
+"game.progression.global_pending_xp" = "Global pending XP (vs server)";
+"game.progression.hint_local_pending" = "At least one local event is not in the server applied set yet.";
+"game.progression.section_local_engine" = "This trip — local engine";
+"game.progression.local_engine_trip_caption" = "Applies to events on this trip not yet listed in server applied progression.";
+"game.progression.trip_pending_xp" = "Pending XP (this trip)";
+"game.progression.trip_pending_finds" = "Pending region finds (this trip)";
+"game.progression.trip_pending_first_places" = "Pending 1st-place finishes (this trip)";
+"game.progression.ever_competitive_first" = "Pending: ever 1st place (this trip)";
+"game.progression.bool_yes" = "Yes";
+"game.progression.bool_no" = "No";
+"game.progression.section_ledger_projection" = "Local ledger projection (device)";
+"game.progression.local_ledger_caption" = "Built from the append-only XP ledger on this device (see list below).";
+"game.progression.local_total_xp_game" = "Net XP (this game, ledger)";
+"game.progression.local_provisional_xp_game" = "Provisional XP (this game)";
+"game.progression.local_provisional_rows_game" = "Provisional rows (this game)";
+"game.progression.local_provisional_xp_session" = "Provisional XP (session, all games)";
+"game.progression.section_ledger_summary" = "Ledger (this game)";
+"game.progression.most_recent_delta" = "Most recent delta (this game)";
+"game.progression.most_recent_reason" = "Most recent reason code";
+"game.progression.no_ledger_game" = "No XP ledger lines for this game on this device yet.";
+"game.progression.net_ledger_xp_game" = "Net ledger XP (this game)";
+"game.progression.net_ledger_xp_session" = "Net ledger XP (full session)";
+"game.progression.section_scoring" = "Scoring (this game)";
+"game.progression.scoring_sub" = "%d first finds · %d discoveries (all participants)";
+"game.progression.ledger_list_title" = "Session XP ledger (newest first)";
+"game.progression.ledger_line_meta" = "%@ · %@";
+"game.progression.ledger_line_ids" = "Row %@ · source %@";
+"game.progression.ledger_badge_game" = "This game";
+"Sponsored message" = "Sponsored message";
+"Ready to keep playing?" = "Ready to keep playing?";
+"Your trip %@ is waiting for more plate finds." = "Your trip %@ is waiting for more plate finds.";

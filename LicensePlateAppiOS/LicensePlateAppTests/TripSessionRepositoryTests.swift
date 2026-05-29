@@ -32,7 +32,7 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let session = TripSession(name: "Repo Test Trip", status: .active, mode: .solo)
+        let session = TripSession(name: "Repo Test Trip", status: .active)
         try repo.create(session: session)
 
         let loaded = try repo.session(byId: session.id)
@@ -51,7 +51,7 @@ struct TripSessionRepositoryTests {
         var active = try repo.loadActiveSessions(userId: nil)
         #expect(active.isEmpty)
 
-        let session = TripSession(name: "Active Trip", status: .active, mode: .solo, startedAt: Date())
+        let session = TripSession(name: "Active Trip", status: .active, startedAt: Date())
         try repo.create(session: session)
         active = try repo.loadActiveSessions(userId: nil)
         #expect(active.count == 1)
@@ -64,7 +64,7 @@ struct TripSessionRepositoryTests {
         let context = ModelContext(container)
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
-        let session = TripSession(name: "Canonical Active", status: .active, mode: .solo, startedAt: Date())
+        let session = TripSession(name: "Canonical Active", status: .active, startedAt: Date())
         try repo.create(session: session)
         let active = try repo.loadActiveSessions(userId: nil)
         #expect(active.count == 1)
@@ -78,7 +78,7 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let session = TripSession(name: "Status Trip", status: .active, mode: .solo)
+        let session = TripSession(name: "Status Trip", status: .active)
         try repo.create(session: session)
 
         try repo.updateStatus(sessionId: session.id, status: .active)
@@ -98,7 +98,7 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let session = TripSession(name: "Participants Trip", status: .active, mode: .collaborative, createdBy: "user1")
+        let session = TripSession(name: "Participants Trip", status: .active, createdBy: "user1")
         try repo.create(session: session)
 
         let participant = TripParticipant(userId: "user2", role: .member)
@@ -119,7 +119,7 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let session = TripSession(name: "Original", status: .active, mode: .solo)
+        let session = TripSession(name: "Original", status: .active)
         try repo.create(session: session)
         let id = session.id
 
@@ -138,14 +138,50 @@ struct TripSessionRepositoryTests {
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
-        let endedSession = TripSession(name: "Ended Trip", status: .ended, mode: .solo, endedAt: Date())
+        let endedSession = TripSession(name: "Ended Trip", status: .ended, endedAt: Date())
         try repo.create(session: endedSession)
-        let activeSession = TripSession(name: "Active Trip", status: .active, mode: .solo, startedAt: Date())
+        let activeSession = TripSession(name: "Active Trip", status: .active, startedAt: Date())
         try repo.create(session: activeSession)
 
-        let archived = try repo.loadArchivedSessions(userId: nil, limit: 10)
+        let archived = try repo.loadArchivedSessions(userId: nil, limit: 10, includeCancelled: false, sortBy: .endedAtDesc)
         #expect(archived.count == 1)
         #expect(archived[0].name == "Ended Trip")
+    }
+
+    @Test func loadArchivedSessionsIncludeCancelledFalseExcludesCancelled() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = TripSessionRepository.shared
+        repo.setModelContext(context)
+
+        let endedSession = TripSession(name: "Ended", status: .ended, endedAt: Date())
+        try repo.create(session: endedSession)
+        var cancelledSession = TripSession(name: "Cancelled", status: .active)
+        try repo.create(session: cancelledSession)
+        try repo.updateStatus(sessionId: cancelledSession.id, status: .cancelled)
+
+        let archived = try repo.loadArchivedSessions(userId: nil, limit: 10, includeCancelled: false, sortBy: .endedAtDesc)
+        #expect(archived.count == 1)
+        #expect(archived[0].name == "Ended")
+    }
+
+    @Test func loadArchivedSessionsSortByEndedAtAsc() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = TripSessionRepository.shared
+        repo.setModelContext(context)
+
+        let older = Date().addingTimeInterval(-200)
+        let newer = Date().addingTimeInterval(-100)
+        let session1 = TripSession(name: "Older", status: .ended, endedAt: older)
+        let session2 = TripSession(name: "Newer", status: .ended, endedAt: newer)
+        try repo.create(session: session1)
+        try repo.create(session: session2)
+
+        let archived = try repo.loadArchivedSessions(userId: nil, limit: 10, includeCancelled: true, sortBy: .endedAtAsc)
+        #expect(archived.count == 2)
+        #expect(archived[0].name == "Older")
+        #expect(archived[1].name == "Newer")
     }
 
     @Test func lastSyncedAtReturnsNil() async throws {
@@ -163,44 +199,68 @@ struct TripSessionRepositoryTests {
         let unknownId = UUID()
         do {
             try repo.updateStatus(sessionId: unknownId, status: .ended)
-            #expect(Bool(false), "Expected TripSessionRepositoryError.sessionNotFound")
+            Issue.record("Expected TripSessionRepositoryError.sessionNotFound")
         } catch let error as TripSessionRepositoryError {
             if case .sessionNotFound(let id) = error {
                 #expect(id == unknownId)
             } else {
-                #expect(Bool(false), "Expected sessionNotFound, got \(error)")
+                Issue.record("Expected sessionNotFound, got \(error)")
             }
         }
     }
 
-    /// Step 06.5 — Session with teams and participant.teamId round-trips correctly.
-    @Test func sessionWithTeamsRoundTrips() async throws {
+    /// Step 6.9.1 — Session with participants (including teamId) round-trips. Teams are on GameInstance; see GameInstanceRepositoryTests for game teams.
+    @Test func sessionWithParticipantTeamIdsRoundTrips() async throws {
         let container = try makeContainer()
         let context = ModelContext(container)
         let repo = TripSessionRepository.shared
         repo.setModelContext(context)
 
         let team1 = TripTeam(name: "Team A", participantUserIds: ["user1", "user2"])
-        let team2 = TripTeam(name: "Team B", participantUserIds: ["user3"])
         let participant1 = TripParticipant(userId: "user1", role: .owner, teamId: team1.id)
         let participant2 = TripParticipant(userId: "user2", role: .member, teamId: team1.id)
         let session = TripSession(
             name: "Team Trip",
             status: .active,
-            mode: .solo,
             createdAt: Date(),
             createdBy: "user1",
             startedAt: Date(),
-            participants: [participant1, participant2],
-            teams: [team1, team2]
+            participants: [participant1, participant2]
         )
         try repo.create(session: session)
 
         let loaded = try repo.session(byId: session.id)
         #expect(loaded != nil)
-        #expect(loaded?.teams.count == 2)
-        #expect(loaded?.teams.first { $0.name == "Team A" }?.participantUserIds == ["user1", "user2"])
         #expect(loaded?.participants.count == 2)
         #expect(loaded?.participants.first { $0.userId == "user1" }?.teamId == team1.id)
+    }
+
+    /// Step 14 — Active list hides trips with a pending voluntary leave row for that user.
+    @Test func loadActiveSessionsExcludesPendingLeaveForUser() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = TripSessionRepository.shared
+        repo.setModelContext(context)
+        PendingTripLeaveRepository.shared.setModelContext(context)
+
+        let session = TripSession(
+            name: "Shared",
+            status: .active,
+            createdAt: Date(),
+            createdBy: "owner1",
+            startedAt: Date(),
+            participants: [
+                TripParticipant(userId: "owner1", role: .owner, joinedAt: Date()),
+                TripParticipant(userId: "joiner1", role: .member, joinedAt: Date())
+            ]
+        )
+        try repo.create(session: session)
+
+        var forJoiner = try repo.loadActiveSessions(userId: "joiner1")
+        #expect(forJoiner.count == 1)
+
+        try PendingTripLeaveRepository.shared.insertPending(sessionId: session.id, userId: "joiner1")
+        forJoiner = try repo.loadActiveSessions(userId: "joiner1")
+        #expect(forJoiner.isEmpty)
     }
 }

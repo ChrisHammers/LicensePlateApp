@@ -67,4 +67,12 @@ struct NotificationEligibilityServiceTests {
         #expect(result.kind == .milestone)
         #expect(result.isEligible == true)
     }
+
+    @Test func eligibilityForInactiveTripReminderUsesSamePermission() async {
+        let provider = MockNotificationPermissionProvider(status: .authorized)
+        let service = NotificationEligibilityService(permissionProvider: provider)
+        let result = await service.eligibility(for: .inactiveActiveTripReminder)
+        #expect(result.kind == .inactiveActiveTripReminder)
+        #expect(result.isEligible == true)
+    }
 }

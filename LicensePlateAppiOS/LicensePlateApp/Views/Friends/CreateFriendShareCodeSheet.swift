@@ -12,32 +12,22 @@ struct CreateFriendShareCodeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    private let familyRepository = FamilyRepository.shared
-    @State private var shareCode: String?
-    @State private var expiresAt: Date?
-    @State private var isGenerating = false
-    @State private var errorMessage: String?
-    @State private var showError = false
-    @State private var qrCodeImage: UIImage?
-    
+    @StateObject private var viewModel = CreateFriendShareCodeViewModel()
+
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
-                if isGenerating {
+            AppBackgroundView {
+                if viewModel.isGenerating {
                     ProgressView()
                         .scaleEffect(1.5)
-                } else if let code = shareCode {
+                } else if let code = viewModel.shareCode {
                     ScrollView {
                         VStack(spacing: 24) {
-                            // Share Code Display
                             VStack(spacing: 12) {
                                 Text("Your Share Code".localized)
                                     .font(.system(.headline, design: .rounded))
                                     .foregroundStyle(Color.Theme.primaryBlue)
-                                
+
                                 Text(code)
                                     .font(.system(.largeTitle, design: .monospaced))
                                     .fontWeight(.bold)
@@ -45,9 +35,9 @@ struct CreateFriendShareCodeSheet: View {
                                     .padding()
                                     .background(Color.Theme.cardBackground)
                                     .cornerRadius(12)
-                                
-                                if let expiresAt = expiresAt {
-                                    Text("Expires in \(timeUntilExpiration(expiresAt))".localized)
+
+                                if let expiresAt = viewModel.expiresAt {
+                                    Text("Expires in \(viewModel.timeUntilExpiration(expiresAt))".localized)
                                         .font(.system(.caption, design: .rounded))
                                         .foregroundStyle(Color.Theme.softBrown)
                                 }
@@ -56,14 +46,13 @@ struct CreateFriendShareCodeSheet: View {
                             .frame(maxWidth: .infinity)
                             .background(Color.Theme.cardBackground)
                             .cornerRadius(16)
-                            
-                            // QR Code Display
-                            if let qrImage = qrCodeImage {
+
+                            if let qrImage = viewModel.qrCodeImage {
                                 VStack(spacing: 12) {
                                     Text("QR Code".localized)
                                         .font(.system(.headline, design: .rounded))
                                         .foregroundStyle(Color.Theme.primaryBlue)
-                                    
+
                                     Image(uiImage: qrImage)
                                         .resizable()
                                         .interpolation(.none)
@@ -77,13 +66,12 @@ struct CreateFriendShareCodeSheet: View {
                                 .background(Color.Theme.cardBackground)
                                 .cornerRadius(16)
                             }
-                            
-                            // Instructions
+
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("How to share".localized)
                                     .font(.system(.headline, design: .rounded))
                                     .foregroundStyle(Color.Theme.primaryBlue)
-                                
+
                                 Text("Share this code or QR code with a friend. They can enter it in the Friends section to send you a friend request.".localized)
                                     .font(.system(.body, design: .rounded))
                                     .foregroundStyle(Color.Theme.softBrown)
@@ -102,9 +90,9 @@ struct CreateFriendShareCodeSheet: View {
                             .foregroundStyle(Color.Theme.softBrown)
                             .multilineTextAlignment(.center)
                             .padding()
-                        
+
                         Button("Generate Code".localized) {
-                            generateCode()
+                            viewModel.generateCode()
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(Color.Theme.primaryBlue)
@@ -122,62 +110,20 @@ struct CreateFriendShareCodeSheet: View {
                     }
                 }
             }
-            .alert("Error".localized, isPresented: $showError) {
+            .alert("Error".localized, isPresented: $viewModel.showError) {
                 Button("OK".localized) {}
             } message: {
-                if let errorMessage = errorMessage {
+                if let errorMessage = viewModel.errorMessage {
                     Text(errorMessage)
                 }
             }
             .onAppear {
-                familyRepository.setModelContext(modelContext)
-                if shareCode == nil {
-                    generateCode()
+                viewModel.configure(authService: authService, modelContext: modelContext)
+                if viewModel.shareCode == nil {
+                    viewModel.generateCode()
                 }
             }
         }
-    }
-    
-    private func generateCode() {
-        guard authService.isOnline else {
-            errorMessage = "Requires network connection".localized
-            showError = true
-            return
-        }
-        
-        isGenerating = true
-        errorMessage = nil
-        
-        Task {
-            do {
-                let result = try await familyRepository.createShareCode(type: "friend")
-                
-                // Generate QR code
-                let qrString = result.code
-                let qrImage = QRCodeService.shared.generateQRCode(from: qrString)
-                
-                await MainActor.run {
-                    shareCode = result.code
-                    expiresAt = result.expiresAt
-                    qrCodeImage = qrImage
-                    isGenerating = false
-                    AnalyticsService.shared.log(.shareCodeGenerated(type: "friend"))
-                }
-            } catch {
-                await MainActor.run {
-                    isGenerating = false
-                    errorMessage = error.localizedDescription
-                    showError = true
-                    print("❌ Share code generation error: \(error.localizedDescription)")
-                }
-            }
-        }
-    }
-    
-    private func timeUntilExpiration(_ date: Date) -> String {
-        let timeInterval = date.timeIntervalSinceNow
-        let minutes = Int(timeInterval / 60)
-        return "\(minutes) minutes".localized
     }
 }
 
@@ -185,4 +131,3 @@ struct CreateFriendShareCodeSheet: View {
     CreateFriendShareCodeSheet()
         .environmentObject(FirebaseAuthService())
 }
-

@@ -39,8 +39,7 @@ struct TravelLogViewModelTests {
         let entity = TripSessionEntity(
             id: sessionId,
             name: "Past Trip",
-            status: TripStatus.ended.rawValue,
-            mode: TripMode.solo.rawValue,
+            status: TripSessionState.ended.rawValue,
             createdAt: endedAt.addingTimeInterval(-100),
             endedAt: endedAt
         )
@@ -75,8 +74,7 @@ struct TravelLogViewModelTests {
         let entity = TripSessionEntity(
             id: sessionId.uuidString,
             name: "New Flow Trip",
-            status: TripStatus.ended.rawValue,
-            mode: TripMode.solo.rawValue,
+            status: TripSessionState.ended.rawValue,
             createdAt: endedAt.addingTimeInterval(-100),
             endedAt: endedAt
         )
@@ -94,9 +92,10 @@ struct TravelLogViewModelTests {
         viewModel.openSummary(sessionId: sessionId)
 
         #expect(viewModel.selectedSummary != nil)
+        #expect(viewModel.selectedSummary?.sessionId == sessionId)
         #expect(viewModel.selectedSummary?.tripName == "New Flow Trip")
         #expect(viewModel.selectedSummary?.totalDiscoveryCount == 0)
-        #expect(viewModel.selectedSummary?.participantContributions.isEmpty == true)
+        #expect(viewModel.selectedSummary?.rankedParticipants.isEmpty == true)
     }
 
     @Test func openSummaryWithEventsBuildsSummaryWithDiscoveries() async throws {
@@ -113,8 +112,7 @@ struct TravelLogViewModelTests {
         let entity = TripSessionEntity(
             id: sessionId.uuidString,
             name: "Trip With Plates",
-            status: TripStatus.ended.rawValue,
-            mode: TripMode.solo.rawValue,
+            status: TripSessionState.ended.rawValue,
             createdAt: endedAt.addingTimeInterval(-100),
             endedAt: endedAt
         )
@@ -135,7 +133,262 @@ struct TravelLogViewModelTests {
         viewModel.openSummary(sessionId: sessionId)
 
         #expect(viewModel.selectedSummary != nil)
+        #expect(viewModel.selectedSummary?.sessionId == sessionId)
         #expect(viewModel.selectedSummary?.tripName == "Trip With Plates")
         #expect(viewModel.selectedSummary?.totalDiscoveryCount == 2)
+    }
+
+    // MARK: - Step 15 recap errors & projections
+
+    @Test func openSummaryFailureSetsSummaryErrorWithoutClearingListError() async throws {
+        let mockTrip = MockTripSessionRepository()
+        let mockGame = MockGameInstanceRepository()
+        let mockEvents = MockTripActivityEventRepository()
+        let mockLog = MockTravelLogRepository()
+
+        let sessionId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "Fails Fetch",
+            status: .ended,
+            createdAt: Date().addingTimeInterval(-200),
+            endedAt: Date().addingTimeInterval(-100),
+            participants: [TripParticipant(userId: "u1", role: .owner)]
+        )
+        mockTrip.seed(session)
+        mockGame.shouldThrow = true
+
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: mockLog,
+            tripSessionRepository: mockTrip,
+            gameInstanceRepository: mockGame,
+            tripActivityEventRepository: mockEvents,
+            authService: FirebaseAuthService()
+        )
+        viewModel.errorMessage = "List load failed"
+
+        viewModel.openSummary(sessionId: sessionId)
+
+        #expect(viewModel.summaryErrorMessage != nil)
+        #expect(viewModel.selectedSummary == nil)
+        #expect(viewModel.errorMessage == "List load failed")
+    }
+
+    @Test func clearSelectionClearsSummaryError() async throws {
+        let mockTrip = MockTripSessionRepository()
+        let mockGame = MockGameInstanceRepository()
+        let mockEvents = MockTripActivityEventRepository()
+        let mockLog = MockTravelLogRepository()
+
+        let sessionId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "X",
+            status: .ended,
+            createdAt: Date(),
+            endedAt: Date(),
+            participants: [TripParticipant(userId: "u1", role: .owner)]
+        )
+        mockTrip.seed(session)
+        mockGame.shouldThrow = true
+
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: mockLog,
+            tripSessionRepository: mockTrip,
+            gameInstanceRepository: mockGame,
+            tripActivityEventRepository: mockEvents,
+            authService: FirebaseAuthService()
+        )
+        viewModel.openSummary(sessionId: sessionId)
+        #expect(viewModel.summaryErrorMessage != nil)
+
+        viewModel.clearSelection()
+        #expect(viewModel.summaryErrorMessage == nil)
+        #expect(viewModel.selectedSummary == nil)
+    }
+
+    @Test func openSummaryAttachesXpRecapLinesFromLedger() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let uid = "ledger_recap_user"
+
+        let session = TripSession(
+            id: sessionId,
+            name: "Ledger recap trip",
+            status: .ended,
+            createdAt: Date().addingTimeInterval(-200),
+            endedAt: Date().addingTimeInterval(-100),
+            participants: [TripParticipant(userId: uid, role: .owner)]
+        )
+        let lpData = try JSONEncoder().encode(LicensePlateGameConfig())
+        let game = GameInstance(
+            id: gameId,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: CommonGameConfig(lifecycleState: .completed, gameMode: .collaborative),
+            gameSpecificPayloadType: "license_plate",
+            gameSpecificPayloadVersion: "1",
+            gameSpecificPayloadData: lpData
+        )
+
+        let mockTrip = MockTripSessionRepository()
+        mockTrip.seed(session)
+        let mockGame = MockGameInstanceRepository()
+        mockGame.seed(game)
+        let mockEvents = MockTripActivityEventRepository()
+
+        let mockLedger = MockXpLedgerRepository()
+        let key = XpLedgerKeyBuilder.uniquenessKey(
+            userId: uid,
+            sessionId: sessionId,
+            gameInstanceId: gameId,
+            itemId: "us-ny",
+            xpCategory: .baseRegionDiscovery
+        ).storageString
+        try mockLedger.append(
+            XpLedgerEvent(
+                userId: uid,
+                sessionId: sessionId,
+                gameInstanceId: gameId,
+                sourceEventId: "ev1",
+                sourceEventType: "region_found",
+                itemId: "us-ny",
+                grantKind: .provisionalDiscoveryXp,
+                status: .provisional,
+                xpDelta: 10,
+                reasonCode: .discoveryClaimPendingResolution,
+                xpUniquenessKey: key
+            )
+        )
+
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: uid, userName: "U", firebaseUID: uid)
+
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: MockTravelLogRepository(),
+            tripSessionRepository: mockTrip,
+            gameInstanceRepository: mockGame,
+            tripActivityEventRepository: mockEvents,
+            authService: auth,
+            xpLedger: mockLedger
+        )
+        viewModel.openSummary(sessionId: sessionId)
+
+        #expect(viewModel.selectedSummary != nil)
+        #expect(viewModel.selectedSummary?.xpRecapLines.isEmpty == false)
+    }
+
+    @Test func anonymousUserShowsThreeNewestSavedTripsAndHiddenCount() async throws {
+        let uid = "anon_saved_trips"
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: uid, userName: "Anon", firebaseUID: uid)
+
+        let entitlementService = EntitlementService(
+            revenueCatBridge: MockRevenueCatBridge(tier: .guest),
+            accountStateProvider: StaticAccountStateProvider(.firebaseAnonymous)
+        )
+        entitlementService.setCurrentUserId(uid)
+
+        let mockLog = MockTravelLogRepository()
+        mockLog.setSummaryProjections(Self.travelLogEntries(count: 6))
+        let analytics = AnalyticsLoggingSpy()
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: mockLog,
+            tripSessionRepository: MockTripSessionRepository(),
+            gameInstanceRepository: MockGameInstanceRepository(),
+            tripActivityEventRepository: MockTripActivityEventRepository(),
+            authService: auth,
+            savedTripAccessPolicy: SavedTripAccessPolicy(
+                entitlementService: entitlementService,
+                accountStateProvider: StaticAccountStateProvider(.firebaseAnonymous)
+            ),
+            analytics: analytics
+        )
+
+        viewModel.loadEntries(statusFilter: .endedOnly)
+
+        #expect(viewModel.entries.count == 3)
+        #expect(viewModel.hiddenSavedTripCount == 3)
+        #expect(analytics.loggedEvents.contains { $0.name == "saved_trip_limit_hit" })
+    }
+
+    @Test func signedUpFreeUserShowsFiveNewestSavedTripsAndHiddenCount() async throws {
+        let uid = "signed_saved_trips"
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: uid, userName: "Signed", firebaseUID: uid)
+
+        let entitlementService = EntitlementService(
+            revenueCatBridge: MockRevenueCatBridge(tier: .guest),
+            accountStateProvider: StaticAccountStateProvider(.signedIn)
+        )
+        entitlementService.setCurrentUserId(uid)
+
+        let mockLog = MockTravelLogRepository()
+        mockLog.setSummaryProjections(Self.travelLogEntries(count: 7))
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: mockLog,
+            tripSessionRepository: MockTripSessionRepository(),
+            gameInstanceRepository: MockGameInstanceRepository(),
+            tripActivityEventRepository: MockTripActivityEventRepository(),
+            authService: auth,
+            savedTripAccessPolicy: SavedTripAccessPolicy(
+                entitlementService: entitlementService,
+                accountStateProvider: StaticAccountStateProvider(.signedIn)
+            ),
+            analytics: AnalyticsLoggingSpy()
+        )
+
+        viewModel.loadEntries(statusFilter: .endedOnly)
+
+        #expect(viewModel.entries.count == 5)
+        #expect(viewModel.hiddenSavedTripCount == 2)
+    }
+
+    @Test func goldUserIsNotSavedTripCapped() async throws {
+        let uid = "gold_saved_trips"
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: uid, userName: "Gold", firebaseUID: uid)
+
+        let entitlementService = EntitlementService(
+            revenueCatBridge: MockRevenueCatBridge(tier: .gold),
+            accountStateProvider: StaticAccountStateProvider(.signedIn)
+        )
+        entitlementService.setCurrentUserId(uid)
+
+        let mockLog = MockTravelLogRepository()
+        mockLog.setSummaryProjections(Self.travelLogEntries(count: 7))
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: mockLog,
+            tripSessionRepository: MockTripSessionRepository(),
+            gameInstanceRepository: MockGameInstanceRepository(),
+            tripActivityEventRepository: MockTripActivityEventRepository(),
+            authService: auth,
+            savedTripAccessPolicy: SavedTripAccessPolicy(
+                entitlementService: entitlementService,
+                accountStateProvider: StaticAccountStateProvider(.signedIn)
+            ),
+            analytics: AnalyticsLoggingSpy()
+        )
+
+        viewModel.loadEntries(statusFilter: .endedOnly)
+
+        #expect(viewModel.entries.count == 7)
+        #expect(viewModel.hiddenSavedTripCount == 0)
+    }
+
+    private static func travelLogEntries(count: Int) -> [TravelLogEntry] {
+        (0..<count).map { index in
+            TravelLogEntry(
+                id: "entry-\(index)",
+                sessionId: UUID(),
+                tripName: "Trip \(index)",
+                endedAt: Date().addingTimeInterval(Double(-index * 60)),
+                summary: "\(index) regions found",
+                participantCount: 1,
+                gameCount: 1,
+                status: .ended
+            )
+        }
     }
 }

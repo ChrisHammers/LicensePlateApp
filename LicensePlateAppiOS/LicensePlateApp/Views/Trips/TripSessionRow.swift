@@ -7,11 +7,17 @@
 
 import SwiftUI
 
-/// Displays a single TripSession in the active list. Shows name, date, and plate count from events.
+/// Displays a single TripSession in the active list. Shows name, date, and primary-game progress from rollup.
 struct TripSessionRow: View {
     let session: TripSession
-    /// Number of license plates / regions found for this trip (from TripActivityEventRepository).
-    var plateCount: Int = 0
+    let rollup: TripRollup
+    let pendingOutgoingInviteCount: Int
+
+    init(session: TripSession, rollup: TripRollup, pendingOutgoingInviteCount: Int = 0) {
+        self.session = session
+        self.rollup = rollup
+        self.pendingOutgoingInviteCount = pendingOutgoingInviteCount
+    }
 
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -31,47 +37,91 @@ struct TripSessionRow: View {
         session.startedAt != nil ? "Started".localized : "Created".localized
     }
 
-    /// Builds LicensePlateGameConfig from the session's enabled countries (same scope/territory logic as CombinedGameAssembler) and returns the total number of regions available for the license plate game.
-    private var licensePlateTotalAvailable: Int {
-        let config = licensePlateConfig(from: session)
-        return LicensePlateScopeCalculator.completionGoal(for: config)
+    private var plateLabel: String {
+        let denom = rollup.primaryGameCompletionGoal.map { "\($0)" } ?? "—"
+        return "\(rollup.primaryGameDiscoveryCount)/\(denom)"
     }
 
-    /// License plate config derived from session.enabledCountries. Matches CombinedGameAssembler defaults (regionScope from countries; include DC, US territories, Canadian territories).
-    private func licensePlateConfig(from session: TripSession) -> LicensePlateGameConfig {
-        let scope = regionScope(from: session.enabledCountries)
-        let territoryOptions = LicensePlateTerritoryOptions(
-            includeUSTerritories: true,
-            includeCanadianTerritories: true,
-            includeDC: true
-        )
-        return LicensePlateGameConfig(regionScope: scope, territoryOptions: territoryOptions)
+    private var accessibilityValue: String {
+        if let goal = rollup.primaryGameCompletionGoal {
+            return "%d of %d".localized(rollup.primaryGameDiscoveryCount, goal)
+        }
+        return "\(rollup.primaryGameDiscoveryCount)"
     }
 
-    private func regionScope(from countries: [PlateRegion.Country]) -> RegionScope {
-        let set = Set(countries)
-        if set == [.unitedStates] { return .usOnly }
-        if set == [.canada] { return .canadaOnly }
-        if set == [.mexico] { return .mexicoOnly }
-        return .northAmerica
+    private var tripMetaLine: String {
+        "%@ · %@".localized(session.mode.localizedDisplayName, rollup.gameCount == 1 ? "1 game".localized : "%d games".localized(rollup.gameCount))
+        
+    }
+
+    private var pendingOutgoingInviteBadgeLabel: String {
+        pendingOutgoingInviteCount == 1
+            ? "1 invite pending".localized
+            : "%d invites pending".localized(pendingOutgoingInviteCount)
+    }
+
+    private var combinedAccessibilityLabel: String {
+        let plateFound = rollup.primaryGameDiscoveryCount == 1
+            ? "1 license plate found".localized
+            : "%d license plates found".localized(rollup.primaryGameDiscoveryCount)
+        let gamesLine = rollup.gameCount == 1 ? "1 game".localized : "%d games".localized(rollup.gameCount)
+        var lines = [
+            "Trip: %@".localized(session.name),
+            "Trip participation: %@".localized(session.mode.localizedDisplayName),
+            gamesLine,
+            plateFound,
+            accessibilityValue
+        ]
+        if pendingOutgoingInviteCount > 0 {
+            lines.append(pendingOutgoingInviteBadgeLabel)
+        }
+        return lines.joined(separator: ". ")
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(session.name)
-                    .font(.system(.title3, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(session.name)
+                        .font(.system(.title3, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+
+                    if pendingOutgoingInviteCount > 0 {
+                        Text(pendingOutgoingInviteBadgeLabel)
+                            .font(.system(.caption2, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(
+                                Capsule()
+                                    .fill(Color.Theme.accentYellow.opacity(0.25))
+                            )
+                            .accessibilityLabel(pendingOutgoingInviteBadgeLabel)
+                    }
+                }
 
                 Spacer()
 
-                Label("\(plateCount)/\(licensePlateTotalAvailable)", systemImage: "licenseplate")
+                Label(plateLabel, systemImage: "licenseplate")
                     .font(.system(.subheadline, design: .rounded))
                     .fontWeight(.medium)
                     .foregroundStyle(Color.Theme.accentYellow)
-                    .accessibilityLabel(plateCount == 1 ? "1 license plate found".localized : "%d license plates found".localized(plateCount))
-                    .accessibilityValue("%d of %d".localized(plateCount, licensePlateTotalAvailable))
+                    .accessibilityLabel(rollup.primaryGameDiscoveryCount == 1 ? "1 license plate found".localized : "%d license plates found".localized(rollup.primaryGameDiscoveryCount))
+                    .accessibilityValue(accessibilityValue)
+            }
+
+            Text(tripMetaLine)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+                .accessibilityHidden(true)
+
+            if rollup.gameCount > 1 {
+                Text("License plate progress (primary game)".localized)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown.opacity(0.9))
+                    .accessibilityHidden(true)
             }
 
             Divider()
@@ -100,21 +150,55 @@ struct TripSessionRow: View {
                 .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Trip: %@".localized(session.name))
+        .accessibilityLabel(combinedAccessibilityLabel)
         .accessibilityHint("Double tap to open trip".localized)
     }
 }
 
 #Preview("Solo trip") {
     List {
-        TripSessionRow(session: PreviewTripFixtures.soloTrip())
+        TripSessionRow(
+            session: PreviewTripFixtures.soloTrip(),
+            rollup: TripRollup(
+                gameCount: 1,
+                participantCount: 1,
+                totalDiscoveryCount: 5,
+                primaryGameDiscoveryCount: 5,
+                primaryGameCompletionGoal: 50
+            )
+        )
     }
     .listStyle(.insetGrouped)
 }
 
 #Preview("Completed trip") {
     List {
-        TripSessionRow(session: PreviewTripFixtures.completedTrip())
+        TripSessionRow(
+            session: PreviewTripFixtures.completedTrip(),
+            rollup: TripRollup(
+                gameCount: 1,
+                participantCount: 1,
+                totalDiscoveryCount: 0,
+                primaryGameDiscoveryCount: 0,
+                primaryGameCompletionGoal: 50
+            )
+        )
+    }
+    .listStyle(.insetGrouped)
+}
+
+#Preview("Multiplayer multi-game") {
+    List {
+        TripSessionRow(
+            session: PreviewTripFixtures.multiGameTrip(),
+            rollup: TripRollup(
+                gameCount: 3,
+                participantCount: 1,
+                totalDiscoveryCount: 10,
+                primaryGameDiscoveryCount: 6,
+                primaryGameCompletionGoal: 50
+            )
+        )
     }
     .listStyle(.insetGrouped)
 }

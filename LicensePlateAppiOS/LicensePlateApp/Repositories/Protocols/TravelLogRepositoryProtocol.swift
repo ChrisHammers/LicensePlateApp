@@ -3,6 +3,7 @@
 //  LicensePlateApp
 //
 //  Protocol for travel log (completed trips) projection. Enables test doubles. Step 03 — repository layer.
+//  Implementation composes TripSessionRepository and GameInstanceRepository for session list and game counts.
 //
 
 import Foundation

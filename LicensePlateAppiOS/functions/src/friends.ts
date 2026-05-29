@@ -3,13 +3,15 @@ import * as admin from "firebase-admin";
 import { checkFriendCap, isUserSearchable } from "./utils/validation";
 import { writeAuditLog } from "./audit";
 import { getFCMToken, sendPushNotification } from "./utils/notifications";
+import { normalizeClientMetadata } from "./clientMetadata";
+import { enforcedCallable } from "./callableOptions";
 
 const db = admin.firestore();
 
 /**
  * Send a friend invite
  */
-export const sendFriendInvite = functions.https.onCall(
+export const sendFriendInvite = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -20,6 +22,7 @@ export const sendFriendInvite = functions.https.onCall(
 
     const { toUserId, method } = data;
     const fromUserId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!toUserId) {
       throw new functions.https.HttpsError(
@@ -59,6 +62,7 @@ export const sendFriendInvite = functions.https.onCall(
           subjectType: "user",
           subjectId: toUserId,
           metadata: { method },
+          clientMetadata,
         });
         throw new functions.https.HttpsError(
           "permission-denied",
@@ -136,6 +140,7 @@ export const sendFriendInvite = functions.https.onCall(
       subjectType: "invite",
       subjectId: inviteRef.id,
       metadata: { toUserId, method },
+      clientMetadata,
     });
 
     return { inviteId: inviteRef.id };
@@ -145,7 +150,7 @@ export const sendFriendInvite = functions.https.onCall(
 /**
  * Respond to a friend invite (accept or decline)
  */
-export const respondToFriendInvite = functions.https.onCall(
+export const respondToFriendInvite = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -156,6 +161,7 @@ export const respondToFriendInvite = functions.https.onCall(
 
     const { inviteId, response } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!inviteId || !response) {
       throw new functions.https.HttpsError(
@@ -244,6 +250,7 @@ export const respondToFriendInvite = functions.https.onCall(
         subjectType: "friendship",
         subjectId: friendshipId,
         metadata: { fromUserId: inviteData.fromUserId },
+        clientMetadata,
       });
     } else {
       await writeAuditLog({
@@ -252,6 +259,7 @@ export const respondToFriendInvite = functions.https.onCall(
         subjectType: "invite",
         subjectId: inviteId,
         metadata: { fromUserId: inviteData.fromUserId },
+        clientMetadata,
       });
     }
 
@@ -260,6 +268,82 @@ export const respondToFriendInvite = functions.https.onCall(
     return { success: true };
   }
 );
+
+/**
+ * Remove an accepted friendship (unfriend). Updates friendCount for both users.
+ */
+export const removeFriend = enforcedCallable(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "User must be authenticated"
+    );
+  }
+
+  const { friendshipId } = data as { friendshipId?: string };
+  const userId = context.auth.uid;
+  const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
+
+  if (!friendshipId || typeof friendshipId !== "string") {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "friendshipId is required"
+    );
+  }
+
+  const friendshipRef = db.collection("friends").doc(friendshipId);
+  const friendshipDoc = await friendshipRef.get();
+
+  if (!friendshipDoc.exists) {
+    throw new functions.https.HttpsError("not-found", "Friendship not found");
+  }
+
+  const fd = friendshipDoc.data()!;
+  const userA = fd.userA as string;
+  const userB = fd.userB as string;
+
+  if (userId !== userA && userId !== userB) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Not authorized to remove this friendship"
+    );
+  }
+
+  if (fd.status !== "accepted") {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Only accepted friendships can be removed this way"
+    );
+  }
+
+  const userARef = db.collection("users").doc(userA);
+  const userBRef = db.collection("users").doc(userB);
+
+  const [userADoc, userBDoc] = await Promise.all([
+    userARef.get(),
+    userBRef.get(),
+  ]);
+
+  const countA = Math.max(0, (userADoc.data()?.friendCount || 0) - 1);
+  const countB = Math.max(0, (userBDoc.data()?.friendCount || 0) - 1);
+
+  const batch = db.batch();
+  batch.delete(friendshipRef);
+  batch.update(userARef, { friendCount: countA });
+  batch.update(userBRef, { friendCount: countB });
+  await batch.commit();
+
+  await writeAuditLog({
+    eventType: "AUDIT_FRIENDSHIP_REMOVED",
+    actorId: userId,
+    subjectType: "friendship",
+    subjectId: friendshipId,
+    metadata: { otherUserId: userId === userA ? userB : userA },
+    clientMetadata,
+  });
+
+  return { success: true };
+});
 
 function generateFriendshipId(userA: string, userB: string): string {
   const sorted = [userA, userB].sort();

@@ -13,6 +13,7 @@ enum GameInstanceMapper {
     static func toEntity(_ instance: GameInstance) -> GameInstanceEntity {
         let ruleSetData = try? JSONEncoder().encode(instance.ruleSet)
         let commonConfigData = try? JSONEncoder().encode(instance.commonConfig)
+        let teamsData = encodeTeams(instance.teams)
         return GameInstanceEntity(
             id: instance.id.uuidString,
             definitionId: instance.definitionId,
@@ -23,7 +24,9 @@ enum GameInstanceMapper {
             commonConfigData: commonConfigData,
             gameSpecificPayloadType: instance.gameSpecificPayloadType,
             gameSpecificPayloadVersion: instance.gameSpecificPayloadVersion,
-            gameSpecificPayloadData: instance.gameSpecificPayloadData
+            gameSpecificPayloadData: instance.gameSpecificPayloadData,
+            teamsData: teamsData,
+            fairnessUiLastAckAt: instance.fairnessUiLastAckAt
         )
     }
 
@@ -41,6 +44,7 @@ enum GameInstanceMapper {
         } else {
             ruleSet = GameRuleSet(gameDefinitionId: entity.definitionId)
         }
+        let teams = decodeTeams(entity.teamsData)
         return GameInstance(
             id: UUID(uuidString: entity.id) ?? UUID(),
             definitionId: entity.definitionId,
@@ -51,8 +55,20 @@ enum GameInstanceMapper {
             commonConfig: commonConfig,
             gameSpecificPayloadType: entity.gameSpecificPayloadType,
             gameSpecificPayloadVersion: entity.gameSpecificPayloadVersion,
-            gameSpecificPayloadData: entity.gameSpecificPayloadData
+            gameSpecificPayloadData: entity.gameSpecificPayloadData,
+            teams: teams,
+            fairnessUiLastAckAt: entity.fairnessUiLastAckAt
         )
+    }
+
+    private static func encodeTeams(_ teams: [TripTeam]) -> Data? {
+        guard !teams.isEmpty else { return nil }
+        return try? JSONEncoder().encode(teams)
+    }
+
+    private static func decodeTeams(_ data: Data?) -> [TripTeam] {
+        guard let data = data else { return [] }
+        return (try? JSONDecoder().decode([TripTeam].self, from: data)) ?? []
     }
 
     /// Decode score snapshot data to a generic dictionary (for future ScoreSnapshot type).

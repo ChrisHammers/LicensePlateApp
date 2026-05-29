@@ -20,11 +20,16 @@ struct PreviewFixturesTests {
         #expect(solo.name == "Solo Road Trip")
 
         let multi = PreviewTripFixtures.multiGameTrip()
-        #expect(multi.mode == .combined)
+        #expect(multi.mode == .solo)
+        #expect(multi.participants.count == 1)
 
         let collaborative = PreviewTripFixtures.collaborativeTrip()
-        #expect(collaborative.mode == .collaborative)
+        #expect(collaborative.mode == .multiplayer)
         #expect(collaborative.participants.count == 2)
+
+        let competitive = PreviewTripFixtures.competitiveTrip()
+        #expect(competitive.mode == .multiplayer)
+        #expect(competitive.participants.count == 2)
 
         let completed = PreviewTripFixtures.completedTrip()
         #expect(completed.status == .ended)
@@ -75,9 +80,24 @@ struct PreviewFixturesTests {
         let summary = PreviewSummaryFixtures.tripSummarySolo()
         #expect(summary.totalDiscoveryCount == 12)
         #expect(summary.games.count == 1)
+        #expect(summary.tripMode == .solo)
+        #expect(summary.games[0].gameMode == .collaborative)
 
         let multiSummary = PreviewSummaryFixtures.tripSummaryMultiGame()
         #expect(multiSummary.gameCount == 3)
+        #expect(multiSummary.tripMode == .solo)
+        #expect(multiSummary.games[0].gameMode == .collaborative)
+        #expect(multiSummary.games[1].gameMode == .competitive)
+
+        let dup = PreviewSummaryFixtures.tripSummaryDuplicateRegionAcrossGames()
+        #expect(dup.tripMode == .multiplayer)
+        #expect(dup.games.allSatisfy { $0.gameMode == .collaborative })
+
+        let compTied = PreviewSummaryFixtures.tripSummaryCompetitiveTied()
+        #expect(compTied.hasCompetitiveGame == true)
+        #expect(compTied.rankedParticipants.count == 2)
+        #expect(compTied.rankedParticipants[0].rank == 1)
+        #expect(compTied.rankedParticipants[1].rank == 1)
     }
 
     @Test("MockFactories build complete graph")

@@ -11,6 +11,7 @@ import SwiftData
 struct TravelLogView: View {
     @ObservedObject var viewModel: TravelLogViewModel
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var savedTripPaywallViewModel = PaywallViewModel()
 
     private let dateFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -21,12 +22,10 @@ struct TravelLogView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-
+            AppBackgroundView {
                 if viewModel.isLoading {
                     ProgressView()
+                        .accessibilityLabel("Loading…".localized)
                 } else if let message = viewModel.errorMessage {
                     VStack(spacing: 16) {
                         Image(systemName: "exclamationmark.triangle.fill")
@@ -47,6 +46,17 @@ struct TravelLogView: View {
                     listContent
                 }
             }
+            .overlay {
+                if viewModel.isLoadingSummary {
+                    ZStack {
+                        Color.Theme.background.opacity(0.88)
+                            .ignoresSafeArea()
+                        ProgressView()
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Loading…".localized)
+                }
+            }
             .navigationTitle("Travel Log".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -63,47 +73,49 @@ struct TravelLogView: View {
             .onAppear {
                 viewModel.loadEntries()
                 viewModel.onScreenAppeared()
-                AnalyticsService.shared.logScreenView(screenName: "travel_log")
+            }
+            .alert("Error".localized, isPresented: Binding(
+                get: { viewModel.summaryErrorMessage != nil },
+                set: { if !$0 { viewModel.summaryErrorMessage = nil } }
+            )) {
+                Button("OK".localized, role: .cancel) {
+                    viewModel.summaryErrorMessage = nil
+                }
+            } message: {
+                Text(viewModel.summaryErrorMessage ?? "")
             }
             .sheet(item: $viewModel.selectedSummary) { summary in
                 NavigationStack {
-                    TripSummaryView(summary: summary) {
+                    TripSummaryView(
+                        summary: summary,
+                        currentUserId: viewModel.currentUserId,
+                        shouldShowAd: viewModel.shouldShowTripSummaryAd()
+                    ) {
                         viewModel.clearSelection()
                     }
+                    .onAppear {
+                        viewModel.onRecapSheetAppeared(summary: summary)
+                    }
+                }
+            }
+            .sheet(isPresented: $viewModel.shouldPresentSavedTripPaywall, onDismiss: {
+                viewModel.dismissSavedTripPaywall()
+            }) {
+                PaywallView(
+                    viewModel: savedTripPaywallViewModel,
+                    onDismiss: {
+                        viewModel.dismissSavedTripPaywall()
+                    },
+                    source: "saved_trip_limit"
+                )
+                .onAppear {
+                    savedTripPaywallViewModel.setSavedTripLimitContext(isAnonymous: viewModel.isCurrentUserAnonymous)
                 }
             }
         }
     }
 
     private var emptyState: some View {
- /*       VStack(spacing: 12) {
-            Image(systemName: "map.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(Color.Theme.accentYellow)
-
-            Text("No completed trips yet".localized)
-                .font(.system(.title3, design: .rounded))
-                .fontWeight(.semibold)
-                .foregroundStyle(Color.Theme.primaryBlue)
-            
-            Text("Your completed trips will appear here.".localized)
-                .multilineTextAlignment(.center)
-                .font(.system(.footnote, design: .rounded))
-                .foregroundStyle(Color.Theme.softBrown)
-                .padding(.horizontal)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, maxHe)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.Theme.cardBackground)
-                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
-        )
-        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("No completed trips yet. Your completed trips will appear here.".localized)
-   */
-        
         VStack(spacing: 16) {
             Image(systemName: "map.fill")
                 .font(.system(size: 60))
@@ -124,20 +136,71 @@ struct TravelLogView: View {
     }
 
     private var listContent: some View {
-        List {
-            ForEach(viewModel.entries) { entry in
-                TravelLogRowView(entry: entry, dateFormatter: dateFormatter)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        viewModel.openSummary(sessionId: entry.sessionId)
-                    }
-                    .listRowBackground(Color.Theme.cardBackground)
-                    .accessibilityLabel(accessibilityLabel(for: entry))
-                    .accessibilityHint("Double tap to view trip summary".localized)
+        VStack {
+            if viewModel.shouldShowTravelLogAd {
+                AdBannerView(surface: .travelLog)
             }
+            List {
+                
+                ForEach(viewModel.entries) { entry in
+                    TravelLogRowView(entry: entry, dateFormatter: dateFormatter)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            viewModel.openSummary(sessionId: entry.sessionId)
+                        }
+                        .listRowBackground(Color.Theme.cardBackground)
+                        .accessibilityLabel(accessibilityLabel(for: entry))
+                        .accessibilityHint("Double tap to view trip summary".localized)
+                }
+                if viewModel.hiddenSavedTripCount > 0 {
+                    savedTripLimitRow
+                        .listRowBackground(Color.Theme.cardBackground)
+                }
+            }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
+    }
+
+    private var savedTripLimitRow: some View {
+        Button {
+            viewModel.showSavedTripLimitPaywall()
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "lock.fill")
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Older saved trips are locked".localized)
+                        .font(.system(.headline, design: .rounded))
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    Text(savedTripLimitMessage)
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                    Text("View older saved trips".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                }
+
+                Spacer()
+            }
+            .padding(.vertical, 8)
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Older saved trips are locked".localized)
+        .accessibilityValue(savedTripLimitMessage)
+        .accessibilityHint("Shows upgrade options for older saved trips".localized)
+    }
+
+    private var savedTripLimitMessage: String {
+        if viewModel.isCurrentUserAnonymous {
+            return "savedTrips.hiddenCount.signUp".localized(viewModel.hiddenSavedTripCount)
+        }
+        return "savedTrips.hiddenCount.upgrade".localized(viewModel.hiddenSavedTripCount)
     }
 
     private func accessibilityLabel(for entry: TravelLogEntry) -> String {
@@ -195,64 +258,6 @@ private struct TravelLogRowView: View {
     }
 }
 
-/*
-private struct TravelLogCard: View {
-    let entry: TravelLogEntry
-
-    private let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter
-    }()
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(entry.tripName)
-                    .font(.system(.title3, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                Spacer()
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(.subheadline))
-                    .foregroundStyle(Color.Theme.accentYellow)
-                    .accessibilityHidden(true)
-            }
-
-            Divider()
-                .background(Color.Theme.softBrown.opacity(0.2))
-                .accessibilityHidden(true)
-
-            Text(entry.summary)
-                .font(.system(.footnote, design: .rounded))
-                .foregroundStyle(Color.Theme.softBrown)
-
-            HStack {
-                Label("Ended".localized, systemImage: "calendar")
-                    .font(.system(.footnote, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                    .accessibilityLabel("Ended".localized)
-                Spacer()
-                Text(dateFormatter.string(from: entry.endedAt))
-                    .font(.system(.footnote, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                    .accessibilityLabel("Date: %@".localized(dateFormatter.string(from: entry.endedAt)))
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color.Theme.cardBackground)
-                .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("%@. %@. Ended %@".localized(entry.tripName, entry.summary, dateFormatter.string(from: entry.endedAt)))
-    }
-}
-*/
-
 // TripSummary must be Identifiable for sheet(item:)
 extension TripSummary: Identifiable {
     var id: UUID { sessionId }
@@ -267,7 +272,7 @@ extension TripSummary: Identifiable {
         authService: FirebaseAuthService()
     ))
     .environmentObject(FirebaseAuthService())
-    .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self], inMemory: true)
+    .modelContainer(for: TripSessionEntity.self, inMemory: true)
 }
 
 #Preview("Travel Log - With entries") {
@@ -284,4 +289,37 @@ extension TripSummary: Identifiable {
     ))
     .environmentObject(FirebaseAuthService())
     .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self], inMemory: true)
+}
+
+#Preview("Travel Log - Saved Trip Cap") {
+    TravelLogView(viewModel: TravelLogViewModel(
+        travelLogRepository: TravelLogRepository.shared,
+        tripSessionRepository: TripSessionRepository.shared,
+        gameInstanceRepository: GameInstanceRepository.shared,
+        tripActivityEventRepository: TripActivityEventRepository.shared,
+        authService: FirebaseAuthService(),
+        previewEntries: [
+            PreviewTravelLogFixtures.travelLogEntry(),
+            PreviewTravelLogFixtures.travelLogEntryWithSummaries(),
+            TravelLogEntry(
+                id: "preview-travel-log-3",
+                sessionId: UUID(),
+                tripName: "Weekend Drive",
+                endedAt: Date().addingTimeInterval(-86_400),
+                summary: "8 regions found",
+                participantCount: 1,
+                gameCount: 1,
+                status: .ended
+            )
+        ],
+        previewHiddenSavedTripCount: 2,
+        previewSavedTripCapKind: .anonymous
+    ))
+    .environmentObject(FirebaseAuthService())
+    .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self], inMemory: true)
+}
+
+#Preview("Travel Log - Ad Banner") {
+    AdBannerView(surface: .travelLog, isPreviewPlaceholder: true)
+        .padding()
 }

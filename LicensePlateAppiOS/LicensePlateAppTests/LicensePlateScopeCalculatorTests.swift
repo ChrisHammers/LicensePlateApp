@@ -13,7 +13,7 @@ struct LicensePlateScopeCalculatorTests {
 
     @Test func usOnlyStatesOnlyReturns50() async throws {
         let config = LicensePlateGameConfig(
-            regionScope: .usOnly,
+            selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue],
             territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: false, includeCanadianTerritories: true, includeDC: false)
         )
         let ids = LicensePlateScopeCalculator.targetRegionIds(for: config)
@@ -24,7 +24,7 @@ struct LicensePlateScopeCalculatorTests {
 
     @Test func usOnlyWithDCReturns51() async throws {
         let config = LicensePlateGameConfig(
-            regionScope: .usOnly,
+            selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue],
             territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: false, includeCanadianTerritories: true, includeDC: true)
         )
         let goal = LicensePlateScopeCalculator.completionGoal(for: config)
@@ -33,7 +33,7 @@ struct LicensePlateScopeCalculatorTests {
 
     @Test func usOnlyWithDCAndTerritoriesReturns56() async throws {
         let config = LicensePlateGameConfig(
-            regionScope: .usOnly,
+            selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue],
             territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: true, includeCanadianTerritories: true, includeDC: true)
         )
         let goal = LicensePlateScopeCalculator.completionGoal(for: config)
@@ -42,7 +42,7 @@ struct LicensePlateScopeCalculatorTests {
 
     @Test func canadaOnlyProvincesOnlyReturns10() async throws {
         let config = LicensePlateGameConfig(
-            regionScope: .canadaOnly,
+            selectedCountriesRawValues: [PlateRegion.Country.canada.rawValue],
             territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: false, includeCanadianTerritories: false, includeDC: false)
         )
         let goal = LicensePlateScopeCalculator.completionGoal(for: config)
@@ -51,7 +51,7 @@ struct LicensePlateScopeCalculatorTests {
 
     @Test func canadaOnlyWithTerritoriesReturns13() async throws {
         let config = LicensePlateGameConfig(
-            regionScope: .canadaOnly,
+            selectedCountriesRawValues: [PlateRegion.Country.canada.rawValue],
             territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: false, includeCanadianTerritories: true, includeDC: false)
         )
         let goal = LicensePlateScopeCalculator.completionGoal(for: config)
@@ -59,14 +59,14 @@ struct LicensePlateScopeCalculatorTests {
     }
 
     @Test func mexicoOnlyReturns32() async throws {
-        let config = LicensePlateGameConfig(regionScope: .mexicoOnly)
+        let config = LicensePlateGameConfig(selectedCountriesRawValues: [PlateRegion.Country.mexico.rawValue])
         let goal = LicensePlateScopeCalculator.completionGoal(for: config)
         #expect(goal == 32)
     }
 
     @Test func northAmericaFullReturnsCorrectTotal() async throws {
         let config = LicensePlateGameConfig(
-            regionScope: .northAmerica,
+            selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue, PlateRegion.Country.canada.rawValue, PlateRegion.Country.mexico.rawValue],
             territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: true, includeCanadianTerritories: true, includeDC: true)
         )
         let ids = LicensePlateScopeCalculator.targetRegionIds(for: config)
@@ -76,9 +76,42 @@ struct LicensePlateScopeCalculatorTests {
     }
 
     @Test func completionGoalMatchesTargetRegionIdsCount() async throws {
-        let config = LicensePlateGameConfig(regionScope: .northAmerica)
+        let config = LicensePlateGameConfig(selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue, PlateRegion.Country.canada.rawValue, PlateRegion.Country.mexico.rawValue])
         let ids = LicensePlateScopeCalculator.targetRegionIds(for: config)
         let goal = LicensePlateScopeCalculator.completionGoal(for: config)
         #expect(goal == ids.count)
+    }
+
+    @Test func usAndCanadaOnlyExcludesMexico() async throws {
+        let config = LicensePlateGameConfig(
+            selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue, PlateRegion.Country.canada.rawValue],
+            territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: false, includeCanadianTerritories: false, includeDC: false)
+        )
+        let ids = LicensePlateScopeCalculator.targetRegionIds(for: config)
+        #expect(ids.contains(where: { $0.hasPrefix("mx-") }) == false)
+        #expect(ids.count == 60) // 50 US states + 10 CA provinces
+    }
+
+    @Test func usAndMexicoOnlyExcludesCanada() async throws {
+        let config = LicensePlateGameConfig(
+            selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue, PlateRegion.Country.mexico.rawValue],
+            territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: false, includeCanadianTerritories: true, includeDC: false)
+        )
+        let ids = LicensePlateScopeCalculator.targetRegionIds(for: config)
+        #expect(ids.contains(where: { $0.hasPrefix("ca-") }) == false)
+        #expect(ids.count == 82) // 50 US states + 32 Mexico states
+    }
+
+    @Test func assemblerNormalizesTerritoryFlagsWhenParentCountryMissing() async throws {
+        let allOn = LicensePlateTerritoryOptions(includeUSTerritories: true, includeCanadianTerritories: true, includeDC: true)
+        let config = CombinedGameAssembler.licensePlateConfig(from: [.mexico], territoryOptions: allOn)
+        #expect(config.territoryOptions.includeUSTerritories == false)
+        #expect(config.territoryOptions.includeDC == false)
+        #expect(config.territoryOptions.includeCanadianTerritories == false)
+        let ids = LicensePlateScopeCalculator.targetRegionIds(for: config)
+        #expect(ids.contains("us-dc") == false)
+        #expect(ids.contains("us-pr") == false)
+        #expect(ids.contains("ca-yt") == false)
+        #expect(ids.count == 32)
     }
 }

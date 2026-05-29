@@ -17,16 +17,14 @@ struct FamilyPendingApprovals: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 List {
                     if pendingRequests.isEmpty {
                         Text("No pending requests".localized)
                             .foregroundStyle(Color.Theme.softBrown)
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding()
+                            .listRowBackground(Color.Theme.cardBackground)
                     } else {
                         ForEach(pendingRequests) { request in
                             PendingApprovalRow(
@@ -40,6 +38,7 @@ struct FamilyPendingApprovals: View {
                                 }
                             )
                             .environmentObject(authService)
+                            .listRowBackground(Color.Theme.cardBackground)
                         }
                     }
                 }

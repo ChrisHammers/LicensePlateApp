@@ -27,20 +27,6 @@ struct GameCreditCalculatorTests {
         )
     }
 
-    @Test func creditsSoloOneFullCreditForDiscoverer() async throws {
-        let discovery = makeDiscovery(participantId: "user1")
-        let result = GameCreditCalculator.credits(
-            for: .solo,
-            discovery: discovery,
-            existingDiscoveriesForTarget: []
-        )
-        #expect(result.count == 1)
-        #expect(result[0].participantId == "user1")
-        #expect(result[0].creditType == .full)
-        #expect(result[0].discoveryId == discovery.id)
-        #expect(result[0].weight == 1.0)
-    }
-
     @Test func creditsCompetitiveOneFullCreditForDiscoverer() async throws {
         let discovery = makeDiscovery(participantId: "user2")
         let result = GameCreditCalculator.credits(
@@ -103,18 +89,6 @@ struct GameCreditCalculatorTests {
         }
     }
 
-    @Test func creditsCombinedOneFullCreditForDiscoverer() async throws {
-        let discovery = makeDiscovery(participantId: "user1")
-        let result = GameCreditCalculator.credits(
-            for: .combined,
-            discovery: discovery,
-            existingDiscoveriesForTarget: []
-        )
-        #expect(result.count == 1)
-        #expect(result[0].creditType == .full)
-        #expect(result[0].participantId == "user1")
-    }
-
     // Step 06.5.5 — competitive: only first finder receives credit when passing first discovery
     @Test func creditsCompetitiveTwoFindersSameTargetOnlyFirstGetsCreditWhenPassingFirst() async throws {
         let first = makeDiscovery(participantId: "user1", targetId: "region-1")
@@ -128,5 +102,49 @@ struct GameCreditCalculatorTests {
         #expect(result[0].participantId == "user1")
         #expect(result[0].creditType == .full)
         #expect(result[0].weight == 1.0)
+    }
+
+    @Test func creditsCompetitiveSetsTeamIdFromGameTeams() async throws {
+        let teams = [TripTeam(id: "team-east", name: "East", participantUserIds: ["user2"])]
+        let discovery = makeDiscovery(participantId: "user2")
+        let result = GameCreditCalculator.credits(
+            for: .competitive,
+            discovery: discovery,
+            existingDiscoveriesForTarget: [],
+            teams: teams
+        )
+        #expect(result.count == 1)
+        #expect(result[0].teamId == "team-east")
+    }
+
+    @Test func creditsCollaborativeSetsTeamIdPerParticipant() async throws {
+        let teams = [
+            TripTeam(id: "t-a", name: "A", participantUserIds: ["user1"]),
+            TripTeam(id: "t-b", name: "B", participantUserIds: ["user2"])
+        ]
+        let existing = makeDiscovery(participantId: "user1", targetId: "region-1")
+        let newDiscovery = makeDiscovery(participantId: "user2", targetId: "region-1")
+        let result = GameCreditCalculator.credits(
+            for: .collaborative,
+            discovery: newDiscovery,
+            existingDiscoveriesForTarget: [existing],
+            teams: teams
+        )
+        #expect(result.count == 2)
+        let byParticipant = Dictionary(uniqueKeysWithValues: result.map { ($0.participantId, $0.teamId) })
+        #expect(byParticipant["user1"] == "t-a")
+        #expect(byParticipant["user2"] == "t-b")
+    }
+
+    @Test func creditsNilTeamIdWhenParticipantNotOnAnyTeam() async throws {
+        let teams = [TripTeam(id: "t-a", name: "A", participantUserIds: ["other"])]
+        let discovery = makeDiscovery(participantId: "lonely")
+        let result = GameCreditCalculator.credits(
+            for: .competitive,
+            discovery: discovery,
+            existingDiscoveriesForTarget: [],
+            teams: teams
+        )
+        #expect(result[0].teamId == nil)
     }
 }

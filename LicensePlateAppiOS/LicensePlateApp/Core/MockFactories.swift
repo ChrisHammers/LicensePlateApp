@@ -15,12 +15,10 @@ enum MockTripFactory {
             id: PreviewConstants.sessionIdSolo,
             name: "Solo Trip",
             status: .active,
-            mode: .solo,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
-            participants: [MockParticipantFactory.makeDriver(userId: PreviewConstants.userId1)],
-            teams: []
+            participants: [MockParticipantFactory.makeDriver(userId: PreviewConstants.userId1)]
         )
         overrides(&session)
         return session
@@ -31,15 +29,13 @@ enum MockTripFactory {
             id: PreviewConstants.sessionIdCollaborative,
             name: "Collaborative Trip",
             status: .active,
-            mode: .collaborative,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
             participants: [
                 MockParticipantFactory.makeDriver(userId: PreviewConstants.userId1),
                 MockParticipantFactory.makePassenger(userId: PreviewConstants.userId2)
-            ],
-            teams: []
+            ]
         )
         overrides(&session)
         return session
@@ -50,15 +46,13 @@ enum MockTripFactory {
             id: PreviewConstants.sessionIdCompetitive,
             name: "Competitive Trip",
             status: .active,
-            mode: .competitive,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
             participants: [
                 MockParticipantFactory.makeDriver(userId: PreviewConstants.userId1),
                 MockParticipantFactory.makePassenger(userId: PreviewConstants.userId2)
-            ],
-            teams: []
+            ]
         )
         overrides(&session)
         return session
@@ -69,12 +63,10 @@ enum MockTripFactory {
             id: PreviewConstants.sessionIdMulti,
             name: "Multi-Game Trip",
             status: .active,
-            mode: .combined,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
-            participants: [MockParticipantFactory.makeDriver(userId: PreviewConstants.userId1)],
-            teams: []
+            participants: [MockParticipantFactory.makeDriver(userId: PreviewConstants.userId1)]
         )
         overrides(&session)
         return session
@@ -92,7 +84,7 @@ enum MockGameFactory {
         config.lifecycleState = .started
         configOverrides(&config)
         let ruleSet = GameRuleSet(gameDefinitionId: GameType.licensePlate.rawValue)
-        let lpConfig = LicensePlateGameConfig(regionScope: .northAmerica)
+        let lpConfig = LicensePlateGameConfig(selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue, PlateRegion.Country.canada.rawValue, PlateRegion.Country.mexico.rawValue])
         let payloadData = try? JSONEncoder().encode(lpConfig)
         return GameInstance(
             id: PreviewConstants.gameInstanceId1,
@@ -259,7 +251,6 @@ struct MockInviteParams {
     var inviteId: String
     var tripSessionId: String
     var tripName: String
-    var tripMode: String
     var fromUserId: String
     var toUserId: String?
     var status: TripInvite.TripInviteStatus
@@ -282,7 +273,6 @@ enum MockInviteFactory {
             inviteId: "mock-invite-\(status.rawValue)",
             tripSessionId: tripSessionId,
             tripName: tripName,
-            tripMode: TripMode.collaborative.rawValue,
             fromUserId: fromUserId,
             toUserId: toUserId,
             status: status,

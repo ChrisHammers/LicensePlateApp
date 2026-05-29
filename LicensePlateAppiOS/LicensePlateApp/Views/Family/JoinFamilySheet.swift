@@ -26,10 +26,7 @@ struct JoinFamilySheet: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 Form {
                     Section {
                         TextField("Enter Share Code".localized, text: $shareCode)
@@ -49,6 +46,7 @@ struct JoinFamilySheet: View {
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
                     }
+                    .listRowBackground(Color.Theme.cardBackground)
                     
                     Section {
                         Button {
@@ -62,6 +60,7 @@ struct JoinFamilySheet: View {
                             }
                         }
                     }
+                    .listRowBackground(Color.Theme.cardBackground)
                     
                     if let error = errorMessage {
                         Section {
@@ -69,9 +68,11 @@ struct JoinFamilySheet: View {
                                 .foregroundStyle(.red)
                                 .font(.system(.caption, design: .rounded))
                         }
+                        .listRowBackground(Color.Theme.cardBackground)
                     }
                 }
                 .formStyle(.grouped)
+                .scrollContentBackground(.hidden)
             }
             .navigationTitle("Join Family".localized)
             .navigationBarTitleDisplayMode(.inline)

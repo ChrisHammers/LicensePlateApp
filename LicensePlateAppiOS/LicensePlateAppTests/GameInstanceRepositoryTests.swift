@@ -43,6 +43,41 @@ struct GameInstanceRepositoryTests {
         #expect(bySession[0].sessionId == sessionId)
     }
 
+    @Test func gameCountReturnsZeroWhenEmptyAndCountWhenInstancesExist() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = GameInstanceRepository.shared
+        repo.setModelContext(context)
+
+        let sessionId = UUID()
+        #expect(try repo.gameCount(sessionId: sessionId) == 0)
+
+        let instance = GameInstance(definitionId: "license_plate", sessionId: sessionId, ruleSet: GameRuleSet(gameDefinitionId: "license_plate"))
+        try repo.create(instance: instance)
+        #expect(try repo.gameCount(sessionId: sessionId) == 1)
+
+        let instance2 = GameInstance(definitionId: "other", sessionId: sessionId, ruleSet: GameRuleSet(gameDefinitionId: "other"))
+        try repo.create(instance: instance2)
+        #expect(try repo.gameCount(sessionId: sessionId) == 2)
+    }
+
+    @Test func deleteForSessionRemovesAllInstancesForSession() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = GameInstanceRepository.shared
+        repo.setModelContext(context)
+
+        let sessionId = UUID()
+        let instance = GameInstance(definitionId: "license_plate", sessionId: sessionId, ruleSet: GameRuleSet(gameDefinitionId: "license_plate"))
+        try repo.create(instance: instance)
+        #expect(try repo.fetchByTripSession(sessionId: sessionId).count == 1)
+        #expect(try repo.gameCount(sessionId: sessionId) == 1)
+
+        try repo.deleteForSession(sessionId: sessionId)
+        #expect(try repo.fetchByTripSession(sessionId: sessionId).isEmpty)
+        #expect(try repo.gameCount(sessionId: sessionId) == 0)
+    }
+
     @Test func instanceByIdReturnsNilWhenMissing() async throws {
         let container = try makeContainer()
         let context = ModelContext(container)
@@ -100,6 +135,114 @@ struct GameInstanceRepositoryTests {
         #expect(decoded["score"] == "100")
     }
 
+    /// Step 6.9.1 — Game with teams round-trips correctly.
+    @Test func gameWithTeamsRoundTrips() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = GameInstanceRepository.shared
+        repo.setModelContext(context)
+
+        let sessionId = UUID()
+        let team1 = TripTeam(name: "Team A", participantUserIds: ["user1", "user2"])
+        let team2 = TripTeam(name: "Team B", participantUserIds: ["user3"])
+        let instance = GameInstance(
+            definitionId: "license_plate",
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            teams: [team1, team2]
+        )
+        try repo.create(instance: instance)
+
+        let loaded = try repo.instance(byId: instance.id)
+        #expect(loaded != nil)
+        #expect(loaded?.teams.count == 2)
+        #expect(loaded?.teams.first { $0.name == "Team A" }?.participantUserIds == ["user1", "user2"])
+        #expect(loaded?.teams.first { $0.name == "Team B" }?.participantUserIds == ["user3"])
+    }
+
+    /// Step 13.2 — Upsert from “remote” shape without watermark preserves existing SwiftData watermark.
+    @Test func upsertPreservesFairnessUiLastAckWhenIncomingOmitsIt() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = GameInstanceRepository.shared
+        repo.setModelContext(context)
+
+        let sessionId = UUID()
+        let ack = Date(timeIntervalSince1970: 1_700_000_000)
+        var instance = GameInstance(
+            definitionId: "license_plate",
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            fairnessUiLastAckAt: ack
+        )
+        try repo.create(instance: instance)
+
+        var remoteSynced = try #require(try repo.instance(byId: instance.id))
+        remoteSynced.fairnessUiLastAckAt = nil
+        try repo.upsert(instance: remoteSynced)
+
+        let loaded = try #require(try repo.instance(byId: instance.id))
+        #expect(loaded.fairnessUiLastAckAt == ack)
+    }
+
+    /// Step 13.2 — Upsert uses max when both sides carry a watermark.
+    @Test func upsertMergesFairnessUiLastAckToGreaterTimestamp() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = GameInstanceRepository.shared
+        repo.setModelContext(context)
+
+        let sessionId = UUID()
+        let older = Date(timeIntervalSince1970: 1_000)
+        let newer = Date(timeIntervalSince1970: 2_000)
+        var instance = GameInstance(
+            definitionId: "license_plate",
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            fairnessUiLastAckAt: older
+        )
+        try repo.create(instance: instance)
+
+        var bump = try #require(try repo.instance(byId: instance.id))
+        bump.fairnessUiLastAckAt = newer
+        try repo.upsert(instance: bump)
+
+        let loaded = try #require(try repo.instance(byId: instance.id))
+        #expect(loaded.fairnessUiLastAckAt == newer)
+    }
+
+    /// Step 13.2 — Bootstrap-style replace keeps per-game fairness watermark when wire games omit it.
+    @Test func replaceGamesForSessionPreservesFairnessUiLastAckAt() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let repo = GameInstanceRepository.shared
+        repo.setModelContext(context)
+
+        let sessionId = UUID()
+        let gameId = UUID()
+        let ack = Date(timeIntervalSince1970: 1_800_000_000)
+        let instance = GameInstance(
+            id: gameId,
+            definitionId: "license_plate",
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            fairnessUiLastAckAt: ack
+        )
+        try repo.create(instance: instance)
+
+        let replacement = GameInstance(
+            id: gameId,
+            definitionId: "license_plate",
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            fairnessUiLastAckAt: nil
+        )
+        try repo.replaceGamesForSession(sessionId: sessionId, instances: [replacement])
+
+        let loaded = try #require(try repo.instance(byId: gameId))
+        #expect(loaded.fairnessUiLastAckAt == ack)
+    }
+
     /// Step 05 — Failure: update throws instanceNotFound when instance was never created.
     @Test func updateThrowsInstanceNotFoundWhenInstanceMissing() async throws {
         let container = try makeContainer()
@@ -113,12 +256,12 @@ struct GameInstanceRepositoryTests {
         let instance = GameInstance(id: unknownId, definitionId: "license_plate", sessionId: sessionId, ruleSet: ruleSet)
         do {
             try repo.update(instance: instance)
-            #expect(Bool(false), "Expected GameInstanceRepositoryError.instanceNotFound")
+            Issue.record("Expected GameInstanceRepositoryError.instanceNotFound")
         } catch let error as GameInstanceRepositoryError {
             if case .instanceNotFound(let id) = error {
                 #expect(id == unknownId)
             } else {
-                #expect(Bool(false), "Expected instanceNotFound, got \(error)")
+                Issue.record("Expected instanceNotFound, got \(error)")
             }
         }
     }

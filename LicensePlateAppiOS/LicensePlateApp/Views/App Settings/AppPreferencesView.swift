@@ -120,10 +120,7 @@ struct AppPreferencesView: View {
   }
   
   var body: some View {
-    ZStack {
-      Color.Theme.background
-        .ignoresSafeArea()
-      
+    AppBackgroundView {
       List {
         Section {
           VStack(spacing: 12) {

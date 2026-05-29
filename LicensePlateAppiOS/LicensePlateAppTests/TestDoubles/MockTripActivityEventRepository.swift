@@ -21,6 +21,54 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
         events.append(event)
     }
 
+    @discardableResult
+    func appendIfAbsent(_ event: TripActivityEvent) throws -> Bool {
+        if shouldThrow { throw NSError(domain: "MockTripActivityEventRepository", code: -1, userInfo: nil) }
+        if let idx = events.firstIndex(where: { $0.id == event.id }) {
+            let existing = events[idx]
+            guard existing.sessionId == event.sessionId,
+                  existing.kind == event.kind,
+                  existing.actorId == event.actorId,
+                  existing.payload == event.payload else {
+                throw TripActivityEventRepositoryError.idCollision(id: event.id)
+            }
+            return false
+        }
+        events.append(event)
+        return true
+    }
+
+    func importEventsIfAbsent(_ events: [TripActivityEvent]) throws {
+        for event in events {
+            _ = try reconcileRemoteActivityEvent(event)
+        }
+    }
+
+    @discardableResult
+    func reconcileRemoteActivityEvent(_ event: TripActivityEvent) throws -> Bool {
+        if shouldThrow { throw NSError(domain: "MockTripActivityEventRepository", code: -1, userInfo: nil) }
+        if let idx = events.firstIndex(where: { $0.id == event.id }) {
+            let existing = events[idx]
+            guard existing.sessionId == event.sessionId, existing.kind == event.kind else {
+                throw TripActivityEventRepositoryError.idCollision(id: event.id)
+            }
+            if existing.timestamp == event.timestamp,
+               existing.actorId == event.actorId,
+               existing.payload == event.payload {
+                return false
+            }
+            events[idx] = event
+            return true
+        }
+        events.append(event)
+        return true
+    }
+
+    func event(byId id: String) throws -> TripActivityEvent? {
+        if shouldThrow { throw NSError(domain: "MockTripActivityEventRepository", code: -1, userInfo: nil) }
+        return events.first { $0.id == id }
+    }
+
     func events(sessionId: UUID, limit: Int?) throws -> [TripActivityEvent] {
         if shouldThrow { throw NSError(domain: "MockTripActivityEventRepository", code: -1, userInfo: nil) }
         var list = events.filter { $0.sessionId == sessionId }.sorted { $0.timestamp < $1.timestamp }
@@ -30,69 +78,35 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
         return list
     }
 
+    func sessionIdsRelevantToProgression(forUserId userId: String) throws -> Set<UUID> {
+        if shouldThrow { throw NSError(domain: "MockTripActivityEventRepository", code: -1, userInfo: nil) }
+        var ids = Set<UUID>()
+        for event in events {
+            switch event.kind {
+            case .gameEnded:
+                ids.insert(event.sessionId)
+            case .regionFound:
+                let payloadPid = event.payload?[TripActivityEventPayloadKey.participantId] ?? ""
+                if !payloadPid.isEmpty, payloadPid == userId {
+                    ids.insert(event.sessionId)
+                } else if event.actorId == userId {
+                    ids.insert(event.sessionId)
+                }
+            default:
+                break
+            }
+        }
+        return ids
+    }
+
     func discoveries(sessionId: UUID, gameInstanceId: UUID?) throws -> [GameDiscovery] {
         let allEvents = try events(sessionId: sessionId, limit: nil)
-        let discoveryEvents = allEvents.filter { $0.kind == .regionFound || $0.kind == .regionRemoved }
-        var byRegion: [String: (TripActivityEvent, [String: String])] = [:]
-        for event in discoveryEvents {
-            let payload = event.payload ?? [:]
-            guard let regionId = payload[TripActivityEventPayloadKey.regionId] else { continue }
-            if let filterGid = gameInstanceId,
-               let payloadGid = payload[TripActivityEventPayloadKey.gameInstanceId],
-               UUID(uuidString: payloadGid) != filterGid {
-                continue
-            }
-            if event.kind == .regionRemoved {
-                byRegion.removeValue(forKey: regionId)
-            } else {
-                byRegion[regionId] = (event, payload)
-            }
-        }
-        return byRegion.values.sorted { ($0.0.timestamp) < ($1.0.timestamp) }.compactMap { event, payload in
-            let targetId = payload[TripActivityEventPayloadKey.regionId] ?? ""
-            guard !targetId.isEmpty else { return nil }
-            let gid = (payload[TripActivityEventPayloadKey.gameInstanceId].flatMap { UUID(uuidString: $0) }) ?? gameInstanceId ?? sessionId
-            let participantId = payload[TripActivityEventPayloadKey.participantId] ?? event.actorId ?? ""
-            let inputMethod = FoundRegion.InputMethod(rawValue: payload[TripActivityEventPayloadKey.inputMethod] ?? FoundRegion.InputMethod.list.rawValue) ?? .list
-            return GameDiscovery(
-                gameInstanceId: gid,
-                participantId: participantId,
-                targetId: targetId,
-                discoveredAt: event.timestamp,
-                inputMethod: inputMethod,
-                location: nil
-            )
-        }
+        return TripActivityEventDiscoveryReplay.replay(events: allEvents, gameInstanceFilter: gameInstanceId).discoveries
     }
 
     func foundRegions(sessionId: UUID, gameInstanceId: UUID?) throws -> [FoundRegion] {
         let allEvents = try events(sessionId: sessionId, limit: nil)
-        let discoveryEvents = allEvents.filter { $0.kind == .regionFound || $0.kind == .regionRemoved }
-        var byRegion: [String: (TripActivityEvent, [String: String])] = [:]
-        for event in discoveryEvents {
-            let payload = event.payload ?? [:]
-            guard let regionId = payload[TripActivityEventPayloadKey.regionId] else { continue }
-            if let filterGid = gameInstanceId,
-               let payloadGid = payload[TripActivityEventPayloadKey.gameInstanceId],
-               UUID(uuidString: payloadGid) != filterGid {
-                continue
-            }
-            if event.kind == .regionRemoved {
-                byRegion.removeValue(forKey: regionId)
-            } else {
-                byRegion[regionId] = (event, payload)
-            }
-        }
-        return byRegion.values.sorted { ($0.0.timestamp) < ($1.0.timestamp) }.map { event, payload in
-            let inputMethod = FoundRegion.InputMethod(rawValue: payload[TripActivityEventPayloadKey.inputMethod] ?? FoundRegion.InputMethod.list.rawValue) ?? .list
-            return FoundRegion(
-                regionID: payload[TripActivityEventPayloadKey.regionId] ?? "",
-                foundAt: event.timestamp,
-                inputMethod: inputMethod,
-                foundBy: payload[TripActivityEventPayloadKey.participantId] ?? event.actorId,
-                foundAtLocation: nil
-            )
-        }
+        return TripActivityEventDiscoveryReplay.replay(events: allEvents, gameInstanceFilter: gameInstanceId).foundRegions
     }
 
     func deleteEvents(sessionId: UUID, gameInstanceId: UUID?) throws {
@@ -101,12 +115,26 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
             let gidStr = gid.uuidString
             events.removeAll { event in
                 guard event.sessionId == sessionId else { return false }
-                guard event.kind == .regionFound || event.kind == .regionRemoved else { return false }
+                guard event.kind == .regionFound || event.kind == .regionRemoved || event.kind == .discoveryRejected else { return false }
                 return event.payload?[TripActivityEventPayloadKey.gameInstanceId] == gidStr
             }
         } else {
             events.removeAll { $0.sessionId == sessionId }
         }
+    }
+
+    func deleteAllEventsForGame(sessionId: UUID, gameInstanceId: UUID) throws {
+        if shouldThrow { throw NSError(domain: "MockTripActivityEventRepository", code: -1, userInfo: nil) }
+        let gidStr = gameInstanceId.uuidString
+        events.removeAll { event in
+            guard event.sessionId == sessionId else { return false }
+            return event.payload?[TripActivityEventPayloadKey.gameInstanceId] == gidStr
+        }
+    }
+
+    func deleteEvent(id: String) throws {
+        if shouldThrow { throw NSError(domain: "MockTripActivityEventRepository", code: -1, userInfo: nil) }
+        events.removeAll { $0.id == id }
     }
 
     /// Test helper: appended events (e.g. to assert trip_started, game_started)

@@ -29,6 +29,7 @@ final class SyncQueueRepository: ObservableObject, SyncQueueRepositoryProtocol {
         try ctx.save()
     }
 
+    /// For the default cap see ``SyncQueueRepositoryBatching/defaultPendingFetchLimit`` (`SyncQueueRepositoryProtocol/fetchPending()`).
     func fetchPending(limit: Int) throws -> [SyncQueueItem] {
         guard let ctx = modelContext else { throw SyncQueueRepositoryError.noModelContext }
         let pendingState = SyncQueueItemState.pending.rawValue
@@ -106,6 +107,63 @@ final class SyncQueueRepository: ObservableObject, SyncQueueRepositoryProtocol {
                 lastSyncedAt: metadata.lastSyncedAt,
                 valueData: metadata.valueData
             ))
+        }
+        try ctx.save()
+    }
+
+    func hasNonTerminalGameplayItem(forEventId eventId: String) throws -> Bool {
+        guard let ctx = modelContext else { throw SyncQueueRepositoryError.noModelContext }
+        let gameplayKind = SyncQueueItemKind.gameplayEvent.rawValue
+        var descriptor = FetchDescriptor<SyncQueueItemEntity>(
+            predicate: #Predicate<SyncQueueItemEntity> { $0.kind == gameplayKind }
+        )
+        let entities = try ctx.fetch(descriptor)
+        let nonTerminalStates: Set<String> = [
+            SyncQueueItemState.pending.rawValue,
+            SyncQueueItemState.inProgress.rawValue,
+            SyncQueueItemState.failed.rawValue
+        ]
+        return entities.contains { entity in
+            entity.payloadEventId == eventId && nonTerminalStates.contains(entity.state)
+        }
+    }
+
+    func hasPendingOrRetryDueGameplayItems() throws -> Bool {
+        guard let ctx = modelContext else { throw SyncQueueRepositoryError.noModelContext }
+        let gameplayKind = SyncQueueItemKind.gameplayEvent.rawValue
+        let pendingState = SyncQueueItemState.pending.rawValue
+        var pendingDescriptor = FetchDescriptor<SyncQueueItemEntity>(
+            predicate: #Predicate<SyncQueueItemEntity> { $0.kind == gameplayKind && $0.state == pendingState }
+        )
+        pendingDescriptor.fetchLimit = 1
+        if try !ctx.fetch(pendingDescriptor).isEmpty {
+            return true
+        }
+        let failedState = SyncQueueItemState.failed.rawValue
+        let failedDescriptor = FetchDescriptor<SyncQueueItemEntity>(
+            predicate: #Predicate<SyncQueueItemEntity> { $0.kind == gameplayKind && $0.state == failedState }
+        )
+        let failedRows = try ctx.fetch(failedDescriptor)
+        let now = Date()
+        return failedRows.contains { row in
+            row.nextRetryAt == nil || (row.nextRetryAt ?? .distantFuture) <= now
+        }
+    }
+
+    func resetStuckInProgressSyncItemsToPending() throws {
+        guard let ctx = modelContext else { throw SyncQueueRepositoryError.noModelContext }
+        let inProgressState = SyncQueueItemState.inProgress.rawValue
+        let descriptor = FetchDescriptor<SyncQueueItemEntity>(
+            predicate: #Predicate<SyncQueueItemEntity> { $0.state == inProgressState }
+        )
+        let stuck = try ctx.fetch(descriptor)
+        guard !stuck.isEmpty else { return }
+        let pendingState = SyncQueueItemState.pending.rawValue
+        let now = Date()
+        for entity in stuck {
+            entity.state = pendingState
+            entity.nextRetryAt = nil
+            entity.updatedAt = now
         }
         try ctx.save()
     }

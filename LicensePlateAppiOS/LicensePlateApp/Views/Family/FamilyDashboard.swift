@@ -32,10 +32,7 @@ struct FamilyDashboard: View {
     
     var body: some View {
      //   NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 if viewModel.isLoading {
                     ProgressView()
                 } else if let family = viewModel.family {
@@ -54,6 +51,7 @@ struct FamilyDashboard: View {
                             }
                             .padding(.vertical, 8)
                         }
+                        .listRowBackground(Color.Theme.cardBackground)
                         
                         // Members
                         Section("Members".localized) {
@@ -88,6 +86,7 @@ struct FamilyDashboard: View {
                                 .disabled(!authService.isOnline)
                             }
                         }
+                        .listRowBackground(Color.Theme.cardBackground)
                         
                         // Pending Invites Section
                         if viewModel.pendingFamilyInvitesCount > 0 {
@@ -106,6 +105,7 @@ struct FamilyDashboard: View {
                                     }
                                 }
                             }
+                            .listRowBackground(Color.Theme.cardBackground)
                         }
                         
                         // Pending Member Requests (for creators/captains)
@@ -122,12 +122,14 @@ struct FamilyDashboard: View {
                                         .foregroundStyle(Color.Theme.softBrown)
                                 }
                             }
+                            .listRowBackground(Color.Theme.cardBackground)
                         } else if !viewModel.pendingRequests.isEmpty {
                             Section("Pending".localized) {
                                 ForEach(viewModel.pendingRequests) { request in
                                     PendingRequestRow(request: request)
                                 }
                             }
+                            .listRowBackground(Color.Theme.cardBackground)
                         }
                         
                         // Stats placeholder
@@ -140,6 +142,7 @@ struct FamilyDashboard: View {
                             .font(.system(.body, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
                         }
+                        .listRowBackground(Color.Theme.cardBackground)
                     }
                     .listStyle(.insetGrouped)
                     .scrollContentBackground(.hidden)
@@ -194,7 +197,7 @@ struct FamilyDashboard: View {
                                 .fontWeight(.semibold)
                                 .frame(maxWidth: .infinity)
                                 .padding()
-                                .background(Color.gray.opacity(0.2))
+                                .background(Color.Theme.cardBackground)
                                 .foregroundColor(Color.Theme.primaryBlue)
                                 .cornerRadius(12)
                             }
@@ -331,6 +334,11 @@ struct FamilyDashboard: View {
                     // InviteRepository will be set up in ViewModel
                 }
             }
+            .onChange(of: viewModel.members.map(\.userId).sorted().joined(separator: ",")) { _, _ in
+                PublicLifetimeStatsRepository.shared.updateFamilyPinnedUserIds(
+                    Set(viewModel.members.map(\.userId))
+                )
+            }
             .onDisappear {
                 // Stop listening when view disappears to prevent permission errors
                 FamilyRepository.shared.stopListening()
@@ -341,14 +349,26 @@ struct FamilyDashboard: View {
 
 struct FamilyMemberRow: View {
     let member: FamilyMember
-    
+    @ObservedObject private var publicLifetimeStatsRepository = PublicLifetimeStatsRepository.shared
+
+    private var memberSubtitle: String {
+        let role = member.roleEnum.displayName
+        if let stats = publicLifetimeStatsRepository.snapshot(forUserId: member.userId) {
+            return "\(role) · \("family.member.public_stats_line".localized(stats.totalCompletedTrips))"
+        }
+        return role
+    }
+
     var body: some View {
         if let user = member.user {
             UserIdentityRowView(
                 user: user,
-                subtitle: member.roleEnum.displayName,
+                subtitle: memberSubtitle,
                 avatarSize: 50
             )
+            .task {
+                publicLifetimeStatsRepository.ensureObservingFriend(userId: member.userId)
+            }
         } else {
             HStack {
                 Circle()

@@ -27,10 +27,7 @@ struct AddFamilyMemberSheet: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 List {
                     Section("Search".localized) {
                         TextField("Username, email, or phone".localized, text: $searchQuery)
@@ -57,6 +54,7 @@ struct AddFamilyMemberSheet: View {
                             }
                         }
                     }
+                    .listRowBackground(Color.Theme.cardBackground)
                     
                     if !searchResults.isEmpty {
                         Section("Results".localized) {
@@ -72,6 +70,7 @@ struct AddFamilyMemberSheet: View {
                                 )
                             }
                         }
+                        .listRowBackground(Color.Theme.cardBackground)
                     }
                 }
                 .listStyle(.insetGrouped)

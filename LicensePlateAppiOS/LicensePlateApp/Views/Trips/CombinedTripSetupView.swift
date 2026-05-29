@@ -10,10 +10,12 @@ import SwiftData
 
 struct CombinedTripSetupView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
+    @EnvironmentObject private var authService: FirebaseAuthService
 
     @StateObject private var viewModel: CombinedTripSetupViewModel
     var onCreated: (TripSession) -> Void
+    @State private var isShowingPassengerSelector = false
+    @StateObject private var tripLimitPaywallViewModel = PaywallViewModel()
 
     init(
         viewModel: CombinedTripSetupViewModel,
@@ -26,17 +28,27 @@ struct CombinedTripSetupView: View {
     @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
     @AppStorage("appUseVibrations") private var appUseVibrations = true
 
+    /// Explicit bindings for pickers (same pattern as `AppPreferencesView` private picker bindings).
+    private var defaultGameModeBinding: Binding<GameMode> {
+        Binding(
+            get: { viewModel.defaultGameMode },
+            set: { viewModel.defaultGameMode = $0 }
+        )
+    }
+
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-
+            AppBackgroundView {
                 List {
+                    if viewModel.shouldShowSetupAd {
+                        adSection
+                    }
                     basicInfoSection
+                    tripParticipationSection
                     gamesSection
                     tripOptionsSection
                     tripSettingsSection
+                 
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
@@ -45,8 +57,7 @@ struct CombinedTripSetupView: View {
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: appPlaySoundEffects)
-                AnalyticsService.shared.log(.combinedTripSetupOpened)
-                AnalyticsService.shared.logScreenView(screenName: "combined_trip_setup")
+                viewModel.logSetupScreenAppeared()
             }
             .onChange(of: appUseVibrations) { _, newValue in
                 FeedbackService.shared.updatePreferences(hapticEnabled: newValue, soundEnabled: appPlaySoundEffects)
@@ -69,10 +80,11 @@ struct CombinedTripSetupView: View {
                         createTapped()
                     }
                     .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .foregroundStyle(!viewModel.canCreate || viewModel.isCreating ? .secondary : Color.Theme.primaryBlue)
                     .disabled(!viewModel.canCreate || viewModel.isCreating)
                     .accessibilityLabel("Create".localized)
-                    .accessibilityHint("Creates the trip with selected games and options".localized)
+                    .accessibilityHint(!viewModel.canCreate ? "Select at least one country before saving.".localized : "Creates the trip with selected games and options".localized
+                    )
                 }
             }
             .alert("Error".localized, isPresented: Binding(
@@ -83,6 +95,34 @@ struct CombinedTripSetupView: View {
             } message: {
                 if let msg = viewModel.errorMessage {
                     Text(msg)
+                }
+            }
+            .sheet(isPresented: $isShowingPassengerSelector) {
+                InvitePlayersView(
+                    viewModel: InvitePlayersViewModel(
+                        mode: .setupSelection,
+                        tripSessionId: UUID(),
+                        tripName: viewModel.tripName,
+                        selectedUserIds: viewModel.selectedPassengerIds,
+                        authService: authService
+                    ),
+                    title: "Passenger List".localized
+                ) { selected in
+                    viewModel.selectedPassengerIds = selected
+                }
+                .environmentObject(authService)
+            }
+            .sheet(isPresented: Binding(
+                get: { viewModel.shouldPresentTripLimitPaywall },
+                set: { if !$0 { viewModel.dismissTripLimitPaywall() } }
+            )) {
+                PaywallView(
+                    viewModel: tripLimitPaywallViewModel,
+                    onDismiss: { viewModel.dismissTripLimitPaywall() },
+                    source: TripLimitGateSource.create.rawValue
+                )
+                .onAppear {
+                    tripLimitPaywallViewModel.setTripLimitContext()
                 }
             }
         }
@@ -121,6 +161,57 @@ struct CombinedTripSetupView: View {
         .textCase(nil)
     }
 
+    private var tripParticipationSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Passenger List".localized)
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+
+                Text("Your trip starts with you. Invite friends or family anytime to play together.".localized)
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("Your trip starts with you. Invite friends or family anytime to play together.".localized)
+
+                Button {
+                    FeedbackService.shared.buttonTap()
+                    isShowingPassengerSelector = true
+                } label: {
+                    HStack {
+                        Label("Passenger List".localized, systemImage: "person.2.fill")
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                        Spacer()
+                        Text(viewModel.selectedPassengerIds.isEmpty ? "Optional".localized : "%d selected".localized(viewModel.selectedPassengerIds.count))
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.Theme.background)
+                    )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Passenger List".localized)
+                .accessibilityHint("Select friends or family to invite after trip creation".localized)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+            .background(Color.Theme.cardBackground)
+            .cornerRadius(20)
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+            .listRowBackground(Color.clear)
+        } header: {
+            Text("Trip".localized)
+                .font(.system(.headline, design: .rounded))
+                .foregroundStyle(Color.Theme.primaryBlue)
+        }
+        .textCase(nil)
+    }
+
     private var gamesSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 12) {
@@ -139,6 +230,21 @@ struct CombinedTripSetupView: View {
                         onToggle: { viewModel.toggleGameType(gameType) }
                     )
                 }
+
+                Text("Play style applies to each selected game.".localized)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .accessibilityLabel("Play style applies to each selected game.".localized)
+
+                Picker(selection: defaultGameModeBinding) {
+                    Text("Collaborative".localized).tag(GameMode.collaborative)
+                    Text("Competitive".localized).tag(GameMode.competitive)
+                } label: {
+                    Text("Play style".localized)
+                }
+                .pickerStyle(.segmented)
+                .accessibilityLabel("Game play style".localized)
+                .accessibilityHint("Collaborative shares credit. Competitive scores individually.".localized)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
@@ -170,9 +276,54 @@ struct CombinedTripSetupView: View {
                         .font(.system(.headline, design: .rounded))
                         .foregroundStyle(Color.Theme.primaryBlue)
 
-                    CombinedTripCountryRow(title: "United States".localized, isOn: $viewModel.includeUS)
-                    CombinedTripCountryRow(title: "Canada".localized, isOn: $viewModel.includeCanada)
-                    CombinedTripCountryRow(title: "Mexico".localized, isOn: $viewModel.includeMexico)
+                    SettingToggleRow(title: "United States".localized, isOn: $viewModel.includeUS)
+                        .onChange(of: viewModel.includeUS) { _, _ in
+                            viewModel.applyTerritoryGatingFromCountryToggles()
+                        }
+                    SettingToggleRow(title: "Canada".localized, isOn: $viewModel.includeCanada)
+                        .onChange(of: viewModel.includeCanada) { _, _ in
+                            viewModel.applyTerritoryGatingFromCountryToggles()
+                        }
+                    SettingToggleRow(title: "Mexico".localized, isOn: $viewModel.includeMexico)
+
+                    Text("Enable United States to configure US territories and Washington, DC. Enable Canada for Canadian territories.".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .accessibilityLabel("Enable United States to configure US territories and Washington, DC. Enable Canada for Canadian territories.".localized)
+
+                    SettingToggleRow(
+                        title: "Include US Territories".localized,
+                        description: "Puerto Rico, Guam, US Virgin Islands, American Samoa, Northern Mariana Islands".localized,
+                        isOn: $viewModel.includeUSTerritories
+                    )
+                    .disabled(!viewModel.includeUS)
+                    .opacity(viewModel.includeUS ? 1.0 : 0.5)
+                    .accessibilityHint(viewModel.includeUS ? "" : "Enable United States first".localized)
+
+                    SettingToggleRow(
+                        title: "Include Washington, DC".localized,
+                        description: "District of Columbia as its own plate region".localized,
+                        isOn: $viewModel.includeDC
+                    )
+                    .disabled(!viewModel.includeUS)
+                    .opacity(viewModel.includeUS ? 1.0 : 0.5)
+                    .accessibilityHint(viewModel.includeUS ? "" : "Enable United States first".localized)
+
+                    SettingToggleRow(
+                        title: "Include Canadian Territories".localized,
+                        description: "Nunavut, Northwest Territories, Yukon".localized,
+                        isOn: $viewModel.includeCanadianTerritories
+                    )
+                    .disabled(!viewModel.includeCanada)
+                    .opacity(viewModel.includeCanada ? 1.0 : 0.5)
+                    .accessibilityHint(viewModel.includeCanada ? "" : "Enable Canada first".localized)
+
+                    if let message = viewModel.countryValidationMessage {
+                        Text(message)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.red)
+                            .accessibilityLabel(message)
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -256,15 +407,34 @@ struct CombinedTripSetupView: View {
         .textCase(nil)
     }
 
+    private var adSection: some View {
+        Section {
+            AdBannerView(surface: .combinedTripSetup)
+                .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                .listRowBackground(Color.clear)
+        }
+        .textCase(nil)
+    }
+
     private func createTapped() {
         FeedbackService.shared.buttonTap()
         viewModel.clearError()
         do {
-            let session = try viewModel.createTrip(modelContext: modelContext)
+            let session = try viewModel.createTrip()
+            Task {
+                // Invites seed `members/{owner}` on Firestore before canonical publish (callable requires owner member).
+                await viewModel.sendSetupInvites(for: session)
+                await viewModel.publishCanonicalToRemote(session: session)
+            }
             FeedbackService.shared.actionSuccess()
             onCreated(session)
             dismiss()
         } catch {
+            if error is TripEntitlementGateError {
+                tripLimitPaywallViewModel.setTripLimitContext()
+                FeedbackService.shared.actionError()
+                return
+            }
             viewModel.setError(error.localizedDescription)
             FeedbackService.shared.actionError()
         }
@@ -310,56 +480,38 @@ private struct GameTypeRow: View {
     }
 }
 
-// MARK: - Country row
-
-private struct CombinedTripCountryRow: View {
-    let title: String
-    @Binding var isOn: Bool
-
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.system(.body, design: .rounded))
-                .foregroundStyle(Color.Theme.primaryBlue)
-
-            Spacer()
-
-            Toggle("", isOn: $isOn)
-                .tint(Color.Theme.primaryBlue)
-                .labelsHidden()
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.Theme.cardBackground)
-        )
-        .accessibilityLabel(title)
-        .accessibilityValue(isOn ? "On".localized : "Off".localized)
-    }
-}
-
 // MARK: - Previews
 
 #Preview("Combined Trip Setup") {
-    CombinedTripSetupView(
+    let auth = FirebaseAuthService()
+    auth.currentUser = AppUser(id: "preview-user", userName: "Preview", firebaseUID: "preview-user")
+    return CombinedTripSetupView(
         viewModel: CombinedTripSetupViewModel(
             tripSessionRepository: TripSessionRepository.shared,
             gameInstanceRepository: GameInstanceRepository.shared,
-            authService: FirebaseAuthService()
+            authService: auth
         ),
         onCreated: { _ in }
     )
+    .environmentObject(auth)
     .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self, TripActivityEventEntity.self], inMemory: true)
 }
 
 #Preview("Combined Trip Setup - With name") {
+    let auth = FirebaseAuthService()
+    auth.currentUser = AppUser(id: "preview-user", userName: "Preview", firebaseUID: "preview-user")
     let vm = CombinedTripSetupViewModel(
         tripSessionRepository: TripSessionRepository.shared,
         gameInstanceRepository: GameInstanceRepository.shared,
-        authService: FirebaseAuthService()
+        authService: auth
     )
     vm.tripName = "Weekend Road Trip"
     return CombinedTripSetupView(viewModel: vm, onCreated: { _ in })
+        .environmentObject(auth)
         .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self, TripActivityEventEntity.self], inMemory: true)
+}
+
+#Preview("Combined Trip Setup - Ad Banner") {
+    AdBannerView(surface: .combinedTripSetup, isPreviewPlaceholder: true)
+        .padding()
 }

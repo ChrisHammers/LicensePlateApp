@@ -26,6 +26,20 @@ exports.expireInvitesAndCodes = functions.pubsub
         });
     });
     await inviteBatch.commit();
+    // Expire pending trip invites past expiresAt
+    const tripInvitesSnapshot = await db
+        .collection("trip_invites")
+        .where("status", "==", "pending")
+        .where("expiresAt", "<", now)
+        .get();
+    const tripInviteBatch = db.batch();
+    tripInvitesSnapshot.forEach((doc) => {
+        tripInviteBatch.update(doc.ref, {
+            status: "expired",
+            respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+    });
+    await tripInviteBatch.commit();
     // Expire share codes (mark as revoked)
     const codesSnapshot = await db
         .collection("share_codes")
@@ -39,7 +53,7 @@ exports.expireInvitesAndCodes = functions.pubsub
         });
     });
     await codeBatch.commit();
-    console.log(`Expired ${invitesSnapshot.size} invites and ${codesSnapshot.size} codes`);
+    console.log(`Expired ${invitesSnapshot.size} family invites, ${tripInvitesSnapshot.size} trip invites, and ${codesSnapshot.size} codes`);
     return null;
 });
 //# sourceMappingURL=expiration.js.map

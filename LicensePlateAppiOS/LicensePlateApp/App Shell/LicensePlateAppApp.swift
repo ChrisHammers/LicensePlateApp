@@ -16,15 +16,21 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Initialize app language on first launch based on device language
         LocalizationHelper.initializeAppLanguageIfNeeded()
 
+        NewTripDefaultsBootstrap.registerFactoryDefaults()
+
         // Reset boundariesLoaded to false on app launch to ensure splash screen shows
         UserDefaults.standard.set(false, forKey: "boundariesLoaded")
         
         // Initialize Firebase here (after delegate is fully set up)
         // This ensures Firebase's AppDelegateSwizzler can properly detect the delegate
-        initializeFirebase()
+        let firebaseConfigured = initializeFirebase()
 
         // RevenueCat: configure after Firebase so we can identify user later. No-op if RevenueCatAPIKey missing.
         RevenueCatEntitlementBridge.shared.configure()
+        AdMobService.shared.startIfNeeded()
+        if firebaseConfigured {
+            FirebaseMessagingService.shared.configure(application: application)
+        }
 
         #if false
         // Initialize Google Maps after Firebase
@@ -79,7 +85,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         }
     }
     
-    private func initializeFirebase() {
+    private func initializeFirebase() -> Bool {
         // Try to initialize Firebase, but don't crash if config is missing
         // Use environment-specific config files based on build configuration
         // The FIREBASE_CONFIG_FILE build setting documents which file should be used
@@ -99,16 +105,22 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         guard let configPath = path else {
             print("⚠️ Firebase configuration not found. App will work in offline-only mode.")
             print("   Expected: \(configFileName).plist or GoogleService-Info.plist")
-            return
+            return false
         }
         
         guard let options = FirebaseOptions(contentsOfFile: configPath) else {
             print("⚠️ Failed to load Firebase configuration. App will work in offline-only mode.")
-            return
+            return false
         }
         
+        AppCheckConfigurator.configure()
         FirebaseApp.configure(options: options)
+        CrashReportingService.shared.configure()
+        Task { @MainActor in
+            await RemoteConfigService.shared.fetchAndActivate()
+        }
         print("✅ Firebase initialized successfully with config: \(configFileName).plist")
+        return true
     }
     
     // Handle deep links
@@ -119,6 +131,13 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             DeepLinkHandler.shared.destination = DeepLinkHandler.shared.handleURL(url)
         }
         return true
+    }
+
+    func application(_ application: UIApplication,
+                     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        Task { @MainActor in
+            FirebaseMessagingService.shared.didRegisterForRemoteNotifications(deviceToken: deviceToken)
+        }
     }
 }
 
@@ -171,6 +190,13 @@ struct LicensePlateAppApp: App {
             RootView()
                 .environmentObject(authService)
                 .environmentObject(riskAssessmentService)
+                .onOpenURL { url in
+                    Task { @MainActor in
+                        if let dest = DeepLinkHandler.shared.handleURL(url) {
+                            DeepLinkHandler.shared.destination = dest
+                        }
+                    }
+                }
         }
         .modelContainer(sharedModelContainer)
     }

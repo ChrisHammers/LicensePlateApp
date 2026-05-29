@@ -9,9 +9,21 @@ import Foundation
 import SwiftUI
 import Combine
 
-enum DeepLinkDestination: Hashable {
+enum DeepLinkDestination: Hashable, Identifiable {
     case friendInvite(inviteId: String)
     case familyInvite(inviteId: String, familyId: String)
+    case tripInvite(inviteId: String)
+
+    var id: String {
+        switch self {
+        case .friendInvite(let inviteId):
+            return "friend-\(inviteId)"
+        case .familyInvite(let inviteId, let familyId):
+            return "family-\(inviteId)-\(familyId)"
+        case .tripInvite(let inviteId):
+            return "trip-\(inviteId)"
+        }
+    }
 }
 
 @MainActor
@@ -21,6 +33,10 @@ class DeepLinkHandler: ObservableObject {
     static let shared = DeepLinkHandler()
     
     private init() {}
+
+    func clearDestination() {
+        destination = nil
+    }
     
     /// Parse a deep link URL
     func handleURL(_ url: URL) -> DeepLinkDestination? {
@@ -51,6 +67,11 @@ class DeepLinkHandler: ObservableObject {
                let familyId = params["familyId"] {
                 AnalyticsService.shared.log(.deepLinkOpened(type: "family", params: params))
                 return .familyInvite(inviteId: inviteId, familyId: familyId)
+            }
+        } else if path.hasPrefix("/invite/trip") {
+            if let inviteId = params["inviteId"] {
+                AnalyticsService.shared.log(.deepLinkOpened(type: "trip", params: params))
+                return .tripInvite(inviteId: inviteId)
             }
         }
         

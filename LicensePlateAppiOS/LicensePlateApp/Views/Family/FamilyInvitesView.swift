@@ -20,10 +20,7 @@ struct FamilyInvitesView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 if isLoading {
                     ProgressView()
                 } else if pendingInvites.isEmpty {
@@ -47,6 +44,7 @@ struct FamilyInvitesView: View {
                     List {
                         ForEach(pendingInvites) { invite in
                             FamilyInviteRow(invite: invite)
+                                .listRowBackground(Color.Theme.cardBackground)
                         }
                     }
                     .listStyle(.insetGrouped)

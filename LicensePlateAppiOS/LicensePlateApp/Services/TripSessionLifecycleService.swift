@@ -2,16 +2,17 @@
 //  TripSessionLifecycleService.swift
 //  LicensePlateApp
 //
-//  Step 04 — Single orchestration path for start/end/reset/cancel trip. Used by CombinedTripSetupViewModel and TripTrackerViewModel.
+//  Step 04 — Single orchestration path for start/end/cancel trip. Used by CombinedTripSetupViewModel and ActiveTripsListViewModel.
+//  Step 6.9.3 — Per-game start/end delegated to GameInstanceLifecycleService.
 //
 
 import Foundation
+import FirebaseAuth
 
 @MainActor
 protocol TripSessionLifecycleServiceProtocol: AnyObject {
     func startTrip(sessionId: UUID, actorId: String) throws
     func endTrip(sessionId: UUID, endedBy: String?) throws
-    func resetTrip(sessionId: UUID, gameInstanceId: UUID) throws
     func cancelSession(sessionId: UUID, cancelledBy: String?) throws
 }
 
@@ -22,24 +23,28 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         tripSessionRepository: TripSessionRepository.shared,
         gameInstanceRepository: GameInstanceRepository.shared,
         tripActivityEventRepository: TripActivityEventRepository.shared,
-        syncCoordinator: SyncCoordinator.shared
+        tripActivityEventRecording: TripActivityEventRecordingService.shared,
+        gameInstanceLifecycleService: GameInstanceLifecycleService.shared
     )
 
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
-    private let syncCoordinator: SyncCoordinatorProtocol
+    private let tripActivityEventRecording: TripActivityEventRecordingProtocol
+    private let gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
 
     init(
         tripSessionRepository: TripSessionRepositoryProtocol,
         gameInstanceRepository: GameInstanceRepositoryProtocol,
         tripActivityEventRepository: TripActivityEventRepositoryProtocol,
-        syncCoordinator: SyncCoordinatorProtocol
+        tripActivityEventRecording: TripActivityEventRecordingProtocol,
+        gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
     ) {
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
         self.tripActivityEventRepository = tripActivityEventRepository
-        self.syncCoordinator = syncCoordinator
+        self.tripActivityEventRecording = tripActivityEventRecording
+        self.gameInstanceLifecycleService = gameInstanceLifecycleService
     }
 
     func startTrip(sessionId: UUID, actorId: String) throws {
@@ -52,75 +57,64 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         session.startedAt = Date()
         session.status = .active
         try tripSessionRepository.save(session: session)
-        try gameInstanceRepository.transitionGamesToStarted(sessionId: sessionId)
         let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
-        let tripStartedEvent = TripActivityEvent(sessionId: sessionId, kind: .tripStarted, actorId: actorId)
-        try tripActivityEventRepository.append(tripStartedEvent)
-        try syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: tripStartedEvent.id)
         for game in games {
-            let gameStartedEvent = TripActivityEvent(
-                sessionId: sessionId,
-                kind: .gameStarted,
-                actorId: nil,
-                payload: [TripActivityEventPayloadKey.gameInstanceId: game.id.uuidString]
-            )
-            try tripActivityEventRepository.append(gameStartedEvent)
-            try syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: gameStartedEvent.id)
-            AnalyticsService.shared.log(.gameInstanceStarted(
-                gameInstanceId: game.id.uuidString,
-                gameType: game.definitionId,
-                gameLifecycleState: "started",
-                configLockReason: ConfigLockReason.gameStarted.rawValue
-            ))
+            try gameInstanceLifecycleService.startGame(sessionId: sessionId, gameInstanceId: game.id)
         }
+        let tripStartedEvent = TripActivityEvent(sessionId: sessionId, kind: .tripStarted, actorId: actorId)
+        try tripActivityEventRecording.recordForSync(tripStartedEvent)
         AnalyticsService.shared.log(.tripSessionStarted(tripId: sessionId.uuidString, tripActiveGameCount: games.count))
+        Task { @MainActor in
+            await ReminderNotificationService.shared.scheduleInactiveActiveTripReminder(sessionId: sessionId, tripName: session.name)
+            try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionId)
+        }
     }
 
     func endTrip(sessionId: UUID, endedBy: String?) throws {
         guard var session = try tripSessionRepository.session(byId: sessionId) else {
             throw TripSessionLifecycleServiceError.sessionNotFound(sessionId)
         }
+        if session.status == .ended {
+            return
+        }
         session.endedAt = Date()
         session.endedBy = endedBy
         session.status = .ended
         try tripSessionRepository.save(session: session)
         let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
-        let tripEndedEvent = TripActivityEvent(sessionId: sessionId, kind: .tripEnded, actorId: endedBy)
-        try tripActivityEventRepository.append(tripEndedEvent)
-        try syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: tripEndedEvent.id)
         for game in games {
-            let gameEndedEvent = TripActivityEvent(
-                sessionId: sessionId,
-                kind: .gameEnded,
-                actorId: nil,
-                payload: [TripActivityEventPayloadKey.gameInstanceId: game.id.uuidString]
-            )
-            try tripActivityEventRepository.append(gameEndedEvent)
-            try syncCoordinator.enqueueForSync(sessionId: sessionId, eventId: gameEndedEvent.id)
+            try gameInstanceLifecycleService.endGame(sessionId: sessionId, gameInstanceId: game.id)
         }
+        let tripEndedEvent = TripActivityEvent(sessionId: sessionId, kind: .tripEnded, actorId: endedBy)
+        try tripActivityEventRecording.recordForSync(tripEndedEvent)
         AnalyticsService.shared.log(.tripSessionEnded(tripId: sessionId.uuidString))
-    }
-
-    func resetTrip(sessionId: UUID, gameInstanceId: UUID) throws {
-        try tripActivityEventRepository.deleteEvents(sessionId: sessionId, gameInstanceId: gameInstanceId)
-        guard var session = try tripSessionRepository.session(byId: sessionId) else {
-            throw TripSessionLifecycleServiceError.sessionNotFound(sessionId)
+        ReminderNotificationService.shared.cancelReminder(sessionId: sessionId, reason: "trip_ended")
+        ReviewPromptService.shared.considerPromptAfterTripCompleted(sessionId: sessionId)
+        Task { @MainActor in
+            let uid = endedBy ?? Auth.auth().currentUser?.uid
+            if let uid {
+                LifetimeStatsCoordinator.shared.onLocalTripEnded(userId: uid)
+            }
+            try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionId)
         }
-        session.startedAt = nil
-        session.endedAt = nil
-        session.endedBy = nil
-        try tripSessionRepository.save(session: session)
-        AnalyticsService.shared.log(.tripSessionReset(tripId: sessionId.uuidString, gameInstanceId: gameInstanceId.uuidString))
     }
 
+    /// Cancels the trip (soft delete UX): marks session cancelled, clears local games and all session events so scores/progress are removed.
     func cancelSession(sessionId: UUID, cancelledBy: String?) throws {
         guard var session = try tripSessionRepository.session(byId: sessionId) else {
             throw TripSessionLifecycleServiceError.sessionNotFound(sessionId)
         }
+        Task { @MainActor in
+            try? await TripCanonicalRemoteSyncService.shared.markTripCancelledRemote(sessionId: sessionId)
+        }
         session.status = .cancelled
         session.endedAt = Date()
+        session.endedBy = cancelledBy
         try tripSessionRepository.save(session: session)
-        AnalyticsService.shared.log(.tripSessionDeleted(tripId: sessionId.uuidString))
+        try tripActivityEventRepository.deleteEvents(sessionId: sessionId, gameInstanceId: nil)
+        try gameInstanceRepository.deleteForSession(sessionId: sessionId)
+        AnalyticsService.shared.log(.tripSessionCancelled(tripId: sessionId.uuidString))
+        ReminderNotificationService.shared.cancelReminder(sessionId: sessionId, reason: "trip_cancelled")
     }
 }
 

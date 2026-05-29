@@ -14,13 +14,12 @@ final class Friendship {
     @Attribute(.unique) var friendshipId: String
     var userA: String
     var userB: String
-    var status: String // "pending", "accepted", "declined"
+    var status: String // "accepted", "declined"
     var initiatedBy: String
     var createdAt: Date
     var respondedAt: Date?
     
     enum FriendshipStatus: String, Codable, CaseIterable {
-        case pending
         case accepted
         case declined
     }
@@ -29,7 +28,7 @@ final class Friendship {
         friendshipId: String,
         userA: String,
         userB: String,
-        status: FriendshipStatus = .pending,
+        status: FriendshipStatus = .accepted,
         initiatedBy: String,
         createdAt: Date = .now,
         respondedAt: Date? = nil
@@ -67,7 +66,7 @@ final class Friendship {
     /// Get status enum
     var statusEnum: FriendshipStatus {
         get {
-            FriendshipStatus(rawValue: status) ?? .pending
+            FriendshipStatus(rawValue: status) ?? .declined
         }
         set {
             status = newValue.rawValue

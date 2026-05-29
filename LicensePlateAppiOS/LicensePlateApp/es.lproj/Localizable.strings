@@ -15,6 +15,9 @@
 "Create Trip" = "Crear Viaje";
 "Trip: %@" = "Viaje: %@";
 "Double tap to open trip" = "Toca dos veces para abrir el viaje";
+"Session Unavailable" = "Sesión no disponible";
+"We could not find this trip session." = "No pudimos encontrar esta sesión de viaje.";
+"Session Unavailable. We could not find this trip session." = "Sesión no disponible. No pudimos encontrar esta sesión de viaje.";
 
 // Trip Tracking
 "List" = "Lista";
@@ -36,6 +39,9 @@
 "Cancel" = "Cancelar";
 "Only the first finder gets credit in competitive mode." = "Solo el primero que encuentra obtiene crédito en modo competitivo.";
 "Tap to dismiss" = "Toca para cerrar";
+"Region selection order resolution" = "Resolución del orden de selección de región";
+"Fairness late competitive body %@ %@ %@" = "Se determinó que encontraste %@ después de %@ en %@.";
+"Fairness invalid participant body %@ %@" = "No se pudo confirmar un hallazgo para %@ en el viaje %@.";
 
 // Voice Recognition
 "Speech Recognition Needed" = "Reconocimiento de Voz Necesario";
@@ -159,6 +165,10 @@
 "Start Trip" = "Iniciar Viaje";
 "End Trip" = "Terminar Viaje";
 "Reset Trip" = "Restablecer Viaje";
+"Reset Game" = "Restablecer Juego";
+"Trip already ended" = "El viaje ya terminó";
+"Reset is not available for ended trips." = "No se puede restablecer en viajes terminados.";
+"Only this game's progress will be reset (discoveries and game state). The trip and its dates will not be changed." = "Solo se restablecerá el progreso de este juego (descubrimientos y estado). El viaje y sus fechas no cambiarán.";
 "Delete Trip" = "Eliminar Viaje";
 "Countries to Include" = "Países a Incluir";
 "United States" = "Estados Unidos";
@@ -179,6 +189,7 @@
 "Hold to Talk" = "Mantén Presionado para Hablar";
 "Press and hold the microphone button to record. If disabled the system will listen until you hit stop." = "Presiona y mantén presionado el botón del micrófono para grabar. Si está deshabilitado, el sistema escuchará hasta que presiones detener.";
 "Reset" = "Restablecer";
+"Remove" = "Quitar";
 "Delete" = "Eliminar";
 "This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset." = "Esto restablecerá toda la configuración del viaje excepto el nombre del viaje. Todo se restablecerá, incluida la Fecha de Inicio, que no se iniciará automáticamente. Cualquier registro se borrará, excepto un registro que indique que fue restablecido.";
 "This will delete the trip and all scores will be removed." = "Esto eliminará el viaje y se eliminarán todas las puntuaciones.";
@@ -366,6 +377,11 @@
 "Will use date and time" = "Se usará fecha y hora";
 "Create" = "Crear";
 "Cancels creating a new trip" = "Cancela la creación de un nuevo viaje";
+"Creates the trip with selected games and options" = "Crea el viaje con los juegos y opciones seleccionados";
+"Done editing changes, saves changes, and dismisses the settings view" = "Termina la edición, guarda los cambios y cierra la vista de ajustes";
+"Saves new trip defaults and closes this view" = "Guarda los valores predeterminados del nuevo viaje y cierra esta vista";
+"Select at least one country before saving." = "Selecciona al menos un país antes de guardar.";
+"Enable location tracking during trip first" = "Primero activa el seguimiento de ubicación durante el viaje";
 
 // Enum Values - AppDarkMode
 "Light" = "Claro";
@@ -588,4 +604,182 @@
 "Purchase failed. Please try again." = "Compra fallida. Por favor, inténtalo de nuevo.";
 "No purchases to restore." = "No hay compras que restaurar.";
 "Get more from RoadTrip Royale with premium features." = "Aprovecha más RoadTrip Royale con funciones premium.";
+"Active trip limit reached" = "Límite de viajes activos alcanzado";
+"Upgrade to keep more road trips active at once." = "Mejora tu plan para mantener más viajes activos a la vez.";
+"You have reached your active trip limit." = "Has alcanzado tu límite de viajes activos.";
+"Saved trip limit reached" = "Límite de viajes guardados alcanzado";
+"Sign up to keep more saved trips" = "Regístrate para mantener más viajes guardados";
+"Create an account to keep more saved trips visible across devices." = "Crea una cuenta para mantener visibles más viajes guardados en todos tus dispositivos.";
+"Upgrade to view older saved trips" = "Mejora tu plan para ver viajes guardados anteriores.";
+"savedTrips.hiddenCount.signUp" = "Regístrate para mantener visibles %d viajes guardados más.";
+"savedTrips.hiddenCount.upgrade" = "Mejora tu plan para ver %d viajes guardados anteriores.";
+"Older saved trips are locked" = "Los viajes guardados anteriores están bloqueados";
+"View older saved trips" = "Ver viajes guardados anteriores";
+"Shows upgrade options for older saved trips" = "Muestra opciones para desbloquear viajes guardados anteriores";
 
+// Step 6.9.3 — Trip vs game lifecycle
+"Trips cannot be reset." = "Los viajes no se pueden restablecer.";
+"Game reset is not available for this trip." = "No se puede restablecer el juego para este viaje.";
+"This ends the trip and all open games. Make sure all participants have synced so all discoveries are counted." = "Esto termina el viaje y todos los juegos abiertos. Asegúrate de que todos los participantes hayan sincronizado para que se cuenten todos los descubrimientos.";
+"This ends this game. Make sure all participants have synced so all discoveries are counted. You can start a new game." = "Esto termina este juego. Asegúrate de que todos los participantes hayan sincronizado para que se cuenten todos los descubrimientos. Puedes empezar un juego nuevo.";
+"Reset is not available for ended or cancelled trips." = "No se puede restablecer en viajes finalizados o cancelados.";
+"This trip has ended" = "Este viaje ha terminado";
+"Trip cancelled" = "Viaje cancelado";
+"This trip was cancelled" = "Este viaje fue cancelado";
+"This trip was cancelled." = "Este viaje fue cancelado.";
+"Start the trip before starting games." = "Inicia el viaje antes de empezar los juegos.";
+"CANCELLED" = "CANCELADO";
+"Game state: %@" = "Estado del juego: %@";
+"Remove this game" = "Quitar este juego";
+"This removes only this game from the trip. The trip continues with your other games." = "Esto quita solo este juego del viaje. El viaje continúa con los demás juegos.";
+"Only available when the trip has more than one game." = "Solo disponible si el viaje tiene más de un juego.";
+"Remove game is not available for ended or cancelled trips." = "No se puede quitar el juego en viajes finalizados o cancelados.";
+"A trip must keep at least one game." = "Un viaje debe tener al menos un juego.";
+
+// Step 6.9.6 Phase D — Invite rows (trip vs game)
+"1 game" = "1 juego";
+"%d games" = "%d juegos";
+"Trip participation: %@" = "Participación en el viaje: %@";
+"Status: %@" = "Estado: %@";
+"Inviter: %@" = "Invitador: %@";
+
+// Step 10 — Collaborative mode / discovery replay
+"Discovery highlights" = "Aspectos destacados de los hallazgos";
+"Found by %@" = "Encontrado por %@";
+"%d finders" = "%d personas";
+"Sign in to remove a find." = "Inicia sesión para quitar un hallazgo.";
+"You don’t have a find to remove for this region." = "No tienes un hallazgo que quitar en esta región.";
+"You can’t remove this find." = "No puedes quitar este hallazgo.";
+"By removing the current find, you lose your discovery and game points." = "Al quitar el hallazgo actual, pierdes tu descubrimiento y los puntos de la partida.";
+"Found by %@ and %@" = "Encontrado por %1$@ y %2$@";
+"Found by %@, %@, and %@" = "Encontrado por %1$@, %2$@ y %3$@";
+"Found by %@, %@, and %d others" = "Encontrado por %1$@, %2$@ y %3$d más";
+"Some discoveries are not tied to a game on this recap." = "Algunos hallazgos no están vinculados a una partida en este resumen.";
+"Show all discovery highlights" = "Mostrar todos los aspectos destacados";
+"Show fewer discovery highlights" = "Mostrar menos aspectos destacados";
+"More discovery highlights are hidden. Expand to show all." = "Hay más aspectos destacados ocultos. Amplía para verlos todos.";
+"Collapses the discovery highlights list." = "Contrae la lista de aspectos destacados.";
+"Loading…" = "Cargando…";
+
+// Step 11 — Competitive rankings & in-game standings
+"Rank #%d" = "Puesto n.º %d";
+"Tied" = "Empate";
+"First finds" = "Primeros hallazgos";
+"Standings" = "Clasificación";
+"Your duplicate attempts" = "Tus intentos duplicados";
+"No duplicate attempts yet" = "Aún no hay intentos duplicados";
+"%d first finds" = "%d primeros hallazgos";
+
+// Step 12 — Trip dashboard (competitive trip-wide leaderboard)
+"Trip leaderboard" = "Clasificación del viaje";
+
+// Step 12.5 — Joiner sync & display names
+"Unknown user" = "Usuario desconocido";
+"Unknown player" = "Jugador desconocido";
+"From: %@" = "De: %@";
+"To: %@" = "Para: %@";
+"Loading profile…" = "Cargando perfil…";
+
+// Lifetime stats (profile)
+"profile.lifetime_stats.title" = "Estadísticas de viajes";
+"profile.lifetime_stats.updating" = "Actualizando estadísticas";
+"profile.lifetime_stats.updating.a11y" = "Actualizando estadísticas";
+"profile.lifetime_stats.error_title" = "No se pudieron actualizar las estadísticas";
+"profile.lifetime_stats.retry" = "Reintentar";
+"profile.lifetime_stats.empty" = "Aún no hay viajes completados o las estadísticas siguen cargando.";
+"profile.lifetime_stats.completed_trips" = "Viajes completados";
+"profile.lifetime_stats.completed_trips.a11y" = "Tu total de viajes completados.";
+"profile.lifetime_stats.games_played" = "Partidas jugadas";
+"profile.lifetime_stats.games_played.a11y" = "Total de partidas en tus viajes completados.";
+"profile.lifetime_stats.discoveries" = "Tus hallazgos";
+"profile.lifetime_stats.discoveries.a11y" = "Tus hallazgos en viajes completados.";
+"profile.lifetime_stats.weighted_score" = "Puntuación ponderada";
+"profile.lifetime_stats.weighted_score.a11y" = "Tu puntuación ponderada combinada según los resúmenes de viaje.";
+"profile.lifetime_stats.family_trips" = "Viajes solo en familia";
+"profile.lifetime_stats.family_trips.a11y" = "Viajes finalizados en los que todos los que siguen en el viaje eran de tu familia.";
+"profile.lifetime_stats.pending_sync" = "Actualizando en el servidor… los números pueden ser de este dispositivo hasta que termine la sincronización.";
+"profile.lifetime_stats.pending_sync.a11y" = "Las estadísticas de por vida están pendientes de sincronizar con el servidor.";
+"friends.public_lifetime_stats.trips_line" = "%d viajes completados";
+"friends.public_lifetime_stats.trips_line.a11y" = "%d viajes completados en las estadísticas públicas.";
+"family.member.public_stats_line" = "%d viajes";
+"trip_settings.leave_trip_impact" = "Saldrás de este viaje en este dispositivo de inmediato. Si estás sin conexión, la salida se sincronizará cuando vuelvas a estar en línea. Después de salir, este viaje ya no cuenta para tus estadísticas de por vida y no aparecerá en tu registro de viajes cuando termine la sincronización.";
+"error.family_lookup_no_context" = "Los datos de familia aún no están disponibles. Inténtalo de nuevo en un momento.";
+"error.lifetime_stats_no_context" = "Las estadísticas aún no están disponibles. Inténtalo de nuevo en un momento.";
+
+"xp.row.detail.pending_resolution" = "Resolución competitiva pendiente";
+"xp.row.pill.pending" = "+%d XP pendientes";
+"xp.row.pill.final" = "+%d XP";
+"xp.row.detail.final_award" = "Premio final: +%d XP";
+"xp.row.a11y.pending_competitive" = "Resolución competitiva pendiente";
+"xp.pending.badge.short" = "Pendiente";
+"xp.pending.badge.a11y" = "Resolución competitiva pendiente";
+"xp.discovery.badge.accepted_late" = "Otro jugador lo encontró un poco antes — premio final: +4 XP";
+"xp.discovery.badge.adjusted_after_sync" = "Ajustado tras sincronizar (puntuación final en la clasificación).";
+
+"profile.xp.section_title" = "XP y progreso";
+"profile.xp.server_total" = "XP sincronizada (cuenta)";
+"profile.xp.server_total_loading" = "La XP sincronizada aparecerá cuando estés en línea.";
+"profile.xp.local_fallback_total" = "XP actual en este dispositivo";
+"profile.xp.local_fallback_note" = "La XP sincronizada aún no está disponible, así que esto incluye el progreso local pendiente.";
+"profile.xp.pending_ledger_line" = "En este dispositivo: +%d XP aún pendientes de resolución competitiva.";
+"profile.xp.pending_section.a11y" = "XP competitiva pendiente en este dispositivo";
+"profile.xp.rank_band_title" = "Progreso en la banda actual (visual)";
+"profile.xp.rank_band.a11y" = "Progreso visual en la banda de XP actual";
+"profile.xp.rank_band.a11y.value" = "%d XP sincronizados, %d pendientes en el dispositivo";
+"profile.xp.pending_overlay_caption" = "La barra amarilla es solo pendiente: no desbloquea recompensas hasta sincronizar.";
+
+"tripSummary.xp_recap.title" = "XP y ajustes";
+"tripSummary.xp_recap.subtitle" = "Desde el libro mayor del viaje en este dispositivo.";
+"tripSummary.xp_recap.state.provisional" = "Pendiente";
+"tripSummary.xp_recap.state.final" = "Final";
+
+"finder.a11y.single" = "Encontrado por %@";
+"finder.a11y.ordered_list" = "Orden de hallazgo: %@";
+"finder.stack.accessibility.default" = "Avatares de personas que lo encontraron";
+"finder.popover.title" = "Orden de hallazgo para %@";
+"finder.popover.subtitle" = "La primera persona aparece primero.";
+"finder.popover.row_title" = "%d. %@";
+"finder.popover.row_a11y" = "Persona %d, %@, encontrado a las %@";
+"finder.stack.accessibility.overflow" = "Y %d personas más";
+
+"game.progression.section_summary" = "Cuenta y XP";
+"game.progression.server_xp" = "XP en servidor (Firestore)";
+"game.progression.value_none" = "— (sin documento)";
+"game.progression.last_server_update" = "Última actualización del servidor";
+"game.progression.value_emdash" = "—";
+"game.progression.account_progression_caption" = "Últimos totales de Firestore más actividad del viaje aún no aplicada en el servidor (`UserProgressionService`). Sin conexión, la parte del servidor es la última instantánea que tuvo este dispositivo (o cero si no hay).";
+"game.progression.account_progression_xp" = "XP de cuenta (progresión en el cliente)";
+"game.progression.account_rank_preview_xp" = "Vista previa de rango (servidor + provisional del libro)";
+"game.progression.account_rank_preview_caption" = "Coincide con la franja del perfil (`ProjectedRankProgressView`). Solo visual; no es la misma fórmula que la XP de progresión de arriba.";
+"game.progression.value_unavailable" = "—";
+"game.progression.global_pending_xp" = "XP global pendiente (vs servidor)";
+"game.progression.hint_local_pending" = "Al menos un evento local aún no está en el conjunto aplicado del servidor.";
+"game.progression.section_local_engine" = "Este viaje — motor local";
+"game.progression.local_engine_trip_caption" = "Se aplica a eventos de este viaje aún no listados en la progresión del servidor.";
+"game.progression.trip_pending_xp" = "XP pendiente (este viaje)";
+"game.progression.trip_pending_finds" = "Hallazgos de región pendientes (este viaje)";
+"game.progression.trip_pending_first_places" = "Primeros lugares pendientes (este viaje)";
+"game.progression.ever_competitive_first" = "Pendiente: algún 1.º lugar (este viaje)";
+"game.progression.bool_yes" = "Sí";
+"game.progression.bool_no" = "No";
+"game.progression.section_ledger_projection" = "Proyección del libro local (dispositivo)";
+"game.progression.local_ledger_caption" = "Basado en el libro XP append-only de este dispositivo (ver lista abajo).";
+"game.progression.local_total_xp_game" = "XP neto (este juego, libro)";
+"game.progression.local_provisional_xp_game" = "XP provisional (este juego)";
+"game.progression.local_provisional_rows_game" = "Filas provisionales (este juego)";
+"game.progression.local_provisional_xp_session" = "XP provisional (sesión, todos los juegos)";
+"game.progression.section_ledger_summary" = "Libro mayor (este juego)";
+"game.progression.most_recent_delta" = "Delta más reciente (este juego)";
+"game.progression.most_recent_reason" = "Código de motivo más reciente";
+"game.progression.no_ledger_game" = "Aún no hay líneas del libro XP para este juego en este dispositivo.";
+"game.progression.net_ledger_xp_game" = "XP neto del libro (este juego)";
+"game.progression.net_ledger_xp_session" = "XP neto del libro (sesión completa)";
+"game.progression.section_scoring" = "Puntuación (este juego)";
+"game.progression.scoring_sub" = "%d primeros hallazgos · %d descubrimientos (todos)";
+"game.progression.ledger_list_title" = "Libro XP de la sesión (más reciente primero)";
+"game.progression.ledger_line_meta" = "%@ · %@";
+"game.progression.ledger_line_ids" = "Fila %@ · origen %@";
+"game.progression.ledger_badge_game" = "Este juego";
+"Sponsored message" = "Mensaje patrocinado";
+"Ready to keep playing?" = "¿Listo para seguir jugando?";
+"Your trip %@ is waiting for more plate finds." = "Tu viaje %@ espera más placas encontradas.";

@@ -7,7 +7,21 @@ export { createShareCode, redeemShareCode } from "./shareCodes";
 export {
   sendFriendInvite,
   respondToFriendInvite,
+  removeFriend,
 } from "./friends";
+export {
+  sendTripInvite,
+  respondToTripInvite,
+  cancelTripInvite,
+} from "./tripInvites";
+export {
+  publishTripCanonicalState,
+  appendTripActivityEvent,
+  fetchTripBootstrapForMember,
+  markTripCancelledRemote,
+  updateFairnessAckWatermark,
+  removeTripParticipantAsOwner,
+} from "./tripSessionCanonical";
 export {
   createFamily,
   sendFamilyInvite,
@@ -20,4 +34,7 @@ export {
 export { expireInvitesAndCodes } from "./expiration";
 export { onAuthUserDeleted } from "./auth";
 export { writeAuditLog } from "./audit";
+export { onTripEndedUpdatePublicLifetimeStats } from "./publicLifetimeStatsOnTripEnded";
+export { onActivityEventUpdateUserProgression } from "./progressionOnActivityEvent";
+export { ensureUserProgressionDocument } from "./progressionBootstrap";
 

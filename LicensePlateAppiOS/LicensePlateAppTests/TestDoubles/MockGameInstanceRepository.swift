@@ -28,9 +28,65 @@ final class MockGameInstanceRepository: GameInstanceRepositoryProtocol {
         bySession[instance.sessionId] = list
     }
 
+    func upsert(instance: GameInstance) throws {
+        if shouldThrow { throw NSError(domain: "MockGameInstanceRepository", code: -1, userInfo: nil) }
+        if instances[instance.id] != nil {
+            try update(instance: instance)
+        } else {
+            try create(instance: instance)
+        }
+    }
+
+    func replaceGamesForSession(sessionId: UUID, instances newInstances: [GameInstance]) throws {
+        if shouldThrow { throw NSError(domain: "MockGameInstanceRepository", code: -1, userInfo: nil) }
+        let prior = (bySession[sessionId] ?? []).reduce(into: [UUID: Date]()) { dict, g in
+            if let w = g.fairnessUiLastAckAt { dict[g.id] = w }
+        }
+        try deleteForSession(sessionId: sessionId)
+        for var instance in newInstances {
+            if let w = prior[instance.id] {
+                if let inc = instance.fairnessUiLastAckAt {
+                    instance.fairnessUiLastAckAt = max(w, inc)
+                } else {
+                    instance.fairnessUiLastAckAt = w
+                }
+            }
+            try create(instance: instance)
+        }
+    }
+
     func fetchByTripSession(sessionId: UUID) throws -> [GameInstance] {
         if shouldThrow { throw NSError(domain: "MockGameInstanceRepository", code: -1, userInfo: nil) }
         return bySession[sessionId] ?? []
+    }
+
+    func gameCount(sessionId: UUID) throws -> Int {
+        if shouldThrow { throw NSError(domain: "MockGameInstanceRepository", code: -1, userInfo: nil) }
+        return (bySession[sessionId] ?? []).count
+    }
+
+    func deleteForSession(sessionId: UUID) throws {
+        if shouldThrow { throw NSError(domain: "MockGameInstanceRepository", code: -1, userInfo: nil) }
+        guard let list = bySession[sessionId] else { return }
+        for instance in list {
+            instances.removeValue(forKey: instance.id)
+        }
+        bySession.removeValue(forKey: sessionId)
+    }
+
+    func delete(instanceId: UUID) throws {
+        if shouldThrow { throw NSError(domain: "MockGameInstanceRepository", code: -1, userInfo: nil) }
+        guard let inst = instances.removeValue(forKey: instanceId) else {
+            throw GameInstanceRepositoryError.instanceNotFound(instanceId)
+        }
+        if var list = bySession[inst.sessionId] {
+            list.removeAll { $0.id == instanceId }
+            if list.isEmpty {
+                bySession.removeValue(forKey: inst.sessionId)
+            } else {
+                bySession[inst.sessionId] = list
+            }
+        }
     }
 
     func update(instance: GameInstance) throws {

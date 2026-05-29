@@ -10,6 +10,29 @@ import Foundation
 
 enum TripSummaryBuilder {
 
+    /// Per-game credits for trip-wide summary / Travel Log / trip dashboard — same rules as `DiscoveryRulesEngine.creditsForDiscoveries` per `GameInstance`.
+    static func creditsForTripSummary(games: [GameInstance], discoveries: [GameDiscovery]) -> [GameCredit] {
+        var allCredits: [GameCredit] = []
+        allCredits.reserveCapacity(discoveries.count)
+        for game in games {
+            let gameDiscoveries = discoveries.filter { $0.gameInstanceId == game.id }
+            let discoveriesByTarget = Dictionary(grouping: gameDiscoveries, by: \.targetId)
+            let gameCredits = DiscoveryRulesEngine.creditsForDiscoveries(
+                mode: game.commonConfig.gameMode,
+                discoveriesByTarget: discoveriesByTarget,
+                teams: game.teams
+            )
+            allCredits.append(contentsOf: gameCredits)
+        }
+        return allCredits
+    }
+
+    /// Build summary by deriving credits from discoveries (Travel Log and trip dashboard entry point).
+    static func build(session: TripSession, games: [GameInstance], discoveries: [GameDiscovery]) -> TripSummary {
+        let credits = creditsForTripSummary(games: games, discoveries: discoveries)
+        return build(session: session, games: games, discoveries: discoveries, credits: credits)
+    }
+
     /// Build a rich summary for a completed trip. Use discoveries and credits from TripActivityEventRepository (and computed credits).
     static func build(
         session: TripSession,
@@ -20,6 +43,7 @@ enum TripSummaryBuilder {
         let participantCount = session.participants.count
         let gameCount = games.count
         let totalDiscoveryCount = discoveries.count
+        let gameModeByInstanceId = Dictionary(uniqueKeysWithValues: games.map { ($0.id, $0.commonConfig.gameMode) })
 
         var gameItems: [TripSummaryGameItem] = []
         for game in games {
@@ -29,7 +53,8 @@ enum TripSummaryBuilder {
             }
             let projection = DiscoveryCreditProjectionService.project(
                 discoveries: gameDiscoveries,
-                credits: gameCredits.isEmpty ? nil : gameCredits
+                credits: gameCredits.isEmpty ? nil : gameCredits,
+                gameModeByInstanceId: gameModeByInstanceId
             )
             let (completionGoal, progressDescription) = Self.progressFromGame(game, discoveryCount: gameDiscoveries.count)
             gameItems.append(TripSummaryGameItem(
@@ -40,23 +65,32 @@ enum TripSummaryBuilder {
                 endedAt: game.endedAt,
                 firstDiscoveries: projection.targetSummaries,
                 completionGoal: completionGoal,
-                progressDescription: progressDescription
+                progressDescription: progressDescription,
+                gameMode: game.commonConfig.gameMode,
+                teamSummary: Self.teamSummary(for: game.teams)
             ))
         }
 
-        let participantContributions = ParticipantContributionBuilder.contributionSummary(
+        let rawContributions = ParticipantContributionBuilder.contributionSummary(
             discoveries: discoveries,
             credits: credits
         )
+        let mergedContributions = TripRosterContributionMerge.merge(
+            roster: session.participants,
+            contributions: rawContributions
+        )
+        let rankedParticipants = TripParticipantRanking.rankContributions(mergedContributions)
 
         let discoveryProjection: DiscoveryCreditProjection? = discoveries.isEmpty ? nil : DiscoveryCreditProjectionService.project(
             discoveries: discoveries,
-            credits: credits.isEmpty ? nil : credits
+            credits: credits.isEmpty ? nil : credits,
+            gameModeByInstanceId: gameModeByInstanceId
         )
 
         return TripSummary(
             sessionId: session.id,
             tripName: session.name,
+            tripMode: session.mode,
             status: session.status,
             endedAt: session.endedAt,
             startedAt: session.startedAt,
@@ -64,26 +98,43 @@ enum TripSummaryBuilder {
             gameCount: gameCount,
             totalDiscoveryCount: totalDiscoveryCount,
             games: gameItems,
-            participantContributions: participantContributions,
+            rankedParticipants: rankedParticipants,
             discoveryProjection: discoveryProjection,
             locationMetadata: nil
         )
+    }
+
+    /// Non-empty teams → short summary for UI; nil when no teams.
+    private static func teamSummary(for teams: [TripTeam]) -> String? {
+        guard !teams.isEmpty else { return nil }
+        if teams.count == 1 {
+            let name = teams[0].name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? "1 team".localized : name
+        }
+        return "%d teams".localized(teams.count)
     }
 
     /// Step 07.5 — Derive completion goal and progress description from game config (license plate only).
     private static func progressFromGame(_ game: GameInstance, discoveryCount: Int) -> (Int?, String?) {
         guard let lpConfig = game.licensePlateConfig() else { return (nil, nil) }
         let goal = LicensePlateScopeCalculator.completionGoal(for: lpConfig)
-        let label = progressLabel(for: lpConfig.regionScope)
+        let label = progressLabel(for: lpConfig.selectedCountries)
         return (goal, "\(discoveryCount) / \(goal) \(label)")
     }
 
-    private static func progressLabel(for scope: RegionScope) -> String {
-        switch scope {
-        case .usOnly: return "US regions"
-        case .canadaOnly: return "Canadian regions"
-        case .mexicoOnly: return "Mexican regions"
-        case .northAmerica: return "North American regions"
+    private static func progressLabel(for countries: [PlateRegion.Country]) -> String {
+        let set = Set(countries)
+        if set == [.unitedStates] { return "US regions" }
+        if set == [.canada] { return "Canadian regions" }
+        if set == [.mexico] { return "Mexican regions" }
+        if set == [.unitedStates, .canada, .mexico] { return "North American regions" }
+        let names = countries.map { country in
+            switch country {
+            case .unitedStates: return "US"
+            case .canada: return "Canada"
+            case .mexico: return "Mexico"
+            }
         }
+        return "\(names.joined(separator: " + ")) regions"
     }
 }

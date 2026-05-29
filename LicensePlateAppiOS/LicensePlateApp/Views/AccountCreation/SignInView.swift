@@ -76,10 +76,7 @@ struct SignInView: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 ScrollView {
                     VStack(spacing: 24) {
                         // Header

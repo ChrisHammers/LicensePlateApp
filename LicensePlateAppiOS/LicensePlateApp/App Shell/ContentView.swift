@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import Combine
 import CoreLocation
 import AVFoundation
 import UserNotifications
@@ -15,7 +16,7 @@ import Speech
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    @State private var path: [UUID] = []
+    @StateObject private var mainCoordinator = MainCoordinator()
     @StateObject private var activeTripsListViewModel = ActiveTripsListViewModel(
         tripSessionRepository: TripSessionRepository.shared,
         tripActivityEventRepository: TripActivityEventRepository.shared,
@@ -30,6 +31,7 @@ struct ContentView: View {
         tripInviteRepository: TripInviteRepository.shared,
         authService: FirebaseAuthService()
     )
+    @StateObject private var tripLimitPaywallViewModel = PaywallViewModel()
     @StateObject private var travelLogViewModel = TravelLogViewModel(
         travelLogRepository: TravelLogRepository.shared,
         tripSessionRepository: TripSessionRepository.shared,
@@ -80,181 +82,9 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             if boundariesLoaded {
-              NavigationStack(path: $path) {
-                AppBackgroundView {
-                  List {
-                    Section {
-                        header
-                            .listRowInsets(.init(top: 24, leading: 20, bottom: 24, trailing: 20))
-                            .listRowBackground(Color.clear)
-                    }
-                    .textCase(nil)
-
-                    // 1. Active Trips (session-based)
-                    if activeTripsListViewModel.items.isEmpty {
-                        Section("Active Trips".localized) {
-                            activeTripEmptyCard
-                                .listRowInsets(.init(top: 0, leading: 20, bottom: 24, trailing: 20))
-                                .listRowBackground(Color.clear)
-                        }
-                        .textCase(nil)
-                    } else {
-                        Section("Active Trips".localized) {
-                            activeSessionList
-                        }
-                        .textCase(nil)
-                        .listRowBackground(Color.clear)
-                    }
-
-                    // 2. Pending Invites
-                    Section("Pending Invites".localized) {
-                        if pendingTripsViewModel.incomingInvites.isEmpty && pendingTripsViewModel.outgoingInvites.isEmpty {
-                            pendingInvitesEmptyCard
-                        } else {
-                            ForEach(pendingTripsViewModel.incomingInvites, id: \.inviteId) { invite in
-                                PendingInviteCard(
-                                    invite: invite,
-                                    isIncoming: true,
-                                    onAccept: { pendingTripsViewModel.accept(invite: invite) },
-                                    onDecline: { pendingTripsViewModel.decline(invite: invite) },
-                                    onCancel: nil
-                                )
-                                .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
-                                .listRowBackground(Color.clear)
-                            }
-                            ForEach(pendingTripsViewModel.outgoingInvites, id: \.inviteId) { invite in
-                                PendingInviteCard(
-                                    invite: invite,
-                                    isIncoming: false,
-                                    onAccept: nil,
-                                    onDecline: nil,
-                                    onCancel: (invite.statusEnum == .sent || invite.statusEnum == .pending) ? { pendingTripsViewModel.cancel(invite: invite) } : nil
-                                )
-                                .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
-                                .listRowBackground(Color.clear)
-                            }
-                        }
-                    }
-                    .textCase(nil)
-                    .listRowBackground(Color.clear)
-                  }
-                  .scrollContentBackground(.hidden)
-                  .listStyle(.insetGrouped)
-                }
-                .navigationTitle("RoadTrip Royale")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                      Button {
-                        isShowingTravelLog = true
-                      } label: {
-                        Image(systemName: "map.fill")
-                          .foregroundStyle(Color.Theme.primaryBlue)
-                      }
-                      .accessibilityLabel("Travel Log Invites".localized)
-                      .accessibilityHint("Review old Trips".localized)
-                    }
-                    ToolbarItem(placement: .topBarTrailing) {
-                      Button {
-                        isShowingSettings = true
-                      } label: {
-                        Image(systemName: "gearshape.fill")
-                          .foregroundStyle(Color.Theme.primaryBlue)
-                      }
-                      .accessibilityLabel("Settings".localized)
-                      .accessibilityHint("Opens app settings".localized)
-                    }
-                }
-                .sheet(isPresented: $isShowingSettings) {
-                  DefaultSettingsView()
-                    .environmentObject(authService)
-                }
-                .sheet(isPresented: $isShowingTravelLog) {
-                  TravelLogView(viewModel: travelLogViewModel)
-                    .environmentObject(authService)
-                }
-                .task {
-                  // Initialize authentication state (checks Firebase Auth first, then local)
-                  await authService.initializeAuthState(modelContext: modelContext)
-                  
-                  // Initialize repositories after authentication
-                  FriendshipRepository.shared.setModelContext(modelContext)
-                  InviteRepository.shared.setModelContext(modelContext)
-                  FamilyRepository.shared.setModelContext(modelContext)
-                  UserRepository.shared.setModelContext(modelContext)
-                  TripSessionRepository.shared.setModelContext(modelContext)
-                  GameInstanceRepository.shared.setModelContext(modelContext)
-                  TravelLogRepository.shared.setModelContext(modelContext)
-                  TripActivityEventRepository.shared.setModelContext(modelContext)
-                  TripInviteRepository.shared.setModelContext(modelContext)
-                  EntitlementService.shared.setModelContext(modelContext)
-                  
-                  // Start listening if user is authenticated
-                  if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {
-                      FriendshipRepository.shared.startListening(userId: userId)
-                      InviteRepository.shared.startListening(userId: userId)
-                  }
-                  pendingTripsViewModel.loadIfNeeded()
-                  activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
-                }
-                .onAppear {
-                  pendingTripsViewModel.setAuthService(authService)
-                  travelLogViewModel.setAuthService(authService)
-                  NotificationRoutingService.shared.startObservingIfNeeded(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
-                }
-                .overlay {
-                  if authService.showUsernameConflictDialog {
-                    UsernameConflictDialog(authService: authService)
-                  }
-                }
-                .overlay(alignment: .bottomTrailing) {
-                  addTripButton
-                }
-                .sheet(isPresented: $isShowingCreateSheet) {
-                    CombinedTripSetupView(
-                        viewModel: CombinedTripSetupViewModel(
-                            tripSessionRepository: TripSessionRepository.shared,
-                            gameInstanceRepository: GameInstanceRepository.shared,
-                            authService: authService
-                        ),
-                        onCreated: { session in
-                            path.append(session.id)
-                            isShowingCreateSheet = false
-                            activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
-                        }
-                    )
-                    .presentationDetents([smallDetent, .medium, .large], selection: $sheetDetent)
-                    .presentationDragIndicator(.visible)
-                    .onAppear {
-                        sheetDetent = smallDetent
-                    }
-                }
-                .onChange(of: isShowingCreateSheet) { _, isShowing in
-                    if !isShowing { activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id) }
-                }
-                .alert("Error".localized, isPresented: Binding(
-                    get: { activeTripsListViewModel.errorMessage != nil },
-                    set: { if !$0 { activeTripsListViewModel.clearError() } }
-                )) {
-                    Button("OK".localized, role: .cancel) { activeTripsListViewModel.clearError() }
-                    Button("Retry".localized) {
-                        AnalyticsService.shared.log(.persistenceRetryTapped(context: "active_list_delete"))
-                        activeTripsListViewModel.retryLastDelete()
-                    }
-                } message: {
-                    if let msg = activeTripsListViewModel.errorMessage {
-                        Text(msg)
-                    }
-                }
-                .navigationDestination(for: UUID.self) { sessionID in
-                    if let (session, primaryGame) = activeTripsListViewModel.sessionAndPrimaryGame(for: sessionID) {
-                        TripTrackerView(session: session, primaryGame: primaryGame, authService: authService)
-                    } else {
-                        TripMissingView()
-                    }
-                }
-              }
-                .transition(.opacity)
+              mainHomeNavigationStack
+              .environmentObject(mainCoordinator)
+              .transition(.opacity)
             } else {
                 SplashScreenView()
                     .transition(.opacity)
@@ -278,6 +108,250 @@ struct ContentView: View {
         .onChange(of: appPlaySoundEffects) { _, newValue in
             FeedbackService.shared.updatePreferences(hapticEnabled: appUseVibrations, soundEnabled: newValue)
         }
+    }
+
+    /// Split from `body` so the Swift compiler can type-check the main scene in reasonable time.
+    private var mainHomeNavigationStack: some View {
+        NavigationStack(path: $mainCoordinator.path) {
+            AppBackgroundView {
+                homeTripAndInvitesList
+            }
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 2) {
+                        Text("RoadTrip Royale")
+                            .font(.system(.headline, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                        if let user = authService.currentUser {
+                            Text(user.displayName)
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel({
+                        let title = "RoadTrip Royale".localized
+                        if let user = authService.currentUser {
+                            return "\(title), \(user.displayName)"
+                        }
+                        return title
+                    }())
+                }
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        isShowingTravelLog = true
+                    } label: {
+                        Image(systemName: "map.fill")
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    .accessibilityLabel("Travel Log".localized)
+                    .accessibilityHint("Review old Trips".localized)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        isShowingSettings = true
+                    } label: {
+                        if let user = authService.currentUser {
+                            AvatarView(user: user, size: 34, showRing: true)
+                        } else {
+                            Image(systemName: "person.crop.circle")
+                                .font(.system(size: 28))
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                        }
+                    }
+                    .accessibilityLabel("Settings".localized)
+                    .accessibilityHint("Opens app settings".localized)
+                }
+            }
+            .sheet(isPresented: $isShowingSettings) {
+                DefaultSettingsView()
+                    .environmentObject(authService)
+            }
+            .sheet(isPresented: $isShowingTravelLog) {
+                TravelLogView(viewModel: travelLogViewModel)
+                    .environmentObject(authService)
+            }
+            .task {
+                await authService.initializeAuthState(modelContext: modelContext)
+
+                FriendshipRepository.shared.setModelContext(modelContext)
+                InviteRepository.shared.setModelContext(modelContext)
+                FamilyRepository.shared.setModelContext(modelContext)
+                UserRepository.shared.setModelContext(modelContext)
+                TripSessionRepository.shared.setModelContext(modelContext)
+                GameInstanceRepository.shared.setModelContext(modelContext)
+                TravelLogRepository.shared.setModelContext(modelContext)
+                TripActivityEventRepository.shared.setModelContext(modelContext)
+                TripInviteRepository.shared.setModelContext(modelContext)
+                EntitlementService.shared.setModelContext(modelContext)
+
+                pendingTripsViewModel.setAuthService(authService)
+                if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {
+                    FriendshipRepository.shared.startListening(userId: userId)
+                    InviteRepository.shared.startListening(userId: userId)
+                }
+                pendingTripsViewModel.loadIfNeeded()
+                activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
+                ReturnStreakService.shared.recordAppReturnIfNeeded()
+                for item in activeTripsListViewModel.items where item.session.status == .active {
+                    await ReminderNotificationService.shared.scheduleInactiveActiveTripReminder(
+                        sessionId: item.session.id,
+                        tripName: item.session.name
+                    )
+                }
+            }
+            .onReceive(TripCanonicalRemoteSyncService.shared.hydrationSignal) { _ in
+                activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
+            }
+            .onAppear {
+                pendingTripsViewModel.setAuthService(authService)
+                travelLogViewModel.setAuthService(authService)
+                NotificationRoutingService.shared.startObservingIfNeeded(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
+            }
+            .overlay {
+                if authService.showUsernameConflictDialog {
+                    UsernameConflictDialog(authService: authService)
+                }
+            }
+            .overlay(alignment: .bottomTrailing) {
+                addTripButton
+            }
+            .sheet(isPresented: $isShowingCreateSheet) {
+                CombinedTripSetupView(
+                    viewModel: CombinedTripSetupViewModel(
+                        tripSessionRepository: TripSessionRepository.shared,
+                        gameInstanceRepository: GameInstanceRepository.shared,
+                        authService: authService
+                    ),
+                    onCreated: { session in
+                        mainCoordinator.openSession(session.id)
+                        isShowingCreateSheet = false
+                        activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
+                    }
+                )
+                .presentationDetents([smallDetent, .medium, .large], selection: $sheetDetent)
+                .presentationDragIndicator(.visible)
+                .onAppear {
+                    sheetDetent = smallDetent
+                }
+            }
+            .onChange(of: isShowingCreateSheet) { _, isShowing in
+                if !isShowing { activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id) }
+            }
+            .sheet(isPresented: Binding(
+                get: { pendingTripsViewModel.shouldPresentTripLimitPaywall },
+                set: { if !$0 { pendingTripsViewModel.dismissTripLimitPaywall() } }
+            )) {
+                PaywallView(
+                    viewModel: tripLimitPaywallViewModel,
+                    onDismiss: { pendingTripsViewModel.dismissTripLimitPaywall() },
+                    source: TripLimitGateSource.inviteAccept.rawValue
+                )
+                .onAppear {
+                    tripLimitPaywallViewModel.setTripLimitContext()
+                }
+            }
+            .alert("Error".localized, isPresented: Binding(
+                get: { activeTripsListViewModel.errorMessage != nil },
+                set: { if !$0 { activeTripsListViewModel.clearError() } }
+            )) {
+                Button("OK".localized, role: .cancel) { activeTripsListViewModel.clearError() }
+                Button("Retry".localized) {
+                    AnalyticsService.shared.log(.persistenceRetryTapped(context: "active_list_delete"))
+                    activeTripsListViewModel.retryLastDelete()
+                }
+            } message: {
+                if let msg = activeTripsListViewModel.errorMessage {
+                    Text(msg)
+                }
+            }
+            .navigationDestination(for: MainCoordinator.MainRoute.self) { route in
+                switch route {
+                case .session(let sessionId):
+                    if activeTripsListViewModel.session(for: sessionId) != nil {
+                        TripSessionView(sessionId: sessionId)
+                    } else {
+                        TripMissingView()
+                    }
+                case .game(let sessionId, let gameId):
+                    if let (session, game) = activeTripsListViewModel.sessionAndGame(sessionId: sessionId, gameId: gameId) {
+                        LicensePlateGameView(session: session, game: game, authService: authService)
+                    } else {
+                        TripMissingView()
+                    }
+                }
+            }
+        }
+    }
+
+    private var homeTripAndInvitesList: some View {
+        List {
+            Section {
+                header
+                    .listRowInsets(.init(top: 24, leading: 20, bottom: 24, trailing: 20))
+                    .listRowBackground(Color.clear)
+            }
+            .textCase(nil)
+
+            if activeTripsListViewModel.items.isEmpty {
+                Section {
+                    activeTripEmptyCard
+                        .listRowInsets(.init(top: 0, leading: 20, bottom: 24, trailing: 20))
+                        .listRowBackground(Color.clear)
+                } header: {
+                    Text("Active Trips".localized)
+                } footer: {
+                    activeTripsPendingLeaveFooter
+                }
+                .textCase(nil)
+            } else {
+                Section {
+                    activeSessionList
+                } header: {
+                    Text("Active Trips".localized)
+                } footer: {
+                    activeTripsPendingLeaveFooter
+                }
+                .textCase(nil)
+                .listRowBackground(Color.clear)
+            }
+
+            Section {
+                if let inviteError = pendingTripsViewModel.errorMessage, !inviteError.isEmpty {
+                    Text(inviteError)
+                        .font(.system(.footnote, design: .rounded))
+                        .foregroundStyle(.red)
+                        .accessibilityLabel(inviteError)
+                }
+                if pendingTripsViewModel.incomingInvites.isEmpty {
+                    pendingInvitesEmptyCard
+                } else {
+                    ForEach(pendingTripsViewModel.incomingInvites, id: \.inviteId) { invite in
+                        PendingInviteCard(
+                            invite: invite,
+                            snapshot: pendingTripsViewModel.displaySnapshot(for: invite, isIncoming: true),
+                            isIncoming: true,
+                            onAccept: { pendingTripsViewModel.accept(invite: invite) },
+                            onDecline: { pendingTripsViewModel.decline(invite: invite) },
+                            onCancel: nil
+                        )
+                        .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
+                        .listRowBackground(Color.clear)
+                    }
+                }
+            } header: {
+                Text("Pending Invites".localized)
+            }
+            .textCase(nil)
+            .listRowBackground(Color.clear)
+        }
+        .scrollContentBackground(.hidden)
+        .listStyle(.insetGrouped)
     }
 
     private var header: some View {
@@ -328,6 +402,17 @@ struct ContentView: View {
         .accessibilityLabel("No active trips. Time you get on the open road.".localized)
     }
 
+    @ViewBuilder
+    private var activeTripsPendingLeaveFooter: some View {
+        if let hint = activeTripsListViewModel.pendingLeaveSyncHint {
+            Text(hint)
+                .font(.system(.footnote, design: .rounded))
+                .foregroundStyle(Color.secondary)
+                .padding(.top, 4)
+                .accessibilityLabel(hint)
+        }
+    }
+
     private var pendingInvitesEmptyCard: some View {
         VStack(spacing: 12) {
             Image(systemName: "envelope.fill")
@@ -339,7 +424,7 @@ struct ContentView: View {
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue)
             
-            Text("When someone invites you to a trip, or you invite others, they will appear here.".localized)
+            Text("When someone invites you to a trip, it will appear here.".localized)
                 .multilineTextAlignment(.center)
                 .font(.system(.footnote, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
@@ -354,18 +439,27 @@ struct ContentView: View {
         )
         .listRowInsets(EdgeInsets(top: 6, leading: 20, bottom: 6, trailing: 20))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("No pending invites. When someone invites you to a trip, or you invite others, they will appear here.".localized)
+        .accessibilityLabel("No pending invites. When someone invites you to a trip, it will appear here.".localized)
     }
 
     private var activeSessionList: some View {
         ForEach(activeTripsListViewModel.items) { item in
-            NavigationLink(value: item.session.id) {
-                TripSessionRow(session: item.session, plateCount: item.plateCount)
+            let pendingOutgoingInviteCount = outgoingPendingInviteCount(for: item.session.id)
+            Button {
+                FeedbackService.shared.buttonTap()
+                mainCoordinator.openSession(item.session.id)
+            } label: {
+                TripSessionRow(
+                    session: item.session,
+                    rollup: item.rollup,
+                    pendingOutgoingInviteCount: pendingOutgoingInviteCount
+                )
                     .padding(.vertical, 8)
             }
+            .buttonStyle(.plain)
             .listRowInsets(.init(top: 6, leading: 20, bottom: 6, trailing: 20))
             .listRowBackground(Color.clear)
-            .accessibilityLabel("Trip: %@".localized(item.session.name))
+            .accessibilityLabel(activeTripAccessibilityLabel(for: item.session, pendingOutgoingInviteCount: pendingOutgoingInviteCount))
             .accessibilityHint("Double tap to open trip".localized)
         }
         .onDelete { offsets in
@@ -377,6 +471,23 @@ struct ContentView: View {
                 FeedbackService.shared.actionError()
             }
         }
+    }
+
+    private func outgoingPendingInviteCount(for sessionId: UUID) -> Int {
+        pendingTripsViewModel.outgoingInvites.filter { invite in
+            UUID(uuidString: invite.tripSessionId) == sessionId
+                && (invite.statusEnum == .pending || invite.statusEnum == .sent)
+        }.count
+    }
+
+    private func activeTripAccessibilityLabel(for session: TripSession, pendingOutgoingInviteCount: Int) -> String {
+        guard pendingOutgoingInviteCount > 0 else {
+            return "Trip: %@".localized(session.name)
+        }
+        let pendingLine = pendingOutgoingInviteCount == 1
+            ? "1 outgoing invite pending".localized
+            : "%d outgoing invites pending".localized(pendingOutgoingInviteCount)
+        return ["Trip: %@".localized(session.name), pendingLine].joined(separator: ". ")
     }
 
     private var addTripButton: some View {
@@ -410,7 +521,7 @@ struct ContentView: View {
 
     @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
     @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
-    @AppStorage("defaultStartTripRightAway") private var defaultStartTripRightAway = false
+    @AppStorage("defaultStartTripRightAway") private var defaultStartTripRightAway = true
     @AppStorage("defaultIncludeUS") private var defaultIncludeUS = true
     @AppStorage("defaultIncludeCanada") private var defaultIncludeCanada = true
     @AppStorage("defaultIncludeMexico") private var defaultIncludeMexico = true
@@ -421,35 +532,9 @@ struct ContentView: View {
     @AppStorage("defaultShowMyActiveTripOnSmallMap") private var defaultShowMyActiveTripOnSmallMap = true
 }
 
-private struct CountryCheckboxRow: View {
-    let title: String
-    @Binding var isOn: Bool
-    
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.system(.body, design: .rounded))
-                .foregroundStyle(Color.Theme.primaryBlue)
-            
-            Spacer()
-            
-            Toggle("", isOn: $isOn)
-                .tint(Color.Theme.primaryBlue)
-                .labelsHidden()
-        }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.Theme.cardBackground)
-        )
-        .accessibilityLabel(title)
-        .accessibilityValue(isOn ? "On".localized : "Off".localized)
-    }
-}
-
 private struct PendingInviteCard: View {
     let invite: TripInvite
+    let snapshot: InviteDisplaySnapshot
     let isIncoming: Bool
     let onAccept: (() -> Void)?
     let onDecline: (() -> Void)?
@@ -473,14 +558,15 @@ private struct PendingInviteCard: View {
                 .background(Color.Theme.softBrown.opacity(0.2))
                 .accessibilityHidden(true)
 
-            HStack {
-                Label("Inviter: %@".localized(invite.fromUserId), systemImage: "person")
+            VStack(alignment: .leading, spacing: 6) {
+                Label(snapshot.counterpartyLine, systemImage: "person")
                     .font(.system(.footnote, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
-                Spacer()
-                Text("Mode: %@".localized(invite.tripMode))
-                    .font(.system(.footnote, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
+                if let games = snapshot.gamesOnTripLine {
+                    Text(games)
+                        .font(.system(.footnote, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                }
             }
 
             if isIncoming, invite.statusEnum == .pending {
@@ -532,29 +618,6 @@ private struct PendingInviteCard: View {
     }
 }
 
-private struct TripMissingView: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(Color.Theme.accentYellow)
-                .accessibilityHidden(true)
-            Text("Trip Unavailable")
-                .font(.system(.title2, design: .rounded))
-                .fontWeight(.semibold)
-                .foregroundStyle(Color.Theme.primaryBlue)
-            Text("We could not find the trip you were looking for.")
-                .font(.system(.body, design: .rounded))
-                .foregroundStyle(Color.Theme.softBrown)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.Theme.background)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Trip Unavailable. We could not find the trip you were looking for.")
-    }
-}
-
 // App Preferences enums are now in Core/AppPreferences.swift
 
 // Default Settings View for new trips
@@ -565,7 +628,7 @@ struct DefaultSettingsView: View {
     @Environment(\.colorScheme) private var systemColorScheme
     @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
     @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
-    @AppStorage("defaultStartTripRightAway") private var defaultStartTripRightAway = false
+    @AppStorage("defaultStartTripRightAway") private var defaultStartTripRightAway = true
     @AppStorage("defaultIncludeUS") private var defaultIncludeUS = true
     @AppStorage("defaultIncludeCanada") private var defaultIncludeCanada = true
     @AppStorage("defaultIncludeMexico") private var defaultIncludeMexico = true
@@ -641,10 +704,7 @@ struct DefaultSettingsView: View {
     
     var body: some View {
       NavigationStack(path: $coordinator.path) { //NavigationStack(path: Binding(get: { coordinator.path }, set: { coordinator.path = $0 })) {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 List {
                     Section {
                         VStack(spacing: 12) {
@@ -748,6 +808,7 @@ struct DefaultSettingsView: View {
                     } header: {
                         Text("Debug – Force persistence failures".localized)
                     }
+                    .listRowBackground(Color.Theme.cardBackground)
                     .accessibilityElement(children: .contain)
                     #endif
                 }
@@ -812,7 +873,6 @@ struct DefaultSettingsView: View {
             }
         }
       .environmentObject(coordinator)
-        .background(Color.Theme.background)
     }
     
     // Removed: All settings content moved to separate view files

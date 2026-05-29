@@ -13,7 +13,6 @@ final class TripInvite {
     @Attribute(.unique) var inviteId: String
     var tripSessionId: String
     var tripName: String
-    var tripMode: String
     var fromUserId: String
     var toUserId: String?
     var status: String // sent, pending, accepted, declined, expired, canceled
@@ -34,7 +33,6 @@ final class TripInvite {
         inviteId: String,
         tripSessionId: String,
         tripName: String,
-        tripMode: String,
         fromUserId: String,
         toUserId: String? = nil,
         status: TripInviteStatus = .pending,
@@ -45,7 +43,6 @@ final class TripInvite {
         self.inviteId = inviteId
         self.tripSessionId = tripSessionId
         self.tripName = tripName
-        self.tripMode = tripMode
         self.fromUserId = fromUserId
         self.toUserId = toUserId
         self.status = status.rawValue

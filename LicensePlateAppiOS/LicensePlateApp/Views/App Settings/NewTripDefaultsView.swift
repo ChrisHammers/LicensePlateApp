@@ -9,160 +9,163 @@ import SwiftUI
 
 struct NewTripDefaultsView: View {
     @Environment(\.dismiss) private var dismiss
-    
-    // New Trip Defaults
-    @AppStorage("defaultIncludeUS") private var defaultIncludeUS = true
-    @AppStorage("defaultIncludeCanada") private var defaultIncludeCanada = true
-    @AppStorage("defaultIncludeMexico") private var defaultIncludeMexico = true
-    @AppStorage("defaultStartTripRightAway") private var defaultStartTripRightAway = true
-    @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
-    @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
-    @AppStorage("defaultSaveLocationWhenMarkingPlates") private var defaultSaveLocationWhenMarkingPlates = true
-    @AppStorage("defaultShowMyLocationOnLargeMap") private var defaultShowMyLocationOnLargeMap = true
-    @AppStorage("defaultTrackMyLocationDuringTrip") private var defaultTrackMyLocationDuringTrip = true
-    @AppStorage("defaultShowMyActiveTripOnLargeMap") private var defaultShowMyActiveTripOnLargeMap = true
-    @AppStorage("defaultShowMyActiveTripOnSmallMap") private var defaultShowMyActiveTripOnSmallMap = true
-    
+    @StateObject private var viewModel = NewTripDefaultsViewModel()
+
     var body: some View {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
+        AppBackgroundView {
+            List {
+                Section("Trip Defaults") {
+                    VStack(spacing: 12) {
+                        // Start Trip - First item
+                        SettingToggleRow(
+                            title: "Start Trip right away".localized,
+                            description: "Automatically start new trips when created".localized,
+                            isOn: $viewModel.startTripRightAway
+                        )
+                        
+                        Divider()
+                        
+                        // Tracking Options
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Location Tracking".localized)
+                                .font(.system(.headline, design: .rounded))
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                                .padding(.bottom, 4)
+                                .accessibilityAddTraits(.isHeader)
+                            
+                            SettingToggleRow(
+                                title: "Save location when marking plates".localized,
+                                description: "Store location data when marking plates (default for new trips)".localized,
+                                isOn: $viewModel.saveLocationWhenMarkingPlates
+                            )
+                            
+                            SettingToggleRow(
+                                title: "Show my location on large map".localized,
+                                description: "Display current location on full-screen map (default for new trips)".localized,
+                                isOn: $viewModel.showMyLocationOnLargeMap
+                            )
+                            
+                            SettingToggleRow(
+                                title: "Track my location during trip".localized,
+                                description: "Continuously track location while trip is active (default for new trips)".localized,
+                                isOn: $viewModel.trackMyLocationDuringTrip
+                            )
+                            
+                            SettingToggleRow(
+                                title: "Show my active trip on the large map".localized,
+                                description: "Display active trip on full-screen map (default for new trips)".localized,
+                                isOn: $viewModel.showMyActiveTripOnLargeMap
+                            )
+                            .disabled(!viewModel.trackMyLocationDuringTrip)
+                            .opacity(viewModel.trackMyLocationDuringTrip ? 1.0 : 0.5)
+                            .accessibilityHintWhenDisabled(
+                                !viewModel.trackMyLocationDuringTrip,
+                                hint: "Enable location tracking during trip first".localized
+                            )
+                            
+                            SettingToggleRow(
+                                title: "Show my active trip on the small map".localized,
+                                description: "Display active trip on small map (default for new trips)".localized,
+                                isOn: $viewModel.showMyActiveTripOnSmallMap
+                            )
+                            .disabled(!viewModel.trackMyLocationDuringTrip)
+                            .opacity(viewModel.trackMyLocationDuringTrip ? 1.0 : 0.5)
+                            .accessibilityHintWhenDisabled(
+                                !viewModel.trackMyLocationDuringTrip,
+                                hint: "Enable location tracking during trip first".localized
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 16)
+                    .background(Color.Theme.cardBackground)
+                    .cornerRadius(20)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                    .listRowBackground(Color.clear)
+                }
                 
-                List {
-                    Section {
-                        VStack(spacing: 12) {
-                            // Start Trip - First item
-                            SettingToggleRow(
-                                title: "Start Trip right away".localized,
-                                description: "Automatically start new trips when created".localized,
-                                isOn: $defaultStartTripRightAway
-                            )
+                Section("Game Defaults") {
+                    VStack(spacing: 12) {
+                        // Countries
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Default Countries".localized)
+                                .font(.system(.headline, design: .rounded))
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                                .accessibilityAddTraits(.isHeader)
                             
-                            Divider()
+                            Text("Select which countries' license plates will be included by default when creating new trips".localized)
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                                .padding(.bottom, 4)
+                                .padding(.horizontal, 16)
                             
-                            // Countries
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text("Default Countries".localized)
-                                    .font(.system(.headline, design: .rounded))
-                                    .foregroundStyle(Color.Theme.primaryBlue)
-                                
-                                Text("Select which countries' license plates will be included by default when creating new trips".localized)
+                            SettingToggleRow(title: "United States".localized, isOn: $viewModel.includeUS)
+                            SettingToggleRow(title: "Canada".localized, isOn: $viewModel.includeCanada)
+                            SettingToggleRow(title: "Mexico".localized, isOn: $viewModel.includeMexico)
+                            
+                            if let message = viewModel.countryValidationMessage {
+                                Text(message)
                                     .font(.system(.caption, design: .rounded))
-                                    .foregroundStyle(Color.Theme.softBrown)
-                                    .padding(.bottom, 4)
-                                    .padding(.horizontal, 16)
-                                
-                                CountryCheckboxRow(title: "United States".localized, isOn: $defaultIncludeUS)
-                                CountryCheckboxRow(title: "Canada".localized, isOn: $defaultIncludeCanada)
-                                CountryCheckboxRow(title: "Mexico".localized, isOn: $defaultIncludeMexico)
-                            }
-                            
-                            Divider()
-                            
-                            // Voice Settings
-                            SettingToggleRow(
-                                title: "Skip Voice Confirmation".localized,
-                                description: "Automatically add license plates heard by speech recognition without requiring user confirmation. This is the default for NEW trips created, this can be changed per trip as well.".localized,
-                                isOn: $defaultSkipVoiceConfirmation
-                            )
-                            
-                            Divider()
-                            
-                            // Tracking Options
-                            VStack(alignment: .leading, spacing: 12) {
-                              
-                                Text("Location Tracking".localized)
-                                    .font(.system(.headline, design: .rounded))
-                                    .foregroundStyle(Color.Theme.primaryBlue)
-                                    .padding(.bottom, 4)
-                                
-                                SettingToggleRow(
-                                    title: "Save location when marking plates".localized,
-                                    description: "Store location data when marking plates (default for new trips)".localized,
-                                    isOn: $defaultSaveLocationWhenMarkingPlates
-                                )
-                                
-                                SettingToggleRow(
-                                    title: "Show my location on large map".localized,
-                                    description: "Display current location on full-screen map (default for new trips)".localized,
-                                    isOn: $defaultShowMyLocationOnLargeMap
-                                )
-                                
-                                SettingToggleRow(
-                                    title: "Track my location during trip".localized,
-                                    description: "Continuously track location while trip is active (default for new trips)".localized,
-                                    isOn: $defaultTrackMyLocationDuringTrip
-                                )
-                                
-                                SettingToggleRow(
-                                    title: "Show my active trip on the large map".localized,
-                                    description: "Display active trip on full-screen map (default for new trips)".localized,
-                                    isOn: $defaultShowMyActiveTripOnLargeMap
-                                )
-                                .disabled(!defaultTrackMyLocationDuringTrip)
-                                .opacity(defaultTrackMyLocationDuringTrip ? 1.0 : 0.5)
-                                
-                                SettingToggleRow(
-                                    title: "Show my active trip on the small map".localized,
-                                    description: "Display active trip on small map (default for new trips)".localized,
-                                    isOn: $defaultShowMyActiveTripOnSmallMap
-                                )
-                                .disabled(!defaultTrackMyLocationDuringTrip)
-                                .opacity(defaultTrackMyLocationDuringTrip ? 1.0 : 0.5)
+                                    .foregroundStyle(Color.red)
+                                    .accessibilityLabel(message)
                             }
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 16)
-                        .background(Color.Theme.cardBackground)
-                        .cornerRadius(20)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-                        .listRowBackground(Color.clear)
+                        
+                        Divider()
+                        
+                        // Voice Settings
+                        SettingToggleRow(
+                            title: "Skip Voice Confirmation".localized,
+                            description: "Automatically add license plates heard by speech recognition without requiring user confirmation. This is the default for NEW trips created, this can be changed per trip as well.".localized,
+                            isOn: $viewModel.skipVoiceConfirmation
+                        )
                     }
-                    .textCase(nil)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 16)
+                    .background(Color.Theme.cardBackground)
+                    .cornerRadius(20)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                    .listRowBackground(Color.clear)
                 }
-                .listStyle(.insetGrouped)
-                .scrollContentBackground(.hidden)
+                .textCase(nil)
             }
-            .navigationTitle("New Trip Defaults".localized)
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarBackButtonHidden(true)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Done".localized) {
-                        dismiss()
-                    }
-                    .font(.system(.body, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                    .accessibilityLabel("Done".localized)
-                    .accessibilityHint("Closes this view".localized)
-                }
-            }
-    }
-}
-
-private struct CountryCheckboxRow: View {
-    let title: String
-    @Binding var isOn: Bool
-    
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.system(.body, design: .rounded))
-                .foregroundStyle(Color.Theme.primaryBlue)
-            
-            Spacer()
-            
-            Toggle("", isOn: $isOn)
-                .tint(Color.Theme.primaryBlue)
-                .labelsHidden()
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.Theme.cardBackground)
-        )
+        .navigationTitle("New Trip Defaults".localized)
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Done".localized) {
+                    viewModel.save()
+                    dismiss()
+                }
+                .font(.system(.body, design: .rounded))
+                .fontWeight(.semibold)
+                .foregroundStyle(!viewModel.canSave ? .secondary : Color.Theme.primaryBlue)
+                .disabled(!viewModel.canSave)
+                .accessibilityLabel("Done".localized)
+                .accessibilityHint(
+                    !viewModel.canSave
+                        ? "Select at least one country before saving.".localized
+                        : "Saves new trip defaults and closes this view".localized
+                )
+            }
+        }
+        .onAppear {
+            viewModel.reloadFromStore()
+        }
     }
 }
 
+private extension View {
+    @ViewBuilder
+    func accessibilityHintWhenDisabled(_ isDisabled: Bool, hint: String) -> some View {
+        if isDisabled {
+            self.accessibilityHint(hint)
+        } else {
+            self
+        }
+    }
+}

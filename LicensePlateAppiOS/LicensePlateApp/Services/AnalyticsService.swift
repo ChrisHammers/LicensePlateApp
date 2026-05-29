@@ -97,17 +97,35 @@ class AnalyticsService: AnalyticsLogging {
         case tripInviteAccepted
         case tripInviteDeclined
         case tripInviteCanceled
+        /// Step 08 — server send succeeded (no PII: trip id + name length only).
+        case tripInviteSent(tripSessionId: String, tripNameLength: Int)
+        case tripInviteSendFailed(tripSessionId: String, error: String)
+        case tripInviteReceivedViewed(inviteId: String?)
+        case tripParticipantsViewed(tripSessionId: String)
 
         // Trip invite with context (Step 10.5)
         case tripInviteAcceptedWithContext(inviteTripId: String?, inviteGameCount: Int?, participantCountAfterJoin: Int?)
         case tripInviteDeclinedWithContext(inviteTripId: String?, inviteGameCount: Int?)
         case participantJoinedTrip(tripId: String, participantCountAfterJoin: Int, teamCountAfterJoin: Int?)
         case participantLeftTrip(tripId: String)
+        /// Step 14 — non-owner initiated voluntary leave (local + queued sync).
+        case tripParticipantLeaveInitiated(tripSessionId: String, offline: Bool)
+        /// Step 14 — `participant_left` accepted by `appendTripActivityEvent`.
+        case tripParticipantLeaveServerCompleted(tripSessionId: String)
+        /// Step 14 — Firestore `members` snapshot no longer includes this user; local roster aligned.
+        case tripParticipantLeaveReconciled(tripSessionId: String)
         case participantRemovedFromTrip(tripId: String, actorParticipantId: String?)
 
         // Combined games (Step 06)
         case combinedTripSetupOpened
-        case combinedTripCreated(gameTypes: [String])
+        case combinedTripCreated(
+            gameTypes: [String],
+            tripSessionId: String? = nil,
+            participantCount: Int? = nil,
+            gameCount: Int? = nil,
+            gameModes: [String]? = nil,
+            hasTeams: Bool? = nil
+        )
 
         // Combined games extended (Step 10.5)
         case combinedGameRemovedBeforeStart(gameInstanceId: String, combinedGameCount: Int)
@@ -124,20 +142,54 @@ class AnalyticsService: AnalyticsLogging {
         case tripSummaryViewedGameSection(sessionId: String)
         case tripSummaryViewedParticipantSection(sessionId: String)
         case tripSummaryViewedMapRecap(sessionId: String)
+        /// Travel log recap XP ledger section shown (Step XP 03).
+        case tripSummaryViewedXpRecap(sessionId: String)
+        /// Step 11 — Travel log summary includes at least one competitive game (rankings section).
+        case tripSummaryCompetitiveRankingsPresented(tripSessionId: String)
+        /// Step 11 — In-game competitive standings first shown (multiplayer).
+        case competitiveInGameStandingsPresented(tripSessionId: String, gameInstanceId: String)
+        /// Step 12 — Trip dashboard trip-wide competitive leaderboard first shown (multiplayer).
+        case tripDashboardCompetitiveLeaderboardPresented(tripSessionId: String)
+
         case travelLogFiltered(filterKey: String, filterValue: String)
         case travelLogSorted(sortKey: String)
+
+        /// Profile lifetime stats — emitted from `LifetimeStatsCoordinator` only (no PII).
+        case lifetimeStatsRecomputeStarted
+        case lifetimeStatsRecomputeSucceeded(completedTripCount: Int, familyOnlyTripCount: Int)
+        case lifetimeStatsRecomputeFailed(error: String)
+        /// User tapped retry on profile stats error row (`LifetimeStatsProfileViewModel` only).
+        case lifetimeStatsProfileRetryTapped
+        /// Firestore listener applied a `public_lifetime_stats` document (length only, no uid).
+        case publicLifetimeStatsListenerUpdated(userIdLength: Int)
+        /// Shown when UI displays the pending-server-sync state (surface key, no PII).
+        case lifetimeStatsPendingSyncShown(surface: String)
+        /// Local `LifetimeStatsRecomputeEngine` path ran for offline / explicit retry.
+        case lifetimeStatsFallbackRecomputeUsed(reason: String)
+
+        // Step 16 — `user_progression` (emitted from `UserProgressionService` only)
+        case progressionSnapshotApplied(totalXp: Int, acceptedRegionFindCount: Int, competitiveFirstPlaceFinishes: Int)
+        case progressionMilestoneEverCompetitiveFirstPlace
+        case progressionXpAwarded(delta: Int, reason: String)
+        case xpGrantAwarded(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
+        case xpGrantSkippedAlreadyGranted(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
 
         // Lifecycle (Step 10.5)
         case tripSessionCreated(tripId: String, tripStatus: String, tripParticipantCount: Int?, tripActiveGameCount: Int?, tripSource: String?)
         case tripSessionStarted(tripId: String, tripActiveGameCount: Int?)
         case tripSessionEnded(tripId: String)
-        case tripSessionReset(tripId: String, gameInstanceId: String)
+        /// Step 6.9.3 — Game progress reset (discoveries cleared for one game); not a trip reset.
+        case gameInstanceReset(tripSessionId: String, gameInstanceId: String)
+        /// One game removed from a multi-game trip (local instance + its events).
+        case gameInstanceDeleted(tripSessionId: String, gameInstanceId: String, gameType: String, remainingGameCount: Int)
+        /// Trip cancelled from active list or settings (soft delete UX).
+        case tripSessionCancelled(tripId: String)
+        /// Reserved for future hard tombstone delete; not emitted on cancel today.
         case tripSessionDeleted(tripId: String)
-        case tripSessionCompleted(tripId: String)
         case gameInstanceCreated(gameInstanceId: String, gameType: String, gameMode: String, tripId: String, gameOrderInTrip: Int?)
-        case gameInstanceStarted(gameInstanceId: String, gameType: String, gameLifecycleState: String, configLockReason: String)
-        case gameInstanceEnded(gameInstanceId: String, gameType: String)
-        case gameInstanceCompleted(gameInstanceId: String, gameType: String)
+        case gameInstanceStarted(gameInstanceId: String, gameType: String, gameLifecycleState: String, configLockReason: String, tripSessionId: String)
+        case gameInstanceEnded(gameInstanceId: String, gameType: String, tripSessionId: String)
+        case gameInstanceCompleted(gameInstanceId: String, gameType: String, tripSessionId: String)
         case gameConfigLocked(gameInstanceId: String, configLockReason: String)
         case gameConfigLockBlockedEdit(gameInstanceId: String, configLockReason: String)
 
@@ -161,7 +213,17 @@ class AnalyticsService: AnalyticsLogging {
         // Discovery outcome (Step 03 — rules engine)
         case discoveryOutcomeRecorded(tripId: String, gameInstanceId: String, targetId: String, outcome: String, participantId: String?)
         case discoveryRejectedDuplicate(tripId: String, gameInstanceId: String, targetId: String, participantId: String?, mode: String)
+        case discoveryRejectedInvalidParticipant(tripId: String, gameInstanceId: String, targetId: String, participantId: String?, tripParticipantCount: Int, gameMode: String)
+        case discoveryRemovalConfirmed(tripId: String, gameInstanceId: String, targetId: String, participantId: String?) // almost a duplicate of Unfind, but based on the cooldown service, which I basically disabled.
+        case discoveryRetapBlockedByCooldown(tripId: String, gameInstanceId: String, targetId: String)
         case discoveryUnfind(tripId: String, gameInstanceId: String, targetId: String, participantId: String?)
+
+        // Step 13 — Cloud gameplay resolver / sync
+        case gameplayEventServerAccepted(tripSessionId: String, gameInstanceId: String, eventKind: String)
+        case gameplayEventServerSuperseded(tripSessionId: String, gameInstanceId: String, serverRejectionEventId: String, reason: String)
+        case gameplayEventServerRejected(tripSessionId: String, eventKind: String, errorCode: Int, errorDomain: String)
+        /// Client-side `appendTripActivityEvent` did not complete within the coordinator timeout (transient; queue will retry).
+        case gameplayEventAppendTimedOut(tripSessionId: String, gameInstanceId: String, eventKind: String, attemptCount: Int, timeoutSeconds: Int)
 
         // Persistence (Step 05)
         case persistenceSaveFailed(context: String, error: String)
@@ -172,12 +234,31 @@ class AnalyticsService: AnalyticsLogging {
         case notificationDeliveredTripInvite
         case notificationDeliveryFailed(error: String)
 
+        // Step 18 — launch operations, growth, and monetization
+        case remoteConfigFetchSucceeded
+        case remoteConfigFetchFailed(error: String)
+        case crashReportingConfigured
+        case crashReportingNonFatalRecorded(context: String)
+        case adEligibilityEvaluated(surface: String, eligible: Bool, reason: String)
+        case adImpression(surface: String)
+        case adLoadFailed(surface: String, error: String)
+        case reviewPromptEligible(completedTripCount: Int)
+        case reviewPromptPresented(sessionId: String)
+        case reviewPromptSuppressed(reason: String, completedTripCount: Int)
+        case reminderScheduled(sessionId: String, hours: Int)
+        case reminderCancelled(sessionId: String, reason: String)
+        case returnStreakUpdated(currentStreak: Int, reason: String)
+        case returnStreakReset(reason: String)
+        case fcmTokenRegistered
+
         // Screen view (Step 10)
         case screenView(screenName: String, screenClass: String?)
 
         // Paywall & RevenueCat (Step 09)
         case paywallViewed(source: String?)
         case paywallDismissed
+        case tripLimitHit(source: String, activeTripCount: Int, activeTripLimit: Int, tier: String)
+        case savedTripLimitHit(source: String, savedTripCount: Int, savedTripLimit: Int, tier: String)
         case purchaseStarted(packageId: String)
         case purchaseCompleted(packageId: String)
         case purchaseFailed(packageId: String?, error: String)
@@ -239,10 +320,17 @@ class AnalyticsService: AnalyticsLogging {
             case .tripInviteAccepted: return "trip_invite_accepted"
             case .tripInviteDeclined: return "trip_invite_declined"
             case .tripInviteCanceled: return "trip_invite_canceled"
+            case .tripInviteSent: return "trip_invite_sent"
+            case .tripInviteSendFailed: return "trip_invite_send_failed"
+            case .tripInviteReceivedViewed: return "trip_invite_received_viewed"
+            case .tripParticipantsViewed: return "trip_participants_viewed"
             case .tripInviteAcceptedWithContext: return "trip_invite_accepted"
             case .tripInviteDeclinedWithContext: return "trip_invite_declined"
             case .participantJoinedTrip: return "participant_joined_trip"
             case .participantLeftTrip: return "participant_left_trip"
+            case .tripParticipantLeaveInitiated: return "trip_participant_leave_initiated"
+            case .tripParticipantLeaveServerCompleted: return "trip_participant_leave_server_completed"
+            case .tripParticipantLeaveReconciled: return "trip_participant_leave_reconciled"
             case .participantRemovedFromTrip: return "participant_removed_from_trip"
             case .combinedTripSetupOpened: return "combined_trip_setup_opened"
             case .combinedTripCreated: return "combined_trip_created"
@@ -256,14 +344,31 @@ class AnalyticsService: AnalyticsLogging {
             case .tripSummaryViewedGameSection: return "trip_summary_viewed_game_section"
             case .tripSummaryViewedParticipantSection: return "trip_summary_viewed_participant_section"
             case .tripSummaryViewedMapRecap: return "trip_summary_viewed_map_recap"
+            case .tripSummaryViewedXpRecap: return "trip_summary_viewed_xp_recap"
+            case .tripSummaryCompetitiveRankingsPresented: return "trip_summary_competitive_rankings_presented"
+            case .competitiveInGameStandingsPresented: return "competitive_in_game_standings_presented"
+            case .tripDashboardCompetitiveLeaderboardPresented: return "trip_dashboard_competitive_leaderboard_presented"
             case .travelLogFiltered: return "travel_log_filtered"
             case .travelLogSorted: return "travel_log_sorted"
+            case .lifetimeStatsRecomputeStarted: return "lifetime_stats_recompute_started"
+            case .lifetimeStatsRecomputeSucceeded: return "lifetime_stats_recompute_succeeded"
+            case .lifetimeStatsRecomputeFailed: return "lifetime_stats_recompute_failed"
+            case .lifetimeStatsProfileRetryTapped: return "lifetime_stats_profile_retry_tapped"
+            case .publicLifetimeStatsListenerUpdated: return "public_lifetime_stats_listener_updated"
+            case .lifetimeStatsPendingSyncShown: return "lifetime_stats_pending_sync_shown"
+            case .lifetimeStatsFallbackRecomputeUsed: return "lifetime_stats_fallback_recompute_used"
+            case .progressionSnapshotApplied: return "progression_snapshot_applied"
+            case .progressionMilestoneEverCompetitiveFirstPlace: return "progression_milestone_ever_competitive_first_place"
+            case .progressionXpAwarded: return "progression_xp_awarded"
+            case .xpGrantAwarded: return "xp_grant_awarded"
+            case .xpGrantSkippedAlreadyGranted: return "xp_grant_skipped_already_granted"
             case .tripSessionCreated: return "trip_session_created"
             case .tripSessionStarted: return "trip_session_started"
             case .tripSessionEnded: return "trip_session_ended"
-            case .tripSessionReset: return "trip_session_reset"
+            case .gameInstanceReset: return "game_instance_reset"
+            case .gameInstanceDeleted: return "game_instance_deleted"
+            case .tripSessionCancelled: return "trip_session_cancelled"
             case .tripSessionDeleted: return "trip_session_deleted"
-            case .tripSessionCompleted: return "trip_session_completed"
             case .gameInstanceCreated: return "game_instance_created"
             case .gameInstanceStarted: return "game_instance_started"
             case .gameInstanceEnded: return "game_instance_ended"
@@ -283,9 +388,26 @@ class AnalyticsService: AnalyticsLogging {
             case .notificationEligibilityChecked: return "notification_eligibility_checked"
             case .notificationDeliveredTripInvite: return "notification_delivered_trip_invite"
             case .notificationDeliveryFailed: return "notification_delivery_failed"
+            case .remoteConfigFetchSucceeded: return "remote_config_fetch_succeeded"
+            case .remoteConfigFetchFailed: return "remote_config_fetch_failed"
+            case .crashReportingConfigured: return "crash_reporting_configured"
+            case .crashReportingNonFatalRecorded: return "crash_reporting_non_fatal_recorded"
+            case .adEligibilityEvaluated: return "ad_eligibility_evaluated"
+            case .adImpression: return "ad_impression"
+            case .adLoadFailed: return "ad_load_failed"
+            case .reviewPromptEligible: return "review_prompt_eligible"
+            case .reviewPromptPresented: return "review_prompt_presented"
+            case .reviewPromptSuppressed: return "review_prompt_suppressed"
+            case .reminderScheduled: return "reminder_scheduled"
+            case .reminderCancelled: return "reminder_cancelled"
+            case .returnStreakUpdated: return "return_streak_updated"
+            case .returnStreakReset: return "return_streak_reset"
+            case .fcmTokenRegistered: return "fcm_token_registered"
             case .screenView: return "screen_view"
             case .paywallViewed: return "paywall_viewed"
             case .paywallDismissed: return "paywall_dismissed"
+            case .tripLimitHit: return "trip_limit_hit"
+            case .savedTripLimitHit: return "saved_trip_limit_hit"
             case .purchaseStarted: return "purchase_started"
             case .purchaseCompleted: return "purchase_completed"
             case .purchaseFailed: return "purchase_failed"
@@ -295,7 +417,14 @@ class AnalyticsService: AnalyticsLogging {
             case .riskAdvisoryDetected: return "risk_advisory_detected"
             case .discoveryOutcomeRecorded: return "discovery_outcome_recorded"
             case .discoveryRejectedDuplicate: return "discovery_rejected_duplicate"
+            case .discoveryRejectedInvalidParticipant: return "discovery_rejected_invalid_participant"
+            case .discoveryRemovalConfirmed: return "discovery_removal_confirmed"
+            case .discoveryRetapBlockedByCooldown: return "discovery_retap_blocked_by_cooldown"
             case .discoveryUnfind: return "discovery_unfind"
+            case .gameplayEventServerAccepted: return "gameplay_event_server_accepted"
+            case .gameplayEventServerSuperseded: return "gameplay_event_server_superseded"
+            case .gameplayEventServerRejected: return "gameplay_event_server_rejected"
+            case .gameplayEventAppendTimedOut: return "gameplay_event_append_timed_out"
             case .persistenceSaveFailed: return "persistence_save_failed"
             case .persistenceRetryTapped: return "persistence_retry_tapped"
             }
@@ -331,6 +460,23 @@ class AnalyticsService: AnalyticsLogging {
                 return ["badge_id": badgeId]
             case .tripInvitesScreenOpened, .tripInviteAccepted, .tripInviteDeclined, .tripInviteCanceled:
                 return nil
+            case .tripInviteSent(let tripSessionId, let tripNameLength):
+                return [
+                    "invite_trip_id": tripSessionId,
+                    "trip_name_length": tripNameLength,
+                ]
+            case .tripInviteSendFailed(let tripSessionId, let error):
+                return [
+                    "invite_trip_id": tripSessionId,
+                    "error": error,
+                ]
+            case .tripInviteReceivedViewed(let inviteId):
+                if let inviteId {
+                    return ["invite_id": inviteId]
+                }
+                return nil
+            case .tripParticipantsViewed(let tripSessionId):
+                return ["trip_session_id": tripSessionId]
             case .tripInviteAcceptedWithContext(let inviteTripId, let inviteGameCount, let participantCountAfterJoin):
                 var p: [String: Any] = [:]
                 if let id = inviteTripId { p["invite_trip_id"] = id }
@@ -343,19 +489,31 @@ class AnalyticsService: AnalyticsLogging {
                 if let c = inviteGameCount { p["invite_game_count"] = c }
                 return p.isEmpty ? nil : p
             case .participantJoinedTrip(let tripId, let participantCountAfterJoin, let teamCountAfterJoin):
-                var p: [String: Any] = ["trip_id": tripId, "participant_count_after_join": participantCountAfterJoin]
+                var p: [String: Any] = ["trip_session_id": tripId, "participant_count_after_join": participantCountAfterJoin]
                 if let c = teamCountAfterJoin { p["team_count_after_join"] = c }
                 return p
             case .participantLeftTrip(let tripId):
-                return ["trip_id": tripId]
+                return ["trip_session_id": tripId]
+            case .tripParticipantLeaveInitiated(let tripSessionId, let offline):
+                return ["trip_session_id": tripSessionId, "offline": offline]
+            case .tripParticipantLeaveServerCompleted(let tripSessionId):
+                return ["trip_session_id": tripSessionId]
+            case .tripParticipantLeaveReconciled(let tripSessionId):
+                return ["trip_session_id": tripSessionId]
             case .participantRemovedFromTrip(let tripId, let actorParticipantId):
-                var p: [String: Any] = ["trip_id": tripId]
+                var p: [String: Any] = ["trip_session_id": tripId]
                 if let id = actorParticipantId { p["actor_participant_id"] = id }
                 return p
             case .combinedTripSetupOpened:
                 return nil
-            case .combinedTripCreated(let gameTypes):
-                return ["game_types": gameTypes.joined(separator: ",")]
+            case .combinedTripCreated(let gameTypes, let tripSessionId, let participantCount, let gameCount, let gameModes, let hasTeams):
+                var p: [String: Any] = ["game_types": gameTypes.joined(separator: ",")]
+                if let id = tripSessionId { p["trip_session_id"] = id }
+                if let count = participantCount { p["participant_count"] = count }
+                if let count = gameCount { p["game_count"] = count }
+                if let modes = gameModes, !modes.isEmpty { p["game_modes"] = modes.joined(separator: ",") }
+                if let teams = hasTeams { p["has_teams"] = teams }
+                return p
             case .combinedGameRemovedBeforeStart(let gameInstanceId, let combinedGameCount):
                 return ["game_instance_id": gameInstanceId, "combined_game_count": combinedGameCount]
             case .combinedGameReordered(let combinedGameCount, let combinedGameTypes):
@@ -365,41 +523,97 @@ class AnalyticsService: AnalyticsLogging {
             case .combinedGameConfigChanged(let gameInstanceId, let settingKey, let oldValue, let newValue):
                 return ["game_instance_id": gameInstanceId, "setting_key": settingKey, "old_value": oldValue, "new_value": newValue]
             case .combinedTripStartedWithGameCount(let tripId, let combinedGameCount, let combinedGameTypes):
-                return ["trip_id": tripId, "combined_game_count": combinedGameCount, "combined_game_types": combinedGameTypes.joined(separator: ",")]
+                return ["trip_session_id": tripId, "combined_game_count": combinedGameCount, "combined_game_types": combinedGameTypes.joined(separator: ",")]
             case .tripSummaryViewed(let sessionId):
                 return ["session_id": sessionId]
-            case .tripSummaryViewedGameSection(let sessionId), .tripSummaryViewedParticipantSection(let sessionId), .tripSummaryViewedMapRecap(let sessionId):
+            case .tripSummaryViewedGameSection(let sessionId), .tripSummaryViewedParticipantSection(let sessionId), .tripSummaryViewedMapRecap(let sessionId), .tripSummaryViewedXpRecap(let sessionId):
                 return ["session_id": sessionId]
+            case .tripSummaryCompetitiveRankingsPresented(let tripSessionId):
+                return ["trip_session_id": tripSessionId]
+            case .competitiveInGameStandingsPresented(let tripSessionId, let gameInstanceId):
+                return ["trip_session_id": tripSessionId, "game_instance_id": gameInstanceId]
+            case .tripDashboardCompetitiveLeaderboardPresented(let tripSessionId):
+                return ["trip_session_id": tripSessionId]
             case .travelLogFiltered(let filterKey, let filterValue):
                 return ["filter_key": filterKey, "filter_value": filterValue]
             case .travelLogSorted(let sortKey):
                 return ["sort_key": sortKey]
+            case .lifetimeStatsRecomputeStarted:
+                return nil
+            case .lifetimeStatsRecomputeSucceeded(let completedTripCount, let familyOnlyTripCount):
+                return [
+                    "completed_trip_count": completedTripCount,
+                    "family_only_trip_count": familyOnlyTripCount
+                ]
+            case .lifetimeStatsRecomputeFailed(let error):
+                return ["error_type": error]
+            case .lifetimeStatsProfileRetryTapped:
+                return nil
+            case .publicLifetimeStatsListenerUpdated(let userIdLength):
+                return ["user_id_length": userIdLength]
+            case .lifetimeStatsPendingSyncShown(let surface):
+                return ["surface": surface]
+            case .lifetimeStatsFallbackRecomputeUsed(let reason):
+                return ["reason": reason]
+            case .progressionSnapshotApplied(let totalXp, let acceptedRegionFindCount, let competitiveFirstPlaceFinishes):
+                return [
+                    "total_xp": totalXp,
+                    "accepted_region_find_count": acceptedRegionFindCount,
+                    "competitive_first_place_finishes": competitiveFirstPlaceFinishes
+                ]
+            case .progressionMilestoneEverCompetitiveFirstPlace:
+                return nil
+            case .progressionXpAwarded(let delta, let reason):
+                return ["delta": delta, "reason": reason]
+            case .xpGrantAwarded(let tripId, let gameInstanceId, let targetId, let participantId):
+                return [
+                    "trip_session_id": tripId,
+                    "game_instance_id": gameInstanceId,
+                    "target_id": targetId,
+                    "participant_id": participantId
+                ]
+            case .xpGrantSkippedAlreadyGranted(let tripId, let gameInstanceId, let targetId, let participantId):
+                return [
+                    "trip_session_id": tripId,
+                    "game_instance_id": gameInstanceId,
+                    "target_id": targetId,
+                    "participant_id": participantId
+                ]
             case .travelLogOpened:
                 return nil
             case .tripSessionCreated(let tripId, let tripStatus, let tripParticipantCount, let tripActiveGameCount, let tripSource):
-                var p: [String: Any] = ["trip_id": tripId, "trip_status": tripStatus]
+                var p: [String: Any] = ["trip_session_id": tripId, "trip_status": tripStatus]
                 if let c = tripParticipantCount { p["trip_participant_count"] = c }
                 if let c = tripActiveGameCount { p["trip_active_game_count"] = c }
                 if let s = tripSource { p["trip_source"] = s }
                 return p
             case .tripSessionStarted(let tripId, let tripActiveGameCount):
-                var p: [String: Any] = ["trip_id": tripId]
+                var p: [String: Any] = ["trip_session_id": tripId]
                 if let c = tripActiveGameCount { p["trip_active_game_count"] = c }
                 return p
-            case .tripSessionEnded(let tripId), .tripSessionCompleted(let tripId):
-                return ["trip_id": tripId]
-            case .tripSessionReset(let tripId, let gameInstanceId):
-                return ["trip_id": tripId, "game_instance_id": gameInstanceId]
-            case .tripSessionDeleted(let tripId):
-                return ["trip_id": tripId]
+            case .tripSessionEnded(let tripId):
+                return ["trip_session_id": tripId]
+            case .gameInstanceReset(let tripSessionId, let gameInstanceId):
+                return ["trip_session_id": tripSessionId, "game_instance_id": gameInstanceId]
+            case .gameInstanceDeleted(let tripSessionId, let gameInstanceId, let gameType, let remainingGameCount):
+                return [
+                    "trip_session_id": tripSessionId,
+                    "game_instance_id": gameInstanceId,
+                    "game_type": gameType,
+                    "remaining_game_count": remainingGameCount
+                ]
+            case .tripSessionCancelled(let tripId), .tripSessionDeleted(let tripId):
+                return ["trip_session_id": tripId]
             case .gameInstanceCreated(let gameInstanceId, let gameType, let gameMode, let tripId, let gameOrderInTrip):
-                var p: [String: Any] = ["game_instance_id": gameInstanceId, "game_type": gameType, "game_mode": gameMode, "trip_id": tripId]
+                var p: [String: Any] = ["game_instance_id": gameInstanceId, "game_type": gameType, "game_mode": gameMode, "trip_session_id": tripId]
                 if let o = gameOrderInTrip { p["game_order_in_trip"] = o }
                 return p
-            case .gameInstanceStarted(let gameInstanceId, let gameType, let gameLifecycleState, let configLockReason):
-                return ["game_instance_id": gameInstanceId, "game_type": gameType, "game_lifecycle_state": gameLifecycleState, "config_lock_reason": configLockReason]
-            case .gameInstanceEnded(let gameInstanceId, let gameType), .gameInstanceCompleted(let gameInstanceId, let gameType):
-                return ["game_instance_id": gameInstanceId, "game_type": gameType]
+            case .gameInstanceStarted(let gameInstanceId, let gameType, let gameLifecycleState, let configLockReason, let tripSessionId):
+                return ["game_instance_id": gameInstanceId, "game_type": gameType, "game_lifecycle_state": gameLifecycleState, "config_lock_reason": configLockReason, "trip_session_id": tripSessionId]
+            case .gameInstanceEnded(let gameInstanceId, let gameType, let tripSessionId):
+                return ["game_instance_id": gameInstanceId, "game_type": gameType, "trip_session_id": tripSessionId]
+            case .gameInstanceCompleted(let gameInstanceId, let gameType, let tripSessionId):
+                return ["game_instance_id": gameInstanceId, "game_type": gameType, "trip_session_id": tripSessionId]
             case .gameConfigLocked(let gameInstanceId, let configLockReason), .gameConfigLockBlockedEdit(let gameInstanceId, let configLockReason):
                 return ["game_instance_id": gameInstanceId, "config_lock_reason": configLockReason]
             case .gameConfigViewed(let gameInstanceId, let configLocked, let configLockReason):
@@ -427,19 +641,63 @@ class AnalyticsService: AnalyticsLogging {
             case .analyticsPropertyBuildFailed(let eventName, let error):
                 return ["event_name": eventName, "error": error]
             case .riskAdvisoryDetected(let flags, let tripId):
-                return ["risk_flags": flags.joined(separator: ","), "trip_id": tripId]
+                return ["risk_flags": flags.joined(separator: ","), "trip_session_id": tripId]
             case .discoveryOutcomeRecorded(let tripId, let gameInstanceId, let targetId, let outcome, let participantId):
-                var p: [String: Any] = ["trip_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "outcome": outcome]
+                var p: [String: Any] = ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "outcome": outcome]
                 if let id = participantId { p["participant_id"] = id }
                 return p
             case .discoveryRejectedDuplicate(let tripId, let gameInstanceId, let targetId, let participantId, let mode):
-                var p: [String: Any] = ["trip_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "mode": mode]
+                var p: [String: Any] = ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "mode": mode]
                 if let id = participantId { p["participant_id"] = id }
                 return p
+            case .discoveryRejectedInvalidParticipant(let tripId, let gameInstanceId, let targetId, let participantId, let tripParticipantCount, let gameMode):
+                var p: [String: Any] = [
+                    "trip_session_id": tripId,
+                    "game_instance_id": gameInstanceId,
+                    "target_id": targetId,
+                    "trip_participant_count": tripParticipantCount,
+                    "game_mode": gameMode
+                ]
+                if let id = participantId { p["participant_id"] = id }
+                return p
+            case .discoveryRemovalConfirmed(let tripId, let gameInstanceId, let targetId, let participantId):
+                var p: [String: Any] = ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId]
+                if let id = participantId { p["participant_id"] = id }
+                return p
+            case .discoveryRetapBlockedByCooldown(let tripId, let gameInstanceId, let targetId):
+                return ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId]
             case .discoveryUnfind(let tripId, let gameInstanceId, let targetId, let participantId):
-                var p: [String: Any] = ["trip_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId]
+                var p: [String: Any] = ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId]
                 if let id = participantId { p["participant_id"] = id }
                 return p
+            case .gameplayEventServerAccepted(let tripSessionId, let gameInstanceId, let eventKind):
+                return [
+                    "trip_session_id": tripSessionId,
+                    "game_instance_id": gameInstanceId,
+                    "event_kind": eventKind
+                ]
+            case .gameplayEventServerSuperseded(let tripSessionId, let gameInstanceId, let serverRejectionEventId, let reason):
+                return [
+                    "trip_session_id": tripSessionId,
+                    "game_instance_id": gameInstanceId,
+                    "server_rejection_event_id": serverRejectionEventId,
+                    "reason": reason
+                ]
+            case .gameplayEventServerRejected(let tripSessionId, let eventKind, let errorCode, let errorDomain):
+                return [
+                    "trip_session_id": tripSessionId,
+                    "event_kind": eventKind,
+                    "error_code": errorCode,
+                    "error_domain": errorDomain
+                ]
+            case .gameplayEventAppendTimedOut(let tripSessionId, let gameInstanceId, let eventKind, let attemptCount, let timeoutSeconds):
+                return [
+                    "trip_session_id": tripSessionId,
+                    "game_instance_id": gameInstanceId,
+                    "event_kind": eventKind,
+                    "attempt_count": attemptCount,
+                    "timeout_seconds": timeoutSeconds
+                ]
             case .persistenceSaveFailed(let context, let error):
                 return ["context": context, "error": error]
             case .persistenceRetryTapped(let context):
@@ -450,6 +708,36 @@ class AnalyticsService: AnalyticsLogging {
                 return nil
             case .notificationDeliveryFailed(let error):
                 return ["error": error]
+            case .remoteConfigFetchSucceeded:
+                return nil
+            case .remoteConfigFetchFailed(let error):
+                return ["error": error]
+            case .crashReportingConfigured:
+                return nil
+            case .crashReportingNonFatalRecorded(let context):
+                return ["context": context]
+            case .adEligibilityEvaluated(let surface, let eligible, let reason):
+                return ["surface": surface, "eligible": eligible, "reason": reason]
+            case .adImpression(let surface):
+                return ["surface": surface]
+            case .adLoadFailed(let surface, let error):
+                return ["surface": surface, "error": error]
+            case .reviewPromptEligible(let completedTripCount):
+                return ["completed_trip_count": completedTripCount]
+            case .reviewPromptPresented(let sessionId):
+                return ["session_id": sessionId]
+            case .reviewPromptSuppressed(let reason, let completedTripCount):
+                return ["reason": reason, "completed_trip_count": completedTripCount]
+            case .reminderScheduled(let sessionId, let hours):
+                return ["session_id": sessionId, "hours": hours]
+            case .reminderCancelled(let sessionId, let reason):
+                return ["session_id": sessionId, "reason": reason]
+            case .returnStreakUpdated(let currentStreak, let reason):
+                return ["current_streak": currentStreak, "reason": reason]
+            case .returnStreakReset(let reason):
+                return ["reason": reason]
+            case .fcmTokenRegistered:
+                return nil
             case .screenView(let screenName, let screenClass):
                 var p: [String: Any] = ["screen_name": screenName]
                 if let screenClass = screenClass { p["screen_class"] = screenClass }
@@ -459,6 +747,20 @@ class AnalyticsService: AnalyticsLogging {
                 return nil
             case .paywallDismissed:
                 return nil
+            case .tripLimitHit(let source, let activeTripCount, let activeTripLimit, let tier):
+                return [
+                    "source": source,
+                    "active_trip_count": activeTripCount,
+                    "active_trip_limit": activeTripLimit,
+                    "tier": tier
+                ]
+            case .savedTripLimitHit(let source, let savedTripCount, let savedTripLimit, let tier):
+                return [
+                    "source": source,
+                    "saved_trip_count": savedTripCount,
+                    "saved_trip_limit": savedTripLimit,
+                    "tier": tier
+                ]
             case .purchaseStarted(let packageId):
                 return ["package_id": packageId]
             case .purchaseCompleted(let packageId):

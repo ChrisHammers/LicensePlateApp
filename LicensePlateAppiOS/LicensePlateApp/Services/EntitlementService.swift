@@ -19,11 +19,18 @@ final class EntitlementService: ObservableObject {
     private let familyRepository: FamilyRepository
     private let userRepository: UserRepository
     private weak var revenueCatBridge: RevenueCatEntitlementProviding?
+    private let accountStateProvider: AccountStateProviding
     
-    init(familyRepository: FamilyRepository = .shared, userRepository: UserRepository = .shared, revenueCatBridge: RevenueCatEntitlementProviding? = nil) {
+    init(
+        familyRepository: FamilyRepository = .shared,
+        userRepository: UserRepository = .shared,
+        revenueCatBridge: RevenueCatEntitlementProviding? = nil,
+        accountStateProvider: AccountStateProviding = FirebaseAccountStateProvider.shared
+    ) {
         self.familyRepository = familyRepository
         self.userRepository = userRepository
         self.revenueCatBridge = revenueCatBridge
+        self.accountStateProvider = accountStateProvider
     }
     
     func setModelContext(_ context: ModelContext) {
@@ -76,7 +83,12 @@ final class EntitlementService: ObservableObject {
     
     /// User tier: base from auth (guest/signedUp); for current user, merged with RevenueCat subscription tier (gold/royale).
     private func userTier(for user: AppUser) -> UserTier {
-        let base: UserTier = user.firebaseUID == nil ? .guest : .signedUp
+        let base: UserTier
+        if isCurrentUser(user) {
+            base = accountStateProvider.currentAccountState(for: user).isGuestLike ? .guest : .signedUp
+        } else {
+            base = user.firebaseUID == nil ? .guest : .signedUp
+        }
         guard isCurrentUser(user), let bridge = revenueCatBridge else { return base }
         return max(base, bridge.currentTier)
     }

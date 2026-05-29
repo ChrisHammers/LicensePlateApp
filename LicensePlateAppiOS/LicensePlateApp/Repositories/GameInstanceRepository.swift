@@ -31,6 +31,64 @@ final class GameInstanceRepository: ObservableObject, GameInstanceRepositoryProt
         try ctx.save()
     }
 
+    func upsert(instance: GameInstance) throws {
+        guard let ctx = modelContext else { throw GameInstanceRepositoryError.noModelContext }
+        let id = instance.id.uuidString
+        let descriptor = FetchDescriptor<GameInstanceEntity>(
+            predicate: #Predicate<GameInstanceEntity> { $0.id == id }
+        )
+        if let existing = try ctx.fetch(descriptor).first {
+            let updated = GameInstanceMapper.toEntity(instance)
+            existing.definitionId = updated.definitionId
+            existing.sessionId = updated.sessionId
+            existing.startedAt = updated.startedAt
+            existing.endedAt = updated.endedAt
+            existing.ruleSetData = updated.ruleSetData
+            existing.commonConfigData = updated.commonConfigData
+            existing.gameSpecificPayloadType = updated.gameSpecificPayloadType
+            existing.gameSpecificPayloadVersion = updated.gameSpecificPayloadVersion
+            existing.gameSpecificPayloadData = updated.gameSpecificPayloadData
+            existing.teamsData = updated.teamsData
+            if let inc = instance.fairnessUiLastAckAt {
+                if let ex = existing.fairnessUiLastAckAt {
+                    existing.fairnessUiLastAckAt = max(ex, inc)
+                } else {
+                    existing.fairnessUiLastAckAt = inc
+                }
+            }
+        } else {
+            ctx.insert(GameInstanceMapper.toEntity(instance))
+        }
+        try ctx.save()
+    }
+
+    func replaceGamesForSession(sessionId: UUID, instances: [GameInstance]) throws {
+        guard let ctx = modelContext else { throw GameInstanceRepositoryError.noModelContext }
+        let sid = sessionId.uuidString
+        let descriptor = FetchDescriptor<GameInstanceEntity>(
+            predicate: #Predicate<GameInstanceEntity> { $0.sessionId == sid }
+        )
+        let prior = try ctx.fetch(descriptor)
+        var watermarkByGameId: [String: Date] = [:]
+        for entity in prior {
+            if let w = entity.fairnessUiLastAckAt {
+                watermarkByGameId[entity.id] = w
+            }
+        }
+        try deleteForSession(sessionId: sessionId)
+        for var instance in instances {
+            let key = instance.id.uuidString
+            if let w = watermarkByGameId[key] {
+                if let inc = instance.fairnessUiLastAckAt {
+                    instance.fairnessUiLastAckAt = max(w, inc)
+                } else {
+                    instance.fairnessUiLastAckAt = w
+                }
+            }
+            try create(instance: instance)
+        }
+    }
+
     // MARK: - Fetch
 
     func fetchByTripSession(sessionId: UUID) throws -> [GameInstance] {
@@ -42,6 +100,54 @@ final class GameInstanceRepository: ObservableObject, GameInstanceRepositoryProt
         descriptor.sortBy = [SortDescriptor(\.startedAt, order: .reverse)]
         let entities = try ctx.fetch(descriptor)
         return entities.map { GameInstanceMapper.toDomain($0) }
+    }
+
+    func gameCount(sessionId: UUID) throws -> Int {
+        guard let ctx = modelContext else { throw GameInstanceRepositoryError.noModelContext }
+        let sid = sessionId.uuidString
+        let descriptor = FetchDescriptor<GameInstanceEntity>(
+            predicate: #Predicate<GameInstanceEntity> { $0.sessionId == sid }
+        )
+        return try ctx.fetchCount(descriptor)
+    }
+
+    func deleteForSession(sessionId: UUID) throws {
+        guard let ctx = modelContext else { throw GameInstanceRepositoryError.noModelContext }
+        let sid = sessionId.uuidString
+        let descriptor = FetchDescriptor<GameInstanceEntity>(
+            predicate: #Predicate<GameInstanceEntity> { $0.sessionId == sid }
+        )
+        let entities = try ctx.fetch(descriptor)
+        for entity in entities {
+            let instanceId = entity.id
+            let snapshotDescriptor = FetchDescriptor<GameScoreSnapshotEntity>(
+                predicate: #Predicate<GameScoreSnapshotEntity> { $0.gameInstanceId == instanceId }
+            )
+            for snapshot in try ctx.fetch(snapshotDescriptor) {
+                ctx.delete(snapshot)
+            }
+            ctx.delete(entity)
+        }
+        try ctx.save()
+    }
+
+    func delete(instanceId: UUID) throws {
+        guard let ctx = modelContext else { throw GameInstanceRepositoryError.noModelContext }
+        let id = instanceId.uuidString
+        let descriptor = FetchDescriptor<GameInstanceEntity>(
+            predicate: #Predicate<GameInstanceEntity> { $0.id == id }
+        )
+        guard let entity = try ctx.fetch(descriptor).first else {
+            throw GameInstanceRepositoryError.instanceNotFound(instanceId)
+        }
+        let snapshotDescriptor = FetchDescriptor<GameScoreSnapshotEntity>(
+            predicate: #Predicate<GameScoreSnapshotEntity> { $0.gameInstanceId == id }
+        )
+        for snapshot in try ctx.fetch(snapshotDescriptor) {
+            ctx.delete(snapshot)
+        }
+        ctx.delete(entity)
+        try ctx.save()
     }
 
     func instance(byId id: UUID) throws -> GameInstance? {
@@ -71,6 +177,7 @@ final class GameInstanceRepository: ObservableObject, GameInstanceRepositoryProt
         entity.gameSpecificPayloadType = updated.gameSpecificPayloadType
         entity.gameSpecificPayloadVersion = updated.gameSpecificPayloadVersion
         entity.gameSpecificPayloadData = updated.gameSpecificPayloadData
+        entity.fairnessUiLastAckAt = instance.fairnessUiLastAckAt
         try ctx.save()
     }
 

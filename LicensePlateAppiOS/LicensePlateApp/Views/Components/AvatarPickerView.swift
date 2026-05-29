@@ -2,7 +2,7 @@
 //  AvatarPickerView.swift
 //  LicensePlateApp
 //
-//  Normal horizontal scroll; fixed-size items; selected item has colored shadow highlight.
+//  Center-snapping horizontal carousel; selected item has colored shadow highlight.
 //
 
 import SwiftUI
@@ -14,33 +14,65 @@ struct AvatarPickerView: View {
     var onSelected: (() -> Void)?
     
     private let itemSize: CGFloat = 94
+    private let itemWidth: CGFloat = 116
     private let spacing: CGFloat = 18
+    @State private var centeredId: String?
     
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: spacing) {
-                ForEach(items) { item in
-                    AvatarPickerItemView(
-                        item: item,
-                        isSelected: selectedId == item.id,
-                        itemSize: itemSize
-                    )
-                    .onTapGesture {
-                        if item.isUnlocked {
-                            selectedId = item.id
-                            onSelected?()
-                        } else {
-                            onLockedTap(item, item.unlockSource)
+        GeometryReader { proxy in
+            let horizontalInset = max(0, (proxy.size.width - itemWidth) / 2)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: spacing) {
+                    ForEach(items) { item in
+                        AvatarPickerItemView(
+                            item: item,
+                            isSelected: selectedId == item.id,
+                            itemSize: itemSize,
+                            itemWidth: itemWidth
+                        )
+                        .id(item.id)
+                        .onTapGesture {
+                            centerAvatar(id: item.id, animated: true)
+                            if item.isUnlocked {
+                                selectedId = item.id
+                                onSelected?()
+                            } else {
+                                onLockedTap(item, item.unlockSource)
+                            }
                         }
                     }
                 }
+                .scrollTargetLayout()
             }
-            .padding(.horizontal, spacing)
+            .contentMargins(.horizontal, horizontalInset, for: .scrollContent)
+            .scrollTargetBehavior(.viewAligned)
+            .scrollPosition(id: $centeredId, anchor: .center)
+            .onAppear {
+                centerSelectedAvatar(animated: false)
+            }
+            .onChange(of: selectedId) { _, _ in
+                centerSelectedAvatar(animated: true)
+            }
+            .onChange(of: items) { _, _ in
+                centerSelectedAvatar(animated: false)
+            }
         }
-        .onAppear {
-            if selectedId == nil, let first = items.first {
-                selectedId = first.id
+    }
+
+    private func centerSelectedAvatar(animated: Bool) {
+        let targetId = items.contains(where: { $0.id == selectedId }) ? selectedId : (centeredId ?? items.first?.id)
+        centerAvatar(id: targetId, animated: animated)
+    }
+
+    private func centerAvatar(id: String?, animated: Bool) {
+        guard let id else { return }
+        if animated {
+            withAnimation(.snappy) {
+                centeredId = id
             }
+        } else {
+            centeredId = id
         }
     }
 }

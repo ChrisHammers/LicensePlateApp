@@ -14,15 +14,14 @@ struct GameplayModelFoundationTests {
 
     @Test func tripModeDefaultsAndCases() async throws {
         #expect(TripMode.solo.rawValue == "solo")
-        #expect(TripMode.collaborative.rawValue == "collaborative")
-        #expect(TripMode.competitive.rawValue == "competitive")
-        #expect(TripMode.combined.rawValue == "combined")
+        #expect(TripMode.multiplayer.rawValue == "multiplayer")
     }
 
-    @Test func tripStatusDefaultsAndCases() async throws {
-        #expect(TripStatus.active.rawValue == "active")
-        #expect(TripStatus.ended.rawValue == "ended")
-        #expect(TripStatus.cancelled.rawValue == "cancelled")
+    @Test func tripSessionStateCases() async throws {
+        #expect(TripSessionState.created.rawValue == "created")
+        #expect(TripSessionState.active.rawValue == "active")
+        #expect(TripSessionState.ended.rawValue == "ended")
+        #expect(TripSessionState.cancelled.rawValue == "cancelled")
     }
 
     @Test func participantCreation() async throws {
@@ -56,10 +55,9 @@ struct GameplayModelFoundationTests {
 
     @Test func tripSessionMigrationSafeDefaults() async throws {
         let session = await TripSession(name: "Test Trip")
-        #expect(session.status == .active)
+        #expect(session.status == .created)
         #expect(session.mode == .solo)
         #expect(session.participants.isEmpty)
-        #expect(session.enabledCountryRawValues.count >= 3)
     }
 
     @Test func gameInstanceAndDiscoveryConstruction() async throws {

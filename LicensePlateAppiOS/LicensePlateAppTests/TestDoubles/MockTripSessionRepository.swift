@@ -27,12 +27,22 @@ final class MockTripSessionRepository: TripSessionRepositoryProtocol {
 
     func loadActiveSessions(userId: String?) throws -> [TripSession] {
         if shouldThrow { throw NSError(domain: "MockTripSessionRepository", code: -1, userInfo: nil) }
-        return sessions.values.filter { $0.status == .active }
+        return sessions.values.filter { $0.status == .active || $0.status == .created }
     }
 
-    func loadArchivedSessions(userId: String?, limit: Int) throws -> [TripSession] {
+    func loadArchivedSessions(userId: String?, limit: Int, includeCancelled: Bool, sortBy: TravelLogSort) throws -> [TripSession] {
         if shouldThrow { throw NSError(domain: "MockTripSessionRepository", code: -1, userInfo: nil) }
-        return Array(sessions.values.filter { $0.status == .ended }.sorted { ($0.endedAt ?? .distantPast) > ($1.endedAt ?? .distantPast) }.prefix(limit))
+        let filtered = sessions.values.filter { session in
+            session.status == .ended || (includeCancelled && session.status == .cancelled)
+        }
+        let sorted: [TripSession]
+        switch sortBy {
+        case .endedAtDesc:
+            sorted = filtered.sorted { ($0.endedAt ?? .distantPast) > ($1.endedAt ?? .distantPast) }
+        case .endedAtAsc:
+            sorted = filtered.sorted { ($0.endedAt ?? .distantPast) < ($1.endedAt ?? .distantPast) }
+        }
+        return Array(sorted.prefix(limit))
     }
 
     func addParticipant(sessionId: UUID, participant: TripParticipant) throws {
@@ -53,7 +63,7 @@ final class MockTripSessionRepository: TripSessionRepositoryProtocol {
         }
     }
 
-    func updateStatus(sessionId: UUID, status: TripStatus) throws {
+    func updateStatus(sessionId: UUID, status: TripSessionState) throws {
         if shouldThrow { throw NSError(domain: "MockTripSessionRepository", code: -1, userInfo: nil) }
         if var session = sessions[sessionId] {
             session.status = status

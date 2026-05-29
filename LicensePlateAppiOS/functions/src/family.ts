@@ -3,13 +3,15 @@ import * as admin from "firebase-admin";
 import { canAddMemberToFamily } from "./utils/validation";
 import { writeAuditLog } from "./audit";
 import { getFCMToken, sendPushNotification } from "./utils/notifications";
+import { normalizeClientMetadata } from "./clientMetadata";
+import { enforcedCallable } from "./callableOptions";
 
 const db = admin.firestore();
 
 /**
  * Create a new family
  */
-export const createFamily = functions.https.onCall(
+export const createFamily = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -20,6 +22,7 @@ export const createFamily = functions.https.onCall(
 
     const { name } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!name || typeof name !== "string" || name.trim().length === 0) {
       throw new functions.https.HttpsError(
@@ -78,6 +81,7 @@ export const createFamily = functions.https.onCall(
       subjectType: "family",
       subjectId: familyRef.id,
       metadata: { name: name.trim() },
+      clientMetadata,
     });
 
     return { familyId: familyRef.id };
@@ -87,7 +91,7 @@ export const createFamily = functions.https.onCall(
 /**
  * Send a family invite
  */
-export const sendFamilyInvite = functions.https.onCall(
+export const sendFamilyInvite = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -98,6 +102,7 @@ export const sendFamilyInvite = functions.https.onCall(
 
     const { toUserId, familyId, method } = data;
     const fromUserId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!toUserId || !familyId) {
       throw new functions.https.HttpsError(
@@ -147,6 +152,7 @@ export const sendFamilyInvite = functions.https.onCall(
         subjectType: "user",
         subjectId: toUserId,
         metadata: { familyId, reason: canAdd.reason },
+        clientMetadata,
       });
       throw new functions.https.HttpsError(
         "failed-precondition",
@@ -193,6 +199,7 @@ export const sendFamilyInvite = functions.https.onCall(
       subjectType: "invite",
       subjectId: inviteRef.id,
       metadata: { toUserId, familyId, method },
+      clientMetadata,
     });
 
     return { inviteId: inviteRef.id };
@@ -202,7 +209,7 @@ export const sendFamilyInvite = functions.https.onCall(
 /**
  * User accepts family invite (step 1) - creates pending request
  */
-export const respondToFamilyInvite_UserStep = functions.https.onCall(
+export const respondToFamilyInvite_UserStep = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -213,6 +220,7 @@ export const respondToFamilyInvite_UserStep = functions.https.onCall(
 
     const { inviteId, response } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!inviteId || !response) {
       throw new functions.https.HttpsError(
@@ -282,6 +290,7 @@ export const respondToFamilyInvite_UserStep = functions.https.onCall(
         subjectType: "invite",
         subjectId: inviteId,
         metadata: { familyId: inviteData.familyId },
+        clientMetadata,
       });
     }
 
@@ -294,7 +303,7 @@ export const respondToFamilyInvite_UserStep = functions.https.onCall(
 /**
  * Captain approves family join request (step 2) - adds member
  */
-export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
+export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -305,6 +314,7 @@ export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
 
     const { familyId, requestId, response } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!familyId || !requestId || !response) {
       throw new functions.https.HttpsError(
@@ -441,6 +451,7 @@ export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
         subjectType: "family",
         subjectId: familyId,
         metadata: { newMemberId: requestData.userId, role: newRole },
+        clientMetadata,
       });
     } else {
       // Decline request
@@ -455,6 +466,7 @@ export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
         subjectType: "family",
         subjectId: familyId,
         metadata: { requestId, userId: requestData.userId },
+        clientMetadata,
       });
     }
 
@@ -467,7 +479,7 @@ export const approveFamilyJoinRequest_CaptainStep = functions.https.onCall(
 /**
  * Remove a family member
  */
-export const removeFamilyMember = functions.https.onCall(
+export const removeFamilyMember = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -478,6 +490,7 @@ export const removeFamilyMember = functions.https.onCall(
 
     const { familyId, memberId } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!familyId || !memberId) {
       throw new functions.https.HttpsError(
@@ -550,6 +563,7 @@ export const removeFamilyMember = functions.https.onCall(
       subjectType: "family",
       subjectId: familyId,
       metadata: { removedMemberId: memberId, role: targetMemberRole },
+      clientMetadata,
     });
 
     return { success: true };
@@ -559,7 +573,7 @@ export const removeFamilyMember = functions.https.onCall(
 /**
  * Change a family member's role
  */
-export const changeFamilyMemberRole = functions.https.onCall(
+export const changeFamilyMemberRole = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -570,6 +584,7 @@ export const changeFamilyMemberRole = functions.https.onCall(
 
     const { familyId, memberId, newRole } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!familyId || !memberId || !newRole) {
       throw new functions.https.HttpsError(
@@ -640,6 +655,7 @@ export const changeFamilyMemberRole = functions.https.onCall(
       subjectType: "family",
       subjectId: familyId,
       metadata: { memberId, oldRole: currentRole, newRole },
+      clientMetadata,
     });
 
     return { success: true };
@@ -650,7 +666,7 @@ export const changeFamilyMemberRole = functions.https.onCall(
  * Inactivate a family (creator only)
  * Marks family as inactive, removes all members, and clears activeFamilyId
  */
-export const inactivateFamily = functions.https.onCall(
+export const inactivateFamily = enforcedCallable(
   async (data, context) => {
     if (!context.auth) {
       throw new functions.https.HttpsError(
@@ -661,6 +677,7 @@ export const inactivateFamily = functions.https.onCall(
 
     const { familyId } = data;
     const userId = context.auth.uid;
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!familyId) {
       throw new functions.https.HttpsError(
@@ -732,6 +749,7 @@ export const inactivateFamily = functions.https.onCall(
         reason: "creator_inactivated",
         familyName: familyData.name,
       },
+      clientMetadata,
     });
 
     return { success: true };

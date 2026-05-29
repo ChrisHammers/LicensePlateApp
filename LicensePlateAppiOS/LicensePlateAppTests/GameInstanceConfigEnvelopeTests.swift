@@ -22,7 +22,7 @@ struct GameInstanceConfigEnvelopeTests {
     @Test func roundTripWithCommonConfigAndLicensePlatePayload() async throws {
         let sessionId = UUID()
         let lpConfig = LicensePlateGameConfig(
-            regionScope: .usOnly,
+            selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue],
             territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: false, includeCanadianTerritories: true, includeDC: true)
         )
         let payloadData = try JSONEncoder().encode(lpConfig)
@@ -50,11 +50,13 @@ struct GameInstanceConfigEnvelopeTests {
 
         let back = GameInstanceMapper.toDomain(entity)
         #expect(back.commonConfig.gameMode == GameMode.competitive)
-        #expect(back.commonConfig.lifecycleState == GameLifecycleState.created)
+        #expect(back.commonConfig.lifecycleState == GameInstanceState.created)
         let decoded = back.licensePlateConfig()
         #expect(decoded != nil)
-        #expect(decoded?.regionScope == .usOnly)
+        #expect(decoded?.selectedCountries == [.unitedStates])
         #expect(decoded?.territoryOptions.includeDC == true)
+        #expect(decoded?.territoryOptions.includeUSTerritories == false)
+        #expect(decoded?.territoryOptions.includeCanadianTerritories == true)
     }
 
     @Test func legacyEntityWithoutCommonConfigDataDecodesWithDefaults() async throws {
@@ -83,13 +85,12 @@ struct GameInstanceConfigEnvelopeTests {
             id: UUID(),
             name: "Test",
             status: .active,
-            mode: .solo,
             createdAt: .now,
-            participants: [TripParticipant(userId: "u1", role: .owner)],
-            enabledCountryRawValues: ["United States", "Canada", "Mexico"]
+            participants: [TripParticipant(userId: "u1", role: .owner)]
         )
         let config = CombinedGameConfiguration(enabledGameTypes: [.licensePlate])
-        let instances = CombinedGameAssembler.assemble(session: session, config: config)
+        let lpConfig = CombinedGameAssembler.licensePlateConfig(from: [.unitedStates, .canada, .mexico])
+        let instances = CombinedGameAssembler.assemble(session: session, config: config, licensePlateConfig: lpConfig)
         #expect(instances.count == 1)
         #expect(instances[0].commonConfig.scoringProfile == "default")
         #expect(instances[0].commonConfig.lifecycleState == .created)

@@ -15,6 +15,7 @@ final class MockRiskAssessmentService: RiskAssessing {
 
     func assessAfterDiscoveryChange(
         tripId: UUID,
+        gameInstanceId: UUID,
         foundRegions: [FoundRegion],
         lastChange: (regionID: String, isAdd: Bool, at: Date)
     ) -> RiskAssessmentResult {

@@ -31,9 +31,8 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
             throw DebugForcedPersistenceError.create
         }
         #endif
-        let entity = TripSessionEntityMapper.toEntity(session)
+        let entity = TripSessionPersistence.toEntity(session)
         ctx.insert(entity)
-        upsertTeams(sessionId: session.id.uuidString, teams: session.teams, context: ctx)
         try ctx.save()
     }
 
@@ -49,11 +48,10 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
             predicate: #Predicate<TripSessionEntity> { $0.id == id }
         )
         if let existing = try ctx.fetch(descriptor).first {
-            TripSessionEntityMapper.updateEntity(existing, from: session)
+            TripSessionPersistence.updateEntity(existing, from: session)
         } else {
-            ctx.insert(TripSessionEntityMapper.toEntity(session))
+            ctx.insert(TripSessionPersistence.toEntity(session))
         }
-        upsertTeams(sessionId: id, teams: session.teams, context: ctx)
         try ctx.save()
     }
 
@@ -61,38 +59,48 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
 
     func loadActiveSessions(userId: String?) throws -> [TripSession] {
         guard let ctx = modelContext else { throw TripSessionRepositoryError.noModelContext }
-        let status = TripStatus.active.rawValue
+        let activeStatus = TripSessionState.active.rawValue
+        let createdStatus = TripSessionState.created.rawValue
         var descriptor = FetchDescriptor<TripSessionEntity>(
-            predicate: #Predicate<TripSessionEntity> { $0.status == status }
+            predicate: #Predicate<TripSessionEntity> { $0.status == activeStatus || $0.status == createdStatus }
         )
         descriptor.sortBy = [SortDescriptor(\.startedAt, order: .reverse)]
         var entities = try ctx.fetch(descriptor)
         if let uid = userId {
+            let pendingLeaveSessions = (try? PendingTripLeaveRepository.shared.sessionIdsPendingLeave(userId: uid)) ?? []
             entities = entities.filter { entity in
-                entity.createdBy == uid || participantIds(from: entity.participantsData).contains(uid)
+                guard let uuid = UUID(uuidString: entity.id) else { return false }
+                if pendingLeaveSessions.contains(uuid) { return false }
+                return entity.createdBy == uid || participantIds(from: entity.participantsData).contains(uid)
             }
         }
-        let teamsMap = try fetchTeamsMap(sessionIds: entities.map(\.id), context: ctx)
-        return entities.map { TripSessionEntityMapper.toDomain($0, teamsData: teamsMap[$0.id].flatMap { $0 }) }
+        return entities.map { TripSessionPersistence.toDomain($0) }
     }
 
-    func loadArchivedSessions(userId: String?, limit: Int) throws -> [TripSession] {
+    func loadArchivedSessions(userId: String?, limit: Int, includeCancelled: Bool, sortBy: TravelLogSort) throws -> [TripSession] {
         guard let ctx = modelContext else { throw TripSessionRepositoryError.noModelContext }
-        let ended = TripStatus.ended.rawValue
-        let cancelled = TripStatus.cancelled.rawValue
-        var descriptor = FetchDescriptor<TripSessionEntity>(
-            predicate: #Predicate<TripSessionEntity> { $0.status == ended || $0.status == cancelled }
-        )
-        descriptor.sortBy = [SortDescriptor(\.endedAt, order: .reverse)]
-        descriptor.fetchLimit = limit
-        var entities = try ctx.fetch(descriptor)
+        let ended = TripSessionState.ended.rawValue
+        let cancelled = TripSessionState.cancelled.rawValue
+        let descriptor: FetchDescriptor<TripSessionEntity>
+        if includeCancelled {
+            descriptor = FetchDescriptor<TripSessionEntity>(
+                predicate: #Predicate<TripSessionEntity> { $0.status == ended || $0.status == cancelled }
+            )
+        } else {
+            descriptor = FetchDescriptor<TripSessionEntity>(
+                predicate: #Predicate<TripSessionEntity> { $0.status == ended }
+            )
+        }
+        var mutableDescriptor = descriptor
+        mutableDescriptor.sortBy = [SortDescriptor(\.endedAt, order: sortBy == .endedAtDesc ? .reverse : .forward)]
+        mutableDescriptor.fetchLimit = limit
+        var entities = try ctx.fetch(mutableDescriptor)
         if let uid = userId {
             entities = entities.filter { entity in
                 entity.createdBy == uid || participantIds(from: entity.participantsData).contains(uid)
             }
         }
-        let teamsMap = try fetchTeamsMap(sessionIds: entities.map(\.id), context: ctx)
-        return entities.map { TripSessionEntityMapper.toDomain($0, teamsData: teamsMap[$0.id].flatMap { $0 }) }
+        return entities.map { TripSessionPersistence.toDomain($0) }
     }
 
     // MARK: - Participant
@@ -103,7 +111,7 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
         guard let entity = try fetchEntity(byId: id, context: ctx) else {
             throw TripSessionRepositoryError.sessionNotFound(sessionId)
         }
-        var participants = TripSessionEntityMapper.toDomain(entity).participants
+        var participants = TripSessionPersistence.toDomain(entity).participants
         if !participants.contains(where: { $0.userId == participant.userId }) {
             participants.append(participant)
         }
@@ -117,7 +125,7 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
         guard let entity = try fetchEntity(byId: id, context: ctx) else {
             throw TripSessionRepositoryError.sessionNotFound(sessionId)
         }
-        var participants = TripSessionEntityMapper.toDomain(entity).participants
+        var participants = TripSessionPersistence.toDomain(entity).participants
         participants.removeAll { $0.userId == userId }
         entity.participantsData = participants.isEmpty ? nil : (try? JSONEncoder().encode(participants))
         try ctx.save()
@@ -125,7 +133,7 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
 
     // MARK: - Status
 
-    func updateStatus(sessionId: UUID, status: TripStatus) throws {
+    func updateStatus(sessionId: UUID, status: TripSessionState) throws {
         guard let ctx = modelContext else { throw TripSessionRepositoryError.noModelContext }
         let id = sessionId.uuidString
         guard let entity = try fetchEntity(byId: id, context: ctx) else {
@@ -146,8 +154,7 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
     func session(byId id: UUID) throws -> TripSession? {
         guard let ctx = modelContext else { throw TripSessionRepositoryError.noModelContext }
         guard let entity = try fetchEntity(byId: id.uuidString, context: ctx) else { return nil }
-        let teamsData = try? fetchTeamsEntity(bySessionId: id.uuidString, context: ctx)?.teamsData
-        return TripSessionEntityMapper.toDomain(entity, teamsData: teamsData)
+        return TripSessionPersistence.toDomain(entity)
     }
 
     /// Placeholder for future sync; entity does not yet have lastSyncedAt.
@@ -164,37 +171,70 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
         return try context.fetch(descriptor).first
     }
 
-    private func fetchTeamsEntity(bySessionId sessionId: String, context: ModelContext) throws -> TripSessionTeamsEntity? {
-        let descriptor = FetchDescriptor<TripSessionTeamsEntity>(
-            predicate: #Predicate<TripSessionTeamsEntity> { $0.sessionId == sessionId }
-        )
-        return try context.fetch(descriptor).first
-    }
-
-    private func fetchTeamsMap(sessionIds: [String], context: ModelContext) throws -> [String: Data?] {
-        let descriptor = FetchDescriptor<TripSessionTeamsEntity>()
-        let all = try context.fetch(descriptor)
-        let sessionIdSet = Set(sessionIds)
-        return all
-            .filter { sessionIdSet.contains($0.sessionId) }
-            .reduce(into: [String: Data?]()) { $0[$1.sessionId] = $1.teamsData }
-    }
-
-    private func upsertTeams(sessionId: String, teams: [TripTeam], context: ModelContext) {
-        let data = TripSessionEntityMapper.encodeTeamsForStorage(teams)
-        if let existing = try? fetchTeamsEntity(bySessionId: sessionId, context: context) {
-            existing.teamsData = data
-        } else if data != nil || !teams.isEmpty {
-            context.insert(TripSessionTeamsEntity(sessionId: sessionId, teamsData: data))
-        }
-    }
-
     private func participantIds(from participantsData: Data?) -> Set<String> {
         guard let data = participantsData,
               let participants = try? JSONDecoder().decode([TripParticipant].self, from: data) else {
             return []
         }
         return Set(participants.map(\.userId))
+    }
+}
+
+// MARK: - Domain <-> SwiftData (Trip participation derived from participants; not stored on entity)
+
+private enum TripSessionPersistence {
+    static func toEntity(_ session: TripSession) -> TripSessionEntity {
+        let participantsData: Data? = encodeParticipants(session.participants)
+        return TripSessionEntity(
+            id: session.id.uuidString,
+            name: session.name,
+            status: session.status.rawValue,
+            createdAt: session.createdAt,
+            createdBy: session.createdBy,
+            startedAt: session.startedAt,
+            endedAt: session.endedAt,
+            endedBy: session.endedBy,
+            participantsData: participantsData
+        )
+    }
+
+    static func toDomain(_ entity: TripSessionEntity) -> TripSession {
+        let participants = decodeParticipants(entity.participantsData)
+        let status = TripSessionState(rawValue: entity.status) ?? .active
+        let createdAt = entity.createdAt ?? entity.startedAt ?? Date.distantPast
+        return TripSession(
+            id: UUID(uuidString: entity.id) ?? UUID(),
+            name: entity.name,
+            status: status,
+            createdAt: createdAt,
+            createdBy: entity.createdBy,
+            startedAt: entity.startedAt,
+            endedAt: entity.endedAt,
+            endedBy: entity.endedBy,
+            participants: participants,
+            riskFlags: nil
+        )
+    }
+
+    static func updateEntity(_ entity: TripSessionEntity, from session: TripSession) {
+        entity.name = session.name
+        entity.status = session.status.rawValue
+        entity.createdAt = session.createdAt
+        entity.createdBy = session.createdBy
+        entity.startedAt = session.startedAt
+        entity.endedAt = session.endedAt
+        entity.endedBy = session.endedBy
+        entity.participantsData = encodeParticipants(session.participants)
+    }
+
+    private static func encodeParticipants(_ participants: [TripParticipant]) -> Data? {
+        guard !participants.isEmpty else { return nil }
+        return try? JSONEncoder().encode(participants)
+    }
+
+    private static func decodeParticipants(_ data: Data?) -> [TripParticipant] {
+        guard let data else { return [] }
+        return (try? JSONDecoder().decode([TripParticipant].self, from: data)) ?? []
     }
 }
 

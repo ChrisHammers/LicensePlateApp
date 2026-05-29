@@ -40,10 +40,8 @@ struct SchemaMigrationGameplayTests {
         let entity = TripSessionEntity(
             id: id,
             name: name,
-            status: TripStatus.active.rawValue,
-            mode: TripMode.solo.rawValue,
-            createdAt: Date(),
-            enabledCountryRawValues: "United States,Canada,Mexico"
+            status: TripSessionState.active.rawValue,
+            createdAt: Date()
         )
         context.insert(entity)
         try context.save()
@@ -52,8 +50,7 @@ struct SchemaMigrationGameplayTests {
         let results = try context.fetch(descriptor)
         #expect(results.count == 1)
         #expect(results[0].name == name)
-        #expect(results[0].status == TripStatus.active.rawValue)
-        #expect(results[0].mode == TripMode.solo.rawValue)
+        #expect(results[0].status == TripSessionState.active.rawValue)
     }
 
     @Test func insertAndFetchGameInstanceEntity() async throws {
@@ -83,11 +80,9 @@ struct SchemaMigrationGameplayTests {
         let entity = TripSessionEntity(
             id: UUID().uuidString,
             name: "Defaults",
-            status: TripStatus.active.rawValue,
-            mode: TripMode.solo.rawValue,
+            status: TripSessionState.active.rawValue,
             createdAt: Date()
         )
-        #expect(entity.enabledCountryRawValues == "United States,Canada,Mexico")
         #expect(entity.createdBy == nil)
         #expect(entity.startedAt == nil)
         #expect(entity.endedAt == nil)

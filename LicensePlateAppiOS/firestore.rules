@@ -10,12 +10,20 @@ service cloud.firestore {
       return request.auth.uid;
     }
 
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.admin == true;
+    }
+
     function userDoc(userId) {
       return get(/databases/$(database)/documents/users/$(userId));
     }
 
     function isRetiredGeneral(userId) {
       return userDoc(userId).data.isRetiredGeneral == true;
+    }
+
+    function userDocHasNoPrivateFields() {
+      return !request.resource.data.keys().hasAny(["deviceIdentifier", "lastLoginLocationData", "lastLoginLocations", "lastLoginLocation"]);
     }
 
     function isFamilyMember(familyId) {
@@ -37,9 +45,26 @@ service cloud.firestore {
     // USERS
     match /users/{userId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && uid() == userId;
-      allow update: if isSignedIn() && uid() == userId;
+      allow create: if isSignedIn() && uid() == userId && userDocHasNoPrivateFields();
+      allow update: if isSignedIn() && uid() == userId && userDocHasNoPrivateFields();
       allow delete: if false; // handle via backend flows if needed
+    }
+
+    match /users/{userId}/private/{docId} {
+      allow read, write: if isSignedIn() && uid() == userId &&
+        docId == "lastLoginLocationData";
+    }
+
+    // Public lifetime stats (read-only aggregate mirror; writes via Admin SDK / Cloud Functions only)
+    match /public_lifetime_stats/{userId} {
+      allow read: if isSignedIn();
+      allow write: if false;
+    }
+
+    // User progression (XP / milestones; writes via Cloud Functions only)
+    match /user_progression/{userId} {
+      allow read: if isSignedIn() && uid() == userId;
+      allow write: if false;
     }
 
     // USERNAME INDEX (write via Cloud Function / transaction)
@@ -60,8 +85,63 @@ service cloud.firestore {
       allow update: if isSignedIn() &&
         (uid() == resource.data.userA || uid() == resource.data.userB);
 
-      allow delete: if isSignedIn() &&
-        (uid() == resource.data.userA || uid() == resource.data.userB);
+      // Removals go through removeFriend Cloud Function (Admin SDK) for friendCount consistency
+      allow delete: if false;
+    }
+
+    function isTripSessionMember(sessionId, userId) {
+      return exists(/databases/$(database)/documents/trip_sessions/$(sessionId)/members/$(userId));
+    }
+
+    // TRIP INVITES (mutations via Cloud Functions only)
+    match /trip_invites/{inviteId} {
+      allow read: if isSignedIn() &&
+        (uid() == resource.data.fromUserId || uid() == resource.data.toUserId);
+      allow create, update, delete: if false;
+    }
+
+    // TRIP SESSIONS — minimal metadata + authoritative roster in members (writes server-only)
+    match /trip_sessions/{sessionId} {
+      // TODO(step-08-rules-hardening): Optionally allow invite-party read access before membership, if product needs pre-accept trip metadata.
+      allow read: if isSignedIn() &&
+        (resource.data.createdBy == uid() || isTripSessionMember(sessionId, uid()));
+      allow create, update, delete: if false;
+    }
+
+    match /trip_sessions/{sessionId}/members/{memberId} {
+      allow read: if isSignedIn() && isTripSessionMember(sessionId, uid());
+      allow create, update, delete: if false;
+    }
+
+    // Trip canonical games & events (read by members; writes via Cloud Functions only)
+    match /trip_sessions/{sessionId}/games/{gameId} {
+      allow read: if isSignedIn() && isTripSessionMember(sessionId, uid());
+      allow create, update, delete: if false;
+    }
+
+    match /trip_sessions/{sessionId}/games/{gameId}/private/{docId} {
+      allow get: if isSignedIn() &&
+        (isAdmin() || resource.data.userId == uid());
+      allow list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /trip_sessions/{sessionId}/activity_events/{eventId} {
+      allow read: if isSignedIn() && isTripSessionMember(sessionId, uid());
+      allow create, update, delete: if false;
+    }
+
+    match /trip_sessions/{sessionId}/activity_events/{eventId}/private/{docId} {
+      allow get: if isSignedIn() &&
+        (isAdmin() || resource.data.userId == uid());
+      allow list: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // Fairness UI watermark per user per game (writes via updateFairnessAckWatermark only)
+    match /trip_sessions/{sessionId}/games/{gameId}/fairness_ack_watermarks/{userId} {
+      allow read: if isSignedIn() && isTripSessionMember(sessionId, uid()) && userId == uid();
+      allow create, update, delete: if false;
     }
 
     // INVITES

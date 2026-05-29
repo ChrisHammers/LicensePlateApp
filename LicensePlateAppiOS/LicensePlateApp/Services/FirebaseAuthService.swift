@@ -12,6 +12,7 @@ import UIKit
 import FirebaseAuth
 import FirebaseFirestore
 import FirebaseCore
+import FirebaseFunctions
 import AuthenticationServices
 import GoogleSignIn
 import Network
@@ -24,11 +25,13 @@ class NetworkMonitor: ObservableObject {
     @Published var isConnected = true
     private let monitor = NWPathMonitor()
     private let queue = DispatchQueue(label: "NetworkMonitor")
-    
+
     init() {
         monitor.pathUpdateHandler = { [weak self] path in
+            // Read `path` only inside the handler (NWPath lifetime).
+            let satisfied = path.status == .satisfied
             Task { @MainActor in
-                self?.isConnected = path.status == .satisfied
+                self?.isConnected = satisfied
             }
         }
         monitor.start(queue: queue)
@@ -63,7 +66,14 @@ class FirebaseAuthService: ObservableObject {
     private weak var syncCoordinator: SyncCoordinatorProtocol?
     private var authStateListener: AuthStateDidChangeListenerHandle?
     private let networkMonitor = NetworkMonitor()
-    
+    private var networkReachabilityCancellables = Set<AnyCancellable>()
+    private var progressionBootstrapAttemptedUserIds: Set<String> = []
+    /// When false, unsatisfied→satisfied transitions do not schedule gameplay sync (avoids flushing before `RootView` wires repos + `setSyncCoordinator`).
+    private var gameplaySyncFlushOnReachabilityRegainedEnabled = false
+
+    /// Published mirror of reachability so SwiftUI can react when connectivity returns.
+    @Published private(set) var isNetworkReachable: Bool
+
     // Store location delegates to prevent deallocation
     var activeLocationDelegates: [OneTimeLocationDelegate] = []
     
@@ -71,12 +81,26 @@ class FirebaseAuthService: ObservableObject {
     private var lastLoginTrackingTime: Date?
     
     init() {
+        isNetworkReachable = networkMonitor.isConnected
         // Observe auth state changes
         authStateListener = auth.addStateDidChangeListener { [weak self] auth, user in
             Task { @MainActor in
                 await self?.handleAuthStateChange(user)
             }
         }
+        networkMonitor.$isConnected
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] connected in
+                guard let self else { return }
+                let wasReachable = self.isNetworkReachable
+                self.isNetworkReachable = connected
+                guard self.gameplaySyncFlushOnReachabilityRegainedEnabled else { return }
+                if !wasReachable && connected {
+                    SyncCoordinator.shared.scheduleDebouncedGameplaySyncFlushIfOnline()
+                }
+            }
+            .store(in: &networkReachabilityCancellables)
     }
     
     deinit {
@@ -91,13 +115,13 @@ class FirebaseAuthService: ObservableObject {
 
     func setSyncCoordinator(_ coordinator: SyncCoordinatorProtocol) {
         self.syncCoordinator = coordinator
+        gameplaySyncFlushOnReachabilityRegainedEnabled = true
     }
     
     // MARK: - Network Status
-    
-    var isOnline: Bool {
-        networkMonitor.isConnected
-    }
+
+    /// Same as `isNetworkReachable`; kept for existing call sites (`isOnline` reads).
+    var isOnline: Bool { isNetworkReachable }
     
     /// Returns info about a restored Firebase user (from Keychain) if they exist and are not anonymous.
     /// Use this on onboarding to offer "Sign in as existing user" when a previous session was restored.
@@ -1089,7 +1113,9 @@ class FirebaseAuthService: ObservableObject {
         lastLoginTrackingTime = .now
         
         // Always update last login date
-        user.lastDateLoggedIn = .now
+        let loginDate = Date()
+        user.lastDateLoggedIn = loginDate
+        user.lastUpdated = loginDate
         
         // Check location permission and update location if available
         let locationManager = CLLocationManager()
@@ -1100,13 +1126,26 @@ class FirebaseAuthService: ObservableObject {
             if let location = await getCurrentLocation() {
                 let loginLocation = LoginLocation(
                     latitude: location.coordinate.latitude,
-                    longitude: location.coordinate.longitude
+                    longitude: location.coordinate.longitude,
+                    timestamp: loginDate
                 )
                 
                 // Add new location and keep only last 5
                 user.lastLoginLocation.append(loginLocation)
                 if user.lastLoginLocation.count > 5 {
                     user.lastLoginLocation.removeFirst()
+                }
+
+                if isOnline, let firebaseUID = user.firebaseUID {
+                    Task {
+                        do {
+                            try await appendPrivateLoginLocation(location, timestamp: loginDate, userId: firebaseUID)
+                        } catch {
+                            #if DEBUG
+                            print("⚠️ Failed to append private login location: \(error)")
+                            #endif
+                        }
+                    }
                 }
             }
         }
@@ -1322,10 +1361,48 @@ class FirebaseAuthService: ObservableObject {
             data[key] = value
         }
         try await docRef.setData(data, merge: true)
+        await ensureUserProgressionDocumentIfPossible(userId: firebaseUID)
         
         user.lastSyncedToFirebase = .now
         user.needsSync = false
         try? modelContext?.save()
+    }
+
+    private func privateLoginLocationDataRef(userId: String) -> DocumentReference {
+        db.collection("users").document(userId).collection("private").document("lastLoginLocationData")
+    }
+
+    private func appendPrivateLoginLocation(_ location: CLLocation, timestamp: Date, userId: String) async throws {
+        let locationData: [String: Any] = [
+            "latitude": location.coordinate.latitude,
+            "longitude": location.coordinate.longitude,
+            "timestamp": Timestamp(date: timestamp),
+            "clientMetadata": ClientMetadata.current.firestoreValue
+        ]
+
+        try await privateLoginLocationDataRef(userId: userId).setData([
+            "lastLoginLocations": FieldValue.arrayUnion([locationData]),
+            "updatedAt": FieldValue.serverTimestamp()
+        ], merge: true)
+    }
+
+    private func ensureUserProgressionDocumentIfPossible(userId: String?) async {
+        guard isOnline,
+              let userId,
+              !userId.isEmpty,
+              Auth.auth().currentUser?.uid == userId,
+              !progressionBootstrapAttemptedUserIds.contains(userId)
+        else { return }
+
+        do {
+            let fn = Functions.functions().httpsCallable("ensureUserProgressionDocument")
+            _ = try await fn.call(([:] as [String: Any]).addingClientMetadata())
+            progressionBootstrapAttemptedUserIds.insert(userId)
+        } catch {
+            #if DEBUG
+            print("⚠️ Failed to ensure user_progression document: \(error)")
+            #endif
+        }
     }
     
     /// Refresh current user data from Firestore (useful after Cloud Function updates)
@@ -1357,6 +1434,11 @@ class FirebaseAuthService: ObservableObject {
             existingUser.phoneNumber = firestoreUser.phoneNumber
             existingUser.userImageURL = firestoreUser.userImageURL
             existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
+            existingUser.avatarColor = firestoreUser.avatarColor
+            existingUser.avatarType = firestoreUser.avatarType
+            existingUser.avatarId = firestoreUser.avatarId
+            existingUser.equippedBadgeId = firestoreUser.equippedBadgeId
+            existingUser.wasEverInFamily = firestoreUser.wasEverInFamily
             // Friends & Family fields
             existingUser.activeFamilyId = firestoreUser.activeFamilyId
             existingUser.friendCount = firestoreUser.friendCount
@@ -1368,11 +1450,21 @@ class FirebaseAuthService: ObservableObject {
             
             // Update published property
             currentUser = existingUser
+            NotificationCenter.default.post(
+                name: .userProfilesMerged,
+                object: nil,
+                userInfo: ["userIds": [firebaseUID]]
+            )
         } else {
             // User doesn't exist locally, insert it
             modelContext.insert(firestoreUser)
             try? modelContext.save()
             currentUser = firestoreUser
+            NotificationCenter.default.post(
+                name: .userProfilesMerged,
+                object: nil,
+                userInfo: ["userIds": [firebaseUID]]
+            )
         }
     }
     
@@ -1410,21 +1502,11 @@ class FirebaseAuthService: ObservableObject {
             data["equippedBadgeId"] = equippedBadgeId
         }
         data["wasEverInFamily"] = user.wasEverInFamily
-        if let deviceIdentifier = user.deviceIdentifier {
-            data["deviceIdentifier"] = deviceIdentifier
-        }
+        data["deviceIdentifier"] = FieldValue.delete()
         if let lastDateLoggedIn = user.lastDateLoggedIn {
             data["lastDateLoggedIn"] = Timestamp(date: lastDateLoggedIn)
         }
-        if !user.lastLoginLocation.isEmpty {
-            data["lastLoginLocation"] = user.lastLoginLocation.map { location in
-                [
-                    "latitude": location.latitude,
-                    "longitude": location.longitude,
-                    "timestamp": Timestamp(date: location.timestamp)
-                ]
-            }
-        }
+        data["lastLoginLocation"] = FieldValue.delete()
         
         // Friends & Family fields
         if let activeFamilyId = user.activeFamilyId {
@@ -1457,7 +1539,7 @@ class FirebaseAuthService: ObservableObject {
     }
     
     private func appUserFromFirestoreData(_ data: [String: Any], id: String) -> AppUser {
-        let userName = data["userName"] as? String ?? "User"
+        let userName = (data["userName"] as? String) ?? (data["username"] as? String) ?? "User"
         let firstName = data["firstName"] as? String
         let lastName = data["lastName"] as? String
         let email = data["email"] as? String

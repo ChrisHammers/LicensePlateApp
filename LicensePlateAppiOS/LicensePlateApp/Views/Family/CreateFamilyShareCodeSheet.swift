@@ -35,10 +35,7 @@ struct CreateFamilyShareCodeSheet: View {
     
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 if isGenerating {
                     ProgressView()
                         .scaleEffect(1.5)

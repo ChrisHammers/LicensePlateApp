@@ -14,10 +14,7 @@ struct VoiceDefaultsView: View {
     @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
     
     var body: some View {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 List {
                     Section {
                         VStack(spacing: 12) {

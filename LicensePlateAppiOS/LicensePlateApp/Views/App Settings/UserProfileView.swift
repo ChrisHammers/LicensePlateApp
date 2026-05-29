@@ -35,6 +35,9 @@ struct UserProfileView: View {
     @State private var previewImage: UIImage?
     @State private var showAvatarPickerSheet = false
 
+    @StateObject private var lifetimeStatsViewModel: LifetimeStatsProfileViewModel
+    @StateObject private var xpProgressViewModel: XpProgressViewModel
+
     // Helper function to get topmost view controller
     private func topViewController(controller: UIViewController? = nil) -> UIViewController? {
         let controller = controller ?? UIApplication.shared.connectedScenes
@@ -129,13 +132,12 @@ struct UserProfileView: View {
         _currentUserName = State(initialValue: user.userName)
         _currentFirstName = State(initialValue: user.firstName ?? "")
         _currentLastName = State(initialValue: user.lastName ?? "")
+        _lifetimeStatsViewModel = StateObject(wrappedValue: LifetimeStatsProfileViewModel(userId: user.id))
+        _xpProgressViewModel = StateObject(wrappedValue: XpProgressViewModel(userId: user.id))
     }
     
     var body: some View {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 List {
                     // Profile Image Section
                     Section {
@@ -279,7 +281,11 @@ struct UserProfileView: View {
                     .textCase(nil)
                     .listRowBackground(Color.clear)
                     .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
-                    
+
+                    LifetimeStatsProfileStatsSection(viewModel: lifetimeStatsViewModel)
+
+                    ProfileXpProgressSection(viewModel: xpProgressViewModel)
+
                     // Friends & Family Section
                     Section {
                         SettingNavigationRow(
@@ -547,7 +553,7 @@ struct UserProfileView: View {
                                                         .font(.system(size: 18))
                                                         .accessibilityHidden(true)
                                                 }
-                                                .foregroundStyle(authService.isLoading ? Color.gray : Color.Theme.primaryBlue)
+                                                .foregroundStyle(authService.isLoading ? Color.Theme.softBrown.opacity(0.7) : Color.Theme.primaryBlue)
                                                 .padding(.vertical, 10)
                                                 .padding(.horizontal, 12)
                                                 .background(
@@ -607,6 +613,10 @@ struct UserProfileView: View {
                 Button("OK".localized, role: .cancel) { }
             } message: {
                 Text(errorMessage)
+            }
+            .onAppear {
+                lifetimeStatsViewModel.onAppear()
+                xpProgressViewModel.refresh()
             }
             .onChange(of: user.userName) { oldValue, newValue in
                 currentUserName = newValue
@@ -874,28 +884,30 @@ private struct ProfileAvatarPickerSheet: View {
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                AvatarPickerView(
-                    items: displayItems,
-                    selectedId: $selectedId,
-                    onLockedTap: { item, source in
-                        unlockSheetPayload = AvatarUnlockSheetPayload(unlockSource: source, avatarName: item.displayName)
-                    },
-                    onSelected: nil
-                )
-                .frame(height: 196)
-                .padding()
-                
-                VStack(spacing: 8) {
-                    Text("Selected".localized)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(selectedAvatarDisplayName)
-                        .font(.headline)
-                        .foregroundStyle(selectedAvatarDisplayName == "None".localized ? .secondary : .primary)
+            AppBackgroundView {
+                VStack(spacing: 20) {
+                    AvatarPickerView(
+                        items: displayItems,
+                        selectedId: $selectedId,
+                        onLockedTap: { item, source in
+                            unlockSheetPayload = AvatarUnlockSheetPayload(unlockSource: source, avatarName: item.displayName)
+                        },
+                        onSelected: nil
+                    )
+                    .frame(height: 196)
+                    .padding()
+
+                    VStack(spacing: 8) {
+                        Text("Selected".localized)
+                            .font(.caption)
+                            .foregroundStyle(Color.Theme.softBrown)
+                        Text(selectedAvatarDisplayName)
+                            .font(.headline)
+                            .foregroundStyle(selectedAvatarDisplayName == "None".localized ? Color.Theme.softBrown : Color.Theme.primaryBlue)
+                    }
+
+                    Spacer()
                 }
-                
-                Spacer()
             }
             .navigationTitle("Change avatar".localized)
             .navigationBarTitleDisplayMode(.inline)

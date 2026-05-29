@@ -45,78 +45,69 @@ enum PreviewTripFixtures {
             id: PreviewConstants.sessionIdSolo,
             name: "Solo Road Trip",
             status: .active,
-            mode: .solo,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
             endedAt: nil,
-            participants: [PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1)],
-            teams: []
+            participants: [PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1)]
         )
     }
 
+    /// Multiplayer trip (one participant; use for multi-game-type previews). Game mode is on each GameInstance.
     static func multiGameTrip() -> TripSession {
         TripSession(
             id: PreviewConstants.sessionIdMulti,
             name: "Multi-Game Trip",
             status: .active,
-            mode: .combined,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
-            participants: [PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1)],
-            teams: []
+            participants: [PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1)]
         )
     }
 
+    /// Multiplayer trip with two participants (e.g. family). For collaborative game behavior use a game with commonConfig.gameMode == .collaborative.
     static func collaborativeTrip() -> TripSession {
         TripSession(
             id: PreviewConstants.sessionIdCollaborative,
             name: "Family Road Trip",
             status: .active,
-            mode: .collaborative,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
             participants: [
                 PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1),
                 PreviewParticipantFixtures.passenger(userId: PreviewConstants.userId2)
-            ],
-            teams: []
+            ]
         )
     }
 
+    /// Multiplayer trip with two participants. For competitive game behavior use a game with commonConfig.gameMode == .competitive.
     static func competitiveTrip() -> TripSession {
         TripSession(
             id: PreviewConstants.sessionIdCompetitive,
             name: "Competitive Trip",
             status: .active,
-            mode: .competitive,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
             participants: [
                 PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1),
                 PreviewParticipantFixtures.passenger(userId: PreviewConstants.userId2)
-            ],
-            teams: []
+            ]
         )
     }
 
+    /// Session for team-based preview. Teams are on GameInstance; use PreviewGameFixtures.licensePlateGame(sessionId:teams:) for a game with teams.
     static func tripWithTeams() -> TripSession {
-        let teams = PreviewTeamFixtures.twoTeams(
-            participantUserIds: ([PreviewConstants.userId1], [PreviewConstants.userId2])
-        )
-        return TripSession(
+        TripSession(
             id: PreviewConstants.sessionIdWithTeams,
             name: "Team Road Trip",
             status: .active,
-            mode: .competitive,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
-            participants: PreviewParticipantFixtures.participantsForSession(teamIds: (PreviewConstants.teamId1, PreviewConstants.teamId2)),
-            teams: teams
+            participants: PreviewParticipantFixtures.participantsForSession(teamIds: (PreviewConstants.teamId1, PreviewConstants.teamId2))
         )
     }
 
@@ -125,12 +116,10 @@ enum PreviewTripFixtures {
             id: PreviewConstants.sessionIdPartial,
             name: "In Progress Trip",
             status: .active,
-            mode: .solo,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
-            participants: [PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1)],
-            teams: []
+            participants: [PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1)]
         )
     }
 
@@ -139,14 +128,12 @@ enum PreviewTripFixtures {
             id: PreviewConstants.sessionIdCompleted,
             name: "Completed Trip",
             status: .ended,
-            mode: .solo,
             createdAt: PreviewConstants.fixedDate,
             createdBy: PreviewConstants.userId1,
             startedAt: PreviewConstants.fixedDate,
             endedAt: PreviewConstants.fixedDateEnded,
             endedBy: PreviewConstants.userId1,
-            participants: [PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1)],
-            teams: []
+            participants: [PreviewParticipantFixtures.driver(userId: PreviewConstants.userId1)]
         )
     }
 }
@@ -154,11 +141,11 @@ enum PreviewTripFixtures {
 // MARK: - PreviewGameFixtures
 
 enum PreviewGameFixtures {
-    static func licensePlateGame(sessionId: UUID = PreviewConstants.sessionIdSolo) -> GameInstance {
+    static func licensePlateGame(sessionId: UUID = PreviewConstants.sessionIdSolo, teams: [TripTeam] = []) -> GameInstance {
         let ruleSet = GameRuleSet(gameDefinitionId: GameType.licensePlate.rawValue)
         var config = CommonGameConfig()
         config.lifecycleState = .started
-        let lpConfig = LicensePlateGameConfig(regionScope: .northAmerica)
+        let lpConfig = LicensePlateGameConfig(selectedCountriesRawValues: [PlateRegion.Country.unitedStates.rawValue, PlateRegion.Country.canada.rawValue, PlateRegion.Country.mexico.rawValue])
         let payloadData = try? JSONEncoder().encode(lpConfig)
         return GameInstance(
             id: PreviewConstants.gameInstanceId1,
@@ -170,7 +157,8 @@ enum PreviewGameFixtures {
             commonConfig: config,
             gameSpecificPayloadType: "license_plate",
             gameSpecificPayloadVersion: "1",
-            gameSpecificPayloadData: payloadData
+            gameSpecificPayloadData: payloadData,
+            teams: teams
         )
     }
 
@@ -318,6 +306,7 @@ enum PreviewSummaryFixtures {
         TripSummary(
             sessionId: PreviewConstants.sessionIdCompleted,
             tripName: "Completed Trip",
+            tripMode: .solo,
             status: .ended,
             endedAt: PreviewConstants.fixedDateEnded,
             startedAt: PreviewConstants.fixedDate,
@@ -333,17 +322,19 @@ enum PreviewSummaryFixtures {
                     endedAt: PreviewConstants.fixedDateEnded,
                     firstDiscoveries: [],
                     completionGoal: 50,
-                    progressDescription: "12 / 50 US states"
+                    progressDescription: "12 / 50 US states",
+                    gameMode: .collaborative,
+                    teamSummary: nil
                 )
             ],
-            participantContributions: [
+            rankedParticipants: TripParticipantRanking.rankContributions([
                 ParticipantContribution(
                     participantId: PreviewConstants.userId1,
                     discoveryCount: 12,
                     weightedScore: 12,
                     firstFindCount: 12
                 )
-            ],
+            ]),
             discoveryProjection: nil,
             locationMetadata: nil
         )
@@ -353,6 +344,7 @@ enum PreviewSummaryFixtures {
         TripSummary(
             sessionId: PreviewConstants.sessionIdMulti,
             tripName: "Multi-Game Trip",
+            tripMode: .solo,
             status: .ended,
             endedAt: PreviewConstants.fixedDateEnded,
             startedAt: PreviewConstants.fixedDate,
@@ -368,7 +360,9 @@ enum PreviewSummaryFixtures {
                     endedAt: PreviewConstants.fixedDateEnded,
                     firstDiscoveries: [],
                     completionGoal: 50,
-                    progressDescription: "12 / 50"
+                    progressDescription: "12 / 50",
+                    gameMode: .collaborative,
+                    teamSummary: "Road Crew"
                 ),
                 TripSummaryGameItem(
                     gameInstanceId: PreviewConstants.gameInstanceId2,
@@ -378,7 +372,9 @@ enum PreviewSummaryFixtures {
                     endedAt: PreviewConstants.fixedDateEnded,
                     firstDiscoveries: [],
                     completionGoal: nil,
-                    progressDescription: nil
+                    progressDescription: nil,
+                    gameMode: .competitive,
+                    teamSummary: nil
                 ),
                 TripSummaryGameItem(
                     gameInstanceId: PreviewConstants.gameInstanceId3,
@@ -388,17 +384,315 @@ enum PreviewSummaryFixtures {
                     endedAt: PreviewConstants.fixedDateEnded,
                     firstDiscoveries: [],
                     completionGoal: nil,
-                    progressDescription: nil
+                    progressDescription: nil,
+                    gameMode: .collaborative,
+                    teamSummary: nil
                 )
             ],
-            participantContributions: [
+            rankedParticipants: TripParticipantRanking.rankContributions([
                 ParticipantContribution(
                     participantId: PreviewConstants.userId1,
                     discoveryCount: 25,
                     weightedScore: 25,
                     firstFindCount: 25
                 )
+            ]),
+            discoveryProjection: nil,
+            locationMetadata: nil
+        )
+    }
+
+    /// Two license plate games both found the same region — trip-level first discoveries list shows two rows with game context.
+    static func tripSummaryDuplicateRegionAcrossGames() -> TripSummary {
+        let g1 = PreviewConstants.gameInstanceId1
+        let g2 = PreviewConstants.gameInstanceId2
+        let projection = DiscoveryCreditProjection(
+            participantScores: [],
+            targetSummaries: [
+                TargetDiscoverySummary(
+                    gameInstanceId: g1,
+                    targetId: "us-ca",
+                    firstFinderParticipantId: PreviewConstants.userId1,
+                    allFinderParticipantIds: [PreviewConstants.userId1],
+                    summaryLabel: "Found by \(PreviewConstants.userId1)"
+                ),
+                TargetDiscoverySummary(
+                    gameInstanceId: g2,
+                    targetId: "us-ca",
+                    firstFinderParticipantId: PreviewConstants.userId2,
+                    allFinderParticipantIds: [PreviewConstants.userId2],
+                    summaryLabel: "Found by \(PreviewConstants.userId2)"
+                )
+            ]
+        )
+        return TripSummary(
+            sessionId: PreviewConstants.sessionIdMulti,
+            tripName: "Same state, two games",
+            tripMode: .multiplayer,
+            status: .ended,
+            endedAt: PreviewConstants.fixedDateEnded,
+            startedAt: PreviewConstants.fixedDate,
+            participantCount: 2,
+            gameCount: 2,
+            totalDiscoveryCount: 2,
+            games: [
+                TripSummaryGameItem(
+                    gameInstanceId: g1,
+                    definitionId: GameType.licensePlate.rawValue,
+                    discoveryCount: 1,
+                    startedAt: PreviewConstants.fixedDate,
+                    endedAt: PreviewConstants.fixedDateEnded,
+                    firstDiscoveries: [],
+                    completionGoal: 50,
+                    progressDescription: "1 / 50 US states",
+                    gameMode: .collaborative,
+                    teamSummary: nil
+                ),
+                TripSummaryGameItem(
+                    gameInstanceId: g2,
+                    definitionId: GameType.licensePlate.rawValue,
+                    discoveryCount: 1,
+                    startedAt: PreviewConstants.fixedDate,
+                    endedAt: PreviewConstants.fixedDateEnded,
+                    firstDiscoveries: [],
+                    completionGoal: 50,
+                    progressDescription: "1 / 50 US states",
+                    gameMode: .collaborative,
+                    teamSummary: nil
+                )
             ],
+            rankedParticipants: TripParticipantRanking.rankContributions([
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId1,
+                    discoveryCount: 1,
+                    weightedScore: 1.0,
+                    firstFindCount: 1
+                ),
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId2,
+                    discoveryCount: 1,
+                    weightedScore: 1.0,
+                    firstFindCount: 1
+                )
+            ]),
+            discoveryProjection: projection,
+            locationMetadata: nil
+        )
+    }
+
+    /// Multiplayer collaborative: same region found by two participants (discovery highlights).
+    static func tripSummaryCollaborativeTwoFindersOneRegion() -> TripSummary {
+        let gid = PreviewConstants.gameInstanceId1
+        let projection = DiscoveryCreditProjection(
+            participantScores: [],
+            targetSummaries: [
+                TargetDiscoverySummary(
+                    gameInstanceId: gid,
+                    targetId: "us-tx",
+                    firstFinderParticipantId: PreviewConstants.userId1,
+                    allFinderParticipantIds: [PreviewConstants.userId1, PreviewConstants.userId2],
+                    summaryLabel: "%d finders".localized(2)
+                )
+            ]
+        )
+        return TripSummary(
+            sessionId: PreviewConstants.sessionIdCollaborative,
+            tripName: "Family Trip",
+            tripMode: .multiplayer,
+            status: .ended,
+            endedAt: PreviewConstants.fixedDateEnded,
+            startedAt: PreviewConstants.fixedDate,
+            participantCount: 2,
+            gameCount: 1,
+            totalDiscoveryCount: 2,
+            games: [
+                TripSummaryGameItem(
+                    gameInstanceId: gid,
+                    definitionId: GameType.licensePlate.rawValue,
+                    discoveryCount: 2,
+                    startedAt: PreviewConstants.fixedDate,
+                    endedAt: PreviewConstants.fixedDateEnded,
+                    firstDiscoveries: projection.targetSummaries,
+                    completionGoal: 50,
+                    progressDescription: "2 / 50 US states",
+                    gameMode: .collaborative,
+                    teamSummary: nil
+                )
+            ],
+            rankedParticipants: TripParticipantRanking.rankContributions([
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId1,
+                    discoveryCount: 1,
+                    weightedScore: 0.5,
+                    firstFindCount: 1
+                ),
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId2,
+                    discoveryCount: 1,
+                    weightedScore: 0.5,
+                    firstFindCount: 0
+                )
+            ]),
+            discoveryProjection: projection,
+            locationMetadata: nil
+        )
+    }
+
+    /// Collaborative: three finders on one region — recap uses multi-name attribution line.
+    static func tripSummaryCollaborativeThreeFindersOneRegion() -> TripSummary {
+        let gid = PreviewConstants.gameInstanceId1
+        let projection = DiscoveryCreditProjection(
+            participantScores: [],
+            targetSummaries: [
+                TargetDiscoverySummary(
+                    gameInstanceId: gid,
+                    targetId: "us-tx",
+                    firstFinderParticipantId: PreviewConstants.userId1,
+                    allFinderParticipantIds: [PreviewConstants.userId1, PreviewConstants.userId2, PreviewConstants.userId3],
+                    summaryLabel: "%d finders".localized(3)
+                )
+            ]
+        )
+        return TripSummary(
+            sessionId: PreviewConstants.sessionIdCollaborative,
+            tripName: "Three Finder Trip",
+            tripMode: .multiplayer,
+            status: .ended,
+            endedAt: PreviewConstants.fixedDateEnded,
+            startedAt: PreviewConstants.fixedDate,
+            participantCount: 3,
+            gameCount: 1,
+            totalDiscoveryCount: 3,
+            games: [
+                TripSummaryGameItem(
+                    gameInstanceId: gid,
+                    definitionId: GameType.licensePlate.rawValue,
+                    discoveryCount: 3,
+                    startedAt: PreviewConstants.fixedDate,
+                    endedAt: PreviewConstants.fixedDateEnded,
+                    firstDiscoveries: projection.targetSummaries,
+                    completionGoal: 50,
+                    progressDescription: "3 / 50 US states",
+                    gameMode: .collaborative,
+                    teamSummary: nil
+                )
+            ],
+            rankedParticipants: TripParticipantRanking.rankContributions([
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId1,
+                    discoveryCount: 1,
+                    weightedScore: 1.0 / 3.0,
+                    firstFindCount: 1
+                ),
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId2,
+                    discoveryCount: 1,
+                    weightedScore: 1.0 / 3.0,
+                    firstFindCount: 0
+                ),
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId3,
+                    discoveryCount: 1,
+                    weightedScore: 1.0 / 3.0,
+                    firstFindCount: 0
+                )
+            ]),
+            discoveryProjection: projection,
+            locationMetadata: nil
+        )
+    }
+
+    /// Many highlight rows to exercise show-all / show-less in recap (Step 15).
+    static func tripSummaryManyDiscoveryHighlights() -> TripSummary {
+        let gid = PreviewConstants.gameInstanceId1
+        let targetRows: [TargetDiscoverySummary] = (0..<22).map { i in
+            TargetDiscoverySummary(
+                gameInstanceId: gid,
+                targetId: "us-\(i)",
+                firstFinderParticipantId: PreviewConstants.userId1,
+                allFinderParticipantIds: [PreviewConstants.userId1],
+                summaryLabel: "Found by \(PreviewConstants.userId1)"
+            )
+        }
+        let projection = DiscoveryCreditProjection(participantScores: [], targetSummaries: targetRows)
+        return TripSummary(
+            sessionId: PreviewConstants.sessionIdCollaborative,
+            tripName: "Long highlights",
+            tripMode: .solo,
+            status: .ended,
+            endedAt: PreviewConstants.fixedDateEnded,
+            startedAt: PreviewConstants.fixedDate,
+            participantCount: 1,
+            gameCount: 1,
+            totalDiscoveryCount: 22,
+            games: [
+                TripSummaryGameItem(
+                    gameInstanceId: gid,
+                    definitionId: GameType.licensePlate.rawValue,
+                    discoveryCount: 22,
+                    startedAt: PreviewConstants.fixedDate,
+                    endedAt: PreviewConstants.fixedDateEnded,
+                    firstDiscoveries: targetRows,
+                    completionGoal: 50,
+                    progressDescription: "22 / 50 US states",
+                    gameMode: .collaborative,
+                    teamSummary: nil
+                )
+            ],
+            rankedParticipants: TripParticipantRanking.rankContributions([
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId1,
+                    discoveryCount: 22,
+                    weightedScore: 22,
+                    firstFindCount: 22
+                )
+            ]),
+            discoveryProjection: projection,
+            locationMetadata: nil
+        )
+    }
+
+    /// Competitive multiplayer: tied weighted score (rank 1,1); `hasCompetitiveGame` true for summary UI.
+    static func tripSummaryCompetitiveTied() -> TripSummary {
+        let gid = PreviewConstants.gameInstanceId1
+        return TripSummary(
+            sessionId: PreviewConstants.sessionIdCollaborative,
+            tripName: "Competitive Weekend",
+            tripMode: .multiplayer,
+            status: .ended,
+            endedAt: PreviewConstants.fixedDateEnded,
+            startedAt: PreviewConstants.fixedDate,
+            participantCount: 2,
+            gameCount: 1,
+            totalDiscoveryCount: 4,
+            games: [
+                TripSummaryGameItem(
+                    gameInstanceId: gid,
+                    definitionId: GameType.licensePlate.rawValue,
+                    discoveryCount: 4,
+                    startedAt: PreviewConstants.fixedDate,
+                    endedAt: PreviewConstants.fixedDateEnded,
+                    firstDiscoveries: [],
+                    completionGoal: 50,
+                    progressDescription: "4 / 50 US states",
+                    gameMode: .competitive,
+                    teamSummary: nil
+                )
+            ],
+            rankedParticipants: TripParticipantRanking.rankContributions([
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId1,
+                    discoveryCount: 2,
+                    weightedScore: 2.0,
+                    firstFindCount: 2
+                ),
+                ParticipantContribution(
+                    participantId: PreviewConstants.userId2,
+                    discoveryCount: 2,
+                    weightedScore: 2.0,
+                    firstFindCount: 2
+                )
+            ]),
             discoveryProjection: nil,
             locationMetadata: nil
         )
@@ -414,7 +708,6 @@ struct PreviewInviteFixturesParams {
     let inviteId: String
     let tripSessionId: String
     let tripName: String
-    let tripMode: String
     let fromUserId: String
     let toUserId: String?
     let status: TripInvite.TripInviteStatus
@@ -427,7 +720,6 @@ struct PreviewInviteFixturesParams {
             inviteId: "preview-invite-pending",
             tripSessionId: PreviewConstants.sessionIdCollaborative.uuidString,
             tripName: "Family Road Trip",
-            tripMode: TripMode.collaborative.rawValue,
             fromUserId: PreviewConstants.userId1,
             toUserId: PreviewConstants.userId2,
             status: .pending,
@@ -442,7 +734,6 @@ struct PreviewInviteFixturesParams {
             inviteId: "preview-invite-accepted",
             tripSessionId: PreviewConstants.sessionIdCollaborative.uuidString,
             tripName: "Family Road Trip",
-            tripMode: TripMode.collaborative.rawValue,
             fromUserId: PreviewConstants.userId1,
             toUserId: PreviewConstants.userId2,
             status: .accepted,

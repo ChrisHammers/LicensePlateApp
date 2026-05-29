@@ -29,10 +29,7 @@ struct PrivacyPermissionsView: View {
     @State private var notificationPermission: UNAuthorizationStatus = .notDetermined
     
     var body: some View {
-            ZStack {
-                Color.Theme.background
-                    .ignoresSafeArea()
-                
+            AppBackgroundView {
                 List {
                     // Location Section
                     Section {
