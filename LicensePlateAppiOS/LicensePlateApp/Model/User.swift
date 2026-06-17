@@ -65,7 +65,7 @@ final class AppUser {
     var avatarColor: AvatarColor
     var avatarType: AvatarType
     
-    // User image - Firebase Storage URL (nil means use default asset)
+    // User image - Firebase Storage URL (nil means use default asset) //TODO: remove.
     var userImageURL: String?
     
     // Device identifier for default username generation
