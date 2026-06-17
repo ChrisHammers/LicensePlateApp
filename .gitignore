@@ -16,3 +16,6 @@ LicensePlateAppiOS/LicensePlateApp/RevenueCat-Info.plist
 /LicensePlateAppiOS/functions/node_modules
 /LicensePlateAppiOS/functions/node_modules
 LicensePlateAppiOS/functions/firebase-debug.log
+LicensePlateAppiOS/LicensePlateApp.xcodeproj/xcshareddata/xcschemes/LicensePlateApp.xcscheme
+LicensePlateAppiOS/LicensePlateApp.xcodeproj/project.xcworkspace/xcuserdata/christopherhammers.xcuserdatad/UserInterfaceState.xcuserstate
+LicensePlateAppiOS/functions/lib/
