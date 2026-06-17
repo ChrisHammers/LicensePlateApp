@@ -2,6 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>AdMobBannerSetupID</key>
+	<string>$(ADMOB_BANNER_SETUP_ID)</string>
+	<key>AdMobBannerSummaryID</key>
+	<string>$(ADMOB_BANNER_SUMMARY_ID)</string>
+	<key>AdMobBannerTravelLogID</key>
+	<string>$(ADMOB_BANNER_TRAVEL_LOG_ID)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -47,6 +53,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>GADApplicationIdentifier</key>
+	<string>$(ADMOB_APP_ID)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.family-games</string>
 	<key>NSCameraUsageDescription</key>

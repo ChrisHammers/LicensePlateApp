@@ -167,6 +167,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 765D54352EC391DC00D4FED1 /* Build configuration list for PBXNativeTarget "LicensePlateApp" */;
 			buildPhases = (
+				76FB18012F20000100D11D3F /* Validate Firebase Release Config */,
 				765D540E2EC391DA00D4FED1 /* Sources */,
 				765D540F2EC391DA00D4FED1 /* Frameworks */,
 				765D54102EC391DA00D4FED1 /* Resources */,
@@ -353,6 +354,26 @@
 			shellPath = /bin/sh;
 			shellScript = "if [ \"$CONFIGURATION\" = \"Release\" ]; then\n  UPLOAD_SYMBOLS=\"${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/upload-symbols\"\n  if [ -x \"$UPLOAD_SYMBOLS\" ] && [ -n \"$DWARF_DSYM_FOLDER_PATH\" ]; then\n    \"$UPLOAD_SYMBOLS\" -gsp \"$PROJECT_DIR/LicensePlateApp/GoogleService-Info-Release.plist\" -p ios \"$DWARF_DSYM_FOLDER_PATH/$DWARF_DSYM_FILE_NAME\"\n  else\n    echo \"warning: Crashlytics upload-symbols not found; skipping dSYM upload\"\n  fi\nfi\n";
 		};
+		76FB18012F20000100D11D3F /* Validate Firebase Release Config */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(PROJECT_DIR)/LicensePlateApp/GoogleService-Info-Release.plist",
+			);
+			name = "Validate Firebase Release Config";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"$CONFIGURATION\" != \"Release\" ]; then exit 0; fi\nPLIST=\"$PROJECT_DIR/LicensePlateApp/GoogleService-Info-Release.plist\"\nif [ ! -f \"$PLIST\" ]; then\n  echo \"error: Missing GoogleService-Info-Release.plist. See CONFIG_SETUP.md\"\n  exit 1\nfi\nPROJECT_ID=$(plutil -extract PROJECT_ID raw \"$PLIST\" 2>/dev/null) || exit 1\nif [ \"$PROJECT_ID\" != \"roadtrip-royale-b694d\" ]; then\n  echo \"error: Release Firebase PROJECT_ID must be roadtrip-royale-b694d, got: $PROJECT_ID\"\n  exit 1\nfi\nif ! plutil -extract CLIENT_ID raw \"$PLIST\" >/dev/null 2>&1; then\n  echo \"error: GoogleService-Info-Release.plist missing CLIENT_ID. Re-download from Firebase Console (roadtrip-royale-b694d).\"\n  exit 1\nfi\n";
+		};
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -428,7 +449,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = U9W4ZMF92S;
+				DEVELOPMENT_TEAM = ZGH4D6QBA8;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -492,7 +513,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = U9W4ZMF92S;
+				DEVELOPMENT_TEAM = ZGH4D6QBA8;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -517,17 +538,17 @@
 		765D54362EC391DC00D4FED1 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ADMOB_APP_ID = "ca-app-pub-3940256099942544~1458002511";
-				ADMOB_BANNER_SETUP_ID = "ca-app-pub-3940256099942544/2934735716";
-				ADMOB_BANNER_SUMMARY_ID = "ca-app-pub-3940256099942544/2934735716";
-				ADMOB_BANNER_TRAVEL_LOG_ID = "ca-app-pub-3940256099942544/2934735716";
+				ADMOB_APP_ID = "ca-app-pub-2977439405387612~5085658959";
+				ADMOB_BANNER_SETUP_ID = "ca-app-pub-2977439405387612/2735572644";
+				ADMOB_BANNER_SUMMARY_ID = "ca-app-pub-2977439405387612/7301503617";
+				ADMOB_BANNER_TRAVEL_LOG_ID = "ca-app-pub-2977439405387612/5041946441";
 				APS_ENVIRONMENT = development;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = LicensePlateApp/LicensePlateApp.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = ZGH4D6QBA8;
 				ENABLE_PREVIEWS = YES;
 				FIREBASE_CONFIG_FILE = "GoogleService-Info-Debug.plist";
@@ -557,17 +578,17 @@
 		765D54372EC391DC00D4FED1 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ADMOB_APP_ID = "ca-app-pub-3940256099942544~1458002511";
-				ADMOB_BANNER_SETUP_ID = "ca-app-pub-3940256099942544/2934735716";
-				ADMOB_BANNER_SUMMARY_ID = "ca-app-pub-3940256099942544/2934735716";
-				ADMOB_BANNER_TRAVEL_LOG_ID = "ca-app-pub-3940256099942544/2934735716";
+				ADMOB_APP_ID = "ca-app-pub-2977439405387612~5085658959";
+				ADMOB_BANNER_SETUP_ID = "ca-app-pub-2977439405387612/2735572644";
+				ADMOB_BANNER_SUMMARY_ID = "ca-app-pub-2977439405387612/7301503617";
+				ADMOB_BANNER_TRAVEL_LOG_ID = "ca-app-pub-2977439405387612/5041946441";
 				APS_ENVIRONMENT = production;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = LicensePlateApp/LicensePlateApp.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = ZGH4D6QBA8;
 				ENABLE_PREVIEWS = YES;
 				FIREBASE_CONFIG_FILE = "GoogleService-Info-Release.plist";
@@ -727,7 +748,7 @@
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 12.6.0;
+				minimumVersion = 12.12.0;
 			};
 		};
 		761312612ECBB31A00F19D3A /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {

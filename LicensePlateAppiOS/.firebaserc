@@ -1,7 +1,9 @@
 {
   "projects": {
     "default": "roadtrip-royale-dev-d2652",
-    "RTR Dev": "roadtrip-royale-dev-d2652"
+    "RTR Dev": "roadtrip-royale-dev-d2652",
+    "production": "roadtrip-royale-b694d",
+    "RTR Prod": "roadtrip-royale-b694d"
   },
   "targets": {},
   "etags": {}

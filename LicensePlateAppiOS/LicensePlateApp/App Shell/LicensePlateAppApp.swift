@@ -86,25 +86,28 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     }
     
     private func initializeFirebase() -> Bool {
-        // Try to initialize Firebase, but don't crash if config is missing
-        // Use environment-specific config files based on build configuration
-        // The FIREBASE_CONFIG_FILE build setting documents which file should be used
-        let configFileName: String
-        #if DEBUG
-        configFileName = "GoogleService-Info-Debug"
-        #else
-        configFileName = "GoogleService-Info-Release"
-        #endif
-        
-        // Try environment-specific config first, then fallback to generic name
+        // Try to initialize Firebase, but don't crash if config is missing.
+        // Release: GoogleService-Info-Release only (validated at build time; see CONFIG_SETUP.md).
+        // Debug: GoogleService-Info-Debug, with fallback to GoogleService-Info.plist.
+        let configFileName = FirebaseBuildConfiguration.expectedPlistBaseName
+
         var path = Bundle.main.path(forResource: configFileName, ofType: "plist")
+        #if DEBUG
         if path == nil {
-            path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist")
+            path = Bundle.main.path(
+                forResource: FirebaseBuildConfiguration.genericPlistBaseName,
+                ofType: "plist"
+            )
         }
-        
+        #endif
+
         guard let configPath = path else {
             print("⚠️ Firebase configuration not found. App will work in offline-only mode.")
-            print("   Expected: \(configFileName).plist or GoogleService-Info.plist")
+            #if DEBUG
+            print("   Expected: \(configFileName).plist or \(FirebaseBuildConfiguration.genericPlistBaseName).plist")
+            #else
+            print("   Expected: \(configFileName).plist")
+            #endif
             return false
         }
         
@@ -115,6 +118,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         
         AppCheckConfigurator.configure()
         FirebaseApp.configure(options: options)
+        AppCheckReadiness.warmUp()
         CrashReportingService.shared.configure()
         Task { @MainActor in
             await RemoteConfigService.shared.fetchAndActivate()
