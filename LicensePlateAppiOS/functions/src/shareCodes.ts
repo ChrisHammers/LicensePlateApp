@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
+import { assertRegisteredAccount } from "./callableAuth";
 
 const db = admin.firestore();
 
@@ -24,15 +25,9 @@ function generateRandomCode(): string {
  */
 export const createShareCode = enforcedCallable(
   async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
-        "unauthenticated",
-        "User must be authenticated"
-      );
-    }
+    const userId = assertRegisteredAccount(context);
 
     const { type, familyId } = data;
-    const userId = context.auth.uid;
     const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (type !== "friend" && type !== "family") {
@@ -71,14 +66,18 @@ export const createShareCode = enforcedCallable(
 
     const codeRef = await db.collection("share_codes").add(codeData);
 
-    await writeAuditLog({
-      eventType: "share_code_generated",
-      actorId: userId,
-      subjectType: "invite",
-      subjectId: codeRef.id,
-      metadata: { type, familyId },
-      clientMetadata,
-    });
+    try {
+      await writeAuditLog({
+        eventType: "share_code_generated",
+        actorId: userId,
+        subjectType: "invite",
+        subjectId: codeRef.id,
+        metadata: familyId ? { type, familyId } : { type },
+        clientMetadata,
+      });
+    } catch (error) {
+      functions.logger.error("share_code_generated audit log failed", error);
+    }
 
     return {
       codeId: codeRef.id,
@@ -93,15 +92,9 @@ export const createShareCode = enforcedCallable(
  */
 export const redeemShareCode = enforcedCallable(
   async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
-        "unauthenticated",
-        "User must be authenticated"
-      );
-    }
+    const userId = assertRegisteredAccount(context);
 
     const { code } = data;
-    const userId = context.auth.uid;
     const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!code) {

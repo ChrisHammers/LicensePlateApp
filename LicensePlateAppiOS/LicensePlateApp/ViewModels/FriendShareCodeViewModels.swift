@@ -17,6 +17,7 @@ final class CreateFriendShareCodeViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var showError = false
     @Published var qrCodeImage: UIImage?
+    private var hasRequestedGeneration = false
 
     private var authService: FirebaseAuthService?
     private let familyRepository: FamilyRepository
@@ -31,12 +32,14 @@ final class CreateFriendShareCodeViewModel: ObservableObject {
     }
 
     func generateCode() {
+        guard !hasRequestedGeneration else { return }
         guard let authService = authService, authService.isOnline else {
             errorMessage = "Requires network connection".localized
             showError = true
             return
         }
 
+        hasRequestedGeneration = true
         isGenerating = true
         errorMessage = nil
 
@@ -53,6 +56,7 @@ final class CreateFriendShareCodeViewModel: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
+                    hasRequestedGeneration = false
                     isGenerating = false
                     errorMessage = error.localizedDescription
                     showError = true

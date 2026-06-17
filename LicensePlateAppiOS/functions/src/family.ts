@@ -5,6 +5,7 @@ import { writeAuditLog } from "./audit";
 import { getFCMToken, sendPushNotification } from "./utils/notifications";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
+import { assertRegisteredAccount } from "./callableAuth";
 
 const db = admin.firestore();
 
@@ -13,15 +14,9 @@ const db = admin.firestore();
  */
 export const createFamily = enforcedCallable(
   async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
-        "unauthenticated",
-        "User must be authenticated"
-      );
-    }
+    const userId = assertRegisteredAccount(context);
 
     const { name } = data;
-    const userId = context.auth.uid;
     const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!name || typeof name !== "string" || name.trim().length === 0) {
@@ -93,15 +88,9 @@ export const createFamily = enforcedCallable(
  */
 export const sendFamilyInvite = enforcedCallable(
   async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
-        "unauthenticated",
-        "User must be authenticated"
-      );
-    }
+    const fromUserId = assertRegisteredAccount(context);
 
     const { toUserId, familyId, method } = data;
-    const fromUserId = context.auth.uid;
     const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!toUserId || !familyId) {
@@ -211,15 +200,9 @@ export const sendFamilyInvite = enforcedCallable(
  */
 export const respondToFamilyInvite_UserStep = enforcedCallable(
   async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
-        "unauthenticated",
-        "User must be authenticated"
-      );
-    }
+    const userId = assertRegisteredAccount(context);
 
     const { inviteId, response } = data;
-    const userId = context.auth.uid;
     const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!inviteId || !response) {
@@ -305,15 +288,9 @@ export const respondToFamilyInvite_UserStep = enforcedCallable(
  */
 export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
   async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
-        "unauthenticated",
-        "User must be authenticated"
-      );
-    }
+    const userId = assertRegisteredAccount(context);
 
     const { familyId, requestId, response } = data;
-    const userId = context.auth.uid;
     const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!familyId || !requestId || !response) {
@@ -481,15 +458,9 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
  */
 export const removeFamilyMember = enforcedCallable(
   async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
-        "unauthenticated",
-        "User must be authenticated"
-      );
-    }
+    const userId = assertRegisteredAccount(context);
 
     const { familyId, memberId } = data;
-    const userId = context.auth.uid;
     const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!familyId || !memberId) {
@@ -575,15 +546,9 @@ export const removeFamilyMember = enforcedCallable(
  */
 export const changeFamilyMemberRole = enforcedCallable(
   async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
-        "unauthenticated",
-        "User must be authenticated"
-      );
-    }
+    const userId = assertRegisteredAccount(context);
 
     const { familyId, memberId, newRole } = data;
-    const userId = context.auth.uid;
     const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!familyId || !memberId || !newRole) {
@@ -668,15 +633,9 @@ export const changeFamilyMemberRole = enforcedCallable(
  */
 export const inactivateFamily = enforcedCallable(
   async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
-        "unauthenticated",
-        "User must be authenticated"
-      );
-    }
+    const userId = assertRegisteredAccount(context);
 
     const { familyId } = data;
-    const userId = context.auth.uid;
     const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!familyId) {

@@ -591,19 +591,39 @@ class FamilyRepository: ObservableObject {
     }
     
     // MARK: - Cloud Functions
+
+    private func requireRegisteredAccount() throws {
+        guard Auth.auth().currentUser != nil else {
+            throw NSError(
+                domain: "FamilyRepository",
+                code: 401,
+                userInfo: [NSLocalizedDescriptionKey: "You are not signed in. Sign in and try again."]
+            )
+        }
+        guard Auth.auth().currentUser?.isAnonymous == false else {
+            throw NSError(
+                domain: "FamilyRepository",
+                code: 403,
+                userInfo: [NSLocalizedDescriptionKey: "Create an account to use Friends & Family features."]
+            )
+        }
+    }
     
     /// Create a new family
     func createFamily(name: String) async throws -> String {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
-        }
+        try requireRegisteredAccount()
         
         let functions = Functions.functions()
         let createFamilyFunction = functions.httpsCallable("createFamily")
         
-        let result = try await createFamilyFunction.call(([
-            "name": name
-        ] as [String: Any]).addingClientMetadata())
+        let result: HTTPSCallableResult
+        do {
+            result = try await createFamilyFunction.call(([
+                "name": name
+            ] as [String: Any]).addingClientMetadata())
+        } catch {
+            throw Self.userFacingCallableError(error)
+        }
         
         guard let data = result.data as? [String: Any],
               let familyId = data["familyId"] as? String else {
@@ -615,16 +635,19 @@ class FamilyRepository: ObservableObject {
     
     /// Redeem a share code to join a family
     func redeemShareCode(code: String) async throws -> String {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
-        }
+        try requireRegisteredAccount()
         
         let functions = Functions.functions()
         let redeemCodeFunction = functions.httpsCallable("redeemShareCode")
         
-        let result = try await redeemCodeFunction.call(([
-            "code": code
-        ] as [String: Any]).addingClientMetadata())
+        let result: HTTPSCallableResult
+        do {
+            result = try await redeemCodeFunction.call(([
+                "code": code
+            ] as [String: Any]).addingClientMetadata())
+        } catch {
+            throw Self.userFacingCallableError(error)
+        }
         
         guard let data = result.data as? [String: Any],
               let inviteId = data["inviteId"] as? String else {
@@ -681,19 +704,22 @@ class FamilyRepository: ObservableObject {
     
     /// Create a share code (friend or family type)
     func createShareCode(type: String, familyId: String? = nil) async throws -> (codeId: String, code: String, expiresAt: Date) {
-        guard Auth.auth().currentUser != nil else {
-            throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
-        }
-        
+        try requireRegisteredAccount()
+
         let functions = Functions.functions()
         let createCodeFunction = functions.httpsCallable("createShareCode")
-        
+
         var data: [String: Any] = ["type": type]
         if let familyId = familyId {
             data["familyId"] = familyId
         }
-        
-        let result = try await createCodeFunction.call(data.addingClientMetadata())
+
+        let result: HTTPSCallableResult
+        do {
+            result = try await createCodeFunction.call(data.addingClientMetadata())
+        } catch {
+            throw Self.userFacingCallableError(error)
+        }
         
         guard let resultData = result.data as? [String: Any],
               let codeId = resultData["codeId"] as? String,
@@ -880,6 +906,42 @@ class FamilyRepository: ObservableObject {
     
     deinit {
         stopListening()
+    }
+
+    private static func userFacingCallableError(_ error: Error) -> Error {
+        let nsError = error as NSError
+        guard nsError.domain == FunctionsErrorDomain,
+              let code = FunctionsErrorCode(rawValue: nsError.code) else {
+            return error
+        }
+
+        let message: String
+        switch code {
+        case .unauthenticated:
+            if Auth.auth().currentUser == nil {
+                message = "You are not signed in. Sign in and try again."
+            } else if Auth.auth().currentUser?.isAnonymous == true {
+                message = "Create an account to use Friends & Family features."
+            } else {
+                message = "The server rejected this request. Sign in and try again."
+            }
+        case .failedPrecondition:
+            message = "Create an account to use Friends & Family features."
+        case .permissionDenied:
+            message = "You do not have permission to create this share code."
+        case .unavailable:
+            message = "The server is temporarily unavailable. Try again shortly."
+        case .internal:
+            message = "The server encountered an error while creating the share code. Try again in a moment."
+        default:
+            return error
+        }
+
+        return NSError(
+            domain: nsError.domain,
+            code: nsError.code,
+            userInfo: [NSLocalizedDescriptionKey: message]
+        )
     }
 }
 

@@ -5,6 +5,7 @@ import { writeAuditLog } from "./audit";
 import { getFCMToken, sendPushNotification } from "./utils/notifications";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
+import { assertRegisteredAccount } from "./callableAuth";
 
 const db = admin.firestore();
 
@@ -13,15 +14,9 @@ const db = admin.firestore();
  */
 export const sendFriendInvite = enforcedCallable(
   async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
-        "unauthenticated",
-        "User must be authenticated"
-      );
-    }
+    const fromUserId = assertRegisteredAccount(context);
 
     const { toUserId, method } = data;
-    const fromUserId = context.auth.uid;
     const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!toUserId) {
@@ -152,15 +147,9 @@ export const sendFriendInvite = enforcedCallable(
  */
 export const respondToFriendInvite = enforcedCallable(
   async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
-        "unauthenticated",
-        "User must be authenticated"
-      );
-    }
+    const userId = assertRegisteredAccount(context);
 
     const { inviteId, response } = data;
-    const userId = context.auth.uid;
     const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
     if (!inviteId || !response) {
@@ -273,15 +262,9 @@ export const respondToFriendInvite = enforcedCallable(
  * Remove an accepted friendship (unfriend). Updates friendCount for both users.
  */
 export const removeFriend = enforcedCallable(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "User must be authenticated"
-    );
-  }
+  const userId = assertRegisteredAccount(context);
 
   const { friendshipId } = data as { friendshipId?: string };
-  const userId = context.auth.uid;
   const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
   if (!friendshipId || typeof friendshipId !== "string") {

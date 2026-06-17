@@ -18,10 +18,26 @@ export interface AuditLogData {
  * Write immutable audit log entry
  */
 export async function writeAuditLog(data: AuditLogData): Promise<void> {
-  const auditData = {
-    ...data,
+  const auditData: Record<string, unknown> = {
+    eventType: data.eventType,
+    actorId: data.actorId,
+    subjectType: data.subjectType,
+    subjectId: data.subjectId,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   };
+
+  if (data.metadata && Object.keys(data.metadata).length > 0) {
+    auditData.metadata = data.metadata;
+  }
+  if (data.clientMetadata) {
+    auditData.clientMetadata = data.clientMetadata;
+  }
+  if (data.ipHash) {
+    auditData.ipHash = data.ipHash;
+  }
+  if (data.deviceIdHash) {
+    auditData.deviceIdHash = data.deviceIdHash;
+  }
 
   await db.collection("audit_logs").add(auditData);
 }
