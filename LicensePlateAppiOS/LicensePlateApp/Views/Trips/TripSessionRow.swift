@@ -38,7 +38,7 @@ struct TripSessionRow: View {
     }
 
     private var plateLabel: String {
-        let denom = rollup.primaryGameCompletionGoal.map { "\($0)" } ?? "—"
+        let denom = rollup.primaryGameCompletionGoal.map { "\($0)" } ?? "—" // TODO: should look for MAX of all games.
         return "\(rollup.primaryGameDiscoveryCount)/\(denom)"
     }
 
