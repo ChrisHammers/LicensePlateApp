@@ -361,11 +361,16 @@ struct FamilyMemberRow: View {
 
     var body: some View {
         if let user = member.user {
-            UserIdentityRowView(
-                user: user,
-                subtitle: memberSubtitle,
-                avatarSize: 50
-            )
+            NavigationLink {
+                StandardProfileView(user: user)
+            } label: {
+                UserIdentityRowView(
+                    user: user,
+                    subtitle: memberSubtitle,
+                    avatarSize: 50
+                )
+            }
+            .buttonStyle(.plain)
             .task {
                 publicLifetimeStatsRepository.ensureObservingFriend(userId: member.userId)
             }

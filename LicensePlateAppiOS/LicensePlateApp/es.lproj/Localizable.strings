@@ -526,6 +526,7 @@
 "Changes will sync when you're online" = "Los cambios se sincronizarán cuando estés en línea";
 "Uploading..." = "Subiendo...";
 "Closes the profile view" = "Cierra la vista de perfil";
+"Opens profile" = "Abre el perfil";
 "Error" = "Error";
 "OK" = "OK";
 "Username cannot be empty" = "El nombre de usuario no puede estar vacío";

@@ -37,6 +37,8 @@ struct UserProfileView: View {
 
     @StateObject private var lifetimeStatsViewModel: LifetimeStatsProfileViewModel
     @StateObject private var xpProgressViewModel: XpProgressViewModel
+    @ObservedObject private var entitlementService = EntitlementService.shared
+    @ObservedObject private var userProgressionRepository = UserProgressionRepository.shared
 
     // Helper function to get topmost view controller
     private func topViewController(controller: UIViewController? = nil) -> UIViewController? {
@@ -135,42 +137,41 @@ struct UserProfileView: View {
         _lifetimeStatsViewModel = StateObject(wrappedValue: LifetimeStatsProfileViewModel(userId: user.id))
         _xpProgressViewModel = StateObject(wrappedValue: XpProgressViewModel(userId: user.id))
     }
+
+    private var gameLicense: UserDriversLicense {
+        let progression = UserProgressionRepository.shared.snapshot
+        return UserDriversLicenseBuilder.make(from: ProfileLicenseInputs(
+            user: user,
+            lifetimeStats: lifetimeStatsViewModel.stats,
+            totalXp: xpProgressViewModel.displayedTotalXp,
+            acceptedRegionFindCount: progression?.acceptedRegionFindCount,
+            competitiveFirstPlaceFinishes: progression?.competitiveFirstPlaceFinishes ?? 0,
+            isRoyale: entitlementService.entitlementState(for: user).effectiveTier >= .royale
+        ))
+    }
     
     var body: some View {
             AppBackgroundView {
                 List {
-                    // Profile Image Section
+                    // Explorer license hero
                     Section {
-                        VStack(spacing: 16) {
-                            // Avatar with pencil (edit) opening avatar picker
-                            ZStack(alignment: .bottomTrailing) {
-                                AvatarBadgeView(user: user, avatarSize: 120, badgeSize: 36)
-                                Button {
-                                    showAvatarPickerSheet = true
-                                    AnalyticsService.shared.log(.avatarPickerOpened(source: "profile"))
-                                } label: {
-                                    Image(systemName: "pencil")
-                                        .font(.system(size: 14, weight: .semibold))
-                                        .foregroundStyle(.white)
-                                        .frame(width: 32, height: 32)
-                                        .background(Circle().fill(Color.Theme.primaryBlue))
-                                }
-                                .offset(x: -4, y: -4)
+                        ProfileDriversLicenseCardSection(
+                            license: gameLicense,
+                            user: user,
+                            showsAvatarEdit: true,
+                            onEditAvatar: {
+                                let _ = print("I did it")
+                                showAvatarPickerSheet = true
+                                AnalyticsService.shared.log(.avatarPickerOpened(source: "profile"))
                             }
-                            
-                            if isUploadingImage {
-                                ProgressView("Uploading...".localized)
-                                    .font(.system(.caption, design: .rounded))
-                                    .foregroundStyle(Color.Theme.softBrown)
-                            }
-                            
-                            Text(user.displayName)
-                                .font(.system(.title2, design: .rounded))
-                                .fontWeight(.bold)
-                                .foregroundStyle(Color.Theme.primaryBlue)
+                        )
+
+                        if isUploadingImage {
+                            ProgressView("Uploading...".localized)
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                                .frame(maxWidth: .infinity)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)
                     }
                     .listRowBackground(Color.clear)
                     .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))

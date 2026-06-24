@@ -101,26 +101,33 @@ struct UserSearchResultRow: View {
 
     var body: some View {
         HStack {
-            Circle()
-                .fill(Color.Theme.primaryBlue.opacity(0.3))
-                .frame(width: 50, height: 50)
+            NavigationLink {
+                StandardProfileView(user: user)
+            } label: {
+                HStack(spacing: 12) {
+                    Circle()
+                        .fill(Color.Theme.primaryBlue.opacity(0.3))
+                        .frame(width: 50, height: 50)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(user.displayName)
-                    .font(.system(.body, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(user.displayName)
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Theme.primaryBlue)
 
-                Text("@\(user.userName)")
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
+                        Text("@\(user.userName)")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
 
-                Text("Found by \(result.matchedField.displayName)".localized)
-                    .font(.system(.caption2, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+                        Text("Found by \(result.matchedField.displayName)".localized)
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+                    }
+
+                    Spacer(minLength: 0)
+                }
             }
-
-            Spacer()
+            .buttonStyle(.plain)
 
             Button("Add".localized) {
                 viewModel.sendInvite(to: result)
@@ -130,7 +137,7 @@ struct UserSearchResultRow: View {
             .disabled(viewModel.invitingUserId != nil || !authService.isOnline)
         }
         .padding(.vertical, 8)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(user.displayName), @\(user.userName)")
     }
 }

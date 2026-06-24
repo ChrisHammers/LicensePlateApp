@@ -534,6 +534,7 @@
 "Changes will sync when you're online" = "Changes will sync when you're online";
 "Uploading..." = "Uploading...";
 "Closes the profile view" = "Closes the profile view";
+"Opens profile" = "Opens profile";
 "Error" = "Error";
 "OK" = "OK";
 "Username cannot be empty" = "Username cannot be empty";

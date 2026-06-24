@@ -281,6 +281,36 @@ struct FriendRow: View {
     }
 
     var body: some View {
+        if let user {
+            NavigationLink {
+                StandardProfileView(user: user)
+            } label: {
+                rowContent
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibilityLabelText)
+            .accessibilityHint("Opens profile".localized)
+            .task {
+                if let oid = otherUserId {
+                    publicLifetimeStatsRepository.ensureObservingFriend(userId: oid)
+                }
+                await loadUser()
+            }
+        } else {
+            rowContent
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(accessibilityLabelText)
+                .task {
+                    if let oid = otherUserId {
+                        publicLifetimeStatsRepository.ensureObservingFriend(userId: oid)
+                    }
+                    await loadUser()
+                }
+        }
+    }
+
+    private var rowContent: some View {
         HStack {
             if let user = user {
                 UserImageView(user: user, size: 50)
@@ -339,14 +369,6 @@ struct FriendRow: View {
             } label: {
                 Label("Remove friend".localized, systemImage: "person.crop.circle.badge.minus")
             }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityLabelText)
-        .task {
-            if let oid = otherUserId {
-                publicLifetimeStatsRepository.ensureObservingFriend(userId: oid)
-            }
-            await loadUser()
         }
     }
 
