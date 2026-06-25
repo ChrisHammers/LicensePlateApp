@@ -816,5 +816,5 @@
 "Sponsored message" = "Sponsored message";
 "Ready to keep playing?" = "Ready to keep playing?";
 "Your trip %@ is waiting for more plate finds." = "Your trip %@ is waiting for more plate finds.";
-"trip_end.remote_toast.generic" = "This trip has ended. Showing your recap.";
+"trip_end.remote_toast.generic" = "%@ has ended. Showing your recap.";
 "trip_summary.error.trip_not_ended" = "This trip recap is available after the trip has ended.";

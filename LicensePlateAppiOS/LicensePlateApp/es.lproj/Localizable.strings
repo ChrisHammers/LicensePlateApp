@@ -784,5 +784,5 @@
 "Sponsored message" = "Mensaje patrocinado";
 "Ready to keep playing?" = "¿Listo para seguir jugando?";
 "Your trip %@ is waiting for more plate finds." = "Tu viaje %@ espera más placas encontradas.";
-"trip_end.remote_toast.generic" = "Este viaje terminó. Mostrando tu resumen.";
+"trip_end.remote_toast.generic" = "%@ terminó. Mostrando tu resumen.";
 "trip_summary.error.trip_not_ended" = "El resumen del viaje está disponible cuando el viaje haya terminado.";

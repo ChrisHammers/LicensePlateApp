@@ -79,7 +79,8 @@ struct TripEndRecapHost<Content: View>: View {
     private func presentRemoteTripRecap(sessionId: UUID, endedBy: String?) {
         reloadActiveTripsList()
         if let endedBy, endedBy != currentUserId() {
-            tripEndedRemoteToastMessage = "trip_end.remote_toast.generic".localized
+            let tripName = activeTripsListViewModel.session(for: sessionId)?.name ?? "Trip".localized
+            tripEndedRemoteToastMessage = "trip_end.remote_toast.generic".localized(tripName)
             AnalyticsService.shared.log(.tripEndedRemoteToastShown(sessionId: sessionId.uuidString))
         }
         if scenePhase == .active {
