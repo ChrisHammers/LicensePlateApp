@@ -74,6 +74,13 @@
             ReferencedContainer = "container:LicensePlateApp.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "AppCheckDebugToken"
+            value = "54CF5463-AEEF-4F39-98BD-A10F5941C7F8"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+      </EnvironmentVariables>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
