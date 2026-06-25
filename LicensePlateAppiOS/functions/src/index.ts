@@ -36,6 +36,7 @@ export { expireInvitesAndCodes } from "./expiration";
 export { onAuthUserDeleted } from "./auth";
 export { writeAuditLog } from "./audit";
 export { onTripEndedUpdatePublicLifetimeStats } from "./publicLifetimeStatsOnTripEnded";
+export { onTripEndedNotifyMembers } from "./tripEndedNotifyMembers";
 export { onActivityEventUpdateUserProgression } from "./progressionOnActivityEvent";
 export { ensureUserProgressionDocument } from "./progressionBootstrap";
 

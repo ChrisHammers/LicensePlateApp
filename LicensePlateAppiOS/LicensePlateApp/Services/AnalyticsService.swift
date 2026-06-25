@@ -137,6 +137,8 @@ class AnalyticsService: AnalyticsLogging {
         // Travel Log (Step 07)
         case travelLogOpened
         case tripSummaryViewed(sessionId: String)
+        case tripSummaryAutoPresentedAfterEnd(sessionId: String, source: String)
+        case tripEndedRemoteToastShown(sessionId: String)
 
         // Summary / Travel log extended (Step 10.5)
         case tripSummaryViewedGameSection(sessionId: String)
@@ -341,6 +343,8 @@ class AnalyticsService: AnalyticsLogging {
             case .combinedTripStartedWithGameCount: return "combined_trip_started_with_game_count"
             case .travelLogOpened: return "travel_log_opened"
             case .tripSummaryViewed: return "trip_summary_viewed"
+            case .tripSummaryAutoPresentedAfterEnd: return "trip_summary_auto_presented_after_end"
+            case .tripEndedRemoteToastShown: return "trip_ended_remote_toast_shown"
             case .tripSummaryViewedGameSection: return "trip_summary_viewed_game_section"
             case .tripSummaryViewedParticipantSection: return "trip_summary_viewed_participant_section"
             case .tripSummaryViewedMapRecap: return "trip_summary_viewed_map_recap"
@@ -525,6 +529,10 @@ class AnalyticsService: AnalyticsLogging {
             case .combinedTripStartedWithGameCount(let tripId, let combinedGameCount, let combinedGameTypes):
                 return ["trip_session_id": tripId, "combined_game_count": combinedGameCount, "combined_game_types": combinedGameTypes.joined(separator: ",")]
             case .tripSummaryViewed(let sessionId):
+                return ["session_id": sessionId]
+            case .tripSummaryAutoPresentedAfterEnd(let sessionId, let source):
+                return ["session_id": sessionId, "source": source]
+            case .tripEndedRemoteToastShown(let sessionId):
                 return ["session_id": sessionId]
             case .tripSummaryViewedGameSection(let sessionId), .tripSummaryViewedParticipantSection(let sessionId), .tripSummaryViewedMapRecap(let sessionId), .tripSummaryViewedXpRecap(let sessionId):
                 return ["session_id": sessionId]

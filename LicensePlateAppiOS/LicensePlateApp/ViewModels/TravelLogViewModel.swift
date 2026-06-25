@@ -8,6 +8,26 @@
 import Foundation
 import Combine
 
+enum TripSummaryPresentationSource: String, Equatable, Sendable {
+    case travelLog
+    case localEnd
+    case remoteEnd
+}
+
+enum TravelLogSummaryBuildError: LocalizedError {
+    case tripNotFound
+    case tripNotEnded
+
+    var errorDescription: String? {
+        switch self {
+        case .tripNotFound:
+            return "Trip not found".localized
+        case .tripNotEnded:
+            return "trip_summary.error.trip_not_ended".localized
+        }
+    }
+}
+
 @MainActor
 final class TravelLogViewModel: ObservableObject {
     @Published private(set) var entries: [TravelLogEntry] = []
@@ -17,6 +37,8 @@ final class TravelLogViewModel: ObservableObject {
     @Published var summaryErrorMessage: String?
     @Published var selectedSummary: TripSummary?
     @Published var isLoadingSummary = false
+    /// Where the recap sheet should appear (Travel Log sheet vs home root).
+    @Published private(set) var summaryPresentationSource: TripSummaryPresentationSource?
     @Published private(set) var hiddenSavedTripCount = 0
     @Published var shouldPresentSavedTripPaywall = false
     @Published private(set) var savedTripCapKind: SavedTripCapKind = .unlimited
@@ -24,6 +46,11 @@ final class TravelLogViewModel: ObservableObject {
 
     /// Avoid duplicate section analytics if `onAppear` fires more than once for the same recap.
     private var recapSectionAnalyticsLoggedSessionId: UUID?
+
+    /// Avoid duplicate auto-present when local end and remote `trip_ended` both arrive.
+    private var autoPresentedSummarySessionIds: Set<UUID> = []
+
+    private static let pendingAutoRecapDefaultsKey = "tripEnd.pendingAutoRecapSessionIds"
 
     private let travelLogRepository: TravelLogRepositoryProtocol
     private let tripSessionRepository: TripSessionRepositoryProtocol
@@ -139,9 +166,14 @@ final class TravelLogViewModel: ObservableObject {
         ))
     }
 
-    /// Open summary for a session: fetch session, games, discoveries from event repo; compute credits; build and set selectedSummary. Recap is built from canonical data only: TripSession, GameInstance, and TripActivityEvent-derived discoveries and credits.
-    func openSummary(sessionId: UUID) {
-        FeedbackService.shared.buttonTap()
+    func openSummary(sessionId: UUID, source: TripSummaryPresentationSource = .travelLog) {
+        if source != .travelLog {
+            guard !autoPresentedSummarySessionIds.contains(sessionId) else { return }
+        }
+        summaryPresentationSource = source
+        if source == .travelLog {
+            FeedbackService.shared.buttonTap()
+        }
         isLoadingSummary = true
         selectedSummary = nil
         summaryErrorMessage = nil
@@ -149,42 +181,98 @@ final class TravelLogViewModel: ObservableObject {
         defer { isLoadingSummary = false }
 
         do {
-            guard let session = try tripSessionRepository.session(byId: sessionId) else {
-                summaryErrorMessage = "Trip not found".localized
-                return
-            }
-            let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
-            let discoveries = try tripActivityEventRepository.discoveries(sessionId: sessionId, gameInstanceId: nil)
-            var summary = TripSummaryBuilder.build(session: session, games: games, discoveries: discoveries)
-            if let uid = currentUserId, !uid.isEmpty {
-                let ledgerRows = (try? xpLedger.ledgerEvents(userId: uid, sessionId: sessionId)) ?? []
-                let itemTitle: (String) -> String = { itemId in
-                    PlateRegion.all.first { $0.id == itemId }?.name ?? itemId
-                }
-                summary.xpRecapLines = XpFeedProjectionBuilder.lines(from: ledgerRows, itemTitle: itemTitle)
-            }
+            let summary = try buildSummary(sessionId: sessionId)
             selectedSummary = summary
+            if source != .travelLog {
+                autoPresentedSummarySessionIds.insert(sessionId)
+                removePendingAutoRecap(sessionId: sessionId)
+                analytics.log(.tripSummaryAutoPresentedAfterEnd(
+                    sessionId: sessionId.uuidString,
+                    source: source.rawValue
+                ))
+            }
             if summary.unassignedDiscoveryCount > 0 {
-                AnalyticsService.shared.log(
+                analytics.log(
                     .summaryProjectionMismatch(
                         sessionId: sessionId.uuidString,
                         error: "unassigned_discovery_count=\(summary.unassignedDiscoveryCount)"
                     )
                 )
             }
-            AnalyticsService.shared.log(.tripSummaryViewed(sessionId: sessionId.uuidString))
+            analytics.log(.tripSummaryViewed(sessionId: sessionId.uuidString))
             if summary.hasCompetitiveGame {
-                AnalyticsService.shared.log(.tripSummaryCompetitiveRankingsPresented(tripSessionId: sessionId.uuidString))
+                analytics.log(.tripSummaryCompetitiveRankingsPresented(tripSessionId: sessionId.uuidString))
             }
+        } catch let error as TravelLogSummaryBuildError {
+            summaryErrorMessage = error.localizedDescription
         } catch {
             summaryErrorMessage = error.localizedDescription
         }
+    }
+
+    func enqueuePendingAutoRecap(sessionId: UUID) {
+        guard !autoPresentedSummarySessionIds.contains(sessionId) else { return }
+        var pending = Self.loadPendingAutoRecapSessionIds()
+        let id = sessionId.uuidString
+        guard !pending.contains(id) else { return }
+        pending.append(id)
+        UserDefaults.standard.set(pending, forKey: Self.pendingAutoRecapDefaultsKey)
+    }
+
+    func flushPendingAutoRecapPresentations() {
+        let pending = Self.loadPendingAutoRecapSessionIds()
+        guard let first = pending.first, let sessionId = UUID(uuidString: first) else { return }
+        if autoPresentedSummarySessionIds.contains(sessionId) {
+            removePendingAutoRecap(sessionId: sessionId)
+            return
+        }
+        openSummary(sessionId: sessionId, source: .remoteEnd)
+    }
+
+    private func removePendingAutoRecap(sessionId: UUID) {
+        var pending = Self.loadPendingAutoRecapSessionIds()
+        pending.removeAll { $0 == sessionId.uuidString }
+        UserDefaults.standard.set(pending, forKey: Self.pendingAutoRecapDefaultsKey)
+    }
+
+    private static func loadPendingAutoRecapSessionIds() -> [String] {
+        UserDefaults.standard.stringArray(forKey: pendingAutoRecapDefaultsKey) ?? []
+    }
+
+    private func buildSummary(sessionId: UUID) throws -> TripSummary {
+        guard let session = try tripSessionRepository.session(byId: sessionId) else {
+            throw TravelLogSummaryBuildError.tripNotFound
+        }
+        guard session.status == .ended else {
+            throw TravelLogSummaryBuildError.tripNotEnded
+        }
+        let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
+        let discoveries = try tripActivityEventRepository.discoveries(sessionId: sessionId, gameInstanceId: nil)
+        var summary = TripSummaryBuilder.build(session: session, games: games, discoveries: discoveries)
+        if let uid = currentUserId, !uid.isEmpty {
+            let ledgerRows = (try? xpLedger.ledgerEvents(userId: uid, sessionId: sessionId)) ?? []
+            let itemTitle: (String) -> String = { itemId in
+                PlateRegion.all.first { $0.id == itemId }?.name ?? itemId
+            }
+            summary.xpRecapLines = XpFeedProjectionBuilder.lines(from: ledgerRows, itemTitle: itemTitle)
+        }
+        return summary
     }
 
     func clearSelection() {
         selectedSummary = nil
         summaryErrorMessage = nil
         recapSectionAnalyticsLoggedSessionId = nil
+        summaryPresentationSource = nil
+    }
+
+    var presentsSummaryInTravelLog: Bool {
+        summaryPresentationSource == .travelLog
+    }
+
+    var presentsSummaryAtRoot: Bool {
+        guard let summaryPresentationSource else { return false }
+        return summaryPresentationSource != .travelLog
     }
 
     /// When the recap sheet is on screen — logs section-level analytics once per session presentation.

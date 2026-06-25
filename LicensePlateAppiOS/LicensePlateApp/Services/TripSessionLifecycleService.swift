@@ -14,6 +14,8 @@ protocol TripSessionLifecycleServiceProtocol: AnyObject {
     func startTrip(sessionId: UUID, actorId: String) throws
     func endTrip(sessionId: UUID, endedBy: String?) throws
     func cancelSession(sessionId: UUID, cancelledBy: String?) throws
+    func applyRemoteTripEnded(sessionId: UUID, endedBy: String?, endedAt: Date?) throws -> Bool
+    func reconcileRemoteTripEndedFromEventLog(userId: String?) throws -> [TripEndedRemotelyInfo]
 }
 
 @MainActor
@@ -97,6 +99,44 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
             }
             try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionId)
         }
+    }
+
+    @discardableResult
+    func applyRemoteTripEnded(sessionId: UUID, endedBy: String?, endedAt: Date?) throws -> Bool {
+        guard var session = try tripSessionRepository.session(byId: sessionId) else {
+            throw TripSessionLifecycleServiceError.sessionNotFound(sessionId)
+        }
+        guard session.status != .ended else { return false }
+
+        session.status = .ended
+        session.endedAt = endedAt ?? Date()
+        session.endedBy = endedBy
+        try tripSessionRepository.save(session: session)
+
+        let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
+        for game in games where game.endedAt == nil {
+            try gameInstanceLifecycleService.endGame(sessionId: sessionId, gameInstanceId: game.id)
+        }
+        ReminderNotificationService.shared.cancelReminder(sessionId: sessionId, reason: "trip_ended")
+        return true
+    }
+
+    func reconcileRemoteTripEndedFromEventLog(userId: String?) throws -> [TripEndedRemotelyInfo] {
+        guard let userId else { return [] }
+        let sessions = try tripSessionRepository.loadActiveSessions(userId: userId)
+        var results: [TripEndedRemotelyInfo] = []
+        for session in sessions where session.status != .ended {
+            let events = try tripActivityEventRepository.events(sessionId: session.id, limit: nil)
+            guard let tripEnded = events.first(where: { $0.kind == .tripEnded }) else { continue }
+            if try applyRemoteTripEnded(
+                sessionId: session.id,
+                endedBy: tripEnded.actorId,
+                endedAt: tripEnded.timestamp
+            ) {
+                results.append(TripEndedRemotelyInfo(sessionId: session.id, endedBy: tripEnded.actorId))
+            }
+        }
+        return results
     }
 
     /// Cancels the trip (soft delete UX): marks session cancelled, clears local games and all session events so scores/progress are removed.

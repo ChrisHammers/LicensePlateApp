@@ -784,3 +784,5 @@
 "Sponsored message" = "Message commandité";
 "Ready to keep playing?" = "Prêt à continuer?";
 "Your trip %@ is waiting for more plate finds." = "Votre voyage %@ attend d'autres plaques trouvées.";
+"trip_end.remote_toast.generic" = "Ce voyage est terminé. Affichage de votre récapitulatif.";
+"trip_summary.error.trip_not_ended" = "Le récapitulatif du voyage est disponible une fois le voyage terminé.";

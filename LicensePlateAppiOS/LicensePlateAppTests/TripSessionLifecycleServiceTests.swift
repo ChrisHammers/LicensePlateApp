@@ -228,4 +228,49 @@ struct TripSessionLifecycleServiceTests {
         #expect(eventRepo.appendedEvents().filter { $0.kind == .tripEnded }.isEmpty)
         #expect(syncCoordinator.enqueueCallCount == 0)
     }
+
+    @Test func applyRemoteTripEndedMirrorsSessionWithoutDuplicateEvent() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let sessionRepo = MockTripSessionRepository()
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        sessionRepo.seed(TripSession(
+            id: sessionId,
+            name: "Remote end",
+            status: .active,
+            createdAt: Date(),
+            startedAt: Date(),
+            participants: []
+        ))
+        gameRepo.seed(GameInstance(
+            id: gameId,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: CommonGameConfig(lifecycleState: .active, gameMode: .collaborative)
+        ))
+        let syncCoordinator = MockSyncCoordinator()
+        let recording = TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: syncCoordinator)
+        let gameLifecycle = GameInstanceLifecycleService(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            tripActivityEventRecording: recording
+        )
+        let service = TripSessionLifecycleService(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            tripActivityEventRecording: recording,
+            gameInstanceLifecycleService: gameLifecycle
+        )
+
+        let applied = try service.applyRemoteTripEnded(sessionId: sessionId, endedBy: "owner", endedAt: Date())
+
+        #expect(applied)
+        #expect(try sessionRepo.session(byId: sessionId)?.status == .ended)
+        #expect(eventRepo.appendedEvents().filter { $0.kind == .tripEnded }.isEmpty)
+        #expect(try service.applyRemoteTripEnded(sessionId: sessionId, endedBy: "owner", endedAt: Date()) == false)
+    }
 }

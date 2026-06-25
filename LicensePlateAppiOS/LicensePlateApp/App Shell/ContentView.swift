@@ -113,9 +113,14 @@ struct ContentView: View {
     /// Split from `body` so the Swift compiler can type-check the main scene in reasonable time.
     private var mainHomeNavigationStack: some View {
         NavigationStack(path: $mainCoordinator.path) {
-            AppBackgroundView {
-                homeTripAndInvitesList
-            }
+            TripEndRecapHost(
+                mainCoordinator: mainCoordinator,
+                travelLogViewModel: travelLogViewModel,
+                activeTripsListViewModel: activeTripsListViewModel
+            ) {
+                AppBackgroundView {
+                    homeTripAndInvitesList
+                }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -197,6 +202,7 @@ struct ContentView: View {
                 }
                 pendingTripsViewModel.loadIfNeeded()
                 activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
+                TripEndRecapSupport.startMultiplayerListeners(for: activeTripsListViewModel.items)
                 ReturnStreakService.shared.recordAppReturnIfNeeded()
                 for item in activeTripsListViewModel.items where item.session.status == .active {
                     await ReminderNotificationService.shared.scheduleInactiveActiveTripReminder(
@@ -207,6 +213,7 @@ struct ContentView: View {
             }
             .onReceive(TripCanonicalRemoteSyncService.shared.hydrationSignal) { _ in
                 activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
+                TripEndRecapSupport.startMultiplayerListeners(for: activeTripsListViewModel.items)
             }
             .onAppear {
                 pendingTripsViewModel.setAuthService(authService)
@@ -269,6 +276,7 @@ struct ContentView: View {
                 if let msg = activeTripsListViewModel.errorMessage {
                     Text(msg)
                 }
+            }
             }
             .navigationDestination(for: MainCoordinator.MainRoute.self) { route in
                 switch route {

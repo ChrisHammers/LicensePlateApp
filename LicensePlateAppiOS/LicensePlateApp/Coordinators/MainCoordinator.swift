@@ -20,6 +20,7 @@ final class MainCoordinator: ObservableObject {
     }
 
     @Published var path: [MainRoute] = []
+    @Published var pendingPostEndSummarySessionId: UUID?
 
     func openSession(_ sessionId: UUID) {
         path.append(.session(sessionId))
@@ -43,5 +44,14 @@ final class MainCoordinator: ObservableObject {
         path.removeAll()
         let selfUid = Auth.auth().currentUser?.uid
         UserProfileListenCoordinator.shared.setPinnedUsers(selfUserId: selfUid, rosterUserIds: [])
+    }
+
+    func completeTripEndFlow(sessionId: UUID) {
+        pendingPostEndSummarySessionId = sessionId
+        popToRoot()
+    }
+
+    func clearPendingPostEndSummary() {
+        pendingPostEndSummarySessionId = nil
     }
 }

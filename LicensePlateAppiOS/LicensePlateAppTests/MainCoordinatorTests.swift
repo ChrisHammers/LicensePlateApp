@@ -78,4 +78,25 @@ struct MainCoordinatorTests {
         coordinator.popToRoot()
         #expect(coordinator.path.isEmpty)
     }
+
+    @Test func completeTripEndFlowClearsPathAndSetsPendingSummary() async throws {
+        let coordinator = MainCoordinator()
+        let sessionId = UUID()
+        coordinator.openSession(UUID())
+        coordinator.openGame(sessionId: sessionId, gameId: UUID())
+        #expect(coordinator.path.count == 2)
+
+        coordinator.completeTripEndFlow(sessionId: sessionId)
+
+        #expect(coordinator.path.isEmpty)
+        #expect(coordinator.pendingPostEndSummarySessionId == sessionId)
+    }
+
+    @Test func clearPendingPostEndSummaryClearsId() async throws {
+        let coordinator = MainCoordinator()
+        let sessionId = UUID()
+        coordinator.completeTripEndFlow(sessionId: sessionId)
+        coordinator.clearPendingPostEndSummary()
+        #expect(coordinator.pendingPostEndSummarySessionId == nil)
+    }
 }

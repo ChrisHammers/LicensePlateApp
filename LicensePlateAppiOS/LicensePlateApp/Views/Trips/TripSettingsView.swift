@@ -12,6 +12,7 @@ struct TripSettingsView: View {
     @ObservedObject var viewModel: TripSettingsViewModel
     var onTripDeleted: () -> Void
     var onTripLeft: () -> Void
+    var onTripEnded: (UUID) -> Void
 
     @State private var showEndTripConfirmation = false
     @State private var showDeleteConfirmation = false
@@ -242,9 +243,19 @@ struct TripSettingsView: View {
             Button("End Trip".localized, role: .destructive) {
                 do {
                     try viewModel.endTrip()
+                    dismiss()
+                    onTripEnded(viewModel.sessionId)
                 } catch {
                     viewModel.setError(error.localizedDescription)
-                    retryAction = { try? viewModel.endTrip() }
+                    retryAction = {
+                        do {
+                            try viewModel.endTrip()
+                            dismiss()
+                            onTripEnded(viewModel.sessionId)
+                        } catch {
+                            viewModel.setError(error.localizedDescription)
+                        }
+                    }
                 }
             }
         } message: {
@@ -311,7 +322,8 @@ struct TripSettingsView: View {
                 authService: auth
             ),
             onTripDeleted: {},
-            onTripLeft: {}
+            onTripLeft: {},
+            onTripEnded: { _ in }
         )
     }
 }
@@ -339,7 +351,8 @@ struct TripSettingsView: View {
                 authService: auth
             ),
             onTripDeleted: {},
-            onTripLeft: {}
+            onTripLeft: {},
+            onTripEnded: { _ in }
         )
     }
 }

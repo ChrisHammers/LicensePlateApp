@@ -145,6 +145,11 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
         fairnessResolutionSubject.eraseToAnyPublisher()
     }
 
+    private let tripEndedRemotelySubject = PassthroughSubject<TripEndedRemotelyInfo, Never>()
+    var tripEndedRemotelySignal: AnyPublisher<TripEndedRemotelyInfo, Never> {
+        tripEndedRemotelySubject.eraseToAnyPublisher()
+    }
+
     /// Called by `SyncCoordinator` after applying server fairness reconciliation locally.
     func publishFairnessResolution(_ info: FairnessResolutionInfo) {
         fairnessResolutionSubject.send(info)
@@ -291,6 +296,17 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
             do {
                 if try tripActivityEventRepository.reconcileRemoteActivityEvent(event) {
                     changed = true
+                    if event.kind == .tripEnded {
+                        if try TripSessionLifecycleService.shared.applyRemoteTripEnded(
+                            sessionId: sessionId,
+                            endedBy: event.actorId,
+                            endedAt: event.timestamp
+                        ) {
+                            tripEndedRemotelySubject.send(
+                                TripEndedRemotelyInfo(sessionId: sessionId, endedBy: event.actorId)
+                            )
+                        }
+                    }
                 }
             } catch {
                 #if DEBUG

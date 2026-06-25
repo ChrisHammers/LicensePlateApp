@@ -47,7 +47,7 @@ struct TravelLogView: View {
                 }
             }
             .overlay {
-                if viewModel.isLoadingSummary {
+                if viewModel.isLoadingSummary && viewModel.presentsSummaryInTravelLog {
                     ZStack {
                         Color.Theme.background.opacity(0.88)
                             .ignoresSafeArea()
@@ -75,7 +75,7 @@ struct TravelLogView: View {
                 viewModel.onScreenAppeared()
             }
             .alert("Error".localized, isPresented: Binding(
-                get: { viewModel.summaryErrorMessage != nil },
+                get: { viewModel.summaryErrorMessage != nil && viewModel.presentsSummaryInTravelLog },
                 set: { if !$0 { viewModel.summaryErrorMessage = nil } }
             )) {
                 Button("OK".localized, role: .cancel) {
@@ -84,19 +84,8 @@ struct TravelLogView: View {
             } message: {
                 Text(viewModel.summaryErrorMessage ?? "")
             }
-            .sheet(item: $viewModel.selectedSummary) { summary in
-                NavigationStack {
-                    TripSummaryView(
-                        summary: summary,
-                        currentUserId: viewModel.currentUserId,
-                        shouldShowAd: viewModel.shouldShowTripSummaryAd()
-                    ) {
-                        viewModel.clearSelection()
-                    }
-                    .onAppear {
-                        viewModel.onRecapSheetAppeared(summary: summary)
-                    }
-                }
+            .sheet(item: travelLogSummaryBinding) { summary in
+                TripSummarySheetContent(viewModel: viewModel, summary: summary)
             }
             .sheet(isPresented: $viewModel.shouldPresentSavedTripPaywall, onDismiss: {
                 viewModel.dismissSavedTripPaywall()
@@ -113,6 +102,18 @@ struct TravelLogView: View {
                 }
             }
         }
+    }
+
+    private var travelLogSummaryBinding: Binding<TripSummary?> {
+        Binding(
+            get: {
+                guard viewModel.presentsSummaryInTravelLog else { return nil }
+                return viewModel.selectedSummary
+            },
+            set: { newValue in
+                if newValue == nil { viewModel.clearSelection() }
+            }
+        )
     }
 
     private var emptyState: some View {

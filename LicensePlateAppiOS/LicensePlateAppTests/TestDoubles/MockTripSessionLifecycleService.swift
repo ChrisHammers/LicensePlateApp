@@ -39,4 +39,14 @@ final class MockTripSessionLifecycleService: TripSessionLifecycleServiceProtocol
         cancelSessionCallCount += 1
         cancelSessionIds.append(sessionId)
     }
+
+    func applyRemoteTripEnded(sessionId: UUID, endedBy: String?, endedAt: Date?) throws -> Bool {
+        if shouldThrow { throw NSError(domain: "MockLifecycleService", code: -1, userInfo: nil) }
+        return false
+    }
+
+    func reconcileRemoteTripEndedFromEventLog(userId: String?) throws -> [TripEndedRemotelyInfo] {
+        if shouldThrow { throw NSError(domain: "MockLifecycleService", code: -1, userInfo: nil) }
+        return []
+    }
 }

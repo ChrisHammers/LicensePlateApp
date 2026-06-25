@@ -145,6 +145,9 @@ struct TripSessionView: View {
                 },
                 onTripLeft: {
                     coordinator.pop()
+                },
+                onTripEnded: { sessionId in
+                    coordinator.completeTripEndFlow(sessionId: sessionId)
                 }
             )
             .environmentObject(authService)

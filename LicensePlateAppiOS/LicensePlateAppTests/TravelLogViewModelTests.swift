@@ -377,6 +377,62 @@ struct TravelLogViewModelTests {
         #expect(viewModel.hiddenSavedTripCount == 0)
     }
 
+    @Test func openSummaryLocalEndLogsAutoPresentAnalyticsOnce() async throws {
+        let sessionId = UUID()
+        let mockTrip = MockTripSessionRepository()
+        mockTrip.seed(TripSession(
+            id: sessionId,
+            name: "Ended",
+            status: .ended,
+            createdAt: Date(),
+            endedAt: Date(),
+            participants: []
+        ))
+        let analytics = AnalyticsLoggingSpy()
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: MockTravelLogRepository(),
+            tripSessionRepository: mockTrip,
+            gameInstanceRepository: MockGameInstanceRepository(),
+            tripActivityEventRepository: MockTripActivityEventRepository(),
+            authService: FirebaseAuthService(),
+            analytics: analytics
+        )
+
+        viewModel.openSummary(sessionId: sessionId, source: .localEnd)
+        viewModel.openSummary(sessionId: sessionId, source: .remoteEnd)
+
+        #expect(viewModel.selectedSummary?.sessionId == sessionId)
+        let autoEvents = analytics.loggedEvents.filter { $0.name == "trip_summary_auto_presented_after_end" }
+        #expect(autoEvents.count == 1)
+    }
+
+    @Test func flushPendingAutoRecapPresentsQueuedSummary() async throws {
+        let sessionId = UUID()
+        UserDefaults.standard.set([sessionId.uuidString], forKey: "tripEnd.pendingAutoRecapSessionIds")
+        defer { UserDefaults.standard.removeObject(forKey: "tripEnd.pendingAutoRecapSessionIds") }
+
+        let mockTrip = MockTripSessionRepository()
+        mockTrip.seed(TripSession(
+            id: sessionId,
+            name: "Queued",
+            status: .ended,
+            createdAt: Date(),
+            endedAt: Date(),
+            participants: []
+        ))
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: MockTravelLogRepository(),
+            tripSessionRepository: mockTrip,
+            gameInstanceRepository: MockGameInstanceRepository(),
+            tripActivityEventRepository: MockTripActivityEventRepository(),
+            authService: FirebaseAuthService()
+        )
+
+        viewModel.flushPendingAutoRecapPresentations()
+
+        #expect(viewModel.selectedSummary?.sessionId == sessionId)
+    }
+
     private static func travelLogEntries(count: Int) -> [TravelLogEntry] {
         (0..<count).map { index in
             TravelLogEntry(
