@@ -50,7 +50,7 @@ enum AppCheckReadiness {
             return NSError(
                 domain: "AppCheckReadiness",
                 code: 403,
-                userInfo: [NSLocalizedDescriptionKey: "App Check debug token is not registered for this Firebase project. In the Xcode console, find the line \"Firebase App Check Debug Token: …\", then add it in Firebase Console → App Check → Manage debug tokens, and relaunch the app."]
+                userInfo: [NSLocalizedDescriptionKey: "App Check debug token is not registered for this Firebase project. In the Xcode console, find \"App Check debug token: '…'\", register it in Firebase Console → App Check → Manage debug tokens, then relaunch. To avoid registering a new token per simulator, set an AppCheckDebugToken environment variable in your Run scheme to one shared token."]
             )
         }
         return error

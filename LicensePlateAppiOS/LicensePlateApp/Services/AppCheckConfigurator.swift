@@ -18,6 +18,28 @@ enum AppCheckConfigurator {
         #endif
     }
 
+    /// Call once after `FirebaseApp.configure()` in debug builds.
+    static func logDevelopmentSetupHintIfNeeded() {
+        #if DEBUG
+        #if canImport(FirebaseAppCheck)
+        if let pinnedToken = ProcessInfo.processInfo.environment["AppCheckDebugToken"],
+           !pinnedToken.isEmpty {
+            print("[App Check] Using pinned debug token from AppCheckDebugToken environment variable.")
+            return
+        }
+
+        print(
+            """
+            [App Check] No AppCheckDebugToken env var is set. Simulators can each generate a different debug token.
+            1. Run once and copy the console line: App Check debug token: '…'
+            2. Firebase Console → App Check → your iOS app → Manage debug tokens → Add token
+            3. (Recommended) Pin that token for all simulators: Xcode → Product → Scheme → Edit Scheme → Run → Arguments → Environment Variables → AppCheckDebugToken = <token>
+            """
+        )
+        #endif
+        #endif
+    }
+
     #if canImport(FirebaseAppCheck)
     private struct ProviderSelection {
         let factory: AppCheckProviderFactory

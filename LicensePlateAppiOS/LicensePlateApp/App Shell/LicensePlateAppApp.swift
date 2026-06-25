@@ -118,6 +118,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         
         AppCheckConfigurator.configure()
         FirebaseApp.configure(options: options)
+        AppCheckConfigurator.logDevelopmentSetupHintIfNeeded()
         AppCheckReadiness.warmUp()
         CrashReportingService.shared.configure()
         Task { @MainActor in

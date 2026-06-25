@@ -132,6 +132,12 @@ final class AddFriendViewModel: ObservableObject {
             return
         }
 
+        if authService.isAnonymousUser {
+            errorMessage = "Create an account to use Friends & Family features.".localized
+            showError = true
+            return
+        }
+
         let toUserId = result.user.firebaseUID ?? result.user.id
         errorMessage = nil
 

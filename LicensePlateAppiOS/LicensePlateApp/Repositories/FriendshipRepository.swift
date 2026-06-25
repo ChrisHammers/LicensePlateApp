@@ -145,58 +145,113 @@ class FriendshipRepository: ObservableObject {
     }
     
     // MARK: - Cloud Functions
+
+    private func requireRegisteredAccount() throws {
+        guard Auth.auth().currentUser != nil else {
+            throw NSError(
+                domain: "FriendshipRepository",
+                code: 401,
+                userInfo: [NSLocalizedDescriptionKey: "You are not signed in. Sign in and try again."]
+            )
+        }
+        guard Auth.auth().currentUser?.isAnonymous == false else {
+            throw NSError(
+                domain: "FriendshipRepository",
+                code: 403,
+                userInfo: [NSLocalizedDescriptionKey: "Create an account to use Friends & Family features."]
+            )
+        }
+    }
+
+    private func invokeCallable(_ name: String, data: [String: Any]) async throws -> [String: Any] {
+        try requireRegisteredAccount()
+        try await AppCheckReadiness.ensureCallablePrerequisites()
+
+        let fn = Functions.functions().httpsCallable(name)
+        let result: HTTPSCallableResult
+        do {
+            result = try await fn.call(data.addingClientMetadata())
+        } catch {
+            throw Self.userFacingCallableError(error)
+        }
+
+        guard let response = result.data as? [String: Any] else {
+            throw NSError(
+                domain: "FriendshipRepository",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid response from \(name)"]
+            )
+        }
+        return response
+    }
     
     /// Send a friend invite to a user
     func sendFriendInvite(toUserId: String, method: String = "search") async throws -> String {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            throw NSError(domain: "FriendshipRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
-        }
-        
-        let functions = Functions.functions()
-        let sendInviteFunction = functions.httpsCallable("sendFriendInvite")
-        
-        let result = try await sendInviteFunction.call(([
+        let data = try await invokeCallable("sendFriendInvite", data: [
             "toUserId": toUserId,
-            "method": method
-        ] as [String: Any]).addingClientMetadata())
-        
-        guard let data = result.data as? [String: Any],
-              let inviteId = data["inviteId"] as? String else {
+            "method": method,
+        ])
+
+        guard let inviteId = data["inviteId"] as? String else {
             throw NSError(domain: "FriendshipRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response from sendFriendInvite"])
         }
-        
+
         return inviteId
     }
     
     /// Respond to a friend invite (accept or decline)
     func respondToFriendInvite(inviteId: String, accept: Bool) async throws {
-        guard Auth.auth().currentUser != nil else {
-            throw NSError(domain: "FriendshipRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
-        }
-        
-        let functions = Functions.functions()
-        let respondFunction = functions.httpsCallable("respondToFriendInvite")
-        
-        _ = try await respondFunction.call(([
+        _ = try await invokeCallable("respondToFriendInvite", data: [
             "inviteId": inviteId,
-            "response": accept ? "accept" : "decline"
-        ] as [String: Any]).addingClientMetadata())
+            "response": accept ? "accept" : "decline",
+        ])
     }
 
     /// Remove an accepted friendship via Cloud Function; drops local SwiftData row when the server succeeds.
     func removeFriend(friendshipId: String) async throws {
-        guard Auth.auth().currentUser != nil else {
-            throw NSError(domain: "FriendshipRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
-        }
-
-        let functions = Functions.functions()
-        let fn = functions.httpsCallable("removeFriend")
-
-        _ = try await fn.call(([
-            "friendshipId": friendshipId
-        ] as [String: Any]).addingClientMetadata())
+        _ = try await invokeCallable("removeFriend", data: [
+            "friendshipId": friendshipId,
+        ])
 
         deleteLocalFriendship(friendshipId: friendshipId)
+    }
+
+    private static func userFacingCallableError(_ error: Error) -> Error {
+        let nsError = error as NSError
+        guard nsError.domain == FunctionsErrorDomain,
+              let code = FunctionsErrorCode(rawValue: nsError.code) else {
+            return error
+        }
+
+        let message: String
+        switch code {
+        case .unauthenticated:
+            if Auth.auth().currentUser == nil {
+                message = "You are not signed in. Sign in and try again."
+            } else if Auth.auth().currentUser?.isAnonymous == true {
+                message = "Create an account to use Friends & Family features."
+            } else {
+                message = "The server rejected this request. Sign in and try again."
+            }
+        case .failedPrecondition:
+            message = "Create an account to use Friends & Family features."
+        case .permissionDenied:
+            message = "You do not have permission to perform this friend action."
+        case .alreadyExists:
+            message = "A friend request already exists for this user."
+        case .unavailable:
+            message = "The server is temporarily unavailable. Try again shortly."
+        case .internal:
+            message = "The server encountered an error. Try again in a moment."
+        default:
+            return error
+        }
+
+        return NSError(
+            domain: nsError.domain,
+            code: nsError.code,
+            userInfo: [NSLocalizedDescriptionKey: message]
+        )
     }
 
     private func deleteLocalFriendship(friendshipId: String) {
