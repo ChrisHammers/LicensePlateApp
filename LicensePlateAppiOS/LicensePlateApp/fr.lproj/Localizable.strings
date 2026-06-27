@@ -706,6 +706,7 @@
 "trip_settings.leave_trip_impact" = "Vous quitterez ce trajet sur cet appareil immédiatement. Hors ligne, la sortie se synchronisera lorsque vous serez de nouveau en ligne. Après votre départ, ce trajet ne compte plus dans vos statistiques à vie et n’apparaîtra plus dans votre carnet de voyage une fois la synchronisation terminée.";
 "error.family_lookup_no_context" = "Les données famille ne sont pas encore disponibles. Réessayez dans un instant.";
 "error.lifetime_stats_no_context" = "Les statistiques ne sont pas encore disponibles. Réessayez dans un instant.";
+"error.user_achievement_no_context" = "La progression des succès n’est pas encore disponible. Réessayez dans un instant.";
 
 "xp.row.detail.pending_resolution" = "Résolution compétitive en attente";
 "xp.row.pill.pending" = "+%d XP en attente";

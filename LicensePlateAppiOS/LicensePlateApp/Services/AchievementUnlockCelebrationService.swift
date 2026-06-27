@@ -20,6 +20,7 @@ final class AchievementUnlockCelebrationService: ObservableObject {
     private let lifetimeStatsCoordinator: LifetimeStatsCoordinator
     private let publicLifetimeStatsRepository: PublicLifetimeStatsRepository
     private let xpLedger: XpLedgerRepository
+    private let userAchievementRepository: UserAchievementRepository
     private let rewardPresenter: RewardPresenter
     private var cancellables = Set<AnyCancellable>()
     private var refreshWorkItem: DispatchWorkItem?
@@ -27,6 +28,7 @@ final class AchievementUnlockCelebrationService: ObservableObject {
     private var user: AppUser?
     private var previousSnapshot: AchievementProgressSnapshot?
     private var hasBaseline = false
+    private var persistedAchievementIds: Set<String> = []
 
     init(
         catalogProvider: ProgressionCatalogProviding = ProgressionCatalogProvider.shared,
@@ -36,6 +38,7 @@ final class AchievementUnlockCelebrationService: ObservableObject {
         lifetimeStatsCoordinator: LifetimeStatsCoordinator = .shared,
         publicLifetimeStatsRepository: PublicLifetimeStatsRepository = .shared,
         xpLedger: XpLedgerRepository = .shared,
+        userAchievementRepository: UserAchievementRepository = .shared,
         rewardPresenter: RewardPresenter = .shared
     ) {
         self.catalogProvider = catalogProvider
@@ -45,6 +48,7 @@ final class AchievementUnlockCelebrationService: ObservableObject {
         self.lifetimeStatsCoordinator = lifetimeStatsCoordinator
         self.publicLifetimeStatsRepository = publicLifetimeStatsRepository
         self.xpLedger = xpLedger
+        self.userAchievementRepository = userAchievementRepository
         self.rewardPresenter = rewardPresenter
 
         userProgressionService.objectWillChange
@@ -71,6 +75,11 @@ final class AchievementUnlockCelebrationService: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.scheduleRefresh() }
             .store(in: &cancellables)
+
+        userAchievementRepository.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.scheduleRefresh() }
+            .store(in: &cancellables)
     }
 
     func configure(user: AppUser?) {
@@ -78,9 +87,11 @@ final class AchievementUnlockCelebrationService: ObservableObject {
         self.user = user
         previousSnapshot = nil
         hasBaseline = false
+        persistedAchievementIds = []
         guard let user else { return }
         let userId = user.firebaseUID ?? user.id
         lifetimeStatsCoordinator.onProfileAppear(userId: userId)
+        persistedAchievementIds = (try? userAchievementRepository.fetchRecordIds(forUserId: userId)) ?? []
         scheduleRefresh()
     }
 
@@ -90,6 +101,7 @@ final class AchievementUnlockCelebrationService: ObservableObject {
         user = nil
         previousSnapshot = nil
         hasBaseline = false
+        persistedAchievementIds = []
         rewardPresenter.reset()
     }
 
@@ -104,6 +116,9 @@ final class AchievementUnlockCelebrationService: ObservableObject {
 
     private func refresh() {
         guard let user else { return }
+        let userId = user.firebaseUID ?? user.id
+        let persistedRecords = (try? userAchievementRepository.fetchRecords(forUserId: userId)) ?? [:]
+        persistedAchievementIds = Set(persistedRecords.keys)
 
         let lifetimeStats = lifetimeStatsCoordinator.stats
         let totalXp = resolveTotalXp(for: user)
@@ -113,7 +128,8 @@ final class AchievementUnlockCelebrationService: ObservableObject {
             totalXp: totalXp,
             catalogProvider: catalogProvider,
             userProgressionService: userProgressionService,
-            entitlementService: entitlementService
+            entitlementService: entitlementService,
+            persistedRecords: persistedRecords
         )
 
         guard isHydrated(for: user) else {
@@ -122,8 +138,7 @@ final class AchievementUnlockCelebrationService: ObservableObject {
         }
 
         guard hasBaseline, let previousSnapshot else {
-            self.previousSnapshot = snapshot
-            hasBaseline = true
+            establishBaseline(snapshot: snapshot, userId: userId)
             return
         }
 
@@ -148,8 +163,13 @@ final class AchievementUnlockCelebrationService: ObservableObject {
                 previous: previousSnapshot.statuses,
                 next: snapshot.statuses
             )
-            for id in unlockedIds {
-                guard let achievement = achievementsById[id] else { continue }
+            let celebrateIds = AchievementProgressPersistence.filterNotYetPersisted(
+                unlockedIds,
+                persistedIds: persistedAchievementIds
+            )
+            for id in celebrateIds {
+                guard let achievement = achievementsById[id],
+                      let status = snapshot.statuses[id] else { continue }
                 rewardPresenter.show(.achievement(achievement))
                 AnalyticsService.shared.log(
                     .achievementUnlocked(
@@ -158,10 +178,36 @@ final class AchievementUnlockCelebrationService: ObservableObject {
                         rarity: achievement.rarity.title
                     )
                 )
+                try? userAchievementRepository.recordUnlock(
+                    userId: userId,
+                    achievementId: id,
+                    lastProgress: status.progress
+                )
+                persistedAchievementIds.insert(id)
+            }
+            for (id, status) in snapshot.statuses where status.isUnlocked && persistedAchievementIds.contains(id) {
+                try? userAchievementRepository.updateProgressIfUnlocked(
+                    userId: userId,
+                    achievementId: id,
+                    lastProgress: status.progress
+                )
             }
         }
 
         self.previousSnapshot = snapshot
+    }
+
+    private func establishBaseline(snapshot: AchievementProgressSnapshot, userId: String) {
+        for (id, status) in snapshot.statuses where status.isUnlocked {
+            try? userAchievementRepository.backfillIfMissing(
+                userId: userId,
+                achievementId: id,
+                lastProgress: status.progress
+            )
+        }
+        persistedAchievementIds = (try? userAchievementRepository.fetchRecordIds(forUserId: userId)) ?? persistedAchievementIds
+        previousSnapshot = snapshot
+        hasBaseline = true
     }
 
     private func resolveTotalXp(for user: AppUser) -> Int {

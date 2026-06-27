@@ -113,6 +113,12 @@ final class SchemaVersion19Marker {
     init() {}
 }
 
+@Model
+final class SchemaVersion20Marker {
+    var createdAt: Date = Date()
+    init() {}
+}
+
 // MARK: - Schema Version 1 (Initial)
 // Initial schema with Trip and AppUser
 
@@ -812,10 +818,62 @@ enum SchemaVersion19: VersionedSchema {
     }
 }
 
+// MARK: - Schema Version 20 (User achievement persistence)
+// Local unlock timestamps + progress rows for achievements.
+
+enum SchemaVersion20: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(20, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            SchemaVersion7Marker.self,
+            SchemaVersion8Marker.self,
+            TripActivityEventEntity.self,
+            SchemaVersion9Marker.self,
+            SchemaVersion10Marker.self,
+            SyncQueueItemEntity.self,
+            RemoteSyncMetadataEntity.self,
+            SchemaVersion11Marker.self,
+            SchemaVersion12Marker.self,
+            SchemaVersion13Marker.self,
+            SchemaVersion14Marker.self,
+            SchemaVersion15Marker.self,
+            PendingTripLeaveEntity.self,
+            SchemaVersion16Marker.self,
+            UserLifetimeStatsEntity.self,
+            SchemaVersion17Marker.self,
+            PublicLifetimeStatsCacheEntity.self,
+            SchemaVersion18Marker.self,
+            XpLedgerEventEntity.self,
+            DiscoveryResolutionEntity.self,
+            SchemaVersion19Marker.self,
+            UserAchievementEntity.self,
+            SchemaVersion20Marker.self
+        ]
+    }
+}
+
 // MARK: - Migration Plan
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self, SchemaVersion11.self, SchemaVersion12.self, SchemaVersion13.self, SchemaVersion14.self, SchemaVersion15.self, SchemaVersion16.self, SchemaVersion17.self, SchemaVersion18.self, SchemaVersion19.self]
+        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self, SchemaVersion11.self, SchemaVersion12.self, SchemaVersion13.self, SchemaVersion14.self, SchemaVersion15.self, SchemaVersion16.self, SchemaVersion17.self, SchemaVersion18.self, SchemaVersion19.self, SchemaVersion20.self]
     }
 
     static var stages: [MigrationStage] {
@@ -837,12 +895,13 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             .lightweight(fromVersion: SchemaVersion15.self, toVersion: SchemaVersion16.self),
             .lightweight(fromVersion: SchemaVersion16.self, toVersion: SchemaVersion17.self),
             .lightweight(fromVersion: SchemaVersion17.self, toVersion: SchemaVersion18.self),
-            .lightweight(fromVersion: SchemaVersion18.self, toVersion: SchemaVersion19.self)
+            .lightweight(fromVersion: SchemaVersion18.self, toVersion: SchemaVersion19.self),
+            .lightweight(fromVersion: SchemaVersion19.self, toVersion: SchemaVersion20.self)
         ]
     }
 }
 
 // MARK: - Current Schema
-// V19: XP ledger (`XpLedgerEventEntity`) + discovery resolution (`DiscoveryResolutionEntity`).
-typealias CurrentSchema = SchemaVersion19
+// V20: local achievement unlock persistence (`UserAchievementEntity`).
+typealias CurrentSchema = SchemaVersion20
 

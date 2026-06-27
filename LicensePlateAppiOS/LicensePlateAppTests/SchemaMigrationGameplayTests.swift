@@ -114,4 +114,27 @@ struct SchemaMigrationGameplayTests {
         let decoded = try JSONDecoder().decode(GameRuleSet.self, from: fetched.ruleSetData!)
         #expect(decoded.gameDefinitionId == "license_plate")
     }
+
+    @Test func insertAndFetchUserAchievementEntity() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let entity = UserAchievementEntity(
+            userId: "user-1",
+            achievementId: "first_win",
+            unlockedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            lastProgress: 1,
+            isBackfilled: false
+        )
+        context.insert(entity)
+        try context.save()
+
+        let key = UserAchievementEntity.makeRecordKey(userId: "user-1", achievementId: "first_win")
+        let descriptor = FetchDescriptor<UserAchievementEntity>(
+            predicate: #Predicate<UserAchievementEntity> { $0.recordKey == key }
+        )
+        let results = try context.fetch(descriptor)
+        #expect(results.count == 1)
+        #expect(results[0].lastProgress == 1)
+        #expect(results[0].isBackfilled == false)
+    }
 }

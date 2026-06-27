@@ -21,6 +21,7 @@ final class AchievementProgressViewModel: ObservableObject {
     private let catalogProvider: ProgressionCatalogProviding
     private let userProgressionService: UserProgressionService
     private let entitlementService: EntitlementService
+    private let userAchievementRepository: UserAchievementRepository
     private let lifetimeStatsViewModel: LifetimeStatsProfileViewModel
     private let xpProgressViewModel: XpProgressViewModel
     private var cancellables = Set<AnyCancellable>()
@@ -31,7 +32,8 @@ final class AchievementProgressViewModel: ObservableObject {
         xpProgressViewModel: XpProgressViewModel,
         catalogProvider: ProgressionCatalogProviding = ProgressionCatalogProvider.shared,
         userProgressionService: UserProgressionService = .shared,
-        entitlementService: EntitlementService = .shared
+        entitlementService: EntitlementService = .shared,
+        userAchievementRepository: UserAchievementRepository = .shared
     ) {
         self.user = user
         self.lifetimeStatsViewModel = lifetimeStatsViewModel
@@ -39,6 +41,7 @@ final class AchievementProgressViewModel: ObservableObject {
         self.catalogProvider = catalogProvider
         self.userProgressionService = userProgressionService
         self.entitlementService = entitlementService
+        self.userAchievementRepository = userAchievementRepository
 
         lifetimeStatsViewModel.objectWillChange
             .receive(on: DispatchQueue.main)
@@ -60,6 +63,11 @@ final class AchievementProgressViewModel: ObservableObject {
             .sink { [weak self] _ in self?.refresh() }
             .store(in: &cancellables)
 
+        userAchievementRepository.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.refresh() }
+            .store(in: &cancellables)
+
         refresh()
     }
 
@@ -71,6 +79,9 @@ final class AchievementProgressViewModel: ObservableObject {
         rankLadder = ProgressionCatalogProjection.rankLadder(from: catalog)
         totalXp = max(0, xpProgressViewModel.displayedTotalXp)
 
+        let userId = user.firebaseUID ?? user.id
+        let persisted = (try? userAchievementRepository.fetchRecords(forUserId: userId)) ?? [:]
+
         let entitlement = entitlementService.entitlementState(for: user)
         let inputs = AchievementProgressInputs(
             progression: userProgressionService.effectiveTotals,
@@ -79,9 +90,13 @@ final class AchievementProgressViewModel: ObservableObject {
             isRoyale: entitlement.effectiveTier >= .royale,
             isFounder: entitlement.hasTag("founder")
         )
-        statuses = AchievementProgressResolver.statuses(
+        let computed = AchievementProgressResolver.statuses(
             for: catalog.visibleAchievements,
             inputs: inputs
+        )
+        statuses = AchievementProgressPersistence.applyPersistedRecords(
+            statuses: computed,
+            persisted: persisted
         )
     }
 }

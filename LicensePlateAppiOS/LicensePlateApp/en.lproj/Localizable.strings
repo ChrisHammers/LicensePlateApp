@@ -736,6 +736,7 @@
 "trip_settings.leave_trip_impact" = "You will leave this trip on this device right away. If you are offline, leaving will sync when you are back online. After you leave, this trip no longer counts toward your lifetime statistics and won’t appear in your travel log once sync completes.";
 "error.family_lookup_no_context" = "Family data isn’t available yet. Try again in a moment.";
 "error.lifetime_stats_no_context" = "Statistics aren’t available yet. Try again in a moment.";
+"error.user_achievement_no_context" = "Achievement progress isn’t available yet. Try again in a moment.";
 
 /* XP Ledger Step 03 — gameplay row + profile + recap */
 "xp.row.detail.pending_resolution" = "Pending competitive resolution";
