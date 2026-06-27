@@ -180,6 +180,8 @@ class AnalyticsService: AnalyticsLogging {
         case achievementUnlocked(achievementId: String, category: String, rarity: String)
         case rankUpCelebrated(level: Int, totalXp: Int)
         case achievementCelebrationDismissed(eventId: String, kind: String)
+        case achievementUnlockSyncSucceeded(recordedCount: Int, alreadySyncedCount: Int, rejectedCount: Int)
+        case achievementUnlockSyncFailed(candidateCount: Int, errorSummary: String)
         case xpGrantAwarded(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
         case xpGrantSkippedAlreadyGranted(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
 
@@ -378,6 +380,8 @@ class AnalyticsService: AnalyticsLogging {
             case .achievementUnlocked: return "achievement_unlocked"
             case .rankUpCelebrated: return "rank_up"
             case .achievementCelebrationDismissed: return "achievement_celebration_dismissed"
+            case .achievementUnlockSyncSucceeded: return "achievement_unlock_sync_succeeded"
+            case .achievementUnlockSyncFailed: return "achievement_unlock_sync_failed"
             case .xpGrantAwarded: return "xp_grant_awarded"
             case .xpGrantSkippedAlreadyGranted: return "xp_grant_skipped_already_granted"
             case .tripSessionCreated: return "trip_session_created"
@@ -613,6 +617,17 @@ class AnalyticsService: AnalyticsLogging {
                 return [
                     "event_id": eventId,
                     "kind": kind
+                ]
+            case .achievementUnlockSyncSucceeded(let recordedCount, let alreadySyncedCount, let rejectedCount):
+                return [
+                    "recorded_count": recordedCount,
+                    "already_synced_count": alreadySyncedCount,
+                    "rejected_count": rejectedCount
+                ]
+            case .achievementUnlockSyncFailed(let candidateCount, let errorSummary):
+                return [
+                    "candidate_count": candidateCount,
+                    "error_summary": errorSummary
                 ]
             case .xpGrantAwarded(let tripId, let gameInstanceId, let targetId, let participantId):
                 return [

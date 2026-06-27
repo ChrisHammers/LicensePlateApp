@@ -1,0 +1,256 @@
+{
+  "cases": [
+    {
+      "achievementId": "first_win",
+      "inputs": {
+        "progression": {
+          "everCompetitiveFirstPlace": true,
+          "acceptedRegionFindCount": 0,
+          "competitiveFirstPlaceFinishes": 1
+        },
+        "lifetimeStats": null,
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 1, "unlocked": true }
+    },
+    {
+      "achievementId": "first_win",
+      "inputs": {
+        "progression": {
+          "everCompetitiveFirstPlace": false,
+          "acceptedRegionFindCount": 0,
+          "competitiveFirstPlaceFinishes": 0
+        },
+        "lifetimeStats": null,
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 0, "unlocked": false }
+    },
+    {
+      "achievementId": "explorer_10",
+      "inputs": {
+        "progression": {
+          "everCompetitiveFirstPlace": false,
+          "acceptedRegionFindCount": 7,
+          "competitiveFirstPlaceFinishes": 0
+        },
+        "lifetimeStats": null,
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 7, "unlocked": false }
+    },
+    {
+      "achievementId": "explorer_10",
+      "inputs": {
+        "progression": {
+          "everCompetitiveFirstPlace": false,
+          "acceptedRegionFindCount": 10,
+          "competitiveFirstPlaceFinishes": 0
+        },
+        "lifetimeStats": null,
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 10, "unlocked": true }
+    },
+    {
+      "achievementId": "coast_to_coast",
+      "inputs": {
+        "progression": {
+          "everCompetitiveFirstPlace": false,
+          "acceptedRegionFindCount": 62,
+          "competitiveFirstPlaceFinishes": 0
+        },
+        "lifetimeStats": null,
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 62, "unlocked": false }
+    },
+    {
+      "achievementId": "coast_to_coast",
+      "inputs": {
+        "progression": {
+          "everCompetitiveFirstPlace": false,
+          "acceptedRegionFindCount": 63,
+          "competitiveFirstPlaceFinishes": 0
+        },
+        "lifetimeStats": null,
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 63, "unlocked": true }
+    },
+    {
+      "achievementId": "plates_100",
+      "inputs": {
+        "progression": null,
+        "lifetimeStats": { "totalCompletedTrips": 0, "totalDiscoveries": 99 },
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 99, "unlocked": false }
+    },
+    {
+      "achievementId": "plates_100",
+      "inputs": {
+        "progression": null,
+        "lifetimeStats": { "totalCompletedTrips": 0, "totalDiscoveries": 100 },
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 100, "unlocked": true }
+    },
+    {
+      "achievementId": "plates_1000",
+      "inputs": {
+        "progression": null,
+        "lifetimeStats": { "totalCompletedTrips": 0, "totalDiscoveries": 1000 },
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 1000, "unlocked": true }
+    },
+    {
+      "achievementId": "trips_10",
+      "inputs": {
+        "progression": null,
+        "lifetimeStats": { "totalCompletedTrips": 9, "totalDiscoveries": 0 },
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 9, "unlocked": false }
+    },
+    {
+      "achievementId": "trips_10",
+      "inputs": {
+        "progression": null,
+        "lifetimeStats": { "totalCompletedTrips": 10, "totalDiscoveries": 0 },
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 10, "unlocked": true }
+    },
+    {
+      "achievementId": "trips_50",
+      "inputs": {
+        "progression": null,
+        "lifetimeStats": { "totalCompletedTrips": 50, "totalDiscoveries": 0 },
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 50, "unlocked": true }
+    },
+    {
+      "achievementId": "family",
+      "inputs": {
+        "progression": null,
+        "lifetimeStats": null,
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 0, "unlocked": false }
+    },
+    {
+      "achievementId": "family",
+      "inputs": {
+        "progression": null,
+        "lifetimeStats": null,
+        "isFamilyMember": true,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 1, "unlocked": true }
+    },
+    {
+      "achievementId": "wins_100",
+      "inputs": {
+        "progression": {
+          "everCompetitiveFirstPlace": false,
+          "acceptedRegionFindCount": 0,
+          "competitiveFirstPlaceFinishes": 99
+        },
+        "lifetimeStats": null,
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 99, "unlocked": false }
+    },
+    {
+      "achievementId": "wins_100",
+      "inputs": {
+        "progression": {
+          "everCompetitiveFirstPlace": false,
+          "acceptedRegionFindCount": 0,
+          "competitiveFirstPlaceFinishes": 100
+        },
+        "lifetimeStats": null,
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 100, "unlocked": true }
+    },
+    {
+      "achievementId": "royale",
+      "inputs": {
+        "progression": null,
+        "lifetimeStats": null,
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 0, "unlocked": false }
+    },
+    {
+      "achievementId": "royale",
+      "inputs": {
+        "progression": null,
+        "lifetimeStats": null,
+        "isFamilyMember": false,
+        "isRoyale": true,
+        "isFounder": false
+      },
+      "expected": { "progress": 1, "unlocked": true }
+    },
+    {
+      "achievementId": "founder",
+      "inputs": {
+        "progression": null,
+        "lifetimeStats": null,
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": false
+      },
+      "expected": { "progress": 0, "unlocked": false }
+    },
+    {
+      "achievementId": "founder",
+      "inputs": {
+        "progression": null,
+        "lifetimeStats": null,
+        "isFamilyMember": false,
+        "isRoyale": false,
+        "isFounder": true
+      },
+      "expected": { "progress": 1, "unlocked": true }
+    }
+  ]
+}

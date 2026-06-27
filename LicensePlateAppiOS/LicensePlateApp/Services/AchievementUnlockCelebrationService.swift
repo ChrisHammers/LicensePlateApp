@@ -116,6 +116,7 @@ final class AchievementUnlockCelebrationService: ObservableObject {
         hasBaseline = false
         persistedAchievementIds = []
         userAchievementRemoteRepository.stopListening()
+        achievementUnlockSyncService.resetForSignOut()
         rewardPresenter.reset()
     }
 
@@ -269,7 +270,8 @@ final class AchievementUnlockCelebrationService: ObservableObject {
     private func isHydrated(for user: AppUser) -> Bool {
         guard userProgressionRepository.hasReceivedInitialSnapshot else { return false }
         guard userProgressionService.effectiveTotals != nil else { return false }
-        return isLifetimeStatsHydrated(for: user)
+        guard isLifetimeStatsHydrated(for: user) else { return false }
+        return userAchievementRemoteRepository.hasReceivedInitialSnapshot
     }
 
     private func isLifetimeStatsHydrated(for user: AppUser) -> Bool {

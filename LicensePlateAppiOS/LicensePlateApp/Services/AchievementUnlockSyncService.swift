@@ -13,12 +13,23 @@ struct AchievementUnlockSyncCandidate: Sendable {
     var lastProgress: Int
 }
 
+struct AchievementUnlockSyncResult: Sendable {
+    var recordedIds: [String]
+    var alreadySyncedIds: [String]
+    var rejectedIds: [String]
+}
+
 @MainActor
 final class AchievementUnlockSyncService {
 
     static let shared = AchievementUnlockSyncService()
 
     private let functions: Functions
+    private var pendingCandidates: [AchievementUnlockSyncCandidate] = []
+    private var pendingUser: AppUser?
+    private var pendingEntitlement: EntitlementState?
+    private var pendingRetryCount = 0
+    private let maxRetryAttempts = 3
 
     init(functions: Functions = Functions.functions()) {
         self.functions = functions
@@ -42,8 +53,24 @@ final class AchievementUnlockSyncService {
 
         do {
             let fn = functions.httpsCallable("syncUserAchievementUnlocks")
-            _ = try await fn.call(payload)
+            let result = try await fn.call(payload)
+            let parsed = parseSyncResponse(result.data)
+            AnalyticsService.shared.log(
+                .achievementUnlockSyncSucceeded(
+                    recordedCount: parsed.recordedIds.count,
+                    alreadySyncedCount: parsed.alreadySyncedIds.count,
+                    rejectedCount: parsed.rejectedIds.count
+                )
+            )
+            clearPendingRetryState()
         } catch {
+            storePendingRetry(user: user, entitlement: entitlement, candidates: candidates)
+            AnalyticsService.shared.log(
+                .achievementUnlockSyncFailed(
+                    candidateCount: candidates.count,
+                    errorSummary: String(error.localizedDescription.prefix(120))
+                )
+            )
             #if DEBUG
             print("⚠️ syncUserAchievementUnlocks failed: \(error.localizedDescription)")
             #endif
@@ -60,6 +87,60 @@ final class AchievementUnlockSyncService {
             return AchievementUnlockSyncCandidate(achievementId: id, lastProgress: status.progress)
         }
         await syncUnlocks(user: user, entitlement: entitlement, candidates: candidates)
+    }
+
+    func retryPendingIfNeeded(user: AppUser, entitlement: EntitlementState) async {
+        guard !pendingCandidates.isEmpty else { return }
+        guard pendingUser?.id == user.id || pendingUser?.firebaseUID == user.firebaseUID else { return }
+        guard pendingRetryCount < maxRetryAttempts else {
+            AnalyticsService.shared.log(
+                .achievementUnlockSyncFailed(
+                    candidateCount: pendingCandidates.count,
+                    errorSummary: "retry_limit_reached"
+                )
+            )
+            clearPendingRetryState()
+            return
+        }
+        pendingRetryCount += 1
+        await syncUnlocks(user: user, entitlement: entitlement, candidates: pendingCandidates)
+    }
+
+    func resetForSignOut() {
+        clearPendingRetryState()
+    }
+
+    private func storePendingRetry(
+        user: AppUser,
+        entitlement: EntitlementState,
+        candidates: [AchievementUnlockSyncCandidate]
+    ) {
+        pendingUser = user
+        pendingEntitlement = entitlement
+        pendingCandidates = candidates
+    }
+
+    private func clearPendingRetryState() {
+        pendingCandidates = []
+        pendingUser = nil
+        pendingEntitlement = nil
+        pendingRetryCount = 0
+    }
+
+    private func parseSyncResponse(_ data: Any?) -> AchievementUnlockSyncResult {
+        guard let dict = data as? [String: Any] else {
+            return AchievementUnlockSyncResult(recordedIds: [], alreadySyncedIds: [], rejectedIds: [])
+        }
+        return AchievementUnlockSyncResult(
+            recordedIds: stringArray(dict["recordedIds"]),
+            alreadySyncedIds: stringArray(dict["alreadySyncedIds"]),
+            rejectedIds: stringArray(dict["rejectedIds"])
+        )
+    }
+
+    private func stringArray(_ value: Any?) -> [String] {
+        guard let array = value as? [Any] else { return [] }
+        return array.compactMap { $0 as? String }
     }
 
     private func entitlementHintsPayload(from entitlement: EntitlementState) -> [String: Any] {

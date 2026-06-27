@@ -47,6 +47,7 @@ enum AchievementProgressSnapshotBuilder {
         catalogProvider: ProgressionCatalogProviding = ProgressionCatalogProvider.shared,
         userProgressionService: UserProgressionService = .shared,
         entitlementService: EntitlementService = .shared,
+        inputs overrideInputs: AchievementProgressInputs? = nil,
         persistedRecords: [String: UserAchievementRecord] = [:],
         localPersistedRecords: [String: UserAchievementRecord] = [:],
         remotePersistedRecords: [String: UserAchievementRecord] = [:]
@@ -54,13 +55,12 @@ enum AchievementProgressSnapshotBuilder {
         let catalog = catalogProvider.current
         let ladder = ProgressionCatalogProjection.rankLadder(from: catalog)
         let xp = max(0, totalXp)
-        let entitlement = entitlementService.entitlementState(for: user)
-        let inputs = AchievementProgressInputs(
+        let inputs = overrideInputs ?? AchievementProgressInputs(
             progression: userProgressionService.effectiveTotals,
             lifetimeStats: lifetimeStats,
             isFamilyMember: user.activeFamilyId != nil || user.wasEverInFamily,
-            isRoyale: entitlement.effectiveTier >= .royale,
-            isFounder: entitlement.hasTag("founder")
+            isRoyale: entitlementService.entitlementState(for: user).effectiveTier >= .royale,
+            isFounder: entitlementService.entitlementState(for: user).hasTag("founder")
         )
         let computed = AchievementProgressResolver.statuses(
             for: catalog.visibleAchievements,

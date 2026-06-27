@@ -3,6 +3,7 @@
   "scripts": {
     "test": "vitest run",
     "build": "tsc && cp src/progressionCatalog.v1.json lib/",
+    "check:catalog-parity": "vitest run src/progressionCatalogParity.test.ts",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",

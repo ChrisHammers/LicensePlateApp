@@ -69,6 +69,15 @@ struct RootView: View {
             if authService.isOnline {
                 Task { await SyncCoordinator.shared.processPendingSyncItems() }
             }
+            if let user = authService.currentUser {
+                let entitlement = EntitlementService.shared.entitlementState(for: user)
+                Task {
+                    await AchievementUnlockSyncService.shared.retryPendingIfNeeded(
+                        user: user,
+                        entitlement: entitlement
+                    )
+                }
+            }
         }
         .task {
             await authService.initializeAuthState(modelContext: modelContext)
