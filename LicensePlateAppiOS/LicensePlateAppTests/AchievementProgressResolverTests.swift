@@ -127,4 +127,55 @@ struct AchievementProgressResolverTests {
         #expect(!status(id: "streak_5", inputs: inputs).isUnlocked)
         #expect(!status(id: "flawless", inputs: inputs).isUnlocked)
     }
+
+    @Test func tripsTenUnlocksFromCompletedTrips() {
+        let inputs = AchievementProgressInputs(
+            progression: nil,
+            lifetimeStats: UserLifetimeStats(
+                totalCompletedTrips: 10,
+                totalGamesPlayed: 0,
+                totalDiscoveries: 0,
+                totalWeightedScore: 0,
+                familyOnlyTripsCount: 0,
+                lastComputedAt: .now
+            ),
+            isFamilyMember: false,
+            isRoyale: false,
+            isFounder: false
+        )
+        let result = status(id: "trips_10", inputs: inputs)
+        #expect(result.isUnlocked)
+        #expect(result.progress == 10)
+    }
+
+    @Test func coastToCoastRequiresSixtyThreeRegions() {
+        let short = AchievementProgressInputs(
+            progression: UserProgressionEffectiveTotals(
+                totalXp: 0,
+                acceptedRegionFindCount: 62,
+                competitiveFirstPlaceFinishes: 0,
+                everCompetitiveFirstPlace: false,
+                hasPendingLocalProgression: false
+            ),
+            lifetimeStats: nil,
+            isFamilyMember: false,
+            isRoyale: false,
+            isFounder: false
+        )
+        let complete = AchievementProgressInputs(
+            progression: UserProgressionEffectiveTotals(
+                totalXp: 0,
+                acceptedRegionFindCount: 63,
+                competitiveFirstPlaceFinishes: 0,
+                everCompetitiveFirstPlace: false,
+                hasPendingLocalProgression: false
+            ),
+            lifetimeStats: nil,
+            isFamilyMember: false,
+            isRoyale: false,
+            isFounder: false
+        )
+        #expect(!status(id: "coast_to_coast", inputs: short).isUnlocked)
+        #expect(status(id: "coast_to_coast", inputs: complete).isUnlocked)
+    }
 }

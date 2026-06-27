@@ -179,6 +179,7 @@ class AnalyticsService: AnalyticsLogging {
         case progressionCatalogConfigFallback(reason: String)
         case achievementUnlocked(achievementId: String, category: String, rarity: String)
         case rankUpCelebrated(level: Int, totalXp: Int)
+        case achievementCelebrationDismissed(eventId: String, kind: String)
         case xpGrantAwarded(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
         case xpGrantSkippedAlreadyGranted(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
 
@@ -376,6 +377,7 @@ class AnalyticsService: AnalyticsLogging {
             case .progressionCatalogConfigFallback: return "progression_catalog_config_fallback"
             case .achievementUnlocked: return "achievement_unlocked"
             case .rankUpCelebrated: return "rank_up"
+            case .achievementCelebrationDismissed: return "achievement_celebration_dismissed"
             case .xpGrantAwarded: return "xp_grant_awarded"
             case .xpGrantSkippedAlreadyGranted: return "xp_grant_skipped_already_granted"
             case .tripSessionCreated: return "trip_session_created"
@@ -606,6 +608,11 @@ class AnalyticsService: AnalyticsLogging {
                 return [
                     "rank_level": level,
                     "total_xp": totalXp
+                ]
+            case .achievementCelebrationDismissed(let eventId, let kind):
+                return [
+                    "event_id": eventId,
+                    "kind": kind
                 ]
             case .xpGrantAwarded(let tripId, let gameInstanceId, let targetId, let participantId):
                 return [

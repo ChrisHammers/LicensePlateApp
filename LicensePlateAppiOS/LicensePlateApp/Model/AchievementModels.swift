@@ -76,68 +76,6 @@ struct AchievementStatus: Equatable {
 
 extension Achievement {
     var hasMeter: Bool { goal > 1 }
-
-    static let catalog: [Achievement] = [
-        Achievement(id: "first_win", title: "First Victory",
-                    detail: "Win your first game.", icon: "checkmark.seal.fill",
-                    rarity: .common, category: .competition, xpReward: 100),
-        Achievement(id: "explorer_10", title: "Getting Started",
-                    detail: "Spot plates from 10 different states or provinces.",
-                    icon: "signpost.right.fill", rarity: .common, category: .exploration,
-                    goal: 10, xpReward: 200),
-        Achievement(id: "plates_100", title: "Plate Spotter",
-                    detail: "Find 100 license plates in total.", icon: "rectangle.on.rectangle",
-                    rarity: .common, category: .collection, goal: 100, xpReward: 250),
-        Achievement(id: "streak_5", title: "On a Roll",
-                    detail: "Win 5 games in a row.", icon: "flame.fill",
-                    rarity: .rare, category: .competition, goal: 5, xpReward: 500),
-        Achievement(id: "trips_10", title: "Frequent Traveler",
-                    detail: "Complete 10 road trips.", icon: "road.lanes",
-                    rarity: .rare, category: .milestones, goal: 10, xpReward: 400),
-        Achievement(id: "family", title: "Family Road Trip",
-                    detail: "Join or create a family.", icon: "person.3.fill",
-                    rarity: .rare, category: .social, xpReward: 300),
-        Achievement(id: "plates_1000", title: "Plate Hoarder",
-                    detail: "Find 1,000 license plates in total.", icon: "square.stack.3d.up.fill",
-                    rarity: .epic, category: .collection, goal: 1000, xpReward: 2000),
-        Achievement(id: "wins_100", title: "Champion",
-                    detail: "Win 100 games.", icon: "trophy.fill",
-                    rarity: .epic, category: .competition, goal: 100, xpReward: 2500),
-        Achievement(id: "trips_50", title: "Road Veteran",
-                    detail: "Complete 50 road trips.", icon: "car.2.fill",
-                    rarity: .epic, category: .milestones, goal: 50, xpReward: 1500),
-        Achievement(id: "royale", title: "Living Royale",
-                    detail: "Become a Royale member.", icon: "crown.fill",
-                    rarity: .epic, category: .social, xpReward: 0),
-        Achievement(id: "coast_to_coast", title: "Coast to Coast",
-                    detail: "Find plates from all 63 states and provinces.", icon: "map.fill",
-                    rarity: .legendary, category: .exploration, goal: 63, xpReward: 5000),
-        Achievement(id: "flawless", title: "Flawless",
-                    detail: "Finish a game without a single miss.", icon: "sparkles",
-                    rarity: .legendary, category: .competition, xpReward: 1500),
-        Achievement(id: "founder", title: "Founder",
-                    detail: "Play during the launch season.", icon: "star.circle.fill",
-                    rarity: .mythic, category: .milestones, xpReward: 0)
-    ]
-
-    /// Demo statuses: a mix of unlocked, in-progress, and locked.
-    static func sampleStatuses() -> [String: AchievementStatus] {
-        [
-            "first_win":     .init(isUnlocked: true, progress: 1, unlockedDate: .now.addingTimeInterval(-86_400 * 30)),
-            "explorer_10":   .init(isUnlocked: true, progress: 10, unlockedDate: .now.addingTimeInterval(-86_400 * 22)),
-            "plates_100":    .init(isUnlocked: true, progress: 100, unlockedDate: .now.addingTimeInterval(-86_400 * 15)),
-            "streak_5":      .init(isUnlocked: true, progress: 5, unlockedDate: .now.addingTimeInterval(-86_400 * 9)),
-            "family":        .init(isUnlocked: true, progress: 1, unlockedDate: .now.addingTimeInterval(-86_400 * 5)),
-            "royale":        .init(isUnlocked: true, progress: 1, unlockedDate: .now.addingTimeInterval(-86_400 * 2)),
-            "plates_1000":   .init(isUnlocked: false, progress: 1240),   // already past goal-style big number, but flagged below
-            "wins_100":      .init(isUnlocked: false, progress: 121),
-            "trips_10":      .init(isUnlocked: true, progress: 10, unlockedDate: .now.addingTimeInterval(-86_400 * 12)),
-            "trips_50":      .init(isUnlocked: false, progress: 36),
-            "coast_to_coast":.init(isUnlocked: false, progress: 48),
-            "flawless":      .init(isUnlocked: false, progress: 0)
-            // "founder" intentionally omitted -> fully locked
-        ]
-    }
 }
 
 // MARK: - Ranks
@@ -208,30 +146,4 @@ struct RankLadder {
         guard span > 0 else { return 1 }
         return min(1, max(0, Double(xp - cur.xpRequired) / span))
     }
-
-    static let standard = RankLadder(ranks: [
-        Rank(level: 1, title: "Rookie Rider", xpRequired: 0,
-             unlocks: [RankUnlock(title: "Standard License", icon: "creditcard.fill", kind: .cosmetic)]),
-        Rank(level: 2, title: "Road Tripper", xpRequired: 1_000,
-             unlocks: [RankUnlock(title: "Custom Plate Name", icon: "textformat", kind: .feature)]),
-        Rank(level: 3, title: "Navigator", xpRequired: 3_000,
-             unlocks: [RankUnlock(title: "Navigator Badge", icon: "location.north.circle.fill", kind: .badge)]),
-        Rank(level: 4, title: "Trailblazer", xpRequired: 7_000,
-             unlocks: [RankUnlock(title: "Carbon Edition", icon: "square.grid.3x3.fill", kind: .cosmetic)]),
-        Rank(level: 5, title: "Pathfinder", xpRequired: 15_000,
-             unlocks: [RankUnlock(title: "Family Invites", icon: "person.3.fill", kind: .feature),
-                       RankUnlock(title: "Pathfinder Badge", icon: "rosette", kind: .badge)]),
-        Rank(level: 6, title: "Road Warrior", xpRequired: 30_000,
-             unlocks: [RankUnlock(title: "Gold Foil", icon: "sparkles", kind: .cosmetic)]),
-        Rank(level: 7, title: "Highway Legend", xpRequired: 55_000,
-             unlocks: [RankUnlock(title: "Legend Title", icon: "text.badge.star", kind: .title),
-                       RankUnlock(title: "Legend Badge", icon: "medal.fill", kind: .badge)]),
-        Rank(level: 8, title: "Route Master", xpRequired: 90_000,
-             unlocks: [RankUnlock(title: "Platinum Foil", icon: "diamond.fill", kind: .cosmetic)]),
-        Rank(level: 9, title: "Asphalt Royalty", xpRequired: 140_000,
-             unlocks: [RankUnlock(title: "Midnight Drive", icon: "moon.stars.fill", kind: .cosmetic)]),
-        Rank(level: 10, title: "Grand Voyager", xpRequired: 220_000,
-             unlocks: [RankUnlock(title: "Prestige Mode", icon: "infinity", kind: .feature),
-                       RankUnlock(title: "Founder Frame", icon: "crown.fill", kind: .cosmetic)])
-    ])
 }

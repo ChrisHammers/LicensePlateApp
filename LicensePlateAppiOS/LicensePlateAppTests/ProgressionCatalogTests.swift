@@ -27,31 +27,23 @@ struct ProgressionCatalogTests {
         #expect(loaded == ProgressionCatalog.bundledDefault)
     }
 
-    @Test func bundledCatalogMatchesLegacySwiftFixtures() {
+    @Test func bundledCatalogMatchesShippedParityFixtures() {
         let catalog = ProgressionCatalog.bundledDefault
-        let legacyById = Dictionary(uniqueKeysWithValues: Achievement.catalog.map { ($0.id, $0) })
+        #expect(catalog.achievements.count == ProgressionCatalogLegacyParity.achievementCount)
+        #expect(catalog.visibleAchievements.count == ProgressionCatalogLegacyParity.visibleAchievementCount)
 
-        #expect(catalog.achievements.count == legacyById.count)
-
-        for entry in catalog.achievements {
-            let legacy = try #require(legacyById[entry.id])
-            #expect(entry.goal == legacy.goal)
-            #expect(entry.xpReward == legacy.xpReward)
-            #expect(entry.icon == legacy.icon)
-            #expect(entry.rarity.rawValue == legacyRarity(legacy.rarity))
-            #expect(entry.category.rawValue == legacyCategory(legacy.category))
+        for (id, expected) in ProgressionCatalogLegacyParity.achievementExpectations {
+            let entry = try #require(catalog.achievements.first { $0.id == id })
+            #expect(entry.goal == expected.goal)
+            #expect(entry.xpReward == expected.xpReward)
+            #expect(entry.icon == expected.icon)
+            #expect(entry.rarity.rawValue == expected.rarity)
+            #expect(entry.category.rawValue == expected.category)
         }
 
-        let legacyThresholds = RankLadder.standard.ranks.map(\.xpRequired)
         let catalogThresholds = catalog.rankLadder.ranks.sorted(by: { $0.level < $1.level }).map(\.xpRequired)
-        #expect(catalogThresholds == legacyThresholds)
-
-        #expect(catalog.rankLadder.ranks.count == RankLadder.standard.ranks.count)
-        for legacyRank in RankLadder.standard.ranks {
-            let catalogRank = try #require(catalog.rankLadder.ranks.first { $0.level == legacyRank.level })
-            #expect(catalogRank.xpRequired == legacyRank.xpRequired)
-            #expect(catalogRank.unlocks.count == legacyRank.unlocks.count)
-        }
+        #expect(catalogThresholds == ProgressionCatalogLegacyParity.rankXpThresholds)
+        #expect(catalog.rankLadder.ranks.count == ProgressionCatalogLegacyParity.rankCount)
     }
 
     @Test func deferredAchievementsAreHidden() {
@@ -178,27 +170,5 @@ struct ProgressionCatalogTests {
         let provider = ProgressionCatalogProvider()
         provider.refresh(presentationOverrideJSON: "{ not json }")
         #expect(provider.current.presentation == ProgressionCatalog.bundledDefault.presentation)
-    }
-
-    // MARK: - Legacy mapping helpers
-
-    private func legacyRarity(_ rarity: LicenseRarity) -> String {
-        switch rarity {
-        case .common: return "common"
-        case .rare: return "rare"
-        case .epic: return "epic"
-        case .legendary: return "legendary"
-        case .mythic: return "mythic"
-        }
-    }
-
-    private func legacyCategory(_ category: AchievementCategory) -> String {
-        switch category {
-        case .exploration: return "exploration"
-        case .collection: return "collection"
-        case .competition: return "competition"
-        case .milestones: return "milestones"
-        case .social: return "social"
-        }
     }
 }

@@ -90,6 +90,14 @@ enum RewardEvent: Identifiable {
         if case .achievement(let a) = self, a.xpReward > 0 { return a.xpReward }
         return nil
     }
+
+    var analyticsKind: String {
+        switch self {
+        case .rankUp: return "rank_up"
+        case .achievement: return "achievement"
+        case .unlock: return "unlock"
+        }
+    }
 }
 
 // MARK: - Presenter (queue)
@@ -110,6 +118,11 @@ final class RewardPresenter: ObservableObject {
     }
 
     func dismiss() {
+        if let event = current {
+            AnalyticsService.shared.log(
+                .achievementCelebrationDismissed(eventId: event.id, kind: event.analyticsKind)
+            )
+        }
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { current = nil }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { [weak self] in
             self?.presentNext()
