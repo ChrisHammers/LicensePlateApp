@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "xp": {
+    "baseDiscoveryXp": 10,
+    "firstFinderBonusXp": 5,
+    "firstPlateFindBonusXp": 15,
+    "baseMultiplayerGameBonusXp": 15,
+    "competitiveFirstPlaceFinishBonusXp": 15,
+    "competitiveSecondPlaceFinishBonusXp": 10,
+    "competitiveThirdPlaceFinishBonusXp": 5,
+    "gameContributorBonusXp": 5,
+    "tripContributorBonusXp": 10,
+    "firstTripCompletionBonusXp": 15,
+    "firstMultiplayerTripCompletionBonusXp": 15,
+    "firstGameCompletionBonusXp": 15,
+    "firstMultiplayerGameCompletionBonusXp": 15,
+    "baseMilestoneBonusXp": 25
+  },
+  "policy": {
+    "minimumLocalReconciliationDelta": 0
+  },
+  "presentation": {
+    "visualBandSize": 100,
+    "xpPerRankLevel": 3000
+  }
+}

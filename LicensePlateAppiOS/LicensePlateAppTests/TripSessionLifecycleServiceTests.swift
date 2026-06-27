@@ -248,7 +248,7 @@ struct TripSessionLifecycleServiceTests {
             definitionId: GameType.licensePlate.rawValue,
             sessionId: sessionId,
             ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
-            commonConfig: CommonGameConfig(lifecycleState: .active, gameMode: .collaborative)
+            commonConfig: CommonGameConfig(lifecycleState: .started, gameMode: .collaborative)
         ))
         let syncCoordinator = MockSyncCoordinator()
         let recording = TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: syncCoordinator)
