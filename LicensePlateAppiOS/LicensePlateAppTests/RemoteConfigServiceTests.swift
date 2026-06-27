@@ -12,5 +12,6 @@ struct RemoteConfigServiceTests {
         #expect(defaults.bool(for: .remindersEnabled))
         #expect(defaults.int(for: .inactiveActiveTripReminderHours) == 24)
         #expect(defaults.bool(for: .returnStreakEnabled))
+        #expect(defaults.string(for: .progressionCatalogPresentationV1).isEmpty)
     }
 }

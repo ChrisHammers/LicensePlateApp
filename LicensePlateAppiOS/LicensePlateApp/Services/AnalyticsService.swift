@@ -175,6 +175,8 @@ class AnalyticsService: AnalyticsLogging {
         case progressionXpAwarded(delta: Int, reason: String)
         case progressionRewardsPresentationOverrideApplied(visualBandSize: Int, xpPerRankLevel: Int)
         case progressionRewardsConfigFallback(reason: String)
+        case progressionCatalogPresentationOverrideApplied(achievementsEnabled: Bool, rankProgressionEnabled: Bool)
+        case progressionCatalogConfigFallback(reason: String)
         case xpGrantAwarded(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
         case xpGrantSkippedAlreadyGranted(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
 
@@ -368,6 +370,8 @@ class AnalyticsService: AnalyticsLogging {
             case .progressionXpAwarded: return "progression_xp_awarded"
             case .progressionRewardsPresentationOverrideApplied: return "progression_rewards_presentation_override_applied"
             case .progressionRewardsConfigFallback: return "progression_rewards_config_fallback"
+            case .progressionCatalogPresentationOverrideApplied: return "progression_catalog_presentation_override_applied"
+            case .progressionCatalogConfigFallback: return "progression_catalog_config_fallback"
             case .xpGrantAwarded: return "xp_grant_awarded"
             case .xpGrantSkippedAlreadyGranted: return "xp_grant_skipped_already_granted"
             case .tripSessionCreated: return "trip_session_created"
@@ -580,6 +584,13 @@ class AnalyticsService: AnalyticsLogging {
             case .progressionRewardsPresentationOverrideApplied(let visualBandSize, let xpPerRankLevel):
                 return ["visual_band_size": visualBandSize, "xp_per_rank_level": xpPerRankLevel]
             case .progressionRewardsConfigFallback(let reason):
+                return ["reason": reason]
+            case .progressionCatalogPresentationOverrideApplied(let achievementsEnabled, let rankProgressionEnabled):
+                return [
+                    "achievements_enabled": achievementsEnabled,
+                    "rank_progression_enabled": rankProgressionEnabled
+                ]
+            case .progressionCatalogConfigFallback(let reason):
                 return ["reason": reason]
             case .xpGrantAwarded(let tripId, let gameInstanceId, let targetId, let participantId):
                 return [

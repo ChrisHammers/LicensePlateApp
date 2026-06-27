@@ -151,6 +151,35 @@ struct ProgressionCatalogTests {
         #expect(ProgressionCatalogLoader.decode(data) == nil)
     }
 
+    @Test func providerReturnsBundledCatalog() {
+        let provider = ProgressionCatalogProvider()
+        #expect(provider.current == ProgressionCatalog.bundledDefault)
+    }
+
+    @Test func providerRefreshIsIdempotentWithoutOverride() {
+        let provider = ProgressionCatalogProvider()
+        let before = provider.current
+        provider.refresh(presentationOverrideJSON: nil)
+        #expect(provider.current == before)
+    }
+
+    @Test func providerRefreshAppliesValidPresentationOverride() {
+        let provider = ProgressionCatalogProvider()
+        provider.refresh(presentationOverrideJSON: """
+        {"achievementsEnabled":false,"rankProgressionEnabled":true}
+        """)
+        #expect(provider.current.presentation.achievementsEnabled == false)
+        #expect(provider.current.presentation.rankProgressionEnabled == true)
+        #expect(provider.current.achievements == ProgressionCatalog.bundledDefault.achievements)
+        #expect(provider.current.rankLadder == ProgressionCatalog.bundledDefault.rankLadder)
+    }
+
+    @Test func providerRefreshIgnoresInvalidPresentationOverride() {
+        let provider = ProgressionCatalogProvider()
+        provider.refresh(presentationOverrideJSON: "{ not json }")
+        #expect(provider.current.presentation == ProgressionCatalog.bundledDefault.presentation)
+    }
+
     // MARK: - Legacy mapping helpers
 
     private func legacyRarity(_ rarity: LicenseRarity) -> String {

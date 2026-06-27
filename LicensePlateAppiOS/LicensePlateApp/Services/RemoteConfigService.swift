@@ -25,7 +25,7 @@ struct RemoteConfigDefaultsProvider: RemoteConfigValueProviding {
             return true
         case .reviewPromptMinimumCompletedTrips, .reviewPromptCooldownDays, .inactiveActiveTripReminderHours:
             return int(for: key) != 0
-        case .progressionRewardsPresentationV1:
+        case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1:
             return !string(for: key).isEmpty
         }
     }
@@ -40,14 +40,14 @@ struct RemoteConfigDefaultsProvider: RemoteConfigValueProviding {
             return 24
         case .adsEnabledFreeTier, .reviewPromptEnabled, .remindersEnabled, .returnStreakEnabled:
             return bool(for: key) ? 1 : 0
-        case .progressionRewardsPresentationV1:
+        case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1:
             return string(for: key).isEmpty ? 0 : 1
         }
     }
 
     func string(for key: RemoteConfigService.Key) -> String {
         switch key {
-        case .progressionRewardsPresentationV1:
+        case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1:
             return ""
         default:
             return ""
@@ -66,6 +66,7 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
         case inactiveActiveTripReminderHours = "inactive_active_trip_reminder_hours"
         case returnStreakEnabled = "return_streak_enabled"
         case progressionRewardsPresentationV1 = "progression_rewards_presentation_v1"
+        case progressionCatalogPresentationV1 = "progression_catalog_presentation_v1"
     }
 
     static let shared = RemoteConfigService()
@@ -103,6 +104,9 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
         #endif
         ProgressionRewardsConfigProvider.shared.refresh(
             presentationOverrideJSON: string(for: .progressionRewardsPresentationV1)
+        )
+        ProgressionCatalogProvider.shared.refresh(
+            presentationOverrideJSON: string(for: .progressionCatalogPresentationV1)
         )
     }
 
@@ -147,7 +151,8 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
             Key.remindersEnabled.rawValue: defaults.bool(for: .remindersEnabled) as NSNumber,
             Key.inactiveActiveTripReminderHours.rawValue: defaults.int(for: .inactiveActiveTripReminderHours) as NSNumber,
             Key.returnStreakEnabled.rawValue: defaults.bool(for: .returnStreakEnabled) as NSNumber,
-            Key.progressionRewardsPresentationV1.rawValue: defaults.string(for: .progressionRewardsPresentationV1) as NSString
+            Key.progressionRewardsPresentationV1.rawValue: defaults.string(for: .progressionRewardsPresentationV1) as NSString,
+            Key.progressionCatalogPresentationV1.rawValue: defaults.string(for: .progressionCatalogPresentationV1) as NSString
         ]
     }
 }
