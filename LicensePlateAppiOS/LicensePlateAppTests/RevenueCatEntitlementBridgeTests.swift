@@ -52,7 +52,7 @@ final class MockRevenueCatBridge: RevenueCatEntitlementProviding {
 struct RevenueCatEntitlementBridgeTests {
 
     @Test @MainActor func entitlementServiceUsesBridgeTierForCurrentUser() async throws {
-        let bridge = MockRevenueCatBridge(tier: .gold, tags: ["founder"])
+        let bridge = MockRevenueCatBridge(tier: .gold, tags: ["lifetime"])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         let schema = Schema(versionedSchema: CurrentSchema.self)
         let container = try ModelContainer(for: schema, configurations: config)
@@ -80,7 +80,7 @@ struct RevenueCatEntitlementBridgeTests {
         let state = entitlementService.entitlementState(for: user)
 
         #expect(state.userTier == .gold)
-        #expect(state.hasTag("founder"))
+        #expect(state.hasTag("lifetime"))
     }
 
     @Test @MainActor func entitlementServiceIgnoresBridgeForNonCurrentUser() async throws {
@@ -111,6 +111,38 @@ struct RevenueCatEntitlementBridgeTests {
 
         #expect(state.userTier == .signedUp)
         #expect(state.tags.isEmpty)
+    }
+
+    @Test @MainActor func peerUserReadsFirestoreTagsWithoutRevenueCatMerge() async throws {
+        let bridge = MockRevenueCatBridge(tier: .royale, tags: ["lifetime"])
+        let config = ModelConfiguration(isStoredInMemoryOnly: true)
+        let schema = Schema(versionedSchema: CurrentSchema.self)
+        let container = try ModelContainer(for: schema, configurations: config)
+        let context = ModelContext(container)
+
+        let user = AppUser(
+            id: "otherUser",
+            userName: "Other",
+            createdAt: .now,
+            lastUpdated: .now,
+            avatarColor: .blue,
+            avatarType: .man,
+            linkedPlatforms: [],
+            firebaseUID: "otherUser"
+        )
+        context.insert(user)
+        try context.save()
+
+        UserRepository.shared.ingestEntitlementTags(userId: "otherUser", tags: ["founder"])
+
+        let entitlementService = EntitlementService(familyRepository: .shared, userRepository: UserRepository.shared, revenueCatBridge: bridge)
+        entitlementService.setModelContext(context)
+        entitlementService.setCurrentUserId("currentUser")
+
+        let state = entitlementService.entitlementState(for: user)
+
+        #expect(state.hasTag("founder"))
+        #expect(state.hasTag("lifetime") == false)
     }
 
     @Test @MainActor func mockBridgeHasActiveEntitlement() async throws {
