@@ -23,7 +23,11 @@ service cloud.firestore {
     }
 
     function userDocHasNoPrivateFields() {
-      return !request.resource.data.keys().hasAny(["deviceIdentifier", "lastLoginLocationData", "lastLoginLocations", "lastLoginLocation"]);
+      return !request.resource.data.keys().hasAny(["deviceIdentifier", "lastLoginLocationData", "lastLoginLocations", "lastLoginLocation", "entitlementTags"]);
+    }
+
+    function userDocPreservesEntitlementTags() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["entitlementTags"]);
     }
 
     function isFamilyMember(familyId) {
@@ -46,7 +50,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && uid() == userId && userDocHasNoPrivateFields();
-      allow update: if isSignedIn() && uid() == userId && userDocHasNoPrivateFields();
+      allow update: if isSignedIn() && uid() == userId && userDocHasNoPrivateFields() && userDocPreservesEntitlementTags();
       allow delete: if false; // handle via backend flows if needed
     }
 
@@ -198,6 +202,12 @@ service cloud.firestore {
     match /families/{familyId}/stats/{docId} {
       allow read: if isSignedIn() && isFamilyMember(familyId);
       allow write: if false; // server-only updates
+    }
+
+    // APP CONFIG (read-only for clients; writes via Admin SDK / console)
+    match /app_config/{docId} {
+      allow read: if isSignedIn();
+      allow write: if false;
     }
 
     // AUDIT LOGS

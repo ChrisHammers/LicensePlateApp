@@ -26,7 +26,7 @@ struct PaywallPackage: Identifiable, Equatable {
 protocol RevenueCatEntitlementProviding: AnyObject {
     /// Current subscription tier from RevenueCat (or guest if not configured).
     var currentTier: UserTier { get }
-    /// Tags such as "founder", "lifetime" from entitlements or attributes.
+    /// Tags such as "lifetime", "seasonal" from RevenueCat entitlements. Founder comes from Firestore.
     var currentTags: Set<String> { get }
     /// True if the user has an active entitlement at or above the given tier.
     func hasActiveEntitlement(for tier: UserTier) -> Bool
@@ -46,9 +46,8 @@ protocol RevenueCatEntitlementProviding: AnyObject {
 
 // MARK: - Bridge implementation (wraps RevenueCat)
 
-/// Maps RevenueCat entitlement identifiers to UserTier and tags.
-/// Expected entitlement IDs in RevenueCat dashboard: e.g. "gold", "royale", "premium";
-/// tags can come from custom attributes or entitlement IDs like "founder", "lifetime".
+/// Maps RevenueCat entitlement identifiers to UserTier and promotional tags.
+/// Founder status is stored in Firestore `users/{uid}.entitlementTags`, not RevenueCat.
 @MainActor
 final class RevenueCatEntitlementBridge: ObservableObject, RevenueCatEntitlementProviding {
 
@@ -221,7 +220,7 @@ final class RevenueCatEntitlementBridge: ObservableObject, RevenueCatEntitlement
         guard let info = cachedCustomerInfo else { return tags }
         for (id, ent) in info.entitlements.all where ent.isActive {
             let lower = id.lowercased()
-            if ["founder", "lifetime", "achievement", "seasonal", "specialPromotion"].contains(lower) {
+            if ["lifetime", "achievement", "seasonal", "specialPromotion"].contains(lower) {
                 tags.insert(lower)
             }
         }

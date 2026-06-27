@@ -8,6 +8,7 @@ import {
   evaluateAchievement,
 } from "./achievementProgressCore";
 import { achievementUnlockScopeKey } from "./progressionCore";
+import { hasFounderTag } from "./founderEntitlementCore";
 
 export type CandidateWire = {
   achievementId?: unknown;
@@ -16,7 +17,6 @@ export type CandidateWire = {
 
 export type EntitlementHintsWire = {
   isRoyale?: unknown;
-  isFounder?: unknown;
 };
 
 export type ParseCandidatesResult =
@@ -144,7 +144,7 @@ export function buildEvaluationContextFromFirestore(
       : null,
     isFamilyMember: !!activeFamilyId || wasEverInFamily,
     isRoyale: boolValue(entitlementHints?.isRoyale),
-    isFounder: boolValue(entitlementHints?.isFounder),
+    isFounder: hasFounderTag(userData),
   };
 }
 

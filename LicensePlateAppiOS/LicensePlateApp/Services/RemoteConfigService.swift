@@ -22,7 +22,7 @@ struct RemoteConfigDefaultsProvider: RemoteConfigValueProviding {
     func bool(for key: RemoteConfigService.Key) -> Bool {
         switch key {
         case .adsEnabledFreeTier, .reviewPromptEnabled, .remindersEnabled, .returnStreakEnabled,
-             .returnStreakCelebrationEnabled:
+             .returnStreakCelebrationEnabled, .founderProgramEnabled:
             return true
         case .returnStreakReminderEnabled:
             return false
@@ -47,7 +47,7 @@ struct RemoteConfigDefaultsProvider: RemoteConfigValueProviding {
         case .returnStreakReminderHour:
             return 20
         case .adsEnabledFreeTier, .reviewPromptEnabled, .remindersEnabled, .returnStreakEnabled,
-             .returnStreakCelebrationEnabled:
+             .returnStreakCelebrationEnabled, .founderProgramEnabled:
             return bool(for: key) ? 1 : 0
         case .returnStreakReminderEnabled:
             return 0
@@ -81,6 +81,7 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
         case returnStreakCelebrationMinStreak = "return_streak_celebration_min_streak"
         case returnStreakReminderEnabled = "return_streak_reminder_enabled"
         case returnStreakReminderHour = "return_streak_reminder_hour"
+        case founderProgramEnabled = "founder_program_enabled"
         case progressionRewardsPresentationV1 = "progression_rewards_presentation_v1"
         case progressionCatalogPresentationV1 = "progression_catalog_presentation_v1"
     }
@@ -162,6 +163,7 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
     var returnStreakCelebrationMinStreak: Int { max(1, int(for: .returnStreakCelebrationMinStreak)) }
     var returnStreakReminderEnabled: Bool { bool(for: .returnStreakReminderEnabled) }
     var returnStreakReminderHour: Int { min(23, max(0, int(for: .returnStreakReminderHour))) }
+    var founderProgramEnabled: Bool { bool(for: .founderProgramEnabled) }
 
     private var defaultValues: [String: NSObject] {
         [
@@ -177,6 +179,7 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
             Key.returnStreakCelebrationMinStreak.rawValue: defaults.int(for: .returnStreakCelebrationMinStreak) as NSNumber,
             Key.returnStreakReminderEnabled.rawValue: defaults.bool(for: .returnStreakReminderEnabled) as NSNumber,
             Key.returnStreakReminderHour.rawValue: defaults.int(for: .returnStreakReminderHour) as NSNumber,
+            Key.founderProgramEnabled.rawValue: defaults.bool(for: .founderProgramEnabled) as NSNumber,
             Key.progressionRewardsPresentationV1.rawValue: defaults.string(for: .progressionRewardsPresentationV1) as NSString,
             Key.progressionCatalogPresentationV1.rawValue: defaults.string(for: .progressionCatalogPresentationV1) as NSString
         ]

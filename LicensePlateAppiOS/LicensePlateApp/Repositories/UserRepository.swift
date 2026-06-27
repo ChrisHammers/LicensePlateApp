@@ -21,6 +21,7 @@ class UserRepository: ObservableObject {
     
     private let db = Firestore.firestore()
     private var modelContext: ModelContext?
+    private var entitlementTagsByUserId: [String: Set<String>] = [:]
     
     @Published var searchResults: [AppUser] = []
     @Published var isLoading = false
@@ -39,6 +40,30 @@ class UserRepository: ObservableObject {
     
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
+    }
+
+    func entitlementTags(for userId: String) -> Set<String> {
+        entitlementTagsByUserId[userId] ?? []
+    }
+
+    func ingestEntitlementTags(userId: String, tags: Set<String>) {
+        entitlementTagsByUserId[userId] = tags
+    }
+
+    func clearEntitlementTags(for userId: String? = nil) {
+        if let userId, !userId.isEmpty {
+            entitlementTagsByUserId.removeValue(forKey: userId)
+        } else {
+            entitlementTagsByUserId.removeAll()
+        }
+    }
+
+    static func parseEntitlementTags(from data: [String: Any]) -> Set<String> {
+        guard let raw = data["entitlementTags"] as? [Any] else { return [] }
+        return Set(raw.compactMap { value in
+            guard let tag = value as? String, !tag.isEmpty else { return nil }
+            return tag
+        })
     }
 
     /// Returns a dictionary of userId -> userName for the given IDs. Missing or failed lookups fall back to the id as the value.
@@ -131,6 +156,7 @@ class UserRepository: ObservableObject {
     }
 
     private func mergeRemoteProfileIntoCache(userId: String, data: [String: Any]) async throws {
+        ingestEntitlementTags(userId: userId, tags: Self.parseEntitlementTags(from: data))
         let user = try await userFromFirestoreData(data, id: userId)
         cacheUsers([user])
     }

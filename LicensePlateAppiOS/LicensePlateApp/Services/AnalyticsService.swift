@@ -91,6 +91,8 @@ class AnalyticsService: AnalyticsLogging {
         case badgeProgress(badgeId: String, progress: Int)
         case badgeUnlocked(badgeId: String)
         case badgeEquipped(badgeId: String)
+        case founderEntitlementGranted
+        case founderEntitlementGrantSkipped(reason: String)
 
         // Trip invites (Step 04)
         case tripInvitesScreenOpened
@@ -334,6 +336,8 @@ class AnalyticsService: AnalyticsLogging {
             case .badgeProgress: return "badge_progress"
             case .badgeUnlocked: return "badge_unlocked"
             case .badgeEquipped: return "badge_equipped"
+            case .founderEntitlementGranted: return "founder_entitlement_granted"
+            case .founderEntitlementGrantSkipped: return "founder_entitlement_grant_skipped"
             case .tripInvitesScreenOpened: return "trip_invites_screen_opened"
             case .tripInviteAccepted: return "trip_invite_accepted"
             case .tripInviteDeclined: return "trip_invite_declined"
@@ -494,6 +498,10 @@ class AnalyticsService: AnalyticsLogging {
                 return ["badge_id": badgeId, "progress": progress]
             case .badgeUnlocked(let badgeId), .badgeEquipped(let badgeId):
                 return ["badge_id": badgeId]
+            case .founderEntitlementGranted:
+                return nil
+            case .founderEntitlementGrantSkipped(let reason):
+                return ["reason": reason]
             case .tripInvitesScreenOpened, .tripInviteAccepted, .tripInviteDeclined, .tripInviteCanceled:
                 return nil
             case .tripInviteSent(let tripSessionId, let tripNameLength):

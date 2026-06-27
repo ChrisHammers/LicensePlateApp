@@ -64,11 +64,9 @@ final class EntitlementService: ObservableObject {
             }
         }
         
-        var tags: Set<String> = []
-        if isCurrentUser(user) {
-            if let bridge = revenueCatBridge {
-                tags = bridge.currentTags
-            }
+        var tags = userRepository.entitlementTags(for: user.firebaseUID ?? user.id)
+        if isCurrentUser(user), let bridge = revenueCatBridge {
+            tags.formUnion(bridge.currentTags)
         }
         
         return EntitlementState(

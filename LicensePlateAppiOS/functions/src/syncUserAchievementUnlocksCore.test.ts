@@ -78,12 +78,22 @@ describe("buildEvaluationContextFromFirestore", () => {
       true,
       { totalCompletedTrips: 4, totalDiscoveries: 90 },
       { activeFamilyId: "fam1", wasEverInFamily: false },
-      { isRoyale: true, isFounder: false }
+      { isRoyale: true }
     );
     expect(ctx.progression.totalXp).toBe(500);
     expect(ctx.lifetimeStats?.totalCompletedTrips).toBe(4);
     expect(ctx.isFamilyMember).toBe(true);
     expect(ctx.isRoyale).toBe(true);
+    expect(ctx.isFounder).toBe(false);
+  });
+
+  it("derives isFounder from user entitlementTags", () => {
+    const ctx = buildEvaluationContextFromFirestore({}, false, undefined, { entitlementTags: ["founder"] }, {});
+    expect(ctx.isFounder).toBe(true);
+  });
+
+  it("ignores spoofed client hints for founder status", () => {
+    const ctx = buildEvaluationContextFromFirestore({}, false, undefined, {}, { isRoyale: false });
     expect(ctx.isFounder).toBe(false);
   });
 
@@ -104,6 +114,17 @@ describe("evaluateCandidateForSync", () => {
       expect(result.progressToStore).toBe(1);
       expect(result.evaluation.unlocked).toBe(true);
     }
+  });
+
+  it("rejects founder achievement without server tag", () => {
+    const result = evaluateCandidateForSync("founder", 1, baseContext(), achievementCatalogEntry);
+    expect(result).toEqual({ kind: "rejected" });
+  });
+
+  it("accepts founder achievement when user doc has founder tag", () => {
+    const ctx = buildEvaluationContextFromFirestore({}, false, undefined, { entitlementTags: ["founder"] }, {});
+    const result = evaluateCandidateForSync("founder", 1, ctx, achievementCatalogEntry);
+    expect(result.kind).toBe("accepted");
   });
 
   it("rejects candidates that fail server evaluation", () => {

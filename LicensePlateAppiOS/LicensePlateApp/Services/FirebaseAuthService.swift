@@ -68,6 +68,7 @@ class FirebaseAuthService: ObservableObject {
     private let networkMonitor = NetworkMonitor()
     private var networkReachabilityCancellables = Set<AnyCancellable>()
     private var progressionBootstrapAttemptedUserIds: Set<String> = []
+    private var founderEntitlementAttemptedUserIds: Set<String> = []
     /// When false, unsatisfied→satisfied transitions do not schedule gameplay sync (avoids flushing before `RootView` wires repos + `setSyncCoordinator`).
     private var gameplaySyncFlushOnReachabilityRegainedEnabled = false
 
@@ -462,6 +463,11 @@ class FirebaseAuthService: ObservableObject {
                 print("⚠️ Firebase sign out failed: \(error)")
             }
         }
+
+        if let userId = currentUser?.firebaseUID ?? currentUser?.id {
+            UserRepository.shared.clearEntitlementTags(for: userId)
+        }
+        founderEntitlementAttemptedUserIds.removeAll()
         
         // Keep user data, just mark as signed out
         if let user = currentUser {
@@ -1335,7 +1341,11 @@ class FirebaseAuthService: ObservableObject {
         guard document.exists, let data = document.data() else {
             return nil
         }
-        
+
+        UserRepository.shared.ingestEntitlementTags(
+            userId: userId,
+            tags: UserRepository.parseEntitlementTags(from: data)
+        )
         return appUserFromFirestoreData(data, id: userId)
     }
     
@@ -1362,6 +1372,7 @@ class FirebaseAuthService: ObservableObject {
         }
         try await docRef.setData(data, merge: true)
         await ensureUserProgressionDocumentIfPossible(userId: firebaseUID)
+        await ensureFounderEntitlementIfPossible(userId: firebaseUID)
         
         user.lastSyncedToFirebase = .now
         user.needsSync = false
@@ -1384,6 +1395,22 @@ class FirebaseAuthService: ObservableObject {
             "lastLoginLocations": FieldValue.arrayUnion([locationData]),
             "updatedAt": FieldValue.serverTimestamp()
         ], merge: true)
+    }
+
+    private func ensureFounderEntitlementIfPossible(userId: String?) async {
+        guard isOnline,
+              let userId,
+              !userId.isEmpty,
+              Auth.auth().currentUser?.uid == userId,
+              !isAnonymousUser,
+              !founderEntitlementAttemptedUserIds.contains(userId)
+        else { return }
+
+        founderEntitlementAttemptedUserIds.insert(userId)
+        let outcome = await FounderEntitlementService.shared.ensureIfPossible(isAnonymous: false)
+        guard outcome == .granted || outcome == .alreadyGranted else { return }
+
+        try? await refreshCurrentUserFromFirestore()
     }
 
     private func ensureUserProgressionDocumentIfPossible(userId: String?) async {

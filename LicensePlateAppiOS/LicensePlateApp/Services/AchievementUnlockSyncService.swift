@@ -145,8 +145,7 @@ final class AchievementUnlockSyncService {
 
     private func entitlementHintsPayload(from entitlement: EntitlementState) -> [String: Any] {
         [
-            "isRoyale": entitlement.effectiveTier >= .royale,
-            "isFounder": entitlement.hasTag("founder")
+            "isRoyale": entitlement.effectiveTier >= .royale
         ]
     }
 }

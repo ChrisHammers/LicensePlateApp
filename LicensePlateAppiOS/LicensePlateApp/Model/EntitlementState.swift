@@ -30,7 +30,7 @@ struct EntitlementState {
     var familyId: String?
     var wasEverInFamily: Bool
     var familyRole: String?
-    var tags: Set<String> // e.g. "founder", "seasonal", "specialPromotion"
+    var tags: Set<String> // e.g. "founder" (Firestore), "seasonal", "specialPromotion" (RevenueCat)
     var creatorTierForFamily: UserTier?
     
     /// familyUnlocked = in family now or was ever in family

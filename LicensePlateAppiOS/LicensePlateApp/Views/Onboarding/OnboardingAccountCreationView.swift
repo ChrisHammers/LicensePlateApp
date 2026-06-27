@@ -10,6 +10,7 @@ import SwiftUI
 struct OnboardingAccountCreationView: View {
     @EnvironmentObject var authService: FirebaseAuthService
     @ObservedObject var coordinator: OnboardingCoordinator
+    @ObservedObject private var remoteConfig = RemoteConfigService.shared
     let onNext: () -> Void
     
     @State private var showSignInSheet = false
@@ -66,20 +67,22 @@ struct OnboardingAccountCreationView: View {
                                 .font(.system(.body, design: .rounded))
                                 .foregroundStyle(Color.Theme.softBrown)
                                 .padding(.horizontal)
-                            HStack(alignment: .top, spacing: 6) {
-                                Text("•")
-                                    .font(.system(.body, design: .rounded))
-                                    .foregroundStyle(Color.Theme.softBrown)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Exclusive Founders Scout avatar (male or female)".localized)
+                            if remoteConfig.founderProgramEnabled {
+                                HStack(alignment: .top, spacing: 6) {
+                                    Text("•")
                                         .font(.system(.body, design: .rounded))
                                         .foregroundStyle(Color.Theme.softBrown)
-                                    Text("Early members only".localized)
-                                        .font(.system(.caption, design: .rounded))
-                                        .foregroundStyle(Color.Theme.softBrown.opacity(0.75))
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Exclusive Founders Scout avatar (male or female)".localized)
+                                            .font(.system(.body, design: .rounded))
+                                            .foregroundStyle(Color.Theme.softBrown)
+                                        Text("Early members only".localized)
+                                            .font(.system(.caption, design: .rounded))
+                                            .foregroundStyle(Color.Theme.softBrown.opacity(0.75))
+                                    }
                                 }
+                                .padding(.horizontal)
                             }
-                            .padding(.horizontal)
                             Text("• Your trips saved & synced across devices".localized)
                                 .font(.system(.body, design: .rounded))
                                 .foregroundStyle(Color.Theme.softBrown)
@@ -176,7 +179,7 @@ struct OnboardingAccountCreationView: View {
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
                     .accessibleButton(label: "Create Account".localized, hint: "Opens create account".localized)
-                    if coordinator.userType == .captain {
+                    if coordinator.userType == .captain, remoteConfig.founderProgramEnabled {
                         Text("Unlocks exclusive Founders Scout avatar".localized)
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
@@ -210,9 +213,11 @@ struct OnboardingAccountCreationView: View {
                                 .foregroundStyle(Color.Theme.softBrown)
                                 .multilineTextAlignment(.leading)
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("• The exclusive Founders Scout avatar".localized)
-                                    .font(.system(.subheadline, design: .rounded))
-                                    .foregroundStyle(Color.Theme.softBrown)
+                                if remoteConfig.founderProgramEnabled {
+                                    Text("• The exclusive Founders Scout avatar".localized)
+                                        .font(.system(.subheadline, design: .rounded))
+                                        .foregroundStyle(Color.Theme.softBrown)
+                                }
                                 Text("• Competing with Friends & Family".localized)
                                     .font(.system(.subheadline, design: .rounded))
                                     .foregroundStyle(Color.Theme.softBrown)
