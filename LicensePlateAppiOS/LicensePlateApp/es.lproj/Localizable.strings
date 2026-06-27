@@ -880,3 +880,14 @@
 "reward.popup.rank_up.detail_unlocks" = "Rango %d · Desbloqueaste %@";
 "reward.popup.xp_bonus" = "+%@ XP";
 "reward.popup.continue" = "Toca para continuar";
+
+"return_streak.a11y.hint" = "Encuentra una placa hoy para mantener tu racha.";
+"return_streak.explanation.title" = "Racha de placas";
+"return_streak.explanation.subtitle" = "Sigue encontrando placas cada día";
+"return_streak.explanation.body" = "Encuentra al menos una placa cada día para construir tu racha. Cada hallazgo aceptado en un viaje activo cuenta para ese día.";
+"return_streak.celebration.kicker" = "RACHA EN MARCHA";
+"return_streak.celebration.detail" = "Buen trabajo — sigue encontrando placas en tus viajes.";
+"return_streak.reminder.title" = "Encuentra una placa hoy";
+"return_streak.reminder.body" = "Encuentra una placa en tu viaje para mantener tu racha.";
+"return_streak.settings.reminder.title" = "Recordatorios de racha";
+"return_streak.settings.reminder.detail" = "Recibe un recordatorio si aún no has encontrado una placa hoy.";

@@ -24,6 +24,7 @@ struct AppPreferencesView: View {
   @AppStorage("appLanguage") private var appLanguageRaw: String = AppLanguage.english.rawValue
   @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
   @AppStorage("appUseVibrations") private var appUseVibrations = true
+  @AppStorage("returnStreakRemindersEnabled") private var returnStreakRemindersEnabled = true
   @AppStorage("appTripSortOrder") private var appTripSortOrderRaw: String = AppTripSortOrder.dateCreated.rawValue
   @AppStorage("appShowConfirmationDialogs") private var appShowConfirmationDialogs = true
   
@@ -183,6 +184,19 @@ struct AppPreferencesView: View {
               description: "Enable haptic feedback".localized,
               isOn: $appUseVibrations
             )
+
+            Divider()
+
+            SettingToggleRow(
+              title: "return_streak.settings.reminder.title".localized,
+              description: "return_streak.settings.reminder.detail".localized,
+              isOn: $returnStreakRemindersEnabled
+            )
+            .onChange(of: returnStreakRemindersEnabled) { _, enabled in
+              ReturnStreakReminderService.shared.setUserEnabled(enabled)
+            }
+            .accessibilityLabel("return_streak.settings.reminder.title".localized)
+            .accessibilityHint("return_streak.settings.reminder.detail".localized)
             
             // Hidden preferences (for future use)
             if false {

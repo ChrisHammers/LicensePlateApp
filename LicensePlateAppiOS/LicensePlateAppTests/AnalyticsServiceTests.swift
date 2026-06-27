@@ -55,6 +55,8 @@ struct AnalyticsServiceTests {
             (.reviewPromptPresented(sessionId: "session-1"), "review_prompt_presented"),
             (.reminderScheduled(sessionId: "session-1", hours: 24), "reminder_scheduled"),
             (.returnStreakUpdated(currentStreak: 2, reason: "consecutive_return"), "return_streak_updated"),
+            (.returnStreakQualified(currentStreak: 2, reason: "continued"), "return_streak_qualified"),
+            (.returnStreakDisplayed(currentStreak: 3, surface: "home"), "return_streak_displayed"),
             (.screenView(screenName: "test", screenClass: nil), "screen_view"),
             (.combinedTripCreated(gameTypes: ["lp"]), "combined_trip_created"),
             (.userSearchPerformed(queryType: "all"), "user_search_performed"),
@@ -97,6 +99,13 @@ struct AnalyticsServiceTests {
 
         let streakEvent = AnalyticsService.Event.returnStreakUpdated(currentStreak: 3, reason: "consecutive_return")
         #expect(streakEvent.parameters?["current_streak"] as? Int == 3)
+
+        let qualifiedEvent = AnalyticsService.Event.returnStreakQualified(currentStreak: 2, reason: "continued")
+        #expect(qualifiedEvent.parameters?["current_streak"] as? Int == 2)
+        #expect(qualifiedEvent.parameters?["reason"] as? String == "continued")
+
+        let displayedEvent = AnalyticsService.Event.returnStreakDisplayed(currentStreak: 4, surface: "home")
+        #expect(displayedEvent.parameters?["surface"] as? String == "home")
 
         // screen_view
         let screenEvent = AnalyticsService.Event.screenView(screenName: "travel_log", screenClass: "TravelLogView")

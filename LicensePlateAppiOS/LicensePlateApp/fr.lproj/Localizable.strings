@@ -880,3 +880,14 @@
 "reward.popup.rank_up.detail_unlocks" = "Rang %d · Débloqué : %@";
 "reward.popup.xp_bonus" = "+%@ XP";
 "reward.popup.continue" = "Appuyez pour continuer";
+
+"return_streak.a11y.hint" = "Trouvez une plaque aujourd'hui pour garder votre série.";
+"return_streak.explanation.title" = "Série de plaques";
+"return_streak.explanation.subtitle" = "Continuez à repérer des plaques chaque jour";
+"return_streak.explanation.body" = "Trouvez au moins une plaque chaque jour pour bâtir votre série. Chaque découverte acceptée pendant un voyage actif compte pour ce jour.";
+"return_streak.celebration.kicker" = "SÉRIE EN CROISSANCE";
+"return_streak.celebration.detail" = "Beau travail — continuez à repérer des plaques pendant vos voyages.";
+"return_streak.reminder.title" = "Repérez une plaque aujourd'hui";
+"return_streak.reminder.body" = "Trouvez une plaque pendant votre voyage pour garder votre série.";
+"return_streak.settings.reminder.title" = "Rappels de série";
+"return_streak.settings.reminder.detail" = "Recevez un rappel si vous n'avez pas encore trouvé de plaque aujourd'hui.";

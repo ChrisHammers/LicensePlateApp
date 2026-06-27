@@ -39,6 +39,8 @@ struct ContentView: View {
         tripActivityEventRepository: TripActivityEventRepository.shared,
         authService: FirebaseAuthService()
     )
+    @StateObject private var returnStreakViewModel = ReturnStreakViewModel()
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("boundariesLoaded") private var boundariesLoaded = false
     
     // Custom detent for the new trip sheet - device-aware sizing
@@ -113,66 +115,44 @@ struct ContentView: View {
     /// Split from `body` so the Swift compiler can type-check the main scene in reasonable time.
     private var mainHomeNavigationStack: some View {
         NavigationStack(path: $mainCoordinator.path) {
-            TripEndRecapHost(
-                mainCoordinator: mainCoordinator,
-                travelLogViewModel: travelLogViewModel,
-                activeTripsListViewModel: activeTripsListViewModel
-            ) {
-                AppBackgroundView {
-                    homeTripAndInvitesList
+            homeTripRecapWithLifecycle
+                .navigationDestination(for: MainCoordinator.MainRoute.self) { route in
+                    homeRouteDestination(route: route)
                 }
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    VStack(spacing: 2) {
-                        Text("RoadTrip Royale")
-                            .font(.system(.headline, design: .rounded))
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Color.Theme.primaryBlue)
-                        if let user = authService.currentUser {
-                            Text(user.displayName)
-                                .font(.system(.caption, design: .rounded))
-                                .foregroundStyle(Color.Theme.softBrown)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.75)
-                        }
-                    }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel({
-                        let title = "RoadTrip Royale".localized
-                        if let user = authService.currentUser {
-                            return "\(title), \(user.displayName)"
-                        }
-                        return title
-                    }())
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        isShowingTravelLog = true
-                    } label: {
-                        Image(systemName: "map.fill")
-                            .foregroundStyle(Color.Theme.primaryBlue)
-                    }
-                    .accessibilityLabel("Travel Log".localized)
-                    .accessibilityHint("Review old Trips".localized)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isShowingSettings = true
-                    } label: {
-                        if let user = authService.currentUser {
-                            AvatarView(user: user, size: 34, showRing: true)
-                        } else {
-                            Image(systemName: "person.crop.circle")
-                                .font(.system(size: 28))
-                                .foregroundStyle(Color.Theme.primaryBlue)
-                        }
-                    }
-                    .accessibilityLabel("Settings".localized)
-                    .accessibilityHint("Opens app settings".localized)
-                }
+        }
+    }
+
+    private var currentUserId: String? {
+        authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+    }
+
+    private var homeTripRecapCore: some View {
+        TripEndRecapHost(
+            mainCoordinator: mainCoordinator,
+            travelLogViewModel: travelLogViewModel,
+            activeTripsListViewModel: activeTripsListViewModel
+        ) {
+            AppBackgroundView {
+                homeTripAndInvitesList
             }
+        }
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            HomeNavigationToolbar(
+                streakPresentation: returnStreakViewModel.presentation,
+                isStreakVisible: returnStreakViewModel.presentation.isVisible,
+                displayName: authService.currentUser?.displayName,
+                currentUser: authService.currentUser,
+                onStreakTap: { returnStreakViewModel.openExplanation() },
+                onTravelLogTap: { isShowingTravelLog = true },
+                onSettingsTap: { isShowingSettings = true }
+            )
+        }
+    }
+
+    private var homeTripRecapWithPresentation: some View {
+        homeTripRecapCore
             .sheet(isPresented: $isShowingSettings) {
                 DefaultSettingsView()
                     .environmentObject(authService)
@@ -181,79 +161,13 @@ struct ContentView: View {
                 TravelLogView(viewModel: travelLogViewModel)
                     .environmentObject(authService)
             }
-            .task {
-                await authService.initializeAuthState(modelContext: modelContext)
-
-                FriendshipRepository.shared.setModelContext(modelContext)
-                InviteRepository.shared.setModelContext(modelContext)
-                FamilyRepository.shared.setModelContext(modelContext)
-                UserRepository.shared.setModelContext(modelContext)
-                TripSessionRepository.shared.setModelContext(modelContext)
-                GameInstanceRepository.shared.setModelContext(modelContext)
-                TravelLogRepository.shared.setModelContext(modelContext)
-                TripActivityEventRepository.shared.setModelContext(modelContext)
-                TripInviteRepository.shared.setModelContext(modelContext)
-                EntitlementService.shared.setModelContext(modelContext)
-
-                pendingTripsViewModel.setAuthService(authService)
-                if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {
-                    FriendshipRepository.shared.startListening(userId: userId)
-                    InviteRepository.shared.startListening(userId: userId)
-                }
-                pendingTripsViewModel.loadIfNeeded()
-                activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
-                TripEndRecapSupport.startMultiplayerListeners(for: activeTripsListViewModel.items)
-                ReturnStreakService.shared.recordAppReturnIfNeeded()
-                for item in activeTripsListViewModel.items where item.session.status == .active {
-                    await ReminderNotificationService.shared.scheduleInactiveActiveTripReminder(
-                        sessionId: item.session.id,
-                        tripName: item.session.name
-                    )
-                }
-            }
-            .onReceive(TripCanonicalRemoteSyncService.shared.hydrationSignal) { _ in
-                activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
-                TripEndRecapSupport.startMultiplayerListeners(for: activeTripsListViewModel.items)
-            }
-            .onAppear {
-                pendingTripsViewModel.setAuthService(authService)
-                travelLogViewModel.setAuthService(authService)
-                NotificationRoutingService.shared.startObservingIfNeeded(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
-            }
-            .overlay {
-                if authService.showUsernameConflictDialog {
-                    UsernameConflictDialog(authService: authService)
-                }
-            }
-            .overlay(alignment: .bottomTrailing) {
-                addTripButton
+            .sheet(isPresented: $returnStreakViewModel.isShowingExplanation) {
+                ReturnStreakExplanationSheet(currentStreak: returnStreakViewModel.presentation.currentStreak)
             }
             .sheet(isPresented: $isShowingCreateSheet) {
-                CombinedTripSetupView(
-                    viewModel: CombinedTripSetupViewModel(
-                        tripSessionRepository: TripSessionRepository.shared,
-                        gameInstanceRepository: GameInstanceRepository.shared,
-                        authService: authService
-                    ),
-                    onCreated: { session in
-                        mainCoordinator.openSession(session.id)
-                        isShowingCreateSheet = false
-                        activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id)
-                    }
-                )
-                .presentationDetents([smallDetent, .medium, .large], selection: $sheetDetent)
-                .presentationDragIndicator(.visible)
-                .onAppear {
-                    sheetDetent = smallDetent
-                }
+                homeCreateTripSheet
             }
-            .onChange(of: isShowingCreateSheet) { _, isShowing in
-                if !isShowing { activeTripsListViewModel.load(userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id) }
-            }
-            .sheet(isPresented: Binding(
-                get: { pendingTripsViewModel.shouldPresentTripLimitPaywall },
-                set: { if !$0 { pendingTripsViewModel.dismissTripLimitPaywall() } }
-            )) {
+            .sheet(isPresented: tripLimitPaywallPresented) {
                 PaywallView(
                     viewModel: tripLimitPaywallViewModel,
                     onDismiss: { pendingTripsViewModel.dismissTripLimitPaywall() },
@@ -263,10 +177,7 @@ struct ContentView: View {
                     tripLimitPaywallViewModel.setTripLimitContext()
                 }
             }
-            .alert("Error".localized, isPresented: Binding(
-                get: { activeTripsListViewModel.errorMessage != nil },
-                set: { if !$0 { activeTripsListViewModel.clearError() } }
-            )) {
+            .alert("Error".localized, isPresented: activeTripsDeleteErrorPresented) {
                 Button("OK".localized, role: .cancel) { activeTripsListViewModel.clearError() }
                 Button("Retry".localized) {
                     AnalyticsService.shared.log(.persistenceRetryTapped(context: "active_list_delete"))
@@ -277,23 +188,134 @@ struct ContentView: View {
                     Text(msg)
                 }
             }
-            }
-            .navigationDestination(for: MainCoordinator.MainRoute.self) { route in
-                switch route {
-                case .session(let sessionId):
-                    if activeTripsListViewModel.session(for: sessionId) != nil {
-                        TripSessionView(sessionId: sessionId)
-                    } else {
-                        TripMissingView()
-                    }
-                case .game(let sessionId, let gameId):
-                    if let (session, game) = activeTripsListViewModel.sessionAndGame(sessionId: sessionId, gameId: gameId) {
-                        LicensePlateGameView(session: session, game: game, authService: authService)
-                    } else {
-                        TripMissingView()
-                    }
+            .overlay {
+                if authService.showUsernameConflictDialog {
+                    UsernameConflictDialog(authService: authService)
                 }
             }
+            .overlay(alignment: .bottomTrailing) {
+                addTripButton
+            }
+    }
+
+    private var homeTripRecapWithLifecycle: some View {
+        homeTripRecapWithPresentation
+            .onChange(of: currentUserId) { _, newUserId in
+                returnStreakViewModel.bind(userId: newUserId)
+            }
+            .onChange(of: scenePhase) { _, phase in
+                handleHomeScenePhaseChange(phase)
+            }
+            .task {
+                await bootstrapHomeScreen()
+            }
+            .onReceive(TripCanonicalRemoteSyncService.shared.hydrationSignal) { _ in
+                activeTripsListViewModel.load(userId: currentUserId)
+                TripEndRecapSupport.startMultiplayerListeners(for: activeTripsListViewModel.items)
+            }
+            .onAppear {
+                pendingTripsViewModel.setAuthService(authService)
+                travelLogViewModel.setAuthService(authService)
+                returnStreakViewModel.bind(userId: currentUserId)
+                NotificationRoutingService.shared.startObservingIfNeeded(userId: currentUserId)
+            }
+            .onChange(of: isShowingCreateSheet) { _, isShowing in
+                if !isShowing {
+                    activeTripsListViewModel.load(userId: currentUserId)
+                }
+            }
+    }
+
+    private var homeCreateTripSheet: some View {
+        CombinedTripSetupView(
+            viewModel: CombinedTripSetupViewModel(
+                tripSessionRepository: TripSessionRepository.shared,
+                gameInstanceRepository: GameInstanceRepository.shared,
+                authService: authService
+            ),
+            onCreated: { session in
+                mainCoordinator.openSession(session.id)
+                isShowingCreateSheet = false
+                activeTripsListViewModel.load(userId: currentUserId)
+            }
+        )
+        .presentationDetents([smallDetent, .medium, .large], selection: $sheetDetent)
+        .presentationDragIndicator(.visible)
+        .onAppear {
+            sheetDetent = smallDetent
+        }
+    }
+
+    private var tripLimitPaywallPresented: Binding<Bool> {
+        Binding(
+            get: { pendingTripsViewModel.shouldPresentTripLimitPaywall },
+            set: { if !$0 { pendingTripsViewModel.dismissTripLimitPaywall() } }
+        )
+    }
+
+    private var activeTripsDeleteErrorPresented: Binding<Bool> {
+        Binding(
+            get: { activeTripsListViewModel.errorMessage != nil },
+            set: { if !$0 { activeTripsListViewModel.clearError() } }
+        )
+    }
+
+    @ViewBuilder
+    private func homeRouteDestination(route: MainCoordinator.MainRoute) -> some View {
+        switch route {
+        case .session(let sessionId):
+            if activeTripsListViewModel.session(for: sessionId) != nil {
+                TripSessionView(sessionId: sessionId)
+            } else {
+                TripMissingView()
+            }
+        case .game(let sessionId, let gameId):
+            if let (session, game) = activeTripsListViewModel.sessionAndGame(sessionId: sessionId, gameId: gameId) {
+                LicensePlateGameView(session: session, game: game, authService: authService)
+            } else {
+                TripMissingView()
+            }
+        }
+    }
+
+    private func handleHomeScenePhaseChange(_ phase: ScenePhase) {
+        guard phase == .active else { return }
+        returnStreakViewModel.refresh()
+        ReturnStreakReminderService.shared.logReminderOpenedIfNeeded(userId: currentUserId)
+        Task {
+            await ReturnStreakReminderService.shared.refreshScheduleIfNeeded(userId: currentUserId)
+        }
+    }
+
+  private func bootstrapHomeScreen() async {
+        await authService.initializeAuthState(modelContext: modelContext)
+
+        FriendshipRepository.shared.setModelContext(modelContext)
+        InviteRepository.shared.setModelContext(modelContext)
+        FamilyRepository.shared.setModelContext(modelContext)
+        UserRepository.shared.setModelContext(modelContext)
+        TripSessionRepository.shared.setModelContext(modelContext)
+        GameInstanceRepository.shared.setModelContext(modelContext)
+        TravelLogRepository.shared.setModelContext(modelContext)
+        TripActivityEventRepository.shared.setModelContext(modelContext)
+        TripInviteRepository.shared.setModelContext(modelContext)
+        EntitlementService.shared.setModelContext(modelContext)
+
+        pendingTripsViewModel.setAuthService(authService)
+        if let userId = currentUserId {
+            FriendshipRepository.shared.startListening(userId: userId)
+            InviteRepository.shared.startListening(userId: userId)
+        }
+        pendingTripsViewModel.loadIfNeeded()
+        activeTripsListViewModel.load(userId: currentUserId)
+        TripEndRecapSupport.startMultiplayerListeners(for: activeTripsListViewModel.items)
+        returnStreakViewModel.bind(userId: currentUserId)
+        await ReturnStreakReminderService.shared.refreshScheduleIfNeeded(userId: currentUserId)
+        for item in activeTripsListViewModel.items where item.session.status == .active {
+            await ReminderNotificationService.shared.scheduleInactiveActiveTripReminder(
+                sessionId: item.session.id,
+                tripName: item.session.name
+            )
         }
     }
 

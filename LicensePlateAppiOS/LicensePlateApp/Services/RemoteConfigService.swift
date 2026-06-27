@@ -21,9 +21,13 @@ protocol RemoteConfigValueProviding {
 struct RemoteConfigDefaultsProvider: RemoteConfigValueProviding {
     func bool(for key: RemoteConfigService.Key) -> Bool {
         switch key {
-        case .adsEnabledFreeTier, .reviewPromptEnabled, .remindersEnabled, .returnStreakEnabled:
+        case .adsEnabledFreeTier, .reviewPromptEnabled, .remindersEnabled, .returnStreakEnabled,
+             .returnStreakCelebrationEnabled:
             return true
-        case .reviewPromptMinimumCompletedTrips, .reviewPromptCooldownDays, .inactiveActiveTripReminderHours:
+        case .returnStreakReminderEnabled:
+            return false
+        case .reviewPromptMinimumCompletedTrips, .reviewPromptCooldownDays, .inactiveActiveTripReminderHours,
+             .returnStreakMinDisplay, .returnStreakCelebrationMinStreak, .returnStreakReminderHour:
             return int(for: key) != 0
         case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1:
             return !string(for: key).isEmpty
@@ -38,8 +42,15 @@ struct RemoteConfigDefaultsProvider: RemoteConfigValueProviding {
             return 120
         case .inactiveActiveTripReminderHours:
             return 24
-        case .adsEnabledFreeTier, .reviewPromptEnabled, .remindersEnabled, .returnStreakEnabled:
+        case .returnStreakMinDisplay, .returnStreakCelebrationMinStreak:
+            return 2
+        case .returnStreakReminderHour:
+            return 20
+        case .adsEnabledFreeTier, .reviewPromptEnabled, .remindersEnabled, .returnStreakEnabled,
+             .returnStreakCelebrationEnabled:
             return bool(for: key) ? 1 : 0
+        case .returnStreakReminderEnabled:
+            return 0
         case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1:
             return string(for: key).isEmpty ? 0 : 1
         }
@@ -65,6 +76,11 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
         case remindersEnabled = "reminders_enabled"
         case inactiveActiveTripReminderHours = "inactive_active_trip_reminder_hours"
         case returnStreakEnabled = "return_streak_enabled"
+        case returnStreakMinDisplay = "return_streak_min_display"
+        case returnStreakCelebrationEnabled = "return_streak_celebration_enabled"
+        case returnStreakCelebrationMinStreak = "return_streak_celebration_min_streak"
+        case returnStreakReminderEnabled = "return_streak_reminder_enabled"
+        case returnStreakReminderHour = "return_streak_reminder_hour"
         case progressionRewardsPresentationV1 = "progression_rewards_presentation_v1"
         case progressionCatalogPresentationV1 = "progression_catalog_presentation_v1"
     }
@@ -141,6 +157,11 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
     var remindersEnabled: Bool { bool(for: .remindersEnabled) }
     var inactiveActiveTripReminderHours: Int { max(1, int(for: .inactiveActiveTripReminderHours)) }
     var returnStreakEnabled: Bool { bool(for: .returnStreakEnabled) }
+    var returnStreakMinDisplay: Int { max(1, int(for: .returnStreakMinDisplay)) }
+    var returnStreakCelebrationEnabled: Bool { bool(for: .returnStreakCelebrationEnabled) }
+    var returnStreakCelebrationMinStreak: Int { max(1, int(for: .returnStreakCelebrationMinStreak)) }
+    var returnStreakReminderEnabled: Bool { bool(for: .returnStreakReminderEnabled) }
+    var returnStreakReminderHour: Int { min(23, max(0, int(for: .returnStreakReminderHour))) }
 
     private var defaultValues: [String: NSObject] {
         [
@@ -151,6 +172,11 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
             Key.remindersEnabled.rawValue: defaults.bool(for: .remindersEnabled) as NSNumber,
             Key.inactiveActiveTripReminderHours.rawValue: defaults.int(for: .inactiveActiveTripReminderHours) as NSNumber,
             Key.returnStreakEnabled.rawValue: defaults.bool(for: .returnStreakEnabled) as NSNumber,
+            Key.returnStreakMinDisplay.rawValue: defaults.int(for: .returnStreakMinDisplay) as NSNumber,
+            Key.returnStreakCelebrationEnabled.rawValue: defaults.bool(for: .returnStreakCelebrationEnabled) as NSNumber,
+            Key.returnStreakCelebrationMinStreak.rawValue: defaults.int(for: .returnStreakCelebrationMinStreak) as NSNumber,
+            Key.returnStreakReminderEnabled.rawValue: defaults.bool(for: .returnStreakReminderEnabled) as NSNumber,
+            Key.returnStreakReminderHour.rawValue: defaults.int(for: .returnStreakReminderHour) as NSNumber,
             Key.progressionRewardsPresentationV1.rawValue: defaults.string(for: .progressionRewardsPresentationV1) as NSString,
             Key.progressionCatalogPresentationV1.rawValue: defaults.string(for: .progressionCatalogPresentationV1) as NSString
         ]

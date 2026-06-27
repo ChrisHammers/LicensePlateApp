@@ -260,6 +260,13 @@ class AnalyticsService: AnalyticsLogging {
         case reminderCancelled(sessionId: String, reason: String)
         case returnStreakUpdated(currentStreak: Int, reason: String)
         case returnStreakReset(reason: String)
+        case returnStreakQualified(currentStreak: Int, reason: String)
+        case returnStreakBroken(previousStreak: Int)
+        case returnStreakDisplayed(currentStreak: Int, surface: String)
+        case returnStreakExplanationOpened(currentStreak: Int)
+        case returnStreakCelebrationShown(currentStreak: Int)
+        case returnStreakReminderScheduled(hour: Int)
+        case returnStreakReminderOpened(currentStreak: Int)
         case fcmTokenRegistered
 
         // Screen view (Step 10)
@@ -424,6 +431,13 @@ class AnalyticsService: AnalyticsLogging {
             case .reminderCancelled: return "reminder_cancelled"
             case .returnStreakUpdated: return "return_streak_updated"
             case .returnStreakReset: return "return_streak_reset"
+            case .returnStreakQualified: return "return_streak_qualified"
+            case .returnStreakBroken: return "return_streak_broken"
+            case .returnStreakDisplayed: return "return_streak_displayed"
+            case .returnStreakExplanationOpened: return "return_streak_explanation_opened"
+            case .returnStreakCelebrationShown: return "return_streak_celebration_shown"
+            case .returnStreakReminderScheduled: return "return_streak_reminder_scheduled"
+            case .returnStreakReminderOpened: return "return_streak_reminder_opened"
             case .fcmTokenRegistered: return "fcm_token_registered"
             case .screenView: return "screen_view"
             case .paywallViewed: return "paywall_viewed"
@@ -800,6 +814,20 @@ class AnalyticsService: AnalyticsLogging {
                 return ["current_streak": currentStreak, "reason": reason]
             case .returnStreakReset(let reason):
                 return ["reason": reason]
+            case .returnStreakQualified(let currentStreak, let reason):
+                return ["current_streak": currentStreak, "reason": reason]
+            case .returnStreakBroken(let previousStreak):
+                return ["previous_streak": previousStreak]
+            case .returnStreakDisplayed(let currentStreak, let surface):
+                return ["current_streak": currentStreak, "surface": surface]
+            case .returnStreakExplanationOpened(let currentStreak):
+                return ["current_streak": currentStreak]
+            case .returnStreakCelebrationShown(let currentStreak):
+                return ["current_streak": currentStreak]
+            case .returnStreakReminderScheduled(let hour):
+                return ["hour": hour]
+            case .returnStreakReminderOpened(let currentStreak):
+                return ["current_streak": currentStreak]
             case .fcmTokenRegistered:
                 return nil
             case .screenView(let screenName, let screenClass):

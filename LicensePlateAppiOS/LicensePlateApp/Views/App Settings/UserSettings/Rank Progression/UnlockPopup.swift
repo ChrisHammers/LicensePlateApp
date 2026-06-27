@@ -26,12 +26,14 @@ enum RewardEvent: Identifiable {
     case rankUp(Rank)
     case achievement(Achievement)
     case unlock(title: String, detail: String, icon: String, rarity: LicenseRarity)
+    case returnStreak(days: Int)
 
     var id: String {
         switch self {
         case .rankUp(let r):       return "rank-\(r.level)"
         case .achievement(let a):  return "ach-\(a.id)"
         case .unlock(let t, _, _, _): return "unlock-\(t)"
+        case .returnStreak(let days): return "return-streak-\(days)"
         }
     }
 
@@ -46,6 +48,7 @@ enum RewardEvent: Identifiable {
         case .rankUp: return "reward.popup.kicker.rank_up".localized
         case .achievement: return "reward.popup.kicker.achievement".localized
         case .unlock: return "reward.popup.kicker.unlock".localized
+        case .returnStreak: return "return_streak.celebration.kicker".localized
         }
     }
 
@@ -54,6 +57,8 @@ enum RewardEvent: Identifiable {
         case .rankUp(let r):      return r.title
         case .achievement(let a): return a.title
         case .unlock(let t, _, _, _): return t
+        case .returnStreak(let days):
+            return String(format: "return_streak.celebration.title".localized, days)
         }
     }
 
@@ -67,6 +72,7 @@ enum RewardEvent: Identifiable {
             return "reward.popup.rank_up.detail_unlocks".localized(r.level, names.joined(separator: ", "))
         case .achievement(let a): return a.detail
         case .unlock(_, let d, _, _): return d
+        case .returnStreak: return "return_streak.celebration.detail".localized
         }
     }
 
@@ -75,6 +81,7 @@ enum RewardEvent: Identifiable {
         case .rankUp(let r):      return r.icon
         case .achievement(let a): return a.icon
         case .unlock(_, _, let i, _): return i
+        case .returnStreak: return "flame.fill"
         }
     }
 
@@ -83,6 +90,7 @@ enum RewardEvent: Identifiable {
         case .rankUp(let r):      return r.accent
         case .achievement(let a): return a.rarity.color
         case .unlock(_, _, _, let r): return r.color
+        case .returnStreak: return .orange
         }
     }
 
@@ -96,6 +104,7 @@ enum RewardEvent: Identifiable {
         case .rankUp: return "rank_up"
         case .achievement: return "achievement"
         case .unlock: return "unlock"
+        case .returnStreak: return "return_streak"
         }
     }
 }

@@ -17,5 +17,6 @@ final class ProgressionAppendObserverChain: ProgressionLocalAppendObserving {
     func progressionDidCommitLocalActivityEvent(_ event: TripActivityEvent) {
         UserProgressionService.shared.progressionDidCommitLocalActivityEvent(event)
         XpReconciliationService.shared.handleCommittedActivityEvent(event)
+        _ = ReturnStreakService.shared.handleCommittedActivityEvent(event)
     }
 }

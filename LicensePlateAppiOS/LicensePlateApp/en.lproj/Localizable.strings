@@ -912,3 +912,14 @@
 "reward.popup.rank_up.detail_unlocks" = "Rank %d · Unlocked %@";
 "reward.popup.xp_bonus" = "+%@ XP";
 "reward.popup.continue" = "Tap to continue";
+
+"return_streak.a11y.hint" = "Find a plate today to keep your streak.";
+"return_streak.explanation.title" = "Plate Find Streak";
+"return_streak.explanation.subtitle" = "Keep spotting plates each day";
+"return_streak.explanation.body" = "Find at least one license plate each day to build your streak. Every accepted find on an active trip counts for that day.";
+"return_streak.celebration.kicker" = "STREAK GROWING";
+"return_streak.celebration.detail" = "Nice work — keep spotting plates on your trips.";
+"return_streak.reminder.title" = "Spot a plate today";
+"return_streak.reminder.body" = "Find a license plate on your trip to keep your streak going.";
+"return_streak.settings.reminder.title" = "Streak Reminders";
+"return_streak.settings.reminder.detail" = "Get a gentle reminder if you have not found a plate yet today.";
