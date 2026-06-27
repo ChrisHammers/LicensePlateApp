@@ -62,7 +62,7 @@ struct Achievement: Identifiable {
 }
 
 /// Player-specific state for an achievement. Missing entry == locked, no progress.
-struct AchievementStatus {
+struct AchievementStatus: Equatable {
     var isUnlocked: Bool
     var progress: Int
     var unlockedDate: Date?

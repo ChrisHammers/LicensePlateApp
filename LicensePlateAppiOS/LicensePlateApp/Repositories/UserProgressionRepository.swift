@@ -22,6 +22,8 @@ final class UserProgressionRepository: ObservableObject {
     private(set) var currentObservedUserId: String?
 
     @Published private(set) var snapshot: UserProgressionSnapshot?
+    /// True after the Firestore listener delivers its first snapshot for the bound user (including missing doc).
+    @Published private(set) var hasReceivedInitialSnapshot = false
 
     private init() {}
 
@@ -31,11 +33,13 @@ final class UserProgressionRepository: ObservableObject {
         stopListening()
         boundUserId = userId
         currentObservedUserId = userId
+        hasReceivedInitialSnapshot = false
 
         let ref = db.collection("user_progression").document(userId)
         listener = ref.addSnapshotListener { [weak self] docSnap, error in
             Task { @MainActor in
                 guard let self else { return }
+                self.hasReceivedInitialSnapshot = true
                 if let error {
                     #if DEBUG
                     print("⚠️ user_progression listener \(userId): \(error.localizedDescription)")
@@ -62,6 +66,7 @@ final class UserProgressionRepository: ObservableObject {
         boundUserId = nil
         currentObservedUserId = nil
         snapshot = nil
+        hasReceivedInitialSnapshot = false
     }
 
     private static func decodeSnapshot(data: [String: Any]) -> UserProgressionSnapshot {

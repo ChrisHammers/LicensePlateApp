@@ -34,6 +34,8 @@ final class PublicLifetimeStatsRepository: ObservableObject {
 
     private var profileUserId: String?
     private var familyPinnedUserIds = Set<String>()
+    /// Profile user's id once its Firestore listener has fired at least once (including missing doc).
+    private(set) var profileInitialSnapshotReceivedForUserId: String?
 
     @Published private(set) var snapshots: [String: UserLifetimeStats] = [:]
 
@@ -45,6 +47,13 @@ final class PublicLifetimeStatsRepository: ObservableObject {
 
     func setProfileUserId(_ userId: String?) {
         profileUserId = userId
+        if userId != profileInitialSnapshotReceivedForUserId {
+            profileInitialSnapshotReceivedForUserId = nil
+        }
+    }
+
+    func hasReceivedInitialProfileSnapshot(forUserId userId: String) -> Bool {
+        profileInitialSnapshotReceivedForUserId == userId
     }
 
     func updateFamilyPinnedUserIds(_ ids: Set<String>) {
@@ -167,6 +176,9 @@ final class PublicLifetimeStatsRepository: ObservableObject {
         let registration = ref.addSnapshotListener { [weak self] snapshot, error in
             Task { @MainActor in
                 guard let self else { return }
+                if userId == self.profileUserId {
+                    self.profileInitialSnapshotReceivedForUserId = userId
+                }
                 if let error {
                     #if DEBUG
                     print("⚠️ public_lifetime_stats listener \(userId): \(error.localizedDescription)")

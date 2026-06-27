@@ -871,3 +871,11 @@
 "rank.progression.current_xp" = "%@ XP";
 "rank.progression.xp_to_next" = "%@ XP para %@";
 "rank.progression.progress.a11y" = "Progreso hacia el siguiente rango";
+
+"reward.popup.kicker.rank_up" = "SUBISTE DE RANGO";
+"reward.popup.kicker.achievement" = "LOGRO DESBLOQUEADO";
+"reward.popup.kicker.unlock" = "NUEVO DESBLOQUEO";
+"reward.popup.rank_up.detail" = "Alcanzaste el rango %d.";
+"reward.popup.rank_up.detail_unlocks" = "Rango %d · Desbloqueaste %@";
+"reward.popup.xp_bonus" = "+%@ XP";
+"reward.popup.continue" = "Toca para continuar";

@@ -177,6 +177,8 @@ class AnalyticsService: AnalyticsLogging {
         case progressionRewardsConfigFallback(reason: String)
         case progressionCatalogPresentationOverrideApplied(achievementsEnabled: Bool, rankProgressionEnabled: Bool)
         case progressionCatalogConfigFallback(reason: String)
+        case achievementUnlocked(achievementId: String, category: String, rarity: String)
+        case rankUpCelebrated(level: Int, totalXp: Int)
         case xpGrantAwarded(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
         case xpGrantSkippedAlreadyGranted(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
 
@@ -372,6 +374,8 @@ class AnalyticsService: AnalyticsLogging {
             case .progressionRewardsConfigFallback: return "progression_rewards_config_fallback"
             case .progressionCatalogPresentationOverrideApplied: return "progression_catalog_presentation_override_applied"
             case .progressionCatalogConfigFallback: return "progression_catalog_config_fallback"
+            case .achievementUnlocked: return "achievement_unlocked"
+            case .rankUpCelebrated: return "rank_up"
             case .xpGrantAwarded: return "xp_grant_awarded"
             case .xpGrantSkippedAlreadyGranted: return "xp_grant_skipped_already_granted"
             case .tripSessionCreated: return "trip_session_created"
@@ -592,6 +596,17 @@ class AnalyticsService: AnalyticsLogging {
                 ]
             case .progressionCatalogConfigFallback(let reason):
                 return ["reason": reason]
+            case .achievementUnlocked(let achievementId, let category, let rarity):
+                return [
+                    "achievement_id": achievementId,
+                    "category": category,
+                    "rarity": rarity
+                ]
+            case .rankUpCelebrated(let level, let totalXp):
+                return [
+                    "rank_level": level,
+                    "total_xp": totalXp
+                ]
             case .xpGrantAwarded(let tripId, let gameInstanceId, let targetId, let participantId):
                 return [
                     "trip_session_id": tripId,

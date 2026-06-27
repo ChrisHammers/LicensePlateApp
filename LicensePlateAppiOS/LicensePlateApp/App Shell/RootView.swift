@@ -50,13 +50,18 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: appCoordinator.rootView)
+        .rewardPopupHost(RewardPresenter.shared)
         .onChange(of: authService.currentUser?.firebaseUID ?? authService.currentUser?.id) { _, newUserId in
             TripActivityEventRecordingService.shared.setProgressionAppendObserver(nil)
             UserProgressionRepository.shared.stopListening()
             UserProgressionService.shared.resetForSignOut()
+            AchievementUnlockCelebrationService.shared.resetForSignOut()
             if let newUserId, !newUserId.isEmpty {
                 UserProgressionRepository.shared.startListening(userId: newUserId)
                 TripActivityEventRecordingService.shared.setProgressionAppendObserver(ProgressionAppendObserverChain.shared)
+            }
+            if let user = authService.currentUser {
+                AchievementUnlockCelebrationService.shared.configure(user: user)
             }
         }
         .onChange(of: scenePhase) { newPhase in
@@ -101,6 +106,9 @@ struct RootView: View {
                 TripActivityEventRecordingService.shared.setProgressionAppendObserver(ProgressionAppendObserverChain.shared)
             }
             EntitlementService.shared.setCurrentUserId(userId)
+            if let user = authService.currentUser {
+                AchievementUnlockCelebrationService.shared.configure(user: user)
+            }
             await RevenueCatEntitlementBridge.shared.identify(userId: userId)
             if authService.isOnline {
                 Task { await SyncCoordinator.shared.processPendingSyncItems() }

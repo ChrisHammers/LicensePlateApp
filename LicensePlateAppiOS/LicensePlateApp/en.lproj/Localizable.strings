@@ -903,3 +903,11 @@
 "rank.progression.current_xp" = "%@ XP";
 "rank.progression.xp_to_next" = "%@ XP to %@";
 "rank.progression.progress.a11y" = "Progress toward next rank";
+
+"reward.popup.kicker.rank_up" = "RANK UP";
+"reward.popup.kicker.achievement" = "ACHIEVEMENT UNLOCKED";
+"reward.popup.kicker.unlock" = "NEW UNLOCK";
+"reward.popup.rank_up.detail" = "You reached Rank %d.";
+"reward.popup.rank_up.detail_unlocks" = "Rank %d · Unlocked %@";
+"reward.popup.xp_bonus" = "+%@ XP";
+"reward.popup.continue" = "Tap to continue";

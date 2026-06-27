@@ -7,10 +7,8 @@
 //
 //  Attach the host once near the root:
 //
-//      @StateObject private var rewards = RewardPresenter()
-//      ...
 //      RootView()
-//          .rewardPopupHost(rewards)
+//          .rewardPopupHost(RewardPresenter.shared)
 //
 //  Then fire events whenever they happen:
 //
@@ -45,9 +43,9 @@ enum RewardEvent: Identifiable {
 
     var kicker: String {
         switch self {
-        case .rankUp:      return "RANK UP"
-        case .achievement: return "ACHIEVEMENT UNLOCKED"
-        case .unlock:      return "NEW UNLOCK"
+        case .rankUp: return "reward.popup.kicker.rank_up".localized
+        case .achievement: return "reward.popup.kicker.achievement".localized
+        case .unlock: return "reward.popup.kicker.unlock".localized
         }
     }
 
@@ -63,8 +61,10 @@ enum RewardEvent: Identifiable {
         switch self {
         case .rankUp(let r):
             let names = r.unlocks.map(\.title)
-            return names.isEmpty ? "You reached Rank \(r.level)."
-                                 : "Rank \(r.level) · Unlocked " + names.joined(separator: ", ")
+            if names.isEmpty {
+                return "reward.popup.rank_up.detail".localized(r.level)
+            }
+            return "reward.popup.rank_up.detail_unlocks".localized(r.level, names.joined(separator: ", "))
         case .achievement(let a): return a.detail
         case .unlock(_, let d, _, _): return d
         }
@@ -96,10 +96,15 @@ enum RewardEvent: Identifiable {
 
 @MainActor
 final class RewardPresenter: ObservableObject {
+
+    static let shared = RewardPresenter()
+
     @Published private(set) var current: RewardEvent?
     private var queue: [RewardEvent] = []
 
     func show(_ event: RewardEvent) {
+        if current?.id == event.id { return }
+        if queue.contains(where: { $0.id == event.id }) { return }
         queue.append(event)
         presentNext()
     }
@@ -109,6 +114,11 @@ final class RewardPresenter: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) { [weak self] in
             self?.presentNext()
         }
+    }
+
+    func reset() {
+        queue.removeAll()
+        current = nil
     }
 
     private func presentNext() {
@@ -190,7 +200,7 @@ struct RewardPopupView: View {
             if let xp = event.xpReward {
                 HStack(spacing: 5) {
                     Image(systemName: "bolt.fill")
-                    Text("+\(xp.formatted()) XP")
+                    Text("reward.popup.xp_bonus".localized(xp.formatted()))
                 }
                 .font(.footnote.weight(.bold))
                 .foregroundStyle(event.color)
@@ -199,7 +209,7 @@ struct RewardPopupView: View {
             }
 
             Button(action: onDismiss) {
-                Text("Tap to continue")
+                Text("reward.popup.continue".localized)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)

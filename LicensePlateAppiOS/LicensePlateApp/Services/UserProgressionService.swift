@@ -34,6 +34,14 @@ final class UserProgressionService: ObservableObject, ProgressionLocalAppendObse
                 self?.scheduleRefreshPending()
             }
             .store(in: &cancellables)
+        repository.$hasReceivedInitialSnapshot
+            .removeDuplicates()
+            .filter { $0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.scheduleRefreshPending()
+            }
+            .store(in: &cancellables)
     }
 
     /// Clears transition state (e.g. sign-out).
