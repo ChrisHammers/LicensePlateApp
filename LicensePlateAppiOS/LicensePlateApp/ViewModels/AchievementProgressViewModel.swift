@@ -22,6 +22,7 @@ final class AchievementProgressViewModel: ObservableObject {
     private let userProgressionService: UserProgressionService
     private let entitlementService: EntitlementService
     private let userAchievementRepository: UserAchievementRepository
+    private let userAchievementRemoteRepository: UserAchievementRemoteRepository
     private let lifetimeStatsViewModel: LifetimeStatsProfileViewModel
     private let xpProgressViewModel: XpProgressViewModel
     private var cancellables = Set<AnyCancellable>()
@@ -33,7 +34,8 @@ final class AchievementProgressViewModel: ObservableObject {
         catalogProvider: ProgressionCatalogProviding = ProgressionCatalogProvider.shared,
         userProgressionService: UserProgressionService = .shared,
         entitlementService: EntitlementService = .shared,
-        userAchievementRepository: UserAchievementRepository = .shared
+        userAchievementRepository: UserAchievementRepository = .shared,
+        userAchievementRemoteRepository: UserAchievementRemoteRepository = .shared
     ) {
         self.user = user
         self.lifetimeStatsViewModel = lifetimeStatsViewModel
@@ -42,6 +44,7 @@ final class AchievementProgressViewModel: ObservableObject {
         self.userProgressionService = userProgressionService
         self.entitlementService = entitlementService
         self.userAchievementRepository = userAchievementRepository
+        self.userAchievementRemoteRepository = userAchievementRemoteRepository
 
         lifetimeStatsViewModel.objectWillChange
             .receive(on: DispatchQueue.main)
@@ -68,6 +71,14 @@ final class AchievementProgressViewModel: ObservableObject {
             .sink { [weak self] _ in self?.refresh() }
             .store(in: &cancellables)
 
+        userAchievementRemoteRepository.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.refresh() }
+            .store(in: &cancellables)
+
+        let userId = user.firebaseUID ?? user.id
+        userAchievementRemoteRepository.startListening(userId: userId)
+
         refresh()
     }
 
@@ -80,7 +91,8 @@ final class AchievementProgressViewModel: ObservableObject {
         totalXp = max(0, xpProgressViewModel.displayedTotalXp)
 
         let userId = user.firebaseUID ?? user.id
-        let persisted = (try? userAchievementRepository.fetchRecords(forUserId: userId)) ?? [:]
+        let local = (try? userAchievementRepository.fetchRecords(forUserId: userId)) ?? [:]
+        let remote = userAchievementRemoteRepository.records
 
         let entitlement = entitlementService.entitlementState(for: user)
         let inputs = AchievementProgressInputs(
@@ -96,7 +108,8 @@ final class AchievementProgressViewModel: ObservableObject {
         )
         statuses = AchievementProgressPersistence.applyPersistedRecords(
             statuses: computed,
-            persisted: persisted
+            local: local,
+            remote: remote
         )
     }
 }

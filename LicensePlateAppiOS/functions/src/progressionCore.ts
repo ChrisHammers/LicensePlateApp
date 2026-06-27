@@ -231,6 +231,11 @@ export function baseRegionDiscoveryScopeKey(input: {
   return `xp_scope|v1|${input.userId}|${input.sessionId}|${gameInstanceId}|${regionId}|base_region_discovery`;
 }
 
+/** Idempotent XP grant scope when an achievement unlock is persisted server-side. */
+export function achievementUnlockScopeKey(userId: string, achievementId: string): string {
+  return `achievement_xp|v1|${userId}|${achievementId}`;
+}
+
 /**
  * Per-user Firestore field increments for one new activity event (caller enforces idempotency per user doc).
  */

@@ -67,6 +67,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // User achievements (server-authoritative unlock rows; writes via Cloud Functions only)
+    match /user_achievements/{userId}/achievements/{achievementId} {
+      allow read: if isSignedIn() && uid() == userId;
+      allow write: if false;
+    }
+
     // USERNAME INDEX (write via Cloud Function / transaction)
     match /usernames/{usernameLower} {
       allow read: if isSignedIn();

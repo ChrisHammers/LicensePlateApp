@@ -39,4 +39,5 @@ export { onTripEndedUpdatePublicLifetimeStats } from "./publicLifetimeStatsOnTri
 export { onTripEndedNotifyMembers } from "./tripEndedNotifyMembers";
 export { onActivityEventUpdateUserProgression } from "./progressionOnActivityEvent";
 export { ensureUserProgressionDocument } from "./progressionBootstrap";
+export { syncUserAchievementUnlocks } from "./syncUserAchievementUnlocks";
 

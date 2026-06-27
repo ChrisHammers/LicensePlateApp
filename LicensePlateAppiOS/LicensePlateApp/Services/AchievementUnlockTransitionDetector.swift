@@ -47,7 +47,9 @@ enum AchievementProgressSnapshotBuilder {
         catalogProvider: ProgressionCatalogProviding = ProgressionCatalogProvider.shared,
         userProgressionService: UserProgressionService = .shared,
         entitlementService: EntitlementService = .shared,
-        persistedRecords: [String: UserAchievementRecord] = [:]
+        persistedRecords: [String: UserAchievementRecord] = [:],
+        localPersistedRecords: [String: UserAchievementRecord] = [:],
+        remotePersistedRecords: [String: UserAchievementRecord] = [:]
     ) -> AchievementProgressSnapshot {
         let catalog = catalogProvider.current
         let ladder = ProgressionCatalogProjection.rankLadder(from: catalog)
@@ -64,9 +66,18 @@ enum AchievementProgressSnapshotBuilder {
             for: catalog.visibleAchievements,
             inputs: inputs
         )
+        let mergedPersisted: [String: UserAchievementRecord]
+        if !persistedRecords.isEmpty {
+            mergedPersisted = persistedRecords
+        } else {
+            mergedPersisted = AchievementProgressPersistence.mergedRecords(
+                local: localPersistedRecords,
+                remote: remotePersistedRecords
+            )
+        }
         let statuses = AchievementProgressPersistence.applyPersistedRecords(
             statuses: computed,
-            persisted: persistedRecords
+            persisted: mergedPersisted
         )
         return AchievementProgressSnapshot(
             statuses: statuses,

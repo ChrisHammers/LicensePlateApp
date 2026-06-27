@@ -2,7 +2,7 @@
   "name": "functions",
   "scripts": {
     "test": "vitest run",
-    "build": "tsc",
+    "build": "tsc && cp src/progressionCatalog.v1.json lib/",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",

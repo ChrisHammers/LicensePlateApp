@@ -9,6 +9,28 @@ import Foundation
 
 enum AchievementProgressPersistence {
 
+    static func mergedRecords(
+        local: [String: UserAchievementRecord],
+        remote: [String: UserAchievementRecord]
+    ) -> [String: UserAchievementRecord] {
+        var merged = local
+        for (id, remoteRecord) in remote {
+            merged[id] = remoteRecord
+        }
+        return merged
+    }
+
+    static func applyPersistedRecords(
+        statuses: [String: AchievementStatus],
+        local: [String: UserAchievementRecord],
+        remote: [String: UserAchievementRecord] = [:]
+    ) -> [String: AchievementStatus] {
+        applyPersistedRecords(
+            statuses: statuses,
+            persisted: mergedRecords(local: local, remote: remote)
+        )
+    }
+
     static func applyPersistedRecords(
         statuses: [String: AchievementStatus],
         persisted: [String: UserAchievementRecord]
@@ -24,6 +46,13 @@ enum AchievementProgressPersistence {
             merged[id] = status
         }
         return merged
+    }
+
+    static func persistedAchievementIds(
+        local: [String: UserAchievementRecord],
+        remote: [String: UserAchievementRecord] = [:]
+    ) -> Set<String> {
+        Set(mergedRecords(local: local, remote: remote).keys)
     }
 
     static func persistedAchievementIds(_ persisted: [String: UserAchievementRecord]) -> Set<String> {

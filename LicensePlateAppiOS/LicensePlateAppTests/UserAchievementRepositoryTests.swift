@@ -89,6 +89,59 @@ struct AchievementProgressPersistenceTests {
         #expect(merged["trips_10"]?.unlockedDate == nil)
     }
 
+    @Test func applyPersistedRecordsPrefersRemoteUnlockDate() {
+        let computed: [String: AchievementStatus] = [
+            "first_win": AchievementStatus(isUnlocked: true, progress: 1)
+        ]
+        let local: [String: UserAchievementRecord] = [
+            "first_win": UserAchievementRecord(
+                userId: "u1",
+                achievementId: "first_win",
+                unlockedAt: Date(timeIntervalSince1970: 1_000),
+                lastProgress: 1,
+                isBackfilled: true
+            )
+        ]
+        let remote: [String: UserAchievementRecord] = [
+            "first_win": UserAchievementRecord(
+                userId: "u1",
+                achievementId: "first_win",
+                unlockedAt: Date(timeIntervalSince1970: 1_700_000_000),
+                lastProgress: 1,
+                isBackfilled: false
+            )
+        ]
+        let merged = AchievementProgressPersistence.applyPersistedRecords(
+            statuses: computed,
+            local: local,
+            remote: remote
+        )
+        #expect(merged["first_win"]?.unlockedDate == Date(timeIntervalSince1970: 1_700_000_000))
+    }
+
+    @Test func mergedRecordsRemoteOverridesLocal() {
+        let local: [String: UserAchievementRecord] = [
+            "trips_10": UserAchievementRecord(
+                userId: "u1",
+                achievementId: "trips_10",
+                unlockedAt: .now,
+                lastProgress: 10,
+                isBackfilled: true
+            )
+        ]
+        let remote: [String: UserAchievementRecord] = [
+            "trips_10": UserAchievementRecord(
+                userId: "u1",
+                achievementId: "trips_10",
+                unlockedAt: Date(timeIntervalSince1970: 1_700_000_000),
+                lastProgress: 10,
+                isBackfilled: false
+            )
+        ]
+        let merged = AchievementProgressPersistence.mergedRecords(local: local, remote: remote)
+        #expect(merged["trips_10"]?.isBackfilled == false)
+    }
+
     @Test func filterNotYetPersistedExcludesStoredIds() {
         let ids = ["first_win", "trips_10", "family"]
         let filtered = AchievementProgressPersistence.filterNotYetPersisted(ids, persistedIds: ["trips_10"])
