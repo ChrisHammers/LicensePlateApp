@@ -11,6 +11,7 @@ struct ProgressionLocalEngineTests {
 
     private let sessionId = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
     private let gameId = UUID(uuidString: "550e8400-e29b-41d4-a716-446655440001")!
+    private let rewards = ProgressionRewardsConfig.fixtureDefault
 
     @Test func pendingRegionFoundWhenNotOnServer() {
         let e1 = TripActivityEvent(
@@ -34,9 +35,10 @@ struct ProgressionLocalEngineTests {
             rosterUserIds: ["u1", "u2"],
             subjectUserId: "u1",
             serverAppliedEventIds: [],
-            gamesById: games
+            gamesById: games,
+            rewards: rewards
         )
-        #expect(d.totalXp == GameProgressionXPRewards.baseDiscoveryXp)
+        #expect(d.totalXp == rewards.xp.baseDiscoveryXp)
         #expect(d.acceptedRegionFindCount == 1)
     }
 
@@ -62,7 +64,8 @@ struct ProgressionLocalEngineTests {
             rosterUserIds: ["u1"],
             subjectUserId: "u1",
             serverAppliedEventIds: ["rf1"],
-            gamesById: games
+            gamesById: games,
+            rewards: rewards
         )
         #expect(d == .zero)
     }
@@ -97,7 +100,8 @@ struct ProgressionLocalEngineTests {
             rosterUserIds: ["u1", "u2"],
             subjectUserId: "u1",
             serverAppliedEventIds: [],
-            gamesById: games
+            gamesById: games,
+            rewards: rewards
         )
         #expect(d.competitiveFirstPlaceFinishes == 0)
         #expect(d.everCompetitiveFirstPlace == false)
@@ -147,19 +151,21 @@ struct ProgressionLocalEngineTests {
             rosterUserIds: ["u1", "u2"],
             subjectUserId: "u1",
             serverAppliedEventIds: [],
-            gamesById: games
+            gamesById: games,
+            rewards: rewards
         )
         let d2 = ProgressionLocalEngine.pendingDeltaForSession(
             sortedSessionEvents: [rf1, rf2, ge],
             rosterUserIds: ["u1", "u2"],
             subjectUserId: "u2",
             serverAppliedEventIds: [],
-            gamesById: games
+            gamesById: games,
+            rewards: rewards
         )
         #expect(d1.competitiveFirstPlaceFinishes == 1)
         #expect(d2.competitiveFirstPlaceFinishes == 1)
-        #expect(d1.totalXp == GameProgressionXPRewards.baseDiscoveryXp + GameProgressionXPRewards.competitiveFirstPlaceFinishBonusXp)
-        #expect(d2.totalXp == GameProgressionXPRewards.baseDiscoveryXp + GameProgressionXPRewards.competitiveFirstPlaceFinishBonusXp)
+        #expect(d1.totalXp == rewards.xp.baseDiscoveryXp + rewards.xp.competitiveFirstPlaceFinishBonusXp)
+        #expect(d2.totalXp == rewards.xp.baseDiscoveryXp + rewards.xp.competitiveFirstPlaceFinishBonusXp)
     }
 
     @Test func sameScopedRefindDoesNotAddPendingAgain() {
@@ -207,7 +213,8 @@ struct ProgressionLocalEngineTests {
             rosterUserIds: ["u1"],
             subjectUserId: "u1",
             serverAppliedEventIds: [],
-            gamesById: games
+            gamesById: games,
+            rewards: rewards
         )
         #expect(d.acceptedRegionFindCount == 1)
         #expect(d.totalXp == GameProgressionXPRewards.baseDiscoveryXp)
@@ -248,10 +255,11 @@ struct ProgressionLocalEngineTests {
             rosterUserIds: ["u1"],
             subjectUserId: "u1",
             serverAppliedEventIds: [],
-            gamesById: games
+            gamesById: games,
+            rewards: rewards
         )
         #expect(d.acceptedRegionFindCount == 2)
-        #expect(d.totalXp == GameProgressionXPRewards.baseDiscoveryXp * 2)
+        #expect(d.totalXp == rewards.xp.baseDiscoveryXp * 2)
     }
 
     @Test func appliedAnchorSuppressesPendingAndRefindDoesNotReplaceAnchor() {
@@ -287,7 +295,8 @@ struct ProgressionLocalEngineTests {
             rosterUserIds: ["u1"],
             subjectUserId: "u1",
             serverAppliedEventIds: ["rf1"],
-            gamesById: games
+            gamesById: games,
+            rewards: rewards
         )
         #expect(d.acceptedRegionFindCount == 0)
         #expect(d.totalXp == 0)

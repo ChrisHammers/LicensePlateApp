@@ -108,4 +108,16 @@ struct ProgressionRewardsConfigTests {
         let data = Data("{ not json }".utf8)
         #expect(ProgressionRewardsConfigLoader.decode(data) == nil)
     }
+
+    @Test func providerReturnsBundledConfig() {
+        let provider = ProgressionRewardsConfigProvider()
+        #expect(provider.current == ProgressionRewardsConfig.bundledDefault)
+    }
+
+    @Test func providerRefreshIsIdempotent() {
+        let provider = ProgressionRewardsConfigProvider()
+        let before = provider.current
+        provider.refresh()
+        #expect(provider.current == before)
+    }
 }

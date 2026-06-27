@@ -8,10 +8,10 @@ import { parseCommonConfigGameMode, parseTeamsDataBase64 } from "./publicLifetim
 
 export const KIND_GAME_ENDED = "game_ended";
 
-/** XP awarded per accepted `region_found` (canonical event on server). */
+/** XP awarded per accepted `region_found` (canonical event on server). Parity: ProgressionRewardsConfig.v1.json → xp.baseDiscoveryXp */
 export const XP_PER_ACCEPTED_REGION_FOUND = 10;
-/** XP awarded per competitive first-place finish at `game_ended` (ties: each rank-1 receives this). */
-export const XP_PER_COMPETITIVE_FIRST_PLACE_FINISH = 50;
+/** XP awarded per competitive first-place finish at `game_ended` (ties: each rank-1 receives this). Parity: ProgressionRewardsConfig.v1.json → xp.competitiveFirstPlaceFinishBonusXp */
+export const XP_PER_COMPETITIVE_FIRST_PLACE_FINISH = 15;
 
 type DiscoveryRow = {
   id: string;

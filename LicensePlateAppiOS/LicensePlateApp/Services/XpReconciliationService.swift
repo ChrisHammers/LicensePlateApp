@@ -17,19 +17,22 @@ final class XpReconciliationService {
     private let tripActivityEvents: TripActivityEventRepositoryProtocol
     private let gameRepository: GameInstanceRepositoryProtocol
     private let tripSessionRepository: TripSessionRepositoryProtocol
+    private let rewardsConfig: ProgressionRewardsConfigProviding
 
     init(
         xpLedger: XpLedgerRepositoryProtocol = XpLedgerRepository.shared,
         resolutionRepo: DiscoveryResolutionRepositoryProtocol = DiscoveryResolutionRepository.shared,
         tripActivityEvents: TripActivityEventRepositoryProtocol = TripActivityEventRepository.shared,
         gameRepository: GameInstanceRepositoryProtocol = GameInstanceRepository.shared,
-        tripSessionRepository: TripSessionRepositoryProtocol = TripSessionRepository.shared
+        tripSessionRepository: TripSessionRepositoryProtocol = TripSessionRepository.shared,
+        rewardsConfig: ProgressionRewardsConfigProviding = ProgressionRewardsConfigProvider.shared
     ) {
         self.xpLedger = xpLedger
         self.resolutionRepo = resolutionRepo
         self.tripActivityEvents = tripActivityEvents
         self.gameRepository = gameRepository
         self.tripSessionRepository = tripSessionRepository
+        self.rewardsConfig = rewardsConfig
     }
 
     /// Called after a gameplay event is durably inserted (same timing as progression observer).
@@ -69,6 +72,9 @@ final class XpReconciliationService {
             xpCategory: .baseRegionDiscovery
         ).storageString
 
+        let rewards = rewardsConfig.current
+        let baseDiscoveryXp = rewards.xp.baseDiscoveryXp
+
         if tripMode == .solo {
             let soloFinal = XpLedgerEvent(
                 userId: participantId,
@@ -79,7 +85,7 @@ final class XpReconciliationService {
                 itemId: regionId,
                 grantKind: .finalDiscoveryAward,
                 status: .final,
-                xpDelta: XpLedgerConstants.baseDiscoveryProvisionalOrFull,
+                xpDelta: baseDiscoveryXp,
                 reasonCode: .soloNewDiscovery,
                 xpUniquenessKey: key,
                 metadata: [XpLedgerMetadataKey.originalDiscoveryEventId: event.id]
@@ -107,7 +113,7 @@ final class XpReconciliationService {
                 itemId: regionId,
                 grantKind: .provisionalDiscoveryXp,
                 status: .provisional,
-                xpDelta: XpLedgerConstants.baseDiscoveryProvisionalOrFull,
+                xpDelta: baseDiscoveryXp,
                 reasonCode: .discoveryClaimPendingResolution,
                 xpUniquenessKey: key,
                 metadata: [XpLedgerMetadataKey.originalDiscoveryEventId: event.id]
@@ -131,7 +137,7 @@ final class XpReconciliationService {
                 itemId: regionId,
                 grantKind: .finalDiscoveryAward,
                 status: .final,
-                xpDelta: XpLedgerConstants.baseDiscoveryProvisionalOrFull,
+                xpDelta: baseDiscoveryXp,
                 reasonCode: .collaborativeSharedFinder,
                 xpUniquenessKey: key,
                 metadata: [XpLedgerMetadataKey.originalDiscoveryEventId: event.id]
@@ -169,13 +175,19 @@ final class XpReconciliationService {
 
         try resolutionRepo.save(resolution)
 
-        let award = XpAwardRuleEngine.compute(from: resolution, gameMode: gameMode, tripMode: tripMode)
+        let rewards = rewardsConfig.current
+        let award = XpAwardRuleEngine.compute(
+            from: resolution,
+            gameMode: gameMode,
+            tripMode: tripMode,
+            rewards: rewards
+        )
         let targetNet = award.xpNet
 
         let rows = try xpLedger.ledgerEvents(forUniquenessKey: baseKey)
         let currentNet = rows.reduce(0) { $0 + $1.xpDelta }
         let rawDelta = targetNet - currentNet
-        let delta = max(GameProgressionXPRewards.minimumLocalReconciliationDelta, rawDelta)
+        let delta = max(rewards.policy.minimumLocalReconciliationDelta, rawDelta)
         guard delta != 0 else { return }
 
         var meta: [String: String] = [XpLedgerMetadataKey.resolutionId: resolution.resolutionId]

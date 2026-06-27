@@ -9,6 +9,8 @@ import Testing
 
 struct XpAwardRuleEngineTests {
 
+    private let rewards = ProgressionRewardsConfig.fixtureDefault
+
     @Test func competitiveFirstFinderNet10() {
         let r = DiscoveryResolution(
             sourceEventId: "e1",
@@ -22,12 +24,12 @@ struct XpAwardRuleEngineTests {
             finalXpAward: 0,
             xpReason: .discoveryClaimPendingResolution
         )
-        let c = XpAwardRuleEngine.compute(from: r, gameMode: .competitive, tripMode: .multiplayer)
-        #expect(c.xpNet == 10)
+        let c = XpAwardRuleEngine.compute(from: r, gameMode: .competitive, tripMode: .multiplayer, rewards: rewards)
+        #expect(c.xpNet == rewards.xp.baseDiscoveryXp)
         #expect(c.xpReason == .competitiveFirstFinder)
     }
 
-    @Test func competitiveLateNet4() {
+    @Test func competitiveLateNet10() {
         let r = DiscoveryResolution(
             sourceEventId: "e1",
             sessionId: UUID(),
@@ -40,8 +42,8 @@ struct XpAwardRuleEngineTests {
             finalXpAward: 0,
             xpReason: .discoveryClaimPendingResolution
         )
-        let c = XpAwardRuleEngine.compute(from: r, gameMode: .competitive, tripMode: .multiplayer)
-        #expect(c.xpNet == 4)
+        let c = XpAwardRuleEngine.compute(from: r, gameMode: .competitive, tripMode: .multiplayer, rewards: rewards)
+        #expect(c.xpNet == rewards.xp.baseDiscoveryXp)
         #expect(c.xpReason == .competitiveLateFinder)
     }
 
@@ -58,7 +60,7 @@ struct XpAwardRuleEngineTests {
             finalXpAward: 0,
             xpReason: .discoveryClaimPendingResolution
         )
-        let c = XpAwardRuleEngine.compute(from: r, gameMode: .competitive, tripMode: .multiplayer)
+        let c = XpAwardRuleEngine.compute(from: r, gameMode: .competitive, tripMode: .multiplayer, rewards: rewards)
         #expect(c.xpNet == 0)
         #expect(c.xpReason == .duplicateNoXp)
     }
@@ -76,8 +78,8 @@ struct XpAwardRuleEngineTests {
             finalXpAward: 0,
             xpReason: .discoveryClaimPendingResolution
         )
-        let c = XpAwardRuleEngine.compute(from: r, gameMode: .competitive, tripMode: .solo)
-        #expect(c.xpNet == 10)
+        let c = XpAwardRuleEngine.compute(from: r, gameMode: .competitive, tripMode: .solo, rewards: rewards)
+        #expect(c.xpNet == rewards.xp.baseDiscoveryXp)
         #expect(c.xpReason == .soloNewDiscovery)
     }
 
@@ -94,8 +96,8 @@ struct XpAwardRuleEngineTests {
             finalXpAward: 0,
             xpReason: .discoveryClaimPendingResolution
         )
-        let c = XpAwardRuleEngine.compute(from: r, gameMode: .collaborative, tripMode: .multiplayer)
-        #expect(c.xpNet == 10)
+        let c = XpAwardRuleEngine.compute(from: r, gameMode: .collaborative, tripMode: .multiplayer, rewards: rewards)
+        #expect(c.xpNet == rewards.xp.baseDiscoveryXp)
         #expect(c.xpReason == .collaborativeSharedFinder)
     }
 }

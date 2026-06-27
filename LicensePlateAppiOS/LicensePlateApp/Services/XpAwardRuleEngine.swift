@@ -22,12 +22,14 @@ enum XpAwardRuleEngine {
     static func compute(
         from resolution: DiscoveryResolution,
         gameMode: GameMode,
-        tripMode: TripMode? = nil
+        tripMode: TripMode? = nil,
+        rewards: ProgressionRewardsConfig = ProgressionRewardsConfigProvider.shared.current
     ) -> XpAwardComputation {
         let xp = xpNetAndReason(
             finalOutcome: resolution.finalOutcome,
             gameMode: gameMode,
-            tripMode: tripMode
+            tripMode: tripMode,
+            rewards: rewards
         )
         return XpAwardComputation(
             tripScoringNet: xp.amount,
@@ -40,24 +42,30 @@ enum XpAwardRuleEngine {
     private static func xpNetAndReason(
         finalOutcome: DiscoveryResolutionOutcome,
         gameMode: GameMode,
-        tripMode: TripMode?
+        tripMode: TripMode?,
+        rewards: ProgressionRewardsConfig
     ) -> (amount: Int, reason: XpReasonCode) {
+        let baseDiscovery = rewards.xp.baseDiscoveryXp
         switch finalOutcome {
         case .pending:
             return (0, .discoveryClaimPendingResolution)
         case .acceptedFirst:
             if tripMode == .solo {
-                return (XpLedgerConstants.baseDiscoveryProvisionalOrFull, .soloNewDiscovery)
+                return (baseDiscovery, .soloNewDiscovery)
             }
-            let reason: XpReasonCode = switch gameMode {
+            var reason: XpReasonCode = switch gameMode {
             case .competitive: .competitiveFirstFinder
             case .collaborative: .collaborativeSharedFinder
             }
-            return (XpLedgerConstants.baseDiscoveryProvisionalOrFull, reason)
+            if reason == .competitiveFirstFinder {
+                return (rewards.xp.baseDiscoveryXp + rewards.xp.firstFinderBonusXp, reason)
+            }
+            
+            return (baseDiscovery, reason)
         case .acceptedLate:
-            return (XpLedgerConstants.competitiveLateFinderNet, .competitiveLateFinder)
+            return (baseDiscovery, .competitiveLateFinder)
         case .acceptedShared:
-            return (XpLedgerConstants.baseDiscoveryProvisionalOrFull, .collaborativeSharedFinder)
+            return (baseDiscovery, .collaborativeSharedFinder)
         case .rejectedDuplicate:
             return (0, .duplicateNoXp)
         case .rejectedPersonalDuplicate:

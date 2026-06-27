@@ -24,7 +24,8 @@ enum ProgressionLocalEngine {
         rosterUserIds: [String],
         subjectUserId: String,
         serverAppliedEventIds: Set<String>,
-        gamesById: [UUID: ProgressionGameSnapshot]
+        gamesById: [UUID: ProgressionGameSnapshot],
+        rewards: ProgressionRewardsConfig = ProgressionRewardsConfigProvider.shared.current
     ) -> ProgressionPendingDelta {
         guard !subjectUserId.isEmpty else { return .zero }
 
@@ -46,7 +47,7 @@ enum ProgressionLocalEngine {
                 guard let pid = regionFoundParticipantId(event), pid == subjectUserId else { continue }
                 guard let key = baseDiscoveryScopedKey(for: event, participantId: pid) else { continue }
                 guard firstFindEventIdByScopedKey[key] == event.id else { continue }
-                delta.totalXp += GameProgressionXPRewards.baseDiscoveryXp
+                delta.totalXp += rewards.xp.baseDiscoveryXp
                 delta.acceptedRegionFindCount += 1
 
             case .gameEnded:
@@ -71,7 +72,7 @@ enum ProgressionLocalEngine {
                 let ranked = TripParticipantRanking.rankContributions(merged)
                 let rankOnes = Set(ranked.filter { $0.rank == 1 }.map(\.contribution.participantId))
                 guard rankOnes.contains(subjectUserId) else { continue }
-                delta.totalXp += GameProgressionXPRewards.competitiveFirstPlaceFinishBonusXp
+                delta.totalXp += rewards.xp.competitiveFirstPlaceFinishBonusXp
                 delta.competitiveFirstPlaceFinishes += 1
                 delta.everCompetitiveFirstPlace = true
 
@@ -87,7 +88,8 @@ enum ProgressionLocalEngine {
     static func pendingDeltaAcrossSessions(
         sessions: [(sortedEvents: [TripActivityEvent], rosterUserIds: [String], gamesById: [UUID: ProgressionGameSnapshot])],
         subjectUserId: String,
-        serverAppliedEventIds: Set<String>
+        serverAppliedEventIds: Set<String>,
+        rewards: ProgressionRewardsConfig = ProgressionRewardsConfigProvider.shared.current
     ) -> ProgressionPendingDelta {
         var acc = ProgressionPendingDelta.zero
         for session in sessions {
@@ -96,7 +98,8 @@ enum ProgressionLocalEngine {
                 rosterUserIds: session.rosterUserIds,
                 subjectUserId: subjectUserId,
                 serverAppliedEventIds: serverAppliedEventIds,
-                gamesById: session.gamesById
+                gamesById: session.gamesById,
+                rewards: rewards
             )
         }
         return acc
