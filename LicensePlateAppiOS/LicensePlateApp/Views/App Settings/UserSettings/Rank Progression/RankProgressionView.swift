@@ -5,15 +5,13 @@
 //  Shows the player's current rank, progress to the next, and the full ladder
 //  of past and future ranks with the rewards unlocked at each.
 //
-//      RankProgressionView(xp: player.xp)
-//
 
 import SwiftUI
 
 struct RankProgressionView: View {
 
-    var ladder: RankLadder = .standard
-    var xp: Int
+    let ladder: RankLadder
+    let xp: Int
 
     private var current: Rank { ladder.currentRank(xp: xp) }
     private var next: Rank? { ladder.nextRank(xp: xp) }
@@ -48,6 +46,8 @@ struct RankProgressionView: View {
                 }
             }
         }
+        .navigationTitle("rank.progression.title".localized)
+        .navigationBarTitleDisplayMode(.inline)
     }
 
     private var header: some View {
@@ -62,9 +62,10 @@ struct RankProgressionView: View {
                                        startPoint: .top, endPoint: .bottom), in: Circle())
                     .overlay(Circle().strokeBorder(.white.opacity(0.3), lineWidth: 2))
                     .shadow(color: current.accent.opacity(0.5), radius: 12)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("RANK \(current.level)")
+                    Text("rank.progression.rank_label".localized(current.level))
                         .font(.caption.weight(.heavy)).kerning(1).foregroundStyle(current.accent)
                     Text(current.title).font(.title2.weight(.bold))
                 }
@@ -83,16 +84,22 @@ struct RankProgressionView: View {
                         }
                     }
                     .frame(height: 8)
+                    .accessibilityLabel("rank.progression.progress.a11y".localized)
+                    .accessibilityValue("\(Int(ladder.progress(xp: xp) * 100))")
+
                     HStack {
-                        Text("\(xp.formatted()) XP")
+                        Text("rank.progression.current_xp".localized(xp.formatted()))
                             .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                         Spacer()
-                        Text("\(max(0, next.xpRequired - xp).formatted()) XP to \(next.title)")
+                        Text("rank.progression.xp_to_next".localized(
+                            max(0, next.xpRequired - xp).formatted(),
+                            next.title
+                        ))
                             .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                     }
                 }
             } else {
-                Text("Max rank reached")
+                Text("rank.progression.max_rank".localized)
                     .font(.subheadline.weight(.semibold)).foregroundStyle(current.accent)
                     .frame(maxWidth: .infinity)
             }
@@ -170,14 +177,12 @@ struct RankNodeRow: View {
                     Text(rank.title)
                         .font(.headline.weight(.semibold))
                         .foregroundStyle(reached ? .primary : .secondary)
-                    Text(rank.level == 1 ? "Starting rank"
-                                         : (reached ? "Reached at \(rank.xpRequired.formatted()) XP"
-                                                    : "Requires \(rank.xpRequired.formatted()) XP"))
+                    Text(subtitle)
                         .font(.caption2).foregroundStyle(.secondary)
                 }
                 Spacer()
                 if state == .current {
-                    Text("YOU")
+                    Text("rank.progression.you".localized)
                         .font(.caption2.weight(.heavy)).foregroundStyle(.white)
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(rank.accent, in: Capsule())
@@ -206,14 +211,35 @@ struct RankNodeRow: View {
             .strokeBorder(state == .current ? rank.accent : Color.primary.opacity(0.06),
                           lineWidth: state == .current ? 2 : 1))
     }
+
+    private var subtitle: String {
+        if rank.level == 1 {
+            return "rank.progression.starting_rank".localized
+        }
+        if reached {
+            return "rank.progression.reached_at".localized(rank.xpRequired.formatted())
+        }
+        return "rank.progression.requires".localized(rank.xpRequired.formatted())
+    }
 }
 
 // MARK: - Preview
 
 #Preview("Ranks — Light") {
-    RankProgressionView(xp: UserDriversLicense.sample.xp)   // 86,400 -> Highway Legend, ~90% to next
+    NavigationStack {
+        RankProgressionView(
+            ladder: ProgressionCatalogProjection.rankLadder(from: .bundledDefault),
+            xp: UserDriversLicense.sample.xp
+        )
+    }
 }
 
 #Preview("Ranks — Dark") {
-    RankProgressionView(xp: 12_500).preferredColorScheme(.dark)
+    NavigationStack {
+        RankProgressionView(
+            ladder: ProgressionCatalogProjection.rankLadder(from: .bundledDefault),
+            xp: 12_500
+        )
+        .preferredColorScheme(.dark)
+    }
 }

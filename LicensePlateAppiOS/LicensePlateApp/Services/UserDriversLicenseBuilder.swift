@@ -19,33 +19,14 @@ struct ProfileLicenseInputs {
 
 enum UserDriversLicenseBuilder {
 
-    private static let rankTitles: [String] = [
-        "Road Rookie",
-        "Highway Scout",
-        "Navigator",
-        "Pathfinder",
-        "Trailblazer",
-        "Cartographer",
-        "Highway Legend"
-    ]
-
-    static func rankLevel(
-        fromXp xp: Int,
-        presentation: ProgressionPresentationRewards = ProgressionRewardsConfigProvider.shared.current.presentation
-    ) -> Int {
-        let xpPerLevel = max(1, presentation.xpPerRankLevel)
-        return max(1, xp / xpPerLevel + 1)
-    }
-
-    static func rankTitle(forLevel level: Int) -> String {
-        let band = min(max((level - 1) / 5, 0), rankTitles.count - 1)
-        return rankTitles[band]
-    }
-
-    static func make(from inputs: ProfileLicenseInputs) -> UserDriversLicense {
+    static func make(
+        from inputs: ProfileLicenseInputs,
+        catalogProvider: ProgressionCatalogProviding = ProgressionCatalogProvider.shared
+    ) -> UserDriversLicense {
         let stats = inputs.lifetimeStats
         let xp = max(0, inputs.totalXp)
-        let level = rankLevel(fromXp: xp)
+        let ladder = ProgressionCatalogProjection.rankLadder(from: catalogProvider.current)
+        let rank = ladder.currentRank(xp: xp)
         let discoveries = stats?.totalDiscoveries ?? 0
         let regions = inputs.acceptedRegionFindCount ?? min(discoveries, 63)
         let isFamily = inputs.user.activeFamilyId != nil || inputs.user.wasEverInFamily
@@ -53,8 +34,8 @@ enum UserDriversLicenseBuilder {
         return UserDriversLicense(
             holderName: inputs.user.displayName,
             issueDate: inputs.user.createdAt,
-            rankLevel: level,
-            rankTitle: rankTitle(forLevel: level),
+            rankLevel: rank.level,
+            rankTitle: rank.title,
             statesProvincesFound: max(0, regions),
             platesFound: max(0, discoveries),
             tripsTaken: max(0, stats?.totalCompletedTrips ?? 0),

@@ -76,14 +76,15 @@ final class StandardProfileViewModel: ObservableObject {
 
     func makeLicense(isRoyale: Bool) -> UserDriversLicense {
         let progression = UserProgressionRepository.shared.snapshot
+        let effective = UserProgressionService.shared.effectiveTotals
         let xp = isSelfProfile
-            ? (xpProgressViewModel?.displayedTotalXp ?? progression?.totalXp ?? 0)
+            ? (xpProgressViewModel?.displayedTotalXp ?? effective?.totalXp ?? progression?.totalXp ?? 0)
             : 0
         let regions = isSelfProfile
-            ? progression?.acceptedRegionFindCount
+            ? (effective?.acceptedRegionFindCount ?? progression?.acceptedRegionFindCount)
             : nil
         let wins = isSelfProfile
-            ? (progression?.competitiveFirstPlaceFinishes ?? 0)
+            ? (effective?.competitiveFirstPlaceFinishes ?? progression?.competitiveFirstPlaceFinishes ?? 0)
             : 0
 
         return UserDriversLicenseBuilder.make(from: ProfileLicenseInputs(

@@ -256,14 +256,25 @@ private struct PopupDemo: View {
     @StateObject private var rewards = RewardPresenter()
     var body: some View {
         VStack(spacing: 14) {
-            Button("Rank Up")    { rewards.show(.rankUp(RankLadder.standard.ranks[6])) }
-            Button("Achievement"){ rewards.show(.achievement(Achievement.catalog[10])) }
+            Button("Rank Up") {
+                rewards.show(.rankUp(ProgressionCatalogProjection.rankLadder(from: .bundledDefault).ranks[6]))
+            }
+            Button("Achievement") {
+                let achievements = ProgressionCatalogProjection.achievements(from: .bundledDefault)
+                if let coastToCoast = achievements.first(where: { $0.id == "coast_to_coast" }) {
+                    rewards.show(.achievement(coastToCoast))
+                }
+            }
             Button("Unlock")     { rewards.show(.unlock(title: "Gold Foil",
                                                         detail: "New license skin unlocked.",
                                                         icon: "sparkles", rarity: .epic)) }
             Button("Queue all 3") {
-                rewards.show(.rankUp(RankLadder.standard.ranks[6]))
-                rewards.show(.achievement(Achievement.catalog[10]))
+                let ladder = ProgressionCatalogProjection.rankLadder(from: .bundledDefault)
+                rewards.show(.rankUp(ladder.ranks[6]))
+                if let achievement = ProgressionCatalogProjection.achievements(from: .bundledDefault)
+                    .first(where: { $0.id == "coast_to_coast" }) {
+                    rewards.show(.achievement(achievement))
+                }
                 rewards.show(.unlock(title: "Gold Foil", detail: "New license skin unlocked.",
                                      icon: "sparkles", rarity: .epic))
             }

@@ -10,6 +10,11 @@ import SwiftData
 import GoogleSignInSwift
 import FirebaseAuth
 
+private enum ProfileProgressionRoute: Hashable {
+    case achievements
+    case rankProgression
+}
+
 struct UserProfileView: View {
     @Bindable var user: AppUser
     @ObservedObject var authService: FirebaseAuthService
@@ -37,8 +42,10 @@ struct UserProfileView: View {
 
     @StateObject private var lifetimeStatsViewModel: LifetimeStatsProfileViewModel
     @StateObject private var xpProgressViewModel: XpProgressViewModel
+    @StateObject private var achievementProgressViewModel: AchievementProgressViewModel
     @ObservedObject private var entitlementService = EntitlementService.shared
     @ObservedObject private var userProgressionRepository = UserProgressionRepository.shared
+    @ObservedObject private var userProgressionService = UserProgressionService.shared
 
     // Helper function to get topmost view controller
     private func topViewController(controller: UIViewController? = nil) -> UIViewController? {
@@ -134,18 +141,27 @@ struct UserProfileView: View {
         _currentUserName = State(initialValue: user.userName)
         _currentFirstName = State(initialValue: user.firstName ?? "")
         _currentLastName = State(initialValue: user.lastName ?? "")
-        _lifetimeStatsViewModel = StateObject(wrappedValue: LifetimeStatsProfileViewModel(userId: user.id))
-        _xpProgressViewModel = StateObject(wrappedValue: XpProgressViewModel(userId: user.id))
+        let lifetimeStatsVM = LifetimeStatsProfileViewModel(userId: user.id)
+        let xpProgressVM = XpProgressViewModel(userId: user.id)
+        _lifetimeStatsViewModel = StateObject(wrappedValue: lifetimeStatsVM)
+        _xpProgressViewModel = StateObject(wrappedValue: xpProgressVM)
+        _achievementProgressViewModel = StateObject(wrappedValue: AchievementProgressViewModel(
+            user: user,
+            lifetimeStatsViewModel: lifetimeStatsVM,
+            xpProgressViewModel: xpProgressVM
+        ))
     }
 
     private var gameLicense: UserDriversLicense {
-        let progression = UserProgressionRepository.shared.snapshot
+        let progression = userProgressionRepository.snapshot
+        let effective = userProgressionService.effectiveTotals
         return UserDriversLicenseBuilder.make(from: ProfileLicenseInputs(
             user: user,
             lifetimeStats: lifetimeStatsViewModel.stats,
             totalXp: xpProgressViewModel.displayedTotalXp,
-            acceptedRegionFindCount: progression?.acceptedRegionFindCount,
-            competitiveFirstPlaceFinishes: progression?.competitiveFirstPlaceFinishes ?? 0,
+            acceptedRegionFindCount: effective?.acceptedRegionFindCount ?? progression?.acceptedRegionFindCount,
+            competitiveFirstPlaceFinishes: effective?.competitiveFirstPlaceFinishes
+                ?? progression?.competitiveFirstPlaceFinishes ?? 0,
             isRoyale: entitlementService.entitlementState(for: user).effectiveTier >= .royale
         ))
     }
@@ -286,6 +302,39 @@ struct UserProfileView: View {
                     LifetimeStatsProfileStatsSection(viewModel: lifetimeStatsViewModel)
 
                     ProfileXpProgressSection(viewModel: xpProgressViewModel)
+
+                    if achievementProgressViewModel.achievementsEnabled
+                        || achievementProgressViewModel.rankProgressionEnabled {
+                        Section {
+                            if achievementProgressViewModel.achievementsEnabled {
+                                NavigationLink(value: ProfileProgressionRoute.achievements) {
+                                    profileProgressionRow(
+                                        title: "profile.progression.achievements.title".localized,
+                                        description: "profile.progression.achievements.description".localized,
+                                        icon: "rosette"
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            if achievementProgressViewModel.rankProgressionEnabled {
+                                NavigationLink(value: ProfileProgressionRoute.rankProgression) {
+                                    profileProgressionRow(
+                                        title: "profile.progression.ranks.title".localized,
+                                        description: "profile.progression.ranks.description".localized,
+                                        icon: "chart.line.uptrend.xyaxis"
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        } header: {
+                            Text("profile.progression.section_title".localized)
+                                .font(.system(.headline, design: .rounded))
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                        }
+                        .textCase(nil)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
+                    }
 
                     // Friends & Family Section
                     Section {
@@ -618,6 +667,23 @@ struct UserProfileView: View {
             .onAppear {
                 lifetimeStatsViewModel.onAppear()
                 xpProgressViewModel.refresh()
+                achievementProgressViewModel.refresh()
+            }
+            .navigationDestination(for: ProfileProgressionRoute.self) { route in
+                switch route {
+                case .achievements:
+                    AchievementListView(
+                        achievements: achievementProgressViewModel.achievements,
+                        statuses: achievementProgressViewModel.statuses
+                    )
+                    .navigationTitle("achievement.list.title".localized)
+                    .navigationBarTitleDisplayMode(.inline)
+                case .rankProgression:
+                    RankProgressionView(
+                        ladder: achievementProgressViewModel.rankLadder,
+                        xp: achievementProgressViewModel.totalXp
+                    )
+                }
             }
             .onChange(of: user.userName) { oldValue, newValue in
                 currentUserName = newValue
@@ -672,6 +738,41 @@ struct UserProfileView: View {
             }
     }
     
+    private func profileProgressionRow(title: String, description: String, icon: String) -> some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundStyle(Color.Theme.primaryBlue)
+                .frame(width: 24)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(.body, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+
+                Text(description)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.Theme.softBrown)
+                .accessibilityHidden(true)
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+        )
+        .accessibilityElement(children: .combine)
+    }
+
     private func saveUserName() {
         let trimmedName = currentUserName.trimmingCharacters(in: .whitespacesAndNewlines)
         

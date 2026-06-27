@@ -31,6 +31,16 @@ enum AchievementCategory: String, CaseIterable, Identifiable {
         case .social:      return "person.2.fill"
         }
     }
+
+    var localizedTitle: String {
+        switch self {
+        case .exploration: return "achievement.category.exploration".localized
+        case .collection: return "achievement.category.collection".localized
+        case .competition: return "achievement.category.competition".localized
+        case .milestones: return "achievement.category.milestones".localized
+        case .social: return "achievement.category.social".localized
+        }
+    }
 }
 
 struct Achievement: Identifiable {

@@ -12,12 +12,20 @@ import SwiftUI
 
 struct AchievementListView: View {
 
-    var achievements: [Achievement] = Achievement.catalog
-    var statuses: [String: AchievementStatus] = [:]
+    var achievements: [Achievement]
+    var statuses: [String: AchievementStatus]
 
     enum StatusFilter: String, CaseIterable, Identifiable {
-        case all = "All", unlocked = "Unlocked", locked = "Locked"
+        case all, unlocked, locked
         var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .all: return "achievement.filter.all".localized
+            case .unlocked: return "achievement.filter.unlocked".localized
+            case .locked: return "achievement.filter.locked".localized
+            }
+        }
     }
 
     @State private var statusFilter: StatusFilter = .all
@@ -67,33 +75,39 @@ struct AchievementListView: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 1) {
-                Text("Achievements").font(.title2.weight(.bold))
-                Text("\(earnedXP.formatted()) XP earned")
+                Text("achievement.list.title".localized)
+                    .font(.title2.weight(.bold))
+                    .accessibilityAddTraits(.isHeader)
+                Text("achievement.list.xp_earned".localized(earnedXP.formatted()))
                     .font(.subheadline).foregroundStyle(.secondary)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 1) {
                 Text("\(unlockedCount)/\(achievements.count)")
                     .font(.title3.weight(.heavy))
-                Text("UNLOCKED").font(.caption2.weight(.bold)).kerning(0.8)
+                Text("achievement.list.unlocked_label".localized)
+                    .font(.caption2.weight(.bold)).kerning(0.8)
                     .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 10)
+        .accessibilityElement(children: .combine)
     }
 
     private var filters: some View {
         VStack(spacing: 10) {
-            Picker("Status", selection: $statusFilter) {
-                ForEach(StatusFilter.allCases) { Text($0.rawValue).tag($0) }
+            Picker("achievement.filter.status.a11y".localized, selection: $statusFilter) {
+                ForEach(StatusFilter.allCases) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 16)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    categoryChip(nil, label: "All", icon: "square.grid.2x2.fill")
-                    ForEach(AchievementCategory.allCases) { categoryChip($0, label: $0.rawValue, icon: $0.icon) }
+                    categoryChip(nil, label: "achievement.filter.all".localized, icon: "square.grid.2x2.fill")
+                    ForEach(AchievementCategory.allCases) {
+                        categoryChip($0, label: $0.localizedTitle, icon: $0.icon)
+                    }
                 }
                 .padding(.horizontal, 16)
             }
@@ -151,7 +165,7 @@ struct AchievementRow: View {
 
                 HStack(spacing: 6) {
                     tag(achievement.rarity.title.uppercased(), color: color)
-                    tag(achievement.category.rawValue.uppercased(), color: .secondary)
+                    tag(achievement.category.localizedTitle.uppercased(), color: .secondary)
                     if unlocked, let date = status.unlockedDate {
                         Text("· " + date.formatted(date: .abbreviated, time: .omitted))
                             .font(.caption2).foregroundStyle(.secondary)
@@ -193,7 +207,7 @@ struct AchievementRow: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 17)).foregroundStyle(color)
         } else if achievement.xpReward > 0 {
-            Text("\(achievement.xpReward.formatted()) XP")
+            Text("achievement.row.xp_reward".localized(achievement.xpReward.formatted()))
                 .font(.caption2.weight(.bold)).foregroundStyle(.secondary)
         }
     }
@@ -222,11 +236,49 @@ struct AchievementRow: View {
 
 // MARK: - Preview
 
+private enum AchievementListPreviewSupport {
+    static var sampleAchievements: [Achievement] {
+        ProgressionCatalogProjection.achievements(from: .bundledDefault)
+    }
+
+    static var sampleStatuses: [String: AchievementStatus] {
+        AchievementProgressResolver.statuses(
+            for: ProgressionCatalog.bundledDefault.visibleAchievements,
+            inputs: AchievementProgressInputs(
+                progression: UserProgressionEffectiveTotals(
+                    totalXp: 86_400,
+                    acceptedRegionFindCount: 48,
+                    competitiveFirstPlaceFinishes: 121,
+                    everCompetitiveFirstPlace: true,
+                    hasPendingLocalProgression: false
+                ),
+                lifetimeStats: UserLifetimeStats(
+                    totalCompletedTrips: 36,
+                    totalGamesPlayed: 184,
+                    totalDiscoveries: 1_240,
+                    totalWeightedScore: 245_980,
+                    familyOnlyTripsCount: 0,
+                    lastComputedAt: .now
+                ),
+                isFamilyMember: true,
+                isRoyale: true,
+                isFounder: false
+            )
+        )
+    }
+}
+
 #Preview("Achievements — Light") {
-    AchievementListView(statuses: Achievement.sampleStatuses())
+    AchievementListView(
+        achievements: AchievementListPreviewSupport.sampleAchievements,
+        statuses: AchievementListPreviewSupport.sampleStatuses
+    )
 }
 
 #Preview("Achievements — Dark") {
-    AchievementListView(statuses: Achievement.sampleStatuses())
+    AchievementListView(
+        achievements: AchievementListPreviewSupport.sampleAchievements,
+        statuses: AchievementListPreviewSupport.sampleStatuses
+    )
         .preferredColorScheme(.dark)
 }

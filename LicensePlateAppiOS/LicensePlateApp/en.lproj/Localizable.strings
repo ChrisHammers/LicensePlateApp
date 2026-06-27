@@ -818,3 +818,88 @@
 "Your trip %@ is waiting for more plate finds." = "Your trip %@ is waiting for more plate finds.";
 "trip_end.remote_toast.generic" = "%@ has ended. Showing your recap.";
 "trip_summary.error.trip_not_ended" = "This trip recap is available after the trip has ended.";
+
+/* Profile progression (achievements + rank ladder) */
+"profile.progression.section_title" = "Progression";
+"profile.progression.achievements.title" = "Achievements";
+"profile.progression.achievements.description" = "Track unlocks and progress toward rewards";
+"profile.progression.ranks.title" = "Rank progression";
+"profile.progression.ranks.description" = "See your rank ladder and upcoming unlocks";
+
+"achievement.list.title" = "Achievements";
+"achievement.list.xp_earned" = "%@ XP earned";
+"achievement.list.unlocked_label" = "UNLOCKED";
+"achievement.filter.all" = "All";
+"achievement.filter.unlocked" = "Unlocked";
+"achievement.filter.locked" = "Locked";
+"achievement.filter.status.a11y" = "Achievement status filter";
+"achievement.row.xp_reward" = "%@ XP";
+
+"achievement.category.exploration" = "Exploration";
+"achievement.category.collection" = "Collection";
+"achievement.category.competition" = "Competition";
+"achievement.category.milestones" = "Milestones";
+"achievement.category.social" = "Social";
+
+"achievement.first_win.title" = "First Victory";
+"achievement.first_win.detail" = "Win your first game.";
+"achievement.explorer_10.title" = "Getting Started";
+"achievement.explorer_10.detail" = "Spot plates from 10 different states or provinces.";
+"achievement.plates_100.title" = "Plate Spotter";
+"achievement.plates_100.detail" = "Find 100 license plates in total.";
+"achievement.streak_5.title" = "On a Roll";
+"achievement.streak_5.detail" = "Win 5 games in a row.";
+"achievement.trips_10.title" = "Frequent Traveler";
+"achievement.trips_10.detail" = "Complete 10 road trips.";
+"achievement.family.title" = "Family Road Trip";
+"achievement.family.detail" = "Join or create a family.";
+"achievement.plates_1000.title" = "Plate Hoarder";
+"achievement.plates_1000.detail" = "Find 1,000 license plates in total.";
+"achievement.wins_100.title" = "Champion";
+"achievement.wins_100.detail" = "Win 100 games.";
+"achievement.trips_50.title" = "Road Veteran";
+"achievement.trips_50.detail" = "Complete 50 road trips.";
+"achievement.royale.title" = "Living Royale";
+"achievement.royale.detail" = "Become a Royale member.";
+"achievement.coast_to_coast.title" = "Coast to Coast";
+"achievement.coast_to_coast.detail" = "Find plates from all 63 states and provinces.";
+"achievement.flawless.title" = "Flawless";
+"achievement.flawless.detail" = "Finish a game without a single miss.";
+"achievement.founder.title" = "Founder";
+"achievement.founder.detail" = "Play during the launch season.";
+
+"rank.rookie_rider.title" = "Rookie Rider";
+"rank.road_tripper.title" = "Road Tripper";
+"rank.navigator.title" = "Navigator";
+"rank.trailblazer.title" = "Trailblazer";
+"rank.pathfinder.title" = "Pathfinder";
+"rank.road_warrior.title" = "Road Warrior";
+"rank.highway_legend.title" = "Highway Legend";
+"rank.route_master.title" = "Route Master";
+"rank.asphalt_royalty.title" = "Asphalt Royalty";
+"rank.grand_voyager.title" = "Grand Voyager";
+
+"rank.unlock.standard_license" = "Standard License";
+"rank.unlock.custom_plate_name" = "Custom Plate Name";
+"rank.unlock.navigator_badge" = "Navigator Badge";
+"rank.unlock.carbon_edition" = "Carbon Edition";
+"rank.unlock.family_invites" = "Family Invites";
+"rank.unlock.pathfinder_badge" = "Pathfinder Badge";
+"rank.unlock.gold_foil" = "Gold Foil";
+"rank.unlock.legend_title" = "Legend Title";
+"rank.unlock.legend_badge" = "Legend Badge";
+"rank.unlock.platinum_foil" = "Platinum Foil";
+"rank.unlock.midnight_drive" = "Midnight Drive";
+"rank.unlock.prestige_mode" = "Prestige Mode";
+"rank.unlock.founder_frame" = "Founder Frame";
+
+"rank.progression.title" = "Rank progression";
+"rank.progression.rank_label" = "RANK %d";
+"rank.progression.max_rank" = "Max rank reached";
+"rank.progression.starting_rank" = "Starting rank";
+"rank.progression.reached_at" = "Reached at %@ XP";
+"rank.progression.requires" = "Requires %@ XP";
+"rank.progression.you" = "YOU";
+"rank.progression.current_xp" = "%@ XP";
+"rank.progression.xp_to_next" = "%@ XP to %@";
+"rank.progression.progress.a11y" = "Progress toward next rank";

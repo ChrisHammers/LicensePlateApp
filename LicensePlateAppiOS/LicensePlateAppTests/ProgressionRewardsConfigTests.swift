@@ -143,8 +143,8 @@ struct ProgressionRewardsConfigTests {
         #expect(ProgressionRankBands.pendingOverlayFraction(pendingXp: 100, presentation: presentation) == 0.5)
     }
 
-    @Test func rankLevelRespectsPresentationOverride() {
-        let presentation = ProgressionPresentationRewards(visualBandSize: 100, xpPerRankLevel: 5_000)
-        #expect(UserDriversLicenseBuilder.rankLevel(fromXp: 10_000, presentation: presentation) == 3)
+    @Test func rankLadderFromCatalogAtTenThousandXp() {
+        let ladder = ProgressionCatalogProjection.rankLadder(from: .bundledDefault)
+        #expect(ladder.currentRank(xp: 10_000).level == 4)
     }
 }

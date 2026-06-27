@@ -786,3 +786,88 @@
 "Your trip %@ is waiting for more plate finds." = "Votre voyage %@ attend d'autres plaques trouvées.";
 "trip_end.remote_toast.generic" = "%@ est terminé. Affichage de votre récapitulatif.";
 "trip_summary.error.trip_not_ended" = "Le récapitulatif du voyage est disponible une fois le voyage terminé.";
+
+/* Profile progression (achievements + rank ladder) */
+"profile.progression.section_title" = "Progression";
+"profile.progression.achievements.title" = "Succès";
+"profile.progression.achievements.description" = "Suivez les déblocages et la progression vers les récompenses";
+"profile.progression.ranks.title" = "Progression de rang";
+"profile.progression.ranks.description" = "Consultez votre échelle de rangs et les prochains déblocages";
+
+"achievement.list.title" = "Succès";
+"achievement.list.xp_earned" = "%@ XP gagnés";
+"achievement.list.unlocked_label" = "DÉBLOQUÉS";
+"achievement.filter.all" = "Tous";
+"achievement.filter.unlocked" = "Débloqués";
+"achievement.filter.locked" = "Verrouillés";
+"achievement.filter.status.a11y" = "Filtre d'état des succès";
+"achievement.row.xp_reward" = "%@ XP";
+
+"achievement.category.exploration" = "Exploration";
+"achievement.category.collection" = "Collection";
+"achievement.category.competition" = "Compétition";
+"achievement.category.milestones" = "Jalons";
+"achievement.category.social" = "Social";
+
+"achievement.first_win.title" = "Première victoire";
+"achievement.first_win.detail" = "Gagnez votre première partie.";
+"achievement.explorer_10.title" = "Premiers pas";
+"achievement.explorer_10.detail" = "Repérez des plaques de 10 états ou provinces différents.";
+"achievement.plates_100.title" = "Observateur de plaques";
+"achievement.plates_100.detail" = "Trouvez 100 plaques au total.";
+"achievement.streak_5.title" = "En série";
+"achievement.streak_5.detail" = "Gagnez 5 parties d'affilée.";
+"achievement.trips_10.title" = "Voyageur fréquent";
+"achievement.trips_10.detail" = "Terminez 10 voyages routiers.";
+"achievement.family.title" = "Road trip familial";
+"achievement.family.detail" = "Rejoignez ou créez une famille.";
+"achievement.plates_1000.title" = "Collectionneur de plaques";
+"achievement.plates_1000.detail" = "Trouvez 1 000 plaques au total.";
+"achievement.wins_100.title" = "Champion";
+"achievement.wins_100.detail" = "Gagnez 100 parties.";
+"achievement.trips_50.title" = "Vétéran de la route";
+"achievement.trips_50.detail" = "Terminez 50 voyages routiers.";
+"achievement.royale.title" = "Royale vivant";
+"achievement.royale.detail" = "Devenez membre Royale.";
+"achievement.coast_to_coast.title" = "D'un océan à l'autre";
+"achievement.coast_to_coast.detail" = "Trouvez des plaques des 63 états et provinces.";
+"achievement.flawless.title" = "Impeccable";
+"achievement.flawless.detail" = "Terminez une partie sans aucune erreur.";
+"achievement.founder.title" = "Fondateur";
+"achievement.founder.detail" = "Jouez pendant la saison de lancement.";
+
+"rank.rookie_rider.title" = "Débutant du volant";
+"rank.road_tripper.title" = "Routier";
+"rank.navigator.title" = "Navigateur";
+"rank.trailblazer.title" = "Pionnier";
+"rank.pathfinder.title" = "Éclaireur";
+"rank.road_warrior.title" = "Guerrier de la route";
+"rank.highway_legend.title" = "Légende de l'autoroute";
+"rank.route_master.title" = "Maître des routes";
+"rank.asphalt_royalty.title" = "Royauté de l'asphalte";
+"rank.grand_voyager.title" = "Grand voyageur";
+
+"rank.unlock.standard_license" = "Permis standard";
+"rank.unlock.custom_plate_name" = "Nom de plaque personnalisé";
+"rank.unlock.navigator_badge" = "Badge navigateur";
+"rank.unlock.carbon_edition" = "Édition carbone";
+"rank.unlock.family_invites" = "Invitations familiales";
+"rank.unlock.pathfinder_badge" = "Badge éclaireur";
+"rank.unlock.gold_foil" = "Pellicule dorée";
+"rank.unlock.legend_title" = "Titre de légende";
+"rank.unlock.legend_badge" = "Badge de légende";
+"rank.unlock.platinum_foil" = "Pellicule platine";
+"rank.unlock.midnight_drive" = "Conduite de minuit";
+"rank.unlock.prestige_mode" = "Mode prestige";
+"rank.unlock.founder_frame" = "Cadre fondateur";
+
+"rank.progression.title" = "Progression de rang";
+"rank.progression.rank_label" = "RANG %d";
+"rank.progression.max_rank" = "Rang maximum atteint";
+"rank.progression.starting_rank" = "Rang de départ";
+"rank.progression.reached_at" = "Atteint à %@ XP";
+"rank.progression.requires" = "Nécessite %@ XP";
+"rank.progression.you" = "VOUS";
+"rank.progression.current_xp" = "%@ XP";
+"rank.progression.xp_to_next" = "%@ XP pour %@";
+"rank.progression.progress.a11y" = "Progression vers le prochain rang";
