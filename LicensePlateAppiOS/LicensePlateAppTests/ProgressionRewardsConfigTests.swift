@@ -114,10 +114,37 @@ struct ProgressionRewardsConfigTests {
         #expect(provider.current == ProgressionRewardsConfig.bundledDefault)
     }
 
-    @Test func providerRefreshIsIdempotent() {
+    @Test func providerRefreshIsIdempotentWithoutOverride() {
         let provider = ProgressionRewardsConfigProvider()
         let before = provider.current
-        provider.refresh()
+        provider.refresh(presentationOverrideJSON: nil)
         #expect(provider.current == before)
+    }
+
+    @Test func providerRefreshAppliesValidPresentationOverride() {
+        let provider = ProgressionRewardsConfigProvider()
+        provider.refresh(presentationOverrideJSON: """
+        {"visualBandSize":200,"xpPerRankLevel":5000}
+        """)
+        #expect(provider.current.presentation.visualBandSize == 200)
+        #expect(provider.current.presentation.xpPerRankLevel == 5_000)
+        #expect(provider.current.xp == ProgressionRewardsConfig.bundledDefault.xp)
+    }
+
+    @Test func providerRefreshIgnoresInvalidPresentationOverride() {
+        let provider = ProgressionRewardsConfigProvider()
+        provider.refresh(presentationOverrideJSON: "{\"visualBandSize\":1}")
+        #expect(provider.current.presentation == ProgressionRewardsConfig.bundledDefault.presentation)
+    }
+
+    @Test func rankBandsRespectPresentationOverride() {
+        let presentation = ProgressionPresentationRewards(visualBandSize: 200, xpPerRankLevel: 5_000)
+        #expect(ProgressionRankBands.progressInCurrentBand(totalXp: 150, presentation: presentation) == 0.75)
+        #expect(ProgressionRankBands.pendingOverlayFraction(pendingXp: 100, presentation: presentation) == 0.5)
+    }
+
+    @Test func rankLevelRespectsPresentationOverride() {
+        let presentation = ProgressionPresentationRewards(visualBandSize: 100, xpPerRankLevel: 5_000)
+        #expect(UserDriversLicenseBuilder.rankLevel(fromXp: 10_000, presentation: presentation) == 3)
     }
 }

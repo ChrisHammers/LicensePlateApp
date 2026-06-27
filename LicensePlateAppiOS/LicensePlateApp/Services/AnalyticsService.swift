@@ -173,6 +173,8 @@ class AnalyticsService: AnalyticsLogging {
         case progressionSnapshotApplied(totalXp: Int, acceptedRegionFindCount: Int, competitiveFirstPlaceFinishes: Int)
         case progressionMilestoneEverCompetitiveFirstPlace
         case progressionXpAwarded(delta: Int, reason: String)
+        case progressionRewardsPresentationOverrideApplied(visualBandSize: Int, xpPerRankLevel: Int)
+        case progressionRewardsConfigFallback(reason: String)
         case xpGrantAwarded(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
         case xpGrantSkippedAlreadyGranted(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
 
@@ -364,6 +366,8 @@ class AnalyticsService: AnalyticsLogging {
             case .progressionSnapshotApplied: return "progression_snapshot_applied"
             case .progressionMilestoneEverCompetitiveFirstPlace: return "progression_milestone_ever_competitive_first_place"
             case .progressionXpAwarded: return "progression_xp_awarded"
+            case .progressionRewardsPresentationOverrideApplied: return "progression_rewards_presentation_override_applied"
+            case .progressionRewardsConfigFallback: return "progression_rewards_config_fallback"
             case .xpGrantAwarded: return "xp_grant_awarded"
             case .xpGrantSkippedAlreadyGranted: return "xp_grant_skipped_already_granted"
             case .tripSessionCreated: return "trip_session_created"
@@ -573,6 +577,10 @@ class AnalyticsService: AnalyticsLogging {
                 return nil
             case .progressionXpAwarded(let delta, let reason):
                 return ["delta": delta, "reason": reason]
+            case .progressionRewardsPresentationOverrideApplied(let visualBandSize, let xpPerRankLevel):
+                return ["visual_band_size": visualBandSize, "xp_per_rank_level": xpPerRankLevel]
+            case .progressionRewardsConfigFallback(let reason):
+                return ["reason": reason]
             case .xpGrantAwarded(let tripId, let gameInstanceId, let targetId, let participantId):
                 return [
                     "trip_session_id": tripId,

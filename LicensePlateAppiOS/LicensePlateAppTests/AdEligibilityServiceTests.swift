@@ -5,9 +5,11 @@ import Testing
 struct MockRemoteConfigValues: RemoteConfigValueProviding {
     var bools: [RemoteConfigService.Key: Bool] = [:]
     var ints: [RemoteConfigService.Key: Int] = [:]
+    var strings: [RemoteConfigService.Key: String] = [:]
 
     func bool(for key: RemoteConfigService.Key) -> Bool { bools[key] ?? false }
     func int(for key: RemoteConfigService.Key) -> Int { ints[key] ?? 0 }
+    func string(for key: RemoteConfigService.Key) -> String { strings[key] ?? "" }
 }
 
 @MainActor

@@ -15,6 +15,7 @@ import FirebaseRemoteConfig
 protocol RemoteConfigValueProviding {
     func bool(for key: RemoteConfigService.Key) -> Bool
     func int(for key: RemoteConfigService.Key) -> Int
+    func string(for key: RemoteConfigService.Key) -> String
 }
 
 struct RemoteConfigDefaultsProvider: RemoteConfigValueProviding {
@@ -24,6 +25,8 @@ struct RemoteConfigDefaultsProvider: RemoteConfigValueProviding {
             return true
         case .reviewPromptMinimumCompletedTrips, .reviewPromptCooldownDays, .inactiveActiveTripReminderHours:
             return int(for: key) != 0
+        case .progressionRewardsPresentationV1:
+            return !string(for: key).isEmpty
         }
     }
 
@@ -37,6 +40,17 @@ struct RemoteConfigDefaultsProvider: RemoteConfigValueProviding {
             return 24
         case .adsEnabledFreeTier, .reviewPromptEnabled, .remindersEnabled, .returnStreakEnabled:
             return bool(for: key) ? 1 : 0
+        case .progressionRewardsPresentationV1:
+            return string(for: key).isEmpty ? 0 : 1
+        }
+    }
+
+    func string(for key: RemoteConfigService.Key) -> String {
+        switch key {
+        case .progressionRewardsPresentationV1:
+            return ""
+        default:
+            return ""
         }
     }
 }
@@ -51,6 +65,7 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
         case remindersEnabled = "reminders_enabled"
         case inactiveActiveTripReminderHours = "inactive_active_trip_reminder_hours"
         case returnStreakEnabled = "return_streak_enabled"
+        case progressionRewardsPresentationV1 = "progression_rewards_presentation_v1"
     }
 
     static let shared = RemoteConfigService()
@@ -86,6 +101,9 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
         #else
         AnalyticsService.shared.log(.remoteConfigFetchSucceeded)
         #endif
+        ProgressionRewardsConfigProvider.shared.refresh(
+            presentationOverrideJSON: string(for: .progressionRewardsPresentationV1)
+        )
     }
 
     func bool(for key: Key) -> Bool {
@@ -101,6 +119,14 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
         return remoteConfig.configValue(forKey: key.rawValue).numberValue.intValue
         #else
         return defaults.int(for: key)
+        #endif
+    }
+
+    func string(for key: Key) -> String {
+        #if canImport(FirebaseRemoteConfig)
+        return remoteConfig.configValue(forKey: key.rawValue).stringValue
+        #else
+        return defaults.string(for: key)
         #endif
     }
 
@@ -120,7 +146,8 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
             Key.reviewPromptCooldownDays.rawValue: defaults.int(for: .reviewPromptCooldownDays) as NSNumber,
             Key.remindersEnabled.rawValue: defaults.bool(for: .remindersEnabled) as NSNumber,
             Key.inactiveActiveTripReminderHours.rawValue: defaults.int(for: .inactiveActiveTripReminderHours) as NSNumber,
-            Key.returnStreakEnabled.rawValue: defaults.bool(for: .returnStreakEnabled) as NSNumber
+            Key.returnStreakEnabled.rawValue: defaults.bool(for: .returnStreakEnabled) as NSNumber,
+            Key.progressionRewardsPresentationV1.rawValue: defaults.string(for: .progressionRewardsPresentationV1) as NSString
         ]
     }
 }

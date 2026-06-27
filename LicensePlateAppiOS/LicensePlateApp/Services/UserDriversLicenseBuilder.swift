@@ -29,8 +29,12 @@ enum UserDriversLicenseBuilder {
         "Highway Legend"
     ]
 
-    static func rankLevel(fromXp xp: Int) -> Int {
-        max(1, xp / 3_000 + 1)
+    static func rankLevel(
+        fromXp xp: Int,
+        presentation: ProgressionPresentationRewards = ProgressionRewardsConfigProvider.shared.current.presentation
+    ) -> Int {
+        let xpPerLevel = max(1, presentation.xpPerRankLevel)
+        return max(1, xp / xpPerLevel + 1)
     }
 
     static func rankTitle(forLevel level: Int) -> String {
