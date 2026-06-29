@@ -195,6 +195,9 @@ struct LicensePlateAppApp: App {
             RootView()
                 .environmentObject(authService)
                 .environmentObject(riskAssessmentService)
+                .onAppear {
+                    RewardPopupWindowHost.shared.install(presenter: RewardPresenter.shared)
+                }
                 .onOpenURL { url in
                     Task { @MainActor in
                         if let dest = DeepLinkHandler.shared.handleURL(url) {

@@ -50,7 +50,6 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: appCoordinator.rootView)
-        .rewardPopupHost(RewardPresenter.shared)
         .onChange(of: authService.currentUser?.firebaseUID ?? authService.currentUser?.id) { _, newUserId in
             ReturnStreakService.shared.setActiveUserId(newUserId)
             ReturnStreakReminderService.shared.cancelReminder(reason: "user_changed")

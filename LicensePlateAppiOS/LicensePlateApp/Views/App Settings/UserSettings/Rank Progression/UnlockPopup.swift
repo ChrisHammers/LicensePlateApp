@@ -5,12 +5,10 @@
 //  A celebratory popup for rank-ups, achievements, and unlocks, plus a small
 //  presenter that queues events so several can play back-to-back.
 //
-//  Attach the host once near the root:
+//  `RewardPopupWindowHost` is installed once at app launch (see `LicensePlateAppApp`).
+//  For SwiftUI previews, attach `.rewardPopupHost(presenter)` on the preview root.
 //
-//      RootView()
-//          .rewardPopupHost(RewardPresenter.shared)
-//
-//  Then fire events whenever they happen:
+//  Fire events whenever they happen:
 //
 //      rewards.show(.rankUp(ladder.currentRank(xp: newXP)))
 //      rewards.show(.achievement(unlocked))
@@ -158,21 +156,13 @@ extension View {
     }
 }
 
+/// In-tree overlay for SwiftUI previews only. Production uses `RewardPopupWindowHost`.
 struct RewardPopupHost: ViewModifier {
     @ObservedObject var presenter: RewardPresenter
 
     func body(content: Content) -> some View {
         content.overlay {
-            if let event = presenter.current {
-                ZStack {
-                    Color.black.opacity(0.55)
-                        .ignoresSafeArea()
-                        .transition(.opacity)
-                        .onTapGesture { presenter.dismiss() }
-                    RewardPopupView(event: event) { presenter.dismiss() }
-                        .transition(.scale(scale: 0.85).combined(with: .opacity))
-                }
-            }
+            RewardPopupOverlayContent(presenter: presenter)
         }
     }
 }
