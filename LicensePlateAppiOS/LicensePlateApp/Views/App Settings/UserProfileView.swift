@@ -500,6 +500,8 @@ struct UserProfileView: View {
                   .listRowBackground(Color.clear)
                   .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
                   
+                    // MVP: Linked Accounts hidden — restore when account linking ships post-MVP
+                    /*
                     // Linked Accounts Section
                     Section {
                         VStack(alignment: .leading, spacing: 16) {
@@ -640,6 +642,7 @@ struct UserProfileView: View {
                     .textCase(nil)
                     .listRowBackground(Color.clear)
                     .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
+                    */
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)

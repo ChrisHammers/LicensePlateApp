@@ -332,6 +332,8 @@ struct SignInView: View {
                         )
                         .padding(.horizontal, 20)
                         
+                        // MVP: OAuth / linked-account sign-in hidden — restore post-MVP
+                        /*
                         // OAuth providers
                         VStack(spacing: 16) {
                             Text("Or sign in with")
@@ -360,6 +362,7 @@ struct SignInView: View {
                         }
                         .padding(.top, 8)
                         .padding(.horizontal, 20)
+                        */
                         
                         // Offline notice
                         if !authService.isOnline {
