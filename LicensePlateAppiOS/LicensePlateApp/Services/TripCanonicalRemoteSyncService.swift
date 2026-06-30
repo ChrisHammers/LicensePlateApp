@@ -238,6 +238,7 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
 
         let domainEvents: [TripActivityEvent] = bundle.events.compactMap { TripCanonicalMapper.domainEvent(from: $0) }
         try tripActivityEventRepository.importEventsIfAbsent(domainEvents)
+        try reconcileGameLifecycleFromStoredEvents(sessionId: sessionId)
 
         hydrationSubject.send(sessionId)
         startIncrementalListeningIfNeeded(sessionId: sessionId)
@@ -282,17 +283,28 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
             }
         }
         if changed {
+            do {
+                try reconcileGameLifecycleFromStoredEvents(sessionId: sessionId)
+            } catch {
+                #if DEBUG
+                print("TripCanonicalRemoteSyncService: reconcile game lifecycle after games snapshot failed \(error)")
+                #endif
+            }
             hydrationSubject.send(sessionId)
         }
     }
 
     private func applyEventsSnapshot(sessionId: UUID, snapshot: QuerySnapshot) {
         var changed = false
+        var lifecycleEvents: [TripActivityEvent] = []
         for doc in snapshot.documents {
             let data = doc.data()
             guard let wire = TripCanonicalFirestoreFields.eventWire(documentId: doc.documentID, data: data),
                   let event = TripCanonicalMapper.domainEvent(from: wire),
                   event.sessionId == sessionId else { continue }
+            if event.kind == .gameStarted || event.kind == .gameEnded {
+                lifecycleEvents.append(event)
+            }
             do {
                 if try tripActivityEventRepository.reconcileRemoteActivityEvent(event) {
                     changed = true
@@ -314,8 +326,26 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
                 #endif
             }
         }
+        for event in lifecycleEvents.sorted(by: { $0.timestamp < $1.timestamp }) {
+            do {
+                if try GameInstanceLifecycleService.shared.applyRemoteGameLifecycleEvent(event) {
+                    changed = true
+                }
+            } catch {
+                #if DEBUG
+                print("TripCanonicalRemoteSyncService: apply game lifecycle event failed \(error)")
+                #endif
+            }
+        }
         if changed {
             hydrationSubject.send(sessionId)
+        }
+    }
+
+    private func reconcileGameLifecycleFromStoredEvents(sessionId: UUID) throws {
+        let events = try tripActivityEventRepository.events(sessionId: sessionId, limit: nil)
+        for event in events where event.kind == .gameStarted || event.kind == .gameEnded {
+            _ = try GameInstanceLifecycleService.shared.applyRemoteGameLifecycleEvent(event)
         }
     }
 

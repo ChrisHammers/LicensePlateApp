@@ -121,7 +121,7 @@ struct TripSessionViewModelTests {
         return g
     }
 
-    @Test func addGame_whenCreatedTripAndOneLP_addsSecondLPWithoutStarting() async throws {
+    @Test func addGame_whenCreatedTripAndOneLP_rejectsSecondLPWhileFirstIsCreated() async throws {
         let sessionId = UUID()
         let session = makeCreatedSession(id: sessionId)
         let lp = licensePlateInstance(sessionId: sessionId, lifecycle: .created)
@@ -144,14 +144,12 @@ struct TripSessionViewModelTests {
 
         viewModel.addGame()
 
-        let games = try gameRepo.fetchByTripSession(sessionId: sessionId)
-        #expect(games.count == 2)
-        #expect(games.allSatisfy { $0.definitionId == GameType.licensePlate.rawValue })
+        #expect(try gameRepo.fetchByTripSession(sessionId: sessionId).count == 1)
         #expect(gameLifecycle.startGameCallCount == 0)
-        #expect(viewModel.errorMessage == nil)
+        #expect(viewModel.errorMessage != nil)
     }
 
-    @Test func addGame_whenActiveTripAndOneLP_addsSecondLPAndCallsStartGame() async throws {
+    @Test func addGame_whenActiveTripAndOneLPStarted_rejectsSecondLP() async throws {
         let sessionId = UUID()
         let session = makeSession(id: sessionId, name: "Active")
         let lp = licensePlateInstance(sessionId: sessionId, lifecycle: .started)
@@ -174,11 +172,86 @@ struct TripSessionViewModelTests {
 
         viewModel.addGame()
 
+        #expect(try gameRepo.fetchByTripSession(sessionId: sessionId).count == 1)
+        #expect(gameLifecycle.startGameCallCount == 0)
+        #expect(viewModel.errorMessage != nil)
+    }
+
+    @Test func addGame_whenPriorLPEnded_addsSecondLPAndStartsOnActiveTrip() async throws {
+        let sessionId = UUID()
+        let session = makeSession(id: sessionId, name: "Active")
+        let endedLP = licensePlateInstance(sessionId: sessionId, lifecycle: .ended)
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        gameRepo.seed(endedLP)
+        let eventRepo = MockTripActivityEventRepository()
+        let gameLifecycle = MockGameInstanceLifecycleService()
+
+        let viewModel = TripSessionViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            gameInstanceLifecycleService: gameLifecycle,
+            authService: creatorAuth()
+        )
+
+        viewModel.addGame()
+
         let games = try gameRepo.fetchByTripSession(sessionId: sessionId)
         #expect(games.count == 2)
-        #expect(games.allSatisfy { $0.definitionId == GameType.licensePlate.rawValue })
         #expect(gameLifecycle.startGameCallCount == 1)
         #expect(viewModel.errorMessage == nil)
+    }
+
+    @Test func canAddGame_falseWhenLiveLPExists() async throws {
+        let sessionId = UUID()
+        let session = makeSession(id: sessionId, name: "Active")
+        let lp = licensePlateInstance(sessionId: sessionId, lifecycle: .started)
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        gameRepo.seed(lp)
+        let eventRepo = MockTripActivityEventRepository()
+
+        let viewModel = TripSessionViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            authService: creatorAuth()
+        )
+        viewModel.load()
+
+        #expect(viewModel.canAddGame == false)
+    }
+
+    @Test func loadMarksStartedGameRowInProgress() async throws {
+        let sessionId = UUID()
+        let session = makeSession(id: sessionId, name: "Active")
+        let lp = licensePlateInstance(sessionId: sessionId, lifecycle: .started)
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        gameRepo.seed(lp)
+        let eventRepo = MockTripActivityEventRepository()
+
+        let viewModel = TripSessionViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            authService: creatorAuth()
+        )
+        viewModel.load()
+
+        #expect(viewModel.gameRowItems.count == 1)
+        #expect(viewModel.gameRowItems[0].showsInProgressIndicator == true)
+        #expect(viewModel.gameRowItems[0].lifecycleDisplay == GameInstanceState.started.localizedDisplayName)
     }
 
     @Test func addGame_whenPassenger_setsErrorAndDoesNotCreate() async throws {

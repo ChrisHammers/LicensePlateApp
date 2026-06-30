@@ -71,6 +71,78 @@ struct TripSessionLifecycleServiceTests {
         #expect(appended.contains { $0.kind == .gameStarted && $0.payload?[TripActivityEventPayloadKey.gameInstanceId] == gameId.uuidString })
     }
 
+    @Test func startTripStartsOnlyOneCreatedGamePerType() async throws {
+        let sessionRepo = MockTripSessionRepository()
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+
+        let sessionId = UUID()
+        let olderLP = UUID()
+        let newerLP = UUID()
+        let bingoId = UUID()
+        sessionRepo.seed(TripSession(
+            id: sessionId,
+            name: "Test",
+            status: .created,
+            createdAt: Date(),
+            createdBy: "user1",
+            startedAt: nil,
+            participants: [TripParticipant(userId: "user1", role: .owner, joinedAt: Date())]
+        ))
+        gameRepo.seed(GameInstance(
+            id: olderLP,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: CommonGameConfig(lifecycleState: .created)
+        ))
+        gameRepo.seed(GameInstance(
+            id: newerLP,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: CommonGameConfig(lifecycleState: .created)
+        ))
+        gameRepo.seed(GameInstance(
+            id: bingoId,
+            definitionId: GameType.roadSignBingo.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: GameType.roadSignBingo.rawValue),
+            commonConfig: CommonGameConfig(lifecycleState: .created)
+        ))
+
+        let recording = TripActivityEventRecordingService(
+            tripActivityEventRepository: eventRepo,
+            syncCoordinator: MockSyncCoordinator()
+        )
+        let gameLifecycle = GameInstanceLifecycleService(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            tripActivityEventRecording: recording
+        )
+        let service = TripSessionLifecycleService(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            tripActivityEventRecording: recording,
+            gameInstanceLifecycleService: gameLifecycle
+        )
+
+        try service.startTrip(sessionId: sessionId, actorId: "user1")
+
+        let instances = try gameRepo.fetchByTripSession(sessionId: sessionId)
+        let startedLP = instances.filter {
+            $0.definitionId == GameType.licensePlate.rawValue && $0.commonConfig.lifecycleState == .started
+        }
+        #expect(startedLP.count == 1)
+        #expect(startedLP.first?.id == newerLP)
+        let startedBingo = instances.first {
+            $0.definitionId == GameType.roadSignBingo.rawValue && $0.commonConfig.lifecycleState == .started
+        }
+        #expect(startedBingo?.id == bingoId)
+    }
+
     @Test func endTripSetsEndedAndAppendsEvents() async throws {
         let sessionRepo = MockTripSessionRepository()
         let gameRepo = MockGameInstanceRepository()

@@ -114,9 +114,7 @@ struct TripSessionView: View {
                 }
                 .disabled(!viewModel.canAddGame)
                 .opacity(viewModel.canAddGame ? 1.0 : 0.5)
-                .accessibilityHint(viewModel.isTripCreator
-                    ? "Adds another license plate game to this trip".localized
-                    : "Only the trip creator can add a game".localized)
+                .accessibilityHint(viewModel.addGameAccessibilityHint)
                 .listRowBackground(Color.Theme.cardBackground)
             } header: {
                 Text("Games".localized)
@@ -303,10 +301,25 @@ private struct GameRowView: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(item.title)
-                    .font(.system(.body, design: .rounded))
-                    .fontWeight(.medium)
-                    .foregroundStyle(Color.Theme.primaryBlue)
+                HStack(spacing: 8) {
+                    Text(item.title)
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.medium)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    if item.showsInProgressIndicator {
+                        Text("In progress".localized)
+                            .font(.system(.caption2, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule()
+                                    .fill(Color.Theme.primaryBlue.opacity(0.12))
+                            )
+                            .accessibilityLabel("In progress".localized)
+                    }
+                }
                 Text(item.progressSummary)
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
@@ -320,10 +333,10 @@ private struct GameRowView: View {
                         .foregroundStyle(Color.Theme.softBrown)
                         .accessibilityLabel("Teams".localized + ", " + teams)
                 }
-                Text(item.statusOrLifecycle.capitalized)
+                Text(item.lifecycleDisplay)
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown.opacity(0.85))
-                    .accessibilityLabel("Game state: %@".localized(item.statusOrLifecycle))
+                    .accessibilityLabel("Game state: %@".localized(item.lifecycleDisplay))
             }
             Spacer()
             if item.isEnterable {

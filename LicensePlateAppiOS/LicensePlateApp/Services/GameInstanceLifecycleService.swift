@@ -37,6 +37,9 @@ protocol GameInstanceLifecycleServiceProtocol: AnyObject {
     func resetGame(sessionId: UUID, gameInstanceId: UUID) throws
     /// Removes this game from the trip (events + SwiftData row). Requires at least one other game on the session.
     func deleteGame(sessionId: UUID, gameInstanceId: UUID) throws
+    /// Applies `game_started` / `game_ended` from canonical activity events (multiplayer peers + bootstrap).
+    @discardableResult
+    func applyRemoteGameLifecycleEvent(_ event: TripActivityEvent) throws -> Bool
 }
 
 @MainActor
@@ -86,6 +89,8 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
         if game.commonConfig.lifecycleState == .started && game.commonConfig.configLocked {
             return
         }
+        let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
+        try GameplayLifecycleRules.validateCanStartGame(instance: game, existingGames: games)
         game.startedAt = Date()
         game.commonConfig.lifecycleState = .started
         game.commonConfig.configLocked = true
@@ -106,6 +111,7 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
             configLockReason: ConfigLockReason.gameStarted.rawValue,
             tripSessionId: sessionId.uuidString
         ))
+        schedulePublishCanonicalState(sessionId: sessionId)
     }
 
     /// Marks game ended, appends `gameEnded`, sync enqueue, analytics. Idempotent if already ended or completed.
@@ -126,6 +132,7 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
             return
         }
         game.commonConfig.lifecycleState = .ended
+        game.endedAt = Date()
         try gameInstanceRepository.update(instance: game)
 
         let gameEndedEvent = TripActivityEvent(
@@ -140,6 +147,7 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
             gameType: game.definitionId,
             tripSessionId: sessionId.uuidString
         ))
+        schedulePublishCanonicalState(sessionId: sessionId)
     }
 
     /// Clears discovery-related events for this game and sets lifecycle to `created`. Trip dates and status unchanged.
@@ -151,9 +159,11 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
         try tripActivityEventRepository.deleteEvents(sessionId: sessionId, gameInstanceId: gameInstanceId)
         if var game = try gameInstanceRepository.instance(byId: gameInstanceId) {
             game.commonConfig.lifecycleState = .created
+            game.endedAt = nil
             try gameInstanceRepository.update(instance: game)
         }
         AnalyticsService.shared.log(.gameInstanceReset(tripSessionId: sessionId.uuidString, gameInstanceId: gameInstanceId.uuidString))
+        schedulePublishCanonicalState(sessionId: sessionId)
     }
 
     /// Deletes persisted events tagged with this game, then removes the `GameInstance`. Does not end the trip.
@@ -181,5 +191,46 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
             gameType: game.definitionId,
             remainingGameCount: remaining
         ))
+        schedulePublishCanonicalState(sessionId: sessionId)
+    }
+
+    @discardableResult
+    func applyRemoteGameLifecycleEvent(_ event: TripActivityEvent) throws -> Bool {
+        guard event.kind == .gameStarted || event.kind == .gameEnded else { return false }
+        guard let gameIdStr = event.payload?[TripActivityEventPayloadKey.gameInstanceId],
+              let gameId = UUID(uuidString: gameIdStr),
+              var game = try gameInstanceRepository.instance(byId: gameId) else {
+            return false
+        }
+        switch event.kind {
+        case .gameStarted:
+            if game.commonConfig.lifecycleState == .started && game.commonConfig.configLocked {
+                return false
+            }
+            game.commonConfig.lifecycleState = .started
+            game.commonConfig.configLocked = true
+            game.commonConfig.configLockReason = .gameStarted
+            if game.startedAt == nil {
+                game.startedAt = event.timestamp
+            }
+            try gameInstanceRepository.update(instance: game)
+            return true
+        case .gameEnded:
+            if game.commonConfig.lifecycleState == .ended || game.commonConfig.lifecycleState == .completed {
+                return false
+            }
+            game.commonConfig.lifecycleState = .ended
+            game.endedAt = game.endedAt ?? event.timestamp
+            try gameInstanceRepository.update(instance: game)
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func schedulePublishCanonicalState(sessionId: UUID) {
+        Task { @MainActor in
+            try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionId)
+        }
     }
 }

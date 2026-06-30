@@ -15,8 +15,10 @@ struct GameRowItem: Identifiable {
     let gameId: UUID
     let definitionId: String
     let title: String
-    let statusOrLifecycle: String
+    let lifecycleDisplay: String
     let progressSummary: String
+    /// True when lifecycle is `.started` (in-progress pill on trip dashboard).
+    let showsInProgressIndicator: Bool
     /// Localized collaborative / competitive (game-scoped).
     let gameModeDisplay: String
     /// Nil when the game has no teams.
@@ -54,9 +56,22 @@ final class TripSessionViewModel: ObservableObject {
 
     var canAddGame: Bool {
         guard let session else { return false }
-        return isTripCreator
-            && session.status != .ended
-            && session.status != .cancelled
+        guard isTripCreator else { return false }
+        guard session.status != .ended, session.status != .cancelled else { return false }
+        return canAddLicensePlateGame(existingGames: sessionGamesForAddGameCheck())
+    }
+
+    var addGameAccessibilityHint: String {
+        if !isTripCreator {
+            return "Only the trip creator can add a game".localized
+        }
+        if let session, session.status == .ended || session.status == .cancelled {
+            return "This trip can't be changed anymore.".localized
+        }
+        if !canAddLicensePlateGame(existingGames: sessionGamesForAddGameCheck()) {
+            return "End the current license plate game before adding another.".localized
+        }
+        return "Adds another license plate game to this trip".localized
     }
 
     init(
@@ -117,7 +132,7 @@ final class TripSessionViewModel: ObservableObject {
                 } else {
                     progressSummary = "\(discoveryCount)"
                 }
-                let lifecycle = game.commonConfig.lifecycleState.rawValue
+                let lifecycleState = game.commonConfig.lifecycleState
                 let title = GameType(rawValue: game.definitionId)?.displayName ?? game.definitionId
                 let isEnterable = game.definitionId == GameType.licensePlate.rawValue
                 let modeDisplay = game.commonConfig.gameMode.localizedDisplayName
@@ -126,8 +141,9 @@ final class TripSessionViewModel: ObservableObject {
                     gameId: game.id,
                     definitionId: game.definitionId,
                     title: title,
-                    statusOrLifecycle: lifecycle,
+                    lifecycleDisplay: lifecycleState.localizedDisplayName,
                     progressSummary: progressSummary,
+                    showsInProgressIndicator: lifecycleState.showsInProgressIndicator,
                     gameModeDisplay: modeDisplay,
                     teamSummary: teamsLine,
                     isEnterable: isEnterable
@@ -207,6 +223,17 @@ final class TripSessionViewModel: ObservableObject {
         return createdBy == uid
     }
 
+    private func sessionGamesForAddGameCheck() -> [GameInstance] {
+        (try? gameInstanceRepository.fetchByTripSession(sessionId: sessionId)) ?? []
+    }
+
+    private func canAddLicensePlateGame(existingGames: [GameInstance]) -> Bool {
+        (try? GameplayLifecycleRules.validateCanAddGame(
+            ofType: GameType.licensePlate.rawValue,
+            existingGames: existingGames
+        )) != nil
+    }
+
     /// Adds another license plate game, cloning mode/teams/scope from the first LP game on the trip (defaults if none).
     func addGame() {
         do {
@@ -228,6 +255,10 @@ final class TripSessionViewModel: ObservableObject {
             }
 
             let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
+            try GameplayLifecycleRules.validateCanAddGame(
+                ofType: GameType.licensePlate.rawValue,
+                existingGames: games
+            )
             let template = games.first { $0.definitionId == GameType.licensePlate.rawValue }
             let choice = GameSetupChoice(
                 gameType: .licensePlate,
@@ -274,6 +305,8 @@ final class TripSessionViewModel: ObservableObject {
             Task { @MainActor in
                 try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionId)
             }
+        } catch let error as GameplayLifecycleRulesError {
+            errorMessage = error.localizedDescription
         } catch {
             errorMessage = error.localizedDescription
         }

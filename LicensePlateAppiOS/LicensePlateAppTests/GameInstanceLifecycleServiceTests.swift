@@ -182,6 +182,52 @@ struct GameInstanceLifecycleServiceTests {
         }
     }
 
+    @Test func startGameThrowsWhenAnotherSameTypeIsLive() async throws {
+        let sessionRepo = MockTripSessionRepository()
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let sessionId = UUID()
+        let firstId = UUID()
+        let secondId = UUID()
+        sessionRepo.seed(TripSession(
+            id: sessionId,
+            name: "T",
+            status: .active,
+            createdAt: Date(),
+            createdBy: "u",
+            startedAt: Date(),
+            participants: []
+        ))
+        gameRepo.seed(GameInstance(
+            id: firstId,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: CommonGameConfig(lifecycleState: .created)
+        ))
+        gameRepo.seed(GameInstance(
+            id: secondId,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: CommonGameConfig(lifecycleState: .created)
+        ))
+        let service = GameInstanceLifecycleService(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: MockSyncCoordinator())
+        )
+        do {
+            try service.startGame(sessionId: sessionId, gameInstanceId: secondId)
+            Issue.record("Expected liveGameOfTypeAlreadyExists")
+        } catch let error as GameplayLifecycleRulesError {
+            if case .liveGameOfTypeAlreadyExists = error {} else {
+                Issue.record("Wrong error: \(error)")
+            }
+        }
+    }
+
     @Test func startGameSetsStartedLocksAndAppendsGameStarted() async throws {
         let sessionRepo = MockTripSessionRepository()
         let gameRepo = MockGameInstanceRepository()
@@ -294,9 +340,55 @@ struct GameInstanceLifecycleServiceTests {
         try service.endGame(sessionId: sessionId, gameInstanceId: gameId)
         let game = try gameRepo.instance(byId: gameId)
         #expect(game?.commonConfig.lifecycleState == .ended)
+        #expect(game?.endedAt != nil)
         let appended = eventRepo.appendedEvents()
         #expect(appended.contains { $0.kind == .gameEnded && $0.payload?[TripActivityEventPayloadKey.gameInstanceId] == gameId.uuidString })
         #expect(sync.enqueueCallCount == 1)
+    }
+
+    @Test func applyRemoteGameLifecycleEventGameEndedUpdatesLocalInstance() async throws {
+        let sessionRepo = MockTripSessionRepository()
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let sessionId = UUID()
+        let gameId = UUID()
+        let endedAt = Date()
+        sessionRepo.seed(TripSession(
+            id: sessionId,
+            name: "T",
+            status: .active,
+            createdAt: Date(),
+            createdBy: "u",
+            startedAt: Date(),
+            participants: []
+        ))
+        gameRepo.seed(GameInstance(
+            id: gameId,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: CommonGameConfig(lifecycleState: .started, configLocked: true, configLockReason: .gameStarted)
+        ))
+        let service = GameInstanceLifecycleService(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            tripActivityEventRecording: TripActivityEventRecordingService(
+                tripActivityEventRepository: eventRepo,
+                syncCoordinator: MockSyncCoordinator()
+            )
+        )
+        let event = TripActivityEvent(
+            sessionId: sessionId,
+            kind: .gameEnded,
+            timestamp: endedAt,
+            payload: [TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString]
+        )
+        let applied = try service.applyRemoteGameLifecycleEvent(event)
+        #expect(applied == true)
+        let game = try gameRepo.instance(byId: gameId)
+        #expect(game?.commonConfig.lifecycleState == .ended)
+        #expect(game?.endedAt == endedAt)
     }
 
     @Test func endGameIsIdempotentWhenAlreadyEndedOrCompleted() async throws {

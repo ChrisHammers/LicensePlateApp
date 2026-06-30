@@ -43,4 +43,10 @@ final class MockGameInstanceLifecycleService: GameInstanceLifecycleServiceProtoc
         lastDeleteSessionId = sessionId
         lastDeleteGameInstanceId = gameInstanceId
     }
+
+    @discardableResult
+    func applyRemoteGameLifecycleEvent(_ event: TripActivityEvent) throws -> Bool {
+        if shouldThrow { throw NSError(domain: "MockGameInstanceLifecycleService", code: -1, userInfo: nil) }
+        return false
+    }
 }

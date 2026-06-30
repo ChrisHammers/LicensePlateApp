@@ -15,6 +15,8 @@ enum GameplayLifecycleRulesError: Error, Equatable, Sendable, LocalizedError {
     case gameResetTripTerminal
     /// Removing the last game instance would leave the trip with no games.
     case gameDeleteLastGameNotAllowed
+    /// Another game of the same type is still live (`.created` or `.started`).
+    case liveGameOfTypeAlreadyExists(definitionId: String)
 
     var errorDescription: String? {
         switch self {
@@ -24,6 +26,9 @@ enum GameplayLifecycleRulesError: Error, Equatable, Sendable, LocalizedError {
             return "Game reset is not available for this trip.".localized
         case .gameDeleteLastGameNotAllowed:
             return "A trip must keep at least one game.".localized
+        case .liveGameOfTypeAlreadyExists(let definitionId):
+            let displayName = GameType(rawValue: definitionId)?.displayName ?? definitionId
+            return "End the current %@ game before starting another.".localized(displayName)
         }
     }
 }
@@ -47,6 +52,38 @@ enum GameplayLifecycleRules {
         try validateGameResetAllowed(tripSessionState: tripSessionState)
         if gameCountInSession < 2 {
             throw GameplayLifecycleRulesError.gameDeleteLastGameNotAllowed
+        }
+    }
+
+    /// A live round is configured or in progress (not ended/completed).
+    static func isLiveRound(_ state: GameInstanceState) -> Bool {
+        state == .created || state == .started
+    }
+
+    /// First live game of `definitionId`, optionally excluding one instance (e.g. the game being started).
+    static func liveGame(
+        ofType definitionId: String,
+        in games: [GameInstance],
+        excluding gameId: UUID? = nil
+    ) -> GameInstance? {
+        games.first { game in
+            game.definitionId == definitionId
+                && isLiveRound(game.commonConfig.lifecycleState)
+                && game.id != gameId
+        }
+    }
+
+    /// Adding a new instance requires no other live round of the same type on the trip.
+    static func validateCanAddGame(ofType definitionId: String, existingGames: [GameInstance]) throws {
+        if liveGame(ofType: definitionId, in: existingGames) != nil {
+            throw GameplayLifecycleRulesError.liveGameOfTypeAlreadyExists(definitionId: definitionId)
+        }
+    }
+
+    /// Starting a game requires no other live round of the same type besides this instance.
+    static func validateCanStartGame(instance: GameInstance, existingGames: [GameInstance]) throws {
+        if liveGame(ofType: instance.definitionId, in: existingGames, excluding: instance.id) != nil {
+            throw GameplayLifecycleRulesError.liveGameOfTypeAlreadyExists(definitionId: instance.definitionId)
         }
     }
 }

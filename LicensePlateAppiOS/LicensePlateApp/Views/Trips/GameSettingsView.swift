@@ -134,7 +134,7 @@ struct GameSettingsView: View {
 
             SettingInfoRow(
                 title: "Status".localized,
-                value: localizedGameLifecycleState(viewModel.game.commonConfig.lifecycleState)
+                value: viewModel.game.commonConfig.lifecycleState.localizedDisplayName
             )
 
             if let endedAt = viewModel.game.endedAt {
@@ -250,15 +250,6 @@ struct GameSettingsView: View {
             }
         } message: {
             Text("This ends this game. Make sure all participants have synced so all discoveries are counted. You can start a new game.".localized)
-        }
-    }
-
-    private func localizedGameLifecycleState(_ state: GameInstanceState) -> String {
-        switch state {
-        case .created: return "Not started".localized
-        case .started: return "In progress".localized
-        case .ended: return "Ended".localized
-        case .completed: return "Completed".localized
         }
     }
 

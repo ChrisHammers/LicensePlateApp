@@ -35,6 +35,11 @@
 "Only the trip creator can end the trip" = "Solo el creador del viaje puede terminarlo";
 "Only the trip creator can add a game" = "Solo el creador del viaje puede agregar un juego";
 "Adds another license plate game to this trip" = "Agrega otro juego de placas a este viaje";
+"End the current license plate game before adding another." = "Termina el juego de placas actual antes de agregar otro.";
+"End the current %@ game before starting another." = "Termina el juego actual de %@ antes de iniciar otro.";
+"Not started" = "No iniciado";
+"In progress" = "En progreso";
+"Completed" = "Completado";
 "Trip Ended" = "Viaje Terminado";
 "This trip has been completed" = "Este viaje ha sido completado";
 "This will stop the game. You won't be able to add states in this trip anymore." = "Esto detendrá el juego. Ya no podrás agregar estados en este viaje.";

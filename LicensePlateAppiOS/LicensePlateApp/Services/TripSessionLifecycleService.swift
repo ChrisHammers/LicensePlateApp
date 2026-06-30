@@ -60,8 +60,16 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         session.status = .active
         try tripSessionRepository.save(session: session)
         let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
-        for game in games {
-            try gameInstanceLifecycleService.startGame(sessionId: sessionId, gameInstanceId: game.id)
+        for (_, typeGames) in Dictionary(grouping: games, by: \.definitionId) {
+            if typeGames.contains(where: { $0.commonConfig.lifecycleState == .started }) {
+                for started in typeGames where started.commonConfig.lifecycleState == .started {
+                    try gameInstanceLifecycleService.startGame(sessionId: sessionId, gameInstanceId: started.id)
+                }
+                continue
+            }
+            let createdCandidates = typeGames.filter { $0.commonConfig.lifecycleState == .created }
+            guard let toStart = createdCandidates.last else { continue }
+            try gameInstanceLifecycleService.startGame(sessionId: sessionId, gameInstanceId: toStart.id)
         }
         let tripStartedEvent = TripActivityEvent(sessionId: sessionId, kind: .tripStarted, actorId: actorId)
         try tripActivityEventRecording.recordForSync(tripStartedEvent)
