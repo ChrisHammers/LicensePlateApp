@@ -203,12 +203,15 @@ struct AchievementRow: View {
     }
 
     @ViewBuilder private var trailing: some View {
-        if unlocked {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 17)).foregroundStyle(color)
-        } else if achievement.xpReward > 0 {
-            Text("achievement.row.xp_reward".localized(achievement.xpReward.formatted()))
-                .font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+        HStack(spacing: 6) {
+            if achievement.xpReward > 0 {
+                Text("achievement.row.xp_reward".localized(achievement.xpReward.formatted()))
+                    .font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+            }
+            if unlocked {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 17)).foregroundStyle(color)
+            }
         }
     }
 
