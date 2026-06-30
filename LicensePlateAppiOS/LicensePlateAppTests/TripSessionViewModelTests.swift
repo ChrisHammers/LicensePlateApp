@@ -251,7 +251,7 @@ struct TripSessionViewModelTests {
 
         #expect(viewModel.gameRowItems.count == 1)
         #expect(viewModel.gameRowItems[0].showsInProgressIndicator == true)
-        #expect(viewModel.gameRowItems[0].lifecycleDisplay == GameInstanceState.started.localizedDisplayName)
+        #expect(viewModel.gameRowItems[0].gameTypeDisplay == GameType.licensePlate.displayName)
     }
 
     @Test func addGame_whenPassenger_setsErrorAndDoesNotCreate() async throws {

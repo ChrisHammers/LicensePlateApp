@@ -15,7 +15,7 @@ struct GameRowItem: Identifiable {
     let gameId: UUID
     let definitionId: String
     let title: String
-    let lifecycleDisplay: String
+    let gameTypeDisplay: String
     let progressSummary: String
     /// True when lifecycle is `.started` (in-progress pill on trip dashboard).
     let showsInProgressIndicator: Bool
@@ -68,6 +68,7 @@ final class TripSessionViewModel: ObservableObject {
         if let session, session.status == .ended || session.status == .cancelled {
             return "This trip can't be changed anymore.".localized
         }
+       
         if !canAddLicensePlateGame(existingGames: sessionGamesForAddGameCheck()) {
             return "End the current license plate game before adding another.".localized
         }
@@ -133,7 +134,8 @@ final class TripSessionViewModel: ObservableObject {
                     progressSummary = "\(discoveryCount)"
                 }
                 let lifecycleState = game.commonConfig.lifecycleState
-                let title = GameType(rawValue: game.definitionId)?.displayName ?? game.definitionId
+                let gameTypeDisplay = GameType(rawValue: game.definitionId)?.displayName ?? game.definitionId
+                let title = gameTypeDisplay
                 let isEnterable = game.definitionId == GameType.licensePlate.rawValue
                 let modeDisplay = game.commonConfig.gameMode.localizedDisplayName
                 let teamsLine = Self.teamSummary(for: game.teams)
@@ -141,7 +143,7 @@ final class TripSessionViewModel: ObservableObject {
                     gameId: game.id,
                     definitionId: game.definitionId,
                     title: title,
-                    lifecycleDisplay: lifecycleState.localizedDisplayName,
+                    gameTypeDisplay: gameTypeDisplay,
                     progressSummary: progressSummary,
                     showsInProgressIndicator: lifecycleState.showsInProgressIndicator,
                     gameModeDisplay: modeDisplay,

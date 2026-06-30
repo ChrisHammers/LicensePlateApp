@@ -333,10 +333,10 @@ private struct GameRowView: View {
                         .foregroundStyle(Color.Theme.softBrown)
                         .accessibilityLabel("Teams".localized + ", " + teams)
                 }
-                Text(item.lifecycleDisplay)
+                Text(item.gameTypeDisplay)
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown.opacity(0.85))
-                    .accessibilityLabel("Game state: %@".localized(item.lifecycleDisplay))
+                    .accessibilityLabel("Game type".localized + ", " + item.gameTypeDisplay)
             }
             Spacer()
             if item.isEnterable {
