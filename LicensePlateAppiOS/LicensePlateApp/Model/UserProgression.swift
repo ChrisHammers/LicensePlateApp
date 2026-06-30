@@ -40,6 +40,8 @@ struct UserProgressionSnapshot: Equatable, Sendable {
     var lastUpdatedAt: Date?
     /// Keys of `appliedProgressionEvents` on the server doc (authoritative applied event ids).
     var appliedProgressionEventIds: Set<String>
+    /// Keys of `appliedProgressionScopes` (e.g. achievement XP idempotency scopes).
+    var appliedProgressionScopeKeys: Set<String>
 
     static let empty = UserProgressionSnapshot(
         totalXp: 0,
@@ -47,7 +49,8 @@ struct UserProgressionSnapshot: Equatable, Sendable {
         competitiveFirstPlaceFinishes: 0,
         everCompetitiveFirstPlace: false,
         lastUpdatedAt: nil,
-        appliedProgressionEventIds: []
+        appliedProgressionEventIds: [],
+        appliedProgressionScopeKeys: []
     )
 }
 

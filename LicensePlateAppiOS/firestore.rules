@@ -69,6 +69,11 @@ service cloud.firestore {
     match /user_progression/{userId} {
       allow read: if isSignedIn() && uid() == userId;
       allow write: if false;
+
+      match /xp_grants/{grantId} {
+        allow read: if isSignedIn() && uid() == userId;
+        allow write: if false;
+      }
     }
 
     // User achievements (server-authoritative unlock rows; writes via Cloud Functions only)

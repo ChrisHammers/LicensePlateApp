@@ -12,6 +12,7 @@ import {
   parseAchievementCandidates,
   planAchievementSyncTransaction,
 } from "./syncUserAchievementUnlocksCore";
+import { writeXpGrantIfAbsent } from "./xpGrantLedgerCore";
 
 const db = admin.firestore();
 const MAX_CANDIDATES = 20;
@@ -127,6 +128,16 @@ export const syncUserAchievementUnlocks = enforcedCallable(async (data, context)
         progressionWrite.appliedProgressionScopes = {
           [plan.progressionWrite.scopeKey]: admin.firestore.FieldValue.serverTimestamp(),
         };
+        await writeXpGrantIfAbsent(tx, db, userId, {
+          grantId: plan.progressionWrite.scopeKey,
+          amount: plan.progressionWrite.xpReward,
+          reason: "achievement_unlock",
+          sourceType: "achievement",
+          sourceId: achievementId,
+          idempotencyKey: plan.progressionWrite.scopeKey,
+          achievementId,
+          xpRewardAtGrant: plan.progressionWrite.xpReward,
+        });
       }
 
       tx.set(achievementRef, achievementWrite, { merge: true });

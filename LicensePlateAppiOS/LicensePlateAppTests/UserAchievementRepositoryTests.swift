@@ -59,7 +59,8 @@ struct AchievementProgressPersistenceTests {
                 achievementId: "first_win",
                 unlockedAt: Date(timeIntervalSince1970: 1_700_000_000),
                 lastProgress: 1,
-                isBackfilled: false
+                isBackfilled: false,
+                storedXpReward: nil
             )
         ]
         let merged = AchievementProgressPersistence.applyPersistedRecords(
@@ -79,7 +80,8 @@ struct AchievementProgressPersistenceTests {
                 achievementId: "trips_10",
                 unlockedAt: .now,
                 lastProgress: 10,
-                isBackfilled: true
+                isBackfilled: true,
+                storedXpReward: nil
             )
         ]
         let merged = AchievementProgressPersistence.applyPersistedRecords(
@@ -99,7 +101,8 @@ struct AchievementProgressPersistenceTests {
                 achievementId: "first_win",
                 unlockedAt: Date(timeIntervalSince1970: 1_000),
                 lastProgress: 1,
-                isBackfilled: true
+                isBackfilled: true,
+                storedXpReward: nil
             )
         ]
         let remote: [String: UserAchievementRecord] = [
@@ -108,7 +111,8 @@ struct AchievementProgressPersistenceTests {
                 achievementId: "first_win",
                 unlockedAt: Date(timeIntervalSince1970: 1_700_000_000),
                 lastProgress: 1,
-                isBackfilled: false
+                isBackfilled: false,
+                storedXpReward: nil
             )
         ]
         let merged = AchievementProgressPersistence.applyPersistedRecords(
@@ -126,7 +130,8 @@ struct AchievementProgressPersistenceTests {
                 achievementId: "trips_10",
                 unlockedAt: .now,
                 lastProgress: 10,
-                isBackfilled: true
+                isBackfilled: true,
+                storedXpReward: nil
             )
         ]
         let remote: [String: UserAchievementRecord] = [
@@ -135,7 +140,8 @@ struct AchievementProgressPersistenceTests {
                 achievementId: "trips_10",
                 unlockedAt: Date(timeIntervalSince1970: 1_700_000_000),
                 lastProgress: 10,
-                isBackfilled: false
+                isBackfilled: false,
+                storedXpReward: nil
             )
         ]
         let merged = AchievementProgressPersistence.mergedRecords(local: local, remote: remote)

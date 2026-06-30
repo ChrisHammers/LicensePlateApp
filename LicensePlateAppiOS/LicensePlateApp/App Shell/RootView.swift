@@ -55,11 +55,22 @@ struct RootView: View {
             ReturnStreakReminderService.shared.cancelReminder(reason: "user_changed")
             TripActivityEventRecordingService.shared.setProgressionAppendObserver(nil)
             UserProgressionRepository.shared.stopListening()
+            XpGrantRemoteRepository.shared.stopListening()
             UserProgressionService.shared.resetForSignOut()
+            XpGrantReconcileService.shared.resetForSignOut()
             AchievementUnlockCelebrationService.shared.resetForSignOut()
             if let newUserId, !newUserId.isEmpty {
                 UserProgressionRepository.shared.startListening(userId: newUserId)
+                XpGrantRemoteRepository.shared.startListening(userId: newUserId)
                 TripActivityEventRecordingService.shared.setProgressionAppendObserver(ProgressionAppendObserverChain.shared)
+                if authService.isOnline {
+                    Task {
+                        _ = await XpGrantReconcileService.shared.reconcileIfNeeded(
+                            userId: newUserId,
+                            isOnline: authService.isOnline
+                        )
+                    }
+                }
             }
             if let user = authService.currentUser {
                 AchievementUnlockCelebrationService.shared.configure(user: user)
@@ -114,7 +125,16 @@ struct RootView: View {
                 PublicLifetimeStatsRepository.shared.setProfileUserId(userId)
                 PublicLifetimeStatsRepository.shared.ensureObservingProfileUser(userId)
                 UserProgressionRepository.shared.startListening(userId: userId)
+                XpGrantRemoteRepository.shared.startListening(userId: userId)
                 TripActivityEventRecordingService.shared.setProgressionAppendObserver(ProgressionAppendObserverChain.shared)
+                if authService.isOnline {
+                    Task {
+                        _ = await XpGrantReconcileService.shared.reconcileIfNeeded(
+                            userId: userId,
+                            isOnline: authService.isOnline
+                        )
+                    }
+                }
             }
             EntitlementService.shared.setCurrentUserId(userId)
             if let user = authService.currentUser {

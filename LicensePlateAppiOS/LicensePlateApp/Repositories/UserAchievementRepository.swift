@@ -158,7 +158,8 @@ final class UserAchievementRepository: ObservableObject {
             achievementId: entity.achievementId,
             unlockedAt: entity.unlockedAt,
             lastProgress: entity.lastProgress,
-            isBackfilled: entity.isBackfilled
+            isBackfilled: entity.isBackfilled,
+            storedXpReward: nil
         )
     }
 }

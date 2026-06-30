@@ -7,6 +7,11 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { KIND_REGION_FOUND } from "./gameplayEventResolver";
 import { KIND_GAME_ENDED, previewProgressionDeltasForActivityEvent, baseRegionDiscoveryScopeKey } from "./progressionCore";
+import {
+  activityEventGrantReason,
+  activityEventXpGrantId,
+  writeXpGrantIfAbsent,
+} from "./xpGrantLedgerCore";
 
 const db = admin.firestore();
 
@@ -114,6 +119,15 @@ export const onActivityEventUpdateUserProgression = functions.firestore
 
           if (d && d.totalXp !== 0) {
             update.totalXp = admin.firestore.FieldValue.increment(d.totalXp);
+            await writeXpGrantIfAbsent(tx, db, uid, {
+              grantId: activityEventXpGrantId(uid, eventId),
+              amount: d.totalXp,
+              reason: activityEventGrantReason(kind),
+              sourceType: "activity_event",
+              sourceId: eventId,
+              idempotencyKey: eventId,
+              sessionId,
+            });
           }
           if (d && d.acceptedRegionFindCount !== 0) {
             update.acceptedRegionFindCount = admin.firestore.FieldValue.increment(d.acceptedRegionFindCount);

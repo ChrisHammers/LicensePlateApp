@@ -57,7 +57,8 @@ final class UserAchievementRemoteRepository: ObservableObject {
                         achievementId: achievementId,
                         unlockedAt: unlockedAt,
                         lastProgress: lastProgress,
-                        isBackfilled: false
+                        isBackfilled: false,
+                        storedXpReward: Self.optionalIntValue(data["xpReward"])
                     )
                 }
                 self.records = mapped
@@ -78,5 +79,10 @@ final class UserAchievementRemoteRepository: ObservableObject {
         if let n = any as? NSNumber { return n.intValue }
         if let d = any as? Double { return Int(d) }
         return 0
+    }
+
+    private static func optionalIntValue(_ any: Any?) -> Int? {
+        guard any != nil else { return nil }
+        return intValue(any)
     }
 }

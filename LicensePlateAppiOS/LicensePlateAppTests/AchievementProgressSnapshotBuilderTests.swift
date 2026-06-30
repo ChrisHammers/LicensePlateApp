@@ -48,7 +48,8 @@ struct AchievementProgressSnapshotBuilderTests {
                 achievementId: "first_win",
                 unlockedAt: Date(timeIntervalSince1970: 1_000),
                 lastProgress: 1,
-                isBackfilled: true
+                isBackfilled: true,
+                storedXpReward: nil
             )
         ]
         let snapshot = AchievementProgressSnapshotBuilder.build(
@@ -70,7 +71,8 @@ struct AchievementProgressSnapshotBuilderTests {
                 achievementId: "first_win",
                 unlockedAt: Date(timeIntervalSince1970: 1_000),
                 lastProgress: 1,
-                isBackfilled: true
+                isBackfilled: true,
+                storedXpReward: nil
             )
         ]
         let remoteDate = Date(timeIntervalSince1970: 1_700_000_000)
@@ -80,7 +82,8 @@ struct AchievementProgressSnapshotBuilderTests {
                 achievementId: "first_win",
                 unlockedAt: remoteDate,
                 lastProgress: 1,
-                isBackfilled: false
+                isBackfilled: false,
+                storedXpReward: nil
             )
         ]
         let snapshot = AchievementProgressSnapshotBuilder.build(
@@ -102,7 +105,8 @@ struct AchievementProgressSnapshotBuilderTests {
                 achievementId: "first_win",
                 unlockedAt: Date(timeIntervalSince1970: 1_700_000_000),
                 lastProgress: 1,
-                isBackfilled: false
+                isBackfilled: false,
+                storedXpReward: nil
             )
         ]
         let persistedIds = AchievementProgressPersistence.persistedAchievementIds(

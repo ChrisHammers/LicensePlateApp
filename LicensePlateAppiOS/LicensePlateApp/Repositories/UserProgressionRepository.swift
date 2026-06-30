@@ -79,13 +79,18 @@ final class UserProgressionRepository: ObservableObject {
             guard let raw = data["appliedProgressionEvents"] as? [String: Any] else { return [] }
             return Set(raw.keys)
         }()
+        let appliedScopes: Set<String> = {
+            guard let raw = data["appliedProgressionScopes"] as? [String: Any] else { return [] }
+            return Set(raw.keys)
+        }()
         return UserProgressionSnapshot(
             totalXp: totalXp,
             acceptedRegionFindCount: acceptedRegionFindCount,
             competitiveFirstPlaceFinishes: competitiveFirstPlaceFinishes,
             everCompetitiveFirstPlace: everCompetitiveFirstPlace,
             lastUpdatedAt: lastUpdatedAt,
-            appliedProgressionEventIds: appliedIds
+            appliedProgressionEventIds: appliedIds,
+            appliedProgressionScopeKeys: appliedScopes
         )
     }
 

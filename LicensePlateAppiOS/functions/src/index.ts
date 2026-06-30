@@ -41,4 +41,5 @@ export { onActivityEventUpdateUserProgression } from "./progressionOnActivityEve
 export { ensureUserProgressionDocument } from "./progressionBootstrap";
 export { ensureFounderEntitlementIfEligible } from "./founderEntitlement";
 export { syncUserAchievementUnlocks } from "./syncUserAchievementUnlocks";
+export { reconcileXpGrantLedger } from "./reconcileXpGrantLedger";
 

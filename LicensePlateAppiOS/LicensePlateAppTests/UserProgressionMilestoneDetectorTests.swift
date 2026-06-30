@@ -16,7 +16,8 @@ struct UserProgressionMilestoneDetectorTests {
             competitiveFirstPlaceFinishes: 0,
             everCompetitiveFirstPlace: false,
             lastUpdatedAt: nil,
-            appliedProgressionEventIds: []
+            appliedProgressionEventIds: [],
+            appliedProgressionScopeKeys: []
         )
         let next = UserProgressionSnapshot(
             totalXp: 60,
@@ -24,7 +25,8 @@ struct UserProgressionMilestoneDetectorTests {
             competitiveFirstPlaceFinishes: 1,
             everCompetitiveFirstPlace: true,
             lastUpdatedAt: nil,
-            appliedProgressionEventIds: []
+            appliedProgressionEventIds: [],
+            appliedProgressionScopeKeys: []
         )
         let keys = UserProgressionMilestoneDetector.milestoneKeys(previous: prev, next: next)
         #expect(keys.contains("ever_competitive_first_place"))
@@ -37,7 +39,8 @@ struct UserProgressionMilestoneDetectorTests {
             competitiveFirstPlaceFinishes: 1,
             everCompetitiveFirstPlace: true,
             lastUpdatedAt: nil,
-            appliedProgressionEventIds: []
+            appliedProgressionEventIds: [],
+            appliedProgressionScopeKeys: []
         )
         let next = UserProgressionSnapshot(
             totalXp: 110,
@@ -45,7 +48,8 @@ struct UserProgressionMilestoneDetectorTests {
             competitiveFirstPlaceFinishes: 2,
             everCompetitiveFirstPlace: true,
             lastUpdatedAt: nil,
-            appliedProgressionEventIds: []
+            appliedProgressionEventIds: [],
+            appliedProgressionScopeKeys: []
         )
         let keys = UserProgressionMilestoneDetector.milestoneKeys(previous: prev, next: next)
         #expect(keys.isEmpty)
@@ -58,7 +62,8 @@ struct UserProgressionMilestoneDetectorTests {
             competitiveFirstPlaceFinishes: 1,
             everCompetitiveFirstPlace: true,
             lastUpdatedAt: nil,
-            appliedProgressionEventIds: []
+            appliedProgressionEventIds: [],
+            appliedProgressionScopeKeys: []
         )
         let keys = UserProgressionMilestoneDetector.milestoneKeys(previous: nil, next: next)
         #expect(keys.contains("ever_competitive_first_place"))
@@ -71,7 +76,8 @@ struct UserProgressionMilestoneDetectorTests {
             competitiveFirstPlaceFinishes: 0,
             everCompetitiveFirstPlace: false,
             lastUpdatedAt: nil,
-            appliedProgressionEventIds: []
+            appliedProgressionEventIds: [],
+            appliedProgressionScopeKeys: []
         )
         let pending = ProgressionPendingDelta(
             totalXp: 10,
@@ -91,7 +97,8 @@ struct UserProgressionMilestoneDetectorTests {
             competitiveFirstPlaceFinishes: 0,
             everCompetitiveFirstPlace: false,
             lastUpdatedAt: nil,
-            appliedProgressionEventIds: []
+            appliedProgressionEventIds: [],
+            appliedProgressionScopeKeys: []
         )
         let next = UserProgressionSnapshot(
             totalXp: 80,
@@ -99,7 +106,8 @@ struct UserProgressionMilestoneDetectorTests {
             competitiveFirstPlaceFinishes: 0,
             everCompetitiveFirstPlace: false,
             lastUpdatedAt: nil,
-            appliedProgressionEventIds: []
+            appliedProgressionEventIds: [],
+            appliedProgressionScopeKeys: []
         )
         #expect(UserProgressionMilestoneDetector.totalXpDelta(previous: prev, next: next) == 0)
     }
