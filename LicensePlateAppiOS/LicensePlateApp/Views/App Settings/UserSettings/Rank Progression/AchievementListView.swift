@@ -60,14 +60,16 @@ struct AchievementListView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            filters
-            ScrollView {
-                LazyVStack(spacing: 10) {
-                    ForEach(rows) { AchievementRow(achievement: $0, status: status($0)) }
+        AppBackgroundView {
+            VStack(spacing: 0) {
+                header
+                filters
+                ScrollView {
+                    LazyVStack(spacing: 10) {
+                        ForEach(rows) { AchievementRow(achievement: $0, status: status($0)) }
+                    }
+                    .padding(16)
                 }
-                .padding(16)
             }
         }
     }
@@ -77,17 +79,19 @@ struct AchievementListView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("achievement.list.title".localized)
                     .font(.title2.weight(.bold))
+                    .foregroundStyle(Color.Theme.primaryBlue)
                     .accessibilityAddTraits(.isHeader)
                 Text("achievement.list.xp_earned".localized(earnedXP.formatted()))
-                    .font(.subheadline).foregroundStyle(.secondary)
+                    .font(.subheadline).foregroundStyle(Color.Theme.softBrown)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 1) {
                 Text("\(unlockedCount)/\(achievements.count)")
                     .font(.title3.weight(.heavy))
+                    .foregroundStyle(Color.Theme.primaryBlue)
                 Text("achievement.list.unlocked_label".localized)
                     .font(.caption2.weight(.bold)).kerning(0.8)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.Theme.softBrown)
             }
         }
         .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 10)
@@ -100,6 +104,7 @@ struct AchievementListView: View {
                 ForEach(StatusFilter.allCases) { Text($0.title).tag($0) }
             }
             .pickerStyle(.segmented)
+            .tint(Color.Theme.primaryBlue)
             .padding(.horizontal, 16)
 
             ScrollView(.horizontal, showsIndicators: false) {
@@ -125,9 +130,9 @@ struct AchievementListView: View {
                 Text(label).font(.caption.weight(.semibold))
             }
             .padding(.horizontal, 12).padding(.vertical, 7)
-            .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-            .background(selected ? AnyShapeStyle(Color.accentColor)
-                                 : AnyShapeStyle(Color.primary.opacity(0.06)), in: Capsule())
+            .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(Color.Theme.primaryBlue))
+            .background(selected ? AnyShapeStyle(Color.Theme.primaryBlue)
+                                 : AnyShapeStyle(Color.Theme.cardBackground), in: Capsule())
         }
         .buttonStyle(.plain)
     }
@@ -153,31 +158,31 @@ struct AchievementRow: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text(achievement.title)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(Color.Theme.primaryBlue)
                     Spacer()
                     trailing
                 }
                 Text(achievement.detail)
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(Color.Theme.softBrown)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if !unlocked && achievement.hasMeter { meter }
 
                 HStack(spacing: 6) {
                     tag(achievement.rarity.title.uppercased(), color: color)
-                    tag(achievement.category.localizedTitle.uppercased(), color: .secondary)
+                    tag(achievement.category.localizedTitle.uppercased(), color: Color.Theme.softBrown)
                     if unlocked, let date = status.unlockedDate {
                         Text("· " + date.formatted(date: .abbreviated, time: .omitted))
-                            .font(.caption2).foregroundStyle(.secondary)
+                            .font(.caption2).foregroundStyle(Color.Theme.softBrown)
                     }
                 }
             }
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(Color.primary.opacity(0.04)))
+            .fill(Color.Theme.cardBackground))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .strokeBorder(unlocked ? color.opacity(0.45) : Color.primary.opacity(0.06),
+            .strokeBorder(unlocked ? color.opacity(0.45) : Color.Theme.softBrown.opacity(0.2),
                           lineWidth: unlocked ? 1.5 : 1))
         .opacity(unlocked ? 1 : 0.92)
     }
@@ -206,7 +211,7 @@ struct AchievementRow: View {
         HStack(spacing: 6) {
             if achievement.xpReward > 0 {
                 Text("achievement.row.xp_reward".localized(achievement.xpReward.formatted()))
-                    .font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                    .font(.caption2.weight(.bold)).foregroundStyle(Color.Theme.softBrown)
             }
             if unlocked {
                 Image(systemName: "checkmark.circle.fill")
@@ -219,13 +224,13 @@ struct AchievementRow: View {
         VStack(alignment: .leading, spacing: 3) {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.primary.opacity(0.10))
+                    Capsule().fill(Color.Theme.softBrown.opacity(0.15))
                     Capsule().fill(color).frame(width: geo.size.width * fraction)
                 }
             }
             .frame(height: 6)
             Text("\(min(status.progress, achievement.goal))/\(achievement.goal)")
-                .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                .font(.caption2.weight(.semibold)).foregroundStyle(Color.Theme.softBrown)
         }
         .padding(.top, 1)
     }

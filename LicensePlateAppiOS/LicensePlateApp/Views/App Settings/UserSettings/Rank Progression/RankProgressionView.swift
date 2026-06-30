@@ -23,25 +23,27 @@ struct RankProgressionView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 0) {
-                        ForEach(ladder.ranks) { rank in
-                            RankNodeRow(rank: rank,
-                                        state: state(for: rank),
-                                        isFirst: rank.level == ladder.ranks.first?.level,
-                                        isLast: rank.level == ladder.ranks.last?.level)
-                                .id(rank.level)
+        AppBackgroundView {
+            VStack(spacing: 0) {
+                header
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            ForEach(ladder.ranks) { rank in
+                                RankNodeRow(rank: rank,
+                                            state: state(for: rank),
+                                            isFirst: rank.level == ladder.ranks.first?.level,
+                                            isLast: rank.level == ladder.ranks.last?.level)
+                                    .id(rank.level)
+                            }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                }
-                .onAppear {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        withAnimation(.easeInOut) { proxy.scrollTo(current.level, anchor: .center) }
+                    .onAppear {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            withAnimation(.easeInOut) { proxy.scrollTo(current.level, anchor: .center) }
+                        }
                     }
                 }
             }
@@ -67,7 +69,9 @@ struct RankProgressionView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("rank.progression.rank_label".localized(current.level))
                         .font(.caption.weight(.heavy)).kerning(1).foregroundStyle(current.accent)
-                    Text(current.title).font(.title2.weight(.bold))
+                    Text(current.title)
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(Color.Theme.primaryBlue)
                 }
                 Spacer()
             }
@@ -76,7 +80,7 @@ struct RankProgressionView: View {
                 VStack(spacing: 5) {
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
-                            Capsule().fill(Color.primary.opacity(0.10))
+                            Capsule().fill(Color.Theme.softBrown.opacity(0.15))
                             Capsule()
                                 .fill(LinearGradient(colors: [current.accent, next.accent],
                                                      startPoint: .leading, endPoint: .trailing))
@@ -89,13 +93,13 @@ struct RankProgressionView: View {
 
                     HStack {
                         Text("rank.progression.current_xp".localized(xp.formatted()))
-                            .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                            .font(.caption2.weight(.semibold)).foregroundStyle(Color.Theme.softBrown)
                         Spacer()
                         Text("rank.progression.xp_to_next".localized(
                             max(0, next.xpRequired - xp).formatted(),
                             next.title
                         ))
-                            .font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                            .font(.caption2.weight(.semibold)).foregroundStyle(Color.Theme.softBrown)
                     }
                 }
             } else {
@@ -118,6 +122,7 @@ struct RankNodeRow: View {
 
     private var reached: Bool { state != .locked }
     private var spineColor: Color { rank.accent }
+    private var mutedSpineColor: Color { Color.Theme.softBrown.opacity(0.2) }
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
@@ -131,11 +136,11 @@ struct RankNodeRow: View {
     private var spine: some View {
         VStack(spacing: 0) {
             Rectangle()
-                .fill(reached ? spineColor : Color.primary.opacity(0.12))
+                .fill(reached ? spineColor : mutedSpineColor)
                 .frame(width: 3, height: isFirst ? 0 : 14)
             node
             Rectangle()
-                .fill(state == .achieved ? spineColor : Color.primary.opacity(0.12))
+                .fill(state == .achieved ? spineColor : mutedSpineColor)
                 .frame(width: 3)
                 .frame(maxHeight: .infinity)
                 .opacity(isLast ? 0 : 1)
@@ -158,9 +163,9 @@ struct RankNodeRow: View {
             .overlay(Circle().strokeBorder(rank.accent.opacity(0.4), lineWidth: 4).scaleEffect(1.25))
             .shadow(color: rank.accent.opacity(0.6), radius: 8)
         case .locked:
-            circle(fill: Color.primary.opacity(0.12)) {
+            circle(fill: mutedSpineColor) {
                 Image(systemName: "lock.fill").font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.Theme.softBrown)
             }
         }
     }
@@ -176,9 +181,9 @@ struct RankNodeRow: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(rank.title)
                         .font(.headline.weight(.semibold))
-                        .foregroundStyle(reached ? .primary : .secondary)
+                        .foregroundStyle(reached ? Color.Theme.primaryBlue : Color.Theme.softBrown.opacity(0.7))
                     Text(subtitle)
-                        .font(.caption2).foregroundStyle(.secondary)
+                        .font(.caption2).foregroundStyle(Color.Theme.softBrown)
                 }
                 Spacer()
                 if state == .current {
@@ -193,12 +198,12 @@ struct RankNodeRow: View {
                 HStack(spacing: 8) {
                     Image(systemName: unlock.icon)
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(reached ? AnyShapeStyle(rank.accent) : AnyShapeStyle(.secondary))
+                        .foregroundStyle(reached ? AnyShapeStyle(rank.accent) : AnyShapeStyle(Color.Theme.softBrown.opacity(0.7)))
                         .frame(width: 22, height: 22)
-                        .background((reached ? rank.accent : Color.secondary).opacity(0.14), in: Circle())
+                        .background((reached ? rank.accent : Color.Theme.softBrown).opacity(0.14), in: Circle())
                     Text(unlock.title)
                         .font(.caption.weight(.medium))
-                        .foregroundStyle(reached ? .primary : .secondary)
+                        .foregroundStyle(reached ? Color.Theme.primaryBlue : Color.Theme.softBrown.opacity(0.7))
                     Spacer(minLength: 0)
                 }
             }
@@ -206,9 +211,9 @@ struct RankNodeRow: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(Color.primary.opacity(state == .current ? 0.06 : 0.035)))
+            .fill(Color.Theme.cardBackground))
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .strokeBorder(state == .current ? rank.accent : Color.primary.opacity(0.06),
+            .strokeBorder(state == .current ? rank.accent : Color.Theme.softBrown.opacity(0.2),
                           lineWidth: state == .current ? 2 : 1))
     }
 
