@@ -41,23 +41,38 @@ final class TripSessionViewModel: ObservableObject {
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol?
     private let gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
+    private let authService: FirebaseAuthService
     private var didLogTripDashboardLeaderboard = false
     private var cancellables = Set<AnyCancellable>()
     /// One-time bootstrap merge per distinct roster (listeners handle ongoing updates).
     private var lastRosterProfileBootstrapSignature: String?
+
+    var isTripCreator: Bool {
+        guard let session else { return false }
+        return isTripCreator(for: session)
+    }
+
+    var canAddGame: Bool {
+        guard let session else { return false }
+        return isTripCreator
+            && session.status != .ended
+            && session.status != .cancelled
+    }
 
     init(
         sessionId: UUID,
         tripSessionRepository: TripSessionRepositoryProtocol,
         gameInstanceRepository: GameInstanceRepositoryProtocol,
         tripActivityEventRepository: TripActivityEventRepositoryProtocol? = nil,
-        gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol = GameInstanceLifecycleService.shared
+        gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol = GameInstanceLifecycleService.shared,
+        authService: FirebaseAuthService
     ) {
         self.sessionId = sessionId
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
         self.tripActivityEventRepository = tripActivityEventRepository
         self.gameInstanceLifecycleService = gameInstanceLifecycleService
+        self.authService = authService
 
         TripCanonicalRemoteSyncService.shared.hydrationSignal
             .filter { [weak self] hydratedId in
@@ -186,6 +201,12 @@ final class TripSessionViewModel: ObservableObject {
         }
     }
 
+    private func isTripCreator(for session: TripSession) -> Bool {
+        let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+        guard let uid, let createdBy = session.createdBy else { return false }
+        return createdBy == uid
+    }
+
     /// Adds another license plate game, cloning mode/teams/scope from the first LP game on the trip (defaults if none).
     func addGame() {
         do {
@@ -195,6 +216,10 @@ final class TripSessionViewModel: ObservableObject {
                 gameRowItems = []
                 showsTripCompetitiveLeaderboard = false
                 tripLeaderboardRows = []
+                return
+            }
+            guard isTripCreator(for: session) else {
+                errorMessage = "Only the trip creator can add a game.".localized
                 return
             }
             if session.status == .ended || session.status == .cancelled {

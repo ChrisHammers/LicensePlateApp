@@ -33,6 +33,8 @@
 "End Trip" = "Terminer le Voyage";
 "Ends the trip and stops tracking" = "Termine le voyage et arrête le suivi";
 "Only the trip creator can end the trip" = "Seul le créateur du voyage peut le terminer";
+"Only the trip creator can add a game" = "Seul le créateur du voyage peut ajouter un jeu";
+"Adds another license plate game to this trip" = "Ajoute un autre jeu de plaques à ce voyage";
 "Trip Ended" = "Voyage Terminé";
 "This trip has been completed" = "Ce voyage a été complété";
 "This will stop the game. You won't be able to add states in this trip anymore." = "Cela arrêtera le jeu. Vous ne pourrez plus ajouter d'états dans ce voyage.";

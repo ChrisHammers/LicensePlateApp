@@ -265,7 +265,7 @@ struct ContentView: View {
         switch route {
         case .session(let sessionId):
             if activeTripsListViewModel.session(for: sessionId) != nil {
-                TripSessionView(sessionId: sessionId)
+                TripSessionView(sessionId: sessionId, authService: authService)
             } else {
                 TripMissingView()
             }

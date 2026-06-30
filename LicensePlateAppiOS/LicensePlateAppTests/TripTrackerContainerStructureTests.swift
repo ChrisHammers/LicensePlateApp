@@ -140,7 +140,8 @@ struct TripTrackerContainerStructureTests {
             sessionId: sessionId,
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
-            tripActivityEventRepository: eventRepo
+            tripActivityEventRepository: eventRepo,
+            authService: FirebaseAuthService()
         )
         vm.load()
 

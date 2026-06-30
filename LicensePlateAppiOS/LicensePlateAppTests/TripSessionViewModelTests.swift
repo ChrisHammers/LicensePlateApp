@@ -13,6 +13,12 @@ import Testing
 @MainActor
 struct TripSessionViewModelTests {
 
+    private func creatorAuth(userId: String = "user1") -> FirebaseAuthService {
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: userId, userName: "U", firebaseUID: userId)
+        return auth
+    }
+
     private func makeSession(id: UUID = UUID(), name: String = "Test Trip") -> TripSession {
         TripSession(
             id: id,
@@ -52,7 +58,8 @@ struct TripSessionViewModelTests {
             sessionId: sessionId,
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
-            tripActivityEventRepository: eventRepo
+            tripActivityEventRepository: eventRepo,
+            authService: creatorAuth()
         )
 
         viewModel.load()
@@ -77,7 +84,8 @@ struct TripSessionViewModelTests {
             sessionId: sessionId,
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
-            tripActivityEventRepository: eventRepo
+            tripActivityEventRepository: eventRepo,
+            authService: creatorAuth()
         )
 
         viewModel.load()
@@ -130,7 +138,8 @@ struct TripSessionViewModelTests {
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            gameInstanceLifecycleService: gameLifecycle
+            gameInstanceLifecycleService: gameLifecycle,
+            authService: creatorAuth()
         )
 
         viewModel.addGame()
@@ -159,7 +168,8 @@ struct TripSessionViewModelTests {
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            gameInstanceLifecycleService: gameLifecycle
+            gameInstanceLifecycleService: gameLifecycle,
+            authService: creatorAuth()
         )
 
         viewModel.addGame()
@@ -169,6 +179,45 @@ struct TripSessionViewModelTests {
         #expect(games.allSatisfy { $0.definitionId == GameType.licensePlate.rawValue })
         #expect(gameLifecycle.startGameCallCount == 1)
         #expect(viewModel.errorMessage == nil)
+    }
+
+    @Test func addGame_whenPassenger_setsErrorAndDoesNotCreate() async throws {
+        let sessionId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "Multi Trip",
+            status: .active,
+            createdAt: Date(),
+            createdBy: "owner1",
+            startedAt: Date(),
+            participants: [
+                TripParticipant(userId: "owner1", role: .owner, joinedAt: Date()),
+                TripParticipant(userId: "user2", role: .member, joinedAt: Date())
+            ]
+        )
+        let lp = licensePlateInstance(sessionId: sessionId, lifecycle: .started)
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        gameRepo.seed(lp)
+        let eventRepo = MockTripActivityEventRepository()
+        let gameLifecycle = MockGameInstanceLifecycleService()
+
+        let viewModel = TripSessionViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            gameInstanceLifecycleService: gameLifecycle,
+            authService: creatorAuth(userId: "user2")
+        )
+
+        viewModel.addGame()
+
+        #expect(try gameRepo.fetchByTripSession(sessionId: sessionId).count == 1)
+        #expect(viewModel.errorMessage != nil)
+        #expect(gameLifecycle.startGameCallCount == 0)
     }
 
     @Test func addGame_whenTripEnded_setsErrorAndDoesNotCreate() async throws {
@@ -189,7 +238,8 @@ struct TripSessionViewModelTests {
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            gameInstanceLifecycleService: gameLifecycle
+            gameInstanceLifecycleService: gameLifecycle,
+            authService: creatorAuth()
         )
 
         viewModel.addGame()
@@ -217,7 +267,8 @@ struct TripSessionViewModelTests {
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
             tripActivityEventRepository: eventRepo,
-            gameInstanceLifecycleService: gameLifecycle
+            gameInstanceLifecycleService: gameLifecycle,
+            authService: creatorAuth()
         )
 
         viewModel.addGame()
@@ -274,7 +325,8 @@ struct TripSessionViewModelTests {
             sessionId: sessionId,
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
-            tripActivityEventRepository: eventRepo
+            tripActivityEventRepository: eventRepo,
+            authService: creatorAuth()
         )
         viewModel.load()
 
@@ -305,7 +357,8 @@ struct TripSessionViewModelTests {
             sessionId: sessionId,
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: gameRepo,
-            tripActivityEventRepository: eventRepo
+            tripActivityEventRepository: eventRepo,
+            authService: creatorAuth()
         )
         viewModel.load()
 

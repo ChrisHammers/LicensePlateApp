@@ -33,6 +33,8 @@
 "End Trip" = "End Trip";
 "Ends the trip and stops tracking" = "Ends the trip and stops tracking";
 "Only the trip creator can end the trip" = "Only the trip creator can end the trip";
+"Only the trip creator can add a game" = "Only the trip creator can add a game";
+"Adds another license plate game to this trip" = "Adds another license plate game to this trip";
 "Trip Ended" = "Trip Ended";
 "This trip has been completed" = "This trip has been completed";
 "This will stop the game. You won't be able to add states in this trip anymore." = "This will stop the game. You won't be able to add states in this trip anymore.";

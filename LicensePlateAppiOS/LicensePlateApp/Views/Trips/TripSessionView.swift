@@ -16,13 +16,14 @@ struct TripSessionView: View {
     @State private var showTripSettings = false
     @State private var showPassengerList = false
 
-    init(sessionId: UUID) {
+    init(sessionId: UUID, authService: FirebaseAuthService) {
         self.sessionId = sessionId
         _viewModel = StateObject(wrappedValue: TripSessionViewModel(
             sessionId: sessionId,
             tripSessionRepository: TripSessionRepository.shared,
             gameInstanceRepository: GameInstanceRepository.shared,
-            tripActivityEventRepository: TripActivityEventRepository.shared
+            tripActivityEventRepository: TripActivityEventRepository.shared,
+            authService: authService
         ))
     }
 
@@ -111,6 +112,11 @@ struct TripSessionView: View {
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.primaryBlue)
                 }
+                .disabled(!viewModel.canAddGame)
+                .opacity(viewModel.canAddGame ? 1.0 : 0.5)
+                .accessibilityHint(viewModel.isTripCreator
+                    ? "Adds another license plate game to this trip".localized
+                    : "Only the trip creator can add a game".localized)
                 .listRowBackground(Color.Theme.cardBackground)
             } header: {
                 Text("Games".localized)
@@ -332,10 +338,12 @@ private struct GameRowView: View {
 }
 
 #Preview("Trip session") {
-    NavigationStack {
-        TripSessionView(sessionId: PreviewConstants.sessionIdSolo)
+    let auth = FirebaseAuthService()
+    auth.currentUser = AppUser(id: PreviewConstants.userId1, userName: "Preview Driver", firebaseUID: PreviewConstants.userId1)
+    return NavigationStack {
+        TripSessionView(sessionId: PreviewConstants.sessionIdSolo, authService: auth)
             .environmentObject(MainCoordinator())
-            .environmentObject(FirebaseAuthService())
+            .environmentObject(auth)
     }
 }
 
