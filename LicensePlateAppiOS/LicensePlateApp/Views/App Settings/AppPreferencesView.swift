@@ -331,6 +331,12 @@ struct AppPreferencesView: View {
               description: "Use TileOverlay for polygon rendering - best performance for many polygons".localized,
               isOn: $useTileOverlayRendering
             )
+
+            Divider()
+
+            XpProgressionDebugExportButton(
+              userId: XpProgressionDebugExporter.resolvedUserIdFromProgressionRepository()
+            )
           }
           .padding(.horizontal, 16)
           .padding(.vertical, 16)

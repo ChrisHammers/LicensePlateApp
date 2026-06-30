@@ -517,9 +517,23 @@ struct LicensePlateGameView: View {
         let p = viewModel.sessionProgressionPending
         let rankPreviewBase = server?.totalXp ?? 0
         let rankPreviewTotal = rankPreviewBase + viewModel.accountLedgerProvisionalPending
+        let exportUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
         return VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    #if DEBUG
+                    XpProgressionDebugExportButton(
+                        userId: exportUserId,
+                        sessionContext: XpProgressionDebugExporter.SessionContext(
+                            sessionId: viewModel.sessionId,
+                            gameInstanceId: viewModel.game.id,
+                            sessionProgressionPending: p,
+                            sessionLedgerNetXp: netSessionLedger,
+                            gameLedgerNetXp: netGameLedger
+                        )
+                    )
+                    Divider()
+                    #endif
                     Text("game.progression.section_summary".localized)
                         .font(.headline)
                         .foregroundStyle(Color.Theme.primaryBlue)
