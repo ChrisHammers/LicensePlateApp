@@ -11,7 +11,7 @@ import Combine
 enum DeferredSetupStep: String, CaseIterable, Identifiable {
     case avatar
     case account
-    case family
+    //case family
     case notifications
 
     var id: String { rawValue }
@@ -20,7 +20,7 @@ enum DeferredSetupStep: String, CaseIterable, Identifiable {
         switch self {
         case .avatar: return "Choose your avatar".localized
         case .account: return "Create account".localized
-        case .family: return "Friends & Family".localized
+        //case .family: return "Friends & Family".localized
         case .notifications: return "Notifications".localized
         }
     }
@@ -29,7 +29,7 @@ enum DeferredSetupStep: String, CaseIterable, Identifiable {
         switch self {
         case .avatar: return "person.crop.circle"
         case .account: return "person.badge.plus"
-        case .family: return "person.2.fill"
+        //case .family: return "person.2.fill"
         case .notifications: return "bell.fill"
         }
     }
@@ -65,11 +65,11 @@ final class DeferredProfileSetupStore: ObservableObject {
             steps.append(.account)
         }
 
-        if !accountState.isGuestLike,
-           user?.activeFamilyId == nil,
-           !completed.contains(DeferredSetupStep.family.rawValue) {
-            steps.append(.family)
-        }
+//        if !accountState.isGuestLike,
+//           user?.activeFamilyId == nil,
+//           !completed.contains(DeferredSetupStep.family.rawValue) {
+//            steps.append(.family)
+//        }
 
         if !completed.contains(DeferredSetupStep.notifications.rawValue) {
             steps.append(.notifications)

@@ -100,16 +100,16 @@ struct DeferredProfileSetupHubView: View {
                     )
                     .environmentObject(authService)
                 }
-            case .family:
-                OnboardingBackgroundView {
-                    OnboardingCreateFamilyView(
-                        coordinator: onboardingCoordinator,
-                        onNext: {
-                            complete(step)
-                        }
-                    )
-                    .environmentObject(authService)
-                }
+//            case .family:
+//                OnboardingBackgroundView {
+//                    OnboardingCreateFamilyView(
+//                        coordinator: onboardingCoordinator,
+//                        onNext: {
+//                            complete(step)
+//                        }
+//                    )
+//                    .environmentObject(authService)
+//                }
             case .notifications:
                 PrivacyPermissionsView(onDone: { complete(step) })
             }
