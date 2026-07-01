@@ -12,6 +12,7 @@ import UserNotifications
 import Speech
 
 struct PrivacyPermissionsView: View {
+    var onDone: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     
     // Privacy & Permissions
@@ -185,7 +186,11 @@ struct PrivacyPermissionsView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done".localized) {
-                        dismiss()
+                        if let onDone {
+                            onDone()
+                        } else {
+                            dismiss()
+                        }
                     }
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)

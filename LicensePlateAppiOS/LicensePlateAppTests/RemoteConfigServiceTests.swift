@@ -18,6 +18,6 @@ struct RemoteConfigServiceTests {
         #expect(defaults.int(for: .returnStreakReminderHour) == 20)
         #expect(defaults.string(for: .progressionCatalogPresentationV1).isEmpty)
         #expect(defaults.bool(for: .quickSoloFirstSessionEnabled))
-        #expect(defaults.int(for: .quickSoloSplashDelayMs) == 500)
+        #expect(defaults.int(for: .quickSoloSplashDelayMs) == 1000)
     }
 }

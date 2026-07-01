@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Combine
 
 enum DeferredSetupStep: String, CaseIterable, Identifiable {
     case avatar
@@ -35,8 +36,10 @@ enum DeferredSetupStep: String, CaseIterable, Identifiable {
 }
 
 @MainActor
-final class DeferredProfileSetupStore {
+final class DeferredProfileSetupStore: ObservableObject {
     static let shared = DeferredProfileSetupStore()
+
+    @Published private(set) var revision = 0
 
     private let state: FirstSessionStateStoring
     private let accountStateProvider: AccountStateProviding
@@ -77,8 +80,9 @@ final class DeferredProfileSetupStore {
 
     func markCompleted(_ step: DeferredSetupStep) {
         var completed = state.deferredSetupStepsCompleted
-        completed.insert(step.rawValue)
+        guard completed.insert(step.rawValue).inserted else { return }
         state.deferredSetupStepsCompleted = completed
+        revision += 1
     }
 
     func shouldShowPostFirstFindPrompt(for user: AppUser?) -> Bool {
@@ -88,6 +92,8 @@ final class DeferredProfileSetupStore {
     }
 
     func dismissPostFirstFindPrompt() {
+        guard state.deferredSetupPromptDismissedAt == nil else { return }
         state.deferredSetupPromptDismissedAt = Date()
+        revision += 1
     }
 }

@@ -78,15 +78,6 @@ struct OnboardingAvatarPickerView: View {
                         .cornerRadius(12)
                 }
                 .accessibleButton(label: "Continue".localized, hint: "Save avatar and continue".localized)
-                
-                Button {
-                    onNext()
-                } label: {
-                    Text("Skip".localized)
-                        .font(.system(.body, design: .rounded))
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                }
-                .accessibleButton(label: "Skip".localized, hint: "Keep current avatar and continue".localized)
             }
             .padding(24)
         }

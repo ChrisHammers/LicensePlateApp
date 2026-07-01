@@ -9,7 +9,7 @@ import SwiftUI
 
 /// A view wrapper that applies the appropriate background based on user preferences
 struct AppBackgroundView<Content: View>: View {
-    @AppStorage("appBackgroundStyle") private var backgroundStyleRaw: String = AppBackgroundStyle.none.rawValue
+    @AppStorage("appBackgroundStyle") private var backgroundStyleRaw: String = AppBackgroundStyle.paths.rawValue
     @AppStorage("appDarkMode") private var darkModeRaw: String = AppDarkMode.system.rawValue
     @Environment(\.colorScheme) private var systemColorScheme
     

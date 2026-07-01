@@ -44,6 +44,7 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("boundariesLoaded") private var boundariesLoaded = false
     @AppStorage(FirstSessionStateKeys.hasLoggedFirstFind) private var hasLoggedFirstFind = false
+    @ObservedObject private var deferredSetupStore = DeferredProfileSetupStore.shared
     @State private var showDeferredSetupBanner = false
     @State private var isShowingDeferredSetupHub = false
     
@@ -206,7 +207,9 @@ struct ContentView: View {
                     deferredSetupBanner
                 }
             }
-            .sheet(isPresented: $isShowingDeferredSetupHub) {
+            .sheet(isPresented: $isShowingDeferredSetupHub, onDismiss: {
+                refreshDeferredSetupBanner()
+            }) {
                 NavigationStack {
                     DeferredProfileSetupHubView()
                         .environmentObject(authService)
@@ -245,6 +248,12 @@ struct ContentView: View {
                 refreshDeferredSetupBanner()
             }
             .onChange(of: mainCoordinator.path.count) { _, _ in
+                refreshDeferredSetupBanner()
+            }
+            .onChange(of: deferredSetupStore.revision) { _, _ in
+                refreshDeferredSetupBanner()
+            }
+            .onChange(of: authService.currentUser?.id) { _, _ in
                 refreshDeferredSetupBanner()
             }
             .onChange(of: isShowingCreateSheet) { _, isShowing in
@@ -355,10 +364,9 @@ struct ContentView: View {
     }
 
     private func refreshDeferredSetupBanner() {
-        let store = DeferredProfileSetupStore.shared
-        let shouldShow = store.shouldShowPostFirstFindPrompt(for: authService.currentUser)
+        let shouldShow = deferredSetupStore.shouldShowPostFirstFindPrompt(for: authService.currentUser)
         if shouldShow, !showDeferredSetupBanner {
-            let pending = store.pendingSteps(for: authService.currentUser)
+            let pending = deferredSetupStore.pendingSteps(for: authService.currentUser)
             FirstSessionAnalyticsService.shared.recordDeferredSetupPromptShown(pendingSteps: pending)
         }
         showDeferredSetupBanner = shouldShow
@@ -389,7 +397,7 @@ struct ContentView: View {
             }
             .accessibleButton(label: "Open".localized, hint: "Opens profile setup".localized)
             Button {
-                DeferredProfileSetupStore.shared.dismissPostFirstFindPrompt()
+                deferredSetupStore.dismissPostFirstFindPrompt()
                 showDeferredSetupBanner = false
             } label: {
                 Image(systemName: "xmark")
@@ -742,6 +750,7 @@ private struct PendingInviteCard: View {
 
 // Default Settings View for new trips
 struct DefaultSettingsView: View {
+    @ObservedObject private var deferredSetupStore = DeferredProfileSetupStore.shared
     @StateObject private var coordinator = MainSettingsCoordinator()
     
     @Environment(\.dismiss) private var dismiss
@@ -821,6 +830,14 @@ struct DefaultSettingsView: View {
             set: { appLanguageRaw = $0.rawValue }
         )
     }
+
+    private var pendingDeferredSetupSteps: [DeferredSetupStep] {
+        deferredSetupStore.pendingSteps(for: authService.currentUser)
+    }
+
+    private var showsDeferredProfileSetup: Bool {
+        authService.currentUser != nil && !pendingDeferredSetupSteps.isEmpty
+    }
     
     var body: some View {
       NavigationStack(path: $coordinator.path) { //NavigationStack(path: Binding(get: { coordinator.path }, set: { coordinator.path = $0 })) {
@@ -829,28 +846,28 @@ struct DefaultSettingsView: View {
                     Section {
                         VStack(spacing: 12) {
                             // Profile (from User section, but no section header)
-                            if let _ = authService.currentUser {
-                                SettingNavigationRow(
-                                    title: "Profile".localized,
-                                    description: "Edit username and manage account".localized,
-                                    icon: "person.circle"
-                                ) {
-                                    coordinator.navigateToProfile()
+                            if authService.currentUser != nil {
+                                if showsDeferredProfileSetup {
+                                    SettingNavigationRow(
+                                        title: "Complete your profile".localized,
+                                        description: "deferred_setup.settings.description".localized,
+                                        icon: "person.crop.circle.badge.checkmark"
+                                    ) {
+                                        coordinator.navigateToDeferredProfileSetup()
+                                    }
+                                } else {
+                                    SettingNavigationRow(
+                                        title: "Profile".localized,
+                                        description: "Edit username and manage account".localized,
+                                        icon: "person.circle"
+                                    ) {
+                                        coordinator.navigateToProfile()
+                                    }
                                 }
-                                
+
                                 Divider()
                             }
 
-                            SettingNavigationRow(
-                                title: "Complete Your Profile".localized,
-                                description: "deferred_setup.settings.description".localized,
-                                icon: "person.crop.circle.badge.checkmark"
-                            ) {
-                                coordinator.navigateToDeferredProfileSetup()
-                            }
-
-                            Divider()
-                            
                             // Privacy & Permissions
                             SettingNavigationRow(
                                 title: "Privacy & Permissions".localized,

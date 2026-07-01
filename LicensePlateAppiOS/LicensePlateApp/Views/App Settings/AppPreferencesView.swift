@@ -13,7 +13,7 @@ struct AppPreferencesView: View {
   
   // App Preferences
   @AppStorage("appDarkMode") private var appDarkModeRaw: String = AppDarkMode.system.rawValue
-  @AppStorage("appBackgroundStyle") private var appBackgroundStyleRaw: String = AppBackgroundStyle.none.rawValue
+  @AppStorage("appBackgroundStyle") private var appBackgroundStyleRaw: String = AppBackgroundStyle.paths.rawValue
   @AppStorage("appDistanceUnit") private var appDistanceUnitRaw: String = AppDistanceUnit.miles.rawValue
   @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
   @AppStorage("appShowRegionBorders") private var appShowRegionBorders = false
