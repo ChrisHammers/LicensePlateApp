@@ -109,3 +109,21 @@ export async function isUserSearchable(
   }
 }
 
+const recipientNotRegisteredMessage =
+  "Recipient has not created a registered account";
+
+/**
+ * Rejects invite targets that have not upgraded from an anonymous account.
+ * Missing `isRegistered` is treated as registered (legacy users).
+ */
+export async function assertUserIsRegistered(userId: string): Promise<void> {
+  const userDoc = await db.collection("users").doc(userId).get();
+  if (!userDoc.exists) {
+    throw new Error("User not found");
+  }
+  if (userDoc.data()?.isRegistered === false) {
+    throw new Error(recipientNotRegisteredMessage);
+  }
+}
+
+export { recipientNotRegisteredMessage };

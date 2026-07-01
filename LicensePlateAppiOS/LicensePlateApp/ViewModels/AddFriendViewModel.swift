@@ -77,8 +77,23 @@ final class AddFriendViewModel: ObservableObject {
         isSearching = true
         errorMessage = nil
 
+        guard let authService else {
+            isSearching = false
+            errorMessage = "User not authenticated".localized
+            showError = true
+            return
+        }
+
+        if !FriendsFamilyAccessPolicy.shared.canUseFriendsAndFamily(for: authService.currentUser) {
+            isSearching = false
+            searchResults = []
+            errorMessage = FriendsFamilyCallableErrors.guestBlockedMessage
+            showError = true
+            return
+        }
+
         do {
-            guard let currentUserId = authService?.currentUser?.firebaseUID ?? authService?.currentUser?.id else {
+            guard let currentUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else {
                 isSearching = false
                 errorMessage = "User not authenticated".localized
                 showError = true
@@ -88,7 +103,8 @@ final class AddFriendViewModel: ObservableObject {
             var results = try await userRepository.searchUsers(
                 query: searchQuery,
                 searchType: searchType,
-                excludeUserId: currentUserId
+                excludeUserId: currentUserId,
+                searchingUser: authService.currentUser
             )
 
             let acceptedFriendships = friendshipRepository.getAcceptedFriendships(for: currentUserId)
@@ -132,8 +148,8 @@ final class AddFriendViewModel: ObservableObject {
             return
         }
 
-        if authService.isAnonymousUser {
-            errorMessage = "Create an account to use Friends & Family features.".localized
+        if !FriendsFamilyAccessPolicy.shared.canUseFriendsAndFamily(for: authService.currentUser) {
+            errorMessage = FriendsFamilyCallableErrors.guestBlockedMessage
             showError = true
             return
         }

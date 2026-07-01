@@ -1,6 +1,6 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import { canAddMemberToFamily } from "./utils/validation";
+import { canAddMemberToFamily, assertUserIsRegistered, recipientNotRegisteredMessage } from "./utils/validation";
 import { writeAuditLog } from "./audit";
 import { getFCMToken, sendPushNotification } from "./utils/notifications";
 import { normalizeClientMetadata } from "./clientMetadata";
@@ -97,6 +97,18 @@ export const sendFamilyInvite = enforcedCallable(
       throw new functions.https.HttpsError(
         "invalid-argument",
         "toUserId and familyId are required"
+      );
+    }
+
+    try {
+      await assertUserIsRegistered(toUserId);
+    } catch (error) {
+      if (error instanceof Error && error.message === "User not found") {
+        throw new functions.https.HttpsError("not-found", "User not found");
+      }
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        recipientNotRegisteredMessage
       );
     }
 

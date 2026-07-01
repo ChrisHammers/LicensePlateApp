@@ -593,20 +593,7 @@ class FamilyRepository: ObservableObject {
     // MARK: - Cloud Functions
 
     private func requireRegisteredAccount() throws {
-        guard Auth.auth().currentUser != nil else {
-            throw NSError(
-                domain: "FamilyRepository",
-                code: 401,
-                userInfo: [NSLocalizedDescriptionKey: "You are not signed in. Sign in and try again."]
-            )
-        }
-        guard Auth.auth().currentUser?.isAnonymous == false else {
-            throw NSError(
-                domain: "FamilyRepository",
-                code: 403,
-                userInfo: [NSLocalizedDescriptionKey: "Create an account to use Friends & Family features."]
-            )
-        }
+        try FriendsFamilyAccessPolicy.shared.validateFriendsFamilyCallableAccess(for: nil)
     }
     
     /// Create a new family

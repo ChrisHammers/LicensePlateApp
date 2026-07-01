@@ -6,8 +6,18 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isRegisteredAccount() {
+      return isSignedIn()
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
     function uid() {
       return request.auth.uid;
+    }
+
+    function isDiscoverableUserProfile(userId) {
+      return uid() == userId
+        || resource.data.get('isRegistered', true) != false;
     }
 
     function isAdmin() {
@@ -48,7 +58,7 @@ service cloud.firestore {
 
     // USERS
     match /users/{userId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && isDiscoverableUserProfile(userId);
       allow create: if isSignedIn() && uid() == userId && userDocHasNoPrivateFields();
       allow update: if isSignedIn() && uid() == userId && userDocHasNoPrivateFields() && userDocPreservesEntitlementTags();
       allow delete: if false; // handle via backend flows if needed
@@ -93,11 +103,11 @@ service cloud.firestore {
       allow read: if isSignedIn() &&
         (uid() == resource.data.userA || uid() == resource.data.userB);
 
-      allow create: if isSignedIn() &&
+      allow create: if isRegisteredAccount() &&
         request.resource.data.status == "pending" &&
         (uid() == request.resource.data.userA || uid() == request.resource.data.userB);
 
-      allow update: if isSignedIn() &&
+      allow update: if isRegisteredAccount() &&
         (uid() == resource.data.userA || uid() == resource.data.userB);
 
       // Removals go through removeFriend Cloud Function (Admin SDK) for friendCount consistency
@@ -164,8 +174,8 @@ service cloud.firestore {
       allow read: if isSignedIn() &&
         (uid() == resource.data.fromUserId || uid() == resource.data.toUserId);
 
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() &&
+      allow create: if isRegisteredAccount();
+      allow update: if isRegisteredAccount() &&
         (uid() == resource.data.fromUserId || uid() == resource.data.toUserId);
 
       allow delete: if false;
@@ -174,8 +184,8 @@ service cloud.firestore {
     // SHARE CODES
     match /share_codes/{codeId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.resource.data.createdBy == uid();
-      allow update: if isSignedIn() && resource.data.createdBy == uid();
+      allow create: if isRegisteredAccount() && request.resource.data.createdBy == uid();
+      allow update: if isRegisteredAccount() && resource.data.createdBy == uid();
       allow delete: if false;
     }
 
@@ -183,9 +193,9 @@ service cloud.firestore {
     match /families/{familyId} {
       allow read: if isSignedIn() && isFamilyMember(familyId);
 
-      // create family allowed for signed-in user; membership enforced via backend
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && (isCreator(familyId) || isCaptain(familyId));
+      // create family allowed for registered accounts; membership enforced via backend
+      allow create: if isRegisteredAccount();
+      allow update: if isRegisteredAccount() && (isCreator(familyId) || isCaptain(familyId));
       allow delete: if false; // never delete; mark inactive via backend
     }
 
@@ -193,13 +203,13 @@ service cloud.firestore {
       allow read: if isSignedIn() && isFamilyMember(familyId);
 
       // Writes are limited; detailed role/limit enforcement should be in Cloud Functions
-      allow create, update, delete: if isSignedIn() && (isCreator(familyId) || isCaptain(familyId));
+      allow create, update, delete: if isRegisteredAccount() && (isCreator(familyId) || isCaptain(familyId));
     }
 
     match /families/{familyId}/pending/{requestId} {
       allow read: if isSignedIn() && isFamilyMember(familyId);
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && (isCreator(familyId) || isCaptain(familyId));
+      allow create: if isRegisteredAccount();
+      allow update: if isRegisteredAccount() && (isCreator(familyId) || isCaptain(familyId));
       allow delete: if false;
     }
 

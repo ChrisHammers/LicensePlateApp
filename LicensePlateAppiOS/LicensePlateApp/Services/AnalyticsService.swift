@@ -33,6 +33,7 @@ class AnalyticsService: AnalyticsLogging {
         // Navigation / Entry
         case friendsScreenOpened
         case familyScreenOpened
+        case friendsFamilySignUpGateShown(feature: String)
         case addFriendCTATapped
         case inviteViaQROpened
         case inviteViaCodeOpened
@@ -290,6 +291,7 @@ class AnalyticsService: AnalyticsLogging {
             switch self {
             case .friendsScreenOpened: return "friends_screen_opened"
             case .familyScreenOpened: return "family_screen_opened"
+            case .friendsFamilySignUpGateShown: return "friends_family_sign_up_gate_shown"
             case .addFriendCTATapped: return "add_friend_cta_tapped"
             case .inviteViaQROpened: return "invite_via_qr_opened"
             case .inviteViaCodeOpened: return "invite_via_code_opened"
@@ -480,6 +482,8 @@ class AnalyticsService: AnalyticsLogging {
                 return paramsDict
             case .userSearchPerformed(let queryType):
                 return ["query_type": queryType]
+            case .friendsFamilySignUpGateShown(let feature):
+                return ["feature": feature]
             case .shareCodeGenerated(let type), .shareCodeUsed(let type):
                 return ["type": type]
             case .familyCreateFailed(let error):

@@ -893,11 +893,17 @@ struct DefaultSettingsView: View {
                     case .helpAbout:
                         HelpAboutView()
                     case .friends:
-                        FriendsHub()
-                            .environmentObject(authService)
+                        RegisteredAccountGate(feature: .friends) {
+                            FriendsHub()
+                                .environmentObject(authService)
+                        }
+                        .environmentObject(authService)
                     case .family:
-                        FamilyDashboard()
-                            .environmentObject(authService)
+                        RegisteredAccountGate(feature: .family) {
+                            FamilyDashboard()
+                                .environmentObject(authService)
+                        }
+                        .environmentObject(authService)
                     }
                 }
             }

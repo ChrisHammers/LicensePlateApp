@@ -155,6 +155,16 @@ struct AddFamilyMemberSheet: View {
             }
             return
         }
+
+        if !FriendsFamilyAccessPolicy.shared.canUseFriendsAndFamily(for: authService.currentUser) {
+            await MainActor.run {
+                searchResults = []
+                isSearching = false
+                errorMessage = FriendsFamilyCallableErrors.guestBlockedMessage
+                showError = true
+            }
+            return
+        }
         
         await MainActor.run {
             isSearching = true
@@ -164,7 +174,12 @@ struct AddFamilyMemberSheet: View {
         do {
             // Get current user ID to exclude from results
             let currentUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
-            let results = try await userRepository.searchUsers(query: searchQuery, searchType: searchType, excludeUserId: currentUserId)
+            let results = try await userRepository.searchUsers(
+                query: searchQuery,
+                searchType: searchType,
+                excludeUserId: currentUserId,
+                searchingUser: authService.currentUser
+            )
             await MainActor.run {
                 searchResults = results
                 isSearching = false
@@ -234,6 +249,12 @@ struct FamilyMemberSearchResultRow: View {
     private func sendInvite() {
         guard authService.isOnline else {
             errorMessage = "Requires network connection".localized
+            showError = true
+            return
+        }
+
+        if !FriendsFamilyAccessPolicy.shared.canUseFriendsAndFamily(for: authService.currentUser) {
+            errorMessage = FriendsFamilyCallableErrors.guestBlockedMessage
             showError = true
             return
         }

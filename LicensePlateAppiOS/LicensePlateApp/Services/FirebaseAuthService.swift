@@ -1541,6 +1541,7 @@ class FirebaseAuthService: ObservableObject {
         }
         data["friendCount"] = user.friendCount
         data["isRetiredGeneral"] = user.isRetiredGeneral
+        data["isRegistered"] = !(Auth.auth().currentUser?.isAnonymous ?? true)
         
         if !user.linkedPlatforms.isEmpty {
             data["linkedPlatforms"] = user.linkedPlatforms.map { platform in

@@ -193,103 +193,110 @@ struct UserProfileView: View {
                     .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
                     
                     Section {
-                        // First Name - Editable
-                        SettingEditableTextRow(
-                            title: "First Name".localized,
-                            value: $currentFirstName,
-                            placeholder: "Enter first name".localized,
-                            detail: nil,
-                            isDisabled: false,
-                            onSave: {
-                                saveFirstName()
-                            },
-                            onCancel: {
-                                cancelFirstNameEditing()
-                            }
-                        )
-                        
-                        // Last Name - Editable
-                        SettingEditableTextRow(
-                            title: "Last Name".localized,
-                            value: $currentLastName,
-                            placeholder: "Enter last name".localized,
-                            detail: nil,
-                            isDisabled: false,
-                            onSave: {
-                                saveLastName()
-                            },
-                            onCancel: {
-                                cancelLastNameEditing()
-                            }
-                        )
-                        
-                        // Username - Editable
-                        SettingEditableTextRow(
-                            title: "Username".localized,
-                            value: $currentUserName,
-                            placeholder: "Enter username".localized,
-                            detail: nil,
-                            isDisabled: isCheckingUsername,
-                            onSave: {
-                                saveUserName()
-                            },
-                            onCancel: {
-                                cancelEditing()
-                            }
-                        )
-                      
-                        // Email - Share Data Toggle
-                        SettingShareDataToggleRow3(
-                            title: "Email".localized,
-                            value: Binding(
-                                get: { user.email },
-                                set: { newValue in
-                                    user.email = newValue
+                        VStack(spacing: 12) {
+                            // First Name - Editable
+                            SettingEditableTextRow(
+                                title: "First Name".localized,
+                                value: $currentFirstName,
+                                placeholder: "Enter first name".localized,
+                                detail: nil,
+                                isDisabled: false,
+                                onSave: {
+                                    saveFirstName()
+                                },
+                                onCancel: {
+                                    cancelFirstNameEditing()
                                 }
-                            ),
-                            detail: nil,
-                            isOn: Binding(
-                                get: { user.isEmailPublic },
-                                set: { newValue in
-                                    user.isEmailPublic = newValue
+                            )
+                            
+                            // Last Name - Editable
+                            SettingEditableTextRow(
+                                title: "Last Name".localized,
+                                value: $currentLastName,
+                                placeholder: "Enter last name".localized,
+                                detail: nil,
+                                isDisabled: false,
+                                onSave: {
+                                    saveLastName()
+                                },
+                                onCancel: {
+                                    cancelLastNameEditing()
+                                }
+                            )
+                            
+                            // Username - Editable
+                            SettingEditableTextRow(
+                                title: "Username".localized,
+                                value: $currentUserName,
+                                placeholder: "Enter username".localized,
+                                detail: nil,
+                                isDisabled: isCheckingUsername,
+                                onSave: {
+                                    saveUserName()
+                                },
+                                onCancel: {
+                                    cancelEditing()
+                                }
+                            )
+                          
+                            // Email - Share Data Toggle
+                            SettingShareDataToggleRow3(
+                                title: "Email".localized,
+                                value: Binding(
+                                    get: { user.email },
+                                    set: { newValue in
+                                        user.email = newValue
+                                    }
+                                ),
+                                detail: nil,
+                                isOn: Binding(
+                                    get: { user.isEmailPublic },
+                                    set: { newValue in
+                                        user.isEmailPublic = newValue
+                                        try? modelContext.save()
+                                    }
+                                ),
+                                isEditable: false,
+                                onSave: {
                                     try? modelContext.save()
+                                },
+                                onCancel: {
+                                    // Reset to original value if needed
                                 }
-                            ),
-                            isEditable: false,
-                            onSave: {
-                                try? modelContext.save()
-                            },
-                            onCancel: {
-                                // Reset to original value if needed
-                            }
-                        )
-                        
-                        // Phone - Share Data Toggle
-                        SettingShareDataToggleRow3(
-                            title: "Phone".localized,
-                            value: Binding(
-                                get: { user.phoneNumber },
-                                set: { newValue in
-                                    user.phoneNumber = newValue
-                                }
-                            ),
-                            detail: nil,
-                            isOn: Binding(
-                                get: { user.isPhonePublic },
-                                set: { newValue in
-                                    user.isPhonePublic = newValue
+                            )
+                            
+                            // Phone - Share Data Toggle
+                            SettingShareDataToggleRow3(
+                                title: "Phone".localized,
+                                value: Binding(
+                                    get: { user.phoneNumber },
+                                    set: { newValue in
+                                        user.phoneNumber = newValue
+                                    }
+                                ),
+                                detail: nil,
+                                isOn: Binding(
+                                    get: { user.isPhonePublic },
+                                    set: { newValue in
+                                        user.isPhonePublic = newValue
+                                        try? modelContext.save()
+                                    }
+                                ),
+                                isEditable: true,
+                                onSave: {
                                     try? modelContext.save()
+                                },
+                                onCancel: {
+                                    // Reset to original value if needed
                                 }
-                            ),
-                            isEditable: true,
-                            onSave: {
-                                try? modelContext.save()
-                            },
-                            onCancel: {
-                                // Reset to original value if needed
-                            }
-                        )
-                        
+                            )
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .background(Color.Theme.cardBackground)
+                        .cornerRadius(20)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                        .listRowBackground(Color.clear)
                     } header: {
                         Text("Account Information".localized)
                             .font(.system(.headline, design: .rounded))
@@ -306,26 +313,34 @@ struct UserProfileView: View {
                     if achievementProgressViewModel.achievementsEnabled
                         || achievementProgressViewModel.rankProgressionEnabled {
                         Section {
-                            if achievementProgressViewModel.achievementsEnabled {
-                                NavigationLink(value: ProfileProgressionRoute.achievements) {
-                                    profileProgressionRow(
-                                        title: "profile.progression.achievements.title".localized,
-                                        description: "profile.progression.achievements.description".localized,
-                                        icon: "rosette"
-                                    )
+                            VStack(spacing: 12) {
+                                if achievementProgressViewModel.achievementsEnabled {
+                                    NavigationLink(value: ProfileProgressionRoute.achievements) {
+                                        profileProgressionRow(
+                                            title: "profile.progression.achievements.title".localized,
+                                            description: "profile.progression.achievements.description".localized,
+                                            icon: "rosette"
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
-                            }
-                            if achievementProgressViewModel.rankProgressionEnabled {
-                                NavigationLink(value: ProfileProgressionRoute.rankProgression) {
-                                    profileProgressionRow(
-                                        title: "profile.progression.ranks.title".localized,
-                                        description: "profile.progression.ranks.description".localized,
-                                        icon: "chart.line.uptrend.xyaxis"
-                                    )
+                                if achievementProgressViewModel.rankProgressionEnabled {
+                                    NavigationLink(value: ProfileProgressionRoute.rankProgression) {
+                                        profileProgressionRow(
+                                            title: "profile.progression.ranks.title".localized,
+                                            description: "profile.progression.ranks.description".localized,
+                                            icon: "chart.line.uptrend.xyaxis"
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 16)
+                            .background(Color.Theme.cardBackground)
+                            .cornerRadius(20)
+                            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                            .listRowBackground(Color.clear)
                         } header: {
                             Text("profile.progression.section_title".localized)
                                 .font(.system(.headline, design: .rounded))
@@ -338,21 +353,29 @@ struct UserProfileView: View {
 
                     // Friends & Family Section
                     Section {
-                        SettingNavigationRow(
-                            title: "Friends".localized,
-                            description: "Manage your friends and friend requests".localized,
-                            icon: "person.2"
-                        ) {
-                            coordinator.navigateToFriends()
+                        VStack(spacing: 12) {
+                            SettingNavigationRow(
+                                title: "Friends".localized,
+                                description: "Manage your friends and friend requests".localized,
+                                icon: "person.2"
+                            ) {
+                                coordinator.navigateToFriends()
+                            }
+
+                            SettingNavigationRow(
+                                title: "Family".localized,
+                                description: "View and manage your family".localized,
+                                icon: "house"
+                            ) {
+                                coordinator.navigateToFamily()
+                            }
                         }
-                      
-                      SettingNavigationRow(
-                          title: "Family".localized,
-                          description: "View and manage your family".localized,
-                          icon: "house"
-                      ) {
-                          coordinator.navigateToFamily()
-                      }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .background(Color.Theme.cardBackground)
+                        .cornerRadius(20)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                        .listRowBackground(Color.clear)
                     } header: {
                         Text("Friends & Family".localized)
                             .font(.system(.headline, design: .rounded))

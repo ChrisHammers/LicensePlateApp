@@ -31,79 +31,87 @@ struct LifetimeStatsProfileStatsSectionContent: View {
 
     var body: some View {
         Section {
-            if isPendingServerSync {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                        .accessibilityHidden(true)
-                    Text("profile.lifetime_stats.pending_sync".localized)
+            VStack(spacing: 12) {
+                if isPendingServerSync {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                            .accessibilityHidden(true)
+                        Text("profile.lifetime_stats.pending_sync".localized)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    .padding(.vertical, 4)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("profile.lifetime_stats.pending_sync.a11y".localized)
+                }
+
+                if isRecomputing {
+                    HStack(spacing: 12) {
+                        ProgressView()
+                            .accessibilityLabel("profile.lifetime_stats.updating.a11y".localized)
+                        Text("profile.lifetime_stats.updating".localized)
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    .padding(.vertical, 4)
+                    .accessibilityElement(children: .combine)
+                }
+
+                if let err = lastError, !err.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("profile.lifetime_stats.error_title".localized)
+                            .font(.system(.subheadline, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                        Text(err)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                        Button("profile.lifetime_stats.retry".localized, action: onRetry)
+                            .font(.system(.subheadline, design: .rounded))
+                            .fontWeight(.semibold)
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                if let s = stats {
+                    statRow(
+                        titleKey: "profile.lifetime_stats.completed_trips",
+                        value: "\(s.totalCompletedTrips)",
+                        a11yHint: "profile.lifetime_stats.completed_trips.a11y"
+                    )
+                    statRow(
+                        titleKey: "profile.lifetime_stats.games_played",
+                        value: "\(s.totalGamesPlayed)",
+                        a11yHint: "profile.lifetime_stats.games_played.a11y"
+                    )
+                    statRow(
+                        titleKey: "profile.lifetime_stats.discoveries",
+                        value: "\(s.totalDiscoveries)",
+                        a11yHint: "profile.lifetime_stats.discoveries.a11y"
+                    )
+                    statRow(
+                        titleKey: "profile.lifetime_stats.weighted_score",
+                        value: formatScore(s.totalWeightedScore),
+                        a11yHint: "profile.lifetime_stats.weighted_score.a11y"
+                    )
+                    statRow(
+                        titleKey: "profile.lifetime_stats.family_trips",
+                        value: "\(s.familyOnlyTripsCount)",
+                        a11yHint: "profile.lifetime_stats.family_trips.a11y"
+                    )
+                } else if !isRecomputing && (lastError == nil || lastError?.isEmpty == true) {
+                    Text("profile.lifetime_stats.empty".localized)
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                 }
-                .padding(.vertical, 4)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("profile.lifetime_stats.pending_sync.a11y".localized)
             }
-
-            if isRecomputing {
-                HStack(spacing: 12) {
-                    ProgressView()
-                        .accessibilityLabel("profile.lifetime_stats.updating.a11y".localized)
-                    Text("profile.lifetime_stats.updating".localized)
-                        .font(.system(.subheadline, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-                }
-                .padding(.vertical, 4)
-                .accessibilityElement(children: .combine)
-            }
-
-            if let err = lastError, !err.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("profile.lifetime_stats.error_title".localized)
-                        .font(.system(.subheadline, design: .rounded))
-                        .fontWeight(.semibold)
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                    Text(err)
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-                    Button("profile.lifetime_stats.retry".localized, action: onRetry)
-                        .font(.system(.subheadline, design: .rounded))
-                        .fontWeight(.semibold)
-                }
-                .padding(.vertical, 4)
-            }
-
-            if let s = stats {
-                statRow(
-                    titleKey: "profile.lifetime_stats.completed_trips",
-                    value: "\(s.totalCompletedTrips)",
-                    a11yHint: "profile.lifetime_stats.completed_trips.a11y"
-                )
-                statRow(
-                    titleKey: "profile.lifetime_stats.games_played",
-                    value: "\(s.totalGamesPlayed)",
-                    a11yHint: "profile.lifetime_stats.games_played.a11y"
-                )
-                statRow(
-                    titleKey: "profile.lifetime_stats.discoveries",
-                    value: "\(s.totalDiscoveries)",
-                    a11yHint: "profile.lifetime_stats.discoveries.a11y"
-                )
-                statRow(
-                    titleKey: "profile.lifetime_stats.weighted_score",
-                    value: formatScore(s.totalWeightedScore),
-                    a11yHint: "profile.lifetime_stats.weighted_score.a11y"
-                )
-                statRow(
-                    titleKey: "profile.lifetime_stats.family_trips",
-                    value: "\(s.familyOnlyTripsCount)",
-                    a11yHint: "profile.lifetime_stats.family_trips.a11y"
-                )
-            } else if !isRecomputing && (lastError == nil || lastError?.isEmpty == true) {
-                Text("profile.lifetime_stats.empty".localized)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+            .background(Color.Theme.cardBackground)
+            .cornerRadius(20)
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+            .listRowBackground(Color.clear)
         } header: {
             Text("profile.lifetime_stats.title".localized)
                 .font(.system(.headline, design: .rounded))

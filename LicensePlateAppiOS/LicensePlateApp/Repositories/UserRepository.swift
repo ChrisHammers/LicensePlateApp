@@ -22,13 +22,19 @@ class UserRepository: ObservableObject {
     private let db = Firestore.firestore()
     private var modelContext: ModelContext?
     private var entitlementTagsByUserId: [String: Set<String>] = [:]
+    private let friendsFamilyAccessPolicy: FriendsFamilyAccessPolicy
     
     @Published var searchResults: [AppUser] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    private init() {
-        // Private initializer prevents external instantiation
+    /// Missing `isRegistered` is treated as registered (legacy users).
+    static func isRegisteredForSearch(_ data: [String: Any]) -> Bool {
+        (data["isRegistered"] as? Bool) ?? true
+    }
+    
+    init(friendsFamilyAccessPolicy: FriendsFamilyAccessPolicy = .shared) {
+        self.friendsFamilyAccessPolicy = friendsFamilyAccessPolicy
     }
 
     struct UserIdentitySnapshot: Sendable {
@@ -199,6 +205,7 @@ class UserRepository: ObservableObject {
                 
                 for document in exactSnapshot.documents {
                     let data = document.data()
+                    guard Self.isRegisteredForSearch(data) else { continue }
                     if let foundUsername = data["userName"] as? String {
                         let user = try await userFromFirestoreData(data, id: document.documentID)
                         // Avoid duplicates
@@ -244,6 +251,7 @@ class UserRepository: ObservableObject {
                 
                 for document in snapshot.documents {
                     let data = document.data()
+                    guard Self.isRegisteredForSearch(data) else { continue }
                     // Firestore field is "userName" (camelCase)
                     if let foundUsername = data["userName"] as? String {
                         let foundUsernameLower = foundUsername.lowercased()
@@ -292,6 +300,7 @@ class UserRepository: ObservableObject {
                 
                 for document in fallbackSnapshot.documents {
                     let data = document.data()
+                    guard Self.isRegisteredForSearch(data) else { continue }
                     if let foundUsername = data["userName"] as? String {
                         let foundUsernameLower = foundUsername.lowercased()
                         // Case-insensitive contains check
@@ -332,6 +341,7 @@ class UserRepository: ObservableObject {
         
         for document in snapshot.documents {
             let data = document.data()
+            guard Self.isRegisteredForSearch(data) else { continue }
             
             // Check privacy setting
             let privacy = data["privacy"] as? [String: Any] ?? [:]
@@ -359,6 +369,7 @@ class UserRepository: ObservableObject {
         
         for document in snapshot.documents {
             let data = document.data()
+            guard Self.isRegisteredForSearch(data) else { continue }
             
             // Check privacy setting
             let privacy = data["privacy"] as? [String: Any] ?? [:]
@@ -391,6 +402,7 @@ class UserRepository: ObservableObject {
             
             for document in snapshot.documents {
                 let data = document.data()
+                guard Self.isRegisteredForSearch(data) else { continue }
                 if let userName = data["userName"] as? String {
                     let userNameLower = userName.lowercased()
                     // Case-insensitive contains check
@@ -431,6 +443,7 @@ class UserRepository: ObservableObject {
             
             for document in snapshot.documents {
                 let data = document.data()
+                guard Self.isRegisteredForSearch(data) else { continue }
                 
                 // Check privacy setting
                 let privacy = data["privacy"] as? [String: Any] ?? [:]
@@ -481,6 +494,7 @@ class UserRepository: ObservableObject {
             
             for document in snapshot.documents {
                 let data = document.data()
+                guard Self.isRegisteredForSearch(data) else { continue }
                 
                 // Check privacy setting
                 let privacy = data["privacy"] as? [String: Any] ?? [:]
@@ -516,7 +530,11 @@ class UserRepository: ObservableObject {
     ///   - query: Search query string
     ///   - searchType: Type of search to perform
     ///   - excludeUserId: Optional user ID to exclude from results (typically current user)
-    func searchUsers(query: String, searchType: SearchType, excludeUserId: String? = nil) async throws -> [UserSearchResult] {
+    func searchUsers(query: String, searchType: SearchType, excludeUserId: String? = nil, searchingUser: AppUser? = nil) async throws -> [UserSearchResult] {
+        guard friendsFamilyAccessPolicy.canUseFriendsAndFamily(for: searchingUser) else {
+            return []
+        }
+
         var results: [UserSearchResult] = []
         let queryLower = query.lowercased()
         

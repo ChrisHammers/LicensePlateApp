@@ -155,11 +155,25 @@ struct RootView: View {
         .sheet(item: deepLinkSheetBinding) { destination in
             switch destination {
             case .friendInvite(let inviteId):
-                FriendInviteDetail(inviteId: inviteId)
-                    .environmentObject(authService)
+                if FriendsFamilyAccessPolicy.shared.canUseFriendsAndFamily(for: authService.currentUser) {
+                    FriendInviteDetail(inviteId: inviteId)
+                        .environmentObject(authService)
+                } else {
+                    NavigationStack {
+                        FriendsFamilySignUpGateView(feature: .friends)
+                            .environmentObject(authService)
+                    }
+                }
             case .familyInvite(let inviteId, let familyId):
-                FamilyInviteDetail(inviteId: inviteId, familyId: familyId, family: nil)
-                    .environmentObject(authService)
+                if FriendsFamilyAccessPolicy.shared.canUseFriendsAndFamily(for: authService.currentUser) {
+                    FamilyInviteDetail(inviteId: inviteId, familyId: familyId, family: nil)
+                        .environmentObject(authService)
+                } else {
+                    NavigationStack {
+                        FriendsFamilySignUpGateView(feature: .family)
+                            .environmentObject(authService)
+                    }
+                }
             case .tripInvite(_):
                 PendingTripsView()
                     .environmentObject(authService)
