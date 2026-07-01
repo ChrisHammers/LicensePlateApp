@@ -839,6 +839,12 @@ final class LicensePlateGameViewModel: ObservableObject {
                 outcome: result.outcome.rawValue,
                 participantId: participantId.isEmpty ? nil : participantId
             ))
+            FirstSessionAnalyticsService.shared.recordFirstFindIfNeeded(
+                tripSessionId: sessionId,
+                gameInstanceId: game.id,
+                targetId: regionID,
+                inputMethod: inputMethod.rawValue
+            )
             if game.definitionId == GameType.licensePlate.rawValue,
                let lpConfig = game.licensePlateConfig() {
                 let goal = LicensePlateScopeCalculator.completionGoal(for: lpConfig)

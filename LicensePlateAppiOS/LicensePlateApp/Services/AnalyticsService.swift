@@ -17,6 +17,7 @@ import Firebase
 protocol AnalyticsLogging: AnyObject {
     func log(_ event: AnalyticsService.Event)
     func log(_ name: String, parameters: [String: Any])
+    func setUserProperty(_ value: String?, forName name: String)
 }
 
 // MARK: - AnalyticsService
@@ -272,6 +273,17 @@ class AnalyticsService: AnalyticsLogging {
         case returnStreakReminderOpened(currentStreak: Int)
         case fcmTokenRegistered
 
+        // First-session quick solo onboarding funnel
+        case onboardingStarted(flowVariant: String, offline: Bool)
+        case onboardingStepViewed(stepId: String, stepIndex: Int, flowVariant: String)
+        case onboardingAbandoned(lastStepId: String, flowVariant: String, elapsedMs: Int)
+        case onboardingCompleted(flowVariant: String, elapsedMs: Int, offline: Bool)
+        case quickSoloTripStarted(tripSessionId: String, gameInstanceId: String, offline: Bool, elapsedMs: Int)
+        case firstFindCompleted(tripSessionId: String, gameInstanceId: String, targetId: String, elapsedMs: Int, inputMethod: String)
+        case deferredSetupPromptShown(pendingSteps: String)
+        case deferredSetupStepOpened(stepId: String, source: String)
+        case deferredSetupStepCompleted(stepId: String)
+
         // Screen view (Step 10)
         case screenView(screenName: String, screenClass: String?)
 
@@ -445,6 +457,15 @@ class AnalyticsService: AnalyticsLogging {
             case .returnStreakReminderScheduled: return "return_streak_reminder_scheduled"
             case .returnStreakReminderOpened: return "return_streak_reminder_opened"
             case .fcmTokenRegistered: return "fcm_token_registered"
+            case .onboardingStarted: return "onboarding_started"
+            case .onboardingStepViewed: return "onboarding_step_viewed"
+            case .onboardingAbandoned: return "onboarding_abandoned"
+            case .onboardingCompleted: return "onboarding_completed"
+            case .quickSoloTripStarted: return "quick_solo_trip_started"
+            case .firstFindCompleted: return "first_find_completed"
+            case .deferredSetupPromptShown: return "deferred_setup_prompt_shown"
+            case .deferredSetupStepOpened: return "deferred_setup_step_opened"
+            case .deferredSetupStepCompleted: return "deferred_setup_step_completed"
             case .screenView: return "screen_view"
             case .paywallViewed: return "paywall_viewed"
             case .paywallDismissed: return "paywall_dismissed"
@@ -842,6 +863,35 @@ class AnalyticsService: AnalyticsLogging {
                 return ["current_streak": currentStreak]
             case .fcmTokenRegistered:
                 return nil
+            case .onboardingStarted(let flowVariant, let offline):
+                return ["flow_variant": flowVariant, "offline": offline]
+            case .onboardingStepViewed(let stepId, let stepIndex, let flowVariant):
+                return ["step_id": stepId, "step_index": stepIndex, "flow_variant": flowVariant]
+            case .onboardingAbandoned(let lastStepId, let flowVariant, let elapsedMs):
+                return ["last_step_id": lastStepId, "flow_variant": flowVariant, "elapsed_ms": elapsedMs]
+            case .onboardingCompleted(let flowVariant, let elapsedMs, let offline):
+                return ["flow_variant": flowVariant, "elapsed_ms": elapsedMs, "offline": offline]
+            case .quickSoloTripStarted(let tripSessionId, let gameInstanceId, let offline, let elapsedMs):
+                return [
+                    "trip_session_id": tripSessionId,
+                    "game_instance_id": gameInstanceId,
+                    "offline": offline,
+                    "elapsed_ms": elapsedMs
+                ]
+            case .firstFindCompleted(let tripSessionId, let gameInstanceId, let targetId, let elapsedMs, let inputMethod):
+                return [
+                    "trip_session_id": tripSessionId,
+                    "game_instance_id": gameInstanceId,
+                    "target_id": targetId,
+                    "elapsed_ms": elapsedMs,
+                    "input_method": inputMethod
+                ]
+            case .deferredSetupPromptShown(let pendingSteps):
+                return ["pending_steps": pendingSteps]
+            case .deferredSetupStepOpened(let stepId, let source):
+                return ["step_id": stepId, "source": source]
+            case .deferredSetupStepCompleted(let stepId):
+                return ["step_id": stepId]
             case .screenView(let screenName, let screenClass):
                 var p: [String: Any] = ["screen_name": screenName]
                 if let screenClass = screenClass { p["screen_class"] = screenClass }

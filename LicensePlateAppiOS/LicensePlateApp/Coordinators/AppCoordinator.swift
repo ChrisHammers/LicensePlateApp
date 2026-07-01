@@ -8,40 +8,74 @@
 import SwiftUI
 import Combine
 
-/// Root-level coordinator for app flow: Splash → Onboarding (if first launch) → Main App
+/// Root-level coordinator for app flow: Splash → Quick Start / Legacy Onboarding → Main App
 @MainActor
 final class AppCoordinator: ObservableObject {
     enum RootView: Equatable {
         case splash
-        case onboarding
+        case quickStart
+        case legacyOnboarding
         case main
     }
-    
+
     @Published var rootView: RootView = .splash
+    @Published var pendingQuickSoloLaunch: QuickSoloLaunchIntent?
+
     @AppStorage("hasSeenOnboarding") var hasSeenOnboarding = false
-    
-    // MARK: - Navigation Methods
-    
-    /// Transition from splash to next view (onboarding or main)
-    func transitionFromSplash() {
-        if hasSeenOnboarding {
-            showMainApp()
-        } else {
-            showOnboarding()
+
+    init() {
+        if AppLaunchConfiguration.skipOnboarding {
+            hasSeenOnboarding = true
         }
     }
-    
-    /// Show onboarding flow
-    func showOnboarding() {
-        rootView = .onboarding
+
+    // MARK: - Navigation Methods
+
+    /// Transition from splash to next view (main, quick start, or legacy onboarding).
+    func transitionFromSplash(quickSoloEnabled: Bool) {
+        if hasSeenOnboarding {
+            showMainApp()
+            return
+        }
+        if AppLaunchConfiguration.forceLegacyOnboarding {
+            showLegacyOnboarding()
+            return
+        }
+        if quickSoloEnabled || AppLaunchConfiguration.forceQuickSoloFirstSession {
+            showQuickStart()
+        } else {
+            showLegacyOnboarding()
+        }
     }
-    
-    /// Complete onboarding and show main app
+
+    func showQuickStart() {
+        rootView = .quickStart
+    }
+
+    func showLegacyOnboarding() {
+        rootView = .legacyOnboarding
+    }
+
+    /// Complete legacy onboarding and show main app.
     func completeOnboarding() {
         hasSeenOnboarding = true
+        pendingQuickSoloLaunch = nil
         showMainApp()
     }
-    
+
+    /// Complete quick start with auto-created trip; deep-link into gameplay from ContentView.
+    func completeQuickStart(launchIntent: QuickSoloLaunchIntent) {
+        hasSeenOnboarding = true
+        pendingQuickSoloLaunch = launchIntent
+        showMainApp()
+    }
+
+    func consumePendingQuickSoloLaunch() -> QuickSoloLaunchIntent? {
+        let intent = pendingQuickSoloLaunch
+        pendingQuickSoloLaunch = nil
+        return intent
+    }
+
     /// Show main app (ContentView)
     func showMainApp() {
         rootView = .main

@@ -28,6 +28,8 @@ final class AnalyticsLoggingSpy: AnalyticsLogging {
         loggedEvents.append(LoggedEvent(name: name, parameters: parameters.isEmpty ? nil : parameters))
     }
 
+    func setUserProperty(_ value: String?, forName name: String) {}
+
     func clear() {
         loggedEvents.removeAll()
     }
@@ -59,6 +61,9 @@ struct AnalyticsServiceTests {
             (.returnStreakDisplayed(currentStreak: 3, surface: "home"), "return_streak_displayed"),
             (.screenView(screenName: "test", screenClass: nil), "screen_view"),
             (.combinedTripCreated(gameTypes: ["lp"]), "combined_trip_created"),
+            (.onboardingStarted(flowVariant: "quick_solo", offline: false), "onboarding_started"),
+            (.quickSoloTripStarted(tripSessionId: "t1", gameInstanceId: "g1", offline: false, elapsedMs: 100), "quick_solo_trip_started"),
+            (.firstFindCompleted(tripSessionId: "t1", gameInstanceId: "g1", targetId: "us-ca", elapsedMs: 200, inputMethod: "list"), "first_find_completed"),
             (.userSearchPerformed(queryType: "all"), "user_search_performed"),
         ]
         for (event, expectedName) in expectations {

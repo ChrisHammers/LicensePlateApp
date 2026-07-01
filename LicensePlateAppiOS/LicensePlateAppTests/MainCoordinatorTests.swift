@@ -46,6 +46,15 @@ struct MainCoordinatorTests {
         }
     }
 
+    @Test func openQuickSoloGameplayStoresIntent() async throws {
+        let coordinator = MainCoordinator()
+        let intent = QuickSoloLaunchIntent(sessionId: UUID(), gameId: UUID())
+        coordinator.openQuickSoloGameplay(intent: intent)
+        #expect(coordinator.pendingQuickSoloGameplay == intent)
+        coordinator.clearPendingQuickSoloGameplay()
+        #expect(coordinator.pendingQuickSoloGameplay == nil)
+    }
+
     @Test func popRemovesLastRoute() async throws {
         let coordinator = MainCoordinator()
         let sessionId = UUID()

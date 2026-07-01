@@ -21,6 +21,7 @@ final class MainCoordinator: ObservableObject {
 
     @Published var path: [MainRoute] = []
     @Published var pendingPostEndSummarySessionId: UUID?
+    @Published var pendingQuickSoloGameplay: QuickSoloLaunchIntent?
 
     func openSession(_ sessionId: UUID) {
         path.append(.session(sessionId))
@@ -28,6 +29,14 @@ final class MainCoordinator: ObservableObject {
 
     func openGame(sessionId: UUID, gameId: UUID) {
         path.append(.game(sessionId: sessionId, gameId: gameId))
+    }
+
+    func openQuickSoloGameplay(intent: QuickSoloLaunchIntent) {
+        pendingQuickSoloGameplay = intent
+    }
+
+    func clearPendingQuickSoloGameplay() {
+        pendingQuickSoloGameplay = nil
     }
 
     func pop() {

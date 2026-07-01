@@ -332,6 +332,24 @@
 "Continue as %@" = "Continuar como %@";
 "Sign In Using Different Account" = "Iniciar sesión con otra cuenta";
 
+// Quick Solo First Session
+"quick_solo.subtitle" = "Encuentra placas en tu viaje y márcalas en el mapa. Empieza un viaje en solitario en segundos.";
+"Start Quick Solo Trip" = "Iniciar viaje en solitario rápido";
+"quick_solo.primary_button.hint" = "Crea un viaje en solitario y abre el juego de placas";
+"Tap a plate to log your first find" = "Toca una placa para registrar tu primer hallazgo";
+"quick_solo.coach_mark.hint" = "Toca dos veces una región de la lista para marcarla como encontrada";
+"Complete Your Profile" = "Completa tu perfil";
+"Complete your profile" = "Completa tu perfil";
+"deferred_setup.settings.description" = "Avatar, cuenta, familia y permisos que omitiste";
+"deferred_setup.banner.subtitle" = "Configura cuenta, avatar y más cuando quieras";
+"deferred_setup.footer" = "Estos pasos son opcionales y puedes completarlos en cualquier momento.";
+"deferred_setup.all_complete" = "Has completado todos los pasos opcionales del perfil.";
+"splash.loading.accessibility" = "Cargando RoadTrip Royale";
+"Choose your avatar" = "Elige tu avatar";
+"Opens profile setup" = "Abre la configuración del perfil";
+"Hides this reminder" = "Oculta este recordatorio";
+"Opens this setup step" = "Abre este paso de configuración";
+
 // Accessibility - Onboarding and dialogs
 "Continues to next screen" = "Continúa a la siguiente pantalla";
 "Goes to previous screen" = "Regresa a la pantalla anterior";

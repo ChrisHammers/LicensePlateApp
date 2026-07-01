@@ -144,86 +144,44 @@ final class CombinedTripSetupViewModel: ObservableObject {
         guard !countryList.isEmpty else {
             throw CombinedTripSetupError.noCountriesSelected
         }
-        let types = selectedGameTypes.filter { $0.isAvailable }
+        let types = Array(selectedGameTypes.filter { $0.isAvailable })
         guard !types.isEmpty else {
             throw CombinedTripSetupError.noGameTypesSelected
         }
 
         let createdBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? "unknown"
+
+        applyTerritoryGatingFromCountryToggles()
+
+        let request = TripSessionCreationRequest(
+            tripName: tripName,
+            gameTypes: types,
+            defaultGameMode: defaultGameMode,
+            countryList: countryList,
+            territoryOptions: LicensePlateTerritoryOptions(
+                includeUSTerritories: includeUSTerritories,
+                includeCanadianTerritories: includeCanadianTerritories,
+                includeDC: includeDC
+            ),
+            startTripRightAway: startTripRightAway,
+            tripSource: "combined_setup",
+            createdBy: createdBy
+        )
+
         do {
-            try tripEntitlementGate.validateCanAddActiveTrip(
-                user: authService.currentUser,
-                userId: createdBy,
-                source: .create
+            let result = try TripSessionFactory.create(
+                request: request,
+                tripSessionRepository: tripSessionRepository,
+                gameInstanceRepository: gameInstanceRepository,
+                lifecycleService: lifecycleService,
+                tripEntitlementGate: tripEntitlementGate,
+                user: authService.currentUser
             )
+            return result.session
         } catch let error as TripEntitlementGateError {
             shouldPresentTripLimitPaywall = true
             throw error
         }
-
-        applyTerritoryGatingFromCountryToggles()
-
-        let createdAt = Date()
-        let finalName = tripName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? Self.defaultTripName(from: createdAt)
-            : tripName.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let sessionId = UUID()
-        let participant = TripParticipant(userId: createdBy, role: .owner, joinedAt: createdAt)
-
-        let session = TripSession(
-            id: sessionId,
-            name: finalName,
-            status: .created,
-            createdAt: createdAt,
-            createdBy: createdBy,
-            startedAt: nil,
-            endedAt: nil,
-            endedBy: nil,
-            participants: [participant]
-        )
-
-        try tripSessionRepository.create(session: session)
-
-        let config = CombinedGameConfiguration(enabledGameTypes: Array(types))
-        var choicesByGameType: [GameType: GameSetupChoice] = [:]
-        for type in types {
-            choicesByGameType[type] = GameSetupChoice(gameType: type, gameMode: defaultGameMode, teams: [])
-        }
-        let territoryOpts = LicensePlateTerritoryOptions(
-            includeUSTerritories: includeUSTerritories,
-            includeCanadianTerritories: includeCanadianTerritories,
-            includeDC: includeDC
-        )
-        //TODO need to not haradcode this and inform when unselecting we need atleast 1 game?
-        let lpConfig = CombinedGameAssembler.licensePlateConfig(from: countryList, territoryOptions: territoryOpts)
-        let instances = CombinedGameAssembler.assemble(
-            session: session,
-            config: config,
-            choicesByGameType: choicesByGameType,
-            licensePlateConfig: lpConfig
-        )
-
-        let gameModeStrings = instances.map(\.commonConfig.gameMode.rawValue)
-        let hasTeams = instances.contains { !$0.teams.isEmpty }
-
-        AnalyticsService.shared.log(.tripSessionCreated(tripId: sessionId.uuidString, tripStatus: session.status.rawValue, tripParticipantCount: session.participants.count, tripActiveGameCount: instances.count, tripSource: "combined_setup"))
-        for (index, instance) in instances.enumerated() {
-            try gameInstanceRepository.create(instance: instance)
-            AnalyticsService.shared.log(.gameInstanceCreated(gameInstanceId: instance.id.uuidString, gameType: instance.definitionId, gameMode: instance.commonConfig.gameMode.rawValue, tripId: sessionId.uuidString, gameOrderInTrip: index + 1))
-        }
-        AnalyticsService.shared.log(.combinedTripCreated(
-            gameTypes: types.map(\.rawValue),
-            tripSessionId: sessionId.uuidString,
-            participantCount: session.participants.count,
-            gameCount: instances.count,
-            gameModes: gameModeStrings,
-            hasTeams: hasTeams
-        ))
-        if startTripRightAway {
-            try lifecycleService.startTrip(sessionId: sessionId, actorId: createdBy)
-        }
-        return try tripSessionRepository.session(byId: sessionId) ?? session
     }
 
     /// Publishes session + games to Firestore so invitees can bootstrap. Best effort.
@@ -258,13 +216,6 @@ final class CombinedTripSetupViewModel: ObservableObject {
                 ))
             }
         }
-    }
-
-    private static func defaultTripName(from date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
     }
 
     private func applyNewTripDefaults(_ defaults: NewTripDefaults) {

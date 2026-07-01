@@ -14,6 +14,7 @@ import UserNotifications
 import Speech
 
 struct ContentView: View {
+    @ObservedObject var appCoordinator: AppCoordinator
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
     @StateObject private var mainCoordinator = MainCoordinator()
@@ -42,6 +43,9 @@ struct ContentView: View {
     @StateObject private var returnStreakViewModel = ReturnStreakViewModel()
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("boundariesLoaded") private var boundariesLoaded = false
+    @AppStorage(FirstSessionStateKeys.hasLoggedFirstFind) private var hasLoggedFirstFind = false
+    @State private var showDeferredSetupBanner = false
+    @State private var isShowingDeferredSetupHub = false
     
     // Custom detent for the new trip sheet - device-aware sizing
     // On iPad, use a larger fraction since 25% is too small to show the text field
@@ -77,9 +81,10 @@ struct ContentView: View {
         return formatter
     }()
 
-  init() {
+  @MainActor
+  init(appCoordinator: AppCoordinator) {
+        self.appCoordinator = appCoordinator
     UINavigationBar.appearance().titleTextAttributes = [.foregroundColor: Color.Theme.primaryBlue.uiColor]
-
      }
     var body: some View {
         ZStack {
@@ -196,6 +201,22 @@ struct ContentView: View {
             .overlay(alignment: .bottomTrailing) {
                 addTripButton
             }
+            .overlay(alignment: .top) {
+                if showDeferredSetupBanner {
+                    deferredSetupBanner
+                }
+            }
+            .sheet(isPresented: $isShowingDeferredSetupHub) {
+                NavigationStack {
+                    DeferredProfileSetupHubView()
+                        .environmentObject(authService)
+                        .toolbar {
+                            ToolbarItem(placement: .cancellationAction) {
+                                Button("Done".localized) { isShowingDeferredSetupHub = false }
+                            }
+                        }
+                }
+            }
     }
 
     private var homeTripRecapWithLifecycle: some View {
@@ -218,6 +239,13 @@ struct ContentView: View {
                 travelLogViewModel.setAuthService(authService)
                 returnStreakViewModel.bind(userId: currentUserId)
                 NotificationRoutingService.shared.startObservingIfNeeded(userId: currentUserId)
+                refreshDeferredSetupBanner()
+            }
+            .onChange(of: hasLoggedFirstFind) { _, _ in
+                refreshDeferredSetupBanner()
+            }
+            .onChange(of: mainCoordinator.path.count) { _, _ in
+                refreshDeferredSetupBanner()
             }
             .onChange(of: isShowingCreateSheet) { _, isShowing in
                 if !isShowing {
@@ -317,6 +345,68 @@ struct ContentView: View {
                 tripName: item.session.name
             )
         }
+        handleQuickSoloLaunchIfNeeded()
+    }
+
+    private func handleQuickSoloLaunchIfNeeded() {
+        guard let intent = appCoordinator.consumePendingQuickSoloLaunch() else { return }
+        activeTripsListViewModel.load(userId: currentUserId)
+        mainCoordinator.openGame(sessionId: intent.sessionId, gameId: intent.gameId)
+    }
+
+    private func refreshDeferredSetupBanner() {
+        let store = DeferredProfileSetupStore.shared
+        let shouldShow = store.shouldShowPostFirstFindPrompt(for: authService.currentUser)
+        if shouldShow, !showDeferredSetupBanner {
+            let pending = store.pendingSteps(for: authService.currentUser)
+            FirstSessionAnalyticsService.shared.recordDeferredSetupPromptShown(pendingSteps: pending)
+        }
+        showDeferredSetupBanner = shouldShow
+    }
+
+    private var deferredSetupBanner: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Complete your profile".localized)
+                    .font(.system(.subheadline, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                Text("deferred_setup.banner.subtitle".localized)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+            }
+            Spacer(minLength: 8)
+            Button {
+                isShowingDeferredSetupHub = true
+                FirstSessionAnalyticsService.shared.recordDeferredSetupStepOpened(
+                    stepId: "hub",
+                    source: "post_first_find_banner"
+                )
+            } label: {
+                Text("Open".localized)
+                    .font(.system(.caption, design: .rounded))
+                    .fontWeight(.semibold)
+            }
+            .accessibleButton(label: "Open".localized, hint: "Opens profile setup".localized)
+            Button {
+                DeferredProfileSetupStore.shared.dismissPostFirstFindPrompt()
+                showDeferredSetupBanner = false
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color.Theme.softBrown)
+            }
+            .accessibleButton(label: "Dismiss".localized, hint: "Hides this reminder".localized)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+                .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .accessibilityElement(children: .contain)
     }
 
     private var homeTripAndInvitesList: some View {
@@ -750,6 +840,16 @@ struct DefaultSettingsView: View {
                                 
                                 Divider()
                             }
+
+                            SettingNavigationRow(
+                                title: "Complete Your Profile".localized,
+                                description: "deferred_setup.settings.description".localized,
+                                icon: "person.crop.circle.badge.checkmark"
+                            ) {
+                                coordinator.navigateToDeferredProfileSetup()
+                            }
+
+                            Divider()
                             
                             // Privacy & Permissions
                             SettingNavigationRow(
@@ -918,6 +1018,9 @@ struct DefaultSettingsView: View {
                             Text("No user available")
                                 .foregroundStyle(Color.Theme.softBrown)
                         }
+                    case .deferredProfileSetup:
+                        DeferredProfileSetupHubView()
+                            .environmentObject(authService)
                     }
                 }
             }
@@ -934,7 +1037,7 @@ struct DefaultSettingsView: View {
 }
 
 #Preview {
-    ContentView()
+    ContentView(appCoordinator: AppCoordinator())
         .environmentObject(FirebaseAuthService())
         .modelContainer(for: [TripSessionEntity.self, GameInstanceEntity.self, TripActivityEventEntity.self], inMemory: true)
 }

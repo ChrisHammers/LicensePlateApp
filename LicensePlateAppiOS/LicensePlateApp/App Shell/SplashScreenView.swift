@@ -12,12 +12,10 @@ struct SplashScreenView: View {
     
     var body: some View {
         ZStack {
-            // Background color matching app theme
             Color.Theme.primaryBlue
                 .ignoresSafeArea()
             
             VStack(spacing: 24) {
-                // App logo/icon placeholder - replace with actual logo if available
                 Image(systemName: "car.fill")
                     .font(.system(size: 80))
                     .foregroundColor(.white)
@@ -27,17 +25,20 @@ struct SplashScreenView: View {
                             .repeatForever(autoreverses: true),
                         value: isAnimating
                     )
+                    .accessibleDecorative()
                 
-                // App name
-                Text("RoadTrip Royale")
+                Text("RoadTrip Royale".localized)
                     .font(.system(size: 32, weight: .bold))
                     .foregroundColor(.white)
+                    .accessibleHeader("RoadTrip Royale".localized)
                 
-                // Loading indicator
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                     .scaleEffect(1.2)
+                    .accessibilityLabel("splash.loading.accessibility".localized)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("splash.loading.accessibility".localized)
         }
         .onAppear {
             isAnimating = true
@@ -48,4 +49,3 @@ struct SplashScreenView: View {
 #Preview {
     SplashScreenView()
 }
-

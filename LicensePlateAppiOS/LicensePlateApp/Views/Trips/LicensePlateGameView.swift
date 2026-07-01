@@ -58,6 +58,7 @@ struct LicensePlateGameView: View {
     @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
     @AppStorage("appUseVibrations") private var appUseVibrations = true
     @AppStorage("defaultSkipVoiceConfirmation") private var skipVoiceConfirmation = false
+    @AppStorage(FirstSessionStateKeys.hasLoggedFirstFind) private var hasLoggedFirstFind = false
 
     @State private var selectedTab: Tab = .list
     @State private var lastMatchedRegion: PlateRegion?
@@ -108,9 +109,18 @@ struct LicensePlateGameView: View {
 
                 // Keep both views in hierarchy to preserve scroll position
                 ZStack {
-                    regionList
-                        .opacity(selectedTab == .list ? 1 : 0)
-                        .allowsHitTesting(selectedTab == .list)
+                    ZStack(alignment: .bottom) {
+                        regionList
+                            .opacity(selectedTab == .list ? 1 : 0)
+                            .allowsHitTesting(selectedTab == .list)
+
+                        if !hasLoggedFirstFind && selectedTab == .list && viewModel.isGamePlayActive {
+                            FirstFindCoachMarkOverlay()
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 12)
+                                .allowsHitTesting(false)
+                        }
+                    }
 
                     voiceCaptureView
                         .opacity(selectedTab == .voice ? 1 : 0)

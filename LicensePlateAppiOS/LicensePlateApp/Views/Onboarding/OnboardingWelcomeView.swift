@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct OnboardingWelcomeView: View {
+    @EnvironmentObject private var authService: FirebaseAuthService
     let onNext: () -> Void
     
     var body: some View {
@@ -55,6 +56,17 @@ struct OnboardingWelcomeView: View {
             .padding(.horizontal, 24)
             .padding(.top, 16)
             .padding(.bottom, 32)
+        }
+        .onAppear {
+            FirstSessionAnalyticsService.shared.recordOnboardingStarted(
+                flowVariant: .legacy,
+                offline: !authService.isOnline
+            )
+            FirstSessionAnalyticsService.shared.recordOnboardingStepViewed(
+                stepId: "welcome",
+                stepIndex: 0,
+                flowVariant: .legacy
+            )
         }
     }
 }

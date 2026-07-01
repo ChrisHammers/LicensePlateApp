@@ -8,7 +8,7 @@
 import SwiftUI
 import SwiftData
 
-/// Root view that orchestrates Splash → Onboarding → Main App flow
+/// Root view that orchestrates Splash → Quick Start / Legacy Onboarding → Main App flow
 struct RootView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -16,7 +16,8 @@ struct RootView: View {
     @ObservedObject private var deepLinkHandler = DeepLinkHandler.shared
     @StateObject private var appCoordinator = AppCoordinator()
     @StateObject private var onboardingCoordinator = OnboardingCoordinator()
-    
+    @ObservedObject private var remoteConfig = RemoteConfigService.shared
+
     @AppStorage("boundariesLoaded") private var boundariesLoaded = false
 
     private var deepLinkSheetBinding: Binding<DeepLinkDestination?> {
@@ -31,21 +32,26 @@ struct RootView: View {
             set: { deepLinkHandler.destination = $0 }
         )
     }
-    
+
     var body: some View {
         Group {
             switch appCoordinator.rootView {
             case .splash:
                 SplashScreenView()
                     .transition(.opacity)
-            case .onboarding:
+            case .quickStart:
+                OnboardingContainerBackground {
+                    QuickSoloStartView(appCoordinator: appCoordinator)
+                }
+                .transition(.opacity)
+            case .legacyOnboarding:
                 OnboardingContainerView(
                     coordinator: onboardingCoordinator,
                     appCoordinator: appCoordinator
                 )
                 .transition(.opacity)
             case .main:
-                ContentView()
+                ContentView(appCoordinator: appCoordinator)
                     .transition(.opacity)
             }
         }
@@ -76,7 +82,11 @@ struct RootView: View {
                 AchievementUnlockCelebrationService.shared.configure(user: user)
             }
         }
-        .onChange(of: scenePhase) { newPhase in
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .background, !appCoordinator.hasSeenOnboarding {
+                let variant = FirstSessionState.shared.activeFlowVariant ?? .quickSolo
+                FirstSessionAnalyticsService.shared.recordOnboardingAbandoned(flowVariant: variant)
+            }
             guard newPhase == .active else { return }
             if authService.isOnline {
                 Task { await SyncCoordinator.shared.processPendingSyncItems() }
@@ -92,6 +102,7 @@ struct RootView: View {
             }
         }
         .task {
+            await remoteConfig.fetchAndActivate()
             await authService.initializeAuthState(modelContext: modelContext)
             FriendshipRepository.shared.setModelContext(modelContext)
             InviteRepository.shared.setModelContext(modelContext)
@@ -116,7 +127,6 @@ struct RootView: View {
             let syncCoordinator = SyncCoordinator.shared
             syncCoordinator.setUserSyncExecutor(UserSyncExecutor(authService: authService, userRepository: UserRepository.shared))
             syncCoordinator.setGameplaySyncOnlineProvider { authService.isOnline }
-            // Enables reachability false→true → debounced gameplay queue flush (after repos have ModelContext).
             authService.setSyncCoordinator(syncCoordinator)
             let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
             if let userId = userId {
@@ -147,9 +157,10 @@ struct RootView: View {
             TripParticipationService.shared.bindAuthService(authService)
         }
         .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            let delaySeconds = Double(remoteConfig.quickSoloSplashDelayMs) / 1000.0
+            DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds) {
                 boundariesLoaded = true
-                appCoordinator.transitionFromSplash()
+                appCoordinator.transitionFromSplash(quickSoloEnabled: remoteConfig.quickSoloFirstSessionEnabled)
             }
         }
         .sheet(item: deepLinkSheetBinding) { destination in
@@ -178,6 +189,26 @@ struct RootView: View {
                 PendingTripsView()
                     .environmentObject(authService)
             }
+        }
+    }
+}
+
+/// Shared onboarding background wrapper for quick start screen.
+private struct OnboardingContainerBackground<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        ZStack {
+            if let imageName = AppPreferences.backgroundImageName(style: .paths, colorScheme: colorScheme) {
+                Image(imageName)
+                    .resizable()
+                    .ignoresSafeArea()
+            } else {
+                Color.Theme.background
+                    .ignoresSafeArea()
+            }
+            content()
         }
     }
 }

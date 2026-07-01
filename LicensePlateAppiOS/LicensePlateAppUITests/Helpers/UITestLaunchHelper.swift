@@ -7,11 +7,12 @@
 
 import XCTest
 
-/// Use launch arguments or environment so the app can enable test-only behavior (e.g. skip onboarding, seed data).
-/// Configure in test: app.launchArguments = UITestLaunchHelper.launchArguments(uitest: true, skipOnboarding: true)
+/// Use launch arguments or environment so the app (when built with test-only code path for --uitest) can skip onboarding, seed data, or force flow variants.
 enum UITestLaunchHelper {
     static let launchArgUITest = "--uitest"
     static let launchArgSkipOnboarding = "--skipOnboarding"
+    static let launchArgQuickSoloFirstSession = "--quickSoloFirstSession"
+    static let launchArgLegacyOnboarding = "--legacyOnboarding"
     static let launchArgSeedTripWithTwoGames = "--seedTripWithTwoGames"
     static let launchArgSeedCollaborativeTrip = "--seedCollaborativeTrip"
     static let launchArgSeedTripWithRiskFlags = "--seedTripWithRiskFlags"
@@ -19,10 +20,11 @@ enum UITestLaunchHelper {
     static let envKeyTestUserId = "UITEST_USER_ID"
     static let envKeyAnalyticsDisabled = "UITEST_ANALYTICS_DISABLED"
 
-    /// Build launch arguments for XCUIApplication. Pass these to app.launchArguments before app.launch().
     static func launchArguments(
         uitest: Bool = true,
         skipOnboarding: Bool = false,
+        quickSoloFirstSession: Bool = false,
+        legacyOnboarding: Bool = false,
         seedTripWithTwoGames: Bool = false,
         seedCollaborativeTrip: Bool = false,
         seedTripWithRiskFlags: Bool = false
@@ -30,13 +32,14 @@ enum UITestLaunchHelper {
         var args: [String] = []
         if uitest { args.append(launchArgUITest) }
         if skipOnboarding { args.append(launchArgSkipOnboarding) }
+        if quickSoloFirstSession { args.append(launchArgQuickSoloFirstSession) }
+        if legacyOnboarding { args.append(launchArgLegacyOnboarding) }
         if seedTripWithTwoGames { args.append(launchArgSeedTripWithTwoGames) }
         if seedCollaborativeTrip { args.append(launchArgSeedCollaborativeTrip) }
         if seedTripWithRiskFlags { args.append(launchArgSeedTripWithRiskFlags) }
         return args
     }
 
-    /// Build launch environment for XCUIApplication. App can read these to e.g. set test user or disable analytics.
     static func launchEnvironment(
         testUserId: String? = nil,
         analyticsDisabled: Bool = true
@@ -47,16 +50,19 @@ enum UITestLaunchHelper {
         return env
     }
 
-    /// Launch the given app with common UI test args and environment. Call from test's setUp or test method.
     static func launchApp(
         _ app: XCUIApplication,
         uitest: Bool = true,
         skipOnboarding: Bool = false,
+        quickSoloFirstSession: Bool = false,
+        legacyOnboarding: Bool = false,
         seedTripWithTwoGames: Bool = false
     ) {
         app.launchArguments = launchArguments(
             uitest: uitest,
             skipOnboarding: skipOnboarding,
+            quickSoloFirstSession: quickSoloFirstSession,
+            legacyOnboarding: legacyOnboarding,
             seedTripWithTwoGames: seedTripWithTwoGames
         )
         app.launchEnvironment = launchEnvironment(analyticsDisabled: true)

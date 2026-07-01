@@ -25,6 +25,8 @@ final class MockAnalyticsService: AnalyticsLogging {
         }
     }
 
+    func setUserProperty(_ value: String?, forName name: String) {}
+
     func reset() {
         loggedEvents.removeAll()
         loggedNames.removeAll()

@@ -24,10 +24,11 @@ struct RemoteConfigDefaultsProvider: RemoteConfigValueProviding {
         case .adsEnabledFreeTier, .reviewPromptEnabled, .remindersEnabled, .returnStreakEnabled,
              .returnStreakCelebrationEnabled, .founderProgramEnabled:
             return true
-        case .returnStreakReminderEnabled:
+        case .returnStreakReminderEnabled, .quickSoloFirstSessionEnabled:
             return false
         case .reviewPromptMinimumCompletedTrips, .reviewPromptCooldownDays, .inactiveActiveTripReminderHours,
-             .returnStreakMinDisplay, .returnStreakCelebrationMinStreak, .returnStreakReminderHour:
+             .returnStreakMinDisplay, .returnStreakCelebrationMinStreak, .returnStreakReminderHour,
+             .quickSoloSplashDelayMs:
             return int(for: key) != 0
         case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1:
             return !string(for: key).isEmpty
@@ -46,8 +47,10 @@ struct RemoteConfigDefaultsProvider: RemoteConfigValueProviding {
             return 2
         case .returnStreakReminderHour:
             return 20
+        case .quickSoloSplashDelayMs:
+            return 1000
         case .adsEnabledFreeTier, .reviewPromptEnabled, .remindersEnabled, .returnStreakEnabled,
-             .returnStreakCelebrationEnabled, .founderProgramEnabled:
+             .returnStreakCelebrationEnabled, .founderProgramEnabled, .quickSoloFirstSessionEnabled:
             return bool(for: key) ? 1 : 0
         case .returnStreakReminderEnabled:
             return 0
@@ -84,6 +87,8 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
         case founderProgramEnabled = "founder_program_enabled"
         case progressionRewardsPresentationV1 = "progression_rewards_presentation_v1"
         case progressionCatalogPresentationV1 = "progression_catalog_presentation_v1"
+        case quickSoloFirstSessionEnabled = "quick_solo_first_session_enabled"
+        case quickSoloSplashDelayMs = "quick_solo_splash_delay_ms"
     }
 
     static let shared = RemoteConfigService()
@@ -164,6 +169,8 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
     var returnStreakReminderEnabled: Bool { bool(for: .returnStreakReminderEnabled) }
     var returnStreakReminderHour: Int { min(23, max(0, int(for: .returnStreakReminderHour))) }
     var founderProgramEnabled: Bool { bool(for: .founderProgramEnabled) }
+    var quickSoloFirstSessionEnabled: Bool { bool(for: .quickSoloFirstSessionEnabled) }
+    var quickSoloSplashDelayMs: Int { max(0, int(for: .quickSoloSplashDelayMs)) }
 
     private var defaultValues: [String: NSObject] {
         [
@@ -181,7 +188,9 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
             Key.returnStreakReminderHour.rawValue: defaults.int(for: .returnStreakReminderHour) as NSNumber,
             Key.founderProgramEnabled.rawValue: defaults.bool(for: .founderProgramEnabled) as NSNumber,
             Key.progressionRewardsPresentationV1.rawValue: defaults.string(for: .progressionRewardsPresentationV1) as NSString,
-            Key.progressionCatalogPresentationV1.rawValue: defaults.string(for: .progressionCatalogPresentationV1) as NSString
+            Key.progressionCatalogPresentationV1.rawValue: defaults.string(for: .progressionCatalogPresentationV1) as NSString,
+            Key.quickSoloFirstSessionEnabled.rawValue: defaults.bool(for: .quickSoloFirstSessionEnabled) as NSNumber,
+            Key.quickSoloSplashDelayMs.rawValue: defaults.int(for: .quickSoloSplashDelayMs) as NSNumber
         ]
     }
 }

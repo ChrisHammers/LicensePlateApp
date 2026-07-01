@@ -100,6 +100,8 @@ final class OnboardingCoordinator: ObservableObject {
         case .permissions:
             stepStack.append(.getStarted)
         case .getStarted:
+            let offline = !(authService?.isOnline ?? true)
+            FirstSessionAnalyticsService.shared.recordOnboardingCompleted(flowVariant: .legacy, offline: offline)
             appCoordinator?.completeOnboarding()
         }
     }

@@ -332,6 +332,24 @@
 "Continue as %@" = "Continue as %@";
 "Sign In Using Different Account" = "Sign In Using Different Account";
 
+// Quick Solo First Session
+"quick_solo.subtitle" = "Spot license plates on your trip and mark them on the map. Start a solo trip in seconds.";
+"Start Quick Solo Trip" = "Start Quick Solo Trip";
+"quick_solo.primary_button.hint" = "Creates a solo trip and opens the license plate game";
+"Tap a plate to log your first find" = "Tap a plate to log your first find";
+"quick_solo.coach_mark.hint" = "Double tap a region in the list below to mark it found";
+"Complete Your Profile" = "Complete Your Profile";
+"Complete your profile" = "Complete your profile";
+"deferred_setup.settings.description" = "Avatar, account, family, and permissions you skipped";
+"deferred_setup.banner.subtitle" = "Set up account, avatar, and more when you are ready";
+"deferred_setup.footer" = "These steps are optional and can be completed anytime.";
+"deferred_setup.all_complete" = "You have completed all optional profile steps.";
+"splash.loading.accessibility" = "Loading RoadTrip Royale";
+"Choose your avatar" = "Choose your avatar";
+"Opens profile setup" = "Opens profile setup";
+"Hides this reminder" = "Hides this reminder";
+"Opens this setup step" = "Opens this setup step";
+
 // Accessibility - Onboarding and dialogs
 "Continues to next screen" = "Continues to next screen";
 "Goes to previous screen" = "Goes to previous screen";
