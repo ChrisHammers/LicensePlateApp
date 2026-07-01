@@ -30,12 +30,14 @@ final class XpProgressViewModel: ObservableObject {
     private let xpLedger: XpLedgerRepositoryProtocol
     private let snapshotProvider: () -> Int?
     private let verifiedProvider: () -> (verified: Int?, matchesServerTotal: Bool)
+    private var cancellables = Set<AnyCancellable>()
 
     init(
         userId: String,
         xpLedger: XpLedgerRepositoryProtocol = XpLedgerRepository.shared,
         snapshotProvider: (() -> Int?)? = nil,
-        verifiedProvider: (() -> (verified: Int?, matchesServerTotal: Bool))? = nil
+        verifiedProvider: (() -> (verified: Int?, matchesServerTotal: Bool))? = nil,
+        wiresLiveUpdates: Bool = true
     ) {
         self.userId = userId
         self.xpLedger = xpLedger
@@ -51,6 +53,28 @@ final class XpProgressViewModel: ObservableObject {
             return (verified > 0 || serverTotal == 0 ? verified : nil, matches)
         }
         refresh()
+        if wiresLiveUpdates {
+            subscribeToLiveUpdates()
+        }
+    }
+
+    private func subscribeToLiveUpdates() {
+        UserProgressionRepository.shared.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.refresh() }
+            .store(in: &cancellables)
+
+        XpGrantRemoteRepository.shared.objectWillChange
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.refresh() }
+            .store(in: &cancellables)
+
+        if let ledger = xpLedger as? XpLedgerRepository {
+            ledger.objectWillChange
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in self?.refresh() }
+                .store(in: &cancellables)
+        }
     }
 
     func refresh() {

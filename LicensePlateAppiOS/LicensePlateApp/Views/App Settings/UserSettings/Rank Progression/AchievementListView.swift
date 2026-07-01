@@ -12,8 +12,25 @@ import SwiftUI
 
 struct AchievementListView: View {
 
-    var achievements: [Achievement]
-    var statuses: [String: AchievementStatus]
+    @StateObject private var viewModel: AchievementProgressViewModel
+    private let previewAchievements: [Achievement]?
+    private let previewStatuses: [String: AchievementStatus]?
+
+    private var achievements: [Achievement] { previewAchievements ?? viewModel.achievements }
+    private var statuses: [String: AchievementStatus] { previewStatuses ?? viewModel.statuses }
+
+    init(user: AppUser) {
+        _viewModel = StateObject(wrappedValue: AchievementProgressViewModel(user: user))
+        previewAchievements = nil
+        previewStatuses = nil
+    }
+
+    /// Preview-only: static achievements/statuses without live subscriptions.
+    init(achievements: [Achievement], statuses: [String: AchievementStatus]) {
+        _viewModel = StateObject(wrappedValue: AchievementProgressViewModel.inertForPreviews())
+        previewAchievements = achievements
+        previewStatuses = statuses
+    }
 
     enum StatusFilter: String, CaseIterable, Identifiable {
         case all, unlocked, locked
@@ -71,6 +88,12 @@ struct AchievementListView: View {
                     .padding(16)
                 }
             }
+        }
+        .navigationTitle("achievement.list.title".localized)
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            guard previewAchievements == nil else { return }
+            viewModel.onAppear()
         }
     }
 

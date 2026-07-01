@@ -27,6 +27,14 @@ final class AchievementProgressViewModel: ObservableObject {
     private let xpProgressViewModel: XpProgressViewModel
     private var cancellables = Set<AnyCancellable>()
 
+    convenience init(user: AppUser) {
+        self.init(
+            user: user,
+            lifetimeStatsViewModel: LifetimeStatsProfileViewModel(userId: user.id),
+            xpProgressViewModel: XpProgressViewModel(userId: user.id)
+        )
+    }
+
     init(
         user: AppUser,
         lifetimeStatsViewModel: LifetimeStatsProfileViewModel,
@@ -35,7 +43,8 @@ final class AchievementProgressViewModel: ObservableObject {
         userProgressionService: UserProgressionService = .shared,
         entitlementService: EntitlementService = .shared,
         userAchievementRepository: UserAchievementRepository = .shared,
-        userAchievementRemoteRepository: UserAchievementRemoteRepository = .shared
+        userAchievementRemoteRepository: UserAchievementRemoteRepository = .shared,
+        wiresLiveUpdates: Bool = true
     ) {
         self.user = user
         self.lifetimeStatsViewModel = lifetimeStatsViewModel
@@ -45,6 +54,8 @@ final class AchievementProgressViewModel: ObservableObject {
         self.entitlementService = entitlementService
         self.userAchievementRepository = userAchievementRepository
         self.userAchievementRemoteRepository = userAchievementRemoteRepository
+
+        guard wiresLiveUpdates else { return }
 
         lifetimeStatsViewModel.objectWillChange
             .receive(on: DispatchQueue.main)
@@ -79,6 +90,27 @@ final class AchievementProgressViewModel: ObservableObject {
         let userId = user.firebaseUID ?? user.id
         userAchievementRemoteRepository.startListening(userId: userId)
 
+        refresh()
+    }
+
+    /// Canvas/static preview only — no Firestore listeners or Combine wiring.
+    static func inertForPreviews() -> AchievementProgressViewModel {
+        AchievementProgressViewModel(
+            user: AppUser(userName: "preview"),
+            lifetimeStatsViewModel: LifetimeStatsProfileViewModel(userId: "preview"),
+            xpProgressViewModel: XpProgressViewModel(
+                userId: "preview",
+                snapshotProvider: { nil },
+                verifiedProvider: { (nil, false) },
+                wiresLiveUpdates: false
+            ),
+            wiresLiveUpdates: false
+        )
+    }
+
+    func onAppear() {
+        lifetimeStatsViewModel.onAppear()
+        xpProgressViewModel.refresh()
         refresh()
     }
 

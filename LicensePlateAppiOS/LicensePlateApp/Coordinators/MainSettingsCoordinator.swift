@@ -20,6 +20,8 @@ final class MainSettingsCoordinator: ObservableObject {
         case helpAbout
         case friends
         case family
+        case achievements
+        case rankProgression
     }
   
     @Published var path = NavigationPath()
@@ -70,6 +72,16 @@ final class MainSettingsCoordinator: ObservableObject {
         path.append(SettingsDestination.family)
     }
     
+    /// Navigate to the Achievements view
+    func navigateToAchievements() {
+        path.append(SettingsDestination.achievements)
+    }
+    
+    /// Navigate to the Rank Progression view
+    func navifateToRankProgression() {
+        path.append(SettingsDestination.rankProgression)
+    }
+        
     /// Navigate to a specific destination
     func navigate(to destination: SettingsDestination) {
         path.append(destination)

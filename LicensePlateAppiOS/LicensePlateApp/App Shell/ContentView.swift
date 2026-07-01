@@ -904,6 +904,20 @@ struct DefaultSettingsView: View {
                                 .environmentObject(authService)
                         }
                         .environmentObject(authService)
+                    case .achievements:
+                        if let user = authService.currentUser {
+                            AchievementListView(user: user)
+                        } else {
+                            Text("No user available")
+                                .foregroundStyle(Color.Theme.softBrown)
+                        }
+                    case .rankProgression:
+                        if let user = authService.currentUser {
+                            RankProgressionView(user: user)
+                        } else {
+                            Text("No user available")
+                                .foregroundStyle(Color.Theme.softBrown)
+                        }
                     }
                 }
             }

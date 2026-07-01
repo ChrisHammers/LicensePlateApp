@@ -31,6 +31,7 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
         guard let ctx = modelContext else { throw XpLedgerRepositoryError.noModelContext }
         ctx.insert(XpLedgerMapper.toEntity(event))
         try ctx.save()
+        objectWillChange.send()
     }
 
     func appendBaseDiscoveryIfAbsent(_ event: XpLedgerEvent) throws -> Bool {
@@ -43,6 +44,7 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
         }
         ctx.insert(XpLedgerMapper.toEntity(event))
         try ctx.save()
+        objectWillChange.send()
         return true
     }
 

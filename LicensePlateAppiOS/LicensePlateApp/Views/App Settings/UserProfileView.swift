@@ -10,11 +10,6 @@ import SwiftData
 import GoogleSignInSwift
 import FirebaseAuth
 
-private enum ProfileProgressionRoute: Hashable {
-    case achievements
-    case rankProgression
-}
-
 struct UserProfileView: View {
     @Bindable var user: AppUser
     @ObservedObject var authService: FirebaseAuthService
@@ -42,7 +37,6 @@ struct UserProfileView: View {
 
     @StateObject private var lifetimeStatsViewModel: LifetimeStatsProfileViewModel
     @StateObject private var xpProgressViewModel: XpProgressViewModel
-    @StateObject private var achievementProgressViewModel: AchievementProgressViewModel
     @ObservedObject private var entitlementService = EntitlementService.shared
     @ObservedObject private var userProgressionRepository = UserProgressionRepository.shared
     @ObservedObject private var userProgressionService = UserProgressionService.shared
@@ -145,11 +139,6 @@ struct UserProfileView: View {
         let xpProgressVM = XpProgressViewModel(userId: user.id)
         _lifetimeStatsViewModel = StateObject(wrappedValue: lifetimeStatsVM)
         _xpProgressViewModel = StateObject(wrappedValue: xpProgressVM)
-        _achievementProgressViewModel = StateObject(wrappedValue: AchievementProgressViewModel(
-            user: user,
-            lifetimeStatsViewModel: lifetimeStatsVM,
-            xpProgressViewModel: xpProgressVM
-        ))
     }
 
     private var gameLicense: UserDriversLicense {
@@ -310,46 +299,38 @@ struct UserProfileView: View {
 
                     ProfileXpProgressSection(viewModel: xpProgressViewModel)
 
-                    if achievementProgressViewModel.achievementsEnabled
-                        || achievementProgressViewModel.rankProgressionEnabled {
-                        Section {
-                            VStack(spacing: 12) {
-                                if achievementProgressViewModel.achievementsEnabled {
-                                    NavigationLink(value: ProfileProgressionRoute.achievements) {
-                                        profileProgressionRow(
-                                            title: "profile.progression.achievements.title".localized,
-                                            description: "profile.progression.achievements.description".localized,
-                                            icon: "rosette"
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                                if achievementProgressViewModel.rankProgressionEnabled {
-                                    NavigationLink(value: ProfileProgressionRoute.rankProgression) {
-                                        profileProgressionRow(
-                                            title: "profile.progression.ranks.title".localized,
-                                            description: "profile.progression.ranks.description".localized,
-                                            icon: "chart.line.uptrend.xyaxis"
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
-                                }
+                    Section {
+                        VStack(spacing: 12) {
+                            SettingNavigationRow(
+                                title: "profile.progression.achievements.title".localized,
+                                description: "profile.progression.achievements.description".localized,
+                                icon: "rosette"
+                            ) {
+                                coordinator.navigateToAchievements()
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 16)
-                            .background(Color.Theme.cardBackground)
-                            .cornerRadius(20)
-                            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-                            .listRowBackground(Color.clear)
-                        } header: {
-                            Text("profile.progression.section_title".localized)
-                                .font(.system(.headline, design: .rounded))
-                                .foregroundStyle(Color.Theme.primaryBlue)
+
+                            SettingNavigationRow(
+                                title: "profile.progression.ranks.title".localized,
+                                description: "profile.progression.ranks.description".localized,
+                                icon: "chart.line.uptrend.xyaxis"
+                            ) {
+                                coordinator.navifateToRankProgression()
+                            }
                         }
-                        .textCase(nil)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 16)
+                        .background(Color.Theme.cardBackground)
+                        .cornerRadius(20)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                         .listRowBackground(Color.clear)
-                        .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
+                    } header: {
+                        Text("profile.progression.section_title".localized)
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
                     }
+                    .textCase(nil)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
 
                     // Friends & Family Section
                     Section {
@@ -693,23 +674,6 @@ struct UserProfileView: View {
             .onAppear {
                 lifetimeStatsViewModel.onAppear()
                 xpProgressViewModel.refresh()
-                achievementProgressViewModel.refresh()
-            }
-            .navigationDestination(for: ProfileProgressionRoute.self) { route in
-                switch route {
-                case .achievements:
-                    AchievementListView(
-                        achievements: achievementProgressViewModel.achievements,
-                        statuses: achievementProgressViewModel.statuses
-                    )
-                    .navigationTitle("achievement.list.title".localized)
-                    .navigationBarTitleDisplayMode(.inline)
-                case .rankProgression:
-                    RankProgressionView(
-                        ladder: achievementProgressViewModel.rankLadder,
-                        xp: achievementProgressViewModel.totalXp
-                    )
-                }
             }
             .onChange(of: user.userName) { oldValue, newValue in
                 currentUserName = newValue

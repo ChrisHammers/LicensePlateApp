@@ -10,8 +10,25 @@ import SwiftUI
 
 struct RankProgressionView: View {
 
-    let ladder: RankLadder
-    let xp: Int
+    @StateObject private var viewModel: AchievementProgressViewModel
+    private let previewLadder: RankLadder?
+    private let previewXp: Int?
+
+    private var ladder: RankLadder { previewLadder ?? viewModel.rankLadder }
+    private var xp: Int { previewXp ?? viewModel.totalXp }
+
+    init(user: AppUser) {
+        _viewModel = StateObject(wrappedValue: AchievementProgressViewModel(user: user))
+        previewLadder = nil
+        previewXp = nil
+    }
+
+    /// Preview-only: static ladder/XP without live subscriptions.
+    init(ladder: RankLadder, xp: Int) {
+        _viewModel = StateObject(wrappedValue: AchievementProgressViewModel.inertForPreviews())
+        previewLadder = ladder
+        previewXp = xp
+    }
 
     private var current: Rank { ladder.currentRank(xp: xp) }
     private var next: Rank? { ladder.nextRank(xp: xp) }
@@ -50,6 +67,10 @@ struct RankProgressionView: View {
         }
         .navigationTitle("rank.progression.title".localized)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            guard previewLadder == nil else { return }
+            viewModel.onAppear()
+        }
     }
 
     private var header: some View {
