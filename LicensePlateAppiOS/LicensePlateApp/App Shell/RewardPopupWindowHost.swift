@@ -28,7 +28,6 @@ struct RewardPopupOverlayContent: View {
                 Color.black.opacity(0.55)
                     .ignoresSafeArea()
                     .transition(.opacity)
-                    .onTapGesture { presenter.dismiss() }
                 RewardPopupView(event: event) { presenter.dismiss() }
                     .transition(.scale(scale: 0.85).combined(with: .opacity))
             }
