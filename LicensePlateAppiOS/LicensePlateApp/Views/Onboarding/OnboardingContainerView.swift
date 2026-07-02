@@ -43,17 +43,8 @@ struct OnboardingContainerView: View {
                     switch coordinator.currentStep {
                     case .welcome:
                         OnboardingWelcomeView(onNext: { coordinator.nextStep() })
-                    case .howItWorks:
-                        OnboardingHowItWorksView(onNext: { coordinator.nextStep() })
-                    case .features:
-                        OnboardingFeaturesView(onNext: { coordinator.nextStep() })
                     case .disclaimer:
                         OnboardingDisclaimerView(onAgree: { coordinator.nextStep() })
-                    case .userTypeAndBirthYear:
-                        OnboardingUserTypeView(
-                            coordinator: coordinator,
-                            onNext: { coordinator.nextStep() }
-                        )
                     case .accountCreation:
                         OnboardingAccountCreationView(
                             coordinator: coordinator,

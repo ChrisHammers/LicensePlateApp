@@ -33,7 +33,7 @@ struct OnboardingJoinFamilyView: View {
                         .foregroundStyle(Color.Theme.primaryBlue)
                         .accessibleHeader("Join Family".localized)
                     
-                    Text((coordinator.userType == .captain ? "Captains can join an existing family. Enter the share code from your family's Captain." : "Scouts need to join a family. Enter the share code from your Captain.").localized)
+                    Text("onboarding.join_family.subtitle".localized)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .multilineTextAlignment(.center)
@@ -108,16 +108,14 @@ struct OnboardingJoinFamilyView: View {
                 .disabled(shareCode.isEmpty || isJoining || !authService.isOnline)
                 .opacity((shareCode.isEmpty || isJoining || !authService.isOnline) ? 0.6 : 1)
                 
-                if coordinator.userType != .scout {
-                    Button {
-                        onNext()
-                    } label: {
-                        Text("Skip".localized)
-                            .font(.system(.body, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
-                    }
-                    .accessibleButton(label: "Skip".localized, hint: "Skips joining a family".localized)
+                Button {
+                    onNext()
+                } label: {
+                    Text("Skip".localized)
+                        .font(.system(.body, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
                 }
+                .accessibleButton(label: "Skip".localized, hint: "Skips joining a family".localized)
             }
             .padding(.horizontal, 24)
             .padding(.top, 16)

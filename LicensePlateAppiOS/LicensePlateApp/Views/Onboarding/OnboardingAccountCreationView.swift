@@ -21,79 +21,49 @@ struct OnboardingAccountCreationView: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 32) {
-                    if coordinator.userType == .scout {
-                        Text("Account".localized)
-                            .font(.system(.largeTitle, design: .rounded))
-                            .fontWeight(.bold)
-                            .foregroundStyle(Color.Theme.primaryBlue)
-                            .accessibleHeader("Account".localized)
-                        
-                        Text("Join your family's journey".localized)
+                    Text("Account".localized)
+                        .font(.system(.largeTitle, design: .rounded))
+                        .fontWeight(.bold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                        .accessibleHeader("Account".localized)
+                    
+                    Text("Create your RoadTrip Royale identity".localized)
+                        .font(.system(.body, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("• Compete or collaborate with your Friends & Family".localized)
                             .font(.system(.body, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
-                            .multilineTextAlignment(.center)
                             .padding(.horizontal)
-                        
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("• Compete or collaborate with your Friends & Family".localized)
-                                .font(.system(.body, design: .rounded))
-                                .foregroundStyle(Color.Theme.softBrown)
-                                .padding(.horizontal)
-                            Text("• Share discoveries".localized)
-                                .font(.system(.body, design: .rounded))
-                                .foregroundStyle(Color.Theme.softBrown)
-                                .padding(.horizontal)
-                            Text("• Save your progress across devices".localized)
-                                .font(.system(.body, design: .rounded))
-                                .foregroundStyle(Color.Theme.softBrown)
-                                .padding(.horizontal)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        Text("Account".localized)
-                            .font(.system(.largeTitle, design: .rounded))
-                            .fontWeight(.bold)
-                            .foregroundStyle(Color.Theme.primaryBlue)
-                            .accessibleHeader("Account".localized)
-                        
-                        Text("Create your RoadTrip Royale identity".localized)
-                            .font(.system(.body, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                        
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("• Compete or collaborate with your Friends & Family".localized)
-                                .font(.system(.body, design: .rounded))
-                                .foregroundStyle(Color.Theme.softBrown)
-                                .padding(.horizontal)
-                            if remoteConfig.founderProgramEnabled {
-                                HStack(alignment: .top, spacing: 6) {
-                                    Text("•")
+                        if remoteConfig.founderProgramEnabled {
+                            HStack(alignment: .top, spacing: 6) {
+                                Text("•")
+                                    .font(.system(.body, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Exclusive Founders Scout avatar (male or female)".localized)
                                         .font(.system(.body, design: .rounded))
                                         .foregroundStyle(Color.Theme.softBrown)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Exclusive Founders Scout avatar (male or female)".localized)
-                                            .font(.system(.body, design: .rounded))
-                                            .foregroundStyle(Color.Theme.softBrown)
-                                        Text("Early members only".localized)
-                                            .font(.system(.caption, design: .rounded))
-                                            .foregroundStyle(Color.Theme.softBrown.opacity(0.75))
-                                    }
+                                    Text("Early members only".localized)
+                                        .font(.system(.caption, design: .rounded))
+                                        .foregroundStyle(Color.Theme.softBrown.opacity(0.75))
                                 }
-                                .padding(.horizontal)
                             }
-                            Text("• Your trips saved & synced across devices".localized)
-                                .font(.system(.body, design: .rounded))
-                                .foregroundStyle(Color.Theme.softBrown)
-                                .padding(.horizontal)
-                            Text("• Early access to future limited releases".localized)
-                                .font(.system(.body, design: .rounded))
-                                .foregroundStyle(Color.Theme.softBrown)
-                                .padding(.horizontal)
+                            .padding(.horizontal)
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Text("• Your trips saved & synced across devices".localized)
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                            .padding(.horizontal)
+                        Text("• Early access to future limited releases".localized)
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                            .padding(.horizontal)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.vertical, 48)
                 .padding(.bottom, 24)
@@ -179,24 +149,22 @@ struct OnboardingAccountCreationView: View {
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
                     .accessibleButton(label: "Create Account".localized, hint: "Opens create account".localized)
-                    if coordinator.userType == .captain, remoteConfig.founderProgramEnabled {
+                    if remoteConfig.founderProgramEnabled {
                         Text("Unlocks exclusive Founders Scout avatar".localized)
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
                     }
                 }
                 
-                if coordinator.userType != .scout {
-                    Button {
-                        showGuestConfirmation = true
-                    } label: {
-                        Text("Continue as Guest (no sync)".localized)
-                            .font(.system(.body, design: .rounded))
-                            .padding(.vertical, 16)
-                            .foregroundStyle(Color.Theme.softBrown)
-                    }
-                    .accessibleButton(label: "Continue as Guest (no sync)".localized, hint: "Continues as guest without syncing".localized)
+                Button {
+                    showGuestConfirmation = true
+                } label: {
+                    Text("Continue as Guest (no sync)".localized)
+                        .font(.system(.body, design: .rounded))
+                        .padding(.vertical, 16)
+                        .foregroundStyle(Color.Theme.softBrown)
                 }
+                .accessibleButton(label: "Continue as Guest (no sync)".localized, hint: "Continues as guest without syncing".localized)
             }
             .padding(.horizontal, 24)
             .padding(.top, 16)

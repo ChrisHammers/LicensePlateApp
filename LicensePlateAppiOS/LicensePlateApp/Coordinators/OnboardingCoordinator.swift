@@ -8,21 +8,12 @@
 import SwiftUI
 import Combine
 
-/// User type for onboarding flow branching
-enum OnboardingUserType: String, CaseIterable {
-    case captain  // Parent - can create families
-    case scout    // Child - must join family
-}
-
-/// Coordinator for onboarding flow with branching (Captain vs Scout, Sign In vs Create)
+/// Coordinator for onboarding flow (Sign In vs Create, optional family setup)
 @MainActor
 final class OnboardingCoordinator: ObservableObject {
     enum Step: Int, CaseIterable {
         case welcome
-        case howItWorks
-        case features
         case disclaimer
-        case userTypeAndBirthYear
         case accountCreation
         case avatarPicker
         case joinFamily
@@ -40,7 +31,6 @@ final class OnboardingCoordinator: ObservableObject {
     }
     
     @Published var isGoingForward = true
-    @Published var userType: OnboardingUserType?
     @Published var didLogIn = false
     @Published var isExistingAccount = false
     
@@ -62,7 +52,7 @@ final class OnboardingCoordinator: ObservableObject {
     }
     
     // MARK: initial flow order:
-    //[.welcome, .howItWorks, .features, .disclaimer, .userTypeAndBirthYear, .accountCreation]
+    // [.welcome, .disclaimer, .accountCreation]
     
     
     // MARK: - Navigation
@@ -78,14 +68,8 @@ final class OnboardingCoordinator: ObservableObject {
     private func performNextStep() {
         switch currentStep {
         case .welcome:
-            stepStack.append(.howItWorks)
-        case .howItWorks:
-            stepStack.append(.features)
-        case .features:
             stepStack.append(.disclaimer)
         case .disclaimer:
-            stepStack.append(.userTypeAndBirthYear)
-        case .userTypeAndBirthYear:
             stepStack.append(.accountCreation)
         case .accountCreation:
             stepStack.append(.avatarPicker)
@@ -119,11 +103,6 @@ final class OnboardingCoordinator: ObservableObject {
         stepStack.removeLast()
     }
     
-    private func advanceFromAccountCreation() {
-        // Always go to avatar picker next; advanceFromAvatarPicker handles flow after
-        stepStack.append(.avatarPicker)
-    }
-    
     private func advanceFromAvatarPicker() {
         if !didLogIn {
             stepStack.append(.permissions)
@@ -131,7 +110,7 @@ final class OnboardingCoordinator: ObservableObject {
         }
         let hasFamily = (authService?.currentUser?.activeFamilyId != nil)
         if !hasFamily {
-            stepStack.append(userType == .scout ? .joinFamily : .createFamily)
+            stepStack.append(.createFamily)//(userType == .scout ? .joinFamily : .createFamily)
         } else if shouldShowPremiumUpsell {
             stepStack.append(.premiumUpsell)
         } else {
@@ -140,7 +119,7 @@ final class OnboardingCoordinator: ObservableObject {
     }
     
     private func advanceFromJoinFamily() {
-        if didLogIn && shouldShowPremiumUpsell {
+        if shouldShowPremiumUpsell {
             stepStack.append(.premiumUpsell)
         } else {
             stepStack.append(.permissions)
@@ -148,7 +127,7 @@ final class OnboardingCoordinator: ObservableObject {
     }
     
     private func advanceFromCreateFamily() {
-        if didLogIn && shouldShowPremiumUpsell {
+        if shouldShowPremiumUpsell {
             stepStack.append(.premiumUpsell)
         } else {
             stepStack.append(.permissions)
@@ -165,9 +144,11 @@ final class OnboardingCoordinator: ObservableObject {
         currentStep == .getStarted
     }
     
-    /// Whether to show premium upsell (logged in, not already premium, and not a Child/Scout account)
+    /// Whether to show premium upsell during onboarding (disabled until product re-enables).
     var shouldShowPremiumUpsell: Bool {
-        didLogIn && !hasPremium && userType != .scout  // Children cannot purchase; skip store
+        false
+        // TODO: re-enable onboarding premium upsell
+        // didLogIn && !hasPremium
     }
     
     private var hasPremium: Bool {
