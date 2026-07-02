@@ -48,6 +48,33 @@ struct QuickSoloStartView: View {
             }
 
             VStack(spacing: 16) {
+                if let restored = authService.restoredUserInfo {
+                    VStack(spacing: 12) {
+                        Text(String(format: "We have found the following user, %@-%@, on this device.".localized, restored.userName, restored.email))
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                            .multilineTextAlignment(.center)
+
+                        Button {
+                            continueAsRestoredUser()
+                        } label: {
+                            Text(String(format: "Continue as %@".localized, restored.userName))
+                                .font(.system(.body, design: .rounded))
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(Capsule().fill(Color.Theme.primaryBlue))
+                                .foregroundStyle(.white)
+                        }
+                        .accessibleButton(
+                            label: String(format: "Continue as %@".localized, restored.userName),
+                            hint: "Continues to next screen".localized
+                        )
+                        .disabled(!hasAgreedToSafeDriving)
+                        .opacity(hasAgreedToSafeDriving ? 1 : 0.6)
+                    }
+                }
+
                 Button {
                     startQuickSoloTrip()
                 } label: {
@@ -75,8 +102,7 @@ struct QuickSoloStartView: View {
 
                 HStack(spacing: 16) {
                     Button {
-                        signInInitialMode = .createAccount
-                        showSignInSheet = true
+                        openAuthSheet(mode: .createAccount)
                     } label: {
                         Text("Create Account".localized)
                             .font(.system(.subheadline, design: .rounded))
@@ -84,26 +110,33 @@ struct QuickSoloStartView: View {
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
                     .accessibleButton(label: "Create Account".localized, hint: "Opens create account".localized)
+                    .disabled(!hasAgreedToSafeDriving)
+                    .opacity(hasAgreedToSafeDriving ? 1 : 0.6)
 
                     Text("·")
                         .foregroundStyle(Color.Theme.softBrown)
 
                     Button {
-                        signInInitialMode = .signIn
-                        showSignInSheet = true
+                        openAuthSheet(mode: .signIn)
                     } label: {
-                        Text("Sign In".localized)
+                        Text((authService.restoredUserInfo != nil ? "Sign In Using Different Account" : "Sign In").localized)
                             .font(.system(.subheadline, design: .rounded))
                             .fontWeight(.medium)
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
-                    .accessibleButton(label: "Sign In".localized, hint: "Opens sign in".localized)
+                    .accessibleButton(
+                        label: (authService.restoredUserInfo != nil ? "Sign In Using Different Account" : "Sign In").localized,
+                        hint: "Opens sign in".localized
+                    )
+                    .disabled(!hasAgreedToSafeDriving)
+                    .opacity(hasAgreedToSafeDriving ? 1 : 0.6)
                 }
             }
             .padding(.horizontal, 24)
-            .padding(.top, 16)
-            .padding(.bottom, 32)
+            .padding(.top, 8)
+            .padding(.bottom, 16)
         }
+        .ignoresSafeArea(edges: .bottom)
         .onAppear {
             FirstSessionAnalyticsService.shared.recordOnboardingStarted(
                 flowVariant: .quickSolo,
@@ -202,6 +235,38 @@ struct QuickSoloStartView: View {
         .padding(.horizontal)
     }
 
+    private func openAuthSheet(mode: SignInInitialMode) {
+        guard hasAgreedToSafeDriving else { return }
+        Task {
+            if authService.restoredUserInfo != nil {
+                try? await authService.signOut()
+                try? authService.resetLocalUserToGuest()
+            }
+            await MainActor.run {
+                signInInitialMode = mode
+                showSignInSheet = true
+            }
+        }
+    }
+
+    private func continueAsRestoredUser() {
+        guard hasAgreedToSafeDriving else { return }
+        FeedbackService.shared.buttonTap()
+        FirstSessionAnalyticsService.shared.recordOnboardingCompleted(
+            flowVariant: .quickSolo,
+            offline: !authService.isOnline
+        )
+        appCoordinator.completeOnboarding()
+    }
+
+    private func ensureGuestSessionForQuickSolo() async throws {
+        let accountState = FirebaseAccountStateProvider.shared.currentAccountState(for: authService.currentUser)
+        guard !accountState.isGuestLike else { return }
+        try await authService.signOut()
+        try authService.resetLocalUserToGuest()
+        try await authService.signInAnonymously()
+    }
+
     private func startQuickSoloTrip() {
         guard hasAgreedToSafeDriving else { return }
         isCreatingTrip = true
@@ -211,6 +276,7 @@ struct QuickSoloStartView: View {
         Task { @MainActor in
             defer { isCreatingTrip = false }
             do {
+                try await ensureGuestSessionForQuickSolo()
                 let intent = try QuickSoloTripService.shared.createAndStartQuickSoloTrip(authService: authService)
                 FirstSessionAnalyticsService.shared.recordOnboardingCompleted(
                     flowVariant: .quickSolo,
