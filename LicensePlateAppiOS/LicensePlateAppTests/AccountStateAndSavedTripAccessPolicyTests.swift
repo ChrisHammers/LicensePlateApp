@@ -97,4 +97,17 @@ struct AccountStateAndSavedTripAccessPolicyTests {
             accountStateProvider: StaticAccountStateProvider(.signedIn)
         ).visibleSavedTripLimit(for: user) == nil)
     }
+
+    @Test func shouldReportAuthSuccessWhenGuestLikeUpgradesToSignedIn() {
+        #expect(AccountState.shouldReportAuthSuccess(from: .localGuest, to: .signedIn))
+        #expect(AccountState.shouldReportAuthSuccess(from: .firebaseAnonymous, to: .signedIn))
+    }
+
+    @Test func shouldNotReportAuthSuccessWhenAlreadySignedInOrStillGuestLike() {
+        #expect(!AccountState.shouldReportAuthSuccess(from: .signedIn, to: .signedIn))
+        #expect(!AccountState.shouldReportAuthSuccess(from: .localGuest, to: .localGuest))
+        #expect(!AccountState.shouldReportAuthSuccess(from: .firebaseAnonymous, to: .firebaseAnonymous))
+        #expect(!AccountState.shouldReportAuthSuccess(from: .signedIn, to: .firebaseAnonymous))
+        #expect(!AccountState.shouldReportAuthSuccess(from: .localGuest, to: .firebaseAnonymous))
+    }
 }

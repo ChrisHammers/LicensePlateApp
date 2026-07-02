@@ -51,6 +51,8 @@ struct SignInView: View {
     @State private var isLoading = false
     @State private var passwordMatchError: String? = nil
     @State private var passwordMatchTask: Task<Void, Never>? = nil
+    @State private var accountStateAtAppear: AccountState = .localGuest
+    @State private var didReportAuthSuccess = false
     
     var onAuthSuccess: (() -> Void)?
     
@@ -396,13 +398,14 @@ struct SignInView: View {
             } message: {
                 Text(errorMessage)
             }
-            .onChange(of: authService.isAuthenticated) { oldValue, newValue in
-                // Auto-dismiss when authentication succeeds
-                if newValue && oldValue == false {
-                    onAuthSuccess?()
-                    dismiss()
-                    authService.showSignInSheet = false
-                }
+            .onAppear {
+                accountStateAtAppear = currentAccountState()
+            }
+            .onChange(of: authService.currentUser?.email) { _, _ in
+                evaluateAccountStateTransition()
+            }
+            .onChange(of: authService.currentUser?.firebaseUID ?? authService.currentUser?.id) { _, _ in
+                evaluateAccountStateTransition()
             }
             .onDisappear {
                 // Cancel any pending password match check when view disappears
@@ -438,6 +441,26 @@ struct SignInView: View {
         birthYear = Calendar.current.component(.year, from: .now) - 25
         errorMessage = ""
     }
+
+    private func currentAccountState() -> AccountState {
+        FirebaseAccountStateProvider.shared.currentAccountState(for: authService.currentUser)
+    }
+
+    private func completeAuthSuccess() {
+        guard !didReportAuthSuccess else { return }
+        didReportAuthSuccess = true
+        onAuthSuccess?()
+        authService.showSignInSheet = false
+        dismiss()
+    }
+
+    private func evaluateAccountStateTransition() {
+        guard AccountState.shouldReportAuthSuccess(
+            from: accountStateAtAppear,
+            to: currentAccountState()
+        ) else { return }
+        completeAuthSuccess()
+    }
     
     private func signIn() {
         guard isFormValid else { return }
@@ -448,8 +471,7 @@ struct SignInView: View {
                 try await authService.signIn(email: email, password: password)
                 await MainActor.run {
                     isLoading = false
-                    authService.showSignInSheet = false
-                    dismiss()
+                    completeAuthSuccess()
                 }
             } catch {
                 await MainActor.run {
@@ -492,8 +514,7 @@ struct SignInView: View {
                 )
                 await MainActor.run {
                     isLoading = false
-                    authService.showSignInSheet = false
-                    dismiss()
+                    completeAuthSuccess()
                 }
             } catch {
                 await MainActor.run {
@@ -525,8 +546,7 @@ struct SignInView: View {
                 try await authService.signInWithGoogle(presentingViewController: rootViewController)
                 await MainActor.run {
                     isLoading = false
-                    authService.showSignInSheet = false
-                    dismiss()
+                    completeAuthSuccess()
                 }
             } catch {
                 await MainActor.run {
@@ -551,8 +571,7 @@ struct SignInView: View {
                 try await authService.signInWithApple()
                 await MainActor.run {
                     isLoading = false
-                    authService.showSignInSheet = false
-                    dismiss()
+                    completeAuthSuccess()
                 }
             } catch {
                 await MainActor.run {

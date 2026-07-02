@@ -21,6 +21,11 @@ enum AccountState: Equatable {
             return false
         }
     }
+
+    /// True when the user upgraded from guest/anonymous to a registered account.
+    static func shouldReportAuthSuccess(from previous: AccountState, to current: AccountState) -> Bool {
+        previous.isGuestLike && current == .signedIn
+    }
 }
 
 @MainActor

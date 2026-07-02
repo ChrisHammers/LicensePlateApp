@@ -122,6 +122,11 @@ struct QuickSoloStartView: View {
                 initialMode: signInInitialMode,
                 onAuthSuccess: {
                     showSignInSheet = false
+                    FirstSessionAnalyticsService.shared.recordOnboardingCompleted(
+                        flowVariant: .quickSolo,
+                        offline: !authService.isOnline
+                    )
+                    appCoordinator.completeOnboarding()
                 }
             )
         }
