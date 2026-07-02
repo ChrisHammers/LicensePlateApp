@@ -13,6 +13,7 @@ import UserNotifications
 
 struct OnboardingPermissionsView: View {
     @ObservedObject var coordinator: OnboardingCoordinator
+    var deferredSetupTouchSource: String = "legacy_onboarding"
     let onNext: () -> Void
     
     @StateObject private var locationManager = LocationManager()
@@ -110,6 +111,7 @@ struct OnboardingPermissionsView: View {
         }
         .onAppear {
             checkPermissions()
+            DeferredProfileSetupStore.shared.markTouched(.notifications, source: deferredSetupTouchSource)
         }
         .onChange(of: locationManager.authorizationStatus) { _, _ in
             checkPermissions()

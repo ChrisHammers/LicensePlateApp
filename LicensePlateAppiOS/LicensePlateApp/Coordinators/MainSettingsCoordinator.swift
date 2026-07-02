@@ -22,7 +22,7 @@ final class MainSettingsCoordinator: ObservableObject {
         case family
         case achievements
         case rankProgression
-        case deferredProfileSetup
+//        case deferredProfileSetup
     }
   
     @Published var path = NavigationPath()
@@ -79,9 +79,9 @@ final class MainSettingsCoordinator: ObservableObject {
     }
     
     /// Navigate to deferred profile setup hub
-    func navigateToDeferredProfileSetup() {
-        path.append(SettingsDestination.deferredProfileSetup)
-    }
+//    func navigateToDeferredProfileSetup() {
+//        path.append(SettingsDestination.deferredProfileSetup)
+//    }
 
     /// Navigate to the Rank Progression view
     func navifateToRankProgression() {

@@ -283,6 +283,7 @@ class AnalyticsService: AnalyticsLogging {
         case deferredSetupPromptShown(pendingSteps: String)
         case deferredSetupStepOpened(stepId: String, source: String)
         case deferredSetupStepCompleted(stepId: String)
+        case deferredSetupStepTouched(stepId: String, source: String)
 
         // Screen view (Step 10)
         case screenView(screenName: String, screenClass: String?)
@@ -466,6 +467,7 @@ class AnalyticsService: AnalyticsLogging {
             case .deferredSetupPromptShown: return "deferred_setup_prompt_shown"
             case .deferredSetupStepOpened: return "deferred_setup_step_opened"
             case .deferredSetupStepCompleted: return "deferred_setup_step_completed"
+            case .deferredSetupStepTouched: return "deferred_setup_step_touched"
             case .screenView: return "screen_view"
             case .paywallViewed: return "paywall_viewed"
             case .paywallDismissed: return "paywall_dismissed"
@@ -892,6 +894,8 @@ class AnalyticsService: AnalyticsLogging {
                 return ["step_id": stepId, "source": source]
             case .deferredSetupStepCompleted(let stepId):
                 return ["step_id": stepId]
+            case .deferredSetupStepTouched(let stepId, let source):
+                return ["step_id": stepId, "source": source]
             case .screenView(let screenName, let screenClass):
                 var p: [String: Any] = ["screen_name": screenName]
                 if let screenClass = screenClass { p["screen_class"] = screenClass }

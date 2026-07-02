@@ -11,7 +11,7 @@ import Combine
 enum DeferredSetupStep: String, CaseIterable, Identifiable {
     case avatar
     case account
-    //case family
+    case family
     case notifications
 
     var id: String { rawValue }
@@ -20,7 +20,7 @@ enum DeferredSetupStep: String, CaseIterable, Identifiable {
         switch self {
         case .avatar: return "Choose your avatar".localized
         case .account: return "Create account".localized
-        //case .family: return "Friends & Family".localized
+        case .family: return "Friends & Family".localized
         case .notifications: return "Notifications".localized
         }
     }
@@ -29,7 +29,7 @@ enum DeferredSetupStep: String, CaseIterable, Identifiable {
         switch self {
         case .avatar: return "person.crop.circle"
         case .account: return "person.badge.plus"
-        //case .family: return "person.2.fill"
+        case .family: return "person.2.fill"
         case .notifications: return "bell.fill"
         }
     }
@@ -53,36 +53,37 @@ final class DeferredProfileSetupStore: ObservableObject {
     }
 
     func pendingSteps(for user: AppUser?) -> [DeferredSetupStep] {
-        let completed = state.deferredSetupStepsCompleted
+        let touched = state.deferredSetupStepsTouched
         var steps: [DeferredSetupStep] = []
 
-        if !completed.contains(DeferredSetupStep.avatar.rawValue) {
+        if !touched.contains(DeferredSetupStep.avatar.rawValue) {
             steps.append(.avatar)
         }
 
         let accountState = accountStateProvider.currentAccountState(for: user)
-        if accountState.isGuestLike, !completed.contains(DeferredSetupStep.account.rawValue) {
+        if accountState.isGuestLike, !touched.contains(DeferredSetupStep.account.rawValue) {
             steps.append(.account)
         }
 
-//        if !accountState.isGuestLike,
-//           user?.activeFamilyId == nil,
-//           !completed.contains(DeferredSetupStep.family.rawValue) {
-//            steps.append(.family)
-//        }
+        if !accountState.isGuestLike,
+           user?.activeFamilyId == nil,
+           !touched.contains(DeferredSetupStep.family.rawValue) {
+            steps.append(.family)
+        }
 
-        if !completed.contains(DeferredSetupStep.notifications.rawValue) {
+        if !touched.contains(DeferredSetupStep.notifications.rawValue) {
             steps.append(.notifications)
         }
 
         return steps
     }
 
-    func markCompleted(_ step: DeferredSetupStep) {
-        var completed = state.deferredSetupStepsCompleted
-        guard completed.insert(step.rawValue).inserted else { return }
-        state.deferredSetupStepsCompleted = completed
+    func markTouched(_ step: DeferredSetupStep, source: String) {
+        var touched = state.deferredSetupStepsTouched
+        guard touched.insert(step.rawValue).inserted else { return }
+        state.deferredSetupStepsTouched = touched
         revision += 1
+        FirstSessionAnalyticsService.shared.recordDeferredSetupStepTouched(stepId: step.rawValue, source: source)
     }
 
     func shouldShowPostFirstFindPrompt(for user: AppUser?) -> Bool {

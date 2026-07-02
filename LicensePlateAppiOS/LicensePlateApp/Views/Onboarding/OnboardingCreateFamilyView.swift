@@ -12,6 +12,7 @@ struct OnboardingCreateFamilyView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
     @ObservedObject var coordinator: OnboardingCoordinator
+    var deferredSetupTouchSource: String = "legacy_onboarding"
     let onNext: () -> Void
     
     private let familyRepository = FamilyRepository.shared
@@ -113,6 +114,7 @@ struct OnboardingCreateFamilyView: View {
         }
         .onAppear {
             familyRepository.setModelContext(modelContext)
+            DeferredProfileSetupStore.shared.markTouched(.family, source: deferredSetupTouchSource)
         }
         .alert("Error".localized, isPresented: $showError) {
             Button("OK", role: .cancel) { }

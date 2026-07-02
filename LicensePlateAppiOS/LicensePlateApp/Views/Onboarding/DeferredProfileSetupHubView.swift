@@ -2,7 +2,7 @@
 //  DeferredProfileSetupHubView.swift
 //  LicensePlateApp
 //
-//  Settings entry for optional profile steps deferred from quick solo first session.
+//  Banner entry for optional profile steps deferred from quick solo first session.
 //
 
 import SwiftUI
@@ -36,7 +36,7 @@ struct DeferredProfileSetupHubView: View {
                             Button {
                                 FirstSessionAnalyticsService.shared.recordDeferredSetupStepOpened(
                                     stepId: step.rawValue,
-                                    source: "settings_hub"
+                                    source: "deferred_hub"
                                 )
                                 activeStep = step
                             } label: {
@@ -84,9 +84,8 @@ struct DeferredProfileSetupHubView: View {
                 OnboardingBackgroundView {
                     OnboardingAvatarPickerView(
                         coordinator: onboardingCoordinator,
-                        onNext: {
-                            complete(step)
-                        }
+                        deferredSetupTouchSource: "deferred_hub",
+                        onNext: { dismissStep() }
                     )
                     .environmentObject(authService)
                 }
@@ -94,31 +93,30 @@ struct DeferredProfileSetupHubView: View {
                 OnboardingBackgroundView {
                     OnboardingAccountCreationView(
                         coordinator: onboardingCoordinator,
-                        onNext: {
-                            complete(step)
-                        }
+                        deferredSetupTouchSource: "deferred_hub",
+                        onNext: { dismissStep() }
                     )
                     .environmentObject(authService)
                 }
-//            case .family:
-//                OnboardingBackgroundView {
-//                    OnboardingCreateFamilyView(
-//                        coordinator: onboardingCoordinator,
-//                        onNext: {
-//                            complete(step)
-//                        }
-//                    )
-//                    .environmentObject(authService)
-//                }
+            case .family:
+                OnboardingBackgroundView {
+                    OnboardingCreateFamilyView(
+                        coordinator: onboardingCoordinator,
+                        deferredSetupTouchSource: "deferred_hub",
+                        onNext: { dismissStep() }
+                    )
+                    .environmentObject(authService)
+                }
             case .notifications:
-                PrivacyPermissionsView(onDone: { complete(step) })
+                PrivacyPermissionsView(
+                    deferredSetupTouchSource: "deferred_hub",
+                    onDone: { dismissStep() }
+                )
             }
         }
     }
 
-    private func complete(_ step: DeferredSetupStep) {
-        setupStore.markCompleted(step)
-        FirstSessionAnalyticsService.shared.recordDeferredSetupStepCompleted(stepId: step.rawValue)
+    private func dismissStep() {
         activeStep = nil
     }
 }

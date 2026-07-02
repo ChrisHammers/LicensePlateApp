@@ -102,4 +102,8 @@ final class FirstSessionAnalyticsService {
     func recordDeferredSetupStepCompleted(stepId: String) {
         analytics.log(.deferredSetupStepCompleted(stepId: stepId))
     }
+
+    func recordDeferredSetupStepTouched(stepId: String, source: String) {
+        analytics.log(.deferredSetupStepTouched(stepId: stepId, source: source))
+    }
 }

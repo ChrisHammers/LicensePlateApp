@@ -12,6 +12,7 @@ struct OnboardingJoinFamilyView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
     @ObservedObject var coordinator: OnboardingCoordinator
+    var deferredSetupTouchSource: String = "legacy_onboarding"
     let onNext: () -> Void
     
     private let familyRepository = FamilyRepository.shared
@@ -123,6 +124,7 @@ struct OnboardingJoinFamilyView: View {
         }
         .onAppear {
             familyRepository.setModelContext(modelContext)
+            DeferredProfileSetupStore.shared.markTouched(.family, source: deferredSetupTouchSource)
         }
         .sheet(isPresented: $showQRScanner) {
             QRScannerView(scannedCode: $scannedCode)

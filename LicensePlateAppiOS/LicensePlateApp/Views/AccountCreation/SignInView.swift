@@ -55,9 +55,17 @@ struct SignInView: View {
     @State private var didReportAuthSuccess = false
     
     var onAuthSuccess: (() -> Void)?
+    var deferredSetupTouchSource: String = "profile"
     
-    init(authService: FirebaseAuthService, initialMode: SignInInitialMode = .signIn, initialBirthYear: Int? = nil, onAuthSuccess: (() -> Void)? = nil) {
+    init(
+        authService: FirebaseAuthService,
+        initialMode: SignInInitialMode = .signIn,
+        initialBirthYear: Int? = nil,
+        deferredSetupTouchSource: String = "profile",
+        onAuthSuccess: (() -> Void)? = nil
+    ) {
         self.authService = authService
+        self.deferredSetupTouchSource = deferredSetupTouchSource
         let year = Calendar.current.component(.year, from: .now)
         self._isSignInMode = State(initialValue: initialMode == .signIn)
         self._birthYear = State(initialValue: initialBirthYear ?? year - 25)
@@ -400,6 +408,7 @@ struct SignInView: View {
             }
             .onAppear {
                 accountStateAtAppear = currentAccountState()
+                DeferredProfileSetupStore.shared.markTouched(.account, source: deferredSetupTouchSource)
             }
             .onChange(of: authService.currentUser?.email) { _, _ in
                 evaluateAccountStateTransition()

@@ -12,6 +12,7 @@ import UserNotifications
 import Speech
 
 struct PrivacyPermissionsView: View {
+    var deferredSetupTouchSource: String = "settings"
     var onDone: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
     
@@ -201,6 +202,7 @@ struct PrivacyPermissionsView: View {
             }
             .onAppear {
                 checkPermissions()
+                DeferredProfileSetupStore.shared.markTouched(.notifications, source: deferredSetupTouchSource)
             }
             .onChange(of: locationManager.authorizationStatus) { oldValue, newValue in
                 checkPermissions()

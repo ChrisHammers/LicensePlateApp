@@ -679,7 +679,7 @@ struct UserProfileView: View {
                 currentUserName = newValue
             }
             .sheet(isPresented: $authService.showSignInSheet) {
-                SignInView(authService: authService)
+                SignInView(authService: authService, deferredSetupTouchSource: "profile")
             }
             .sheet(isPresented: $showImagePicker) {
                 ImagePickerView(selectedImage: $selectedImage)
@@ -1024,6 +1024,7 @@ private struct ProfileAvatarPickerSheet: View {
             }
             .onAppear {
                 selectedId = user.avatarId ?? AvatarCatalog.guestAvatarIds.first
+                DeferredProfileSetupStore.shared.markTouched(.avatar, source: "profile")
             }
             .overlay {
                 if let payload = unlockSheetPayload {

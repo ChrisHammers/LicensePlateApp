@@ -12,7 +12,7 @@ final class InMemoryFirstSessionState: FirstSessionStateStoring {
     var onboardingStartedAt: Date?
     var quickTripStartedAt: Date?
     var hasLoggedFirstFind = false
-    var deferredSetupStepsCompleted: Set<String> = []
+    var deferredSetupStepsTouched: Set<String> = []
     var deferredSetupPromptDismissedAt: Date?
     var activeFlowVariant: FirstSessionFlowVariant?
     var lastOnboardingStepId: String?

@@ -153,6 +153,7 @@ struct QuickSoloStartView: View {
             SignInView(
                 authService: authService,
                 initialMode: signInInitialMode,
+                deferredSetupTouchSource: "quick_solo",
                 onAuthSuccess: {
                     showSignInSheet = false
                     FirstSessionAnalyticsService.shared.recordOnboardingCompleted(

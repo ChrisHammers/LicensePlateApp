@@ -11,6 +11,7 @@ struct OnboardingAccountCreationView: View {
     @EnvironmentObject var authService: FirebaseAuthService
     @ObservedObject var coordinator: OnboardingCoordinator
     @ObservedObject private var remoteConfig = RemoteConfigService.shared
+    var deferredSetupTouchSource: String = "legacy_onboarding"
     let onNext: () -> Void
     
     @State private var showSignInSheet = false
@@ -224,12 +225,16 @@ struct OnboardingAccountCreationView: View {
                 authService: authService,
                 initialMode: signInInitialMode,
                 initialBirthYear: signInInitialMode == .createAccount && coordinator.birthYear > 0 ? coordinator.birthYear : nil,
+                deferredSetupTouchSource: deferredSetupTouchSource,
                 onAuthSuccess: {
                     coordinator.didLogIn = true
                     showSignInSheet = false
                     onNext()
                 }
             )
+        }
+        .onAppear {
+            DeferredProfileSetupStore.shared.markTouched(.account, source: deferredSetupTouchSource)
         }
     }
     

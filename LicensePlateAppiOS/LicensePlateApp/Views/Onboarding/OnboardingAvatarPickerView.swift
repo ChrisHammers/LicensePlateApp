@@ -12,6 +12,7 @@ struct OnboardingAvatarPickerView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
     @ObservedObject var coordinator: OnboardingCoordinator
+    var deferredSetupTouchSource: String = "legacy_onboarding"
     let onNext: () -> Void
     
     @StateObject private var viewModel = AvatarPickerViewModel(catalogService: .shared)
@@ -87,6 +88,7 @@ struct OnboardingAvatarPickerView: View {
                 viewModel.selectedId = user.avatarId ?? AvatarCatalog.randomGuestAvatarId()
             }
             AnalyticsService.shared.log(.avatarPickerOpened(source: "onboarding"))
+            DeferredProfileSetupStore.shared.markTouched(.avatar, source: deferredSetupTouchSource)
         }
         .overlay {
             if let payload = unlockSheetPayload {

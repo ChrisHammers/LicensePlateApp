@@ -750,7 +750,6 @@ private struct PendingInviteCard: View {
 
 // Default Settings View for new trips
 struct DefaultSettingsView: View {
-    @ObservedObject private var deferredSetupStore = DeferredProfileSetupStore.shared
     @StateObject private var coordinator = MainSettingsCoordinator()
     
     @Environment(\.dismiss) private var dismiss
@@ -830,14 +829,6 @@ struct DefaultSettingsView: View {
             set: { appLanguageRaw = $0.rawValue }
         )
     }
-
-    private var pendingDeferredSetupSteps: [DeferredSetupStep] {
-        deferredSetupStore.pendingSteps(for: authService.currentUser)
-    }
-
-    private var showsDeferredProfileSetup: Bool {
-        authService.currentUser != nil && !pendingDeferredSetupSteps.isEmpty
-    }
     
     var body: some View {
       NavigationStack(path: $coordinator.path) { //NavigationStack(path: Binding(get: { coordinator.path }, set: { coordinator.path = $0 })) {
@@ -847,22 +838,12 @@ struct DefaultSettingsView: View {
                         VStack(spacing: 12) {
                             // Profile (from User section, but no section header)
                             if authService.currentUser != nil {
-                                if showsDeferredProfileSetup {
-                                    SettingNavigationRow(
-                                        title: "Complete your profile".localized,
-                                        description: "deferred_setup.settings.description".localized,
-                                        icon: "person.crop.circle.badge.checkmark"
-                                    ) {
-                                        coordinator.navigateToDeferredProfileSetup()
-                                    }
-                                } else {
-                                    SettingNavigationRow(
-                                        title: "Profile".localized,
-                                        description: "Edit username and manage account".localized,
-                                        icon: "person.circle"
-                                    ) {
-                                        coordinator.navigateToProfile()
-                                    }
+                                SettingNavigationRow(
+                                    title: "Profile".localized,
+                                    description: "Edit username and manage account".localized,
+                                    icon: "person.circle"
+                                ) {
+                                    coordinator.navigateToProfile()
                                 }
 
                                 Divider()
@@ -1035,9 +1016,9 @@ struct DefaultSettingsView: View {
                             Text("No user available")
                                 .foregroundStyle(Color.Theme.softBrown)
                         }
-                    case .deferredProfileSetup:
-                        DeferredProfileSetupHubView()
-                            .environmentObject(authService)
+//                    case .deferredProfileSetup:
+//                        DeferredProfileSetupHubView()
+//                            .environmentObject(authService)
                     }
                 }
             }

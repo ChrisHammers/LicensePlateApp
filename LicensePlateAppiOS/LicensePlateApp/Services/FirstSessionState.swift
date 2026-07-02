@@ -17,7 +17,7 @@ protocol FirstSessionStateStoring: AnyObject {
     var onboardingStartedAt: Date? { get set }
     var quickTripStartedAt: Date? { get set }
     var hasLoggedFirstFind: Bool { get set }
-    var deferredSetupStepsCompleted: Set<String> { get set }
+    var deferredSetupStepsTouched: Set<String> { get set }
     var deferredSetupPromptDismissedAt: Date? { get set }
     var activeFlowVariant: FirstSessionFlowVariant? { get set }
     var lastOnboardingStepId: String? { get set }
@@ -28,7 +28,7 @@ enum FirstSessionStateKeys {
     static let onboardingStartedAt = "firstSessionOnboardingStartedAt"
     static let quickTripStartedAt = "firstSessionQuickTripStartedAt"
     static let hasLoggedFirstFind = "firstSessionHasLoggedFirstFind"
-    static let deferredSetupStepsCompleted = "deferredSetupStepsCompleted"
+    static let deferredSetupStepsTouched = "deferredSetupStepsTouched"
     static let deferredSetupPromptDismissedAt = "deferredSetupPromptDismissedAt"
     static let activeFlowVariant = "firstSessionActiveFlowVariant"
     static let lastOnboardingStepId = "firstSessionLastOnboardingStepId"
@@ -77,12 +77,12 @@ final class FirstSessionState: FirstSessionStateStoring {
         set { defaults.set(newValue, forKey: FirstSessionStateKeys.hasLoggedFirstFind) }
     }
 
-    var deferredSetupStepsCompleted: Set<String> {
+    var deferredSetupStepsTouched: Set<String> {
         get {
-            Set(defaults.stringArray(forKey: FirstSessionStateKeys.deferredSetupStepsCompleted) ?? [])
+            Set(defaults.stringArray(forKey: FirstSessionStateKeys.deferredSetupStepsTouched) ?? [])
         }
         set {
-            defaults.set(Array(newValue), forKey: FirstSessionStateKeys.deferredSetupStepsCompleted)
+            defaults.set(Array(newValue), forKey: FirstSessionStateKeys.deferredSetupStepsTouched)
         }
     }
 
