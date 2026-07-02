@@ -9,6 +9,7 @@ import Foundation
 
 enum AdSurface: String, CaseIterable {
     case combinedTripSetup = "combined_trip_setup"
+    case tripSetup = "trip_setup"
     case travelLog = "travel_log"
     case tripSummary = "trip_summary"
 }

@@ -2,7 +2,7 @@
 //  TripSessionLifecycleService.swift
 //  LicensePlateApp
 //
-//  Step 04 — Single orchestration path for start/end/cancel trip. Used by CombinedTripSetupViewModel and ActiveTripsListViewModel.
+//  Step 04 — Single orchestration path for start/end/cancel trip. Used by GameSetupViewModel and ActiveTripsListViewModel.
 //  Step 6.9.3 — Per-game start/end delegated to GameInstanceLifecycleService.
 //
 

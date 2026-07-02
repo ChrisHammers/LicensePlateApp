@@ -122,6 +122,9 @@ class AnalyticsService: AnalyticsLogging {
 
         // Combined games (Step 06)
         case combinedTripSetupOpened
+        case tripSetupOpened
+        case gameSetupOpened
+        case gameSetupAddGameOpened(tripSessionId: String)
         case combinedTripCreated(
             gameTypes: [String],
             tripSessionId: String? = nil,
@@ -370,6 +373,9 @@ class AnalyticsService: AnalyticsLogging {
             case .tripParticipantLeaveReconciled: return "trip_participant_leave_reconciled"
             case .participantRemovedFromTrip: return "participant_removed_from_trip"
             case .combinedTripSetupOpened: return "combined_trip_setup_opened"
+            case .tripSetupOpened: return "trip_setup_opened"
+            case .gameSetupOpened: return "game_setup_opened"
+            case .gameSetupAddGameOpened: return "game_setup_add_game_opened"
             case .combinedTripCreated: return "combined_trip_created"
             case .combinedGameRemovedBeforeStart: return "combined_game_removed_before_start"
             case .combinedGameReordered: return "combined_game_reordered"
@@ -575,8 +581,10 @@ class AnalyticsService: AnalyticsLogging {
                 var p: [String: Any] = ["trip_session_id": tripId]
                 if let id = actorParticipantId { p["actor_participant_id"] = id }
                 return p
-            case .combinedTripSetupOpened:
+            case .combinedTripSetupOpened, .tripSetupOpened, .gameSetupOpened:
                 return nil
+            case .gameSetupAddGameOpened(let tripSessionId):
+                return ["trip_session_id": tripSessionId]
             case .combinedTripCreated(let gameTypes, let tripSessionId, let participantCount, let gameCount, let gameModes, let hasTeams):
                 var p: [String: Any] = ["game_types": gameTypes.joined(separator: ",")]
                 if let id = tripSessionId { p["trip_session_id"] = id }

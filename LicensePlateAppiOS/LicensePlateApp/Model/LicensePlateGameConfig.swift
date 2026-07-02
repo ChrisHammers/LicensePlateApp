@@ -9,7 +9,7 @@
 import Foundation
 
 /// Territory inclusion options for license plate game. Completion goal is derived from scope + these options.
-struct LicensePlateTerritoryOptions: Codable, Sendable {
+struct LicensePlateTerritoryOptions: Codable, Sendable, Hashable {
     var includeUSTerritories: Bool
     var includeCanadianTerritories: Bool
     var includeDC: Bool

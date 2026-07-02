@@ -94,21 +94,7 @@ struct TripSessionViewModelTests {
         #expect(viewModel.gameRowItems.isEmpty)
     }
 
-    // MARK: - addGame (second license plate)
-
-    private func makeCreatedSession(id: UUID) -> TripSession {
-        TripSession(
-            id: id,
-            name: "Created Trip",
-            status: .created,
-            createdAt: Date(),
-            createdBy: "user1",
-            startedAt: nil,
-            endedAt: nil,
-            endedBy: nil,
-            participants: [TripParticipant(userId: "user1", role: .owner, joinedAt: Date())]
-        )
-    }
+    // MARK: - canAddGame (button enablement only; add flow tested in GameSetupViewModelTests)
 
     private func licensePlateInstance(sessionId: UUID, lifecycle: GameInstanceState) -> GameInstance {
         var g = GameInstance(
@@ -119,91 +105,6 @@ struct TripSessionViewModelTests {
         )
         g.id = UUID()
         return g
-    }
-
-    @Test func addGame_whenCreatedTripAndOneLP_rejectsSecondLPWhileFirstIsCreated() async throws {
-        let sessionId = UUID()
-        let session = makeCreatedSession(id: sessionId)
-        let lp = licensePlateInstance(sessionId: sessionId, lifecycle: .created)
-
-        let sessionRepo = MockTripSessionRepository()
-        sessionRepo.seed(session)
-        let gameRepo = MockGameInstanceRepository()
-        gameRepo.seed(lp)
-        let eventRepo = MockTripActivityEventRepository()
-        let gameLifecycle = MockGameInstanceLifecycleService()
-
-        let viewModel = TripSessionViewModel(
-            sessionId: sessionId,
-            tripSessionRepository: sessionRepo,
-            gameInstanceRepository: gameRepo,
-            tripActivityEventRepository: eventRepo,
-            gameInstanceLifecycleService: gameLifecycle,
-            authService: creatorAuth()
-        )
-
-        viewModel.addGame()
-
-        #expect(try gameRepo.fetchByTripSession(sessionId: sessionId).count == 1)
-        #expect(gameLifecycle.startGameCallCount == 0)
-        #expect(viewModel.errorMessage != nil)
-    }
-
-    @Test func addGame_whenActiveTripAndOneLPStarted_rejectsSecondLP() async throws {
-        let sessionId = UUID()
-        let session = makeSession(id: sessionId, name: "Active")
-        let lp = licensePlateInstance(sessionId: sessionId, lifecycle: .started)
-
-        let sessionRepo = MockTripSessionRepository()
-        sessionRepo.seed(session)
-        let gameRepo = MockGameInstanceRepository()
-        gameRepo.seed(lp)
-        let eventRepo = MockTripActivityEventRepository()
-        let gameLifecycle = MockGameInstanceLifecycleService()
-
-        let viewModel = TripSessionViewModel(
-            sessionId: sessionId,
-            tripSessionRepository: sessionRepo,
-            gameInstanceRepository: gameRepo,
-            tripActivityEventRepository: eventRepo,
-            gameInstanceLifecycleService: gameLifecycle,
-            authService: creatorAuth()
-        )
-
-        viewModel.addGame()
-
-        #expect(try gameRepo.fetchByTripSession(sessionId: sessionId).count == 1)
-        #expect(gameLifecycle.startGameCallCount == 0)
-        #expect(viewModel.errorMessage != nil)
-    }
-
-    @Test func addGame_whenPriorLPEnded_addsSecondLPAndStartsOnActiveTrip() async throws {
-        let sessionId = UUID()
-        let session = makeSession(id: sessionId, name: "Active")
-        let endedLP = licensePlateInstance(sessionId: sessionId, lifecycle: .ended)
-
-        let sessionRepo = MockTripSessionRepository()
-        sessionRepo.seed(session)
-        let gameRepo = MockGameInstanceRepository()
-        gameRepo.seed(endedLP)
-        let eventRepo = MockTripActivityEventRepository()
-        let gameLifecycle = MockGameInstanceLifecycleService()
-
-        let viewModel = TripSessionViewModel(
-            sessionId: sessionId,
-            tripSessionRepository: sessionRepo,
-            gameInstanceRepository: gameRepo,
-            tripActivityEventRepository: eventRepo,
-            gameInstanceLifecycleService: gameLifecycle,
-            authService: creatorAuth()
-        )
-
-        viewModel.addGame()
-
-        let games = try gameRepo.fetchByTripSession(sessionId: sessionId)
-        #expect(games.count == 2)
-        #expect(gameLifecycle.startGameCallCount == 1)
-        #expect(viewModel.errorMessage == nil)
     }
 
     @Test func canAddGame_falseWhenLiveLPExists() async throws {
@@ -252,103 +153,6 @@ struct TripSessionViewModelTests {
         #expect(viewModel.gameRowItems.count == 1)
         #expect(viewModel.gameRowItems[0].showsInProgressIndicator == true)
         #expect(viewModel.gameRowItems[0].gameTypeDisplay == GameType.licensePlate.displayName)
-    }
-
-    @Test func addGame_whenPassenger_setsErrorAndDoesNotCreate() async throws {
-        let sessionId = UUID()
-        let session = TripSession(
-            id: sessionId,
-            name: "Multi Trip",
-            status: .active,
-            createdAt: Date(),
-            createdBy: "owner1",
-            startedAt: Date(),
-            participants: [
-                TripParticipant(userId: "owner1", role: .owner, joinedAt: Date()),
-                TripParticipant(userId: "user2", role: .member, joinedAt: Date())
-            ]
-        )
-        let lp = licensePlateInstance(sessionId: sessionId, lifecycle: .started)
-
-        let sessionRepo = MockTripSessionRepository()
-        sessionRepo.seed(session)
-        let gameRepo = MockGameInstanceRepository()
-        gameRepo.seed(lp)
-        let eventRepo = MockTripActivityEventRepository()
-        let gameLifecycle = MockGameInstanceLifecycleService()
-
-        let viewModel = TripSessionViewModel(
-            sessionId: sessionId,
-            tripSessionRepository: sessionRepo,
-            gameInstanceRepository: gameRepo,
-            tripActivityEventRepository: eventRepo,
-            gameInstanceLifecycleService: gameLifecycle,
-            authService: creatorAuth(userId: "user2")
-        )
-
-        viewModel.addGame()
-
-        #expect(try gameRepo.fetchByTripSession(sessionId: sessionId).count == 1)
-        #expect(viewModel.errorMessage != nil)
-        #expect(gameLifecycle.startGameCallCount == 0)
-    }
-
-    @Test func addGame_whenTripEnded_setsErrorAndDoesNotCreate() async throws {
-        let sessionId = UUID()
-        var session = makeSession(id: sessionId, name: "Over")
-        session.status = .ended
-        let lp = licensePlateInstance(sessionId: sessionId, lifecycle: .ended)
-
-        let sessionRepo = MockTripSessionRepository()
-        sessionRepo.seed(session)
-        let gameRepo = MockGameInstanceRepository()
-        gameRepo.seed(lp)
-        let eventRepo = MockTripActivityEventRepository()
-        let gameLifecycle = MockGameInstanceLifecycleService()
-
-        let viewModel = TripSessionViewModel(
-            sessionId: sessionId,
-            tripSessionRepository: sessionRepo,
-            gameInstanceRepository: gameRepo,
-            tripActivityEventRepository: eventRepo,
-            gameInstanceLifecycleService: gameLifecycle,
-            authService: creatorAuth()
-        )
-
-        viewModel.addGame()
-
-        #expect(try gameRepo.fetchByTripSession(sessionId: sessionId).count == 1)
-        #expect(viewModel.errorMessage != nil)
-        #expect(gameLifecycle.startGameCallCount == 0)
-    }
-
-    @Test func addGame_whenTripCancelled_setsErrorAndDoesNotCreate() async throws {
-        let sessionId = UUID()
-        var session = makeSession(id: sessionId, name: "Cancelled")
-        session.status = .cancelled
-        let lp = licensePlateInstance(sessionId: sessionId, lifecycle: .created)
-
-        let sessionRepo = MockTripSessionRepository()
-        sessionRepo.seed(session)
-        let gameRepo = MockGameInstanceRepository()
-        gameRepo.seed(lp)
-        let eventRepo = MockTripActivityEventRepository()
-        let gameLifecycle = MockGameInstanceLifecycleService()
-
-        let viewModel = TripSessionViewModel(
-            sessionId: sessionId,
-            tripSessionRepository: sessionRepo,
-            gameInstanceRepository: gameRepo,
-            tripActivityEventRepository: eventRepo,
-            gameInstanceLifecycleService: gameLifecycle,
-            authService: creatorAuth()
-        )
-
-        viewModel.addGame()
-
-        #expect(try gameRepo.fetchByTripSession(sessionId: sessionId).count == 1)
-        #expect(viewModel.errorMessage != nil)
-        #expect(gameLifecycle.startGameCallCount == 0)
     }
 
     // MARK: - Step 12 Trip dashboard competitive leaderboard

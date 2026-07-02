@@ -412,6 +412,13 @@
 
 // New Trip Sheet
 "New Trip" = "New Trip";
+"Next" = "Next";
+"Game Setup" = "Game Setup";
+"Continues to game setup" = "Continues to game setup";
+"Select at least one country before continuing" = "Select at least one country before continuing";
+"Select at least one game before continuing" = "Select at least one game before continuing";
+"Select at least one game and one country before continuing" = "Select at least one game and one country before continuing";
+"Adds the selected game to this trip" = "Adds the selected game to this trip";
 "Basic Info" = "Basic Info";
 "Trip Options" = "Trip Options";
 "Automatically use date & time" = "Automatically use date & time";

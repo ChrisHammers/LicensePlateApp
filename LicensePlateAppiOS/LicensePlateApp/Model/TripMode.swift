@@ -14,7 +14,7 @@ enum TripMode: String, Codable, CaseIterable, Sendable {
     /// Multiple participants (invited or joined). Game mode per game is on GameInstance.
     case multiplayer
 
-    /// User-visible label; matches trip setup copy (`CombinedTripSetupView`).
+    /// User-visible label; matches trip setup copy (`TripSetupView`).
     var localizedDisplayName: String {
         switch self {
         case .solo: return "Solo".localized

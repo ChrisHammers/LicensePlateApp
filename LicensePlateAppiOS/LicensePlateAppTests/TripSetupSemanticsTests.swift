@@ -34,15 +34,19 @@ struct TripSetupSemanticsTests {
         try ctx.save()
         auth.currentUser = testUser
 
-        let viewModel = CombinedTripSetupViewModel(
+        let tripSetup = TripSetupViewModel(authService: auth)
+        tripSetup.includeUS = true
+        let draft = tripSetup.buildDraft()
+
+        let gameSetup = GameSetupViewModel(
+            context: .newTrip(draft),
             tripSessionRepository: sessionRepo,
             gameInstanceRepository: instanceRepo,
             authService: auth
         )
-        viewModel.selectedGameTypes = [.licensePlate]
-        viewModel.includeUS = true
+        gameSetup.selectedGameTypes = [.licensePlate]
 
-        let session = try viewModel.createTrip()
+        let session = try gameSetup.createTrip()
         #expect(session.mode == .solo)
         #expect(session.participants.count == 1)
     }

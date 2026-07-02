@@ -31,7 +31,7 @@ final class AdMobService {
         let key: String
         let debugFallback: String
         switch surface {
-        case .combinedTripSetup:
+        case .combinedTripSetup, .tripSetup:
             key = "AdMobBannerSetupID"
             debugFallback = "ca-app-pub-3940256099942544/2934735716"
         case .travelLog:

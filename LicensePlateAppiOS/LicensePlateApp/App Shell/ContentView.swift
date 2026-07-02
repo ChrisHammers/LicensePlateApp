@@ -264,18 +264,15 @@ struct ContentView: View {
     }
 
     private var homeCreateTripSheet: some View {
-        CombinedTripSetupView(
-            viewModel: CombinedTripSetupViewModel(
-                tripSessionRepository: TripSessionRepository.shared,
-                gameInstanceRepository: GameInstanceRepository.shared,
-                authService: authService
-            ),
+        NewTripFlowView(
+            authService: authService,
             onCreated: { session in
                 mainCoordinator.openSession(session.id)
                 isShowingCreateSheet = false
                 activeTripsListViewModel.load(userId: currentUserId)
             }
         )
+        .environmentObject(authService)
         .presentationDetents([smallDetent, .medium, .large], selection: $sheetDetent)
         .presentationDragIndicator(.visible)
         .onAppear {

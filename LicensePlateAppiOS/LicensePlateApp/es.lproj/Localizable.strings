@@ -412,6 +412,13 @@
 
 // New Trip Sheet
 "New Trip" = "Nuevo Viaje";
+"Next" = "Siguiente";
+"Game Setup" = "Configuración del Juego";
+"Continues to game setup" = "Continúa a la configuración del juego";
+"Select at least one country before continuing" = "Selecciona al menos un país antes de continuar";
+"Select at least one game before continuing" = "Selecciona al menos un juego antes de continuar";
+"Select at least one game and one country before continuing" = "Selecciona al menos un juego y un país antes de continuar";
+"Adds the selected game to this trip" = "Agrega el juego seleccionado a este viaje";
 "Basic Info" = "Información Básica";
 "Trip Options" = "Opciones del Viaje";
 "Automatically use date & time" = "Usar automáticamente fecha y hora";

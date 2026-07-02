@@ -15,6 +15,7 @@ struct TripSessionView: View {
     @StateObject private var viewModel: TripSessionViewModel
     @State private var showTripSettings = false
     @State private var showPassengerList = false
+    @State private var isShowingGameSetup = false
 
     init(sessionId: UUID, authService: FirebaseAuthService) {
         self.sessionId = sessionId
@@ -106,7 +107,7 @@ struct TripSessionView: View {
 
                 Button {
                     FeedbackService.shared.buttonTap()
-                    viewModel.addGame()
+                    isShowingGameSetup = true
                 } label: {
                     Label("Add Game".localized, systemImage: "plus.circle")
                         .font(.system(.body, design: .rounded))
@@ -159,6 +160,22 @@ struct TripSessionView: View {
         .sheet(isPresented: $showPassengerList) {
             TripParticipantsView(sessionId: session.id)
                 .environmentObject(authService)
+        }
+        .sheet(isPresented: $isShowingGameSetup) {
+            NavigationStack {
+                GameSetupView(
+                    viewModel: GameSetupViewModel(
+                        context: .addToExistingTrip(sessionId: session.id),
+                        tripSessionRepository: TripSessionRepository.shared,
+                        gameInstanceRepository: GameInstanceRepository.shared,
+                        authService: authService
+                    ),
+                    onAdded: {
+                        viewModel.load()
+                    }
+                )
+            }
+            .environmentObject(authService)
         }
         .onChange(of: showTripSettings) { _, isPresented in
             if !isPresented {
