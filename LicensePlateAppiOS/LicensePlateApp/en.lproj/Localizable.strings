@@ -804,7 +804,7 @@
 "profile.xp.pending_overlay_caption" = "Yellow bar is pending only — it does not unlock rewards until sync.";
 
 "tripSummary.xp_recap.title" = "XP & adjustments";
-"tripSummary.xp_recap.subtitle" = "From your trip ledger on this device. Calm messaging when scores change after sync.";
+"tripSummary.xp_recap.subtitle" = "From your trip ledger on this device.";
 "tripSummary.xp_recap.state.provisional" = "Pending";
 "tripSummary.xp_recap.state.final" = "Final";
 
