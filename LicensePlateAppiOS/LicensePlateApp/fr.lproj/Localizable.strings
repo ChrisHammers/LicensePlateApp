@@ -415,6 +415,7 @@
 "Next" = "Suivant";
 "Game Setup" = "Configuration du Jeu";
 "Game Options" = "Options du Jeu";
+"Using default options" = "Utilisation des options par défaut";
 "Continues to game setup" = "Passe à la configuration du jeu";
 "Select at least one country before continuing" = "Sélectionnez au moins un pays avant de continuer";
 "Select at least one game before continuing" = "Sélectionnez au moins un jeu avant de continuer";

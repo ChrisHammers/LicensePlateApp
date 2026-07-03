@@ -180,9 +180,18 @@ struct GameSetupView: View {
             .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
             .listRowBackground(Color.clear)
         } header: {
-            Text("Game Options".localized)
-                .font(.system(.headline, design: .rounded))
-                .foregroundStyle(Color.Theme.primaryBlue)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Game Options".localized)
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                Spacer(minLength: 8)
+                if viewModel.usesGameDefaultOptions {
+                    Text("Using default options".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.permissionOrange.opacity(0.7))
+                        .accessibilityLabel("Using default options".localized)
+                }
+            }
         }
         .textCase(nil)
     }

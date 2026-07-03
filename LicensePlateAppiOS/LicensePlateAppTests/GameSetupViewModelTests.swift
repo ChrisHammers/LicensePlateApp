@@ -102,6 +102,22 @@ struct GameSetupViewModelTests {
         return g
     }
 
+    @Test func usesGameDefaultOptions_whenScopeMatchesStoredDefaults() async throws {
+        let store = StubNewTripDefaultsStore(snapshot: makeDefaults(startTripRightAway: false))
+        let auth = FirebaseAuthService()
+        let viewModel = GameSetupViewModel(
+            context: .newTrip(makeDraft()),
+            tripSessionRepository: TripSessionRepository.shared,
+            gameInstanceRepository: GameInstanceRepository.shared,
+            authService: auth,
+            newTripDefaultsStore: store
+        )
+        #expect(viewModel.usesGameDefaultOptions == true)
+
+        viewModel.includeDC = false
+        #expect(viewModel.usesGameDefaultOptions == false)
+    }
+
     @Test func createTripWithDefaultConfigPersistsSessionAndGameInstances() async throws {
         let container = try makeContainer()
         let ctx = ModelContext(container)

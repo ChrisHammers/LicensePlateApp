@@ -37,6 +37,28 @@ struct NewTripDefaults: Equatable {
     var trackMyLocationDuringTrip: Bool
     var showMyActiveTripOnLargeMap: Bool
     var showMyActiveTripOnSmallMap: Bool
+
+    /// Country + territory scope implied by Game Defaults (Settings → Game Defaults).
+    var gameDefaultScopeOptions: GameDefaultScopeOptions {
+        GameDefaultScopeOptions(
+            includeUS: includeUS,
+            includeCanada: includeCanada,
+            includeMexico: includeMexico,
+            includeUSTerritories: includeUS,
+            includeDC: includeUS,
+            includeCanadianTerritories: includeCanada
+        )
+    }
+}
+
+/// License plate scope toggles shown under Game Options in setup; comparable to Settings → Game Defaults.
+struct GameDefaultScopeOptions: Equatable, Sendable {
+    var includeUS: Bool
+    var includeCanada: Bool
+    var includeMexico: Bool
+    var includeUSTerritories: Bool
+    var includeDC: Bool
+    var includeCanadianTerritories: Bool
 }
 
 // MARK: - Factory registration

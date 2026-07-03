@@ -100,6 +100,22 @@ final class GameSetupViewModel: ObservableObject {
         enabledCountries.isEmpty ? "Select at least one country.".localized : nil
     }
 
+    var currentGameScopeOptions: GameDefaultScopeOptions {
+        GameDefaultScopeOptions(
+            includeUS: includeUS,
+            includeCanada: includeCanada,
+            includeMexico: includeMexico,
+            includeUSTerritories: includeUSTerritories,
+            includeDC: includeDC,
+            includeCanadianTerritories: includeCanadianTerritories
+        )
+    }
+
+    /// True when Game Options country/territory toggles match Settings → Game Defaults.
+    var usesGameDefaultOptions: Bool {
+        currentGameScopeOptions == newTripDefaultsStore.load().gameDefaultScopeOptions
+    }
+
     func applyTerritoryGatingFromCountryToggles() {
         if !includeUS {
             includeUSTerritories = false
@@ -335,12 +351,13 @@ final class GameSetupViewModel: ObservableObject {
     }
 
     private func applyNewTripDefaults(_ defaults: NewTripDefaults) {
-        includeUS = defaults.includeUS
-        includeCanada = defaults.includeCanada
-        includeMexico = defaults.includeMexico
-        includeUSTerritories = defaults.includeUS
-        includeDC = defaults.includeUS
-        includeCanadianTerritories = defaults.includeCanada
+        let scope = defaults.gameDefaultScopeOptions
+        includeUS = scope.includeUS
+        includeCanada = scope.includeCanada
+        includeMexico = scope.includeMexico
+        includeUSTerritories = scope.includeUSTerritories
+        includeDC = scope.includeDC
+        includeCanadianTerritories = scope.includeCanadianTerritories
     }
 
     private func isTripCreator(for session: TripSession) -> Bool {
