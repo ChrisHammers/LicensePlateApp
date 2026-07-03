@@ -581,6 +581,7 @@
 "Error" = "Error";
 "OK" = "OK";
 "Username cannot be empty" = "El nombre de usuario no puede estar vacío";
+"This username contains inappropriate language. Please choose another." = "Este nombre de usuario contiene lenguaje inapropiado. Por favor elige otro.";
 "This username is already taken. Please choose another." = "Este nombre de usuario ya está en uso. Por favor elige otro.";
 "You must be signed in to upload images. Please sign in first." = "Debes iniciar sesión para subir imágenes. Por favor inicia sesión primero.";
 "You must be authenticated with Firebase to upload images. Please sign in first." = "Debes estar autenticado con Firebase para subir imágenes. Por favor inicia sesión primero.";

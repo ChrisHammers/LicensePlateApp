@@ -385,9 +385,14 @@ class FirebaseAuthService: ObservableObject {
             throw AuthError.noUser
         }
         
+        let trimmedUserName = UsernameValidation.trimmed(userName)
+        if let failure = UsernameValidation.failure(for: trimmedUserName) {
+            throw AuthError.usernameValidationFailure(failure)
+        }
+
         // Check username uniqueness (exclude current user)
         let excludingId = currentUser.firebaseUID ?? currentUser.id
-        guard try await !isUsernameTaken(userName, excludingUserId: excludingId) else {
+        guard try await !isUsernameTaken(trimmedUserName, excludingUserId: excludingId) else {
             throw AuthError.usernameTaken
         }
         
@@ -401,7 +406,7 @@ class FirebaseAuthService: ObservableObject {
                     let result = try await firebaseUser.link(with: credential)
                     // Update user info
                     currentUser.email = email
-                    currentUser.userName = userName
+                    currentUser.userName = trimmedUserName
                     currentUser.firstName = firstName
                     currentUser.lastName = lastName
                     currentUser.phoneNumber = phoneNumber
@@ -422,7 +427,7 @@ class FirebaseAuthService: ObservableObject {
                     // If linking fails (email already in use), create new account
                     try auth.signOut()
                     let result = try await auth.createUser(withEmail: email, password: password)
-                    await createNewUserFromFirebase(result.user, email: email, userName: userName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber, birthYear: birthYear)
+                    await createNewUserFromFirebase(result.user, email: email, userName: trimmedUserName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber, birthYear: birthYear)
                     
                     // Update login tracking
                     await updateLoginTracking()
@@ -430,7 +435,7 @@ class FirebaseAuthService: ObservableObject {
             } else {
                 // Not anonymous, create new account
                 let result = try await auth.createUser(withEmail: email, password: password)
-                await createNewUserFromFirebase(result.user, email: email, userName: userName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber, birthYear: birthYear)
+                await createNewUserFromFirebase(result.user, email: email, userName: trimmedUserName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber, birthYear: birthYear)
                 
                 // Update login tracking
                 await updateLoginTracking()
@@ -1067,10 +1072,9 @@ class FirebaseAuthService: ObservableObject {
             throw AuthError.noUser
         }
         
-        let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        guard !trimmedName.isEmpty else {
-            throw AuthError.invalidUsername
+        let trimmedName = UsernameValidation.trimmed(newName)
+        if let failure = UsernameValidation.failure(for: trimmedName) {
+            throw AuthError.usernameValidationFailure(failure)
         }
         
         guard trimmedName != user.userName else {
@@ -1842,6 +1846,7 @@ enum AuthError: LocalizedError {
     case networkError
     case usernameTaken
     case invalidUsername
+    case usernameValidationFailure(UsernameValidation.Failure)
     case noModelContext
     case emailAlreadyInUse
     case offline
@@ -1861,6 +1866,10 @@ enum AuthError: LocalizedError {
             return "This username is already taken. Please choose another."
         case .invalidUsername:
             return "Username cannot be empty."
+        case .usernameValidationFailure(.profanity):
+            return "This username contains inappropriate language. Please choose another.".localized
+        case .usernameValidationFailure(.empty):
+            return "Username cannot be empty.".localized
         case .noModelContext:
             return "Model context is not available."
         case .emailAlreadyInUse:
