@@ -11,8 +11,6 @@ import Foundation
 struct TripSetupDraft: Sendable, Hashable {
     let tripName: String
     let selectedPassengerIds: Set<String>
-    let enabledCountries: [PlateRegion.Country]
-    let territoryOptions: LicensePlateTerritoryOptions
     let startTripRightAway: Bool
     let skipVoiceConfirmation: Bool
     let holdToTalk: Bool

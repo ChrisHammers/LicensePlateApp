@@ -2,7 +2,7 @@
 //  GameSetupViewModel.swift
 //  LicensePlateApp
 //
-//  Game type, play style, and (add-game) country scope. Creates trip or adds games.
+//  Game type, play style, and country scope. Creates trip or adds games.
 //
 
 import Foundation
@@ -33,11 +33,7 @@ final class GameSetupViewModel: ObservableObject {
     private let gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
     private let tripEntitlementGate: TripEntitlementGate
     private let authService: FirebaseAuthService
-
-    var showsCountryScope: Bool {
-        if case .addToExistingTrip = context { return true }
-        return false
-    }
+    private let newTripDefaultsStore: NewTripDefaultsStoring
 
     var primaryActionTitle: String {
         switch context {
@@ -54,7 +50,8 @@ final class GameSetupViewModel: ObservableObject {
         lifecycleService: TripSessionLifecycleServiceProtocol = TripSessionLifecycleService.shared,
         gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol = GameInstanceLifecycleService.shared,
         tripEntitlementGate: TripEntitlementGate = .shared,
-        authService: FirebaseAuthService
+        authService: FirebaseAuthService,
+        newTripDefaultsStore: NewTripDefaultsStoring = UserDefaultsNewTripDefaultsStore()
     ) {
         self.context = context
         self.tripSessionRepository = tripSessionRepository
@@ -64,8 +61,12 @@ final class GameSetupViewModel: ObservableObject {
         self.gameInstanceLifecycleService = gameInstanceLifecycleService
         self.tripEntitlementGate = tripEntitlementGate
         self.authService = authService
+        self.newTripDefaultsStore = newTripDefaultsStore
 
-        if case .addToExistingTrip = context {
+        switch context {
+        case .newTrip:
+            applyNewTripDefaults(newTripDefaultsStore.load())
+        case .addToExistingTrip:
             loadAddGameContext()
         }
     }
@@ -90,12 +91,13 @@ final class GameSetupViewModel: ObservableObject {
     }
 
     var canConfirm: Bool {
-        !selectedGameTypes.isEmpty && selectedGameTypes.contains(where: { $0.isAvailable && selectableGameTypes.contains($0) })
-            && (!showsCountryScope || !enabledCountries.isEmpty)
+        !selectedGameTypes.isEmpty
+            && selectedGameTypes.contains(where: { $0.isAvailable && selectableGameTypes.contains($0) })
+            && !enabledCountries.isEmpty
     }
 
     var countryValidationMessage: String? {
-        showsCountryScope && enabledCountries.isEmpty ? "Select at least one country.".localized : nil
+        enabledCountries.isEmpty ? "Select at least one country.".localized : nil
     }
 
     func applyTerritoryGatingFromCountryToggles() {
@@ -145,13 +147,18 @@ final class GameSetupViewModel: ObservableObject {
         }
 
         let createdBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? "unknown"
+        applyTerritoryGatingFromCountryToggles()
 
         let request = TripSessionCreationRequest(
             tripName: draft.tripName,
             gameTypes: types,
             defaultGameMode: defaultGameMode,
-            countryList: draft.enabledCountries,
-            territoryOptions: draft.territoryOptions,
+            countryList: enabledCountries,
+            territoryOptions: LicensePlateTerritoryOptions(
+                includeUSTerritories: includeUSTerritories,
+                includeCanadianTerritories: includeCanadianTerritories,
+                includeDC: includeDC
+            ),
             startTripRightAway: draft.startTripRightAway,
             tripSource: "trip_setup",
             createdBy: createdBy
@@ -331,6 +338,9 @@ final class GameSetupViewModel: ObservableObject {
         includeUS = defaults.includeUS
         includeCanada = defaults.includeCanada
         includeMexico = defaults.includeMexico
+        includeUSTerritories = defaults.includeUS
+        includeDC = defaults.includeUS
+        includeCanadianTerritories = defaults.includeCanada
     }
 
     private func isTripCreator(for session: TripSession) -> Bool {

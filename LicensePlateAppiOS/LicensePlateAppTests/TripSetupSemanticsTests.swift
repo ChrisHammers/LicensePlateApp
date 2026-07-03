@@ -35,7 +35,6 @@ struct TripSetupSemanticsTests {
         auth.currentUser = testUser
 
         let tripSetup = TripSetupViewModel(authService: auth)
-        tripSetup.includeUS = true
         let draft = tripSetup.buildDraft()
 
         let gameSetup = GameSetupViewModel(
@@ -45,6 +44,9 @@ struct TripSetupSemanticsTests {
             authService: auth
         )
         gameSetup.selectedGameTypes = [.licensePlate]
+        gameSetup.includeUS = true
+        gameSetup.includeCanada = false
+        gameSetup.includeMexico = false
 
         let session = try gameSetup.createTrip()
         #expect(session.mode == .solo)

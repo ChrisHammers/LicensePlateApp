@@ -2,7 +2,7 @@
 //  GameSetupView.swift
 //  LicensePlateApp
 //
-//  Game type, play style, and optional country scope (add-game flow).
+//  Game type, play style, and country scope for new-trip and add-game flows.
 //
 
 import SwiftUI
@@ -42,9 +42,7 @@ struct GameSetupView: View {
         AppBackgroundView {
             List {
                 gamesSection
-                if viewModel.showsCountryScope {
-                    countryScopeSection
-                }
+                gameOptionsSection
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
@@ -103,10 +101,7 @@ struct GameSetupView: View {
 
     private var primaryActionAccessibilityHint: String {
         if !viewModel.canConfirm {
-            if viewModel.showsCountryScope {
-                return "Select at least one game and one country before continuing".localized
-            }
-            return "Select at least one game before continuing".localized
+            return "Select at least one game and one country before continuing".localized
         }
         switch viewModel.context {
         case .newTrip:
@@ -164,7 +159,7 @@ struct GameSetupView: View {
         .textCase(nil)
     }
 
-    private var countryScopeSection: some View {
+    private var gameOptionsSection: some View {
         Section {
             VStack(spacing: 12) {
                 CountryScopeSection(
@@ -185,7 +180,7 @@ struct GameSetupView: View {
             .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
             .listRowBackground(Color.clear)
         } header: {
-            Text("Trip Options".localized)
+            Text("Game Options".localized)
                 .font(.system(.headline, design: .rounded))
                 .foregroundStyle(Color.Theme.primaryBlue)
         }
@@ -280,8 +275,6 @@ struct GameTypeSetupRow: View {
     let draft = TripSetupDraft(
         tripName: "",
         selectedPassengerIds: [],
-        enabledCountries: [.unitedStates],
-        territoryOptions: LicensePlateTerritoryOptions(),
         startTripRightAway: false,
         skipVoiceConfirmation: false,
         holdToTalk: true,

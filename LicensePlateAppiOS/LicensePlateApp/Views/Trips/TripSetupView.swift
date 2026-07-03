@@ -2,7 +2,7 @@
 //  TripSetupView.swift
 //  LicensePlateApp
 //
-//  Step 1 of new-trip flow: trip details, countries, and settings.
+//  Step 1 of new-trip flow: trip name, passengers, and trip settings.
 //
 
 import SwiftUI
@@ -60,14 +60,9 @@ struct TripSetupView: View {
                     onNext()
                 }
                 .fontWeight(.semibold)
-                .foregroundStyle(viewModel.canProceed ? Color.Theme.primaryBlue : .secondary)
-                .disabled(!viewModel.canProceed)
+                .foregroundStyle(Color.Theme.primaryBlue)
                 .accessibilityLabel("Next".localized)
-                .accessibilityHint(
-                    viewModel.canProceed
-                        ? "Continues to game setup".localized
-                        : "Select at least one country before continuing".localized
-                )
+                .accessibilityHint("Continues to game setup".localized)
             }
         }
         .sheet(isPresented: $isShowingPassengerSelector) {
@@ -178,19 +173,6 @@ struct TripSetupView: View {
                     title: "Start Trip right away".localized,
                     description: "Automatically start the trip when created".localized,
                     isOn: $viewModel.startTripRightAway
-                )
-
-                Divider()
-
-                CountryScopeSection(
-                    includeUS: $viewModel.includeUS,
-                    includeCanada: $viewModel.includeCanada,
-                    includeMexico: $viewModel.includeMexico,
-                    includeUSTerritories: $viewModel.includeUSTerritories,
-                    includeDC: $viewModel.includeDC,
-                    includeCanadianTerritories: $viewModel.includeCanadianTerritories,
-                    validationMessage: viewModel.countryValidationMessage,
-                    onCountryToggleChanged: { viewModel.applyTerritoryGatingFromCountryToggles() }
                 )
             }
             .padding(.horizontal, 16)

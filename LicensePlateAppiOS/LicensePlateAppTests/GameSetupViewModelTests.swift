@@ -42,16 +42,12 @@ struct GameSetupViewModelTests {
 
     private func makeDraft(
         tripName: String = "",
-        countries: [PlateRegion.Country] = [.unitedStates],
-        territoryOptions: LicensePlateTerritoryOptions = LicensePlateTerritoryOptions(),
         startTripRightAway: Bool = false,
         selectedPassengerIds: Set<String> = []
     ) -> TripSetupDraft {
         TripSetupDraft(
             tripName: tripName,
             selectedPassengerIds: selectedPassengerIds,
-            enabledCountries: countries,
-            territoryOptions: territoryOptions,
             startTripRightAway: startTripRightAway,
             skipVoiceConfirmation: false,
             holdToTalk: true,
@@ -69,7 +65,8 @@ struct GameSetupViewModelTests {
         instanceRepo: GameInstanceRepositoryProtocol,
         auth: FirebaseAuthService,
         lifecycleService: TripSessionLifecycleServiceProtocol = TripSessionLifecycleService.shared,
-        tripEntitlementGate: TripEntitlementGate = .shared
+        tripEntitlementGate: TripEntitlementGate = .shared,
+        newTripDefaultsStore: NewTripDefaultsStoring = UserDefaultsNewTripDefaultsStore()
     ) -> GameSetupViewModel {
         GameSetupViewModel(
             context: .newTrip(draft),
@@ -77,7 +74,8 @@ struct GameSetupViewModelTests {
             gameInstanceRepository: instanceRepo,
             lifecycleService: lifecycleService,
             tripEntitlementGate: tripEntitlementGate,
-            authService: auth
+            authService: auth,
+            newTripDefaultsStore: newTripDefaultsStore
         )
     }
 
@@ -120,9 +118,12 @@ struct GameSetupViewModelTests {
         ctx.insert(auth.currentUser!)
         try ctx.save()
 
-        let draft = makeDraft(tripName: "My Trip", countries: [.unitedStates])
+        let draft = makeDraft(tripName: "My Trip")
         let viewModel = makeNewTripViewModel(draft: draft, sessionRepo: sessionRepo, instanceRepo: instanceRepo, auth: auth)
         viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = true
+        viewModel.includeCanada = false
+        viewModel.includeMexico = false
 
         let session = try viewModel.createTrip()
 
@@ -149,12 +150,13 @@ struct GameSetupViewModelTests {
         try ctx.save()
 
         let viewModel = makeNewTripViewModel(
-            draft: makeDraft(countries: [.unitedStates]),
+            draft: makeDraft(),
             sessionRepo: sessionRepo,
             instanceRepo: instanceRepo,
             auth: auth
         )
         viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = true
 
         let session = try viewModel.createTrip()
         #expect(!session.name.isEmpty)
@@ -169,8 +171,14 @@ struct GameSetupViewModelTests {
             auth: auth
         )
         viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = true
         #expect(viewModel.canConfirm == true)
         viewModel.selectedGameTypes = []
+        #expect(viewModel.canConfirm == false)
+        viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = false
+        viewModel.includeCanada = false
+        viewModel.includeMexico = false
         #expect(viewModel.canConfirm == false)
     }
 
@@ -230,20 +238,21 @@ struct GameSetupViewModelTests {
 
         let mockLifecycle = MockTripSessionLifecycleService()
         let viewModel = makeNewTripViewModel(
-            draft: makeDraft(tripName: "My Trip", countries: [.unitedStates], startTripRightAway: true),
+            draft: makeDraft(tripName: "My Trip", startTripRightAway: true),
             sessionRepo: sessionRepo,
             instanceRepo: instanceRepo,
             auth: auth,
             lifecycleService: mockLifecycle
         )
         viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = true
 
         let session = try viewModel.createTrip()
         #expect(mockLifecycle.startTripCallCount == 1)
         #expect(mockLifecycle.startTripSessionIds.first == session.id)
     }
 
-    @Test func createTripPersistsTerritoryOptionsFromDraft() async throws {
+    @Test func createTripPersistsTerritoryOptionsFromGameSetup() async throws {
         let container = try makeContainer()
         let ctx = ModelContext(container)
         let sessionRepo = TripSessionRepository.shared
@@ -256,17 +265,20 @@ struct GameSetupViewModelTests {
         ctx.insert(auth.currentUser!)
         try ctx.save()
 
-        let draft = makeDraft(
-            countries: [.unitedStates],
-            territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: false, includeCanadianTerritories: false, includeDC: true)
-        )
-        let viewModel = makeNewTripViewModel(draft: draft, sessionRepo: sessionRepo, instanceRepo: instanceRepo, auth: auth)
+        let viewModel = makeNewTripViewModel(draft: makeDraft(), sessionRepo: sessionRepo, instanceRepo: instanceRepo, auth: auth)
         viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = true
+        viewModel.includeCanada = false
+        viewModel.includeMexico = false
+        viewModel.includeUSTerritories = false
+        viewModel.includeDC = true
+        viewModel.includeCanadianTerritories = true
 
         let session = try viewModel.createTrip()
         let opts = try instanceRepo.fetchByTripSession(sessionId: session.id)[0].licensePlateConfig()?.territoryOptions
         #expect(opts?.includeUSTerritories == false)
         #expect(opts?.includeDC == true)
+        #expect(opts?.includeCanadianTerritories == false)
     }
 
     @Test func createTripPersistsCompetitiveGameMode() async throws {
@@ -283,12 +295,13 @@ struct GameSetupViewModelTests {
         try ctx.save()
 
         let viewModel = makeNewTripViewModel(
-            draft: makeDraft(countries: [.unitedStates]),
+            draft: makeDraft(),
             sessionRepo: sessionRepo,
             instanceRepo: instanceRepo,
             auth: auth
         )
         viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = true
         viewModel.defaultGameMode = .competitive
 
         let session = try viewModel.createTrip()
@@ -327,13 +340,14 @@ struct GameSetupViewModelTests {
             analytics: AnalyticsLoggingSpy()
         )
         let viewModel = makeNewTripViewModel(
-            draft: makeDraft(countries: [.unitedStates]),
+            draft: makeDraft(),
             sessionRepo: sessionRepo,
             instanceRepo: instanceRepo,
             auth: auth,
             tripEntitlementGate: gate
         )
         viewModel.selectedGameTypes = [.licensePlate]
+        viewModel.includeUS = true
 
         #expect(throws: TripEntitlementGateError.self) {
             _ = try viewModel.createTrip()
