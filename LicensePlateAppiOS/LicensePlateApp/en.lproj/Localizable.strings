@@ -798,7 +798,7 @@
 "xp.row.a11y.pending_competitive" = "Pending competitive resolution";
 "xp.pending.badge.short" = "Pending";
 "xp.pending.badge.a11y" = "Pending competitive resolution";
-"xp.discovery.badge.accepted_late" = "Another player found it slightly earlier — final award: +4 XP";
+"xp.discovery.badge.accepted_late" = "Another player found it slightly earlier.";
 "xp.discovery.badge.adjusted_after_sync" = "Adjusted after trip sync (final score on leaderboard).";
 
 "xp.toast.grant.competitive_win.title" = "Competitive win";

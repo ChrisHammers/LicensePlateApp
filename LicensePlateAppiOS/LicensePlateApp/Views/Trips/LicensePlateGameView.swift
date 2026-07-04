@@ -1707,7 +1707,7 @@ struct LicensePlateGameView: View {
 
 }
 
-private struct RegionCellView: View {
+struct RegionCellView: View {
     let region: PlateRegion
     let presentation: RegionPlateRowPresentation?
     let isSelectedFallback: Bool
@@ -1761,12 +1761,6 @@ private struct RegionCellView: View {
             Spacer(minLength: 4)
 
             VStack(alignment: .trailing, spacing: 6) {
-                if let pill = presentation?.xpPillText, !pill.isEmpty {
-                    XpDeltaPillView(
-                        text: pill,
-                        isPendingStyle: presentation?.showPendingBadge == true
-                    )
-                }
                 HStack(spacing: 10) {
                     if !finderEntries.isEmpty {
                         AvatarStackView(
@@ -2881,42 +2875,4 @@ private struct RegionMapView: View {
     }
 }
 
-#Preview("Empty game") {
-    let session = PreviewTripFixtures.soloTrip()
-    let game = PreviewGameFixtures.licensePlateGame(sessionId: session.id)
-    let authService = FirebaseAuthService()
-    return LicensePlateGameView(session: session, game: game, authService: authService)
-        .environmentObject(authService)
-        .environmentObject(RiskAssessmentService(analytics: nil))
-}
-
-#Preview("Game with discoveries") {
-    let session = PreviewTripFixtures.soloTrip()
-    let game = PreviewGameFixtures.licensePlateGame(sessionId: session.id)
-    let authService = FirebaseAuthService()
-    return LicensePlateGameView(session: session, game: game, authService: authService)
-        .environmentObject(authService)
-        .environmentObject(RiskAssessmentService(analytics: nil))
-}
-
-#if DEBUG
-#Preview("Region selection order resolution (Step 13)") {
-    struct FairnessAlertPreviewShell: View {
-        @State private var showAlert = true
-        var body: some View {
-            Color.Theme.background
-                .ignoresSafeArea()
-                .alert("Region selection order resolution".localized, isPresented: $showAlert) {
-                    Button("OK".localized, role: .cancel) { showAlert = false }
-                } message: {
-                    Text("Fairness late competitive body %@ %@ %@".localized("California", "Alex", "Road trip"))
-                        .accessibilityLabel(
-                            "Fairness late competitive body %@ %@ %@".localized("California", "Alex", "Road trip")
-                        )
-                }
-        }
-    }
-    return FairnessAlertPreviewShell()
-}
-#endif
 

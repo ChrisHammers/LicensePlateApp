@@ -767,7 +767,7 @@
 "xp.row.a11y.pending_competitive" = "Resolución competitiva pendiente";
 "xp.pending.badge.short" = "Pendiente";
 "xp.pending.badge.a11y" = "Resolución competitiva pendiente";
-"xp.discovery.badge.accepted_late" = "Otro jugador lo encontró un poco antes — premio final: +4 XP";
+"xp.discovery.badge.accepted_late" = "Otro jugador lo encontró un poco antes.";
 "xp.discovery.badge.adjusted_after_sync" = "Ajustado tras sincronizar (puntuación final en la clasificación).";
 
 "xp.toast.grant.competitive_win.title" = "Victoria competitiva";
