@@ -65,6 +65,7 @@ struct RootView: View {
             UserProgressionService.shared.resetForSignOut()
             XpGrantReconcileService.shared.resetForSignOut()
             AchievementUnlockCelebrationService.shared.resetForSignOut()
+            XpGainToastService.shared.resetForSignOut()
             if let newUserId, !newUserId.isEmpty {
                 UserProgressionRepository.shared.startListening(userId: newUserId)
                 XpGrantRemoteRepository.shared.startListening(userId: newUserId)
@@ -81,6 +82,7 @@ struct RootView: View {
             if let user = authService.currentUser {
                 AchievementUnlockCelebrationService.shared.configure(user: user)
             }
+            XpGainToastService.shared.configure(userId: newUserId)
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background, !appCoordinator.hasSeenOnboarding {
@@ -150,6 +152,7 @@ struct RootView: View {
             if let user = authService.currentUser {
                 AchievementUnlockCelebrationService.shared.configure(user: user)
             }
+            XpGainToastService.shared.configure(userId: userId)
             await RevenueCatEntitlementBridge.shared.identify(userId: userId)
             if authService.isOnline {
                 Task { await SyncCoordinator.shared.processPendingSyncItems() }

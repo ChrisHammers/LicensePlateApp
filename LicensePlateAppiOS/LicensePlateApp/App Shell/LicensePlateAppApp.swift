@@ -197,6 +197,7 @@ struct LicensePlateAppApp: App {
                 .environmentObject(riskAssessmentService)
                 .onAppear {
                     RewardPopupWindowHost.shared.install(presenter: RewardPresenter.shared)
+                    XpGainToastWindowHost.shared.install(service: XpGainToastService.shared)
                 }
                 .onOpenURL { url in
                     Task { @MainActor in

@@ -191,6 +191,8 @@ class AnalyticsService: AnalyticsLogging {
         case achievementUnlockSyncFailed(candidateCount: Int, errorSummary: String)
         case xpGrantAwarded(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
         case xpGrantSkippedAlreadyGranted(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
+        case xpGainToastPresented(lineCount: Int, totalXp: Int, coalesced: Bool, sourceMix: String)
+        case xpGainToastDismissed(reason: String)
 
         // Lifecycle (Step 10.5)
         case tripSessionCreated(tripId: String, tripStatus: String, tripParticipantCount: Int?, tripActiveGameCount: Int?, tripSource: String?)
@@ -416,6 +418,8 @@ class AnalyticsService: AnalyticsLogging {
             case .achievementUnlockSyncFailed: return "achievement_unlock_sync_failed"
             case .xpGrantAwarded: return "xp_grant_awarded"
             case .xpGrantSkippedAlreadyGranted: return "xp_grant_skipped_already_granted"
+            case .xpGainToastPresented: return "xp_gain_toast_presented"
+            case .xpGainToastDismissed: return "xp_gain_toast_dismissed"
             case .tripSessionCreated: return "trip_session_created"
             case .tripSessionStarted: return "trip_session_started"
             case .tripSessionEnded: return "trip_session_ended"
@@ -700,6 +704,15 @@ class AnalyticsService: AnalyticsLogging {
                     "target_id": targetId,
                     "participant_id": participantId
                 ]
+            case .xpGainToastPresented(let lineCount, let totalXp, let coalesced, let sourceMix):
+                return [
+                    "line_count": lineCount,
+                    "total_xp": totalXp,
+                    "coalesced": coalesced,
+                    "source_mix": sourceMix
+                ]
+            case .xpGainToastDismissed(let reason):
+                return ["reason": reason]
             case .travelLogOpened:
                 return nil
             case .tripSessionCreated(let tripId, let tripStatus, let tripParticipantCount, let tripActiveGameCount, let tripSource):

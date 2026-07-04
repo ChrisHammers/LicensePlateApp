@@ -801,6 +801,14 @@
 "xp.discovery.badge.accepted_late" = "Another player found it slightly earlier — final award: +4 XP";
 "xp.discovery.badge.adjusted_after_sync" = "Adjusted after trip sync (final score on leaderboard).";
 
+"xp.toast.grant.competitive_win.title" = "Competitive win";
+"xp.toast.grant.competitive_win.subtitle" = "First place in this game";
+"xp.toast.grant.legacy_balance.title" = "XP synced";
+"xp.toast.grant.generic.title" = "XP earned";
+"xp.toast.grant.xp_format" = "+%d XP";
+"xp.toast.a11y.label" = "XP earned: %@";
+"xp.toast.a11y.hint" = "Dismisses automatically. Double tap to dismiss now.";
+
 "profile.xp.section_title" = "XP & progress";
 "profile.xp.server_total" = "Synced XP (account)";
 "profile.xp.server_total_loading" = "Synced XP will appear when you are online.";

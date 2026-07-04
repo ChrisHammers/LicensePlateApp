@@ -770,6 +770,14 @@
 "xp.discovery.badge.accepted_late" = "Otro jugador lo encontró un poco antes — premio final: +4 XP";
 "xp.discovery.badge.adjusted_after_sync" = "Ajustado tras sincronizar (puntuación final en la clasificación).";
 
+"xp.toast.grant.competitive_win.title" = "Victoria competitiva";
+"xp.toast.grant.competitive_win.subtitle" = "Primer lugar en este juego";
+"xp.toast.grant.legacy_balance.title" = "XP sincronizada";
+"xp.toast.grant.generic.title" = "XP ganada";
+"xp.toast.grant.xp_format" = "+%d XP";
+"xp.toast.a11y.label" = "XP ganada: %@";
+"xp.toast.a11y.hint" = "Se cierra sola. Toca dos veces para cerrar ahora.";
+
 "profile.xp.section_title" = "XP y progreso";
 "profile.xp.server_total" = "XP sincronizada (cuenta)";
 "profile.xp.server_total_loading" = "La XP sincronizada aparecerá cuando estés en línea.";
