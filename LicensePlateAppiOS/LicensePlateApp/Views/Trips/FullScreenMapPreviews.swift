@@ -18,8 +18,16 @@ import SwiftUI
     FullScreenAppleMapPreviewHost(foundRegions: PreviewLocationFixtures.foundRegionsMixedLocations())
 }
 
+#Preview("Where-found pins — multiplayer finders") {
+    FullScreenAppleMapPreviewHost(
+        foundRegions: PreviewLocationFixtures.foundRegionsWithLocations(),
+        finderIdentities: PreviewLocationFixtures.finderIdentities()
+    )
+}
+
 private struct FullScreenAppleMapPreviewHost: View {
     let foundRegions: [FoundRegion]
+    var finderIdentities: [String: UserRepository.UserIdentitySnapshot] = [:]
     @Namespace private var namespace
     @State private var isPresented = true
 
@@ -31,6 +39,7 @@ private struct FullScreenAppleMapPreviewHost: View {
             country: .unitedStates,
             foundRegionIDs: foundRegions.map(\.regionID),
             foundRegions: foundRegions,
+            finderIdentities: finderIdentities,
             locationManager: LocationManager.shared,
             namespace: namespace,
             isPresented: $isPresented

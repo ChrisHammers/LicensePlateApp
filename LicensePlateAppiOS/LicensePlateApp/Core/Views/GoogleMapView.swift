@@ -16,6 +16,8 @@ struct GoogleMapView: UIViewRepresentable {
     @Binding var cameraPosition: GMSCameraPosition
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion] // Full found regions data for markers
+    let finderPinIcons: [String: UIImage] // Where-found pin badge per finder user id (prebuilt by caller)
+    let finderDisplayNames: [String: String] // Finder display names for where-found snippets
     let showUserLocation: Bool
     let userLocation: CLLocationCoordinate2D? // User's current location coordinate
     let showUserAvatarOnMap: Bool
@@ -35,6 +37,8 @@ struct GoogleMapView: UIViewRepresentable {
         cameraPosition: Binding<GMSCameraPosition>,
         foundRegionIDs: [String] = [],
         foundRegions: [FoundRegion] = [],
+        finderPinIcons: [String: UIImage] = [:],
+        finderDisplayNames: [String: String] = [:],
         showUserLocation: Bool = false,
         userLocation: CLLocationCoordinate2D? = nil,
         showUserAvatarOnMap: Bool = false,
@@ -47,6 +51,8 @@ struct GoogleMapView: UIViewRepresentable {
         self._cameraPosition = cameraPosition
         self.foundRegionIDs = foundRegionIDs
         self.foundRegions = foundRegions
+        self.finderPinIcons = finderPinIcons
+        self.finderDisplayNames = finderDisplayNames
         self.showUserLocation = showUserLocation
         self.userLocation = userLocation
         self.showUserAvatarOnMap = showUserAvatarOnMap
@@ -840,12 +846,21 @@ struct GoogleMapView: UIViewRepresentable {
                     marker.position = coordinate
                 } else {
                     marker = GMSMarker(position: coordinate)
-                    marker.icon = GMSMarker.markerImage(with: UIColor(Color.Theme.accentYellow))
                     marker.map = mapView
                     foundLocationMarkers[foundRegion.regionID] = marker
                 }
+                // Finder badge (avatar or initial disc) when known; generic yellow pin otherwise
+                if let finderId = foundRegion.foundBy, let badge = parent.finderPinIcons[finderId] {
+                    marker.icon = badge
+                } else {
+                    marker.icon = GMSMarker.markerImage(with: UIColor(Color.Theme.accentYellow))
+                }
                 marker.title = regionName
-                marker.snippet = "Found on %@".localized(formatDate(foundRegion.foundAt))
+                if let finderId = foundRegion.foundBy, let finderName = parent.finderDisplayNames[finderId] {
+                    marker.snippet = "Found by %@ on %@".localized(finderName, formatDate(foundRegion.foundAt))
+                } else {
+                    marker.snippet = "Found on %@".localized(formatDate(foundRegion.foundAt))
+                }
             }
         }
 

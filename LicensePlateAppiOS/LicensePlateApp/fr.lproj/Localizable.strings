@@ -954,3 +954,6 @@
 
 /* GPS Step 5 — where-found map marker snippet */
 "Found on %@" = "Trouvée le %@";
+
+/* GPS Step 5.5 — where-found pin finder attribution */
+"Found by %@ on %@" = "Trouvée par %@ le %@";

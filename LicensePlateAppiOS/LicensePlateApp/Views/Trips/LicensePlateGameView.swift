@@ -230,6 +230,7 @@ struct LicensePlateGameView: View {
                     enabledCountries: gameScopedEnabledCountries,
                     foundRegionIDs: viewModel.displayFoundRegionIDsForMap,
                     foundRegions: viewModel.foundRegions,
+                    finderIdentities: viewModel.finderIdentitiesByUserId,
                     cameraPosition: $cameraPosition,
                     locationManager: locationManager,
                     namespace: mapNamespace,
@@ -1899,6 +1900,7 @@ private struct FullScreenGoogleMapView: View {
     let enabledCountries: [PlateRegion.Country]
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
+    let finderIdentities: [String: UserRepository.UserIdentitySnapshot]
     @Binding var cameraPosition: GMSCameraPosition
     @ObservedObject var locationManager: LocationManager
     let namespace: Namespace.ID
@@ -1909,14 +1911,28 @@ private struct FullScreenGoogleMapView: View {
     @AppStorage("appShowUserAvatarOnMap") private var appShowUserAvatarOnMap = false
     @ObservedObject private var locationSettings = LocationSettingsService.shared
 
-    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], cameraPosition: Binding<GMSCameraPosition>, locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
+    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], finderIdentities: [String: UserRepository.UserIdentitySnapshot], cameraPosition: Binding<GMSCameraPosition>, locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
         self.enabledCountries = enabledCountries
         self.foundRegionIDs = foundRegionIDs
         self.foundRegions = foundRegions
+        self.finderIdentities = finderIdentities
         self._cameraPosition = cameraPosition
         self.locationManager = locationManager
         self.namespace = namespace
         self._isPresented = isPresented
+    }
+
+    private var finderPinIcons: [String: UIImage] {
+        finderIdentities.compactMapValues { identity in
+            FinderPinBadge.markerIcon(
+                avatarImage: AvatarCatalog.image(forAvatarId: identity.avatarId),
+                displayName: identity.displayName
+            )
+        }
+    }
+
+    private var finderDisplayNames: [String: String] {
+        finderIdentities.mapValues(\.displayName)
     }
     
     private var regions: [PlateRegion] {
@@ -1944,6 +1960,8 @@ private struct FullScreenGoogleMapView: View {
                 cameraPosition: $cameraPosition,
                 foundRegionIDs: foundRegionIDs,
                 foundRegions: foundRegions,
+                finderPinIcons: finderPinIcons,
+                finderDisplayNames: finderDisplayNames,
                 showUserLocation: showUserLocation,
                 userLocation: locationManager.location?.coordinate,
                 showUserAvatarOnMap: appShowUserAvatarOnMap,
@@ -2315,6 +2333,7 @@ struct FullScreenAppleMapView: View {
     let country: PlateRegion.Country
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
+    let finderIdentities: [String: UserRepository.UserIdentitySnapshot]
     @ObservedObject var locationManager: LocationManager
     let namespace: Namespace.ID
     @Binding var isPresented: Bool
@@ -2331,10 +2350,11 @@ struct FullScreenAppleMapView: View {
         return formatter
     }()
 
-    init(country: PlateRegion.Country, foundRegionIDs: [String], foundRegions: [FoundRegion], locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
+    init(country: PlateRegion.Country, foundRegionIDs: [String], foundRegions: [FoundRegion], finderIdentities: [String: UserRepository.UserIdentitySnapshot] = [:], locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
         self.country = country
         self.foundRegionIDs = foundRegionIDs
         self.foundRegions = foundRegions
+        self.finderIdentities = finderIdentities
         self.locationManager = locationManager
         self.namespace = namespace
         self._isPresented = isPresented
@@ -2500,17 +2520,19 @@ struct FullScreenAppleMapView: View {
                 ForEach(foundRegions.filter { $0.foundAtLocation != nil }) { foundRegion in
                     if let locationData = foundRegion.foundAtLocation {
                         let regionName = PlateRegion.all.first(where: { $0.id == foundRegion.regionID })?.name ?? foundRegion.regionID
-                        let foundOnText = "Found on %@".localized(Self.foundDateFormatter.string(from: foundRegion.foundAt))
+                        let finderIdentity = foundRegion.foundBy.flatMap { finderIdentities[$0] }
+                        let dateText = Self.foundDateFormatter.string(from: foundRegion.foundAt)
+                        let foundText = finderIdentity.map { "Found by %@ on %@".localized($0.displayName, dateText) }
+                            ?? "Found on %@".localized(dateText)
                         Annotation(regionName, coordinate: CLLocationCoordinate2D(
                             latitude: locationData.latitude,
                             longitude: locationData.longitude
                         )) {
-                            Image(systemName: "mappin.circle.fill")
-                                .font(.system(size: 22))
-                                .symbolRenderingMode(.palette)
-                                .foregroundStyle(Color.white, Color.Theme.accentYellow)
-                                .shadow(color: Color.black.opacity(0.3), radius: 3, x: 0, y: 2)
-                                .accessibilityLabel("\(regionName), \(foundOnText)")
+                            FinderPinBadgeView(
+                                avatarImage: AvatarCatalog.image(forAvatarId: finderIdentity?.avatarId),
+                                displayName: finderIdentity?.displayName
+                            )
+                            .accessibilityLabel("\(regionName), \(foundText)")
                         }
                     }
                 }
@@ -2836,6 +2858,7 @@ private struct FullScreenMapView: View {
     let enabledCountries: [PlateRegion.Country]
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
+    let finderIdentities: [String: UserRepository.UserIdentitySnapshot]
     @Binding var cameraPosition: GMSCameraPosition
     @ObservedObject var locationManager: LocationManager
     let namespace: Namespace.ID
@@ -2854,6 +2877,7 @@ private struct FullScreenMapView: View {
                     enabledCountries: enabledCountries,
                     foundRegionIDs: foundRegionIDs,
                     foundRegions: foundRegions,
+                    finderIdentities: finderIdentities,
                     cameraPosition: $cameraPosition,
                     locationManager: locationManager,
                     namespace: namespace,
@@ -2866,6 +2890,7 @@ private struct FullScreenMapView: View {
                     country: country,
                     foundRegionIDs: foundRegionIDs,
                     foundRegions: foundRegions,
+                    finderIdentities: finderIdentities,
                     locationManager: locationManager,
                     namespace: namespace,
                     isPresented: $isPresented

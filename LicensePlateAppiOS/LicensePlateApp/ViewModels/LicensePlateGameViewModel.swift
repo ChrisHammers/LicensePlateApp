@@ -41,6 +41,8 @@ final class LicensePlateGameViewModel: ObservableObject {
     /// Latest persisted game instance (refresh after lifecycle or config changes).
     @Published private(set) var game: GameInstance
     @Published private(set) var foundRegions: [FoundRegion] = []
+    /// Finder identity snapshots for where-found pin attribution (GPS Step 5.5), keyed by user id.
+    @Published private(set) var finderIdentitiesByUserId: [String: UserRepository.UserIdentitySnapshot] = [:]
     /// Competitive mode: ranked standings for this game instance (roster merged).
     @Published private(set) var competitiveStandings: [RankedParticipantContribution] = []
     /// Competitive: current user’s `discoveryRejected` duplicate attempts for this game.
@@ -432,7 +434,20 @@ final class LicensePlateGameViewModel: ObservableObject {
 
     func refreshFoundRegions() {
         foundRegions = (try? tripActivityEventRepository.foundRegions(sessionId: sessionId, gameInstanceId: game.id)) ?? []
+        refreshFinderIdentities()
         refreshCompetitiveProjections()
+    }
+
+    /// Identity snapshots (name + avatarId) for where-found pin attribution, from the same
+    /// cache the plate rows use. Cache-only: uncached finders fall back on the pin and get
+    /// backfilled by the pinned roster listeners on the next refresh.
+    private func refreshFinderIdentities() {
+        let finderIds = Set(foundRegions.compactMap(\.foundBy).filter { !$0.isEmpty })
+        guard !finderIds.isEmpty else {
+            if !finderIdentitiesByUserId.isEmpty { finderIdentitiesByUserId = [:] }
+            return
+        }
+        finderIdentitiesByUserId = UserRepository.shared.cachedIdentityMap(forUserIds: finderIds)
     }
 
     /// Rebuilds competitive standings and duplicate-rejection history from the event log; also `rankedScoringForCurrentGame` for all modes.

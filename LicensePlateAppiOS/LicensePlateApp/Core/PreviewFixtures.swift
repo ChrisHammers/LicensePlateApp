@@ -52,6 +52,7 @@ enum PreviewLocationFixtures {
             ("us-ne", 38.8403, -97.6114),  // spotted near Salina, KS
             ("us-mo", 39.0997, -94.5786)   // Kansas City, MO
         ]
+        let finderCycle = [PreviewConstants.userId1, PreviewConstants.userId2, PreviewConstants.userId3]
         return stops.enumerated().map { index, stop in
             let foundAt = PreviewConstants.fixedDate.addingTimeInterval(TimeInterval(index) * 3600)
             let fix = CLLocation(
@@ -65,10 +66,35 @@ enum PreviewLocationFixtures {
                 regionID: stop.regionID,
                 foundAt: foundAt,
                 inputMethod: index.isMultiple(of: 2) ? .list : .voice,
-                foundBy: PreviewConstants.userId1,
+                foundBy: finderCycle[index % finderCycle.count],
                 foundAtLocation: LocationData(from: fix)
             )
         }
+    }
+
+    /// Finder identities for pin-attribution previews: two catalog avatars plus one
+    /// avatar-less identity (renders the initial-letter disc).
+    static func finderIdentities() -> [String: UserRepository.UserIdentitySnapshot] {
+        [
+            PreviewConstants.userId1: .init(
+                userId: PreviewConstants.userId1,
+                displayName: "Preview Driver",
+                avatarId: "raccoon",
+                legacyFallbackImageName: nil
+            ),
+            PreviewConstants.userId2: .init(
+                userId: PreviewConstants.userId2,
+                displayName: "Preview Passenger",
+                avatarId: "fox",
+                legacyFallbackImageName: nil
+            ),
+            PreviewConstants.userId3: .init(
+                userId: PreviewConstants.userId3,
+                displayName: "Casey",
+                avatarId: nil,
+                legacyFallbackImageName: nil
+            )
+        ]
     }
 
     /// Same five finds, but two (us-ut, us-ne) captured no location — their status
