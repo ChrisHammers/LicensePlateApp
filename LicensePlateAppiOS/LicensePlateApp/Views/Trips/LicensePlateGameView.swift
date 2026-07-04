@@ -991,7 +991,7 @@ struct LicensePlateGameView: View {
                 }
             }
         } message: {
-            Text("   game.".localized)
+            Text("This ends this game. Make sure all participants have synced so all discoveries are counted. You can start a new game.".localized)
         }
     }
 
