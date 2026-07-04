@@ -159,6 +159,7 @@ struct DiscoveryUiProjectionBuilderTests {
         #expect(row.isVisuallyFound)
         #expect(row.showPendingBadge)
         #expect(row.detailLine == "xp.row.detail.pending_resolution".localized)
+        #expect(row.detailStyle == .pending)
         #expect(!row.accessibilityValue.localizedCaseInsensitiveContains("xp"))
     }
 
@@ -179,6 +180,7 @@ struct DiscoveryUiProjectionBuilderTests {
         #expect(row.isVisuallyFound)
         #expect(!row.showPendingBadge)
         #expect(row.detailLine == "xp.discovery.badge.accepted_late".localized)
+        #expect(row.detailStyle == .acceptedLate)
         #expect(!(row.detailLine?.localizedCaseInsensitiveContains("xp") ?? false))
         #expect(!row.accessibilityValue.localizedCaseInsensitiveContains("xp"))
     }
@@ -198,6 +200,7 @@ struct DiscoveryUiProjectionBuilderTests {
 
         #expect(row.isVisuallyFound)
         #expect(row.detailLine == nil)
+        #expect(row.detailStyle == nil)
         #expect(!row.accessibilityValue.localizedCaseInsensitiveContains("xp"))
     }
 

@@ -767,8 +767,8 @@
 "xp.row.a11y.pending_competitive" = "Résolution compétitive en attente";
 "xp.pending.badge.short" = "En attente";
 "xp.pending.badge.a11y" = "Résolution compétitive en attente";
-"xp.discovery.badge.accepted_late" = "Un autre joueur l’a trouvé un peu plus tôt.";
-"xp.discovery.badge.adjusted_after_sync" = "Ajusté après synchronisation (score final au classement).";
+"xp.discovery.badge.accepted_late" = "Pas le premier";
+"xp.discovery.badge.adjusted_after_sync" = "Découverte rejetée";
 
 "xp.toast.grant.competitive_win.title" = "Victoire compétitive";
 "xp.toast.grant.competitive_win.subtitle" = "Première place dans cette partie";

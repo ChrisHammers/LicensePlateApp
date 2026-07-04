@@ -1730,6 +1730,17 @@ struct RegionCellView: View {
         }
     }
 
+    @ViewBuilder
+    private var stateBadge: some View {
+        if presentation?.showPendingBadge == true {
+            XpPendingBadgeView()
+        } else if let detail = presentation?.detailLine,
+                  !detail.isEmpty,
+                  let style = presentation?.detailStyle {
+            RegionRowStatusBadgeView(text: detail, style: style)
+        }
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "licenseplate")
@@ -1738,23 +1749,20 @@ struct RegionCellView: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(region.name)
-                        .font(.system(.body, design: .rounded))
-                        .fontWeight(.medium)
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                    if presentation?.showPendingBadge == true {
-                        XpPendingBadgeView()
+                HStack(alignment: .top, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(region.name)
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.medium)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                        
+                        
+                        Text(region.country.rawValue.localized)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
                     }
-                }
-                Text(region.country.rawValue.localized)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                if let detail = presentation?.detailLine, !detail.isEmpty {
-                    Text(detail)
-                        .font(.system(.caption2, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    stateBadge
                 }
             }
 

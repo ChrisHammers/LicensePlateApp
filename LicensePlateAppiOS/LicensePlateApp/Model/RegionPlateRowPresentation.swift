@@ -7,6 +7,14 @@
 
 import Foundation
 
+enum RegionPlateRowStatusStyle: Equatable, Sendable {
+    case pending
+    case firstFinder
+    case acceptedLate
+    case adjustedAfterSync
+    case informational
+}
+
 struct FinderAvatarPresentation: Equatable, Sendable, Identifiable {
     var id: String { participantId }
     var participantId: String
@@ -23,6 +31,7 @@ struct RegionPlateRowPresentation: Equatable, Sendable {
     var showPendingBadge: Bool
     /// Short line under region name (e.g. pending or fairness status copy).
     var detailLine: String?
+    var detailStyle: RegionPlateRowStatusStyle?
     /// Ordered by discovery time ascending (first finder first).
     var orderedFinders: [FinderAvatarPresentation]
     /// Accessibility-ready line describing finder order.
@@ -46,21 +55,27 @@ enum RegionPlateRowPresentationBuilder {
         let showBadge = pending && isFound
 
         let detailLine: String?
+        let detailStyle: RegionPlateRowStatusStyle?
         if let p = projection, isFound {
             switch p.xpPhase {
             case .provisional:
                 detailLine = "xp.row.detail.pending_resolution".localized
+                detailStyle = .pending
             case .final, .finalPending:
                 if let badge = p.statusBadgeText, !badge.isEmpty {
                     detailLine = badge
+                    detailStyle = style(for: badge)
                 } else {
                     detailLine = nil
+                    detailStyle = nil
                 }
             case .none:
                 detailLine = nil
+                detailStyle = nil
             }
         } else {
             detailLine = nil
+            detailStyle = nil
         }
 
         let a11yLabel = regionName
@@ -76,10 +91,24 @@ enum RegionPlateRowPresentationBuilder {
             isVisuallyFound: isFound,
             showPendingBadge: showBadge,
             detailLine: detailLine,
+            detailStyle: detailStyle,
             orderedFinders: orderedFinders,
             findersAccessibilityValue: findersAccessibilityValue,
             accessibilityLabel: a11yLabel,
             accessibilityValue: valueParts.joined(separator: ", ")
         )
+    }
+
+    private static func style(for badgeText: String) -> RegionPlateRowStatusStyle {
+        if badgeText == "First finder".localized {
+            return .firstFinder
+        }
+        if badgeText == "xp.discovery.badge.accepted_late".localized {
+            return .acceptedLate
+        }
+        if badgeText == "xp.discovery.badge.adjusted_after_sync".localized {
+            return .adjustedAfterSync
+        }
+        return .informational
     }
 }

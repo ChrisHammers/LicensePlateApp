@@ -105,6 +105,7 @@ private enum LicensePlateRowPreviewData {
         isVisuallyFound: true,
         showPendingBadge: true,
         detailLine: "xp.row.detail.pending_resolution".localized,
+        detailStyle: .pending,
         orderedFinders: [finderAlex],
         findersAccessibilityValue: "Alex found this region first."
     )
@@ -112,6 +113,7 @@ private enum LicensePlateRowPreviewData {
     static let firstFinder = makePresentation(
         isVisuallyFound: true,
         detailLine: "First finder".localized,
+        detailStyle: .firstFinder,
         orderedFinders: [finderAlex],
         findersAccessibilityValue: "Alex found this region first."
     )
@@ -119,6 +121,7 @@ private enum LicensePlateRowPreviewData {
     static let acceptedLate = makePresentation(
         isVisuallyFound: true,
         detailLine: "xp.discovery.badge.accepted_late".localized,
+        detailStyle: .acceptedLate,
         orderedFinders: [finderMorgan, finderAlex],
         findersAccessibilityValue: "Morgan found this region first. Alex found it second."
     )
@@ -126,6 +129,7 @@ private enum LicensePlateRowPreviewData {
     static let adjustedAfterSync = makePresentation(
         isVisuallyFound: true,
         detailLine: "xp.discovery.badge.adjusted_after_sync".localized,
+        detailStyle: .adjustedAfterSync,
         orderedFinders: [finderMorgan, finderAlex, finderJordan],
         findersAccessibilityValue: "Morgan found this region first. Alex found it second. Jordan found it third."
     )
@@ -158,6 +162,7 @@ private enum LicensePlateRowPreviewData {
         isVisuallyFound: Bool,
         showPendingBadge: Bool = false,
         detailLine: String? = nil,
+        detailStyle: RegionPlateRowStatusStyle? = nil,
         orderedFinders: [FinderAvatarPresentation] = [],
         findersAccessibilityValue: String? = nil
     ) -> RegionPlateRowPresentation {
@@ -177,6 +182,7 @@ private enum LicensePlateRowPreviewData {
             isVisuallyFound: isVisuallyFound,
             showPendingBadge: showPendingBadge,
             detailLine: detailLine,
+            detailStyle: detailStyle,
             orderedFinders: orderedFinders,
             findersAccessibilityValue: findersAccessibilityValue,
             accessibilityLabel: texas.name,

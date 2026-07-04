@@ -121,6 +121,7 @@ struct ActiveTripXpProjectionIntegrationTests {
         #expect(row?.isVisuallyFound == true)
         #expect(row?.showPendingBadge == true)
         #expect(row?.detailLine == "xp.row.detail.pending_resolution".localized)
+        #expect(row?.detailStyle == .pending)
         #expect(!(row?.accessibilityValue.localizedCaseInsensitiveContains("xp") ?? true))
         let projection = vm.discoveryProjectionsByItemId["us-tx"]
         #expect(projection?.xpPhase == .provisional)

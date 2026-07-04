@@ -798,8 +798,8 @@
 "xp.row.a11y.pending_competitive" = "Pending competitive resolution";
 "xp.pending.badge.short" = "Pending";
 "xp.pending.badge.a11y" = "Pending competitive resolution";
-"xp.discovery.badge.accepted_late" = "Another player found it slightly earlier.";
-"xp.discovery.badge.adjusted_after_sync" = "Adjusted after trip sync (final score on leaderboard).";
+"xp.discovery.badge.accepted_late" = "Not First Finder";
+"xp.discovery.badge.adjusted_after_sync" = "Rejected Find";
 
 "xp.toast.grant.competitive_win.title" = "Competitive win";
 "xp.toast.grant.competitive_win.subtitle" = "First place in this game";
