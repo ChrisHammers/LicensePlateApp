@@ -39,6 +39,43 @@ struct LocationData: Codable {
     }
 }
 
+// MARK: - TripActivityEvent payload round-trip (GPS Step 4)
+
+/// Single source for encoding/decoding location on `region_found` payloads.
+/// Record side uses `payloadFields()`; replay uses `init(payload:)`. Keep in sync with
+/// `TripActivityEventPayloadKey.location*`.
+extension LocationData {
+
+    /// String fields to merge into a `region_found` payload.
+    func payloadFields() -> [String: String] {
+        [
+            TripActivityEventPayloadKey.locationLatitude: String(latitude),
+            TripActivityEventPayloadKey.locationLongitude: String(longitude),
+            TripActivityEventPayloadKey.locationAltitude: String(altitude),
+            TripActivityEventPayloadKey.locationHorizontalAccuracy: String(horizontalAccuracy),
+            TripActivityEventPayloadKey.locationVerticalAccuracy: String(verticalAccuracy),
+            TripActivityEventPayloadKey.locationTimestamp: String(timestamp.timeIntervalSince1970)
+        ]
+    }
+
+    /// nil unless latitude and longitude both parse; remaining fields default defensively
+    /// (missing accuracy → -1, CoreLocation's invalid marker).
+    init?(payload: [String: String]?) {
+        guard let payload,
+              let latitude = payload[TripActivityEventPayloadKey.locationLatitude].flatMap(Double.init),
+              let longitude = payload[TripActivityEventPayloadKey.locationLongitude].flatMap(Double.init) else {
+            return nil
+        }
+        self.latitude = latitude
+        self.longitude = longitude
+        self.altitude = payload[TripActivityEventPayloadKey.locationAltitude].flatMap(Double.init) ?? 0
+        self.horizontalAccuracy = payload[TripActivityEventPayloadKey.locationHorizontalAccuracy].flatMap(Double.init) ?? -1
+        self.verticalAccuracy = payload[TripActivityEventPayloadKey.locationVerticalAccuracy].flatMap(Double.init) ?? -1
+        let timestampSeconds = payload[TripActivityEventPayloadKey.locationTimestamp].flatMap(Double.init)
+        self.timestamp = timestampSeconds.map { Date(timeIntervalSince1970: $0) } ?? .distantPast
+    }
+}
+
 /// Metadata for a found region, tracking when, how, and who found it
 struct FoundRegion: Codable, Identifiable {
     var id: String { regionID }

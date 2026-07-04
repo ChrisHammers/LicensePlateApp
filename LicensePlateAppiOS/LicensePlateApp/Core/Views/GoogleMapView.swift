@@ -101,8 +101,13 @@ struct GoogleMapView: UIViewRepresentable {
                 foundRegions: foundRegions,
                 regions: regions
             )
+            context.coordinator.renderFoundLocationMarkers(
+                on: mapView,
+                foundRegions: foundRegions,
+                regions: regions
+            )
         }
-        
+
         // Render green circle first so avatar marker is drawn on top (avatar visible)
         if showUserLocation, let location = userLocation {
             context.coordinator.renderUserLocationMarker(
@@ -176,9 +181,15 @@ struct GoogleMapView: UIViewRepresentable {
                 foundRegions: foundRegions,
                 regions: regions
             )
+            context.coordinator.renderFoundLocationMarkers(
+                on: mapView,
+                foundRegions: foundRegions,
+                regions: regions
+            )
         } else {
             // Clear all markers if preference is disabled
             context.coordinator.clearAllMarkers(on: mapView)
+            context.coordinator.clearFoundLocationMarkers(on: mapView)
         }
         
         // Update green first, then avatar so avatar is on top
@@ -233,6 +244,7 @@ struct GoogleMapView: UIViewRepresentable {
         private var polygons: [String: [GMSPolygon]] = [:] // Array of polygons per region (for MultiPolygon support)
         private var countryPolygons: [String: GMSPolygon] = [:] // Separate storage for country boundaries (map context only)
         private var markers: [String: GMSMarker] = [:] // Storage for region markers
+        private var foundLocationMarkers: [String: GMSMarker] = [:] // Pins at where-found capture points (separate from region-center markers)
         private var userLocationMarker: GMSMarker? // Custom green user location marker
         private var userAvatarMarker: GMSMarker? // Optional avatar at user location
         private var cachedPaths: [String: [GMSMutablePath]] = [:] // Array of paths per region (for MultiPolygon support)
@@ -794,57 +806,56 @@ struct GoogleMapView: UIViewRepresentable {
             countriesRendered = false
         }
         
-        /// Render markers for found regions that have location data (WHERE they were found)
-        /// COMMENTED OUT: This shows where the user was when they found a region
-        /// Keeping this code for future use when we want to show location-based markers
-        /*
-        func renderMarkersWhereFound(
+        /// Render pins at the capture location for found regions that carry location data (WHERE they were found).
+        /// Distinct from `renderMarkers` (region-center status circles): pin-shaped icon, own storage.
+        /// Marker title/snippet feed the default map accessibility (title → label, snippet → hint).
+        func renderFoundLocationMarkers(
             on mapView: GMSMapView,
             foundRegions: [FoundRegion],
             regions: [PlateRegion]
         ) {
-            // Create a set of current found region IDs with locations
             let currentFoundWithLocations = Set(foundRegions.compactMap { region in
                 region.foundAtLocation != nil ? region.regionID : nil
             })
-            
-            // Remove markers for regions that are no longer found or no longer have locations
-            for (regionId, marker) in markers {
-                if !currentFoundWithLocations.contains(regionId) {
-                    marker.map = nil
-                    markers.removeValue(forKey: regionId)
-                }
+
+            // Remove pins for regions no longer found or no longer carrying a location
+            for (regionId, marker) in foundLocationMarkers where !currentFoundWithLocations.contains(regionId) {
+                marker.map = nil
+                foundLocationMarkers.removeValue(forKey: regionId)
             }
-            
-            // Add or update markers for found regions with locations
+
             for foundRegion in foundRegions {
                 guard let locationData = foundRegion.foundAtLocation else { continue }
                 guard regions.contains(where: { $0.id == foundRegion.regionID }) else { continue }
-                
+
                 let coordinate = CLLocationCoordinate2D(
                     latitude: locationData.latitude,
                     longitude: locationData.longitude
                 )
-                
-                // Get region name for marker title
                 let regionName = regions.first(where: { $0.id == foundRegion.regionID })?.name ?? foundRegion.regionID
-                
-                // Create or update marker
+
                 let marker: GMSMarker
-                if let existingMarker = markers[foundRegion.regionID] {
+                if let existingMarker = foundLocationMarkers[foundRegion.regionID] {
                     marker = existingMarker
                     marker.position = coordinate
                 } else {
                     marker = GMSMarker(position: coordinate)
-                    marker.title = regionName
-                    marker.snippet = "Found on \(formatDate(foundRegion.foundAt))"
                     marker.icon = GMSMarker.markerImage(with: UIColor(Color.Theme.accentYellow))
                     marker.map = mapView
-                    markers[foundRegion.regionID] = marker
+                    foundLocationMarkers[foundRegion.regionID] = marker
                 }
+                marker.title = regionName
+                marker.snippet = "Found on %@".localized(formatDate(foundRegion.foundAt))
             }
         }
-        */
+
+        /// Clear the where-found pins.
+        func clearFoundLocationMarkers(on mapView: GMSMapView) {
+            for (_, marker) in foundLocationMarkers {
+                marker.map = nil
+            }
+            foundLocationMarkers.removeAll()
+        }
         
         /// Render markers at region centers showing found/unfound status (WHAT regions were found)
         /// This matches the old Apple Maps behavior - shows markers at region centers

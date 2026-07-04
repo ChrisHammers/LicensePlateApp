@@ -52,7 +52,7 @@ struct LicensePlateGameView: View {
     @StateObject private var speechRecognizer = SpeechRecognizer(onListeningStarted: {
         FeedbackService.shared.startRecording()
     })
-    @StateObject private var locationManager = LocationManager()
+    @ObservedObject private var locationManager = LocationManager.shared
     
     // App Preferences for feedback
     @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
@@ -1907,7 +1907,8 @@ private struct FullScreenGoogleMapView: View {
     @EnvironmentObject private var authService: FirebaseAuthService
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     @AppStorage("appShowUserAvatarOnMap") private var appShowUserAvatarOnMap = false
-    
+    @ObservedObject private var locationSettings = LocationSettingsService.shared
+
     init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], cameraPosition: Binding<GMSCameraPosition>, locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
         self.enabledCountries = enabledCountries
         self.foundRegionIDs = foundRegionIDs
@@ -1928,7 +1929,8 @@ private struct FullScreenGoogleMapView: View {
     }
     
     private var showUserLocation: Bool {
-        locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways
+        (locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways)
+            && locationSettings.showMyLocationOnLargeMap
     }
     
     private var userAvatarImage: UIImage? {
@@ -2307,20 +2309,32 @@ private struct UserLocationPulseView: View {
 }
 
 // Full screen map view with location support (Apple Maps)
-private struct FullScreenAppleMapView: View {
+/// Internal (not private) so `FullScreenMapPreviews.swift` can preview it — canvas thunks
+/// for this 2900-line file time out, so previews live in that small dedicated file.
+struct FullScreenAppleMapView: View {
     let country: PlateRegion.Country
     let foundRegionIDs: [String]
+    let foundRegions: [FoundRegion]
     @ObservedObject var locationManager: LocationManager
     let namespace: Namespace.ID
     @Binding var isPresented: Bool
     
     @EnvironmentObject private var authService: FirebaseAuthService
     @AppStorage("appShowUserAvatarOnMap") private var appShowUserAvatarOnMap = false
+    @ObservedObject private var locationSettings = LocationSettingsService.shared
     @State private var mapCameraPosition: MapCameraPosition
-    
-    init(country: PlateRegion.Country, foundRegionIDs: [String], locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
+
+    private static let foundDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return formatter
+    }()
+
+    init(country: PlateRegion.Country, foundRegionIDs: [String], foundRegions: [FoundRegion], locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
         self.country = country
         self.foundRegionIDs = foundRegionIDs
+        self.foundRegions = foundRegions
         self.locationManager = locationManager
         self.namespace = namespace
         self._isPresented = isPresented
@@ -2482,9 +2496,29 @@ private struct FullScreenAppleMapView: View {
                     }
                 }
                 
+                // Where-found pins at capture locations (parity with GoogleMapView.renderFoundLocationMarkers)
+                ForEach(foundRegions.filter { $0.foundAtLocation != nil }) { foundRegion in
+                    if let locationData = foundRegion.foundAtLocation {
+                        let regionName = PlateRegion.all.first(where: { $0.id == foundRegion.regionID })?.name ?? foundRegion.regionID
+                        let foundOnText = "Found on %@".localized(Self.foundDateFormatter.string(from: foundRegion.foundAt))
+                        Annotation(regionName, coordinate: CLLocationCoordinate2D(
+                            latitude: locationData.latitude,
+                            longitude: locationData.longitude
+                        )) {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.system(size: 22))
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(Color.white, Color.Theme.accentYellow)
+                                .shadow(color: Color.black.opacity(0.3), radius: 3, x: 0, y: 2)
+                                .accessibilityLabel("\(regionName), \(foundOnText)")
+                        }
+                    }
+                }
+
                 // User location: single annotation with ZStack so green is behind, avatar on top
                 if let userLocation = locationManager.location,
-                   locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways {
+                   locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways,
+                   locationSettings.showMyLocationOnLargeMap {
                     Annotation("Your Location".localized, coordinate: userLocation.coordinate) {
                         ZStack {
                             // Green pulse ring (and dot when no avatar) — back layer
@@ -2831,6 +2865,7 @@ private struct FullScreenMapView: View {
                 FullScreenAppleMapView(
                     country: country,
                     foundRegionIDs: foundRegionIDs,
+                    foundRegions: foundRegions,
                     locationManager: locationManager,
                     namespace: namespace,
                     isPresented: $isPresented
@@ -2882,5 +2917,6 @@ private struct RegionMapView: View {
         }
     }
 }
+
 
 

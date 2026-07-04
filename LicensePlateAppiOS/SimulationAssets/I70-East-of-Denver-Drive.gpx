@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Simulated ~30-minute highway drive on I-70 east of Denver (Denver -> Bennett, CO).
+  Timestamps are spaced 90s per ~2.7 km leg (~105 km/h) so Xcode simulates realistic
+  highway movement. Use via Simulator: Features > Location > Custom Location, or in
+  Xcode: Debug > Simulate Location > Add GPX File to Workspace, or attach to the
+  scheme's Run options (Core Location > Default Location).
+  Not part of the app target; developer tooling only.
+-->
+<gpx version="1.1" creator="RoadTrip Royale dev tooling" xmlns="http://www.topografix.com/GPX/1/1">
+  <wpt lat="39.7510" lon="-104.9903"><time>2026-01-01T17:00:00Z</time></wpt>
+  <wpt lat="39.7515" lon="-104.9600"><time>2026-01-01T17:01:30Z</time></wpt>
+  <wpt lat="39.7521" lon="-104.9300"><time>2026-01-01T17:03:00Z</time></wpt>
+  <wpt lat="39.7528" lon="-104.9000"><time>2026-01-01T17:04:30Z</time></wpt>
+  <wpt lat="39.7536" lon="-104.8700"><time>2026-01-01T17:06:00Z</time></wpt>
+  <wpt lat="39.7545" lon="-104.8400"><time>2026-01-01T17:07:30Z</time></wpt>
+  <wpt lat="39.7553" lon="-104.8100"><time>2026-01-01T17:09:00Z</time></wpt>
+  <wpt lat="39.7560" lon="-104.7800"><time>2026-01-01T17:10:30Z</time></wpt>
+  <wpt lat="39.7566" lon="-104.7500"><time>2026-01-01T17:12:00Z</time></wpt>
+  <wpt lat="39.7571" lon="-104.7200"><time>2026-01-01T17:13:30Z</time></wpt>
+  <wpt lat="39.7575" lon="-104.6900"><time>2026-01-01T17:15:00Z</time></wpt>
+  <wpt lat="39.7578" lon="-104.6600"><time>2026-01-01T17:16:30Z</time></wpt>
+  <wpt lat="39.7580" lon="-104.6300"><time>2026-01-01T17:18:00Z</time></wpt>
+  <wpt lat="39.7581" lon="-104.6000"><time>2026-01-01T17:19:30Z</time></wpt>
+  <wpt lat="39.7581" lon="-104.5700"><time>2026-01-01T17:21:00Z</time></wpt>
+  <wpt lat="39.7580" lon="-104.5400"><time>2026-01-01T17:22:30Z</time></wpt>
+  <wpt lat="39.7578" lon="-104.5100"><time>2026-01-01T17:24:00Z</time></wpt>
+  <wpt lat="39.7575" lon="-104.4800"><time>2026-01-01T17:25:30Z</time></wpt>
+  <wpt lat="39.7571" lon="-104.4500"><time>2026-01-01T17:27:00Z</time></wpt>
+  <wpt lat="39.7566" lon="-104.4200"><time>2026-01-01T17:28:30Z</time></wpt>
+</gpx>

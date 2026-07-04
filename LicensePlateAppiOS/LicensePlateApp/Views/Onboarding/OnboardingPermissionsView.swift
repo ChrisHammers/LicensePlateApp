@@ -16,7 +16,7 @@ struct OnboardingPermissionsView: View {
     var deferredSetupTouchSource: String = "legacy_onboarding"
     let onNext: () -> Void
     
-    @StateObject private var locationManager = LocationManager()
+    @ObservedObject private var locationManager = LocationManager.shared
     @State private var microphonePermission: AVAudioSession.RecordPermission = .undetermined
     @State private var speechPermission: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     @State private var cameraPermission: AVAuthorizationStatus = .notDetermined

@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import CoreLocation
 
 /// Server fairness messaging after sync (Step 13); stacked non-blocking banners in-game.
 struct FairnessToastState: Equatable, Identifiable {
@@ -144,6 +145,12 @@ final class LicensePlateGameViewModel: ObservableObject {
             && currentSession.status != .cancelled
     }
 
+    /// Location payload gating (GPS Step 4): cached fixes older than this are not attached to finds.
+    private static let maxLocationFixAgeForDiscovery: TimeInterval = 60
+    private let locationSettings: LocationSettingsProviding
+    /// Cached-fix source; never triggers GPS acquisition. Injectable for tests.
+    private let currentLocationFix: @MainActor () -> CLLocation?
+
     init(
         session: TripSession,
         game: GameInstance,
@@ -157,7 +164,9 @@ final class LicensePlateGameViewModel: ObservableObject {
         regionRemovalCooldownService: RegionRemovalCooldownServiceProtocol = RegionRemovalCooldownService(),
         authService: FirebaseAuthService,
         xpLedger: XpLedgerRepositoryProtocol = XpLedgerRepository.shared,
-        discoveryResolutionRepository: DiscoveryResolutionRepositoryProtocol = DiscoveryResolutionRepository.shared
+        discoveryResolutionRepository: DiscoveryResolutionRepositoryProtocol = DiscoveryResolutionRepository.shared,
+        locationSettings: LocationSettingsProviding = LocationSettingsService.shared,
+        currentLocationFix: @escaping @MainActor () -> CLLocation? = { LocationManager.shared.location }
     ) {
         self.currentSession = session
         self.sessionId = session.id
@@ -173,6 +182,8 @@ final class LicensePlateGameViewModel: ObservableObject {
         self.tripActivityEventRecording = tripActivityEventRecording
         self.regionRemovalCooldownService = regionRemovalCooldownService
         self.authService = authService
+        self.locationSettings = locationSettings
+        self.currentLocationFix = currentLocationFix
         self.foundRegions = (try? tripActivityEventRepository.foundRegions(sessionId: session.id, gameInstanceId: game.id)) ?? []
         refreshCompetitiveProjections()
 
@@ -820,6 +831,9 @@ final class LicensePlateGameViewModel: ObservableObject {
             TripActivityEventPayloadKey.inputMethod: inputMethod.rawValue,
             TripActivityEventPayloadKey.discoveryEventId: discoveryEventId
         ]
+        if let locationFields = locationPayloadFieldsForDiscovery() {
+            payload.merge(locationFields) { _, new in new }
+        }
         let event = TripActivityEvent(
             id: discoveryEventId,
             sessionId: sessionId,
@@ -866,6 +880,19 @@ final class LicensePlateGameViewModel: ObservableObject {
             AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_discovery", error: error.localizedDescription))
             return .failure(error)
         }
+    }
+
+    /// Location fields for a `region_found` payload, or nil when the setting is off,
+    /// no fix is cached, the fix is invalid, or it is older than `maxLocationFixAgeForDiscovery`.
+    /// Reads the cached fix synchronously — never delays the find or triggers GPS.
+    private func locationPayloadFieldsForDiscovery() -> [String: String]? {
+        guard locationSettings.saveLocationWhenMarkingPlates,
+              let fix = currentLocationFix(),
+              fix.horizontalAccuracy >= 0,
+              Date.now.timeIntervalSince(fix.timestamp) <= Self.maxLocationFixAgeForDiscovery else {
+            return nil
+        }
+        return LocationData(from: fix).payloadFields()
     }
 
     func canSubmitDiscoveryTap(regionID: String) -> Bool {

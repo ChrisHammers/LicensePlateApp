@@ -17,14 +17,14 @@ struct PrivacyPermissionsView: View {
     @Environment(\.dismiss) private var dismiss
     
     // Privacy & Permissions
-    @AppStorage("saveLocationWhenMarkingPlates") private var saveLocationWhenMarkingPlates = true
-    @AppStorage("showMyLocationOnLargeMap") private var showMyLocationOnLargeMap = true
-    @AppStorage("trackMyLocationDuringTrips") private var trackMyLocationDuringTrips = true
+    @AppStorage(LocationSettingsKeys.saveLocationWhenMarkingPlates) private var saveLocationWhenMarkingPlates = true
+    @AppStorage(LocationSettingsKeys.showMyLocationOnLargeMap) private var showMyLocationOnLargeMap = true
+    @AppStorage(LocationSettingsKeys.trackMyLocationDuringTrips) private var trackMyLocationDuringTrips = true
     @AppStorage("notifyPlateFoundByOpponent") private var notifyPlateFoundByOpponent = true
     @AppStorage("notifyPlateFoundByCoPilots") private var notifyPlateFoundByCoPilots = true
     @AppStorage("notifyPromotionsAndNews") private var notifyPromotionsAndNews = false
     
-    @StateObject private var locationManager = LocationManager()
+    @ObservedObject private var locationManager = LocationManager.shared
     @State private var microphonePermission: AVAudioSession.RecordPermission = .undetermined
     @State private var speechRecognitionPermission: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     @State private var cameraPermission: AVAuthorizationStatus = .notDetermined

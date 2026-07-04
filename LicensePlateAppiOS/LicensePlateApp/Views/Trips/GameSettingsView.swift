@@ -16,9 +16,9 @@ struct GameSettingsView: View {
     @State private var retryAction: (() -> Void)?
     @State private var showEndGameConfirmation = false
 
-    @AppStorage("defaultSaveLocationWhenMarkingPlates") private var saveLocationWhenMarkingPlates = true
-    @AppStorage("defaultShowMyLocationOnLargeMap") private var showMyLocationOnLargeMap = true
-    @AppStorage("defaultTrackMyLocationDuringTrip") private var trackMyLocationDuringTrip = true
+    @AppStorage(NewTripDefaultsKeys.saveLocationWhenMarkingPlates) private var saveLocationWhenMarkingPlates = true
+    @AppStorage(NewTripDefaultsKeys.showMyLocationOnLargeMap) private var showMyLocationOnLargeMap = true
+    @AppStorage(NewTripDefaultsKeys.trackMyLocationDuringTrip) private var trackMyLocationDuringTrip = true
     @AppStorage("defaultShowMyActiveTripOnLargeMap") private var showMyActiveTripOnLargeMap = true
     @AppStorage("defaultShowMyActiveTripOnSmallMap") private var showMyActiveTripOnSmallMap = true
     @AppStorage("defaultSkipVoiceConfirmation") private var skipVoiceConfirmation = false
@@ -51,7 +51,7 @@ struct GameSettingsView: View {
         return formatter
     }
 
-    @StateObject private var locationManager = LocationManager()
+    @ObservedObject private var locationManager = LocationManager.shared
 
     @State private var showResetConfirmation = false
     @State private var showRemoveGameConfirmation = false

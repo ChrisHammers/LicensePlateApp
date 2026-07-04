@@ -983,3 +983,6 @@
 "return_streak.reminder.body" = "Find a license plate on your trip to keep your streak going.";
 "return_streak.settings.reminder.title" = "Streak Reminders";
 "return_streak.settings.reminder.detail" = "Get a gentle reminder if you have not found a plate yet today.";
+
+/* GPS Step 5 — where-found map marker snippet */
+"Found on %@" = "Found on %@";

@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import CoreLocation
 
 // MARK: - Deterministic IDs and timestamps
 
@@ -35,6 +36,53 @@ enum PreviewConstants {
 
     static let fixedDate = Date(timeIntervalSince1970: 1_700_000_000) // ~Nov 2023
     static let fixedDateEnded = Date(timeIntervalSince1970: 1_700_010_000)
+}
+
+// MARK: - Location fixtures (GPS Steps 4-5: foundAtLocation / where-found pins)
+
+enum PreviewLocationFixtures {
+
+    /// Found regions with capture locations along I-70, Denver → Kansas City.
+    /// Timestamps advance hourly from `PreviewConstants.fixedDate`. Deterministic.
+    static func foundRegionsWithLocations() -> [FoundRegion] {
+        let stops: [(regionID: String, latitude: Double, longitude: Double)] = [
+            ("us-co", 39.7392, -104.9903), // Denver, CO
+            ("us-ut", 39.2639, -103.6922), // spotted near Limon, CO
+            ("us-ks", 38.8793, -99.3268),  // Hays, KS
+            ("us-ne", 38.8403, -97.6114),  // spotted near Salina, KS
+            ("us-mo", 39.0997, -94.5786)   // Kansas City, MO
+        ]
+        return stops.enumerated().map { index, stop in
+            let foundAt = PreviewConstants.fixedDate.addingTimeInterval(TimeInterval(index) * 3600)
+            let fix = CLLocation(
+                coordinate: CLLocationCoordinate2D(latitude: stop.latitude, longitude: stop.longitude),
+                altitude: 500,
+                horizontalAccuracy: 8,
+                verticalAccuracy: 4,
+                timestamp: foundAt
+            )
+            return FoundRegion(
+                regionID: stop.regionID,
+                foundAt: foundAt,
+                inputMethod: index.isMultiple(of: 2) ? .list : .voice,
+                foundBy: PreviewConstants.userId1,
+                foundAtLocation: LocationData(from: fix)
+            )
+        }
+    }
+
+    /// Same five finds, but two (us-ut, us-ne) captured no location — their status
+    /// circles stay yellow while their where-found pins are absent. Compare against
+    /// `foundRegionsWithLocations()`: 3 pins here vs 5 there, same found regions.
+    static func foundRegionsMixedLocations() -> [FoundRegion] {
+        let locationlessRegionIDs: Set<String> = ["us-ut", "us-ne"]
+        return foundRegionsWithLocations().map { foundRegion in
+            guard locationlessRegionIDs.contains(foundRegion.regionID) else { return foundRegion }
+            var stripped = foundRegion
+            stripped.foundAtLocation = nil
+            return stripped
+        }
+    }
 }
 
 // MARK: - PreviewTripFixtures

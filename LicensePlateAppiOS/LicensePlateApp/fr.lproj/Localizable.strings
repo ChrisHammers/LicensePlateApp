@@ -951,3 +951,6 @@
 "return_streak.reminder.body" = "Trouvez une plaque pendant votre voyage pour garder votre série.";
 "return_streak.settings.reminder.title" = "Rappels de série";
 "return_streak.settings.reminder.detail" = "Recevez un rappel si vous n'avez pas encore trouvé de plaque aujourd'hui.";
+
+/* GPS Step 5 — where-found map marker snippet */
+"Found on %@" = "Trouvée le %@";

@@ -55,6 +55,17 @@ enum TripActivityEventPayloadKey {
     static let toUserId = "toUserId"
     static let inviteId = "inviteId"
     static let inviteMethod = "inviteMethod"
+    /// `region_found` only, present when the finder's "Save location when marking plates"
+    /// setting was on and a fresh fix was cached. Mirror `LocationData` fields; all-or-nothing
+    /// via `LocationData.payloadFields()` / `LocationData(payload:)`. Syncs to the shared
+    /// trip document — visible to trip members in multiplayer. Never log these values.
+    static let locationLatitude = "locationLatitude"
+    static let locationLongitude = "locationLongitude"
+    static let locationAltitude = "locationAltitude"
+    static let locationHorizontalAccuracy = "locationHorizontalAccuracy"
+    static let locationVerticalAccuracy = "locationVerticalAccuracy"
+    /// Unix seconds (same style as `serverCommittedAt`).
+    static let locationTimestamp = "locationTimestamp"
 }
 
 /// A single event in the trip lifecycle. Room for analytics and audit.

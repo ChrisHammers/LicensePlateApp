@@ -119,7 +119,7 @@ enum TripActivityEventDiscoveryReplay {
             discoveredAt: event.timestamp,
             serverCommittedAt: serverCommittedAt,
             inputMethod: inputMethod,
-            location: nil
+            location: LocationData(payload: event.payload)
         )
     }
 
@@ -149,7 +149,7 @@ enum TripActivityEventDiscoveryReplay {
                     foundAt: first.discoveredAt,
                     inputMethod: first.inputMethod,
                     foundBy: first.participantId,
-                    foundAtLocation: nil
+                    foundAtLocation: first.location
                 )
             )
         }

@@ -951,3 +951,6 @@
 "return_streak.reminder.body" = "Encuentra una placa en tu viaje para mantener tu racha.";
 "return_streak.settings.reminder.title" = "Recordatorios de racha";
 "return_streak.settings.reminder.detail" = "Recibe un recordatorio si aún no has encontrado una placa hoy.";
+
+/* GPS Step 5 — where-found map marker snippet */
+"Found on %@" = "Encontrada el %@";
