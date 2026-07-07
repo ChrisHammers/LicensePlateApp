@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import MapKit
 
 struct TripSummaryView: View {
     let summary: TripSummary
@@ -49,7 +50,7 @@ struct TripSummaryView: View {
                         xpRecapSection
                     }
                     if summary.locationMetadata != nil && !summary.locationMetadata!.isEmpty {
-                        mapRecapPlaceholder
+                        routeRecapSection
                     }
                 }
                 .padding()
@@ -493,22 +494,79 @@ struct TripSummaryView: View {
         return parts.joined(separator: ", ")
     }
 
-    private var mapRecapPlaceholder: some View {
-        HStack {
-            Image(systemName: "map.fill")
-                .font(.system(.title2))
-                .foregroundStyle(Color.Theme.primaryBlue.opacity(0.6))
-            Text("Map recap coming soon".localized)
-                .font(.system(.footnote, design: .rounded))
-                .foregroundStyle(Color.Theme.softBrown)
+    /// GPS Step 9 — static route recap: simplified polyline on a map plus distance/duration.
+    private var routeRecapSection: some View {
+        let coordinates = TripRouteSummaryBuilder.coordinates(from: summary.locationMetadata)
+        let statsText = routeStatsText
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Trip route".localized)
+                .font(.system(.headline, design: .rounded))
+                .foregroundStyle(Color.Theme.primaryBlue)
+            if coordinates.count >= 2 {
+                Map(initialPosition: .region(routeRegion(for: coordinates)), interactionModes: []) {
+                    MapPolyline(coordinates: coordinates)
+                        .stroke(Color.Theme.primaryBlue, lineWidth: 4)
+                }
+                .frame(height: 180)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .accessibilityHidden(true)
+            }
+            if let statsText {
+                Text(statsText)
+                    .font(.system(.footnote, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+            }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.Theme.cardBackground)
         )
-        .accessibilityLabel("Map recap coming soon".localized)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(routeAccessibilityLabel)
+    }
+
+    private var routeStatsText: String? {
+        var parts: [String] = []
+        if let meters = TripRouteSummaryBuilder.distanceMeters(from: summary.locationMetadata) {
+            let formatter = MeasurementFormatter()
+            formatter.unitOptions = .naturalScale
+            formatter.numberFormatter.maximumFractionDigits = 1
+            parts.append(formatter.string(from: Measurement(value: meters, unit: UnitLength.meters)))
+        }
+        if let seconds = TripRouteSummaryBuilder.durationSeconds(from: summary.locationMetadata), seconds > 0 {
+            let formatter = DateComponentsFormatter()
+            formatter.allowedUnits = seconds >= 3600 ? [.hour, .minute] : [.minute]
+            formatter.unitsStyle = .abbreviated
+            if let duration = formatter.string(from: seconds) {
+                parts.append(duration)
+            }
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private var routeAccessibilityLabel: String {
+        if let statsText = routeStatsText {
+            return "\("Trip route".localized), \(statsText)"
+        }
+        return "Trip route".localized
+    }
+
+    private func routeRegion(for coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion {
+        let latitudes = coordinates.map(\.latitude)
+        let longitudes = coordinates.map(\.longitude)
+        let minLat = latitudes.min() ?? 0
+        let maxLat = latitudes.max() ?? 0
+        let minLon = longitudes.min() ?? 0
+        let maxLon = longitudes.max() ?? 0
+        return MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2),
+            span: MKCoordinateSpan(
+                latitudeDelta: max((maxLat - minLat) * 1.4, 0.05),
+                longitudeDelta: max((maxLon - minLon) * 1.4, 0.05)
+            )
+        )
     }
 }
 

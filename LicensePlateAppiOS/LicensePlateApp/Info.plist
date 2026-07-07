@@ -67,6 +67,10 @@
 	<string>This app needs access to your microphone to listen for state and province names when using voice input.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>This app uses speech recognition to help you quickly log license plates by saying the state or province name out loud.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>location</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

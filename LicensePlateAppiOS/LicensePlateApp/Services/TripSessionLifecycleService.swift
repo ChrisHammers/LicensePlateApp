@@ -74,6 +74,7 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         let tripStartedEvent = TripActivityEvent(sessionId: sessionId, kind: .tripStarted, actorId: actorId)
         try tripActivityEventRecording.recordForSync(tripStartedEvent)
         AnalyticsService.shared.log(.tripSessionStarted(tripId: sessionId.uuidString, tripActiveGameCount: games.count))
+        TripRouteTrackingService.shared.tripDidStart(sessionId: sessionId)
         Task { @MainActor in
             await ReminderNotificationService.shared.scheduleInactiveActiveTripReminder(sessionId: sessionId, tripName: session.name)
             try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionId)
@@ -98,6 +99,7 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         let tripEndedEvent = TripActivityEvent(sessionId: sessionId, kind: .tripEnded, actorId: endedBy)
         try tripActivityEventRecording.recordForSync(tripEndedEvent)
         AnalyticsService.shared.log(.tripSessionEnded(tripId: sessionId.uuidString))
+        TripRouteTrackingService.shared.tripDidEnd(sessionId: sessionId)
         ReminderNotificationService.shared.cancelReminder(sessionId: sessionId, reason: "trip_ended")
         ReviewPromptService.shared.considerPromptAfterTripCompleted(sessionId: sessionId)
         Task { @MainActor in
@@ -125,6 +127,7 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         for game in games where game.endedAt == nil {
             try gameInstanceLifecycleService.endGame(sessionId: sessionId, gameInstanceId: game.id)
         }
+        TripRouteTrackingService.shared.tripDidEnd(sessionId: sessionId)
         ReminderNotificationService.shared.cancelReminder(sessionId: sessionId, reason: "trip_ended")
         return true
     }
@@ -162,6 +165,7 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         try tripActivityEventRepository.deleteEvents(sessionId: sessionId, gameInstanceId: nil)
         try gameInstanceRepository.deleteForSession(sessionId: sessionId)
         AnalyticsService.shared.log(.tripSessionCancelled(tripId: sessionId.uuidString))
+        TripRouteTrackingService.shared.tripWasCancelled(sessionId: sessionId)
         ReminderNotificationService.shared.cancelReminder(sessionId: sessionId, reason: "trip_cancelled")
     }
 }

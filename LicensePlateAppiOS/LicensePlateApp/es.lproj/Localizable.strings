@@ -957,3 +957,6 @@
 
 /* GPS Step 5.5 — where-found pin finder attribution */
 "Found by %@ on %@" = "Encontrada por %@ el %@";
+
+/* GPS Step 9 — trip recap route section */
+"Trip route" = "Ruta del viaje";

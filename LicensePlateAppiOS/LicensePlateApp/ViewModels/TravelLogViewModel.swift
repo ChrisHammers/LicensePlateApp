@@ -256,6 +256,9 @@ final class TravelLogViewModel: ObservableObject {
             }
             summary.xpRecapLines = XpFeedProjectionBuilder.lines(from: ledgerRows, itemTitle: itemTitle)
         }
+        // GPS Step 9 — attach simplified route polyline + stats when a route was tracked.
+        let routePoints = (try? TripRoutePointRepository.shared.points(tripSessionId: sessionId)) ?? []
+        summary.locationMetadata = TripRouteSummaryBuilder.locationMetadata(from: routePoints)
         return summary
     }
 

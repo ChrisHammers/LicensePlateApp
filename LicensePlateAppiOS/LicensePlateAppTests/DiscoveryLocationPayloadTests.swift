@@ -115,10 +115,33 @@ struct DiscoveryLocationGateTests {
         }
     }
 
+    @Test func warmCacheFiresOnlyWhenSettingOn() {
+        var warmCount = 0
+        let eventRepo = MockTripActivityEventRepository()
+        let viewModelOn = makeViewModel(
+            saveLocationSetting: true, fix: nil, eventRepo: eventRepo,
+            warmLocationFix: { warmCount += 1 }
+        )
+        viewModelOn.warmDiscoveryLocationCacheIfNeeded()
+        #expect(warmCount == 1)
+        _ = viewModelOn.submitDiscovery(regionID: "us-wy", inputMethod: .list)
+        #expect(warmCount == 2)
+
+        var warmCountOff = 0
+        let viewModelOff = makeViewModel(
+            saveLocationSetting: false, fix: nil, eventRepo: MockTripActivityEventRepository(),
+            warmLocationFix: { warmCountOff += 1 }
+        )
+        viewModelOff.warmDiscoveryLocationCacheIfNeeded()
+        _ = viewModelOff.submitDiscovery(regionID: "us-wy", inputMethod: .list)
+        #expect(warmCountOff == 0)
+    }
+
     private func makeViewModel(
         saveLocationSetting: Bool,
         fix: CLLocation?,
-        eventRepo: MockTripActivityEventRepository
+        eventRepo: MockTripActivityEventRepository,
+        warmLocationFix: @escaping @MainActor () -> Void = {}
     ) -> LicensePlateGameViewModel {
         let sessionId = UUID()
         let gameId = UUID()
@@ -159,7 +182,8 @@ struct DiscoveryLocationGateTests {
             ),
             authService: auth,
             locationSettings: StubLocationSettings(saveLocationWhenMarkingPlates: saveLocationSetting),
-            currentLocationFix: { fix }
+            currentLocationFix: { fix },
+            warmLocationFix: warmLocationFix
         )
     }
 

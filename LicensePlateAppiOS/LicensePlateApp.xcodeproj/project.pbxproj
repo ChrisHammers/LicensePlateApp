@@ -48,6 +48,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		76543EFC2FF9430C0032E19B /* I70-East-of-Denver-Drive.gpx */ = {isa = PBXFileReference; lastKnownFileType = text.xml; name = "I70-East-of-Denver-Drive.gpx"; path = "SimulationAssets/I70-East-of-Denver-Drive.gpx"; sourceTree = "<group>"; };
 		765D54122EC391DA00D4FED1 /* LicensePlateApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LicensePlateApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		765D54212EC391DC00D4FED1 /* LicensePlateAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LicensePlateAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		765D542B2EC391DC00D4FED1 /* LicensePlateAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LicensePlateAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -134,6 +135,7 @@
 		765D54092EC391DA00D4FED1 = {
 			isa = PBXGroup;
 			children = (
+				76543EFC2FF9430C0032E19B /* I70-East-of-Denver-Drive.gpx */,
 				76B62DE32F620DD300B34A50 /* LicensePlateApp.xctestplan */,
 				765D54142EC391DA00D4FED1 /* LicensePlateApp */,
 				765D54242EC391DC00D4FED1 /* LicensePlateAppTests */,

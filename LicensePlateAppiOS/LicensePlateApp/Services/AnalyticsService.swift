@@ -198,6 +198,9 @@ class AnalyticsService: AnalyticsLogging {
         case tripSessionCreated(tripId: String, tripStatus: String, tripParticipantCount: Int?, tripActiveGameCount: Int?, tripSource: String?)
         case tripSessionStarted(tripId: String, tripActiveGameCount: Int?)
         case tripSessionEnded(tripId: String)
+        /// GPS Step 6 — route capture lifecycle. Session id only; never coordinates or point counts.
+        case routeTrackingStarted(tripId: String)
+        case routeTrackingStopped(tripId: String)
         /// Step 6.9.3 — Game progress reset (discoveries cleared for one game); not a trip reset.
         case gameInstanceReset(tripSessionId: String, gameInstanceId: String)
         /// One game removed from a multi-game trip (local instance + its events).
@@ -423,6 +426,8 @@ class AnalyticsService: AnalyticsLogging {
             case .tripSessionCreated: return "trip_session_created"
             case .tripSessionStarted: return "trip_session_started"
             case .tripSessionEnded: return "trip_session_ended"
+            case .routeTrackingStarted: return "route_tracking_started"
+            case .routeTrackingStopped: return "route_tracking_stopped"
             case .gameInstanceReset: return "game_instance_reset"
             case .gameInstanceDeleted: return "game_instance_deleted"
             case .tripSessionCancelled: return "trip_session_cancelled"
@@ -726,6 +731,10 @@ class AnalyticsService: AnalyticsLogging {
                 if let c = tripActiveGameCount { p["trip_active_game_count"] = c }
                 return p
             case .tripSessionEnded(let tripId):
+                return ["trip_session_id": tripId]
+            case .routeTrackingStarted(let tripId):
+                return ["trip_session_id": tripId]
+            case .routeTrackingStopped(let tripId):
                 return ["trip_session_id": tripId]
             case .gameInstanceReset(let tripSessionId, let gameInstanceId):
                 return ["trip_session_id": tripSessionId, "game_instance_id": gameInstanceId]

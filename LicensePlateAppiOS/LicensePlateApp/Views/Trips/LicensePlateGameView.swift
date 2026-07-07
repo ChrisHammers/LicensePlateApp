@@ -249,6 +249,9 @@ struct LicensePlateGameView: View {
             if locationManager.authorizationStatus == .notDetermined {
                 locationManager.requestAuthorization()
             }
+            // Warm the location cache so find-time capture has a fresh fix (one-shot; no-op
+            // when save-location is off, updates already run, or the cache is fresh)
+            viewModel.warmDiscoveryLocationCacheIfNeeded()
             // Switch to list tab if the game is not playable and we're on voice tab
             if !viewModel.isGamePlayActive && selectedTab == .voice {
                 selectedTab = .list
@@ -1910,6 +1913,7 @@ private struct FullScreenGoogleMapView: View {
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     @AppStorage("appShowUserAvatarOnMap") private var appShowUserAvatarOnMap = false
     @ObservedObject private var locationSettings = LocationSettingsService.shared
+    @ObservedObject private var routeTracking = TripRouteTrackingService.shared
 
     init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], finderIdentities: [String: UserRepository.UserIdentitySnapshot], cameraPosition: Binding<GMSCameraPosition>, locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
         self.enabledCountries = enabledCountries
@@ -1962,6 +1966,7 @@ private struct FullScreenGoogleMapView: View {
                 foundRegions: foundRegions,
                 finderPinIcons: finderPinIcons,
                 finderDisplayNames: finderDisplayNames,
+                routeCoordinates: routeTracking.routePoints.map(\.coordinate),
                 showUserLocation: showUserLocation,
                 userLocation: locationManager.location?.coordinate,
                 showUserAvatarOnMap: appShowUserAvatarOnMap,
@@ -2341,6 +2346,7 @@ struct FullScreenAppleMapView: View {
     @EnvironmentObject private var authService: FirebaseAuthService
     @AppStorage("appShowUserAvatarOnMap") private var appShowUserAvatarOnMap = false
     @ObservedObject private var locationSettings = LocationSettingsService.shared
+    @ObservedObject private var routeTracking = TripRouteTrackingService.shared
     @State private var mapCameraPosition: MapCameraPosition
 
     private static let foundDateFormatter: DateFormatter = {
@@ -2516,6 +2522,12 @@ struct FullScreenAppleMapView: View {
                     }
                 }
                 
+                // Live route ribbon (GPS Step 6) — parity with GoogleMapView.renderRoutePolyline
+                if routeTracking.routePoints.count >= 2 {
+                    MapPolyline(coordinates: routeTracking.routePoints.map(\.coordinate))
+                        .stroke(Color.Theme.primaryBlue, lineWidth: 4)
+                }
+
                 // Where-found pins at capture locations (parity with GoogleMapView.renderFoundLocationMarkers)
                 ForEach(foundRegions.filter { $0.foundAtLocation != nil }) { foundRegion in
                     if let locationData = foundRegion.foundAtLocation {

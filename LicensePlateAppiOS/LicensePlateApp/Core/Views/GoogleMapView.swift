@@ -18,6 +18,7 @@ struct GoogleMapView: UIViewRepresentable {
     let foundRegions: [FoundRegion] // Full found regions data for markers
     let finderPinIcons: [String: UIImage] // Where-found pin badge per finder user id (prebuilt by caller)
     let finderDisplayNames: [String: String] // Finder display names for where-found snippets
+    let routeCoordinates: [CLLocationCoordinate2D] // Live route ribbon points (GPS Step 6); empty hides the ribbon
     let showUserLocation: Bool
     let userLocation: CLLocationCoordinate2D? // User's current location coordinate
     let showUserAvatarOnMap: Bool
@@ -39,6 +40,7 @@ struct GoogleMapView: UIViewRepresentable {
         foundRegions: [FoundRegion] = [],
         finderPinIcons: [String: UIImage] = [:],
         finderDisplayNames: [String: String] = [:],
+        routeCoordinates: [CLLocationCoordinate2D] = [],
         showUserLocation: Bool = false,
         userLocation: CLLocationCoordinate2D? = nil,
         showUserAvatarOnMap: Bool = false,
@@ -53,6 +55,7 @@ struct GoogleMapView: UIViewRepresentable {
         self.foundRegions = foundRegions
         self.finderPinIcons = finderPinIcons
         self.finderDisplayNames = finderDisplayNames
+        self.routeCoordinates = routeCoordinates
         self.showUserLocation = showUserLocation
         self.userLocation = userLocation
         self.showUserAvatarOnMap = showUserAvatarOnMap
@@ -73,9 +76,11 @@ struct GoogleMapView: UIViewRepresentable {
         UserDefaults.standard.bool(forKey: "appShowRegionBorders")
     }
     
-    /// Check if markers should be shown based on user preference
+    /// Check if markers should be shown based on user preference.
+    /// Unset must read as true to match AppPreferencesView's @AppStorage default —
+    /// `bool(forKey:)` alone returns false on fresh installs and hides all markers.
     private var shouldShowMarkers: Bool {
-        UserDefaults.standard.bool(forKey: "appShowMapMarkers")
+        (UserDefaults.standard.object(forKey: "appShowMapMarkers") as? Bool) ?? true
     }
     
     func makeUIView(context: Context) -> GMSMapView {
@@ -113,6 +118,8 @@ struct GoogleMapView: UIViewRepresentable {
                 regions: regions
             )
         }
+
+        context.coordinator.renderRoutePolyline(on: mapView, coordinates: routeCoordinates)
 
         // Render green circle first so avatar marker is drawn on top (avatar visible)
         if showUserLocation, let location = userLocation {
@@ -197,6 +204,8 @@ struct GoogleMapView: UIViewRepresentable {
             context.coordinator.clearAllMarkers(on: mapView)
             context.coordinator.clearFoundLocationMarkers(on: mapView)
         }
+
+        context.coordinator.renderRoutePolyline(on: mapView, coordinates: routeCoordinates)
         
         // Update green first, then avatar so avatar is on top
         if showUserLocation, let location = userLocation {
@@ -251,6 +260,7 @@ struct GoogleMapView: UIViewRepresentable {
         private var countryPolygons: [String: GMSPolygon] = [:] // Separate storage for country boundaries (map context only)
         private var markers: [String: GMSMarker] = [:] // Storage for region markers
         private var foundLocationMarkers: [String: GMSMarker] = [:] // Pins at where-found capture points (separate from region-center markers)
+        private var routePolyline: GMSPolyline? // Live route ribbon (GPS Step 6)
         private var userLocationMarker: GMSMarker? // Custom green user location marker
         private var userAvatarMarker: GMSMarker? // Optional avatar at user location
         private var cachedPaths: [String: [GMSMutablePath]] = [:] // Array of paths per region (for MultiPolygon support)
@@ -870,6 +880,28 @@ struct GoogleMapView: UIViewRepresentable {
                 marker.map = nil
             }
             foundLocationMarkers.removeAll()
+        }
+
+        /// Draw/refresh the live route ribbon; fewer than 2 points removes it.
+        func renderRoutePolyline(on mapView: GMSMapView, coordinates: [CLLocationCoordinate2D]) {
+            guard coordinates.count >= 2 else {
+                routePolyline?.map = nil
+                routePolyline = nil
+                return
+            }
+            let path = GMSMutablePath()
+            for coordinate in coordinates {
+                path.add(coordinate)
+            }
+            if let routePolyline {
+                routePolyline.path = path
+            } else {
+                let polyline = GMSPolyline(path: path)
+                polyline.strokeColor = UIColor(Color.Theme.primaryBlue)
+                polyline.strokeWidth = 4
+                polyline.map = mapView
+                routePolyline = polyline
+            }
         }
         
         /// Render markers at region centers showing found/unfound status (WHAT regions were found)

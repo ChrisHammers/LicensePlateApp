@@ -152,6 +152,8 @@ final class LicensePlateGameViewModel: ObservableObject {
     private let locationSettings: LocationSettingsProviding
     /// Cached-fix source; never triggers GPS acquisition. Injectable for tests.
     private let currentLocationFix: @MainActor () -> CLLocation?
+    /// One-shot cache warmer for when no map or route tracking is feeding the cache. Injectable for tests.
+    private let warmLocationFix: @MainActor () -> Void
 
     init(
         session: TripSession,
@@ -168,7 +170,10 @@ final class LicensePlateGameViewModel: ObservableObject {
         xpLedger: XpLedgerRepositoryProtocol = XpLedgerRepository.shared,
         discoveryResolutionRepository: DiscoveryResolutionRepositoryProtocol = DiscoveryResolutionRepository.shared,
         locationSettings: LocationSettingsProviding = LocationSettingsService.shared,
-        currentLocationFix: @escaping @MainActor () -> CLLocation? = { LocationManager.shared.location }
+        currentLocationFix: @escaping @MainActor () -> CLLocation? = { LocationManager.shared.location },
+        warmLocationFix: @escaping @MainActor () -> Void = {
+            LocationManager.shared.requestOneShotLocationIfStale(maxAge: LicensePlateGameViewModel.maxLocationFixAgeForDiscovery)
+        }
     ) {
         self.currentSession = session
         self.sessionId = session.id
@@ -186,8 +191,13 @@ final class LicensePlateGameViewModel: ObservableObject {
         self.authService = authService
         self.locationSettings = locationSettings
         self.currentLocationFix = currentLocationFix
+        self.warmLocationFix = warmLocationFix
         self.foundRegions = (try? tripActivityEventRepository.foundRegions(sessionId: session.id, gameInstanceId: game.id)) ?? []
         refreshCompetitiveProjections()
+
+        // GPS Step 6 — after app relaunch the lifecycle start hook never fired in this
+        // process; resume route capture for an already-active trip.
+        TripRouteTrackingService.shared.resumeIfActive(session: session)
 
         let selfUid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
         UserProfileListenCoordinator.shared.setPinnedUsers(
@@ -849,6 +859,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         if let locationFields = locationPayloadFieldsForDiscovery() {
             payload.merge(locationFields) { _, new in new }
         }
+        warmDiscoveryLocationCacheIfNeeded()
         let event = TripActivityEvent(
             id: discoveryEventId,
             sessionId: sessionId,
@@ -895,6 +906,14 @@ final class LicensePlateGameViewModel: ObservableObject {
             AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_discovery", error: error.localizedDescription))
             return .failure(error)
         }
+    }
+
+    /// One-shot cache warm so find-time capture has a fresh fix even without a map or
+    /// route tracking running. Fire-and-forget; only when the save-location setting is on.
+    /// Called on game-screen appear and at each find (heals the cache for the next find).
+    func warmDiscoveryLocationCacheIfNeeded() {
+        guard locationSettings.saveLocationWhenMarkingPlates else { return }
+        warmLocationFix()
     }
 
     /// Location fields for a `region_found` payload, or nil when the setting is off,
