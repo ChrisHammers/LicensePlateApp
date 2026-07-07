@@ -149,6 +149,10 @@ final class LicensePlateGameViewModel: ObservableObject {
 
     /// Location payload gating (GPS Step 4): cached fixes older than this are not attached to finds.
     private static let maxLocationFixAgeForDiscovery: TimeInterval = 60
+    /// One-shot warm threshold and periodic-warm cadence. Must stay comfortably below
+    /// `maxLocationFixAgeForDiscovery` (minus one-shot latency) so the periodic warm keeps
+    /// the cache inside the capture window at all times.
+    static let locationWarmInterval: TimeInterval = 45
     private let locationSettings: LocationSettingsProviding
     /// Cached-fix source; never triggers GPS acquisition. Injectable for tests.
     private let currentLocationFix: @MainActor () -> CLLocation?
@@ -172,7 +176,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         locationSettings: LocationSettingsProviding = LocationSettingsService.shared,
         currentLocationFix: @escaping @MainActor () -> CLLocation? = { LocationManager.shared.location },
         warmLocationFix: @escaping @MainActor () -> Void = {
-            LocationManager.shared.requestOneShotLocationIfStale(maxAge: LicensePlateGameViewModel.maxLocationFixAgeForDiscovery)
+            LocationManager.shared.requestOneShotLocationIfStale(maxAge: LicensePlateGameViewModel.locationWarmInterval)
         }
     ) {
         self.currentSession = session

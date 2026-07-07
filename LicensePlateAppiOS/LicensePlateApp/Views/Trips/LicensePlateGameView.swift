@@ -249,9 +249,6 @@ struct LicensePlateGameView: View {
             if locationManager.authorizationStatus == .notDetermined {
                 locationManager.requestAuthorization()
             }
-            // Warm the location cache so find-time capture has a fresh fix (one-shot; no-op
-            // when save-location is off, updates already run, or the cache is fresh)
-            viewModel.warmDiscoveryLocationCacheIfNeeded()
             // Switch to list tab if the game is not playable and we're on voice tab
             if !viewModel.isGamePlayActive && selectedTab == .voice {
                 selectedTab = .list
@@ -286,6 +283,16 @@ struct LicensePlateGameView: View {
             }
             
             cameraPosition = GMSCameraPosition.from(coordinate: center, zoom: zoom)
+        }
+        .task {
+            // Periodic location-cache warm while this screen is front-most, so find-time
+            // capture stays inside the freshness window even with route tracking off.
+            // Each tick is a no-op unless save-location is on, nothing else feeds the
+            // cache, and the fix has aged out. Cancels automatically on disappear.
+            while !Task.isCancelled {
+                viewModel.warmDiscoveryLocationCacheIfNeeded()
+                try? await Task.sleep(for: .seconds(LicensePlateGameViewModel.locationWarmInterval))
+            }
         }
         .onChange(of: viewModel.currentSession.startedAt) { _, _ in
             if !viewModel.isGamePlayActive && selectedTab == .voice {
