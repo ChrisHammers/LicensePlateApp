@@ -12,4 +12,6 @@ enum XpLedgerMetadataKey {
     static let originalDiscoveryEventId = "original_discovery_event_id"
     /// `DiscoveryResolution.resolutionId` applied by a compensating row (idempotent consume).
     static let resolutionId = "xp_resolution_id"
+    /// Current streak day count when granting return-streak XP.
+    static let returnStreakDayCount = "return_streak_day_count"
 }

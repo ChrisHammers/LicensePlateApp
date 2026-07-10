@@ -775,6 +775,23 @@
 "xp.toast.grant.legacy_balance.title" = "XP sincronizada";
 "xp.toast.grant.generic.title" = "XP ganada";
 "xp.toast.grant.xp_format" = "+%d XP";
+"xp.toast.total_xp_format" = "+%d XP";
+"xp.toast.group.discovery.single" = "Descubriste %@";
+"xp.toast.group.discovery.double" = "Descubriste %@ y %@";
+"xp.toast.group.discovery.multi" = "Descubriste %@ y %d más";
+"xp.toast.group.discovery.detail" = "Resolución pendiente";
+"xp.toast.group.achievement.single" = "%d logro desbloqueado";
+"xp.toast.group.achievement.multi" = "%d logros desbloqueados";
+"xp.toast.group.return_streak.single" = "Racha de %d día";
+"xp.toast.group.return_streak.multi" = "Racha de %d días";
+"xp.toast.group.competitive_win.single" = "%d victoria competitiva";
+"xp.toast.group.competitive_win.multi" = "%d victorias competitivas";
+"xp.toast.group.other.single" = "XP ganada";
+"xp.toast.group.other.multi" = "%d fuentes de XP";
+"xp.toast.rank_band.max_rank" = "Rango máximo alcanzado";
+"xp.toast.rank_band.a11y" = "Progreso de rango";
+"xp.toast.rank_band.progress.a11y" = "Barra de progreso de rango";
+"xp.toast.rank_band.progress.a11y.value" = "%d por ciento hacia el siguiente rango, más %d por ciento de esta ganancia";
 "xp.toast.a11y.label" = "XP ganada: %@";
 "xp.toast.a11y.hint" = "Se cierra sola. Toca dos veces para cerrar ahora.";
 

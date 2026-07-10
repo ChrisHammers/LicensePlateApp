@@ -23,7 +23,38 @@ enum ProgressionCatalogValidator {
         }
         if let reason = validateAchievements(catalog.achievements) { return .invalid(reason: reason) }
         if let reason = validateRankLadder(catalog.rankLadder) { return .invalid(reason: reason) }
+        if let reason = validateXpToast(catalog.xpToast) { return .invalid(reason: reason) }
         return .valid
+    }
+
+    static func validateXpToastOverride(_ xpToast: ProgressionCatalogXpToast) -> ProgressionCatalogValidationResult {
+        if let reason = validateXpToast(xpToast) { return .invalid(reason: reason) }
+        return .valid
+    }
+
+    private static func validateXpToast(_ xpToast: ProgressionCatalogXpToast) -> String? {
+        if xpToast.burstDurationSeconds < 1 || xpToast.burstDurationSeconds > 30 {
+            return "xp_toast_burst_duration_out_of_range"
+        }
+        if xpToast.groups.isEmpty {
+            return "xp_toast_groups_empty"
+        }
+        var seenIds = Set<String>()
+        for group in xpToast.groups {
+            if group.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "xp_toast_group_id_empty"
+            }
+            if !seenIds.insert(group.id).inserted {
+                return "xp_toast_group_duplicate_id"
+            }
+            if group.titleKeySingle.isEmpty || group.titleKeyMulti.isEmpty {
+                return "xp_toast_group_title_key_empty"
+            }
+            if let xpReward = group.xpReward, xpReward < 0 || xpReward > 10_000 {
+                return "xp_toast_group_xp_reward_out_of_range"
+            }
+        }
+        return nil
     }
 
     static func validatePresentationOverride(_ presentation: ProgressionCatalogPresentation) -> ProgressionCatalogValidationResult {
@@ -135,9 +166,26 @@ enum ProgressionCatalogLoader {
         return catalog
     }
 
-    /// Merges optional presentation-only Remote Config JSON into bundled catalog.
+    /// Merges optional presentation-only and xpToast Remote Config JSON into bundled catalog.
     /// Achievements and rank ladder always come from `bundled`; invalid override JSON is ignored.
     static func merge(
+        bundled: ProgressionCatalog,
+        presentationOverrideJSON: String?,
+        xpToastOverrideJSON: String? = nil
+    ) -> ProgressionCatalog {
+        var merged = mergePresentation(bundled: bundled, presentationOverrideJSON: presentationOverrideJSON)
+        merged = mergeXpToast(bundled: merged, xpToastOverrideJSON: xpToastOverrideJSON)
+        return merged
+    }
+
+    static func merge(
+        bundled: ProgressionCatalog,
+        presentationOverrideJSON: String?
+    ) -> ProgressionCatalog {
+        merge(bundled: bundled, presentationOverrideJSON: presentationOverrideJSON, xpToastOverrideJSON: nil)
+    }
+
+    private static func mergePresentation(
         bundled: ProgressionCatalog,
         presentationOverrideJSON: String?
     ) -> ProgressionCatalog {
@@ -152,6 +200,24 @@ enum ProgressionCatalogLoader {
 
         var merged = bundled
         merged.presentation = override
+        return merged
+    }
+
+    private static func mergeXpToast(
+        bundled: ProgressionCatalog,
+        xpToastOverrideJSON: String?
+    ) -> ProgressionCatalog {
+        guard let xpToastOverrideJSON,
+              !xpToastOverrideJSON.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let data = xpToastOverrideJSON.data(using: .utf8),
+              let override = try? JSONDecoder().decode(ProgressionCatalogXpToast.self, from: data),
+              case .valid = ProgressionCatalogValidator.validateXpToastOverride(override)
+        else {
+            return bundled
+        }
+
+        var merged = bundled
+        merged.xpToast = override
         return merged
     }
 }

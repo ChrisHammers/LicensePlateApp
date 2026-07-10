@@ -191,7 +191,7 @@ class AnalyticsService: AnalyticsLogging {
         case achievementUnlockSyncFailed(candidateCount: Int, errorSummary: String)
         case xpGrantAwarded(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
         case xpGrantSkippedAlreadyGranted(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
-        case xpGainToastPresented(lineCount: Int, totalXp: Int, coalesced: Bool, sourceMix: String)
+        case xpGainToastPresented(lineCount: Int, totalXp: Int, coalesced: Bool, sourceMix: String, groupIds: String)
         case xpGainToastDismissed(reason: String)
 
         // Lifecycle (Step 10.5)
@@ -709,12 +709,13 @@ class AnalyticsService: AnalyticsLogging {
                     "target_id": targetId,
                     "participant_id": participantId
                 ]
-            case .xpGainToastPresented(let lineCount, let totalXp, let coalesced, let sourceMix):
+            case .xpGainToastPresented(let lineCount, let totalXp, let coalesced, let sourceMix, let groupIds):
                 return [
                     "line_count": lineCount,
                     "total_xp": totalXp,
                     "coalesced": coalesced,
-                    "source_mix": sourceMix
+                    "source_mix": sourceMix,
+                    "group_ids": groupIds
                 ]
             case .xpGainToastDismissed(let reason):
                 return ["reason": reason]

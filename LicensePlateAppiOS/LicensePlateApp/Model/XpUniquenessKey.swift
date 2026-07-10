@@ -14,6 +14,7 @@ enum XpLedgerCategory: String, Codable, CaseIterable, Sendable {
     case tripCompletion = "trip_completion"
     case milestoneUnlock = "milestone_unlock"
     case reconciliation = "reconciliation"
+    case returnStreakDaily = "return_streak_daily"
 }
 
 struct XpUniquenessKey: Hashable, Equatable, Sendable, Codable {

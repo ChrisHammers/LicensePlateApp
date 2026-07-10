@@ -775,6 +775,23 @@
 "xp.toast.grant.legacy_balance.title" = "XP synchronisée";
 "xp.toast.grant.generic.title" = "XP gagnée";
 "xp.toast.grant.xp_format" = "+%d XP";
+"xp.toast.total_xp_format" = "+%d XP";
+"xp.toast.group.discovery.single" = "Découverte : %@";
+"xp.toast.group.discovery.double" = "Découverte : %@ et %@";
+"xp.toast.group.discovery.multi" = "Découverte : %@ et %d autres";
+"xp.toast.group.discovery.detail" = "Résolution en attente";
+"xp.toast.group.achievement.single" = "%d succès débloqué";
+"xp.toast.group.achievement.multi" = "%d succès débloqués";
+"xp.toast.group.return_streak.single" = "Série de %d jour";
+"xp.toast.group.return_streak.multi" = "Série de %d jours";
+"xp.toast.group.competitive_win.single" = "%d victoire compétitive";
+"xp.toast.group.competitive_win.multi" = "%d victoires compétitives";
+"xp.toast.group.other.single" = "XP gagnée";
+"xp.toast.group.other.multi" = "%d sources d'XP";
+"xp.toast.rank_band.max_rank" = "Rang maximum atteint";
+"xp.toast.rank_band.a11y" = "Progression de rang";
+"xp.toast.rank_band.progress.a11y" = "Barre de progression de rang";
+"xp.toast.rank_band.progress.a11y.value" = "%d pour cent vers le prochain rang, plus %d pour cent de ce gain";
 "xp.toast.a11y.label" = "XP gagnée : %@";
 "xp.toast.a11y.hint" = "Se ferme automatiquement. Touchez deux fois pour fermer maintenant.";
 

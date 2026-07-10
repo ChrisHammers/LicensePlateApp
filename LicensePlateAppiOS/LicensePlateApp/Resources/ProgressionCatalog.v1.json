@@ -300,5 +300,70 @@
   "presentation": {
     "achievementsEnabled": true,
     "rankProgressionEnabled": true
+  },
+  "xpToast": {
+    "burstDurationSeconds": 4,
+    "groups": [
+      {
+        "id": "discovery",
+        "displayOrder": 10,
+        "titleKeySingle": "xp.toast.group.discovery.single",
+        "titleKeyMulti": "xp.toast.group.discovery.multi",
+        "detailKey": "xp.toast.group.discovery.detail",
+        "matchers": {
+          "ledgerGrantKinds": [
+            "provisional_discovery_xp",
+            "final_discovery_award",
+            "reconciliation_adjustment"
+          ],
+          "ledgerReasonCodes": [
+            "solo_new_discovery",
+            "competitive_first_finder",
+            "competitive_late_finder",
+            "collaborative_shared_finder",
+            "discovery_claim_pending_resolution"
+          ]
+        }
+      },
+      {
+        "id": "achievement",
+        "displayOrder": 20,
+        "titleKeySingle": "xp.toast.group.achievement.single",
+        "titleKeyMulti": "xp.toast.group.achievement.multi",
+        "matchers": {
+          "ledgerGrantKinds": ["milestone_unlock"],
+          "ledgerReasonCodes": ["milestone_unlock"],
+          "grantReasons": ["achievement_unlock"]
+        }
+      },
+      {
+        "id": "return_streak",
+        "displayOrder": 30,
+        "titleKeySingle": "xp.toast.group.return_streak.single",
+        "titleKeyMulti": "xp.toast.group.return_streak.multi",
+        "matchers": {
+          "ledgerGrantKinds": ["milestone_unlock"],
+          "ledgerReasonCodes": ["return_streak_daily"],
+          "clientEventKinds": ["return_streak"]
+        },
+        "xpReward": 5
+      },
+      {
+        "id": "competitive_win",
+        "displayOrder": 40,
+        "titleKeySingle": "xp.toast.group.competitive_win.single",
+        "titleKeyMulti": "xp.toast.group.competitive_win.multi",
+        "matchers": {
+          "grantReasons": ["competitive_first_place_finish"]
+        }
+      },
+      {
+        "id": "other",
+        "displayOrder": 999,
+        "titleKeySingle": "xp.toast.group.other.single",
+        "titleKeyMulti": "xp.toast.group.other.multi",
+        "matchers": {}
+      }
+    ]
   }
 }

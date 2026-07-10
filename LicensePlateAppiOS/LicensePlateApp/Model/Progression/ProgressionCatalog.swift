@@ -15,8 +15,20 @@ struct ProgressionCatalog: Codable, Equatable, Sendable {
     var achievements: [ProgressionCatalogAchievement]
     var rankLadder: ProgressionCatalogRankLadder
     var presentation: ProgressionCatalogPresentation
+    var xpToast: ProgressionCatalogXpToast
 
     static let supportedSchemaVersions: Set<Int> = [1]
+
+    var sortedXpToastGroups: [ProgressionCatalogXpToastGroup] {
+        xpToast.groups.sorted {
+            if $0.displayOrder != $1.displayOrder { return $0.displayOrder < $1.displayOrder }
+            return $0.id < $1.id
+        }
+    }
+
+    func xpToastGroup(id: String) -> ProgressionCatalogXpToastGroup? {
+        xpToast.groups.first { $0.id == id }
+    }
 
     /// Achievements shown in list UI (excludes `hidden`).
     var visibleAchievements: [ProgressionCatalogAchievement] {
@@ -109,6 +121,30 @@ struct ProgressionCatalogRankLadder: Codable, Equatable, Sendable {
 struct ProgressionCatalogPresentation: Codable, Equatable, Sendable {
     var achievementsEnabled: Bool
     var rankProgressionEnabled: Bool
+}
+
+// MARK: - XP toast grouping (Remote Config override supported)
+
+struct ProgressionCatalogXpToast: Codable, Equatable, Sendable {
+    var burstDurationSeconds: Int
+    var groups: [ProgressionCatalogXpToastGroup]
+}
+
+struct ProgressionCatalogXpToastGroup: Codable, Equatable, Sendable, Identifiable {
+    var id: String
+    var displayOrder: Int
+    var titleKeySingle: String
+    var titleKeyMulti: String
+    var detailKey: String?
+    var matchers: ProgressionCatalogXpToastMatchers
+    var xpReward: Int?
+}
+
+struct ProgressionCatalogXpToastMatchers: Codable, Equatable, Sendable {
+    var ledgerGrantKinds: [String]?
+    var ledgerReasonCodes: [String]?
+    var grantReasons: [String]?
+    var clientEventKinds: [String]?
 }
 
 // MARK: - Defaults
@@ -416,7 +452,94 @@ extension ProgressionCatalog {
         presentation: ProgressionCatalogPresentation(
             achievementsEnabled: true,
             rankProgressionEnabled: true
-        )
+        ),
+        xpToast: ProgressionCatalog.bundledDefaultXpToast
+    )
+
+    static let bundledDefaultXpToast = ProgressionCatalogXpToast(
+        burstDurationSeconds: 4,
+        groups: [
+            ProgressionCatalogXpToastGroup(
+                id: "discovery",
+                displayOrder: 10,
+                titleKeySingle: "xp.toast.group.discovery.single",
+                titleKeyMulti: "xp.toast.group.discovery.multi",
+                detailKey: "xp.toast.group.discovery.detail",
+                matchers: ProgressionCatalogXpToastMatchers(
+                    ledgerGrantKinds: [
+                        XpGrantKind.provisionalDiscoveryXp.rawValue,
+                        XpGrantKind.finalDiscoveryAward.rawValue,
+                        XpGrantKind.reconciliationAdjustment.rawValue,
+                    ],
+                    ledgerReasonCodes: [
+                        XpReasonCode.soloNewDiscovery.rawValue,
+                        XpReasonCode.competitiveFirstFinder.rawValue,
+                        XpReasonCode.competitiveLateFinder.rawValue,
+                        XpReasonCode.collaborativeSharedFinder.rawValue,
+                        XpReasonCode.discoveryClaimPendingResolution.rawValue,
+                    ],
+                    grantReasons: nil,
+                    clientEventKinds: nil
+                ),
+                xpReward: nil
+            ),
+            ProgressionCatalogXpToastGroup(
+                id: "achievement",
+                displayOrder: 20,
+                titleKeySingle: "xp.toast.group.achievement.single",
+                titleKeyMulti: "xp.toast.group.achievement.multi",
+                detailKey: nil,
+                matchers: ProgressionCatalogXpToastMatchers(
+                    ledgerGrantKinds: [XpGrantKind.milestoneUnlock.rawValue],
+                    ledgerReasonCodes: [XpReasonCode.milestoneUnlock.rawValue],
+                    grantReasons: [UserXpGrantReason.achievementUnlock.rawValue],
+                    clientEventKinds: nil
+                ),
+                xpReward: nil
+            ),
+            ProgressionCatalogXpToastGroup(
+                id: "return_streak",
+                displayOrder: 30,
+                titleKeySingle: "xp.toast.group.return_streak.single",
+                titleKeyMulti: "xp.toast.group.return_streak.multi",
+                detailKey: nil,
+                matchers: ProgressionCatalogXpToastMatchers(
+                    ledgerGrantKinds: [XpGrantKind.milestoneUnlock.rawValue],
+                    ledgerReasonCodes: [XpReasonCode.returnStreakDaily.rawValue],
+                    grantReasons: nil,
+                    clientEventKinds: ["return_streak"]
+                ),
+                xpReward: 5
+            ),
+            ProgressionCatalogXpToastGroup(
+                id: "competitive_win",
+                displayOrder: 40,
+                titleKeySingle: "xp.toast.group.competitive_win.single",
+                titleKeyMulti: "xp.toast.group.competitive_win.multi",
+                detailKey: nil,
+                matchers: ProgressionCatalogXpToastMatchers(
+                    ledgerGrantKinds: nil,
+                    ledgerReasonCodes: nil,
+                    grantReasons: [UserXpGrantReason.competitiveFirstPlaceFinish.rawValue],
+                    clientEventKinds: nil
+                ),
+                xpReward: nil
+            ),
+            ProgressionCatalogXpToastGroup(
+                id: "other",
+                displayOrder: 999,
+                titleKeySingle: "xp.toast.group.other.single",
+                titleKeyMulti: "xp.toast.group.other.multi",
+                detailKey: nil,
+                matchers: ProgressionCatalogXpToastMatchers(
+                    ledgerGrantKinds: nil,
+                    ledgerReasonCodes: nil,
+                    grantReasons: nil,
+                    clientEventKinds: nil
+                ),
+                xpReward: nil
+            ),
+        ]
     )
 
     /// Deterministic fixture for unit tests (matches bundled default).

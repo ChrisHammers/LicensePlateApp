@@ -44,6 +44,8 @@ final class ReturnStreakService: ObservableObject {
     private let defaults: UserDefaults
     private let calendar: Calendar
     private let now: () -> Date
+    private let xpLedger: XpLedgerRepositoryProtocol
+    private let catalogProvider: ProgressionCatalogProviding
 
     private(set) var activeUserId: String?
     private(set) var lastRecordOutcome: ReturnStreakRecordOutcome?
@@ -52,12 +54,16 @@ final class ReturnStreakService: ObservableObject {
         remoteConfig: RemoteConfigValueProviding,
         defaults: UserDefaults = .standard,
         calendar: Calendar = .current,
-        now: @escaping () -> Date = Date.init
+        now: @escaping () -> Date = Date.init,
+        xpLedger: XpLedgerRepositoryProtocol = XpLedgerRepository.shared,
+        catalogProvider: ProgressionCatalogProviding = ProgressionCatalogProvider.shared
     ) {
         self.remoteConfig = remoteConfig
         self.defaults = defaults
         self.calendar = calendar
         self.now = now
+        self.xpLedger = xpLedger
+        self.catalogProvider = catalogProvider
     }
 
     func setActiveUserId(_ userId: String?) {
@@ -159,6 +165,7 @@ final class ReturnStreakService: ObservableObject {
 
         lastRecordOutcome = outcome
         objectWillChange.send()
+        grantStreakXpIfNeeded(userId: userId, currentStreak: currentStreak(from: outcome), qualifyingDay: today)
         Task {
             await ReturnStreakReminderService.shared.refreshScheduleIfNeeded(userId: userId)
         }
@@ -186,6 +193,61 @@ final class ReturnStreakService: ObservableObject {
 
     private func lastDayKey(userId: String) -> String {
         "returnStreak.\(userId).lastQualifyingDay"
+    }
+
+    private func grantStreakXpIfNeeded(userId: String, currentStreak: Int, qualifyingDay: Date) {
+        guard currentStreak > 0 else { return }
+        guard let group = catalogProvider.current.xpToastGroup(id: "return_streak"),
+              let xpReward = group.xpReward,
+              xpReward > 0 else { return }
+
+        let dayKey = calendarDayKey(for: qualifyingDay)
+        let uniquenessKey = XpLedgerKeyBuilder.uniquenessKey(
+            userId: userId,
+            sessionId: XpLedgerGlobalScope.sessionId,
+            gameInstanceId: XpLedgerGlobalScope.gameInstanceId,
+            itemId: dayKey,
+            xpCategory: .returnStreakDaily
+        ).storageString
+
+        if let existing = try? xpLedger.ledgerEvents(forUniquenessKey: uniquenessKey), !existing.isEmpty {
+            return
+        }
+
+        let event = XpLedgerEvent(
+            userId: userId,
+            sessionId: XpLedgerGlobalScope.sessionId,
+            gameInstanceId: XpLedgerGlobalScope.gameInstanceId,
+            sourceEventId: "return_streak|\(dayKey)",
+            sourceEventType: "return_streak",
+            itemId: dayKey,
+            grantKind: .milestoneUnlock,
+            status: .final,
+            xpDelta: xpReward,
+            reasonCode: .returnStreakDaily,
+            xpUniquenessKey: uniquenessKey,
+            metadata: [XpLedgerMetadataKey.returnStreakDayCount: "\(currentStreak)"]
+        )
+        try? xpLedger.append(event)
+    }
+
+    private func currentStreak(from outcome: ReturnStreakRecordOutcome) -> Int {
+        switch outcome {
+        case .started(let currentStreak), .continued(_, let currentStreak):
+            return currentStreak
+        case .brokenThenStarted:
+            return 1
+        case .disabled, .noOp:
+            return 0
+        }
+    }
+
+    private func calendarDayKey(for day: Date) -> String {
+        let components = calendar.dateComponents([.year, .month, .day], from: day)
+        let year = components.year ?? 0
+        let month = components.month ?? 0
+        let dayOfMonth = components.day ?? 0
+        return String(format: "%04d-%02d-%02d", year, month, dayOfMonth)
     }
 
     private func migrateLegacyDeviceStateIfNeeded(for userId: String) {

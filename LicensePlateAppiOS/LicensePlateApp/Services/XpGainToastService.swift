@@ -2,17 +2,11 @@
 //  XpGainToastService.swift
 //  LicensePlateApp
 //
-//  Observes local XP ledger and remote xp_grants; presents coalesced auto-dismissing toasts.
+//  Observes local XP ledger and remote xp_grants; presents aggregated auto-dismissing toasts.
 //
 
 import Combine
 import Foundation
-
-struct XpGainToastPresentation: Equatable {
-    var lines: [XpGainToastLine]
-    var expiresAt: Date
-    var dismissDuration: TimeInterval
-}
 
 @MainActor
 protocol XpGainToastRemoteReading: AnyObject {
@@ -27,28 +21,31 @@ final class XpGainToastService: ObservableObject {
 
     static let shared = XpGainToastService()
 
-    static let defaultDismissDuration: TimeInterval = 4.0
-
     @Published private(set) var presentation: XpGainToastPresentation?
 
     private let xpLedger: XpLedgerRepositoryProtocol
     private let remoteReader: XpGainToastRemoteReading
+    private let catalogProvider: ProgressionCatalogProviding
     private var cancellables = Set<AnyCancellable>()
     private var refreshWorkItem: DispatchWorkItem?
     private var dismissTask: Task<Void, Never>?
 
     private var activeUserId: String?
     private var acknowledgedIds = Set<String>()
+    private var burstEvents: [XpGainToastIngestEvent] = []
+    private var rankProgressBaselineXp: Int?
     private var hasBaseline = false
     private var timerGeneration = 0
 
     init(
         xpLedger: XpLedgerRepositoryProtocol = XpLedgerRepository.shared,
         remoteReader: XpGainToastRemoteReading = XpGrantRemoteRepository.shared,
+        catalogProvider: ProgressionCatalogProviding = ProgressionCatalogProvider.shared,
         wiresLiveUpdates: Bool = true
     ) {
         self.xpLedger = xpLedger
         self.remoteReader = remoteReader
+        self.catalogProvider = catalogProvider
 
         guard wiresLiveUpdates else { return }
 
@@ -74,6 +71,8 @@ final class XpGainToastService: ObservableObject {
         presentation = nil
         timerGeneration += 1
         acknowledgedIds.removeAll()
+        burstEvents.removeAll()
+        rankProgressBaselineXp = nil
         hasBaseline = false
         activeUserId = userId?.isEmpty == false ? userId : nil
         guard activeUserId != nil else { return }
@@ -89,6 +88,8 @@ final class XpGainToastService: ObservableObject {
         timerGeneration += 1
         activeUserId = nil
         acknowledgedIds.removeAll()
+        burstEvents.removeAll()
+        rankProgressBaselineXp = nil
         hasBaseline = false
     }
 
@@ -98,6 +99,8 @@ final class XpGainToastService: ObservableObject {
         dismissTask?.cancel()
         dismissTask = nil
         presentation = nil
+        burstEvents.removeAll()
+        rankProgressBaselineXp = nil
         AnalyticsService.shared.log(.xpGainToastDismissed(reason: "manual"))
     }
 
@@ -119,6 +122,7 @@ final class XpGainToastService: ObservableObject {
         guard let userId = activeUserId, !userId.isEmpty else { return }
         guard remoteReader.hasReceivedInitialSnapshot else { return }
 
+        let catalog = catalogProvider.current
         let ledgerRows = (try? xpLedger.ledgerEvents(userId: userId)) ?? []
         let grants = remoteReader.grants
 
@@ -127,29 +131,29 @@ final class XpGainToastService: ObservableObject {
             return
         }
 
-        var newLines: [XpGainToastLine] = []
+        var newEvents: [XpGainToastIngestEvent] = []
         var sourceMix = Set<String>()
 
         for row in ledgerRows {
             let key = "ledger|\(row.id)"
             guard !acknowledgedIds.contains(key) else { continue }
-            guard let line = XpGainToastLineBuilder.line(from: row) else { continue }
+            guard let event = XpGainToastSourceMapper.ingestEvent(from: row, catalog: catalog) else { continue }
             acknowledgedIds.insert(key)
-            newLines.append(line)
+            newEvents.append(event)
             sourceMix.insert("ledger")
         }
 
         for grant in grants {
             let key = "grant|\(grant.grantId)"
             guard !acknowledgedIds.contains(key) else { continue }
-            guard let line = XpGainToastLineBuilder.line(from: grant) else { continue }
+            guard let event = XpGainToastSourceMapper.ingestEvent(from: grant, catalog: catalog) else { continue }
             acknowledgedIds.insert(key)
-            newLines.append(line)
+            newEvents.append(event)
             sourceMix.insert("remote")
         }
 
-        guard !newLines.isEmpty else { return }
-        present(newLines: newLines, sourceMix: sourceMix.sorted().joined(separator: "+"))
+        guard !newEvents.isEmpty else { return }
+        presentBurst(newEvents: newEvents, sourceMix: sourceMix.sorted().joined(separator: "+"))
     }
 
     private func establishBaseline(ledgerRows: [XpLedgerEvent], grants: [UserXpGrant]) {
@@ -162,46 +166,59 @@ final class XpGainToastService: ObservableObject {
         hasBaseline = true
     }
 
-    private func present(newLines: [XpGainToastLine], sourceMix: String) {
+    private func presentBurst(newEvents: [XpGainToastIngestEvent], sourceMix: String) {
         let coalesced = presentation != nil
-        var merged = presentation?.lines ?? []
-        var existingIds = Set(merged.map(\.id))
-        for line in newLines where !existingIds.contains(line.id) {
-            merged.append(line)
-            existingIds.insert(line.id)
+        burstEvents.append(contentsOf: newEvents)
+
+        let catalog = catalogProvider.current
+        let duration = TimeInterval(catalog.xpToast.burstDurationSeconds)
+
+        if !coalesced, let userId = activeUserId {
+            rankProgressBaselineXp = XpDisplayedTotalResolver.totalXp(
+                userId: userId,
+                xpLedger: xpLedger,
+                remoteReader: remoteReader
+            )
         }
 
-        let duration = Self.defaultDismissDuration
-        presentation = XpGainToastPresentation(
-            lines: merged,
-            expiresAt: Date().addingTimeInterval(duration),
+        let baselineXp = rankProgressBaselineXp ?? 0
+        let burstGain = burstEvents.reduce(0) { $0 + $1.xpAmount }
+        var aggregated = XpGainToastAggregator.aggregate(
+            events: burstEvents,
+            catalog: catalog,
             dismissDuration: duration
         )
+        aggregated.rankBand = XpGainToastRankBandBuilder.build(
+            totalXpBeforeBurst: baselineXp,
+            burstXpGained: burstGain,
+            catalog: catalog
+        )
+        presentation = aggregated
 
         if !coalesced {
             FeedbackService.shared.actionSuccess()
         }
 
-        let totalXp = merged.compactMap { parsePositiveXp(from: $0.xpDisplayText) }.reduce(0, +)
+        let groupIds = aggregated.lines.map(\.id).joined(separator: ",")
         AnalyticsService.shared.log(
             .xpGainToastPresented(
-                lineCount: merged.count,
-                totalXp: totalXp,
+                lineCount: aggregated.lines.count,
+                totalXp: aggregated.totalXp,
                 coalesced: coalesced,
-                sourceMix: sourceMix
+                sourceMix: sourceMix,
+                groupIds: groupIds
             )
         )
 
-        scheduleAutoDismiss()
+        scheduleAutoDismiss(duration: duration)
     }
 
-    private func scheduleAutoDismiss() {
+    private func scheduleAutoDismiss(duration: TimeInterval) {
         timerGeneration += 1
         let generation = timerGeneration
-        let delay = Self.defaultDismissDuration
         dismissTask?.cancel()
         dismissTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 guard let self, self.timerGeneration == generation else { return }
@@ -213,12 +230,8 @@ final class XpGainToastService: ObservableObject {
     private func dismissAutomatically() {
         guard presentation != nil else { return }
         presentation = nil
+        burstEvents.removeAll()
+        rankProgressBaselineXp = nil
         AnalyticsService.shared.log(.xpGainToastDismissed(reason: "auto"))
-    }
-
-    private func parsePositiveXp(from displayText: String) -> Int? {
-        let digits = displayText.filter { $0.isNumber }
-        guard let value = Int(digits), value > 0 else { return nil }
-        return value
     }
 }

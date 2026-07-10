@@ -9,7 +9,13 @@ import Foundation
 
 protocol ProgressionCatalogProviding: Sendable {
     var current: ProgressionCatalog { get }
-    func refresh(presentationOverrideJSON: String?)
+    func refresh(presentationOverrideJSON: String?, xpToastOverrideJSON: String?)
+}
+
+extension ProgressionCatalogProviding {
+    func refresh(presentationOverrideJSON: String?) {
+        refresh(presentationOverrideJSON: presentationOverrideJSON, xpToastOverrideJSON: nil)
+    }
 }
 
 final class ProgressionCatalogProvider: ProgressionCatalogProviding, @unchecked Sendable {
@@ -29,24 +35,34 @@ final class ProgressionCatalogProvider: ProgressionCatalogProviding, @unchecked 
         return cached
     }
 
-    /// Reloads bundled JSON and merges optional Remote Config presentation override (achievements/ranks unchanged).
-    func refresh(presentationOverrideJSON: String? = nil) {
+    /// Reloads bundled JSON and merges optional Remote Config presentation / xpToast overrides.
+    func refresh(presentationOverrideJSON: String? = nil, xpToastOverrideJSON: String? = nil) {
         let bundled = ProgressionCatalogLoader.loadBundled()
-        let trimmedOverride = presentationOverrideJSON?
+        let trimmedPresentation = presentationOverrideJSON?
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let hasOverride = !(trimmedOverride?.isEmpty ?? true)
+        let trimmedXpToast = xpToastOverrideJSON?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasPresentationOverride = !(trimmedPresentation?.isEmpty ?? true)
+        let hasXpToastOverride = !(trimmedXpToast?.isEmpty ?? true)
 
         let previous = current
         let merged: ProgressionCatalog
-        if hasOverride, let trimmedOverride {
+        if hasPresentationOverride || hasXpToastOverride {
             merged = ProgressionCatalogLoader.merge(
                 bundled: bundled,
-                presentationOverrideJSON: trimmedOverride
+                presentationOverrideJSON: trimmedPresentation,
+                xpToastOverrideJSON: trimmedXpToast
             )
-            if merged.presentation == bundled.presentation {
+            if hasPresentationOverride,
+               merged.presentation == bundled.presentation {
                 logFallback(reason: "invalid_presentation_override")
-            } else if merged.presentation != previous.presentation {
+            } else if hasPresentationOverride,
+                      merged.presentation != previous.presentation {
                 logPresentationOverrideApplied(merged.presentation)
+            }
+            if hasXpToastOverride,
+               merged.xpToast == bundled.xpToast {
+                logFallback(reason: "invalid_xp_toast_override")
             }
         } else {
             merged = bundled

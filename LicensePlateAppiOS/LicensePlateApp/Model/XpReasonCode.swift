@@ -13,6 +13,7 @@ enum XpReasonCode: String, Codable, CaseIterable, Sendable {
     case soloNewDiscovery = "solo_new_discovery"
     case tripCompletion = "trip_completion"
     case milestoneUnlock = "milestone_unlock"
+    case returnStreakDaily = "return_streak_daily"
     case duplicateNoXp = "duplicate_no_xp"
     case personalRefindNoXp = "personal_refind_no_xp"
     case spamToggleNoXp = "spam_toggle_no_xp"
