@@ -148,7 +148,7 @@ struct ContentView: View {
             HomeNavigationToolbar(
                 streakPresentation: returnStreakViewModel.presentation,
                 isStreakVisible: returnStreakViewModel.presentation.isVisible,
-                displayName: authService.currentUser?.displayName,
+                displayName: authService.currentUser?.userName,
                 currentUser: authService.currentUser,
                 onStreakTap: { returnStreakViewModel.openExplanation() },
                 onTravelLogTap: { isShowingTravelLog = true },
@@ -273,7 +273,7 @@ struct ContentView: View {
             }
         )
         .environmentObject(authService)
-        .presentationDetents([smallDetent, .medium, .large], selection: $sheetDetent)
+        .presentationDetents([.large], selection: $sheetDetent)
         .presentationDragIndicator(.visible)
         .onAppear {
             sheetDetent = smallDetent

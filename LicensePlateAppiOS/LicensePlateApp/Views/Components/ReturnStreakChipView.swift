@@ -24,7 +24,7 @@ struct ReturnStreakChipView: View {
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .frame(minHeight: 44)
+            .frame(minHeight: 24)
             .background(
                 Capsule()
                     .fill(Color.Theme.cardBackground)
