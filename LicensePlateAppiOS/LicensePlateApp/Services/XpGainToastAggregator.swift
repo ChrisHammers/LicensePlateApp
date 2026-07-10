@@ -11,6 +11,7 @@ struct XpGainToastLine: Identifiable, Equatable, Sendable {
     var id: String
     var title: String
     var subtitle: String?
+    var xpAmount: Int
 }
 
 struct XpGainToastPresentation: Equatable {
@@ -40,7 +41,8 @@ enum XpGainToastAggregator {
             let title = title(for: group, events: groupEvents)
             guard !title.isEmpty else { return nil }
             let subtitle = subtitle(for: group, events: groupEvents)
-            return XpGainToastLine(id: group.id, title: title, subtitle: subtitle)
+            let xpAmount = groupEvents.reduce(0) { $0 + $1.xpAmount }
+            return XpGainToastLine(id: group.id, title: title, subtitle: subtitle, xpAmount: xpAmount)
         }
 
         return XpGainToastPresentation(

@@ -158,6 +158,7 @@ struct XpGainToastServiceTests {
         #expect(presentation.totalXp == 30)
         #expect(presentation.lines.count == 1)
         #expect(presentation.lines.first?.id == "discovery")
+        #expect(presentation.lines.first?.xpAmount == 30)
         #expect(presentation.lines.first?.title == "xp.toast.group.discovery.multi".localized("Texas", 2))
     }
 

@@ -13,6 +13,9 @@ struct XpGainToastBanner: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private let rankBarHeight: CGFloat = 8
+    private let rankBarCornerRadius: CGFloat = 4
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
@@ -50,10 +53,16 @@ struct XpGainToastBanner: View {
     @ViewBuilder
     private func lineContent(_ line: XpGainToastLine) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(line.title)
-                .font(.system(.subheadline, design: .rounded).weight(.semibold))
-                .foregroundStyle(Color.Theme.primaryBlue)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(line.title)
+                    .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                Text("xp.toast.grant.xp_format".localized(line.xpAmount))
+                    .font(.system(.caption, design: .rounded).weight(.bold))
+                    .foregroundStyle(Color.Theme.softBrown)
+            }
             if let subtitle = line.subtitle, !subtitle.isEmpty {
                 Text(subtitle)
                     .font(.system(.caption2, design: .rounded))
@@ -64,45 +73,13 @@ struct XpGainToastBanner: View {
     }
 
     private func rankBandSection(_ band: XpGainToastRankBand) -> some View {
-        VStack(spacing: 8) {
-            HStack(alignment: .top, spacing: 10) {
-                rankBandSide(
-                    icon: band.currentRankIcon,
-                    rankLevel: band.currentRankLevel,
-                    levelLabel: "rank.progression.rank_label".localized(band.currentRankLevel),
-                    subtitle: band.currentRankTitle,
-                    detail: "xp.toast.total_xp_format".localized(band.burstXpGained),
-                    alignment: .leading
-                )
-
-                Spacer(minLength: 8)
-
-                if band.isMaxRank {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        Text("xp.toast.rank_band.max_rank".localized)
-                            .font(.system(.caption2, design: .rounded).weight(.semibold))
-                            .foregroundStyle(Color.Theme.softBrown)
-                            .multilineTextAlignment(.trailing)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                } else if let nextLevel = band.nextRankLevel,
-                          let nextTitle = band.nextRankTitle,
-                          let nextIcon = band.nextRankIcon {
-                    rankBandSide(
-                        icon: nextIcon,
-                        rankLevel: nextLevel,
-                        levelLabel: "rank.progression.rank_label".localized(nextLevel),
-                        subtitle: nextTitle,
-                        detail: "rank.progression.xp_to_next".localized(
-                            (band.xpToNextRank ?? 0).formatted(),
-                            nextTitle
-                        ),
-                        alignment: .trailing
-                    )
-                }
-            }
+        HStack(alignment: .center, spacing: 10) {
+            currentRankSide(band)
 
             rankProgressBar(band)
+                .frame(maxWidth: .infinity)
+
+            nextRankSide(band)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -111,47 +88,47 @@ struct XpGainToastBanner: View {
         .accessibilityLabel("xp.toast.rank_band.a11y".localized)
     }
 
-    private func rankBandSide(
-        icon: String,
-        rankLevel: Int,
-        levelLabel: String,
-        subtitle: String? = nil,
-        detail: String,
-        alignment: HorizontalAlignment
-    ) -> some View {
+    private func currentRankSide(_ band: XpGainToastRankBand) -> some View {
         HStack(spacing: 8) {
-            if alignment == .trailing {
-                sideText(levelLabel: levelLabel, subtitle: subtitle, detail: detail, alignment: alignment)
-                rankIconBadge(systemName: icon, rankLevel: rankLevel)
-            } else {
-                rankIconBadge(systemName: icon, rankLevel: rankLevel)
-                sideText(levelLabel: levelLabel, subtitle: subtitle, detail: detail, alignment: alignment)
-            }
-        }
-    }
-
-    private func sideText(
-        levelLabel: String,
-        subtitle: String?,
-        detail: String,
-        alignment: HorizontalAlignment
-    ) -> some View {
-        VStack(alignment: alignment, spacing: 2) {
-            Text(levelLabel)
-                .font(.system(.caption2, design: .rounded).weight(.heavy))
-                .foregroundStyle(Color.Theme.primaryBlue)
-            if let subtitle, !subtitle.isEmpty {
-                Text(subtitle)
+            rankIconBadge(systemName: band.currentRankIcon, rankLevel: band.currentRankLevel)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("rank.progression.rank_label".localized(band.currentRankLevel))
+                    .font(.system(.caption2, design: .rounded).weight(.heavy))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                Text(band.currentRankTitle)
                     .font(.system(.caption2, design: .rounded).weight(.semibold))
                     .foregroundStyle(Color.Theme.softBrown)
                     .lineLimit(1)
             }
-            Text(detail)
-                .font(.system(.caption, design: .rounded).weight(.bold))
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    @ViewBuilder
+    private func nextRankSide(_ band: XpGainToastRankBand) -> some View {
+        if band.isMaxRank {
+            Text("xp.toast.rank_band.max_rank".localized)
+                .font(.system(.caption2, design: .rounded).weight(.semibold))
                 .foregroundStyle(Color.Theme.softBrown)
-                .multilineTextAlignment(alignment == .trailing ? .trailing : .leading)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: true, vertical: false)
+        } else if let nextLevel = band.nextRankLevel,
+                  let nextTitle = band.nextRankTitle,
+                  let nextIcon = band.nextRankIcon {
+            HStack(spacing: 8) {
+                Text("rank.progression.xp_to_next".localized(
+                    (band.xpToNextRank ?? 0).formatted(),
+                    nextTitle
+                ))
+                .font(.system(.caption2, design: .rounded).weight(.semibold))
+                .foregroundStyle(Color.Theme.softBrown)
+                .multilineTextAlignment(.trailing)
                 .lineLimit(2)
                 .minimumScaleFactor(0.85)
+
+                rankIconBadge(systemName: nextIcon, rankLevel: nextLevel)
+            }
+            .fixedSize(horizontal: true, vertical: false)
         }
     }
 
@@ -170,20 +147,39 @@ struct XpGainToastBanner: View {
             let width = geo.size.width
             let primaryWidth = width * band.progressBeforeBurst
             let gainWidth = width * max(0, band.progressAfterBurst - band.progressBeforeBurst)
+            let r = rankBarCornerRadius
 
             ZStack(alignment: .leading) {
-                Capsule()
+                RoundedRectangle(cornerRadius: r, style: .continuous)
                     .fill(Color.Theme.softBrown.opacity(0.15))
-                Capsule()
-                    .fill(Color.Theme.primaryBlue)
-                    .frame(width: primaryWidth)
-                Capsule()
-                    .fill(Color.Theme.accentYellow)
-                    .frame(width: gainWidth)
-                    .offset(x: primaryWidth)
+
+                HStack(spacing: 0) {
+                    if primaryWidth > 0 {
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: r,
+                            bottomLeadingRadius: r,
+                            bottomTrailingRadius: gainWidth > 0 ? 0 : r,
+                            topTrailingRadius: gainWidth > 0 ? 0 : r,
+                            style: .continuous
+                        )
+                        .fill(Color.Theme.primaryBlue)
+                        .frame(width: primaryWidth)
+                    }
+                    if gainWidth > 0 {
+                        UnevenRoundedRectangle(
+                            topLeadingRadius: primaryWidth > 0 ? 0 : r,
+                            bottomLeadingRadius: primaryWidth > 0 ? 0 : r,
+                            bottomTrailingRadius: r,
+                            topTrailingRadius: r,
+                            style: .continuous
+                        )
+                        .fill(Color.Theme.accentYellow)
+                        .frame(width: gainWidth)
+                    }
+                }
             }
         }
-        .frame(height: 8)
+        .frame(height: rankBarHeight)
         .accessibilityLabel("xp.toast.rank_band.progress.a11y".localized)
         .accessibilityValue(
             "xp.toast.rank_band.progress.a11y.value".localized(
@@ -219,23 +215,22 @@ struct XpGainToastBanner: View {
 
     private var accessibilityLabel: String {
         var parts: [String] = []
+        parts.append(contentsOf: presentation.lines.map { line in
+            var lineParts = [line.title, "xp.toast.grant.xp_format".localized(line.xpAmount)]
+            if let subtitle = line.subtitle, !subtitle.isEmpty {
+                lineParts.insert(subtitle, at: 1)
+            }
+            return lineParts.joined(separator: ", ")
+        })
         if let band = presentation.rankBand {
-            parts.append("xp.toast.total_xp_format".localized(band.burstXpGained))
             parts.append("rank.progression.rank_label".localized(band.currentRankLevel))
+            parts.append(band.currentRankTitle)
             if band.isMaxRank {
                 parts.append("xp.toast.rank_band.max_rank".localized)
             } else if let nextTitle = band.nextRankTitle, let xpToNext = band.xpToNextRank {
                 parts.append("rank.progression.xp_to_next".localized(xpToNext.formatted(), nextTitle))
             }
-        } else {
-            parts.append("xp.toast.total_xp_format".localized(presentation.totalXp))
         }
-        parts.append(contentsOf: presentation.lines.map { line in
-            if let subtitle = line.subtitle, !subtitle.isEmpty {
-                return "\(line.title), \(subtitle)"
-            }
-            return line.title
-        })
         return "xp.toast.a11y.label".localized(parts.joined(separator: "; "))
     }
 }
@@ -248,12 +243,14 @@ struct XpGainToastBanner: View {
                 XpGainToastLine(
                     id: "discovery",
                     title: "Discovered Texas and 2 others",
-                    subtitle: nil
+                    subtitle: nil,
+                    xpAmount: 19
                 ),
                 XpGainToastLine(
                     id: "return_streak",
                     title: "2 day streak",
-                    subtitle: nil
+                    subtitle: nil,
+                    xpAmount: 5
                 )
             ],
             rankBand: XpGainToastRankBand(
@@ -285,7 +282,8 @@ struct XpGainToastBanner: View {
                 XpGainToastLine(
                     id: "discovery",
                     title: "Discovered California",
-                    subtitle: "Pending resolution"
+                    subtitle: "Pending resolution",
+                    xpAmount: 10
                 )
             ],
             rankBand: nil,
