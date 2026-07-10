@@ -36,12 +36,11 @@ struct XpGainToastBanner: View {
         .shadow(color: .black.opacity(0.16), radius: 5, x: 0, y: 2)
         .shadow(color: .black.opacity(0.28), radius: 22, x: 0, y: 12)
         .padding(.horizontal, 20)
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .onTapGesture(perform: onDismiss)
         .accessibilityElement(children: .combine)
+        .accessibilityAction { onDismiss() }
         .accessibilityLabel(accessibilityLabel)
         .accessibilityHint("xp.toast.a11y.hint".localized)
-        .accessibilityAddTraits(.isStaticText)
+        .accessibilityAddTraits(.isButton)
     }
 
     @ViewBuilder
