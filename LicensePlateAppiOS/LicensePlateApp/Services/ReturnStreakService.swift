@@ -9,6 +9,8 @@
 //  - Day boundary: calendar.startOfDay(for: now()).
 //  - lastQualifyingDay is stored as an absolute Date (start-of-day instant when qualified).
 //  - Comparisons use calendar.isDate(_:inSameDayAs:).
+//  - Active streak for reads: lastQualifyingDay must be today or yesterday; otherwise currentState reports 0
+//    (stored count is left intact until the next qualifying find restarts at 1).
 //  - DST / travel: boundaries follow the device calendar; timezone changes may shift perceived days.
 //  - Offline: UserDefaults only; idempotent per user per calendar day.
 //  - Clock manipulation: local-trust only (no server authority in Phase 1).
@@ -83,9 +85,11 @@ final class ReturnStreakService: ObservableObject {
             return ReturnStreakState(currentStreak: 0, lastQualifyingDay: nil)
         }
         migrateLegacyDeviceStateIfNeeded(for: userId)
+        let lastQualifyingDay = defaults.object(forKey: lastDayKey(userId: userId)) as? Date
+        let storedStreak = defaults.integer(forKey: streakKey(userId: userId))
         return ReturnStreakState(
-            currentStreak: defaults.integer(forKey: streakKey(userId: userId)),
-            lastQualifyingDay: defaults.object(forKey: lastDayKey(userId: userId)) as? Date
+            currentStreak: effectiveStreak(storedStreak: storedStreak, lastQualifyingDay: lastQualifyingDay),
+            lastQualifyingDay: lastQualifyingDay
         )
     }
 
@@ -181,6 +185,20 @@ final class ReturnStreakService: ObservableObject {
     }
 
     // MARK: - Private
+
+    /// Live streak for UI/reminders: only today or yesterday keeps the stored count active.
+    private func effectiveStreak(storedStreak: Int, lastQualifyingDay: Date?) -> Int {
+        guard storedStreak > 0, let lastQualifyingDay else { return 0 }
+        let today = calendar.startOfDay(for: now())
+        if calendar.isDate(lastQualifyingDay, inSameDayAs: today) {
+            return storedStreak
+        }
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: today),
+              calendar.isDate(lastQualifyingDay, inSameDayAs: yesterday) else {
+            return 0
+        }
+        return storedStreak
+    }
 
     private func resolvedUserId(_ userId: String?) -> String? {
         if let userId, !userId.isEmpty { return userId }

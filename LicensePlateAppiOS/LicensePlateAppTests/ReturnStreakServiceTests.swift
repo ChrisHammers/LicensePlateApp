@@ -85,6 +85,38 @@ struct ReturnStreakServiceTests {
         #expect(service.currentState(for: "user-a").currentStreak == 1)
     }
 
+    @Test func currentStateReportsZeroAfterMissedDayWithoutNewFind() {
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        var currentDate = Date(timeIntervalSince1970: 86_400)
+        let service = makeService(defaults: defaults, now: { currentDate })
+        service.setActiveUserId("user-a")
+
+        _ = service.recordQualifyingFindIfNeeded(userId: "user-a")
+        currentDate = Date(timeIntervalSince1970: 172_800)
+        _ = service.recordQualifyingFindIfNeeded(userId: "user-a")
+        #expect(service.currentState(for: "user-a").currentStreak == 2)
+
+        // Skip a day without recording — stored count remains, but reads report inactive.
+        currentDate = Date(timeIntervalSince1970: 345_600)
+        let state = service.currentState(for: "user-a")
+        #expect(state.currentStreak == 0)
+        #expect(state.lastQualifyingDay == Date(timeIntervalSince1970: 172_800))
+        #expect(defaults.integer(forKey: "returnStreak.user-a.currentStreak") == 2)
+    }
+
+    @Test func currentStateKeepsStreakAliveThroughYesterday() {
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        var currentDate = Date(timeIntervalSince1970: 86_400)
+        let service = makeService(defaults: defaults, now: { currentDate })
+        service.setActiveUserId("user-a")
+
+        _ = service.recordQualifyingFindIfNeeded(userId: "user-a")
+        currentDate = Date(timeIntervalSince1970: 172_800)
+
+        #expect(service.currentState(for: "user-a").currentStreak == 1)
+        #expect(!service.hasQualifiedToday(userId: "user-a"))
+    }
+
     @Test func remoteConfigDisabledDoesNotMutate() {
         let defaults = UserDefaults(suiteName: UUID().uuidString)!
         let service = makeService(

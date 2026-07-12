@@ -64,6 +64,24 @@ struct ReturnStreakViewModelTests {
         #expect(viewModel.presentation.currentStreak == 2)
     }
 
+    @Test func hiddenWhenStoredStreakIsBrokenByCalendarGap() {
+        let defaults = UserDefaults(suiteName: UUID().uuidString)!
+        var currentDate = Date(timeIntervalSince1970: 86_400)
+        let service = makeStreakService(defaults: defaults, now: { currentDate })
+        let viewModel = ReturnStreakViewModel(streakService: service, rewardPresenter: RewardPresenter())
+
+        service.setActiveUserId("user-a")
+        _ = service.recordQualifyingFindIfNeeded(userId: "user-a")
+        currentDate = Date(timeIntervalSince1970: 172_800)
+        _ = service.recordQualifyingFindIfNeeded(userId: "user-a")
+
+        currentDate = Date(timeIntervalSince1970: 345_600)
+        viewModel.bind(userId: "user-a")
+
+        #expect(!viewModel.presentation.isVisible)
+        #expect(viewModel.presentation.currentStreak == 0)
+    }
+
     @Test func hiddenWhenRemoteConfigDisabled() {
         let defaults = UserDefaults(suiteName: UUID().uuidString)!
         let service = makeStreakService(
