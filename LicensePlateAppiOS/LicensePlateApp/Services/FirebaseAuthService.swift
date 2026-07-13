@@ -370,8 +370,7 @@ class FirebaseAuthService: ObservableObject {
         userName: String,
         firstName: String? = nil,
         lastName: String? = nil,
-        phoneNumber: String? = nil,
-        birthYear: Int? = nil
+        phoneNumber: String? = nil
     ) async throws {
         isLoading = true
         defer { isLoading = false }
@@ -413,11 +412,7 @@ class FirebaseAuthService: ObservableObject {
                     currentUser.isUsernameManuallyChanged = true
                     
                     try modelContext.save()
-                    var extraFields: [String: Any] = [:]
-                    if let birthYear = birthYear {
-                        extraFields["birthYear"] = birthYear
-                    }
-                    try await saveUserDataToFirestore(currentUser, extraFields: extraFields)
+                    try await saveUserDataToFirestore(currentUser)
                     
                     isAuthenticated = true
                     
@@ -427,7 +422,7 @@ class FirebaseAuthService: ObservableObject {
                     // If linking fails (email already in use), create new account
                     try auth.signOut()
                     let result = try await auth.createUser(withEmail: email, password: password)
-                    await createNewUserFromFirebase(result.user, email: email, userName: trimmedUserName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber, birthYear: birthYear)
+                    await createNewUserFromFirebase(result.user, email: email, userName: trimmedUserName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber)
                     
                     // Update login tracking
                     await updateLoginTracking()
@@ -435,7 +430,7 @@ class FirebaseAuthService: ObservableObject {
             } else {
                 // Not anonymous, create new account
                 let result = try await auth.createUser(withEmail: email, password: password)
-                await createNewUserFromFirebase(result.user, email: email, userName: trimmedUserName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber, birthYear: birthYear)
+                await createNewUserFromFirebase(result.user, email: email, userName: trimmedUserName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber)
                 
                 // Update login tracking
                 await updateLoginTracking()
@@ -1278,7 +1273,7 @@ class FirebaseAuthService: ObservableObject {
         }
     }
     
-    private func createNewUserFromFirebase(_ firebaseUser: User, email: String?, userName: String?, firstName: String?, lastName: String?, phoneNumber: String?, birthYear: Int? = nil) async {
+    private func createNewUserFromFirebase(_ firebaseUser: User, email: String?, userName: String?, firstName: String?, lastName: String?, phoneNumber: String?) async {
         guard let modelContext = modelContext else { return }
         
         let firebaseUID = firebaseUser.uid
@@ -1303,13 +1298,8 @@ class FirebaseAuthService: ObservableObject {
         currentUser = newUser
         isAuthenticated = true
         
-        // Save to Firestore (birthYear stored in Firestore only, not SwiftData)
-        var extraFields: [String: Any] = [:]
-        if let birthYear = birthYear {
-            extraFields["birthYear"] = birthYear
-        }
         Task {
-            try? await saveUserDataToFirestore(newUser, extraFields: extraFields)
+            try? await saveUserDataToFirestore(newUser)
         }
     }
     

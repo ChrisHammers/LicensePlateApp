@@ -38,7 +38,6 @@ struct SignInView: View {
     @Environment(\.modelContext) private var modelContext
     
     @State private var isSignInMode: Bool
-    @State private var birthYear: Int
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
@@ -60,15 +59,12 @@ struct SignInView: View {
     init(
         authService: FirebaseAuthService,
         initialMode: SignInInitialMode = .signIn,
-        initialBirthYear: Int? = nil,
         deferredSetupTouchSource: String = "profile",
         onAuthSuccess: (() -> Void)? = nil
     ) {
         self.authService = authService
         self.deferredSetupTouchSource = deferredSetupTouchSource
-        let year = Calendar.current.component(.year, from: .now)
         self._isSignInMode = State(initialValue: initialMode == .signIn)
-        self._birthYear = State(initialValue: initialBirthYear ?? year - 25)
         self._email = State(initialValue: "")
         self._password = State(initialValue: "")
         self._confirmPassword = State(initialValue: "")
@@ -148,22 +144,6 @@ struct SignInView: View {
                                         .font(.system(.body, design: .rounded))
                                         .autocapitalization(.words)
                                         .textContentType(.familyName)
-                                }
-                                
-                                // Birth Year field
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Birth Year")
-                                        .font(.system(.body, design: .rounded))
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(Color.Theme.primaryBlue)
-                                    
-                                    Picker("Birth Year", selection: $birthYear) {
-                                        ForEach(((Calendar.current.component(.year, from: .now) - 100)...Calendar.current.component(.year, from: .now)), id: \.self) { year in
-                                            Text(String(year)).tag(year)
-                                        }
-                                    }
-                                    .pickerStyle(.wheel)
-                                    .frame(height: 120)
                                 }
                             }
                             
@@ -307,14 +287,12 @@ struct SignInView: View {
                                         password = ""
                                         confirmPassword = ""
                                         email = ""
-                                        // Autofill from current user (birthYear stored in Firestore only, not available for autofill)
                                         if let currentUser = authService.currentUser {
                                             userName = currentUser.userName
                                             firstName = currentUser.firstName ?? ""
                                             lastName = currentUser.lastName ?? ""
                                             phoneNumber = currentUser.phoneNumber ?? ""
                                         }
-                                        birthYear = Calendar.current.component(.year, from: .now) - 25
                                     } else {
                                         // Switching to sign in - clear all fields
                                         password = ""
@@ -323,7 +301,6 @@ struct SignInView: View {
                                         firstName = ""
                                         lastName = ""
                                         phoneNumber = ""
-                                        birthYear = Calendar.current.component(.year, from: .now) - 25
                                     }
                                     isSignInMode.toggle()
                                 }
@@ -429,12 +406,11 @@ struct SignInView: View {
         } else {
             // For create account, check basic requirements
             // Full validation happens in createAccount()
-            let basicValid = !userName.isEmpty && 
-                           !email.isEmpty && 
-                           !password.isEmpty && 
+            let basicValid = !userName.isEmpty &&
+                           !email.isEmpty &&
+                           !password.isEmpty &&
                            password == confirmPassword &&
-                           password.count >= 8 &&
-                           birthYear > 0
+                           password.count >= 8
             return basicValid
         }
     }
@@ -447,7 +423,6 @@ struct SignInView: View {
         firstName = ""
         lastName = ""
         phoneNumber = ""
-        birthYear = Calendar.current.component(.year, from: .now) - 25
         errorMessage = ""
     }
 
@@ -518,8 +493,7 @@ struct SignInView: View {
                     userName: userName,
                     firstName: firstName.isEmpty ? nil : firstName,
                     lastName: lastName.isEmpty ? nil : lastName,
-                    phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber,
-                    birthYear: birthYear > 0 ? birthYear : nil
+                    phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber
                 )
                 await MainActor.run {
                     isLoading = false

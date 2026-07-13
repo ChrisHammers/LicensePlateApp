@@ -34,8 +34,6 @@ final class OnboardingCoordinator: ObservableObject {
     @Published var didLogIn = false
     @Published var isExistingAccount = false
     
-    @AppStorage("onboardingBirthYear") var birthYear: Int = 0
-    
     private weak var appCoordinator: AppCoordinator?
     private weak var authService: FirebaseAuthService?
     

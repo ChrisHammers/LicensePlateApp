@@ -224,7 +224,6 @@ struct OnboardingAccountCreationView: View {
             SignInView(
                 authService: authService,
                 initialMode: signInInitialMode,
-                initialBirthYear: signInInitialMode == .createAccount && coordinator.birthYear > 0 ? coordinator.birthYear : nil,
                 deferredSetupTouchSource: deferredSetupTouchSource,
                 onAuthSuccess: {
                     coordinator.didLogIn = true
