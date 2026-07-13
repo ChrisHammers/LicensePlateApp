@@ -8,6 +8,30 @@
 import Foundation
 import SwiftData
 
+// MARK: - Legacy avatar identity (frozen SchemaVersion21.AppUser only)
+// Kept so V1–V21 fingerprints stay stable. Live `AppUser` (V22+) uses catalog `avatarId` only.
+
+enum AvatarColor: String, Codable, CaseIterable {
+    case red = "red"
+    case green = "green"
+    case blue = "blue"
+    case orange = "orange"
+    case purple = "purple"
+    case yellow = "yellow"
+    case white = "white"
+    case black = "black"
+}
+
+enum AvatarType: String, Codable, CaseIterable {
+    case woman = "woman"
+    case man = "man"
+    case dog = "dog"
+    case cat = "cat"
+    case bird = "bird"
+    case car = "car"
+    case building = "building"
+}
+
 // MARK: - Schema-version markers
 // Exist solely so each version has a distinct model set, avoiding "Duplicate version checksums detected".
 // Do not use in app logic.
@@ -128,7 +152,7 @@ enum SchemaVersion1: VersionedSchema {
     }
     
     static var models: [any PersistentModel.Type] {
-        [AppUser.self]
+        [SchemaVersion21.AppUser.self]
     }
 }
 
@@ -143,7 +167,7 @@ enum SchemaVersion2: VersionedSchema {
     
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -164,7 +188,7 @@ enum SchemaVersion3: VersionedSchema {
     
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -186,7 +210,7 @@ enum SchemaVersion4: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -210,7 +234,7 @@ enum SchemaVersion5: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -236,7 +260,7 @@ enum SchemaVersion6: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -266,7 +290,7 @@ enum SchemaVersion7: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -318,7 +342,7 @@ enum SchemaVersion8: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -348,7 +372,7 @@ enum SchemaVersion9: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -380,7 +404,7 @@ enum SchemaVersion10: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -414,7 +438,7 @@ enum SchemaVersion11: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -451,7 +475,7 @@ enum SchemaVersion12: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -529,7 +553,7 @@ enum SchemaVersion13: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -566,7 +590,7 @@ enum SchemaVersion14: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -604,7 +628,7 @@ enum SchemaVersion15: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -643,7 +667,7 @@ enum SchemaVersion16: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -686,7 +710,7 @@ enum SchemaVersion17: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -731,7 +755,7 @@ enum SchemaVersion18: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -778,7 +802,7 @@ enum SchemaVersion19: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -828,7 +852,7 @@ enum SchemaVersion20: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -886,7 +910,7 @@ enum SchemaVersion21: VersionedSchema {
 
     static var models: [any PersistentModel.Type] {
         [
-            AppUser.self,
+            SchemaVersion21.AppUser.self,
             Friendship.self,
             Invite.self,
             Family.self,
@@ -928,12 +952,167 @@ enum SchemaVersion21: VersionedSchema {
             SchemaVersion21Marker.self
         ]
     }
+
+    /// Frozen **V1–V21** user row including legacy `avatarColor` / `avatarType`.
+    /// Keeps historical schema fingerprints stable while live `AppUser` drops those fields in V22.
+    @Model
+    final class AppUser {
+        @Attribute(.unique) var id: String
+        var userName: String
+        var firstName: String?
+        var lastName: String?
+        var email: String?
+        var phoneNumber: String?
+        var createdAt: Date
+        var lastUpdated: Date
+        var avatarColor: AvatarColor
+        var avatarType: AvatarType
+        var userImageURL: String?
+        var deviceIdentifier: String?
+        var isUsernameManuallyChanged: Bool = false
+        var isEmailPublic: Bool = false
+        var isPhonePublic: Bool = false
+        var avatarId: String?
+        var equippedBadgeId: String?
+        var wasEverInFamily: Bool = false
+        var isRetiredGeneral: Bool = false
+        var activeFamilyId: String?
+        var friendCount: Int = 0
+        var linkedPlatforms: [LinkedPlatform]
+        var firebaseUID: String?
+        var lastSyncedToFirebase: Date?
+        var needsSync: Bool = false
+        var localIDBeforeFirebase: String?
+        var lastDateLoggedIn: Date?
+        var lastLoginLocation: [LoginLocation]
+
+        init(
+            id: String = UUID().uuidString,
+            userName: String = "User",
+            firstName: String? = nil,
+            lastName: String? = nil,
+            email: String? = nil,
+            phoneNumber: String? = nil,
+            createdAt: Date = .now,
+            lastUpdated: Date = .now,
+            avatarColor: AvatarColor = .blue,
+            avatarType: AvatarType = .man,
+            userImageURL: String? = nil,
+            deviceIdentifier: String? = nil,
+            isUsernameManuallyChanged: Bool = false,
+            isEmailPublic: Bool = false,
+            isPhonePublic: Bool = false,
+            avatarId: String? = nil,
+            equippedBadgeId: String? = nil,
+            wasEverInFamily: Bool = false,
+            isRetiredGeneral: Bool = false,
+            activeFamilyId: String? = nil,
+            friendCount: Int = 0,
+            linkedPlatforms: [LinkedPlatform] = [],
+            firebaseUID: String? = nil,
+            lastSyncedToFirebase: Date? = nil,
+            needsSync: Bool = false,
+            localIDBeforeFirebase: String? = nil,
+            lastDateLoggedIn: Date? = nil,
+            lastLoginLocation: [LoginLocation] = []
+        ) {
+            self.id = id
+            self.userName = userName
+            self.firstName = firstName
+            self.lastName = lastName
+            self.email = email
+            self.phoneNumber = phoneNumber
+            self.createdAt = createdAt
+            self.lastUpdated = lastUpdated
+            self.avatarColor = avatarColor
+            self.avatarType = avatarType
+            self.userImageURL = userImageURL
+            self.deviceIdentifier = deviceIdentifier
+            self.isUsernameManuallyChanged = isUsernameManuallyChanged
+            self.isEmailPublic = isEmailPublic
+            self.isPhonePublic = isPhonePublic
+            self.avatarId = avatarId
+            self.equippedBadgeId = equippedBadgeId
+            self.wasEverInFamily = wasEverInFamily
+            self.isRetiredGeneral = isRetiredGeneral
+            self.activeFamilyId = activeFamilyId
+            self.friendCount = friendCount
+            self.linkedPlatforms = linkedPlatforms
+            self.firebaseUID = firebaseUID
+            self.lastSyncedToFirebase = lastSyncedToFirebase
+            self.needsSync = needsSync
+            self.localIDBeforeFirebase = localIDBeforeFirebase
+            self.lastDateLoggedIn = lastDateLoggedIn
+            self.lastLoginLocation = lastLoginLocation
+        }
+    }
+}
+
+// MARK: - Schema Version 22 (Drop legacy avatar identity from AppUser)
+// Live `AppUser` no longer persists `avatarColor` / `avatarType`; catalog `avatarId` only.
+
+@Model
+final class SchemaVersion22Marker {
+    @Attribute(.unique) var id: String
+    init(id: String = "v22") { self.id = id }
+}
+
+enum SchemaVersion22: VersionedSchema {
+    static var versionIdentifier: Schema.Version {
+        Schema.Version(22, 0, 0)
+    }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            AppUser.self,
+            Friendship.self,
+            Invite.self,
+            Family.self,
+            FamilyMember.self,
+            PendingJoinRequest.self,
+            ShareCode.self,
+            SchemaVersion3Marker.self,
+            TripSessionEntity.self,
+            GameInstanceEntity.self,
+            SchemaVersion4Marker.self,
+            GameScoreSnapshotEntity.self,
+            SchemaVersion5Marker.self,
+            TripInvite.self,
+            SchemaVersion6Marker.self,
+            SchemaVersion7Marker.self,
+            SchemaVersion8Marker.self,
+            TripActivityEventEntity.self,
+            SchemaVersion9Marker.self,
+            SchemaVersion10Marker.self,
+            SyncQueueItemEntity.self,
+            RemoteSyncMetadataEntity.self,
+            SchemaVersion11Marker.self,
+            SchemaVersion12Marker.self,
+            SchemaVersion13Marker.self,
+            SchemaVersion14Marker.self,
+            SchemaVersion15Marker.self,
+            PendingTripLeaveEntity.self,
+            SchemaVersion16Marker.self,
+            UserLifetimeStatsEntity.self,
+            SchemaVersion17Marker.self,
+            PublicLifetimeStatsCacheEntity.self,
+            SchemaVersion18Marker.self,
+            XpLedgerEventEntity.self,
+            DiscoveryResolutionEntity.self,
+            SchemaVersion19Marker.self,
+            UserAchievementEntity.self,
+            SchemaVersion20Marker.self,
+            TripRoutePointEntity.self,
+            SchemaVersion21Marker.self,
+            SchemaVersion22Marker.self
+        ]
+    }
 }
 
 // MARK: - Migration Plan
 enum AppMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self, SchemaVersion11.self, SchemaVersion12.self, SchemaVersion13.self, SchemaVersion14.self, SchemaVersion15.self, SchemaVersion16.self, SchemaVersion17.self, SchemaVersion18.self, SchemaVersion19.self, SchemaVersion20.self, SchemaVersion21.self]
+        [SchemaVersion1.self, SchemaVersion2.self, SchemaVersion3.self, SchemaVersion4.self, SchemaVersion5.self, SchemaVersion6.self, SchemaVersion7.self, SchemaVersion8.self, SchemaVersion9.self, SchemaVersion10.self, SchemaVersion11.self, SchemaVersion12.self, SchemaVersion13.self, SchemaVersion14.self, SchemaVersion15.self, SchemaVersion16.self, SchemaVersion17.self, SchemaVersion18.self, SchemaVersion19.self, SchemaVersion20.self, SchemaVersion21.self, SchemaVersion22.self]
     }
 
     static var stages: [MigrationStage] {
@@ -957,12 +1136,13 @@ enum AppMigrationPlan: SchemaMigrationPlan {
             .lightweight(fromVersion: SchemaVersion17.self, toVersion: SchemaVersion18.self),
             .lightweight(fromVersion: SchemaVersion18.self, toVersion: SchemaVersion19.self),
             .lightweight(fromVersion: SchemaVersion19.self, toVersion: SchemaVersion20.self),
-            .lightweight(fromVersion: SchemaVersion20.self, toVersion: SchemaVersion21.self)
+            .lightweight(fromVersion: SchemaVersion20.self, toVersion: SchemaVersion21.self),
+            .lightweight(fromVersion: SchemaVersion21.self, toVersion: SchemaVersion22.self)
         ]
     }
 }
 
 // MARK: - Current Schema
-// V21: local route point persistence (`TripRoutePointEntity`).
-typealias CurrentSchema = SchemaVersion21
+// V22: drop legacy AppUser avatarColor / avatarType (catalog avatarId only).
+typealias CurrentSchema = SchemaVersion22
 

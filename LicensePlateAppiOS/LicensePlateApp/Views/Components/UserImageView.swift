@@ -20,18 +20,26 @@ struct UserImageView: View {
         self.size = size
     }
     
+    private var catalogImage: UIImage? {
+        guard let avatarId = user.avatarId,
+              let item = AvatarCatalog.avatar(byId: avatarId),
+              item.assetSource == .bundled else {
+            return nil
+        }
+        return UIImage(named: item.assetName)
+    }
+    
     var body: some View {
         Group {
             if let loadedImage = loadedImage {
                 Image(uiImage: loadedImage)
                     .resizable()
                     .scaledToFill()
-            } else if let defaultImage = UIImage(named: user.defaultImageName) {
-                Image(uiImage: defaultImage)
+            } else if let catalogImage {
+                Image(uiImage: catalogImage)
                     .resizable()
                     .scaledToFill()
             } else {
-                // Fallback to system icon if asset not found
                 Image(systemName: "person.circle.fill")
                     .resizable()
                     .scaledToFit()
@@ -51,7 +59,7 @@ struct UserImageView: View {
             }
         }
         .task {
-            await loadUserImage() // TODO: We should be downloading this right away, as app start
+            await loadUserImage()
         }
         .onChange(of: user.userImageURL) { oldValue, newValue in
             if oldValue != newValue {
@@ -62,33 +70,25 @@ struct UserImageView: View {
         }
     }
     
-    //TODO: this shouldn't be only place we loadUserImage.  This same functionality.
     private func loadUserImage() async {
-        // If no custom image URL, use default asset
         guard let imageURL = user.userImageURL, !imageURL.isEmpty else {
             loadedImage = nil
             return
         }
         
-        // Check cache first
         if let cachedData = UserImageCache.shared.loadImage(for: user.id) {
             if let image = UIImage(data: cachedData) {
-                print("Found Cached image for userID: \(user.id)")
                 loadedImage = image
                 return
             }
         }
         
-        // Load from Firebase Storage
         isLoading = true
         loadError = nil
         
         do {
             let storageService = FirebaseStorageService()
             let imageData = try await storageService.downloadUserImage(userId: user.id)
-            
-            print("Downloading image for userID: \(user.id)")
-            // Cache the image
             UserImageCache.shared.saveImage(imageData, for: user.id)
             
             if let image = UIImage(data: imageData) {
@@ -109,9 +109,8 @@ struct UserImageView: View {
 
 #Preview {
     VStack(spacing: 20) {
-        UserImageView(user: AppUser(userName: "TestUser",  avatarColor: .orange, avatarType: .dog), size: 100)
-        UserImageView(user: AppUser(userName: "TestUser2", avatarColor: .blue, avatarType: .cat), size: 150)
+        UserImageView(user: AppUser(userName: "TestUser", avatarId: "navigator_raccoon"), size: 100)
+        UserImageView(user: AppUser(userName: "TestUser2", avatarId: "scout_otter"), size: 150)
     }
     .padding()
 }
-

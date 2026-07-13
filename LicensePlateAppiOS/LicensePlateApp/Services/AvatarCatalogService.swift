@@ -63,7 +63,7 @@ final class AvatarCatalogService: ObservableObject {
         }
     }
     
-    /// Resolve asset name for display (avatarId or legacy defaultImageName)
+    /// Resolve asset name for display from catalog `avatarId`.
     func assetName(for user: AppUser) -> String? {
         if let aid = user.avatarId, let item = AvatarCatalog.avatar(byId: aid) {
             return item.assetName

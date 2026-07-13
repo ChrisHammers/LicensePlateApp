@@ -33,7 +33,7 @@ struct UserIdentityRowView: View {
     
     init(user: AppUser, subtitle: String? = nil, avatarSize: CGFloat = 44) {
         self.avatarId = user.avatarId
-        self.legacyFallbackImageName = user.defaultImageName
+        self.legacyFallbackImageName = nil
         self.displayName = user.displayName
         self.subtitle = subtitle ?? (user.userName.isEmpty ? nil : "@\(user.userName)")
         self.equippedBadgeId = user.equippedBadgeId
@@ -75,7 +75,8 @@ struct UserIdentityRowView: View {
             equippedBadgeId: "first_plate_found"
         )
         UserIdentityRowView(
-            legacyFallbackImageName: "man_blue", displayName: "Legacy User",
+            avatarId: "scout_otter",
+            displayName: "Legacy User",
             subtitle: "@legacy"
         )
     }

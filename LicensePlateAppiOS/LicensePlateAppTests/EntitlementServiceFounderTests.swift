@@ -21,8 +21,7 @@ struct EntitlementServiceFounderTests {
             userName: "Test",
             createdAt: .now,
             lastUpdated: .now,
-            avatarColor: .blue,
-            avatarType: .man,
+
             linkedPlatforms: [],
             firebaseUID: "user1"
         )
@@ -58,8 +57,7 @@ struct EntitlementServiceFounderTests {
             userName: "Test",
             createdAt: .now,
             lastUpdated: .now,
-            avatarColor: .blue,
-            avatarType: .man,
+
             linkedPlatforms: [],
             firebaseUID: "user1"
         )
@@ -91,8 +89,7 @@ struct EntitlementServiceFounderTests {
             userName: "Peer",
             createdAt: .now,
             lastUpdated: .now,
-            avatarColor: .blue,
-            avatarType: .man,
+
             linkedPlatforms: [],
             firebaseUID: "peerUser"
         )

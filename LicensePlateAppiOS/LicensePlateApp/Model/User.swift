@@ -8,39 +8,6 @@
 import Foundation
 import SwiftData
 
-/// Deprecated: legacy avatar identity. Catalog `avatarId` is the source of truth.
-/// Kept on SwiftData `AppUser` until a schema version drops these properties.
-enum AvatarColor: String, Codable, CaseIterable {
-    case red = "red"
-    case green = "green"
-    case blue = "blue"
-    case orange = "orange"
-    case purple = "purple"
-    case yellow = "yellow"
-    case white = "white"
-    case black = "black"
-    
-    static func random() -> AvatarColor {
-        AvatarColor.allCases.randomElement() ?? .blue
-    }
-}
-
-/// Deprecated: legacy avatar identity. Catalog `avatarId` is the source of truth.
-/// Kept on SwiftData `AppUser` until a schema version drops these properties.
-enum AvatarType: String, Codable, CaseIterable {
-    case woman = "woman"
-    case man = "man"
-    case dog = "dog"
-    case cat = "cat"
-    case bird = "bird"
-    case car = "car"
-    case building = "building"
-    
-    static func random() -> AvatarType {
-        AvatarType.allCases.randomElement() ?? .man
-    }
-}
-
 // Login location structure
 struct LoginLocation: Codable {
     var latitude: Double
@@ -64,10 +31,6 @@ final class AppUser {
     var phoneNumber: String?
     var createdAt: Date
     var lastUpdated: Date
-    /// Deprecated: unused for display; catalog `avatarId` is authoritative. Soft-retired from Firestore.
-    var avatarColor: AvatarColor
-    /// Deprecated: unused for display; catalog `avatarId` is authoritative. Soft-retired from Firestore.
-    var avatarType: AvatarType
     
     // User image - Firebase Storage URL (nil means use default asset) //TODO: remove.
     var userImageURL: String?
@@ -114,8 +77,6 @@ final class AppUser {
         phoneNumber: String? = nil,
         createdAt: Date = .now,
         lastUpdated: Date = .now,
-        avatarColor: AvatarColor? = nil,
-        avatarType: AvatarType? = nil,
         userImageURL: String? = nil,
         deviceIdentifier: String? = nil,
         isUsernameManuallyChanged: Bool = false,
@@ -143,8 +104,6 @@ final class AppUser {
         self.phoneNumber = phoneNumber
         self.createdAt = createdAt
         self.lastUpdated = lastUpdated
-        self.avatarColor = avatarColor ?? AvatarColor.random()
-        self.avatarType = avatarType ?? AvatarType.random()
         self.userImageURL = userImageURL
         self.deviceIdentifier = deviceIdentifier
         self.isUsernameManuallyChanged = isUsernameManuallyChanged
@@ -171,11 +130,6 @@ final class AppUser {
         if isManual {
             self.isUsernameManuallyChanged = true
         }
-    }
-    
-    /// Deprecated: legacy asset name (`type_color`); no matching bundle assets. Prefer `avatarId`.
-    var defaultImageName: String {
-        "\(avatarType.rawValue)_\(avatarColor.rawValue)"
     }
     
     /// Get display name (firstName + lastName, or userName as fallback)
@@ -211,4 +165,3 @@ struct LinkedPlatform: Codable {
         // Add more platforms as needed
     }
 }
-

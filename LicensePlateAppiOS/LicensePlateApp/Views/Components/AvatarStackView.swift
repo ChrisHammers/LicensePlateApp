@@ -35,7 +35,7 @@ struct AvatarStackView: View {
             AvatarEntry(
                 id: $0.id,
                 avatarId: $0.avatarId,
-                legacyFallbackImageName: $0.defaultImageName,
+                legacyFallbackImageName: nil,
                 displayName: $0.userName
             )
         }
@@ -124,10 +124,8 @@ struct AvatarStackView: View {
 }
 
 #Preview {
-    let u1 = AppUser(userName: "A", avatarColor: .blue, avatarType: .dog)
-    u1.avatarId = "navigator_raccoon"
-    let u2 = AppUser(userName: "B", avatarColor: .green, avatarType: .cat)
-    u2.avatarId = "scout_otter"
+    let u1 = AppUser(userName: "A", avatarId: "navigator_raccoon")
+    let u2 = AppUser(userName: "B", avatarId: "scout_otter")
     return AvatarStackView(users: [u1, u2], maxDisplay: 3, avatarSize: 36)
         .padding()
 }

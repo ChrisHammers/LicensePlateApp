@@ -63,8 +63,7 @@ struct RevenueCatEntitlementBridgeTests {
             userName: "Test",
             createdAt: .now,
             lastUpdated: .now,
-            avatarColor: .blue,
-            avatarType: .man,
+
             linkedPlatforms: [],
             firebaseUID: "user1"
         )
@@ -95,8 +94,7 @@ struct RevenueCatEntitlementBridgeTests {
             userName: "Other",
             createdAt: .now,
             lastUpdated: .now,
-            avatarColor: .blue,
-            avatarType: .man,
+
             linkedPlatforms: [],
             firebaseUID: "otherUser"
         )
@@ -125,8 +123,7 @@ struct RevenueCatEntitlementBridgeTests {
             userName: "Other",
             createdAt: .now,
             lastUpdated: .now,
-            avatarColor: .blue,
-            avatarType: .man,
+
             linkedPlatforms: [],
             firebaseUID: "otherUser"
         )

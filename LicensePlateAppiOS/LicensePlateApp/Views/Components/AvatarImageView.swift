@@ -2,7 +2,7 @@
 //  AvatarImageView.swift
 //  LicensePlateApp
 //
-//  Displays avatar by avatarId (catalog) or legacy defaultImageName; respects assetSource (MVP: bundle only).
+//  Displays avatar by avatarId (catalog); respects assetSource (MVP: bundle only).
 //
 
 import SwiftUI
@@ -15,7 +15,8 @@ struct AvatarImageView: View {
     let size: CGFloat
     let showRing: Bool
     let customImageURL: String? // Optional custom photo URL (e.g. user.userImageURL)
-    let legacyFallbackImageName: String? // When no avatarId, e.g. user.defaultImageName
+    /// Unused leftover for callers that still pass a name; catalog `avatarId` is authoritative.
+    let legacyFallbackImageName: String?
     
     init(
         avatarId: String? = nil,
@@ -31,13 +32,13 @@ struct AvatarImageView: View {
         self.legacyFallbackImageName = legacyFallbackImageName
     }
     
-    /// Convenience: build from AppUser (uses avatarId, then userImageURL, then defaultImageName)
+    /// Convenience: build from AppUser (uses avatarId, then userImageURL).
     init(user: AppUser, size: CGFloat = 80, showRing: Bool = true) {
         self.avatarId = user.avatarId
         self.size = size
         self.showRing = showRing
         self.customImageURL = user.userImageURL
-        self.legacyFallbackImageName = user.defaultImageName
+        self.legacyFallbackImageName = nil
     }
     
     private var resolvedImage: Image? {
@@ -86,14 +87,8 @@ struct AvatarImageView: View {
         .padding()
 }
 
-#Preview("Fallback") {
-    AvatarImageView(size: 80, legacyFallbackImageName: "dog_blue")
-        .padding()
-}
-
 #Preview("AppUser") {
-    let user = AppUser(userName: "Scout", avatarColor: .blue, avatarType: .cat)
-    user.avatarId = "scout_otter"
+    let user = AppUser(userName: "Scout", avatarId: "scout_otter")
     return AvatarImageView(user: user, size: 100)
         .padding()
 }

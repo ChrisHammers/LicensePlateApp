@@ -1465,8 +1465,6 @@ class FirebaseAuthService: ObservableObject {
             existingUser.phoneNumber = firestoreUser.phoneNumber
             existingUser.userImageURL = firestoreUser.userImageURL
             existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
-            existingUser.avatarColor = firestoreUser.avatarColor
-            existingUser.avatarType = firestoreUser.avatarType
             existingUser.avatarId = firestoreUser.avatarId
             existingUser.equippedBadgeId = firestoreUser.equippedBadgeId
             existingUser.wasEverInFamily = firestoreUser.wasEverInFamily
@@ -1636,20 +1634,7 @@ class FirebaseAuthService: ObservableObject {
             }
         }
         
-        // Legacy avatar fields: parse if present; use fixed defaults when absent (do not randomize).
-        let avatarColor: AvatarColor
-        if let colorString = data["avatarColor"] as? String, let color = AvatarColor(rawValue: colorString) {
-            avatarColor = color
-        } else {
-            avatarColor = .blue
-        }
-        
-        let avatarType: AvatarType
-        if let typeString = data["avatarType"] as? String, let type = AvatarType(rawValue: typeString) {
-            avatarType = type
-        } else {
-            avatarType = .man
-        }
+        // Legacy avatarType/avatarColor Ignored — catalog avatarId is source of truth (V22+).
         
         var linkedPlatforms: [LinkedPlatform] = []
         if let platformsArray = data["linkedPlatforms"] as? [[String: Any]] {
@@ -1696,8 +1681,6 @@ class FirebaseAuthService: ObservableObject {
             phoneNumber: phoneNumber,
             createdAt: createdAt,
             lastUpdated: lastUpdated,
-            avatarColor: avatarColor,
-            avatarType: avatarType,
             userImageURL: userImageURL,
             deviceIdentifier: deviceIdentifier,
             isUsernameManuallyChanged: isUsernameManuallyChanged,

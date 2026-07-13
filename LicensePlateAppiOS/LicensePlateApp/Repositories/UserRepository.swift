@@ -101,7 +101,7 @@ class UserRepository: ObservableObject {
                     userId: id,
                     displayName: user.userName,
                     avatarId: user.avatarId,
-                    legacyFallbackImageName: user.defaultImageName
+                    legacyFallbackImageName: nil
                 )
             }
         }
@@ -120,7 +120,7 @@ class UserRepository: ObservableObject {
                     userId: id,
                     displayName: user.userName,
                     avatarId: user.avatarId,
-                    legacyFallbackImageName: user.defaultImageName
+                    legacyFallbackImageName: nil
                 )
             } else {
                 result[id] = UserIdentitySnapshot(
@@ -658,15 +658,6 @@ class UserRepository: ObservableObject {
             firebaseUID: id
         )
         
-        // Set avatar if available
-        if let avatarColorString = data["avatarColor"] as? String,
-           let avatarColor = AvatarColor(rawValue: avatarColorString) {
-            user.avatarColor = avatarColor
-        }
-        if let avatarTypeString = data["avatarType"] as? String,
-           let avatarType = AvatarType(rawValue: avatarTypeString) {
-            user.avatarType = avatarType
-        }
         user.avatarId = data["avatarId"] as? String
         user.equippedBadgeId = data["equippedBadgeId"] as? String
         user.wasEverInFamily = data["wasEverInFamily"] as? Bool ?? false
@@ -710,8 +701,6 @@ class UserRepository: ObservableObject {
                 existing.isRetiredGeneral = user.isRetiredGeneral
                 existing.activeFamilyId = user.activeFamilyId
                 existing.friendCount = user.friendCount
-                existing.avatarColor = user.avatarColor
-                existing.avatarType = user.avatarType
                 existing.avatarId = user.avatarId
                 existing.equippedBadgeId = user.equippedBadgeId
                 existing.wasEverInFamily = user.wasEverInFamily

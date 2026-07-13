@@ -30,7 +30,7 @@ struct AvatarBadgeView: View {
     
     init(user: AppUser, avatarSize: CGFloat = 80, badgeSize: CGFloat = 28) {
         self.avatarId = user.avatarId
-        self.legacyFallbackImageName = user.defaultImageName
+        self.legacyFallbackImageName = nil
         self.equippedBadgeId = user.equippedBadgeId
         self.avatarSize = avatarSize
         self.badgeSize = badgeSize

@@ -321,15 +321,6 @@ class FamilyRepository: ObservableObject {
                         firebaseUID: userId
                     )
                     
-                    // Set avatar if available
-                    if let avatarColorString = data["avatarColor"] as? String,
-                       let avatarColor = AvatarColor(rawValue: avatarColorString) {
-                        user.avatarColor = avatarColor
-                    }
-                    if let avatarTypeString = data["avatarType"] as? String,
-                       let avatarType = AvatarType(rawValue: avatarTypeString) {
-                        user.avatarType = avatarType
-                    }
                     user.avatarId = data["avatarId"] as? String
                     user.equippedBadgeId = data["equippedBadgeId"] as? String
                     user.wasEverInFamily = data["wasEverInFamily"] as? Bool ?? false
