@@ -14,7 +14,6 @@ struct AvatarImageView: View {
     let avatarId: String?
     let size: CGFloat
     let showRing: Bool
-    let customImageURL: String? // Optional custom photo URL (e.g. user.userImageURL)
     /// Unused leftover for callers that still pass a name; catalog `avatarId` is authoritative.
     let legacyFallbackImageName: String?
     
@@ -22,22 +21,19 @@ struct AvatarImageView: View {
         avatarId: String? = nil,
         size: CGFloat = 80,
         showRing: Bool = true,
-        customImageURL: String? = nil,
         legacyFallbackImageName: String? = nil
     ) {
         self.avatarId = avatarId
         self.size = size
         self.showRing = showRing
-        self.customImageURL = customImageURL
         self.legacyFallbackImageName = legacyFallbackImageName
     }
     
-    /// Convenience: build from AppUser (uses avatarId, then userImageURL).
+    /// Convenience: build from AppUser (uses catalog `avatarId`).
     init(user: AppUser, size: CGFloat = 80, showRing: Bool = true) {
         self.avatarId = user.avatarId
         self.size = size
         self.showRing = showRing
-        self.customImageURL = user.userImageURL
         self.legacyFallbackImageName = nil
     }
     

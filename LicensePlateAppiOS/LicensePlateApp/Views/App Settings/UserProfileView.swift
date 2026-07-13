@@ -8,7 +8,6 @@
 import SwiftUI
 import SwiftData
 import GoogleSignInSwift
-import FirebaseAuth
 
 struct UserProfileView: View {
     @Bindable var user: AppUser
@@ -27,12 +26,7 @@ struct UserProfileView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var isCheckingUsername = false
-    @State private var isUploadingImage = false
     @State private var linkingPlatform: LinkedPlatform.PlatformType? = nil
-    @State private var showImagePicker = false
-    @State private var showImageConfirmation = false
-    @State private var selectedImage: UIImage?
-    @State private var previewImage: UIImage?
     @State private var showAvatarPickerSheet = false
 
     @StateObject private var lifetimeStatsViewModel: LifetimeStatsProfileViewModel
@@ -170,13 +164,6 @@ struct UserProfileView: View {
                                 AnalyticsService.shared.log(.avatarPickerOpened(source: "profile"))
                             }
                         )
-
-                        if isUploadingImage {
-                            ProgressView("Uploading...".localized)
-                                .font(.system(.caption, design: .rounded))
-                                .foregroundStyle(Color.Theme.softBrown)
-                                .frame(maxWidth: .infinity)
-                        }
                     }
                     .listRowBackground(Color.clear)
                     .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
@@ -693,26 +680,6 @@ struct UserProfileView: View {
             .sheet(isPresented: $authService.showSignInSheet) {
                 SignInView(authService: authService, deferredSetupTouchSource: "profile")
             }
-            .sheet(isPresented: $showImagePicker) {
-                ImagePickerView(selectedImage: $selectedImage)
-            }
-            .sheet(isPresented: $showImageConfirmation) {
-                ImageConfirmationView(
-                    image: previewImage,
-                    onUse: {
-                        if let image = previewImage {
-                            uploadUserImage(image)
-                        }
-                        showImageConfirmation = false
-                        previewImage = nil
-                    },
-                    onCancel: {
-                        showImageConfirmation = false
-                        previewImage = nil
-                        selectedImage = nil
-                    }
-                )
-            }
             .sheet(isPresented: $showAvatarPickerSheet) {
                 ProfileAvatarPickerSheet(
                     user: user,
@@ -724,13 +691,6 @@ struct UserProfileView: View {
                     },
                     onDismiss: { showAvatarPickerSheet = false }
                 )
-            }
-            .onChange(of: selectedImage) { oldValue, newValue in
-                if let newImage = newValue {
-                    // Show confirmation instead of immediately uploading
-                    previewImage = newImage
-                    showImageConfirmation = true
-                }
             }
             .onChange(of: user.firstName) { oldValue, newValue in
                 currentFirstName = newValue ?? ""
@@ -858,107 +818,6 @@ struct UserProfileView: View {
     
     private func cancelLastNameEditing() {
         currentLastName = user.lastName ?? ""
-    }
-    
-  
-  func optimizedImage(_ originalImage: UIImage) -> Data? {
-    let scaledImage = scaleImageIfNeeded(originalImage)
-    let compression: CGFloat = 0.8 // 80% quality
-    let imageData = scaledImage.jpegData(compressionQuality: compression)
-    return imageData
-  }
-  
-  private func scaleImageIfNeeded(_ image: UIImage) -> UIImage {
-    let size = image.size
-    
-    // If image is smaller than max dimension, return original
-    if size.width <= 300 && size.height <= 300 {
-      return image
-    }
-    
-    // Calculate aspect ratio
-    let aspectRatio = size.width / size.height
-    
-    // Calculate new size while maintaining aspect ratio
-    var newSize: CGSize
-    if size.width > size.height {
-      newSize = CGSize(width: 300, height: 300 / aspectRatio)
-    } else {
-      newSize = CGSize(width: 300 * aspectRatio, height: 300)
-    }
-    
-    // Scale down the image
-    let renderer = UIGraphicsImageRenderer(size: newSize)
-    return renderer.image { context in
-      image.draw(in: CGRect(origin: .zero, size: newSize))
-    }
-  }
-
-  
-    private func uploadUserImage(_ image: UIImage) {
-        // Must use Firebase UID for Storage (not local ID)
-        guard let firebaseUID = user.firebaseUID else {
-            errorMessage = "You must be signed in to upload images. Please sign in first.".localized
-            showError = true
-            return
-        }
-        
-        // Verify user is authenticated with Firebase
-        guard Auth.auth().currentUser != nil else {
-            errorMessage = "You must be authenticated with Firebase to upload images. Please sign in first.".localized
-            showError = true
-            return
-        }
-        
-        isUploadingImage = true
-        
-        Task {
-            do {
-                // Compress image to JPEG
-                guard let imageData = optimizedImage(image) else {
-                    throw NSError(domain: "ImageUpload", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to compress image"])
-                }
-                
-                print("📤 Uploading image for Firebase user: \(firebaseUID)")
-                print("📤 Image size after compression: \(imageData.count) bytes")
-                
-                // Upload to Firebase Storage (must use Firebase UID)
-                let storageService = FirebaseStorageService()
-                let imageURL = try await storageService.uploadUserImage(userId: firebaseUID, imageData: imageData)
-                
-                // Update user
-                await MainActor.run {
-                    user.userImageURL = imageURL
-                    user.lastUpdated = .now
-                    
-                    // Clear old cache
-                    UserImageCache.shared.deleteCachedImage(for: firebaseUID)
-                    
-                    // Save to cache
-                    UserImageCache.shared.saveImage(imageData, for: firebaseUID)
-                    
-                    try? modelContext.save()
-                    isUploadingImage = false
-                }
-                
-                // Sync to Firestore
-                try await authService.saveUserDataToFirestore(user)
-                
-            } catch {
-                await MainActor.run {
-                    let errorDesc = error.localizedDescription
-                    print("❌ Image upload failed: \(errorDesc)")
-                    if let nsError = error as NSError? {
-                        print("   Error domain: \(nsError.domain)")
-                        print("   Error code: \(nsError.code)")
-                        print("   Error userInfo: \(nsError.userInfo)")
-                    }
-                    errorMessage = "Failed to upload image: %@".localized(errorDesc)
-                    showError = true
-                    isUploadingImage = false
-                }
-            }
-        }
     }
 }
 

@@ -42,7 +42,6 @@ struct AvatarBadgeView: View {
                 avatarId: avatarId,
                 size: avatarSize,
                 showRing: true,
-                customImageURL: nil,
                 legacyFallbackImageName: legacyFallbackImageName
             )
             if let badgeId = equippedBadgeId, UserBadgeCatalog.definition(byId: badgeId) != nil {
