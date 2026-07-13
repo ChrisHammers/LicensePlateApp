@@ -4,7 +4,7 @@
 //
 //  GPS Step 7 — persisted route point for a trip's ribbon. Per-device telemetry:
 //  local-only, never synced to Firestore, not part of the gameplay event log.
-//  Lands in SchemaVersion21.
+//  Included in CurrentSchema (SchemaVersion1 baseline).
 //
 
 import Foundation

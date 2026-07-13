@@ -2,7 +2,8 @@
 //  TripSessionTeamsEntity.swift
 //  LicensePlateApp
 //
-//  Step 06.5 — Legacy entity for session-level teams. Step 6.9.1 — Teams moved to GameInstance; this entity is only retained in schema versions 7–11 for migration. Removed from SchemaVersion12.
+//  Legacy entity for session-level teams. Teams moved to GameInstance; this type is
+//  retained in-source for reference only and is not part of CurrentSchema.
 //
 
 import Foundation
