@@ -15,6 +15,10 @@ struct XpGainToastBanner: View {
 
     private let rankBarHeight: CGFloat = 8
     private let rankBarCornerRadius: CGFloat = 4
+    private let toastContentPadding: CGFloat = 12
+    private let toastScreenInset: CGFloat = 20
+    private let rankBandInnerGutter: CGFloat = 4
+    private let rankSideIconSpacing: CGFloat = 8
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -23,7 +27,7 @@ struct XpGainToastBanner: View {
                     lineContent(line)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, toastContentPadding)
             .padding(.top, 12)
             .padding(.bottom, presentation.rankBand == nil ? 10 : 8)
 
@@ -42,7 +46,7 @@ struct XpGainToastBanner: View {
         )
         .shadow(color: .black.opacity(0.16), radius: 5, x: 0, y: 2)
         .shadow(color: .black.opacity(0.28), radius: 22, x: 0, y: 12)
-        .padding(.horizontal, 20)
+        .padding(.horizontal, toastScreenInset)
         .accessibilityElement(children: .combine)
         .accessibilityAction { onDismiss() }
         .accessibilityLabel(accessibilityLabel)
@@ -73,15 +77,17 @@ struct XpGainToastBanner: View {
     }
 
     private func rankBandSection(_ band: XpGainToastRankBand) -> some View {
-        HStack(alignment: .center, spacing: 10) {
+        HStack(alignment: .center, spacing: rankBandInnerGutter) {
             currentRankSide(band)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             rankProgressBar(band)
                 .frame(maxWidth: .infinity)
 
             nextRankSide(band)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, toastContentPadding)
         .padding(.vertical, 10)
         .background(Color.Theme.primaryBlue.opacity(0.05))
         .accessibilityElement(children: .combine)
@@ -89,7 +95,7 @@ struct XpGainToastBanner: View {
     }
 
     private func currentRankSide(_ band: XpGainToastRankBand) -> some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .center, spacing: rankSideIconSpacing) {
             rankIconBadge(systemName: band.currentRankIcon, rankLevel: band.currentRankLevel)
             VStack(alignment: .leading, spacing: 2) {
                 Text("rank.progression.rank_label".localized(band.currentRankLevel))
@@ -98,10 +104,11 @@ struct XpGainToastBanner: View {
                 Text(band.currentRankTitle)
                     .font(.system(.caption2, design: .rounded).weight(.semibold))
                     .foregroundStyle(Color.Theme.softBrown)
-                    .lineLimit(1)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .fixedSize(horizontal: true, vertical: false)
     }
 
     @ViewBuilder
@@ -110,25 +117,30 @@ struct XpGainToastBanner: View {
             Text("xp.toast.rank_band.max_rank".localized)
                 .font(.system(.caption2, design: .rounded).weight(.semibold))
                 .foregroundStyle(Color.Theme.softBrown)
+                .fixedSize(horizontal: false, vertical: true)
                 .multilineTextAlignment(.trailing)
-                .fixedSize(horizontal: true, vertical: false)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         } else if let nextLevel = band.nextRankLevel,
                   let nextTitle = band.nextRankTitle,
                   let nextIcon = band.nextRankIcon {
-            HStack(spacing: 8) {
-                Text("rank.progression.xp_to_next".localized(
-                    (band.xpToNextRank ?? 0).formatted(),
-                    nextTitle
-                ))
-                .font(.system(.caption2, design: .rounded).weight(.semibold))
-                .foregroundStyle(Color.Theme.softBrown)
-                .multilineTextAlignment(.trailing)
-                .lineLimit(2)
-                .minimumScaleFactor(0.85)
+            HStack(alignment: .center, spacing: rankSideIconSpacing) {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("rank.progression.rank_label".localized(nextLevel))
+                        .font(.system(.caption2, design: .rounded).weight(.heavy))
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                    Text("rank.progression.xp_to_next".localized(
+                        (band.xpToNextRank ?? 0).formatted(),
+                        nextTitle
+                    ))
+                    .font(.system(.caption2, design: .rounded).weight(.semibold))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                }
 
                 rankIconBadge(systemName: nextIcon, rankLevel: nextLevel)
             }
-            .fixedSize(horizontal: true, vertical: false)
         }
     }
 
@@ -258,9 +270,9 @@ struct XpGainToastBanner: View {
                 currentRankTitle: "Road Warrior",
                 currentRankIcon: "car.2.fill",
                 nextRankLevel: 3,
-                nextRankTitle: "Highway Hero",
+                nextRankTitle: "Highway Hero of the Open Road",
                 nextRankIcon: "flame.fill",
-                xpToNextRank: 450,
+                xpToNextRank: 4500000,
                 burstXpGained: 24,
                 progressBeforeBurst: 0.35,
                 progressAfterBurst: 0.52,
