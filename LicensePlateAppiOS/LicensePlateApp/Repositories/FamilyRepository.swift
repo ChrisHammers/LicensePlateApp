@@ -303,7 +303,7 @@ class FamilyRepository: ObservableObject {
                    let userName = (data["userName"] as? String) ?? (data["username"] as? String),
                    !userName.isEmpty {
                     
-                    // Create AppUser from Firestore data
+                    let privacyFlags = UserPrivacyFirestore.decode(from: data)
                     let user = AppUser(
                         id: userId,
                         userName: userName,
@@ -313,8 +313,8 @@ class FamilyRepository: ObservableObject {
                         phoneNumber: data["phone"] as? String,
                         createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? .now,
                         lastUpdated: (data["updatedAt"] as? Timestamp)?.dateValue() ?? .now,
-                        isEmailPublic: (data["privacy"] as? [String: Any])?["emailSearchable"] as? Bool ?? false,
-                        isPhonePublic: (data["privacy"] as? [String: Any])?["phoneSearchable"] as? Bool ?? false,
+                        isEmailPublic: privacyFlags.isEmailPublic,
+                        isPhonePublic: privacyFlags.isPhonePublic,
                         isRetiredGeneral: data["isRetiredGeneral"] as? Bool ?? false,
                         activeFamilyId: data["activeFamilyId"] as? String,
                         friendCount: data["friendCount"] as? Int ?? 0,

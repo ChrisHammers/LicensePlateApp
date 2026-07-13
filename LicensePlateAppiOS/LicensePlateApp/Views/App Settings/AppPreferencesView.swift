@@ -21,22 +21,9 @@ struct AppPreferencesView: View {
   @AppStorage("appShowUserAvatarOnMap") private var appShowUserAvatarOnMap = false
   @AppStorage("useGMURendering") private var useGMURendering = false // For comparison testing
   @AppStorage("useTileOverlayRendering") private var useTileOverlayRendering = false // For performance testing
-  @AppStorage("appLanguage") private var appLanguageRaw: String = AppLanguage.english.rawValue
   @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
   @AppStorage("appUseVibrations") private var appUseVibrations = true
   @AppStorage("returnStreakRemindersEnabled") private var returnStreakRemindersEnabled = true
-  @AppStorage("appTripSortOrder") private var appTripSortOrderRaw: String = AppTripSortOrder.dateCreated.rawValue
-  @AppStorage("appShowConfirmationDialogs") private var appShowConfirmationDialogs = true
-  
-  // Hidden preferences (for future use)
-  @AppStorage("appFontSize") private var appFontSizeRaw: String = AppFontSize.medium.rawValue
-  @AppStorage("appReduceMotion") private var appReduceMotion = false
-  @AppStorage("appAutoSync") private var appAutoSync = true
-  @AppStorage("appDefaultTab") private var appDefaultTabRaw: String = AppDefaultTab.trips.rawValue
-  @AppStorage("appShowStatistics") private var appShowStatistics = true
-  @AppStorage("appPlateDisplayFormat") private var appPlateDisplayFormatRaw: String = AppPlateDisplayFormat.fullName.rawValue
-  @AppStorage("appMapDefaultZoom") private var appMapDefaultZoomRaw: String = AppMapDefaultZoom.medium.rawValue
-  @AppStorage("appShowCompletedRegions") private var appShowCompletedRegions = true
   @AppStorage("appMapProvider") private var appMapProviderRaw: String = AppPreferences.defaultMapProvider().rawValue
   
   @State private var currentColorScheme: ColorScheme?
@@ -67,49 +54,6 @@ struct AppPreferencesView: View {
     Binding(
       get: { AppMapStyle(rawValue: appMapStyleRaw) ?? .standard },
       set: { appMapStyleRaw = $0.rawValue }
-    )
-  }
-  
-  private var appLanguage: Binding<AppLanguage> {
-    Binding(
-      get: { AppLanguage(rawValue: appLanguageRaw) ?? .english },
-      set: { appLanguageRaw = $0.rawValue }
-    )
-  }
-  
-  private var appTripSortOrder: Binding<AppTripSortOrder> {
-    Binding(
-      get: { AppTripSortOrder(rawValue: appTripSortOrderRaw) ?? .dateCreated },
-      set: { appTripSortOrderRaw = $0.rawValue }
-    )
-  }
-  
-  // Hidden preference bindings
-  private var appFontSize: Binding<AppFontSize> {
-    Binding(
-      get: { AppFontSize(rawValue: appFontSizeRaw) ?? .medium },
-      set: { appFontSizeRaw = $0.rawValue }
-    )
-  }
-  
-  private var appDefaultTab: Binding<AppDefaultTab> {
-    Binding(
-      get: { AppDefaultTab(rawValue: appDefaultTabRaw) ?? .trips },
-      set: { appDefaultTabRaw = $0.rawValue }
-    )
-  }
-  
-  private var appPlateDisplayFormat: Binding<AppPlateDisplayFormat> {
-    Binding(
-      get: { AppPlateDisplayFormat(rawValue: appPlateDisplayFormatRaw) ?? .fullName },
-      set: { appPlateDisplayFormatRaw = $0.rawValue }
-    )
-  }
-  
-  private var appMapDefaultZoom: Binding<AppMapDefaultZoom> {
-    Binding(
-      get: { AppMapDefaultZoom(rawValue: appMapDefaultZoomRaw) ?? .medium },
-      set: { appMapDefaultZoomRaw = $0.rawValue }
     )
   }
   
@@ -197,98 +141,6 @@ struct AppPreferencesView: View {
             }
             .accessibilityLabel("return_streak.settings.reminder.title".localized)
             .accessibilityHint("return_streak.settings.reminder.detail".localized)
-            
-            // Hidden preferences (for future use)
-            if false {
-              Divider()
-              
-              SettingPickerRow(
-                title: "Trip Sort Order".localized,
-                description: "How to sort trips in the list".localized,
-                selection: appTripSortOrder
-              )
-              
-              Divider()
-              
-              SettingToggleRow(
-                title: "Show Confirmation Dialogs".localized,
-                description: "Show confirmation prompts for destructive actions like deleting trips".localized,
-                isOn: $appShowConfirmationDialogs
-              )
-              
-              Divider()
-              Divider()
-              
-              SettingPickerRow(
-                title: "Language".localized,
-                description: "Select your preferred language".localized,
-                selection: appLanguage
-              )
-              
-              Divider()
-              
-              SettingPickerRow(
-                title: "Font Size".localized,
-                description: "Adjust text size for better readability".localized,
-                selection: appFontSize
-              )
-              
-              Divider()
-              
-              SettingToggleRow(
-                title: "Reduce Motion".localized,
-                description: "Respect iOS Reduce Motion setting".localized,
-                isOn: $appReduceMotion
-              )
-              
-              Divider()
-              
-              SettingToggleRow(
-                title: "Auto-Sync".localized,
-                description: "Automatically sync data to cloud".localized,
-                isOn: $appAutoSync
-              )
-              
-              Divider()
-              
-              SettingPickerRow(
-                title: "Default Tab".localized,
-                description: "Which tab to show when opening the app".localized,
-                selection: appDefaultTab
-              )
-              
-              Divider()
-              
-              SettingToggleRow(
-                title: "Show Statistics".localized,
-                description: "Display statistics on the main screen".localized,
-                isOn: $appShowStatistics
-              )
-              
-              Divider()
-              
-              SettingPickerRow(
-                title: "Plate Display Format".localized,
-                description: "How to display license plate regions".localized,
-                selection: appPlateDisplayFormat
-              )
-              
-              Divider()
-              
-              SettingPickerRow(
-                title: "Map Default Zoom".localized,
-                description: "Default zoom level when opening maps".localized,
-                selection: appMapDefaultZoom
-              )
-              
-              Divider()
-              
-              SettingToggleRow(
-                title: "Show Completed Regions".localized,
-                description: "Display regions that are already found in lists".localized,
-                isOn: $appShowCompletedRegions
-              )
-            }
           }
           .padding(.horizontal, 16)
           .padding(.vertical, 16)
@@ -398,4 +250,3 @@ struct AppPreferencesView: View {
     }
   }
 }
-

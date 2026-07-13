@@ -27,7 +27,7 @@ struct FriendInviteDetail: View {
                             .padding()
                             .accessibilityLabel("Loading".localized)
                     } else if let user = viewModel.user {
-                        UserImageView(user: user, size: 100)
+                        AvatarImageView(user: user, size: 100)
 
                         Text(user.displayName)
                             .font(.system(.title2, design: .rounded))

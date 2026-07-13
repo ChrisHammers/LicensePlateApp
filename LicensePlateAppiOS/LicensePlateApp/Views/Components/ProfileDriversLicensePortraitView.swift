@@ -2,7 +2,7 @@
 //  ProfileDriversLicensePortraitView.swift
 //  LicensePlateApp
 //
-//  Rectangular portrait fill for `UserDriversLicenseCard` (catalog avatar, legacy asset, or custom photo).
+//  Rectangular portrait fill for `UserDriversLicenseCard` (catalog avatar or custom photo).
 //
 
 import SwiftUI
@@ -33,13 +33,6 @@ struct ProfileDriversLicensePortraitView: View {
                         .frame(width: geo.size.width * 0.75, height: geo.size.height * 0.75)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .foregroundStyle(.white)
-                } else if let legacyImage = legacyAvatarImage {
-                    legacyImage
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: geo.size.width * 0.75, height: geo.size.height * 0.75)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .foregroundStyle(.white)
                 } else {
                     LicensePortraitPlaceholder()
                 }
@@ -57,11 +50,6 @@ struct ProfileDriversLicensePortraitView: View {
               let uiImage = UIImage(named: item.assetName) else {
             return nil
         }
-        return Image(uiImage: uiImage)
-    }
-
-    private var legacyAvatarImage: Image? {
-        guard let uiImage = UIImage(named: user.defaultImageName) else { return nil }
         return Image(uiImage: uiImage)
     }
 

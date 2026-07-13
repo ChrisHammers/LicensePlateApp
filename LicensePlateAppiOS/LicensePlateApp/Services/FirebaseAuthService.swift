@@ -1504,11 +1504,11 @@ class FirebaseAuthService: ObservableObject {
             "userName": user.userName,
             "createdAt": Timestamp(date: user.createdAt),
             "lastUpdated": Timestamp(date: user.lastUpdated),
-            "avatarColor": user.avatarColor.rawValue,
-            "avatarType": user.avatarType.rawValue,
             "isUsernameManuallyChanged": user.isUsernameManuallyChanged,
-            "isEmailPublic": user.isEmailPublic,
-            "isPhonePublic": user.isPhonePublic
+            "privacy": UserPrivacyFirestore.encode(
+                isEmailPublic: user.isEmailPublic,
+                isPhonePublic: user.isPhonePublic
+            )
         ]
         
         if let firstName = user.firstName {
@@ -1534,6 +1534,12 @@ class FirebaseAuthService: ObservableObject {
         }
         data["wasEverInFamily"] = user.wasEverInFamily
         data["deviceIdentifier"] = FieldValue.delete()
+        // Soft-retire legacy avatar identity (catalog avatarId is source of truth).
+        data["avatarColor"] = FieldValue.delete()
+        data["avatarType"] = FieldValue.delete()
+        // Align with search/functions: privacy.* only (drop top-level legacy keys).
+        data["isEmailPublic"] = FieldValue.delete()
+        data["isPhonePublic"] = FieldValue.delete()
         if let lastDateLoggedIn = user.lastDateLoggedIn {
             data["lastDateLoggedIn"] = Timestamp(date: lastDateLoggedIn)
         }
@@ -1582,8 +1588,9 @@ class FirebaseAuthService: ObservableObject {
         let wasEverInFamily = data["wasEverInFamily"] as? Bool ?? false
         let deviceIdentifier = data["deviceIdentifier"] as? String
         let isUsernameManuallyChanged = data["isUsernameManuallyChanged"] as? Bool ?? false
-        let isEmailPublic = data["isEmailPublic"] as? Bool ?? false
-        let isPhonePublic = data["isPhonePublic"] as? Bool ?? false
+        let privacyFlags = UserPrivacyFirestore.decode(from: data)
+        let isEmailPublic = privacyFlags.isEmailPublic
+        let isPhonePublic = privacyFlags.isPhonePublic
         
         let createdAt: Date
         if let timestamp = data["createdAt"] as? Timestamp {
@@ -1629,18 +1636,19 @@ class FirebaseAuthService: ObservableObject {
             }
         }
         
+        // Legacy avatar fields: parse if present; use fixed defaults when absent (do not randomize).
         let avatarColor: AvatarColor
         if let colorString = data["avatarColor"] as? String, let color = AvatarColor(rawValue: colorString) {
             avatarColor = color
         } else {
-            avatarColor = AvatarColor.random()
+            avatarColor = .blue
         }
         
         let avatarType: AvatarType
         if let typeString = data["avatarType"] as? String, let type = AvatarType(rawValue: typeString) {
             avatarType = type
         } else {
-            avatarType = AvatarType.random()
+            avatarType = .man
         }
         
         var linkedPlatforms: [LinkedPlatform] = []

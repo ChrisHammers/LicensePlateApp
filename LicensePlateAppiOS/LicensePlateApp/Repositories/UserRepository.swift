@@ -639,7 +639,7 @@ class UserRepository: ObservableObject {
             throw NSError(domain: "UserRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid user data: missing userName"])
         }
         
-        let privacy = data["privacy"] as? [String: Any] ?? [:]
+        let privacyFlags = UserPrivacyFirestore.decode(from: data)
         
         let user = AppUser(
             id: id,
@@ -650,8 +650,8 @@ class UserRepository: ObservableObject {
             phoneNumber: data["phone"] as? String,
             createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? .now,
             lastUpdated: (data["updatedAt"] as? Timestamp)?.dateValue() ?? .now,
-            isEmailPublic: privacy["emailSearchable"] as? Bool ?? false,
-            isPhonePublic: privacy["phoneSearchable"] as? Bool ?? false,
+            isEmailPublic: privacyFlags.isEmailPublic,
+            isPhonePublic: privacyFlags.isPhonePublic,
             isRetiredGeneral: data["isRetiredGeneral"] as? Bool ?? false,
             activeFamilyId: data["activeFamilyId"] as? String,
             friendCount: data["friendCount"] as? Int ?? 0,

@@ -79,28 +79,8 @@
 "Enable audio feedback for app interactions" = "Habilita retroalimentación de audio para interacciones de la app";
 "Use Vibrations" = "Usar Vibraciones";
 "Enable haptic feedback" = "Habilita retroalimentación háptica";
-"Trip Sort Order" = "Orden de Clasificación de Viajes";
-"How to sort trips in the list" = "Cómo ordenar los viajes en la lista";
-"Show Confirmation Dialogs" = "Mostrar Diálogos de Confirmación";
-"Show confirmation prompts for destructive actions like deleting trips" = "Mostrar avisos de confirmación para acciones destructivas como eliminar viajes";
 "Language" = "Idioma";
 "Select your preferred language" = "Selecciona tu idioma preferido";
-"Font Size" = "Tamaño de Fuente";
-"Adjust text size for better readability" = "Ajusta el tamaño del texto para mejor legibilidad";
-"Reduce Motion" = "Reducir Movimiento";
-"Respect iOS Reduce Motion setting" = "Respeta la configuración de Reducir Movimiento de iOS";
-"Auto-Sync" = "Sincronización Automática";
-"Automatically sync data to cloud" = "Sincroniza automáticamente los datos a la nube";
-"Default Tab" = "Pestaña Predeterminada";
-"Which tab to show when opening the app" = "Qué pestaña mostrar al abrir la app";
-"Show Statistics" = "Mostrar Estadísticas";
-"Display statistics on the main screen" = "Mostrar estadísticas en la pantalla principal";
-"Plate Display Format" = "Formato de Visualización de Placas";
-"How to display license plate regions" = "Cómo mostrar las regiones de placas";
-"Map Default Zoom" = "Zoom Predeterminado del Mapa";
-"Default zoom level when opening maps" = "Nivel de zoom predeterminado al abrir mapas";
-"Show Completed Regions" = "Mostrar Regiones Completadas";
-"Display regions that are already found in lists" = "Mostrar regiones que ya se encontraron en las listas";
 "Show Map Markers" = "Mostrar Marcadores en el Mapa";
 "Display markers on the map showing where regions were found (requires location data)" = "Mostrar marcadores en el mapa indicando dónde se encontraron las regiones (requiere datos de ubicación)";
 "Show Avatars on Map" = "Mostrar Avatares en el Mapa";
@@ -452,29 +432,10 @@
 "Spanish" = "Español";
 "French" = "Francés";
 
-// Enum Values - AppTripSortOrder
-"Date Created" = "Fecha de Creación";
+// Shared labels (also used outside preferences)
 "Name" = "Nombre";
 "Progress" = "Progreso";
-"Last Active" = "Último Activo";
-
-// Enum Values - AppFontSize
-"Small" = "Pequeño";
-"Medium" = "Mediano";
-"Large" = "Grande";
-
-// Enum Values - AppDefaultTab
-"Trips" = "Viajes";
-"Map" = "Mapa";
-"Stats" = "Estadísticas";
-
-// Enum Values - AppPlateDisplayFormat
-"Full Name" = "Nombre Completo";
-"Abbreviation" = "Abreviatura";
-
-// Enum Values - AppMapDefaultZoom
-"Close" = "Cerca";
-"Far" = "Lejos";
+"Close" = "Cerrar";
 
 // Enum Values - AppBackgroundStyle
 "None" = "Ninguno";

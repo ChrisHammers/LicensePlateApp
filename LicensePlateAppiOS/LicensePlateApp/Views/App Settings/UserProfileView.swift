@@ -242,7 +242,13 @@ struct UserProfileView: View {
                                     get: { user.isEmailPublic },
                                     set: { newValue in
                                         user.isEmailPublic = newValue
+                                        user.lastUpdated = .now
                                         try? modelContext.save()
+                                        if authService.isTrulyAuthenticated {
+                                            Task {
+                                                try? await authService.saveUserDataToFirestore(user)
+                                            }
+                                        }
                                     }
                                 ),
                                 isEditable: false,
@@ -268,7 +274,13 @@ struct UserProfileView: View {
                                     get: { user.isPhonePublic },
                                     set: { newValue in
                                         user.isPhonePublic = newValue
+                                        user.lastUpdated = .now
                                         try? modelContext.save()
+                                        if authService.isTrulyAuthenticated {
+                                            Task {
+                                                try? await authService.saveUserDataToFirestore(user)
+                                            }
+                                        }
                                     }
                                 ),
                                 isEditable: true,

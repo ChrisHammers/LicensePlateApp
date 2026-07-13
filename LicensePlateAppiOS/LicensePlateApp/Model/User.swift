@@ -8,7 +8,8 @@
 import Foundation
 import SwiftData
 
-// Avatar color enum
+/// Deprecated: legacy avatar identity. Catalog `avatarId` is the source of truth.
+/// Kept on SwiftData `AppUser` until a schema version drops these properties.
 enum AvatarColor: String, Codable, CaseIterable {
     case red = "red"
     case green = "green"
@@ -24,7 +25,8 @@ enum AvatarColor: String, Codable, CaseIterable {
     }
 }
 
-// Avatar type enum
+/// Deprecated: legacy avatar identity. Catalog `avatarId` is the source of truth.
+/// Kept on SwiftData `AppUser` until a schema version drops these properties.
 enum AvatarType: String, Codable, CaseIterable {
     case woman = "woman"
     case man = "man"
@@ -62,7 +64,9 @@ final class AppUser {
     var phoneNumber: String?
     var createdAt: Date
     var lastUpdated: Date
+    /// Deprecated: unused for display; catalog `avatarId` is authoritative. Soft-retired from Firestore.
     var avatarColor: AvatarColor
+    /// Deprecated: unused for display; catalog `avatarId` is authoritative. Soft-retired from Firestore.
     var avatarType: AvatarType
     
     // User image - Firebase Storage URL (nil means use default asset) //TODO: remove.
@@ -79,7 +83,7 @@ final class AppUser {
     var isPhonePublic: Bool = false
     
     // Avatar & Badge (MVP Identity)
-    var avatarId: String? // Catalog avatar ID; nil = use legacy avatarType/avatarColor
+    var avatarId: String? // Catalog avatar ID (source of truth for display)
     var equippedBadgeId: String? // MVP: one equipped badge slot
     var wasEverInFamily: Bool = false // Keeps family unlocks after leaving
     
@@ -169,7 +173,7 @@ final class AppUser {
         }
     }
     
-    /// Get the default asset image name based on avatar type and color
+    /// Deprecated: legacy asset name (`type_color`); no matching bundle assets. Prefer `avatarId`.
     var defaultImageName: String {
         "\(avatarType.rawValue)_\(avatarColor.rawValue)"
     }

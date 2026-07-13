@@ -313,7 +313,7 @@ struct FriendRow: View {
     private var rowContent: some View {
         HStack {
             if let user = user {
-                UserImageView(user: user, size: 50)
+                AvatarImageView(user: user, size: 50)
             } else {
                 Circle()
                     .fill(Color.Theme.primaryBlue.opacity(0.3))

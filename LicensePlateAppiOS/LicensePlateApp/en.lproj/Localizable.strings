@@ -79,28 +79,8 @@
 "Enable audio feedback for app interactions" = "Enable audio feedback for app interactions";
 "Use Vibrations" = "Use Vibrations";
 "Enable haptic feedback" = "Enable haptic feedback";
-"Trip Sort Order" = "Trip Sort Order";
-"How to sort trips in the list" = "How to sort trips in the list";
-"Show Confirmation Dialogs" = "Show Confirmation Dialogs";
-"Show confirmation prompts for destructive actions like deleting trips" = "Show confirmation prompts for destructive actions like deleting trips";
 "Language" = "Language";
 "Select your preferred language" = "Select your preferred language";
-"Font Size" = "Font Size";
-"Adjust text size for better readability" = "Adjust text size for better readability";
-"Reduce Motion" = "Reduce Motion";
-"Respect iOS Reduce Motion setting" = "Respect iOS Reduce Motion setting";
-"Auto-Sync" = "Auto-Sync";
-"Automatically sync data to cloud" = "Automatically sync data to cloud";
-"Default Tab" = "Default Tab";
-"Which tab to show when opening the app" = "Which tab to show when opening the app";
-"Show Statistics" = "Show Statistics";
-"Display statistics on the main screen" = "Display statistics on the main screen";
-"Plate Display Format" = "Plate Display Format";
-"How to display license plate regions" = "How to display license plate regions";
-"Map Default Zoom" = "Map Default Zoom";
-"Default zoom level when opening maps" = "Default zoom level when opening maps";
-"Show Completed Regions" = "Show Completed Regions";
-"Display regions that are already found in lists" = "Display regions that are already found in lists";
 "Show Map Markers" = "Show Map Markers";
 "Display markers on the map showing where regions were found (requires location data)" = "Display markers on the map showing where regions were found (requires location data)";
 "Show Avatars on Map" = "Show Avatars on Map";
@@ -452,29 +432,10 @@
 "Spanish" = "Spanish";
 "French" = "French";
 
-// Enum Values - AppTripSortOrder
-"Date Created" = "Date Created";
+// Shared labels (also used outside preferences)
 "Name" = "Name";
 "Progress" = "Progress";
-"Last Active" = "Last Active";
-
-// Enum Values - AppFontSize
-"Small" = "Small";
-"Medium" = "Medium";
-"Large" = "Large";
-
-// Enum Values - AppDefaultTab
-"Trips" = "Trips";
-"Map" = "Map";
-"Stats" = "Stats";
-
-// Enum Values - AppPlateDisplayFormat
-"Full Name" = "Full Name";
-"Abbreviation" = "Abbreviation";
-
-// Enum Values - AppMapDefaultZoom
 "Close" = "Close";
-"Far" = "Far";
 
 // Enum Values - AppBackgroundStyle
 "None" = "None";
