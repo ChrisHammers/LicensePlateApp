@@ -30,7 +30,7 @@ struct RemoteConfigDefaultsProvider: RemoteConfigValueProviding {
              .returnStreakMinDisplay, .returnStreakCelebrationMinStreak, .returnStreakReminderHour,
              .quickSoloSplashDelayMs:
             return int(for: key) != 0
-        case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1:
+        case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1, .progressionCatalogXpToastV1:
             return !string(for: key).isEmpty
         }
     }
@@ -54,14 +54,14 @@ struct RemoteConfigDefaultsProvider: RemoteConfigValueProviding {
             return bool(for: key) ? 1 : 0
         case .returnStreakReminderEnabled:
             return 0
-        case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1:
+        case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1, .progressionCatalogXpToastV1:
             return string(for: key).isEmpty ? 0 : 1
         }
     }
 
     func string(for key: RemoteConfigService.Key) -> String {
         switch key {
-        case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1:
+        case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1, .progressionCatalogXpToastV1:
             return ""
         default:
             return ""
@@ -87,6 +87,7 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
         case founderProgramEnabled = "founder_program_enabled"
         case progressionRewardsPresentationV1 = "progression_rewards_presentation_v1"
         case progressionCatalogPresentationV1 = "progression_catalog_presentation_v1"
+        case progressionCatalogXpToastV1 = "progression_catalog_xp_toast_v1"
         case quickSoloFirstSessionEnabled = "quick_solo_first_session_enabled"
         case quickSoloSplashDelayMs = "quick_solo_splash_delay_ms"
     }
@@ -128,7 +129,8 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
             presentationOverrideJSON: string(for: .progressionRewardsPresentationV1)
         )
         ProgressionCatalogProvider.shared.refresh(
-            presentationOverrideJSON: string(for: .progressionCatalogPresentationV1)
+            presentationOverrideJSON: string(for: .progressionCatalogPresentationV1),
+            xpToastOverrideJSON: string(for: .progressionCatalogXpToastV1)
         )
     }
 
@@ -189,6 +191,7 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
             Key.founderProgramEnabled.rawValue: defaults.bool(for: .founderProgramEnabled) as NSNumber,
             Key.progressionRewardsPresentationV1.rawValue: defaults.string(for: .progressionRewardsPresentationV1) as NSString,
             Key.progressionCatalogPresentationV1.rawValue: defaults.string(for: .progressionCatalogPresentationV1) as NSString,
+            Key.progressionCatalogXpToastV1.rawValue: defaults.string(for: .progressionCatalogXpToastV1) as NSString,
             Key.quickSoloFirstSessionEnabled.rawValue: defaults.bool(for: .quickSoloFirstSessionEnabled) as NSNumber,
             Key.quickSoloSplashDelayMs.rawValue: defaults.int(for: .quickSoloSplashDelayMs) as NSNumber
         ]
