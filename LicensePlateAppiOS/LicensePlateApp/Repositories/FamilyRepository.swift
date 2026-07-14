@@ -310,7 +310,7 @@ class FamilyRepository: ObservableObject {
                         firstName: data["firstName"] as? String,
                         lastName: data["lastName"] as? String,
                         email: data["email"] as? String,
-                        phoneNumber: data["phone"] as? String,
+                        phoneNumber: data["phoneNumber"] as? String,
                         createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? .now,
                         lastUpdated: (data["updatedAt"] as? Timestamp)?.dateValue() ?? .now,
                         isEmailPublic: privacyFlags.isEmailPublic,

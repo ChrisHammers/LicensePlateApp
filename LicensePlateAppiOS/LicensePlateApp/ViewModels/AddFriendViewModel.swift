@@ -161,7 +161,10 @@ final class AddFriendViewModel: ObservableObject {
             invitingUserId = toUserId
             defer { invitingUserId = nil }
             do {
-                _ = try await friendshipRepository.sendFriendInvite(toUserId: toUserId, method: "search")
+                _ = try await friendshipRepository.sendFriendInvite(
+                    toUserId: toUserId,
+                    method: result.matchedField.inviteMethod
+                )
                 AnalyticsService.shared.log(.userSearchResultSelected)
                 AnalyticsService.shared.log(.friendRequestSent)
                 showSuccessAlert = true

@@ -44,3 +44,11 @@ struct UserPrivacyFirestoreTests {
         #expect(decoded.isPhonePublic == false)
     }
 }
+
+struct UserSearchInviteMethodTests {
+    @Test func inviteMethodMapsMatchFieldForCloudFunctionGates() {
+        #expect(UserRepository.UserSearchResult.MatchField.username.inviteMethod == "search")
+        #expect(UserRepository.UserSearchResult.MatchField.email.inviteMethod == "email")
+        #expect(UserRepository.UserSearchResult.MatchField.phone.inviteMethod == "phone")
+    }
+}

@@ -1,6 +1,6 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import { canAddMemberToFamily, assertUserIsRegistered, recipientNotRegisteredMessage } from "./utils/validation";
+import { canAddMemberToFamily, assertUserIsRegistered, recipientNotRegisteredMessage, isUserSearchable } from "./utils/validation";
 import { writeAuditLog } from "./audit";
 import { getFCMToken, sendPushNotification } from "./utils/notifications";
 import { normalizeClientMetadata } from "./clientMetadata";
@@ -159,6 +159,28 @@ export const sendFamilyInvite = enforcedCallable(
         "failed-precondition",
         canAdd.reason || "Cannot add user to family"
       );
+    }
+
+    // Check privacy if searching by email/phone
+    if (method === "email" || method === "phone") {
+      const searchable = await isUserSearchable(
+        toUserId,
+        method === "email" ? "email" : "phone"
+      );
+      if (!searchable) {
+        await writeAuditLog({
+          eventType: "invite_auto_rejected_not_searchable",
+          actorId: fromUserId,
+          subjectType: "user",
+          subjectId: toUserId,
+          metadata: { familyId, method },
+          clientMetadata,
+        });
+        throw new functions.https.HttpsError(
+          "permission-denied",
+          "User is not searchable by this method"
+        );
+      }
     }
 
     // Create invite

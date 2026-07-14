@@ -261,11 +261,12 @@ struct FamilyMemberSearchResultRow: View {
         
         // Use firebaseUID if available, otherwise fall back to id
         let toUserId = user.firebaseUID ?? user.id
+        let inviteMethod = result.matchedField.inviteMethod
         
         print("📤 Sending family invite:")
         print("   - To User ID: \(toUserId)")
         print("   - Family ID: \(familyId)")
-        print("   - Method: search")
+        print("   - Method: \(inviteMethod)")
         
         isInviting = true
         errorMessage = nil
@@ -275,7 +276,7 @@ struct FamilyMemberSearchResultRow: View {
                 let inviteId = try await familyRepository.sendFamilyInvite(
                     toUserId: toUserId,
                     familyId: familyId,
-                    method: "search"
+                    method: inviteMethod
                 )
                 
                 print("✅ Family invite sent successfully:")

@@ -362,7 +362,7 @@ class UserRepository: ObservableObject {
         
         // Query users where phone matches and phoneSearchable is true
         let query = db.collection("users")
-            .whereField("phone", isEqualTo: phone)
+            .whereField("phoneNumber", isEqualTo: phone)
         
         let snapshot = try await query.getDocuments()
         var results: [AppUser] = []
@@ -500,7 +500,7 @@ class UserRepository: ObservableObject {
                 let privacy = data["privacy"] as? [String: Any] ?? [:]
                 let phoneSearchable = privacy["phoneSearchable"] as? Bool ?? false
                 
-                if phoneSearchable, let phone = data["phone"] as? String {
+                if phoneSearchable, let phone = data["phoneNumber"] as? String {
                     let phoneNumbers = phone.filter { $0.isNumber }
                     // Contains check on numeric characters only
                     if phoneNumbers.contains(phoneQuery) {
@@ -545,12 +545,12 @@ class UserRepository: ObservableObject {
                 .filter { excludeUserId == nil || $0.id != excludeUserId }
                 .map { UserSearchResult(user: $0, matchedField: .username) }
         case .email:
-            let users = try await searchByEmailContains(query)
+            let users = try await searchByEmail(query)
             results = users
                 .filter { excludeUserId == nil || $0.id != excludeUserId }
                 .map { UserSearchResult(user: $0, matchedField: .email) }
         case .phone:
-            let users = try await searchByPhoneContains(query)
+            let users = try await searchByPhone(query)
             results = users
                 .filter { excludeUserId == nil || $0.id != excludeUserId }
                 .map { UserSearchResult(user: $0, matchedField: .phone) }
@@ -567,8 +567,8 @@ class UserRepository: ObservableObject {
                 }
             }
             
-            // Search email (if public)
-            let emailResults = try await searchByEmailContains(query)
+            // Search email exact match (if public)
+            let emailResults = try await searchByEmail(query)
             for user in emailResults {
                 if (excludeUserId == nil || user.id != excludeUserId) && !foundUsers.contains(user.id) {
                     results.append(UserSearchResult(user: user, matchedField: .email))
@@ -576,8 +576,8 @@ class UserRepository: ObservableObject {
                 }
             }
             
-            // Search phone (if public)
-            let phoneResults = try await searchByPhoneContains(query)
+            // Search phone exact match (if public)
+            let phoneResults = try await searchByPhone(query)
             for user in phoneResults {
                 if (excludeUserId == nil || user.id != excludeUserId) && !foundUsers.contains(user.id) {
                     results.append(UserSearchResult(user: user, matchedField: .phone))
@@ -627,6 +627,16 @@ class UserRepository: ObservableObject {
                 case .phone: return "Phone".localized
                 }
             }
+
+            /// Invite method string for Cloud Functions searchable gates.
+            /// Username discovery stays `"search"`; email/phone trigger privacy checks.
+            var inviteMethod: String {
+                switch self {
+                case .username: return "search"
+                case .email: return "email"
+                case .phone: return "phone"
+                }
+            }
         }
     }
     
@@ -647,7 +657,7 @@ class UserRepository: ObservableObject {
             firstName: data["firstName"] as? String,
             lastName: data["lastName"] as? String,
             email: data["email"] as? String,
-            phoneNumber: data["phone"] as? String,
+            phoneNumber: data["phoneNumber"] as? String,
             createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? .now,
             lastUpdated: (data["updatedAt"] as? Timestamp)?.dateValue() ?? .now,
             isEmailPublic: privacyFlags.isEmailPublic,

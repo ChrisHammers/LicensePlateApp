@@ -93,19 +93,28 @@ export async function checkFriendCap(
 }
 
 /**
- * Check if user is searchable by email/phone
+ * Check if user is searchable by email/phone.
+ * Prefers privacy.emailSearchable / phoneSearchable when present; falls back to
+ * legacy top-level isEmailPublic / isPhonePublic for older docs.
  */
 export async function isUserSearchable(
   userId: string,
   searchType: "email" | "phone"
 ): Promise<boolean> {
   const userDoc = await db.collection("users").doc(userId).get();
-  const privacy = userDoc.data()?.privacy || {};
+  const data = userDoc.data() || {};
+  const privacy = data.privacy || {};
 
   if (searchType === "email") {
-    return privacy.emailSearchable === true;
+    if (typeof privacy.emailSearchable === "boolean") {
+      return privacy.emailSearchable === true;
+    }
+    return data.isEmailPublic === true;
   } else {
-    return privacy.phoneSearchable === true;
+    if (typeof privacy.phoneSearchable === "boolean") {
+      return privacy.phoneSearchable === true;
+    }
+    return data.isPhonePublic === true;
   }
 }
 
