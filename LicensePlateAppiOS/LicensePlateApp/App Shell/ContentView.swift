@@ -846,6 +846,26 @@ struct DefaultSettingsView: View {
                                 Divider()
                             }
 
+                            SettingNavigationRow(
+                                title: "Friends".localized,
+                                description: "Manage your friends and friend requests".localized,
+                                icon: "person.2"
+                            ) {
+                                coordinator.navigateToFriends()
+                            }
+
+                            Divider()
+
+                            SettingNavigationRow(
+                                title: "Family".localized,
+                                description: "View and manage your family".localized,
+                                icon: "house"
+                            ) {
+                                coordinator.navigateToFamily()
+                            }
+
+                            Divider()
+
                             // Privacy & Permissions
                             SettingNavigationRow(
                                 title: "Privacy & Permissions".localized,

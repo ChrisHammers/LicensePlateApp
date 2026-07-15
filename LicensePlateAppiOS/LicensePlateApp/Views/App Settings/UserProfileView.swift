@@ -323,40 +323,6 @@ struct UserProfileView: View {
                     .listRowBackground(Color.clear)
                     .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
 
-                    // Friends & Family Section
-                    Section {
-                        VStack(spacing: 12) {
-                            SettingNavigationRow(
-                                title: "Friends".localized,
-                                description: "Manage your friends and friend requests".localized,
-                                icon: "person.2"
-                            ) {
-                                coordinator.navigateToFriends()
-                            }
-
-                            SettingNavigationRow(
-                                title: "Family".localized,
-                                description: "View and manage your family".localized,
-                                icon: "house"
-                            ) {
-                                coordinator.navigateToFamily()
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 16)
-                        .background(Color.Theme.cardBackground)
-                        .cornerRadius(20)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-                        .listRowBackground(Color.clear)
-                    } header: {
-                        Text("Friends & Family".localized)
-                            .font(.system(.headline, design: .rounded))
-                            .foregroundStyle(Color.Theme.primaryBlue)
-                    }
-                    .textCase(nil)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
-                    
                   // Authentication Status Section
                   Section {
                       VStack(alignment: .leading, spacing: 16) {
