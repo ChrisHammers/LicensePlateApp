@@ -500,7 +500,7 @@
 "5. Changes to Terms" = "5. Cambios a los Términos";
 "We reserve the right to modify these terms at any time. Continued use of the app after changes constitutes acceptance of the new terms." = "Nos reservamos el derecho de modificar estos términos en cualquier momento. El uso continuo de la app después de los cambios constituye la aceptación de los nuevos términos.";
 "1. Information We Collect" = "1. Información que Recopilamos";
-"RoadTrip Royale collects the following information:\n\n• Account information (username, email, phone) if you create an account\n• Trip data and license plate tracking information\n• Location data (optional, with your permission)\n• Device information for app functionality" = "RoadTrip Royale recopila la siguiente información:\n\n• Información de cuenta (nombre de usuario, correo, teléfono) si creas una cuenta\n• Datos de viaje e información de seguimiento de placas\n• Datos de ubicación (opcional, con tu permiso)\n• Información del dispositivo para la funcionalidad de la app";
+"RoadTrip Royale collects the following information:\n\n• Account information (username, email) if you create an account\n• Trip data and license plate tracking information\n• Location data (optional, with your permission)\n• Device information for app functionality" = "RoadTrip Royale recopila la siguiente información:\n\n• Información de cuenta (nombre de usuario, correo) si creas una cuenta\n• Datos de viaje e información de seguimiento de placas\n• Datos de ubicación (opcional, con tu permiso)\n• Información del dispositivo para la funcionalidad de la app";
 "2. How We Use Your Information" = "2. Cómo Usamos Tu Información";
 "We use your information to:\n\n• Provide and improve the app's functionality\n• Sync your data across devices (if you sign in)\n• Respond to support requests\n• Ensure app security and prevent fraud" = "Usamos tu información para:\n\n• Proporcionar y mejorar la funcionalidad de la app\n• Sincronizar tus datos entre dispositivos (si inicias sesión)\n• Responder a solicitudes de soporte\n• Garantizar la seguridad de la app y prevenir fraudes";
 "3. Data Storage" = "3. Almacenamiento de Datos";
@@ -944,4 +944,5 @@
 
 /* User search */
 "No users found" = "No se encontraron usuarios";
-"Try a different username, email, or phone number." = "Prueba con otro nombre de usuario, correo o teléfono.";
+"Try a different username or email." = "Prueba con otro nombre de usuario o correo.";
+"Username or email" = "Nombre de usuario o correo";

@@ -39,7 +39,7 @@ struct AddFamilyMemberSheet: View {
             AppBackgroundView {
                 List {
                     Section("Search".localized) {
-                        TextField("Username, email, or phone".localized, text: $searchQuery)
+                        TextField("Username or email".localized, text: $searchQuery)
                             .textFieldStyle(.roundedBorder)
                             .onSubmit {
                                 Task {

@@ -19,7 +19,7 @@ struct AddFriendSheet: View {
             AppBackgroundView {
                 List {
                     Section("Search".localized) {
-                        TextField("Username, email, or phone".localized, text: $viewModel.searchQuery)
+                        TextField("Username or email".localized, text: $viewModel.searchQuery)
                             .textFieldStyle(.roundedBorder)
                             .onSubmit {
                                 Task { await viewModel.performSearch() }

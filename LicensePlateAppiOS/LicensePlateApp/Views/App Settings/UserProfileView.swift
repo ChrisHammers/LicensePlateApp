@@ -242,34 +242,6 @@ struct UserProfileView: View {
                                     // Reset to original value if needed
                                 }
                             )
-                            
-                            // Phone - Share Data Toggle
-                            SettingShareDataToggleRow3(
-                                title: "Phone".localized,
-                                value: Binding(
-                                    get: { user.phoneNumber },
-                                    set: { newValue in
-                                        user.phoneNumber = newValue
-                                    }
-                                ),
-                                detail: nil,
-                                isOn: Binding(
-                                    get: { user.isPhonePublic },
-                                    set: { newValue in
-                                        user.isPhonePublic = newValue
-                                        user.lastUpdated = .now
-                                        try? modelContext.save()
-                                        syncProfileToFirestoreIfNeeded()
-                                    }
-                                ),
-                                isEditable: true,
-                                onSave: {
-                                    try? modelContext.save()
-                                },
-                                onCancel: {
-                                    // Reset to original value if needed
-                                }
-                            )
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 16)

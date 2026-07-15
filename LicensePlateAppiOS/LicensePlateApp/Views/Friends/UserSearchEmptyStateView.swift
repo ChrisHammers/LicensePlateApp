@@ -20,7 +20,7 @@ struct UserSearchEmptyStateView: View {
                 .foregroundStyle(Color.Theme.primaryBlue)
                 .multilineTextAlignment(.center)
 
-            Text("Try a different username, email, or phone number.".localized)
+            Text("Try a different username or email.".localized)
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
                 .multilineTextAlignment(.center)
@@ -30,7 +30,7 @@ struct UserSearchEmptyStateView: View {
         .padding(.horizontal, 16)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "\("No users found".localized). \("Try a different username, email, or phone number.".localized)"
+            "\("No users found".localized). \("Try a different username or email.".localized)"
         )
     }
 }

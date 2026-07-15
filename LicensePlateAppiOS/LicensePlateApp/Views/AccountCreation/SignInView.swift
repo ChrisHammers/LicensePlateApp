@@ -44,7 +44,6 @@ struct SignInView: View {
     @State private var userName = ""
     @State private var firstName = ""
     @State private var lastName = ""
-    @State private var phoneNumber = ""
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var isLoading = false
@@ -71,7 +70,6 @@ struct SignInView: View {
         self._userName = State(initialValue: "")
         self._firstName = State(initialValue: "")
         self._lastName = State(initialValue: "")
-        self._phoneNumber = State(initialValue: "")
         self._showError = State(initialValue: false)
         self._errorMessage = State(initialValue: "")
         self._isLoading = State(initialValue: false)
@@ -161,23 +159,6 @@ struct SignInView: View {
                                     .autocapitalization(.none)
                                     .autocorrectionDisabled()
                                     .textContentType(isSignInMode ? .emailAddress : .emailAddress)
-                            }
-                            
-                            if !isSignInMode {
-                                // Phone Number field (only for create account)
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Phone Number (Optional)")
-                                        .font(.system(.body, design: .rounded))
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(Color.Theme.primaryBlue)
-                                    
-                                    TextField("Enter your phone number", text: $phoneNumber)
-                                        .textFieldStyle(.roundedBorder)
-                                        .font(.system(.body, design: .rounded))
-                                        .keyboardType(.phonePad)
-                                        .autocapitalization(.none)
-                                        .textContentType(.telephoneNumber)
-                                }
                             }
                             
                             // Password field
@@ -291,7 +272,6 @@ struct SignInView: View {
                                             userName = currentUser.userName
                                             firstName = currentUser.firstName ?? ""
                                             lastName = currentUser.lastName ?? ""
-                                            phoneNumber = currentUser.phoneNumber ?? ""
                                         }
                                     } else {
                                         // Switching to sign in - clear all fields
@@ -300,7 +280,6 @@ struct SignInView: View {
                                         userName = ""
                                         firstName = ""
                                         lastName = ""
-                                        phoneNumber = ""
                                     }
                                     isSignInMode.toggle()
                                 }
@@ -422,7 +401,6 @@ struct SignInView: View {
         userName = ""
         firstName = ""
         lastName = ""
-        phoneNumber = ""
         errorMessage = ""
     }
 
@@ -492,8 +470,7 @@ struct SignInView: View {
                     password: password,
                     userName: userName,
                     firstName: firstName.isEmpty ? nil : firstName,
-                    lastName: lastName.isEmpty ? nil : lastName,
-                    phoneNumber: phoneNumber.isEmpty ? nil : phoneNumber
+                    lastName: lastName.isEmpty ? nil : lastName
                 )
                 await MainActor.run {
                     isLoading = false

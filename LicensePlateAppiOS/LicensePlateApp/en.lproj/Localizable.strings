@@ -508,7 +508,7 @@
 "5. Changes to Terms" = "5. Changes to Terms";
 "We reserve the right to modify these terms at any time. Continued use of the app after changes constitutes acceptance of the new terms." = "We reserve the right to modify these terms at any time. Continued use of the app after changes constitutes acceptance of the new terms.";
 "1. Information We Collect" = "1. Information We Collect";
-"RoadTrip Royale collects the following information:\n\n• Account information (username, email, phone) if you create an account\n• Trip data and license plate tracking information\n• Location data (optional, with your permission)\n• Device information for app functionality" = "RoadTrip Royale collects the following information:\n\n• Account information (username, email, phone) if you create an account\n• Trip data and license plate tracking information\n• Location data (optional, with your permission)\n• Device information for app functionality";
+"RoadTrip Royale collects the following information:\n\n• Account information (username, email) if you create an account\n• Trip data and license plate tracking information\n• Location data (optional, with your permission)\n• Device information for app functionality" = "RoadTrip Royale collects the following information:\n\n• Account information (username, email) if you create an account\n• Trip data and license plate tracking information\n• Location data (optional, with your permission)\n• Device information for app functionality";
 "2. How We Use Your Information" = "2. How We Use Your Information";
 "We use your information to:\n\n• Provide and improve the app's functionality\n• Sync your data across devices (if you sign in)\n• Respond to support requests\n• Ensure app security and prevent fraud" = "We use your information to:\n\n• Provide and improve the app's functionality\n• Sync your data across devices (if you sign in)\n• Respond to support requests\n• Ensure app security and prevent fraud";
 "3. Data Storage" = "3. Data Storage";
@@ -976,4 +976,5 @@
 
 /* User search */
 "No users found" = "No users found";
-"Try a different username, email, or phone number." = "Try a different username, email, or phone number.";
+"Try a different username or email." = "Try a different username or email.";
+"Username or email" = "Username or email";

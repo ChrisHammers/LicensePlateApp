@@ -654,7 +654,7 @@ struct PrivacyView: View {
                     .foregroundStyle(Color.Theme.primaryBlue)
                     .padding(.top)
                 
-                Text("RoadTrip Royale collects the following information:\n\n• Account information (username, email, phone) if you create an account\n• Trip data and license plate tracking information\n• Location data (optional, with your permission)\n• Device information for app functionality".localized)
+                Text("RoadTrip Royale collects the following information:\n\n• Account information (username, email) if you create an account\n• Trip data and license plate tracking information\n• Location data (optional, with your permission)\n• Device information for app functionality".localized)
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
                 
