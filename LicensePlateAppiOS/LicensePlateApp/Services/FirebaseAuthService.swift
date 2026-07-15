@@ -1340,7 +1340,22 @@ class FirebaseAuthService: ObservableObject {
             userId: userId,
             tags: UserRepository.parseEntitlementTags(from: data)
         )
-        return appUserFromFirestoreData(data, id: userId)
+        var user = appUserFromFirestoreData(data, id: userId)
+
+        // Own contact may live only under private/contact after PII strip.
+        if userId == Auth.auth().currentUser?.uid {
+            let contactSnap = try? await docRef.collection("private").document("contact").getDocument()
+            if let contact = contactSnap?.data() {
+                if let email = contact["email"] as? String, !email.isEmpty {
+                    user.email = email
+                }
+                if let phone = contact["phoneNumber"] as? String, !phone.isEmpty {
+                    user.phoneNumber = phone
+                }
+            }
+        }
+
+        return user
     }
     
     func saveUserDataToFirestore(_ user: AppUser, extraFields: [String: Any] = [:]) async throws {
@@ -1365,12 +1380,43 @@ class FirebaseAuthService: ObservableObject {
             data[key] = value
         }
         try await docRef.setData(data, merge: true)
+        try await savePrivateContact(for: user, userId: firebaseUID)
         await ensureUserProgressionDocumentIfPossible(userId: firebaseUID)
         await ensureFounderEntitlementIfPossible(userId: firebaseUID)
         
         user.lastSyncedToFirebase = .now
         user.needsSync = false
         try? modelContext?.save()
+    }
+
+    /// Writes normalized contact under users/{uid}/private/contact for search indexes.
+    private func savePrivateContact(for user: AppUser, userId: String) async throws {
+        let email = user.email?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let phone = user.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines)
+        var contact: [String: Any] = [
+            "updatedAt": FieldValue.serverTimestamp(),
+        ]
+        if let email, !email.isEmpty {
+            contact["email"] = email
+            contact["emailLower"] = ContactSearchNormalization.emailLower(email) ?? email.lowercased()
+        } else {
+            contact["email"] = NSNull()
+            contact["emailLower"] = NSNull()
+        }
+        if let phone, !phone.isEmpty {
+            contact["phoneNumber"] = phone
+            if let e164 = ContactSearchNormalization.phoneE164US(phone) {
+                contact["phoneE164"] = e164
+            } else {
+                contact["phoneE164"] = NSNull()
+            }
+        } else {
+            contact["phoneNumber"] = NSNull()
+            contact["phoneE164"] = NSNull()
+        }
+        try await db.collection("users").document(userId)
+            .collection("private").document("contact")
+            .setData(contact, merge: true)
     }
 
     private func privateLoginLocationDataRef(userId: String) -> DocumentReference {
@@ -1490,6 +1536,7 @@ class FirebaseAuthService: ObservableObject {
     private func firestoreDataFromAppUser(_ user: AppUser) -> [String: Any] {
         var data: [String: Any] = [
             "userName": user.userName,
+            "userNameLower": ContactSearchNormalization.userNameLower(user.userName),
             "createdAt": Timestamp(date: user.createdAt),
             "lastUpdated": Timestamp(date: user.lastUpdated),
             "isUsernameManuallyChanged": user.isUsernameManuallyChanged,
@@ -1505,12 +1552,9 @@ class FirebaseAuthService: ObservableObject {
         if let lastName = user.lastName {
             data["lastName"] = lastName
         }
-        if let email = user.email {
-            data["email"] = email
-        }
-        if let phoneNumber = user.phoneNumber {
-            data["phoneNumber"] = phoneNumber
-        }
+        // Email/phone live on private/contact only (not peer-readable public profile).
+        data["email"] = FieldValue.delete()
+        data["phoneNumber"] = FieldValue.delete()
         if let userImageURL = user.userImageURL {
             data["userImageURL"] = userImageURL
         }

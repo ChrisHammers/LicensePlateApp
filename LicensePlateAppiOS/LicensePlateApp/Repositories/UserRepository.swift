@@ -8,6 +8,8 @@
 import Foundation
 import SwiftData
 import FirebaseFirestore
+import FirebaseFunctions
+import FirebaseAuth
 import Combine
 
 extension Notification.Name {
@@ -180,6 +182,7 @@ class UserRepository: ObservableObject {
     
     /// Search users by username (always searchable)
     /// Supports exact match, prefix matching, and contains matching
+    /// - Note: Unused by live `searchUsers` (Cloud Function). Kept for emergency rollback only.
     func searchByUsername(_ username: String) async throws -> [AppUser] {
         isLoading = true
         defer { isLoading = false }
@@ -328,6 +331,7 @@ class UserRepository: ObservableObject {
     }
     
     /// Search users by email (only if emailSearchable is true)
+    /// - Note: Unused by live `searchUsers` (Cloud Function). Kept for emergency rollback only.
     func searchByEmail(_ email: String) async throws -> [AppUser] {
         isLoading = true
         defer { isLoading = false }
@@ -356,6 +360,7 @@ class UserRepository: ObservableObject {
     }
     
     /// Search users by phone (only if phoneSearchable is true)
+    /// - Note: Unused by live `searchUsers` (Cloud Function). Kept for emergency rollback only.
     func searchByPhone(_ phone: String) async throws -> [AppUser] {
         isLoading = true
         defer { isLoading = false }
@@ -524,76 +529,100 @@ class UserRepository: ObservableObject {
         return results
     }
     
-    /// Combined search: username (always), email/phone (if searchable)
-    /// Returns search results with match type information
+    /// Combined search via `searchUsers` Cloud Function (public DTO only).
     /// - Parameters:
     ///   - query: Search query string
-    ///   - searchType: Type of search to perform
+    ///   - searchType: Retained for analytics; server classifies email/phone/username from the query
     ///   - excludeUserId: Optional user ID to exclude from results (typically current user)
     func searchUsers(query: String, searchType: SearchType, excludeUserId: String? = nil, searchingUser: AppUser? = nil) async throws -> [UserSearchResult] {
         guard friendsFamilyAccessPolicy.canUseFriendsAndFamily(for: searchingUser) else {
             return []
         }
 
-        var results: [UserSearchResult] = []
-        let queryLower = query.lowercased()
-        
-        switch searchType {
-        case .username:
-            let users = try await searchByUsernameContains(query)
-            results = users
-                .filter { excludeUserId == nil || $0.id != excludeUserId }
-                .map { UserSearchResult(user: $0, matchedField: .username) }
-        case .email:
-            let users = try await searchByEmail(query)
-            results = users
-                .filter { excludeUserId == nil || $0.id != excludeUserId }
-                .map { UserSearchResult(user: $0, matchedField: .email) }
-        case .phone:
-            let users = try await searchByPhone(query)
-            results = users
-                .filter { excludeUserId == nil || $0.id != excludeUserId }
-                .map { UserSearchResult(user: $0, matchedField: .phone) }
-        case .all:
-            // Try all fields and combine results
-            var foundUsers: Set<String> = [] // Track user IDs to avoid duplicates
-            
-            // Search username (always searchable)
-            let usernameResults = try await searchByUsernameContains(query)
-            for user in usernameResults {
-                if (excludeUserId == nil || user.id != excludeUserId) && !foundUsers.contains(user.id) {
-                    results.append(UserSearchResult(user: user, matchedField: .username))
-                    foundUsers.insert(user.id)
-                }
-            }
-            
-            // Search email exact match (if public)
-            let emailResults = try await searchByEmail(query)
-            for user in emailResults {
-                if (excludeUserId == nil || user.id != excludeUserId) && !foundUsers.contains(user.id) {
-                    results.append(UserSearchResult(user: user, matchedField: .email))
-                    foundUsers.insert(user.id)
-                }
-            }
-            
-            // Search phone exact match (if public)
-            let phoneResults = try await searchByPhone(query)
-            for user in phoneResults {
-                if (excludeUserId == nil || user.id != excludeUserId) && !foundUsers.contains(user.id) {
-                    results.append(UserSearchResult(user: user, matchedField: .phone))
-                    foundUsers.insert(user.id)
-                }
-            }
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 3 else {
+            return []
         }
-        
-        // Cache users in SwiftData
-        let users = results.map { $0.user }
-        cacheUsers(users)
-        
-        // Update searchResults for backward compatibility
-        searchResults = users
-        
+
+        try FriendsFamilyAccessPolicy.shared.validateFriendsFamilyCallableAccess(for: searchingUser)
+        try await AppCheckReadiness.ensureCallablePrerequisites()
+
+        let fn = Functions.functions().httpsCallable("searchUsers")
+        let result: HTTPSCallableResult
+        do {
+            result = try await fn.call(([
+                "query": trimmed,
+            ] as [String: Any]).addingClientMetadata())
+        } catch {
+            throw Self.userFacingSearchCallableError(error)
+        }
+
+        guard let response = result.data as? [String: Any],
+              let rawResults = response["results"] as? [[String: Any]] else {
+            throw NSError(
+                domain: "UserRepository",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid response from searchUsers".localized]
+            )
+        }
+
+        var results: [UserSearchResult] = []
+        var seen = Set<String>()
+
+        for item in rawResults {
+            guard let hit = PublicUserSearchHit(firestoreValue: item) else { continue }
+            if let excludeUserId, hit.userId == excludeUserId { continue }
+            if seen.contains(hit.userId) { continue }
+            seen.insert(hit.userId)
+
+            let user = AppUser(
+                id: hit.userId,
+                userName: hit.userName,
+                firstName: hit.firstNameComponent,
+                lastName: hit.lastNameComponent,
+                email: nil,
+                phoneNumber: nil,
+                avatarId: hit.avatarId,
+                firebaseUID: hit.userId
+            )
+            results.append(UserSearchResult(user: user, matchedField: hit.matchedField))
+        }
+
+        // Cache public identity only (no email/phone on search hits)
+        cacheUsers(results.map(\.user))
+        searchResults = results.map(\.user)
+
+        // searchType retained for callers/analytics; classification is server-side
+        _ = searchType
+
         return results
+    }
+
+    private static func userFacingSearchCallableError(_ error: Error) -> Error {
+        let nsError = error as NSError
+        guard nsError.domain == FunctionsErrorDomain,
+              let code = FunctionsErrorCode(rawValue: nsError.code) else {
+            return error
+        }
+        let message: String
+        switch code {
+        case .unauthenticated:
+            message = Auth.auth().currentUser?.isAnonymous == true
+                ? FriendsFamilyCallableErrors.guestBlockedMessage
+                : "You are not signed in. Sign in and try again.".localized
+        case .failedPrecondition:
+            message = FriendsFamilyCallableErrors.guestBlockedMessage
+        case .unavailable:
+            message = "Requires network connection".localized
+        default:
+            message = (nsError.userInfo[NSLocalizedDescriptionKey] as? String)
+                ?? error.localizedDescription
+        }
+        return NSError(
+            domain: "UserRepository",
+            code: nsError.code,
+            userInfo: [NSLocalizedDescriptionKey: message]
+        )
     }
     
     /// Legacy method for backward compatibility - returns just users
@@ -628,15 +657,48 @@ class UserRepository: ObservableObject {
                 }
             }
 
-            /// Invite method string for Cloud Functions searchable gates.
-            /// Username discovery stays `"search"`; email/phone trigger privacy checks.
-            var inviteMethod: String {
-                switch self {
-                case .username: return "search"
-                case .email: return "email"
-                case .phone: return "phone"
-                }
+            /// Invite method for Cloud Functions. Always `"search"` so email/phone
+            /// discovery does not re-trigger opt-in privacy gates or break InviteMethod parsing.
+            var inviteMethod: String { "search" }
+        }
+    }
+
+    /// Public-only hit from `searchUsers` callable (never includes email/phone).
+    struct PublicUserSearchHit {
+        let userId: String
+        let userName: String
+        let displayName: String
+        let avatarId: String?
+        let matchedField: UserSearchResult.MatchField
+
+        init?(firestoreValue data: [String: Any]) {
+            guard let userId = data["userId"] as? String, !userId.isEmpty,
+                  let userName = data["userName"] as? String, !userName.isEmpty else {
+                return nil
             }
+            self.userId = userId
+            self.userName = userName
+            self.displayName = (data["displayName"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? userName
+            self.avatarId = data["avatarId"] as? String
+            let raw = data["matchedField"] as? String ?? "username"
+            switch raw {
+            case "email": self.matchedField = .email
+            case "phone": self.matchedField = .phone
+            default: self.matchedField = .username
+            }
+        }
+
+        /// Best-effort split of displayName for AppUser first/last when caching identity.
+        var firstNameComponent: String? {
+            let parts = displayName.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+            guard parts.count == 2 else { return displayName == userName ? nil : displayName }
+            return String(parts[0])
+        }
+
+        var lastNameComponent: String? {
+            let parts = displayName.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
+            guard parts.count == 2 else { return nil }
+            return String(parts[1])
         }
     }
     

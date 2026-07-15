@@ -19,12 +19,21 @@ struct AddFamilyMemberSheet: View {
     @State private var searchType: UserRepository.SearchType = .all
     @State private var searchResults: [UserRepository.UserSearchResult] = []
     @State private var isSearching = false
+    @State private var hasCompletedSearch = false
     @State private var isInviting = false
     @State private var errorMessage: String?
     @State private var showError = false
     @State private var showSuccessAlert = false
     @State private var searchTask: Task<Void, Never>?
-    
+
+    private var showNoUsersFoundEmptyState: Bool {
+        FriendsFamilyAccessPolicy.shared.canUseFriendsAndFamily(for: authService.currentUser)
+            && searchQuery.count >= 3
+            && !isSearching
+            && hasCompletedSearch
+            && searchResults.isEmpty
+            && !showError
+    }    
     var body: some View {
         NavigationStack {
             AppBackgroundView {
@@ -71,6 +80,11 @@ struct AddFamilyMemberSheet: View {
                             }
                         }
                         .listRowBackground(Color.Theme.cardBackground)
+                    } else if showNoUsersFoundEmptyState {
+                        Section {
+                            UserSearchEmptyStateView()
+                        }
+                        .listRowBackground(Color.Theme.cardBackground)
                     }
                 }
                 .listStyle(.insetGrouped)
@@ -108,6 +122,7 @@ struct AddFamilyMemberSheet: View {
                 if newValue.count < 3 {
                     searchResults = []
                     isSearching = false
+                    hasCompletedSearch = false
                     return
                 }
                 
@@ -152,6 +167,7 @@ struct AddFamilyMemberSheet: View {
             await MainActor.run {
                 searchResults = []
                 isSearching = false
+                hasCompletedSearch = false
             }
             return
         }
@@ -160,7 +176,19 @@ struct AddFamilyMemberSheet: View {
             await MainActor.run {
                 searchResults = []
                 isSearching = false
+                hasCompletedSearch = false
                 errorMessage = FriendsFamilyCallableErrors.guestBlockedMessage
+                showError = true
+            }
+            return
+        }
+
+        guard authService.isOnline else {
+            await MainActor.run {
+                searchResults = []
+                isSearching = false
+                hasCompletedSearch = false
+                errorMessage = "Requires network connection".localized
                 showError = true
             }
             return
@@ -169,6 +197,8 @@ struct AddFamilyMemberSheet: View {
         await MainActor.run {
             isSearching = true
             errorMessage = nil
+            showError = false
+            hasCompletedSearch = false
         }
         
         do {
@@ -183,16 +213,14 @@ struct AddFamilyMemberSheet: View {
             await MainActor.run {
                 searchResults = results
                 isSearching = false
+                hasCompletedSearch = true
                 AnalyticsService.shared.log(.userSearchPerformed(queryType: searchType == .all ? "all" : searchType == .username ? "username" : searchType == .email ? "email" : "phone"))
-                
-                // Log if no results found for debugging
-                if results.isEmpty {
-                    print("🔍 Search for '\(searchQuery)' returned no results")
-                }
             }
         } catch {
             await MainActor.run {
                 isSearching = false
+                hasCompletedSearch = false
+                searchResults = []
                 errorMessage = error.localizedDescription
                 showError = true
                 print("❌ Search error: \(error.localizedDescription)")

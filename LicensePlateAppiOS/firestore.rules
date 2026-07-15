@@ -15,9 +15,11 @@ service cloud.firestore {
       return request.auth.uid;
     }
 
+    // Own profile always readable. Peers: registered callers only, and target must not be anonymous.
     function isDiscoverableUserProfile(userId) {
       return uid() == userId
-        || resource.data.get('isRegistered', true) != false;
+        || (isRegisteredAccount()
+            && resource.data.get('isRegistered', true) != false);
     }
 
     function isAdmin() {
@@ -66,7 +68,16 @@ service cloud.firestore {
 
     match /users/{userId}/private/{docId} {
       allow read, write: if isSignedIn() && uid() == userId &&
-        docId == "lastLoginLocationData";
+        (docId == "lastLoginLocationData" || docId == "contact");
+    }
+
+    // Email/phone lookup indexes — Admin SDK / Cloud Functions only
+    match /user_lookup_email/{emailLower} {
+      allow read, write: if false;
+    }
+
+    match /user_lookup_phone/{phoneId} {
+      allow read, write: if false;
     }
 
     // Public lifetime stats (read-only aggregate mirror; writes via Admin SDK / Cloud Functions only)

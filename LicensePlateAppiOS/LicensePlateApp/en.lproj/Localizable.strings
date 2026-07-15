@@ -970,3 +970,7 @@
 
 /* GPS Step 9 — trip recap route section */
 "Trip route" = "Trip route";
+
+/* User search */
+"No users found" = "No users found";
+"Try a different username, email, or phone number." = "Try a different username, email, or phone number.";

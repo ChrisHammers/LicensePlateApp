@@ -42,4 +42,9 @@ export { ensureUserProgressionDocument } from "./progressionBootstrap";
 export { ensureFounderEntitlementIfEligible } from "./founderEntitlement";
 export { syncUserAchievementUnlocks } from "./syncUserAchievementUnlocks";
 export { reconcileXpGrantLedger } from "./reconcileXpGrantLedger";
+export {
+  searchUsers,
+  onUserProfileSearchIndexSync,
+  onUserContactSearchIndexSync,
+} from "./userSearch";
 

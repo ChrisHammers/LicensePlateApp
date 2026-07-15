@@ -938,3 +938,7 @@
 
 /* GPS Step 9 — trip recap route section */
 "Trip route" = "Ruta del viaje";
+
+/* User search */
+"No users found" = "No se encontraron usuarios";
+"Try a different username, email, or phone number." = "Prueba con otro nombre de usuario, correo o teléfono.";

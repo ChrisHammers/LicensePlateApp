@@ -48,7 +48,7 @@ struct UserPrivacyFirestoreTests {
 struct UserSearchInviteMethodTests {
     @Test func inviteMethodMapsMatchFieldForCloudFunctionGates() {
         #expect(UserRepository.UserSearchResult.MatchField.username.inviteMethod == "search")
-        #expect(UserRepository.UserSearchResult.MatchField.email.inviteMethod == "email")
-        #expect(UserRepository.UserSearchResult.MatchField.phone.inviteMethod == "phone")
+        #expect(UserRepository.UserSearchResult.MatchField.email.inviteMethod == "search")
+        #expect(UserRepository.UserSearchResult.MatchField.phone.inviteMethod == "search")
     }
 }

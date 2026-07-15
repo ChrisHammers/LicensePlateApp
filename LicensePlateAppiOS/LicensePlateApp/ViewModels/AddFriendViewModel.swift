@@ -13,10 +13,24 @@ final class AddFriendViewModel: ObservableObject {
     @Published var searchType: UserRepository.SearchType = .all
     @Published var searchResults: [UserRepository.UserSearchResult] = []
     @Published var isSearching = false
+    @Published var hasCompletedSearch = false
     @Published var errorMessage: String?
     @Published var showError = false
     @Published var showSuccessAlert = false
     @Published private(set) var invitingUserId: String?
+
+    /// True when a registered search finished with zero hits (not loading / short query / error / guest).
+    var showNoUsersFoundEmptyState: Bool {
+        guard let authService else { return false }
+        guard FriendsFamilyAccessPolicy.shared.canUseFriendsAndFamily(for: authService.currentUser) else {
+            return false
+        }
+        return searchQuery.count >= 3
+            && !isSearching
+            && hasCompletedSearch
+            && searchResults.isEmpty
+            && !showError
+    }
 
     private var searchTask: Task<Void, Never>?
     private var authService: FirebaseAuthService?
@@ -56,6 +70,7 @@ final class AddFriendViewModel: ObservableObject {
         if searchQuery.count < 3 {
             searchResults = []
             isSearching = false
+            hasCompletedSearch = false
             return
         }
         searchTask = Task { @MainActor in
@@ -71,11 +86,14 @@ final class AddFriendViewModel: ObservableObject {
         guard searchQuery.count >= 3 else {
             searchResults = []
             isSearching = false
+            hasCompletedSearch = false
             return
         }
 
         isSearching = true
         errorMessage = nil
+        showError = false
+        hasCompletedSearch = false
 
         guard let authService else {
             isSearching = false
@@ -88,6 +106,14 @@ final class AddFriendViewModel: ObservableObject {
             isSearching = false
             searchResults = []
             errorMessage = FriendsFamilyCallableErrors.guestBlockedMessage
+            showError = true
+            return
+        }
+
+        guard authService.isOnline else {
+            isSearching = false
+            searchResults = []
+            errorMessage = "Requires network connection".localized
             showError = true
             return
         }
@@ -125,6 +151,7 @@ final class AddFriendViewModel: ObservableObject {
 
             searchResults = results
             isSearching = false
+            hasCompletedSearch = true
 
             let queryType: String
             switch searchType {
@@ -136,6 +163,8 @@ final class AddFriendViewModel: ObservableObject {
             AnalyticsService.shared.log(.userSearchPerformed(queryType: queryType))
         } catch {
             isSearching = false
+            hasCompletedSearch = false
+            searchResults = []
             errorMessage = error.localizedDescription
             showError = true
         }

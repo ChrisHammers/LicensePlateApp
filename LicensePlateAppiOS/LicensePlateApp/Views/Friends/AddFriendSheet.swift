@@ -50,6 +50,11 @@ struct AddFriendSheet: View {
                             }
                         }
                         .listRowBackground(Color.Theme.cardBackground)
+                    } else if viewModel.showNoUsersFoundEmptyState {
+                        Section {
+                            UserSearchEmptyStateView()
+                        }
+                        .listRowBackground(Color.Theme.cardBackground)
                     }
                 }
                 .listStyle(.insetGrouped)
