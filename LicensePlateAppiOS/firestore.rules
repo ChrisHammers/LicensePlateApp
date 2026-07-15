@@ -34,8 +34,10 @@ service cloud.firestore {
       return userDoc(userId).data.isRetiredGeneral == true;
     }
 
+    // entitlementTags may remain on merge results; clients must not *change* them
+    // (see userDocPreservesEntitlementTags). Do not list them here or updates fail for tagged users.
     function userDocHasNoPrivateFields() {
-      return !request.resource.data.keys().hasAny(["deviceIdentifier", "lastLoginLocationData", "lastLoginLocations", "lastLoginLocation", "entitlementTags"]);
+      return !request.resource.data.keys().hasAny(["deviceIdentifier", "lastLoginLocationData", "lastLoginLocations", "lastLoginLocation"]);
     }
 
     function userDocPreservesEntitlementTags() {

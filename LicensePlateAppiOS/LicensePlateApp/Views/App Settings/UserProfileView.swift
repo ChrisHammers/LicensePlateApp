@@ -231,11 +231,7 @@ struct UserProfileView: View {
                                         user.isEmailPublic = newValue
                                         user.lastUpdated = .now
                                         try? modelContext.save()
-                                        if authService.isTrulyAuthenticated {
-                                            Task {
-                                                try? await authService.saveUserDataToFirestore(user)
-                                            }
-                                        }
+                                        syncProfileToFirestoreIfNeeded()
                                     }
                                 ),
                                 isEditable: false,
@@ -263,11 +259,7 @@ struct UserProfileView: View {
                                         user.isPhonePublic = newValue
                                         user.lastUpdated = .now
                                         try? modelContext.save()
-                                        if authService.isTrulyAuthenticated {
-                                            Task {
-                                                try? await authService.saveUserDataToFirestore(user)
-                                            }
-                                        }
+                                        syncProfileToFirestoreIfNeeded()
                                     }
                                 ),
                                 isEditable: true,
@@ -685,7 +677,7 @@ struct UserProfileView: View {
                     user: user,
                     onSave: {
                         try? modelContext.save()
-                        Task { try? await authService.saveUserDataToFirestore(user) }
+                        syncProfileToFirestoreIfNeeded()
                         AnalyticsService.shared.log(.avatarSaved(avatarId: user.avatarId ?? "", source: "profile"))
                         showAvatarPickerSheet = false
                     },
@@ -789,13 +781,7 @@ struct UserProfileView: View {
         user.firstName = trimmed.isEmpty ? nil : trimmed
         user.lastUpdated = .now
         try? modelContext.save()
-        
-        // Sync to Firestore if authenticated
-        if authService.isTrulyAuthenticated {
-            Task {
-                try? await authService.saveUserDataToFirestore(user)
-            }
-        }
+        syncProfileToFirestoreIfNeeded()
     }
     
     private func cancelFirstNameEditing() {
@@ -807,17 +793,27 @@ struct UserProfileView: View {
         user.lastName = trimmed.isEmpty ? nil : trimmed
         user.lastUpdated = .now
         try? modelContext.save()
-        
-        // Sync to Firestore if authenticated
-      if authService.isTrulyAuthenticated {
-            Task {
-                try? await authService.saveUserDataToFirestore(user)
-            }
-        }
+        syncProfileToFirestoreIfNeeded()
     }
     
     private func cancelLastNameEditing() {
         currentLastName = user.lastName ?? ""
+    }
+
+    /// Persists profile to Firestore; surfaces failures via the existing error alert.
+    private func syncProfileToFirestoreIfNeeded() {
+        guard authService.isTrulyAuthenticated else { return }
+        Task {
+            do {
+                try await authService.saveUserDataToFirestore(user)
+            } catch {
+                print("❌ Profile sync to Firestore failed: \(error.localizedDescription)")
+                await MainActor.run {
+                    errorMessage = error.localizedDescription
+                    showError = true
+                }
+            }
+        }
     }
 }
 
