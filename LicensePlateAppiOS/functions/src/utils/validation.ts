@@ -93,29 +93,45 @@ export async function checkFriendCap(
 }
 
 /**
- * Check if user is searchable by email/phone.
+ * Sync privacy check for email/phone discovery.
  * Prefers privacy.emailSearchable / phoneSearchable when present; falls back to
  * legacy top-level isEmailPublic / isPhonePublic for older docs.
+ */
+export function isContactSearchableFromUserData(
+  data: Record<string, unknown> | undefined | null,
+  searchType: "email" | "phone"
+): boolean {
+  const doc = data || {};
+  const privacy =
+    doc.privacy && typeof doc.privacy === "object" && !Array.isArray(doc.privacy)
+      ? (doc.privacy as Record<string, unknown>)
+      : {};
+
+  if (searchType === "email") {
+    if (typeof privacy.emailSearchable === "boolean") {
+      return privacy.emailSearchable === true;
+    }
+    return doc.isEmailPublic === true;
+  }
+
+  if (typeof privacy.phoneSearchable === "boolean") {
+    return privacy.phoneSearchable === true;
+  }
+  return doc.isPhonePublic === true;
+}
+
+/**
+ * Check if user is searchable by email/phone (loads users/{userId}).
  */
 export async function isUserSearchable(
   userId: string,
   searchType: "email" | "phone"
 ): Promise<boolean> {
   const userDoc = await db.collection("users").doc(userId).get();
-  const data = userDoc.data() || {};
-  const privacy = data.privacy || {};
-
-  if (searchType === "email") {
-    if (typeof privacy.emailSearchable === "boolean") {
-      return privacy.emailSearchable === true;
-    }
-    return data.isEmailPublic === true;
-  } else {
-    if (typeof privacy.phoneSearchable === "boolean") {
-      return privacy.phoneSearchable === true;
-    }
-    return data.isPhonePublic === true;
-  }
+  return isContactSearchableFromUserData(
+    (userDoc.data() || {}) as Record<string, unknown>,
+    searchType
+  );
 }
 
 const recipientNotRegisteredMessage =

@@ -26,6 +26,7 @@ import {
   syncUsernameSearchIndex,
   PRIVATE_CONTACT_DOC,
 } from "./userSearchIndex";
+import { isUserSearchable } from "./utils/validation";
 
 const db = admin.firestore();
 
@@ -52,6 +53,8 @@ async function searchByEmail(
   if (!lookup.exists) return [];
   const userId = lookup.data()?.userId as string | undefined;
   if (!userId) return [];
+  // Honor isEmailPublic / privacy.emailSearchable at query time (real-time).
+  if (!(await isUserSearchable(userId, "email"))) return [];
   const hit = await loadUserHit(userId, "email", callerId);
   return hit ? [hit] : [];
 }
@@ -69,6 +72,8 @@ async function searchByPhone(
   if (!lookup.exists) return [];
   const userId = lookup.data()?.userId as string | undefined;
   if (!userId) return [];
+  // Honor isPhonePublic / privacy.phoneSearchable at query time (real-time).
+  if (!(await isUserSearchable(userId, "phone"))) return [];
   const hit = await loadUserHit(userId, "phone", callerId);
   return hit ? [hit] : [];
 }

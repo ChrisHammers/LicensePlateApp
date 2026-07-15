@@ -21,7 +21,77 @@ vi.mock("firebase-admin", () => ({
   }),
 }));
 
-import { isUserSearchable } from "./utils/validation";
+import {
+  isContactSearchableFromUserData,
+  isUserSearchable,
+} from "./utils/validation";
+
+describe("isContactSearchableFromUserData", () => {
+  it("returns true when privacy.emailSearchable is true", () => {
+    expect(
+      isContactSearchableFromUserData(
+        { privacy: { emailSearchable: true, phoneSearchable: false } },
+        "email"
+      )
+    ).toBe(true);
+  });
+
+  it("returns false when privacy.emailSearchable is false even if legacy public", () => {
+    expect(
+      isContactSearchableFromUserData(
+        { privacy: { emailSearchable: false }, isEmailPublic: true },
+        "email"
+      )
+    ).toBe(false);
+  });
+
+  it("defaults to not searchable when flags are missing", () => {
+    expect(isContactSearchableFromUserData({}, "email")).toBe(false);
+    expect(isContactSearchableFromUserData({}, "phone")).toBe(false);
+    expect(isContactSearchableFromUserData(null, "email")).toBe(false);
+  });
+
+  it("falls back to legacy isEmailPublic / isPhonePublic", () => {
+    expect(
+      isContactSearchableFromUserData(
+        { isEmailPublic: true, isPhonePublic: false },
+        "email"
+      )
+    ).toBe(true);
+    expect(
+      isContactSearchableFromUserData(
+        { isEmailPublic: true, isPhonePublic: false },
+        "phone"
+      )
+    ).toBe(false);
+  });
+
+  it("returns true when privacy.phoneSearchable is true", () => {
+    expect(
+      isContactSearchableFromUserData(
+        { privacy: { phoneSearchable: true } },
+        "phone"
+      )
+    ).toBe(true);
+  });
+
+  it("gates email search opt-out used by searchUsers contact modality", () => {
+    const optedOut = {
+      userName: "Alpha",
+      isRegistered: true,
+      privacy: { emailSearchable: false, phoneSearchable: false },
+    };
+    expect(isContactSearchableFromUserData(optedOut, "email")).toBe(false);
+    expect(isContactSearchableFromUserData(optedOut, "phone")).toBe(false);
+
+    const optedIn = {
+      ...optedOut,
+      privacy: { emailSearchable: true, phoneSearchable: true },
+    };
+    expect(isContactSearchableFromUserData(optedIn, "email")).toBe(true);
+    expect(isContactSearchableFromUserData(optedIn, "phone")).toBe(true);
+  });
+});
 
 describe("isUserSearchable", () => {
   beforeEach(() => {
