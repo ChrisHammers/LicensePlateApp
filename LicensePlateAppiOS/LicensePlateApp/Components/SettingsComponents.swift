@@ -804,12 +804,20 @@ struct SettingNavigationRow: View {
     let title: String
     let description: String
     let icon: String?
+    let badgeCount: Int
     let action: () -> Void
     
-    init(title: String, description: String, icon: String? = nil, action: @escaping () -> Void) {
+    init(
+        title: String,
+        description: String,
+        icon: String? = nil,
+        badgeCount: Int = 0,
+        action: @escaping () -> Void
+    ) {
         self.title = title
         self.description = description
         self.icon = icon
+        self.badgeCount = badgeCount
         self.action = action
     }
     
@@ -837,6 +845,11 @@ struct SettingNavigationRow: View {
                 
                 Spacer()
                 
+                if badgeCount > 0 {
+                    BadgeView(count: badgeCount, size: 20)
+                        .accessibilityHidden(true)
+                }
+                
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color.Theme.softBrown)
@@ -851,9 +864,17 @@ struct SettingNavigationRow: View {
         }
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-        .accessibilityLabel(title)
+        .accessibilityLabel(accessibilityLabelText)
         .accessibilityHint(description)
+        .accessibilityValue(badgeCount > 0 ? "social.inbox.a11y.pending_count".localized(badgeCount) : "")
         .accessibilityAddTraits(.isButton)
+    }
+
+    private var accessibilityLabelText: String {
+        if badgeCount > 0 {
+            return "\(title), \("social.inbox.a11y.pending_count".localized(badgeCount))"
+        }
+        return title
     }
 }
 
@@ -921,6 +942,14 @@ struct SettingNavigationRow: View {
             icon: "person.circle"
         ) {
             print("Navigate to profile")
+        }
+        SettingNavigationRow(
+            title: "Friends",
+            description: "Manage your friends and friend requests",
+            icon: "person.2",
+            badgeCount: 3
+        ) {
+            print("Navigate to friends")
         }
     }
     .listStyle(.insetGrouped)

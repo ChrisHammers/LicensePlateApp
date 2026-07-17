@@ -36,7 +36,6 @@ struct BadgeModifier: ViewModifier {
             .overlay(alignment: alignment) {
                 if count > 0 {
                     BadgeView(count: count)
-                        .offset(x: 8, y: -8)
                 }
             }
     }

@@ -242,7 +242,7 @@ struct FamilyDashboard: View {
                         } label: {
                             Image(systemName: "envelope.fill")
                                 .foregroundStyle(Color.Theme.primaryBlue)
-                                .badge(count: viewModel.pendingFamilyInvitesCount)
+                                .badge(viewModel.pendingFamilyInvitesCount)
                         }
                     }
                 }
@@ -250,21 +250,21 @@ struct FamilyDashboard: View {
                 if viewModel.canManageFamily {
                     ToolbarItem(placement: .topBarTrailing) {
                         HStack(spacing: 16) {
+                            Button {
+                                showSettings = true
+                            } label: {
+                                Image(systemName: "gearshape")
+                                    .foregroundStyle(Color.Theme.primaryBlue)
+                            }
                             if viewModel.pendingMemberRequestsCount > 0 {
                                 Button {
                                     showPendingApprovalsView = true
                                 } label: {
                                     Image(systemName: "person.badge.clock")
                                         .foregroundStyle(Color.Theme.primaryBlue)
-                                        .badge(count: viewModel.pendingMemberRequestsCount)
+                                    
                                 }
-                            }
-                            
-                            Button {
-                                showSettings = true
-                            } label: {
-                                Image(systemName: "gearshape")
-                                    .foregroundStyle(Color.Theme.primaryBlue)
+                                .badge(viewModel.pendingMemberRequestsCount)
                             }
                         }
                     }

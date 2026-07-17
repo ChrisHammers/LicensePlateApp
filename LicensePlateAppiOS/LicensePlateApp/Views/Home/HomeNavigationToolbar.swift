@@ -10,6 +10,7 @@ struct HomeNavigationToolbar: ToolbarContent {
     let isStreakVisible: Bool
     let displayName: String?
     let currentUser: AppUser?
+    let pendingInviteBadgeCount: Int
     let onStreakTap: () -> Void
     let onTravelLogTap: () -> Void
     let onSettingsTap: () -> Void
@@ -42,9 +43,17 @@ struct HomeNavigationToolbar: ToolbarContent {
                         .foregroundStyle(Color.Theme.primaryBlue)
                 }
             }
-            .accessibilityLabel("Settings".localized)
+            .badge(pendingInviteBadgeCount)
+            .accessibilityLabel(settingsAccessibilityLabel)
             .accessibilityHint("Opens app settings".localized)
         }
+    }
+
+    private var settingsAccessibilityLabel: String {
+        if pendingInviteBadgeCount > 0 {
+            return "\("Settings".localized), \("social.inbox.a11y.avatar_pending".localized(pendingInviteBadgeCount))"
+        }
+        return "Settings".localized
     }
 }
 
@@ -98,6 +107,7 @@ private struct HomeToolbarPrincipalView: View {
                     isStreakVisible: true,
                     displayName: "Chris",
                     currentUser: nil,
+                    pendingInviteBadgeCount: 2,
                     onStreakTap: {},
                     onTravelLogTap: {},
                     onSettingsTap: {}

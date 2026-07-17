@@ -45,6 +45,7 @@ struct ContentView: View {
     @AppStorage("boundariesLoaded") private var boundariesLoaded = false
     @AppStorage(FirstSessionStateKeys.hasLoggedFirstFind) private var hasLoggedFirstFind = false
     @ObservedObject private var deferredSetupStore = DeferredProfileSetupStore.shared
+    @ObservedObject private var socialInboxBadges = SocialInboxBadgeService.shared
     @State private var showDeferredSetupBanner = false
     @State private var isShowingDeferredSetupHub = false
     
@@ -150,6 +151,7 @@ struct ContentView: View {
                 isStreakVisible: returnStreakViewModel.presentation.isVisible,
                 displayName: authService.currentUser?.userName,
                 currentUser: authService.currentUser,
+                pendingInviteBadgeCount: socialInboxBadges.totalPendingInviteCount,
                 onStreakTap: { returnStreakViewModel.openExplanation() },
                 onTravelLogTap: { isShowingTravelLog = true },
                 onSettingsTap: { isShowingSettings = true }
@@ -226,6 +228,7 @@ struct ContentView: View {
         homeTripRecapWithPresentation
             .onChange(of: currentUserId) { _, newUserId in
                 returnStreakViewModel.bind(userId: newUserId)
+                SocialInboxBadgeService.shared.bind(userId: newUserId)
             }
             .onChange(of: scenePhase) { _, phase in
                 handleHomeScenePhaseChange(phase)
@@ -241,6 +244,7 @@ struct ContentView: View {
                 pendingTripsViewModel.setAuthService(authService)
                 travelLogViewModel.setAuthService(authService)
                 returnStreakViewModel.bind(userId: currentUserId)
+                SocialInboxBadgeService.shared.bind(userId: currentUserId)
                 NotificationRoutingService.shared.startObservingIfNeeded(userId: currentUserId)
                 refreshDeferredSetupBanner()
             }
@@ -340,6 +344,7 @@ struct ContentView: View {
             FriendshipRepository.shared.startListening(userId: userId)
             InviteRepository.shared.startListening(userId: userId)
         }
+        SocialInboxBadgeService.shared.bind(userId: currentUserId)
         pendingTripsViewModel.loadIfNeeded()
         activeTripsListViewModel.load(userId: currentUserId)
         TripEndRecapSupport.startMultiplayerListeners(for: activeTripsListViewModel.items)
@@ -797,6 +802,7 @@ struct DefaultSettingsView: View {
 
     @EnvironmentObject var authService: FirebaseAuthService
     @Environment(\.modelContext) private var modelContext
+    @ObservedObject private var socialInboxBadges = SocialInboxBadgeService.shared
     
     // Computed properties for picker bindings
     private var appDarkMode: Binding<AppDarkMode> {
@@ -849,7 +855,8 @@ struct DefaultSettingsView: View {
                             SettingNavigationRow(
                                 title: "Friends".localized,
                                 description: "Manage your friends and friend requests".localized,
-                                icon: "person.2"
+                                icon: "person.2",
+                                badgeCount: socialInboxBadges.pendingFriendRequestsCount
                             ) {
                                 coordinator.navigateToFriends()
                             }
@@ -859,7 +866,8 @@ struct DefaultSettingsView: View {
                             SettingNavigationRow(
                                 title: "Family".localized,
                                 description: "View and manage your family".localized,
-                                icon: "house"
+                                icon: "house",
+                                badgeCount: socialInboxBadges.pendingFamilyInvitesCount
                             ) {
                                 coordinator.navigateToFamily()
                             }

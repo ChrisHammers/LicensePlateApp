@@ -946,3 +946,7 @@
 "No users found" = "No se encontraron usuarios";
 "Try a different username or email." = "Prueba con otro nombre de usuario o correo.";
 "Username or email" = "Nombre de usuario o correo";
+
+/* Social inbox badges (Steps 1–3) */
+"social.inbox.a11y.pending_count" = "%d pendientes";
+"social.inbox.a11y.avatar_pending" = "%d solicitudes de amigos o familia pendientes";
