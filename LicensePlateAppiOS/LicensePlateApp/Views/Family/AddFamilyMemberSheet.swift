@@ -243,9 +243,7 @@ struct FamilyMemberSearchResultRow: View {
     
     var body: some View {
         HStack {
-            Circle()
-                .fill(Color.Theme.primaryBlue.opacity(0.3))
-                .frame(width: 50, height: 50)
+            AvatarImageView(user: user, size: 50)
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(user.displayName)
@@ -272,6 +270,8 @@ struct FamilyMemberSearchResultRow: View {
             .disabled(isInviting || !authService.isOnline)
         }
         .padding(.vertical, 8)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(user.displayName), @\(user.userName)")
     }
     
     private func sendInvite() {

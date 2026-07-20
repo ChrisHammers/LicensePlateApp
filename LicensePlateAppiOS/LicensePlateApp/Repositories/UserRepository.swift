@@ -101,7 +101,7 @@ class UserRepository: ObservableObject {
             if let user = try? modelContext.fetch(descriptor).first {
                 result[id] = UserIdentitySnapshot(
                     userId: id,
-                    displayName: user.userName,
+                    displayName: user.displayName,
                     avatarId: user.avatarId,
                     legacyFallbackImageName: nil
                 )
@@ -120,7 +120,7 @@ class UserRepository: ObservableObject {
             if let user = try? await getUser(userId: id) {
                 result[id] = UserIdentitySnapshot(
                     userId: id,
-                    displayName: user.userName,
+                    displayName: user.displayName,
                     avatarId: user.avatarId,
                     legacyFallbackImageName: nil
                 )

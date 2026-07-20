@@ -64,12 +64,15 @@ struct FamilyPendingApprovals: View {
     
     private func refreshPendingRequests() async {
         do {
-            _ = try await familyRepository.fetchPendingRequests(familyId: familyId)
+            let linked = try await familyRepository.fetchPendingRequests(familyId: familyId)
             await MainActor.run {
-                loadPendingRequests()
+                pendingRequests = linked.filter { $0.statusEnum == .pending }
             }
         } catch {
             // Error fetching - use cached data
+            await MainActor.run {
+                loadPendingRequests()
+            }
         }
     }
 }
@@ -86,20 +89,17 @@ struct PendingApprovalRow: View {
     
     var body: some View {
         HStack {
-            Circle()
-                .fill(Color.Theme.primaryBlue.opacity(0.3))
-                .frame(width: 50, height: 50)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(request.user?.displayName ?? "User")
-                    .font(.system(.body, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                
-                if let userName = request.user?.userName {
-                    Text("@\(userName)")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
+            if let user = request.user {
+                UserIdentityRowView(user: user, subtitle: nil, avatarSize: 50)
+            } else {
+                HStack(spacing: 12) {
+                    AvatarImageView(avatarId: nil, size: 50)
+
+                    Text("User".localized)
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+
                 }
             }
             
@@ -125,11 +125,20 @@ struct PendingApprovalRow: View {
             }
         }
         .padding(.vertical, 8)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(pendingApprovalAccessibilityLabel)
         .alert("Error".localized, isPresented: $showError) {
             Button("OK".localized, role: .cancel) { }
         } message: {
             Text(errorMessage ?? "Unknown error".localized)
         }
+    }
+
+    private var pendingApprovalAccessibilityLabel: String {
+        if let user = request.user {
+            return "\(user.displayName), @\(user.userName)"
+        }
+        return "User".localized
     }
     
     private func approveRequest() async {

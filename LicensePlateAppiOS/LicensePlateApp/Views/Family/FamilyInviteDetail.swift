@@ -68,24 +68,24 @@ struct FamilyInviteDetail: View {
                                     
                                     ForEach(captains) { captain in
                                         HStack {
-                                            Circle()
-                                                .fill(Color.Theme.primaryBlue.opacity(0.3))
-                                                .frame(width: 40, height: 40)
-                                            
-                                            VStack(alignment: .leading, spacing: 4) {
-                                                Text(captain.user?.displayName ?? "Captain".localized)
-                                                    .font(.system(.body, design: .rounded))
-                                                    .fontWeight(.semibold)
-                                                    .foregroundStyle(Color.Theme.primaryBlue)
-                                                
-                                                if let userName = captain.user?.userName {
-                                                    Text("@\(userName)")
-                                                        .font(.system(.caption, design: .rounded))
-                                                        .foregroundStyle(Color.Theme.softBrown)
+                                            if let user = captain.user {
+                                                UserIdentityRowView(
+                                                    user: user,
+                                                    subtitle: nil,
+                                                    avatarSize: 40
+                                                )
+                                            } else {
+                                                HStack(spacing: 12) {
+                                                    AvatarImageView(avatarId: nil, size: 40)
+                                                    
+                                                    Text("Captain".localized)
+                                                        .font(.system(.body, design: .rounded))
+                                                        .fontWeight(.semibold)
+                                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                                    
+                                                    Spacer(minLength: 0)
                                                 }
                                             }
-                                            
-                                            Spacer()
                                             
                                             Text(captain.roleEnum == .creator ? "Creator".localized : "Captain".localized)
                                                 .font(.system(.caption, design: .rounded))
@@ -96,6 +96,8 @@ struct FamilyInviteDetail: View {
                                                 .cornerRadius(8)
                                         }
                                         .padding(.vertical, 4)
+                                        .accessibilityElement(children: .combine)
+                                        .accessibilityLabel(captainAccessibilityLabel(captain))
                                     }
                                 }
                                 .padding()
@@ -198,11 +200,15 @@ struct FamilyInviteDetail: View {
                     fetchedFamily = try await familyRepository.fetchFamily(familyId: familyId)
                 }
                 
-                // Always fetch members to get captains
+                // Always fetch members to get captains (hydration awaits user links)
                 let fetchedMembers = try await familyRepository.fetchMembers(familyId: familyId)
                 
+                // Prefer SwiftData reload so captain.user relationships are present
+                let linkedMembers = familyRepository.getMembers(familyId: familyId)
+                let sourceMembers = linkedMembers.isEmpty ? fetchedMembers : linkedMembers
+                
                 // Filter for captains and creator
-                let captainsList = fetchedMembers.filter { member in
+                let captainsList = sourceMembers.filter { member in
                     member.roleEnum == .captain || member.roleEnum == .creator
                 }
                 
@@ -221,6 +227,14 @@ struct FamilyInviteDetail: View {
                 }
             }
         }
+    }
+
+    private func captainAccessibilityLabel(_ captain: FamilyMember) -> String {
+        let role = captain.roleEnum == .creator ? "Creator".localized : "Captain".localized
+        if let user = captain.user {
+            return "\(user.displayName), @\(user.userName), \(role)"
+        }
+        return "\("Captain".localized), \(role)"
     }
     
 }

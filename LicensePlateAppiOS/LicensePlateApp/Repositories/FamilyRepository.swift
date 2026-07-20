@@ -184,18 +184,14 @@ class FamilyRepository: ObservableObject {
             }
         }
         
-        // Cache complete AppUser data for all family members
-        // This is critical for offline access to full user profiles
-        fetchAndCacheUsers(userIds: userIdsToFetch, familyId: familyId)
-        
-            // Sync members to SwiftData
-            for member in members {
-                let searchMemberId = member.id
-                let descriptor = FetchDescriptor<FamilyMember>(
-                    predicate: #Predicate<FamilyMember> { m in
-                        m.id == searchMemberId
-                    }
-                )
+        // Sync members to SwiftData
+        for member in members {
+            let searchMemberId = member.id
+            let descriptor = FetchDescriptor<FamilyMember>(
+                predicate: #Predicate<FamilyMember> { m in
+                    m.id == searchMemberId
+                }
+            )
             
             if let existing = try? modelContext.fetch(descriptor).first {
                 existing.familyId = member.familyId
@@ -210,10 +206,14 @@ class FamilyRepository: ObservableObject {
             }
         }
         
-        // Update published dictionary
-        familyMembers[familyId] = members
-        
         try? modelContext.save()
+        
+        // Publish SwiftData members immediately, then hydrate user links and republish.
+        familyMembers[familyId] = getMembers(familyId: familyId)
+        Task {
+            await self.fetchAndCacheUsers(userIds: userIdsToFetch, familyId: familyId)
+            self.republishLinkedMembersAndPending(familyId: familyId)
+        }
     }
     
     private func handlePendingSnapshot(snapshot: QuerySnapshot?, error: Error?, familyId: String) {
@@ -243,9 +243,7 @@ class FamilyRepository: ObservableObject {
             }
         }
         
-        // Cache complete AppUser data for pending users
-        fetchAndCacheUsers(userIds: userIdsToFetch, familyId: familyId)
-        
+        // Cache complete AppUser data for pending users — deferred until after SwiftData sync
         // Sync requests to SwiftData
         for request in requests {
             let searchRequestId = request.requestId
@@ -268,86 +266,92 @@ class FamilyRepository: ObservableObject {
             }
         }
         
-        // Update published dictionary
-        pendingRequests[familyId] = requests
-        
         try? modelContext.save()
+        
+        pendingRequests[familyId] = getPendingRequests(familyId: familyId)
+        Task {
+            await self.fetchAndCacheUsers(userIds: userIdsToFetch, familyId: familyId)
+            self.republishLinkedMembersAndPending(familyId: familyId)
+        }
     }
     
-    /// Fetch and cache complete AppUser data for family members
-    /// This ensures offline access to full user profiles
-    private func fetchAndCacheUsers(userIds: [String], familyId: String) {
+    /// Fetch and cache complete AppUser data for family members / pending users.
+    /// Links `user` relationships on SwiftData entities before returning.
+    private func fetchAndCacheUsers(userIds: [String], familyId: String) async {
         guard let modelContext = modelContext else { return }
         
-        Task {
-            for userId in userIds {
-                // Check if user already cached
-                let searchUserId = userId
-                let userDescriptor = FetchDescriptor<AppUser>(
-                    predicate: #Predicate<AppUser> { user in
-                        user.id == searchUserId
-                    }
+        let uniqueIds = Array(Set(userIds)).filter { !$0.isEmpty }
+        for userId in uniqueIds {
+            let searchUserId = userId
+            let userDescriptor = FetchDescriptor<AppUser>(
+                predicate: #Predicate<AppUser> { user in
+                    user.id == searchUserId || user.firebaseUID == searchUserId
+                }
+            )
+            
+            if (try? modelContext.fetch(userDescriptor).first) != nil {
+                linkUserToMembers(userId: userId, familyId: familyId)
+                continue
+            }
+            
+            let userDoc = try? await db.collection("users").document(userId).getDocument()
+            
+            if let userDoc = userDoc,
+               let data = userDoc.data(),
+               let userName = (data["userName"] as? String) ?? (data["username"] as? String),
+               !userName.isEmpty {
+                
+                let privacyFlags = UserPrivacyFirestore.decode(from: data)
+                let user = AppUser(
+                    id: userId,
+                    userName: userName,
+                    firstName: data["firstName"] as? String,
+                    lastName: data["lastName"] as? String,
+                    email: data["email"] as? String,
+                    phoneNumber: data["phoneNumber"] as? String,
+                    createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? .now,
+                    lastUpdated: (data["updatedAt"] as? Timestamp)?.dateValue() ?? .now,
+                    isEmailPublic: privacyFlags.isEmailPublic,
+                    isPhonePublic: privacyFlags.isPhonePublic,
+                    isRetiredGeneral: data["isRetiredGeneral"] as? Bool ?? false,
+                    activeFamilyId: data["activeFamilyId"] as? String,
+                    friendCount: data["friendCount"] as? Int ?? 0,
+                    firebaseUID: userId
                 )
                 
-                if let existingUser = try? modelContext.fetch(userDescriptor).first {
-                    // User already cached, link to members/requests
-                    linkUserToMembers(userId: userId, familyId: familyId)
-                    continue
-                }
+                user.avatarId = data["avatarId"] as? String
+                user.equippedBadgeId = data["equippedBadgeId"] as? String
+                user.wasEverInFamily = data["wasEverInFamily"] as? Bool ?? false
                 
-                // Fetch from Firestore
-                let userDoc = try? await db.collection("users").document(userId).getDocument()
+                modelContext.insert(user)
+                try? modelContext.save()
                 
-                if let userDoc = userDoc,
-                   let data = userDoc.data(),
-                   let userName = (data["userName"] as? String) ?? (data["username"] as? String),
-                   !userName.isEmpty {
-                    
-                    let privacyFlags = UserPrivacyFirestore.decode(from: data)
-                    let user = AppUser(
-                        id: userId,
-                        userName: userName,
-                        firstName: data["firstName"] as? String,
-                        lastName: data["lastName"] as? String,
-                        email: data["email"] as? String,
-                        phoneNumber: data["phoneNumber"] as? String,
-                        createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? .now,
-                        lastUpdated: (data["updatedAt"] as? Timestamp)?.dateValue() ?? .now,
-                        isEmailPublic: privacyFlags.isEmailPublic,
-                        isPhonePublic: privacyFlags.isPhonePublic,
-                        isRetiredGeneral: data["isRetiredGeneral"] as? Bool ?? false,
-                        activeFamilyId: data["activeFamilyId"] as? String,
-                        friendCount: data["friendCount"] as? Int ?? 0,
-                        firebaseUID: userId
-                    )
-                    
-                    user.avatarId = data["avatarId"] as? String
-                    user.equippedBadgeId = data["equippedBadgeId"] as? String
-                    user.wasEverInFamily = data["wasEverInFamily"] as? Bool ?? false
-                    
-                    modelContext.insert(user)
-                    try? modelContext.save()
-                    
-                    // Link user to members/requests
-                    linkUserToMembers(userId: userId, familyId: familyId)
-                }
+                linkUserToMembers(userId: userId, familyId: familyId)
             }
         }
+    }
+    
+    /// Republish members and pending from SwiftData so UI sees linked `user` relationships.
+    private func republishLinkedMembersAndPending(familyId: String) {
+        familyMembers[familyId] = getMembers(familyId: familyId)
+        pendingRequests[familyId] = getPendingRequests(familyId: familyId)
     }
     
     /// Link cached AppUser to FamilyMember and PendingJoinRequest
     private func linkUserToMembers(userId: String, familyId: String) {
         guard let modelContext = modelContext else { return }
         
+        let searchUserId = userId
         let userDescriptor = FetchDescriptor<AppUser>(
-            predicate: #Predicate<AppUser> { $0.id == userId }
+            predicate: #Predicate<AppUser> { user in
+                user.id == searchUserId || user.firebaseUID == searchUserId
+            }
         )
         
         guard let user = try? modelContext.fetch(userDescriptor).first else { return }
         
         // Link to FamilyMember
         let searchFamilyId = familyId
-        let searchUserId = userId
         let memberDescriptor = FetchDescriptor<FamilyMember>(
             predicate: #Predicate<FamilyMember> { member in
                 member.familyId == searchFamilyId && member.userId == searchUserId
@@ -494,9 +498,6 @@ class FamilyRepository: ObservableObject {
             }
         }
         
-        // Cache complete AppUser data for all family members
-        fetchAndCacheUsers(userIds: userIdsToFetch, familyId: familyId)
-        
         // Sync members to SwiftData
         for member in members {
             let searchMemberId = member.id
@@ -521,10 +522,10 @@ class FamilyRepository: ObservableObject {
         
         try? modelContext.save()
         
-        // Update published dictionary
-        familyMembers[familyId] = members
+        await fetchAndCacheUsers(userIds: userIdsToFetch, familyId: familyId)
+        republishLinkedMembersAndPending(familyId: familyId)
         
-        return members
+        return getMembers(familyId: familyId)
     }
     
     /// Fetch pending requests directly from Firestore (prioritizes online data)
@@ -547,9 +548,6 @@ class FamilyRepository: ObservableObject {
                 userIdsToFetch.append(request.userId)
             }
         }
-        
-        // Cache complete AppUser data for pending users
-        fetchAndCacheUsers(userIds: userIdsToFetch, familyId: familyId)
         
         // Sync requests to SwiftData
         for request in requests {
@@ -575,10 +573,10 @@ class FamilyRepository: ObservableObject {
         
         try? modelContext.save()
         
-        // Update published dictionary
-        pendingRequests[familyId] = requests
+        await fetchAndCacheUsers(userIds: userIdsToFetch, familyId: familyId)
+        republishLinkedMembersAndPending(familyId: familyId)
         
-        return requests
+        return getPendingRequests(familyId: familyId)
     }
     
     // MARK: - Cloud Functions

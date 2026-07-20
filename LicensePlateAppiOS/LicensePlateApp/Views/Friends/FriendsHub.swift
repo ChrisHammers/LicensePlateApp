@@ -315,9 +315,7 @@ struct FriendRow: View {
             if let user = user {
                 AvatarImageView(user: user, size: 50)
             } else {
-                Circle()
-                    .fill(Color.Theme.primaryBlue.opacity(0.3))
-                    .frame(width: 50, height: 50)
+                AvatarImageView(avatarId: nil, size: 50)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -422,9 +420,11 @@ struct FriendInviteRow: View {
             }
         } label: {
             HStack {
-                Circle()
-                    .fill(Color.Theme.primaryBlue.opacity(0.3))
-                    .frame(width: 50, height: 50)
+                if let user = user {
+                    AvatarImageView(user: user, size: 50)
+                } else {
+                    AvatarImageView(avatarId: nil, size: 50)
+                }
 
                 VStack(alignment: .leading, spacing: 4) {
                     if let user = user {
@@ -459,7 +459,7 @@ struct FriendInviteRow: View {
             .padding(.vertical, 8)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(isOutgoing ? "Outgoing friend request".localized : "Incoming friend request".localized)
+        .accessibilityLabel(friendInviteAccessibilityLabel)
         .accessibilityHint(isOutgoing ? "" : "Opens request details".localized)
         .sheet(isPresented: $showInviteDetail) {
             FriendInviteDetail(inviteId: invite.inviteId)
@@ -468,6 +468,14 @@ struct FriendInviteRow: View {
         .task {
             await loadUser()
         }
+    }
+
+    private var friendInviteAccessibilityLabel: String {
+        let kind = isOutgoing ? "Outgoing friend request".localized : "Incoming friend request".localized
+        if let user = user {
+            return "\(kind), \(user.displayName), @\(user.userName)"
+        }
+        return kind
     }
 
     private func loadUser() async {

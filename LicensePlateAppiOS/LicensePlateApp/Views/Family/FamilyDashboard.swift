@@ -373,9 +373,7 @@ struct FamilyMemberRow: View {
             }
         } else {
             HStack {
-                Circle()
-                    .fill(Color.Theme.primaryBlue.opacity(0.3))
-                    .frame(width: 50, height: 50)
+                AvatarImageView(avatarId: nil, size: 50)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Member")
                         .font(.system(.body, design: .rounded))
@@ -404,9 +402,7 @@ struct PendingRequestRow: View {
             )
         } else {
             HStack {
-                Circle()
-                    .fill(Color.Theme.primaryBlue.opacity(0.3))
-                    .frame(width: 50, height: 50)
+                AvatarImageView(avatarId: nil, size: 50)
                 VStack(alignment: .leading) {
                     Text("Pending User")
                     .font(.system(.body, design: .rounded))

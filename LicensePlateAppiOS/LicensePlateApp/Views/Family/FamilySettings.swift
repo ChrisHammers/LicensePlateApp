@@ -219,12 +219,14 @@ struct FamilyMemberSettingsRow: View {
     
     var body: some View {
         HStack {
-            Circle()
-                .fill(Color.Theme.primaryBlue.opacity(0.3))
-                .frame(width: 40, height: 40)
+            if let user = member.user {
+                AvatarImageView(user: user, size: 40)
+            } else {
+                AvatarImageView(avatarId: nil, size: 40)
+            }
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(member.user?.displayName ?? "Member")
+                Text(member.user?.displayName ?? "Member".localized)
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(Color.Theme.primaryBlue)
                 
@@ -242,6 +244,15 @@ struct FamilyMemberSettingsRow: View {
             Spacer()
         }
         .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(settingsMemberAccessibilityLabel)
+    }
+
+    private var settingsMemberAccessibilityLabel: String {
+        if let user = member.user {
+            return "\(user.displayName), @\(user.userName), \(member.roleEnum.displayName)"
+        }
+        return "\("Member".localized), \(member.roleEnum.displayName)"
     }
 }
 

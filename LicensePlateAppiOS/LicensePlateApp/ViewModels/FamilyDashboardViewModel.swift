@@ -133,7 +133,23 @@ class FamilyDashboardViewModel: ObservableObject {
                 let membersWithUsers = self.familyRepository.getMembers(familyId: familyId)
                 if !membersWithUsers.isEmpty {
                     self.members = membersWithUsers
+                } else if !repositoryMembers.isEmpty {
+                    self.members = repositoryMembers
                 }
+            }
+            .store(in: &cancellables)
+
+        // Observe pending requests the same way so linked users refresh the hub
+        familyRepository.$pendingRequests
+            .sink { [weak self] pendingByFamily in
+                guard let self = self,
+                      let familyId = self.family?.familyId,
+                      pendingByFamily[familyId] != nil else {
+                    return
+                }
+                
+                let pendingWithUsers = self.familyRepository.getPendingRequests(familyId: familyId)
+                self.pendingRequests = pendingWithUsers
             }
             .store(in: &cancellables)
         
@@ -222,9 +238,9 @@ class FamilyDashboardViewModel: ObservableObject {
                         return
                     }
                     
-                    // Fetch members and pending requests FIRST to verify we have permissions
-                    let fetchedMembers = try await familyRepository.fetchMembers(familyId: activeFamilyId)
-                    let fetchedPending = try await familyRepository.fetchPendingRequests(familyId: activeFamilyId)
+                    // Fetch members and pending requests (awaitable hydration links AppUser)
+                    let membersWithUsers = try await familyRepository.fetchMembers(familyId: activeFamilyId)
+                    let pendingWithUsers = try await familyRepository.fetchPendingRequests(familyId: activeFamilyId)
                     
                     // Only start listening if we successfully fetched members (have permissions)
                     await MainActor.run {
@@ -233,16 +249,10 @@ class FamilyDashboardViewModel: ObservableObject {
                         SocialInboxBadgeService.shared.reassertBoundFamilyListening()
                     }
                     
-                    // Wait a bit for user linking to complete (fetchAndCacheUsers runs asynchronously)
-                    try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
-                    
-                    // Reload members from SwiftData to get user relationships
-                    let membersWithUsers = familyRepository.getMembers(familyId: activeFamilyId)
-                    
                     let canManage = await MainActor.run {
                         self.family = fetchedFamily
-                        self.members = membersWithUsers // Use members with user relationships
-                        self.pendingRequests = fetchedPending
+                        self.members = membersWithUsers
+                        self.pendingRequests = pendingWithUsers
                         self.isLoading = false
                         
                         // Check if user can manage family (needs members to be set first)

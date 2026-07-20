@@ -49,6 +49,7 @@ struct UserIdentityRowView: View {
                 avatarSize: avatarSize,
                 badgeSize: max(16, avatarSize * 0.36)
             )
+            
             VStack(alignment: .leading, spacing: 2) {
                 Text(displayName)
                     .font(.system(.body, design: .rounded))
@@ -60,6 +61,7 @@ struct UserIdentityRowView: View {
                         .foregroundStyle(Color.Theme.softBrown)
                 }
             }
+            
             Spacer(minLength: 0)
         }
         .padding(.vertical, 6)

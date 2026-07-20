@@ -110,9 +110,7 @@ struct UserSearchResultRow: View {
                 StandardProfileView(user: user)
             } label: {
                 HStack(spacing: 12) {
-                    Circle()
-                        .fill(Color.Theme.primaryBlue.opacity(0.3))
-                        .frame(width: 50, height: 50)
+                    AvatarImageView(user: user, size: 50)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(user.displayName)
