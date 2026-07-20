@@ -193,8 +193,13 @@ struct FamilySettings: View {
                 
                 // Refresh current user from Firestore to get updated activeFamilyId
                 try? await authService.refreshCurrentUserFromFirestore()
-                
+
                 await MainActor.run {
+                    let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+                    SocialInboxBadgeService.shared.bind(
+                        userId: userId,
+                        activeFamilyId: authService.currentUser?.activeFamilyId
+                    )
                     isDeletingFamily = false
                     dismiss()
                 }

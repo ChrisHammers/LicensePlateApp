@@ -32,8 +32,10 @@ final class SocialInboxBadgeService: ObservableObject {
         let identityUnchanged = userId == boundUserId && activeFamilyId == boundActiveFamilyId
         if identityUnchanged, !cancellables.isEmpty {
             // Identity same, but family listen may have been torn down elsewhere — keep approvals live.
-            if let activeFamilyId {
-                FamilyRepository.shared.startListening(familyId: activeFamilyId)
+            ensureFamilyListening(activeFamilyId: activeFamilyId)
+            // Recount immediately from current publishers (don't wait for the next Firestore snapshot).
+            if let userId {
+                applyFromCurrentPublishers(userId: userId, activeFamilyId: activeFamilyId)
             }
             return
         }
@@ -48,12 +50,7 @@ final class SocialInboxBadgeService: ObservableObject {
             return
         }
 
-        if let activeFamilyId {
-            FamilyRepository.shared.startListening(familyId: activeFamilyId)
-        } else {
-            // No active family → no join-approval inbox; drop any prior family listeners.
-            FamilyRepository.shared.stopListening()
-        }
+        ensureFamilyListening(activeFamilyId: activeFamilyId)
 
         let invitesPublisher = InviteRepository.shared.$invites
         let pendingPublisher = FamilyRepository.shared.$pendingRequests
@@ -73,8 +70,33 @@ final class SocialInboxBadgeService: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// Re-assert family listen + badge counts for the currently bound identity.
+    /// Call after any screen (e.g. Family dashboard) stops or restarts `FamilyRepository` listeners.
+    func reassertBoundFamilyListening() {
+        bind(userId: boundUserId, activeFamilyId: boundActiveFamilyId)
+    }
+
     func stopObserving() {
         bind(userId: nil, activeFamilyId: nil)
+    }
+
+    private func ensureFamilyListening(activeFamilyId: String?) {
+        if let activeFamilyId {
+            FamilyRepository.shared.startListening(familyId: activeFamilyId)
+        } else {
+            // No active family → no join-approval inbox; drop any prior family listeners.
+            FamilyRepository.shared.stopListening()
+        }
+    }
+
+    private func applyFromCurrentPublishers(userId: String, activeFamilyId: String?) {
+        apply(
+            invites: InviteRepository.shared.invites,
+            pendingRequests: FamilyRepository.shared.pendingRequests,
+            members: FamilyRepository.shared.familyMembers,
+            userId: userId,
+            activeFamilyId: activeFamilyId
+        )
     }
 
     private func resetCounts() {

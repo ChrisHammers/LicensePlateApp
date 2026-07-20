@@ -181,13 +181,13 @@ class FamilyDashboardViewModel: ObservableObject {
             
             let activeFamilyId: String? = await MainActor.run {
                 guard let activeFamilyId = self.authService.currentUser?.activeFamilyId else {
-                    // No active family - clear everything and stop any existing listeners
-                    self.familyRepository.stopListening()
+                    // No active family — clear dashboard UI and hand listen ownership back to the badge.
                     self.family = nil
                     self.members = []
                     self.pendingRequests = []
                     self.activeShareCode = nil
                     self.isLoading = false
+                    self.handFamilyListeningBackToBadge()
                     return nil
                 }
                 
@@ -207,7 +207,6 @@ class FamilyDashboardViewModel: ObservableObject {
                     // Check if family is inactive - if so, clear everything and stop listeners
                     if fetchedFamily.statusEnum == .inactive {
                         await MainActor.run {
-                            self.familyRepository.stopListening()
                             self.familyRepository.clearFamilyFromCache(familyId: activeFamilyId)
                             self.family = nil
                             self.members = []
@@ -217,6 +216,9 @@ class FamilyDashboardViewModel: ObservableObject {
                         }
                         // Clear activeFamilyId from user document
                         await self.clearActiveFamilyId()
+                        await MainActor.run {
+                            self.handFamilyListeningBackToBadge()
+                        }
                         return
                     }
                     
@@ -227,6 +229,8 @@ class FamilyDashboardViewModel: ObservableObject {
                     // Only start listening if we successfully fetched members (have permissions)
                     await MainActor.run {
                         self.familyRepository.startListening(familyId: activeFamilyId)
+                        // Keep badge projection in sync with the shared family listen.
+                        SocialInboxBadgeService.shared.reassertBoundFamilyListening()
                     }
                     
                     // Wait a bit for user linking to complete (fetchAndCacheUsers runs asynchronously)
@@ -250,10 +254,8 @@ class FamilyDashboardViewModel: ObservableObject {
                         await loadActiveShareCode(familyId: activeFamilyId)
                     }
                 } else {
-                    // Family doesn't exist in Firestore - stop listeners and clear local cache
+                    // Family doesn't exist in Firestore - clear local cache and hand listen back to badge.
                     await MainActor.run {
-                        self.familyRepository.stopListening()
-                        // Clear SwiftData cache for this family
                         self.familyRepository.clearFamilyFromCache(familyId: activeFamilyId)
                         
                         self.family = nil
@@ -264,6 +266,9 @@ class FamilyDashboardViewModel: ObservableObject {
                     }
                     // Clear activeFamilyId from user document
                     await self.clearActiveFamilyId()
+                    await MainActor.run {
+                        self.handFamilyListeningBackToBadge()
+                    }
                 }
             } catch {
                 // Network error or permission issue - check if family exists and is active
@@ -271,16 +276,16 @@ class FamilyDashboardViewModel: ObservableObject {
                     self.familyRepository.getFamily(familyId: activeFamilyId)
                 }
                 
-                // If cached family is inactive, clear it and stop listeners
+                // If cached family is inactive, clear it and hand listen back to badge
                 if let cached = cachedFamily, cached.statusEnum == .inactive {
                     await MainActor.run {
-                        self.familyRepository.stopListening()
                         self.familyRepository.clearFamilyFromCache(familyId: activeFamilyId)
                         self.family = nil
                         self.members = []
                         self.pendingRequests = []
                         self.activeShareCode = nil
                         self.isLoading = false
+                        self.handFamilyListeningBackToBadge()
                     }
                 } else {
                     // Fall back to SwiftData cache only if online fetch failed
@@ -295,6 +300,9 @@ class FamilyDashboardViewModel: ObservableObject {
                             self.activeShareCode = nil
                         }
                         
+                        // Re-assert badge listen so home approvals stay live after a failed fetch.
+                        self.handFamilyListeningBackToBadge()
+                        
                         return self.canManageFamily
                     }
                     
@@ -305,6 +313,15 @@ class FamilyDashboardViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    /// Family dashboard must not permanently own/tear down listeners the social inbox badge needs.
+    private func handFamilyListeningBackToBadge() {
+        let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+        SocialInboxBadgeService.shared.bind(
+            userId: userId,
+            activeFamilyId: authService.currentUser?.activeFamilyId
+        )
     }
     
     
