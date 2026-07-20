@@ -285,7 +285,18 @@ export const respondToFamilyInvite_UserStep = enforcedCallable(
       respondedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
+    let pendingRequestId: string | null = null;
+    const familyId =
+      typeof inviteData.familyId === "string" ? inviteData.familyId : null;
+
     if (response === "accept") {
+      if (!familyId) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Invite is missing familyId"
+        );
+      }
+
       // Create pending join request (awaiting captain approval)
       const requestData = {
         userId,
@@ -295,9 +306,8 @@ export const respondToFamilyInvite_UserStep = enforcedCallable(
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       };
 
-      const requestRef = db
-        .collection(`families/${inviteData.familyId}/pending`)
-        .doc();
+      const requestRef = db.collection(`families/${familyId}/pending`).doc();
+      pendingRequestId = requestRef.id;
 
       batch.set(requestRef, requestData);
 
@@ -306,16 +316,75 @@ export const respondToFamilyInvite_UserStep = enforcedCallable(
         actorId: userId,
         subjectType: "invite",
         subjectId: inviteId,
-        metadata: { familyId: inviteData.familyId },
+        metadata: { familyId },
         clientMetadata,
       });
     }
 
     await batch.commit();
 
+    // Notify creators/captains that a join request needs approval (Family pref gated).
+    if (response === "accept" && familyId && pendingRequestId) {
+      await notifyFamilyManagersOfJoinRequest({
+        familyId,
+        requestId: pendingRequestId,
+        requesterUserId: userId,
+      });
+    }
+
     return { success: true };
   }
 );
+
+/**
+ * FCM creators/captains when someone accepts an invite and needs approval.
+ */
+async function notifyFamilyManagersOfJoinRequest(args: {
+  familyId: string;
+  requestId: string;
+  requesterUserId: string;
+}): Promise<void> {
+  const { familyId, requestId, requesterUserId } = args;
+  const membersSnap = await db.collection(`families/${familyId}/members`).get();
+  const managerIds: string[] = [];
+  membersSnap.forEach((doc) => {
+    const role = doc.data().role;
+    if (role === "creator" || role === "captain") {
+      managerIds.push(doc.id);
+    }
+  });
+
+  const deepLink = `roadtrip-royale://family/${familyId}/pending`;
+  await Promise.all(
+    managerIds.map(async (managerId) => {
+      if (managerId === requesterUserId) {
+        return;
+      }
+      const fcmToken = await getFCMTokenForSocialPush(managerId, "family");
+      if (!fcmToken) {
+        return;
+      }
+      try {
+        await sendPushNotification(
+          fcmToken,
+          "Family Join Request",
+          "Someone wants to join your family",
+          {
+            type: "family_join_request",
+            familyId,
+            requestId,
+            deepLink,
+          }
+        );
+      } catch (error) {
+        console.error(
+          `Error sending family_join_request push to ${managerId}:`,
+          error
+        );
+      }
+    })
+  );
+}
 
 /**
  * Captain approves family join request (step 2) - adds member

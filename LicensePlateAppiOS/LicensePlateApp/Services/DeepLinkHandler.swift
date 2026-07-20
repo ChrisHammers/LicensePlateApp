@@ -13,6 +13,10 @@ enum DeepLinkDestination: Hashable, Identifiable {
     case friendInvite(inviteId: String)
     case familyInvite(inviteId: String, familyId: String)
     case tripInvite(inviteId: String)
+    /// Creator/captain inbox: pending join requests for a family.
+    case familyPendingApprovals(familyId: String)
+    /// Open Family dashboard (e.g. after join approved).
+    case familyHome(familyId: String)
 
     var id: String {
         switch self {
@@ -22,6 +26,10 @@ enum DeepLinkDestination: Hashable, Identifiable {
             return "family-\(inviteId)-\(familyId)"
         case .tripInvite(let inviteId):
             return "trip-\(inviteId)"
+        case .familyPendingApprovals(let familyId):
+            return "family-pending-\(familyId)"
+        case .familyHome(let familyId):
+            return "family-home-\(familyId)"
         }
     }
 }
@@ -45,6 +53,7 @@ class DeepLinkHandler: ObservableObject {
         }
         
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let host = components?.host ?? ""
         let path = components?.path ?? ""
         let queryItems = components?.queryItems ?? []
         
@@ -55,24 +64,50 @@ class DeepLinkHandler: ObservableObject {
                 params[item.name] = value
             }
         }
+
+        // Normalize `roadtrip-royale://invite/friend` (host+path) and `roadtrip-royale:/invite/friend` (path only).
+        let routePath: String = {
+            if path.hasPrefix("/invite/") || path.hasPrefix("/family/") {
+                return path
+            }
+            if !host.isEmpty {
+                let suffix = (path == "/" || path.isEmpty) ? "" : path
+                return "/\(host)\(suffix)"
+            }
+            return path
+        }()
         
         // Handle invite paths
-        if path.hasPrefix("/invite/friend") {
+        if routePath.hasPrefix("/invite/friend") {
             if let inviteId = params["inviteId"] {
                 AnalyticsService.shared.log(.deepLinkOpened(type: "friend", params: params))
                 return .friendInvite(inviteId: inviteId)
             }
-        } else if path.hasPrefix("/invite/family") {
+        } else if routePath.hasPrefix("/invite/family") {
             if let inviteId = params["inviteId"],
                let familyId = params["familyId"] {
                 AnalyticsService.shared.log(.deepLinkOpened(type: "family", params: params))
                 return .familyInvite(inviteId: inviteId, familyId: familyId)
             }
-        } else if path.hasPrefix("/invite/trip") {
+        } else if routePath.hasPrefix("/invite/trip") {
             if let inviteId = params["inviteId"] {
                 AnalyticsService.shared.log(.deepLinkOpened(type: "trip", params: params))
                 return .tripInvite(inviteId: inviteId)
             }
+        } else if routePath.hasPrefix("/family/") {
+            let segments = routePath
+                .split(separator: "/")
+                .map(String.init)
+            // ["family", "{familyId}"] or ["family", "{familyId}", "pending"]
+            guard segments.count >= 2, segments[0] == "family" else { return nil }
+            let familyId = segments[1]
+            guard !familyId.isEmpty else { return nil }
+            if segments.count >= 3, segments[2] == "pending" {
+                AnalyticsService.shared.log(.deepLinkOpened(type: "family_pending", params: ["familyId": familyId]))
+                return .familyPendingApprovals(familyId: familyId)
+            }
+            AnalyticsService.shared.log(.deepLinkOpened(type: "family_home", params: ["familyId": familyId]))
+            return .familyHome(familyId: familyId)
         }
         
         return nil
@@ -96,6 +131,7 @@ class DeepLinkHandler: ObservableObject {
 
         let type = stringValue(userInfo["type"])
         let inviteId = stringValue(userInfo["inviteId"]) ?? stringValue(userInfo["invite_id"])
+        let familyId = stringValue(userInfo["familyId"]) ?? stringValue(userInfo["family_id"])
 
         switch type {
         case "friend_invite":
@@ -104,7 +140,7 @@ class DeepLinkHandler: ObservableObject {
             return .friendInvite(inviteId: inviteId)
         case "family_invite":
             guard let inviteId,
-                  let familyId = stringValue(userInfo["familyId"]) ?? stringValue(userInfo["family_id"]) else {
+                  let familyId else {
                 return nil
             }
             AnalyticsService.shared.log(.deepLinkOpened(
@@ -116,6 +152,20 @@ class DeepLinkHandler: ObservableObject {
             guard let inviteId else { return nil }
             AnalyticsService.shared.log(.deepLinkOpened(type: "trip", params: ["inviteId": inviteId, "source": "notification"]))
             return .tripInvite(inviteId: inviteId)
+        case "family_join_request":
+            guard let familyId else { return nil }
+            AnalyticsService.shared.log(.deepLinkOpened(
+                type: "family_pending",
+                params: ["familyId": familyId, "source": "notification"]
+            ))
+            return .familyPendingApprovals(familyId: familyId)
+        case "family_join_approved":
+            guard let familyId else { return nil }
+            AnalyticsService.shared.log(.deepLinkOpened(
+                type: "family_home",
+                params: ["familyId": familyId, "source": "notification"]
+            ))
+            return .familyHome(familyId: familyId)
         default:
             return nil
         }
@@ -156,5 +206,20 @@ class DeepLinkHandler: ObservableObject {
         components.queryItems = [URLQueryItem(name: "inviteId", value: inviteId)]
         return components.url!
     }
-}
 
+    /// Pending join approvals for a family (creator/captain).
+    static func familyPendingApprovalsURL(familyId: String) -> URL {
+        var components = URLComponents()
+        components.scheme = "roadtrip-royale"
+        components.path = "/family/\(familyId)/pending"
+        return components.url!
+    }
+
+    /// Family home / dashboard deep link.
+    static func familyHomeURL(familyId: String) -> URL {
+        var components = URLComponents()
+        components.scheme = "roadtrip-royale"
+        components.path = "/family/\(familyId)"
+        return components.url!
+    }
+}

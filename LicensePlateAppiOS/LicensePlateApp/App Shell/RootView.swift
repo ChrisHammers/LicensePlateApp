@@ -206,6 +206,28 @@ struct RootView: View {
             case .tripInvite(_):
                 PendingTripsView()
                     .environmentObject(authService)
+            case .familyPendingApprovals(let familyId):
+                if FriendsFamilyAccessPolicy.shared.canUseFriendsAndFamily(for: authService.currentUser) {
+                    FamilyPendingApprovals(familyId: familyId)
+                        .environmentObject(authService)
+                } else {
+                    NavigationStack {
+                        FriendsFamilySignUpGateView(feature: .family)
+                            .environmentObject(authService)
+                    }
+                }
+            case .familyHome:
+                if FriendsFamilyAccessPolicy.shared.canUseFriendsAndFamily(for: authService.currentUser) {
+                    NavigationStack {
+                        FamilyDashboard()
+                            .environmentObject(authService)
+                    }
+                } else {
+                    NavigationStack {
+                        FriendsFamilySignUpGateView(feature: .family)
+                            .environmentObject(authService)
+                    }
+                }
             }
         }
     }
