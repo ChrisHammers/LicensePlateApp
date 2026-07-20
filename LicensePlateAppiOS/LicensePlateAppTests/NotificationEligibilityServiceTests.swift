@@ -75,4 +75,21 @@ struct NotificationEligibilityServiceTests {
         #expect(result.kind == .inactiveActiveTripReminder)
         #expect(result.isEligible == true)
     }
+
+    @Test func eligibilityForFriendInviteUsesSamePermission() async {
+        let provider = MockNotificationPermissionProvider(status: .authorized)
+        let service = NotificationEligibilityService(permissionProvider: provider)
+        let result = await service.eligibility(for: .friendInvite)
+        #expect(result.kind == .friendInvite)
+        #expect(result.isEligible == true)
+    }
+
+    @Test func eligibilityForFamilyInviteUsesSamePermission() async {
+        let provider = MockNotificationPermissionProvider(status: .denied)
+        let service = NotificationEligibilityService(permissionProvider: provider)
+        let result = await service.eligibility(for: .familyInvite)
+        #expect(result.kind == .familyInvite)
+        #expect(result.isEligible == false)
+        #expect(result.denialReason == "denied")
+    }
 }

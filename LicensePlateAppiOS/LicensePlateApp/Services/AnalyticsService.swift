@@ -255,6 +255,8 @@ class AnalyticsService: AnalyticsLogging {
         // Notifications & eligibility (Step 08)
         case notificationEligibilityChecked(kind: String, eligible: Bool)
         case notificationDeliveredTripInvite
+        case notificationDeliveredFriendInvite
+        case notificationDeliveredFamilyInvite
         case notificationDeliveryFailed(error: String)
 
         // Step 18 — launch operations, growth, and monetization
@@ -450,6 +452,8 @@ class AnalyticsService: AnalyticsLogging {
             case .analyticsPropertyBuildFailed: return "analytics_property_build_failed"
             case .notificationEligibilityChecked: return "notification_eligibility_checked"
             case .notificationDeliveredTripInvite: return "notification_delivered_trip_invite"
+            case .notificationDeliveredFriendInvite: return "notification_delivered_friend_invite"
+            case .notificationDeliveredFamilyInvite: return "notification_delivered_family_invite"
             case .notificationDeliveryFailed: return "notification_delivery_failed"
             case .remoteConfigFetchSucceeded: return "remote_config_fetch_succeeded"
             case .remoteConfigFetchFailed: return "remote_config_fetch_failed"
@@ -848,7 +852,9 @@ class AnalyticsService: AnalyticsLogging {
                 return ["context": context]
             case .notificationEligibilityChecked(let kind, let eligible):
                 return ["kind": kind, "eligible": eligible]
-            case .notificationDeliveredTripInvite:
+            case .notificationDeliveredTripInvite,
+                 .notificationDeliveredFriendInvite,
+                 .notificationDeliveredFamilyInvite:
                 return nil
             case .notificationDeliveryFailed(let error):
                 return ["error": error]

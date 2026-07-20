@@ -10,6 +10,8 @@ import Foundation
 /// Kind of notification we may deliver (trip invite, milestone, etc.).
 enum NotificationEligibilityKind: String, CaseIterable {
     case tripInvite
+    case friendInvite
+    case familyInvite
     case milestone
     case inactiveActiveTripReminder
     case returnStreakReminder

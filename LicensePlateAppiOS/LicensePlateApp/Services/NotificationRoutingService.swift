@@ -2,7 +2,8 @@
 //  NotificationRoutingService.swift
 //  LicensePlateApp
 //
-//  Step 08 — Routes notification events (e.g. trip invite received) to local notifications when eligible.
+//  Step 08 — Routes notification events (trip / friend / family invite received)
+//  to local notifications when eligible.
 //
 
 import Foundation
@@ -22,59 +23,130 @@ final class NotificationRoutingService {
 
     private let eligibilityService: NotificationEligibilityService
     private let analytics: AnalyticsLogging
-    private var inviteCancellable: AnyCancellable?
-    private var lastKnownIncomingCount: Int?
-    private var hasSeededIncomingCount = false
+    private var cancellables = Set<AnyCancellable>()
+
+    private var lastKnownIncomingTripCount: Int?
+    private var hasSeededIncomingTripCount = false
+
+    private var lastKnownIncomingFriendCount: Int?
+    private var hasSeededIncomingFriendCount = false
+
+    private var lastKnownIncomingFamilyCount: Int?
+    private var hasSeededIncomingFamilyCount = false
 
     init(eligibilityService: NotificationEligibilityService, analytics: AnalyticsLogging) {
         self.eligibilityService = eligibilityService
         self.analytics = analytics
     }
 
-    /// Call when main app is active (e.g. ContentView.onAppear) to start observing trip invite events.
-    /// Listener is set up only once; pass current userId so we only notify when that user receives new incoming invites.
+    /// Call when main app is active (e.g. ContentView.onAppear) to start observing invite events.
+    /// Listeners are set up only once; pass current userId so we only notify for that user.
     func startObservingIfNeeded(userId: String?) {
         guard let userId = userId else { return }
-        guard inviteCancellable == nil else { return }
+        guard cancellables.isEmpty else { return }
 
-        let repo = TripInviteRepository.shared
-        inviteCancellable = repo.$tripInvites
+        TripInviteRepository.shared.$tripInvites
             .receive(on: DispatchQueue.main)
             .sink { [weak self] invites in
-                Task { @MainActor in
-                    self?.handleTripInvitesUpdate(invites: invites, userId: userId)
-                }
+                self?.handleTripInvitesUpdate(invites: invites, userId: userId)
             }
+            .store(in: &cancellables)
+
+        InviteRepository.shared.$invites
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] invites in
+                self?.handleSocialInvitesUpdate(invites: invites, userId: userId)
+            }
+            .store(in: &cancellables)
     }
 
     func stopObserving() {
-        inviteCancellable?.cancel()
-        inviteCancellable = nil
-        lastKnownIncomingCount = nil
-        hasSeededIncomingCount = false
+        cancellables.removeAll()
+        lastKnownIncomingTripCount = nil
+        hasSeededIncomingTripCount = false
+        lastKnownIncomingFriendCount = nil
+        hasSeededIncomingFriendCount = false
+        lastKnownIncomingFamilyCount = nil
+        hasSeededIncomingFamilyCount = false
     }
 
     private func handleTripInvitesUpdate(invites: [TripInvite], userId: String) {
         let incomingCount = invites.filter { $0.toUserId == userId && $0.statusEnum == .pending }.count
 
-        if !hasSeededIncomingCount {
-            lastKnownIncomingCount = incomingCount
-            hasSeededIncomingCount = true
+        if !hasSeededIncomingTripCount {
+            lastKnownIncomingTripCount = incomingCount
+            hasSeededIncomingTripCount = true
             return
         }
 
-        let previous = lastKnownIncomingCount ?? 0
-        lastKnownIncomingCount = incomingCount
+        let previous = lastKnownIncomingTripCount ?? 0
+        lastKnownIncomingTripCount = incomingCount
 
         if incomingCount > previous {
             Task.detached(priority: .utility) { [weak self] in
-                await self?.handleTripInviteReceived()
+                await self?.deliverLocalInviteNotification(
+                    kind: .tripInvite,
+                    titleKey: "New trip invite",
+                    bodyKey: "You have a new trip invite. Open the app to view.",
+                    requestPrefix: "trip-invite",
+                    deliveredEvent: .notificationDeliveredTripInvite
+                )
             }
         }
     }
 
-    private func handleTripInviteReceived() async {
-        let eligibility = await eligibilityService.eligibility(for: .tripInvite)
+    private func handleSocialInvitesUpdate(invites: [Invite], userId: String) {
+        let counts = SocialInboxBadgeCounts.counts(from: invites, userId: userId)
+        let friendCount = counts.friend
+        let familyCount = counts.family
+
+        if !hasSeededIncomingFriendCount {
+            lastKnownIncomingFriendCount = friendCount
+            hasSeededIncomingFriendCount = true
+        } else {
+            let previousFriend = lastKnownIncomingFriendCount ?? 0
+            lastKnownIncomingFriendCount = friendCount
+            if friendCount > previousFriend {
+                Task.detached(priority: .utility) { [weak self] in
+                    await self?.deliverLocalInviteNotification(
+                        kind: .friendInvite,
+                        titleKey: "New friend request",
+                        bodyKey: "You have a new friend request. Open the app to view.",
+                        requestPrefix: "friend-invite",
+                        deliveredEvent: .notificationDeliveredFriendInvite
+                    )
+                }
+            }
+        }
+
+        if !hasSeededIncomingFamilyCount {
+            lastKnownIncomingFamilyCount = familyCount
+            hasSeededIncomingFamilyCount = true
+        } else {
+            let previousFamily = lastKnownIncomingFamilyCount ?? 0
+            lastKnownIncomingFamilyCount = familyCount
+            if familyCount > previousFamily {
+                Task.detached(priority: .utility) { [weak self] in
+                    await self?.deliverLocalInviteNotification(
+                        kind: .familyInvite,
+                        titleKey: "New family invitation",
+                        bodyKey: "You have a new family invitation. Open the app to view.",
+                        requestPrefix: "family-invite",
+                        deliveredEvent: .notificationDeliveredFamilyInvite
+                    )
+                }
+            }
+        }
+    }
+
+    private func deliverLocalInviteNotification(
+        kind: NotificationEligibilityKind,
+        titleKey: String,
+        bodyKey: String,
+        requestPrefix: String,
+        deliveredEvent: AnalyticsService.Event
+    ) async {
+        let eligibility = await eligibilityService.eligibility(for: kind)
         analytics.log(
             .notificationEligibilityChecked(
                 kind: eligibility.kind.rawValue,
@@ -84,20 +156,19 @@ final class NotificationRoutingService {
         guard eligibility.isEligible else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = "New trip invite".localized
-        content.body = "You have a new trip invite. Open the app to view.".localized
+        content.title = titleKey.localized
+        content.body = bodyKey.localized
         content.sound = .default
 
         let request = UNNotificationRequest(
-            identifier: "trip-invite-\(UUID().uuidString)",
+            identifier: "\(requestPrefix)-\(UUID().uuidString)",
             content: content,
             trigger: UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
         )
         do {
             try await UNUserNotificationCenter.current().add(request)
-            analytics.log(.notificationDeliveredTripInvite)
+            analytics.log(deliveredEvent)
         } catch {
-            // Log but don't surface; notification delivery is best-effort
             analytics.log(.notificationDeliveryFailed(error: String(describing: error)))
         }
     }

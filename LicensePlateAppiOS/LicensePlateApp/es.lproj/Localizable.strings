@@ -613,6 +613,10 @@
 // Notifications (Step 08)
 "New trip invite" = "Nueva invitación de viaje";
 "You have a new trip invite. Open the app to view." = "Tienes una nueva invitación de viaje. Abre la app para ver.";
+"New friend request" = "Nueva solicitud de amistad";
+"You have a new friend request. Open the app to view." = "Tienes una nueva solicitud de amistad. Abre la app para ver.";
+"New family invitation" = "Nueva invitación familiar";
+"You have a new family invitation. Open the app to view." = "Tienes una nueva invitación familiar. Abre la app para ver.";
 
 // Paywall & RevenueCat (Step 09)
 "Restore Purchases" = "Restaurar compras";
