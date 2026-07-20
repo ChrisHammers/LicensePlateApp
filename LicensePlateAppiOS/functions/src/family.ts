@@ -2,7 +2,7 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { canAddMemberToFamily, assertUserIsRegistered, recipientNotRegisteredMessage, isUserSearchable } from "./utils/validation";
 import { writeAuditLog } from "./audit";
-import { getFCMToken, sendPushNotification } from "./utils/notifications";
+import { getFCMTokenForSocialPush, sendPushNotification } from "./utils/notifications";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
 import { assertRegisteredAccount } from "./callableAuth";
@@ -200,8 +200,8 @@ export const sendFamilyInvite = enforcedCallable(
 
     const inviteRef = await db.collection("invites").add(inviteData);
 
-    // Send push notification
-    const fcmToken = await getFCMToken(toUserId);
+    // Send push notification (gated by recipient notificationPrefs.family)
+    const fcmToken = await getFCMTokenForSocialPush(toUserId, "family");
     if (fcmToken) {
       await sendPushNotification(
         fcmToken,
@@ -441,8 +441,8 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // Send push notification
-      const fcmToken = await getFCMToken(requestData.userId);
+      // Send push notification (gated by recipient notificationPrefs.family)
+      const fcmToken = await getFCMTokenForSocialPush(requestData.userId, "family");
       if (fcmToken) {
         await sendPushNotification(
           fcmToken,

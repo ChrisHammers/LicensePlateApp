@@ -829,5 +829,33 @@ class UserRepository: ObservableObject {
             "fcmTokenUpdatedAt": FieldValue.serverTimestamp()
         ], merge: true)
     }
+
+    // MARK: - Notification preferences (Firestore-only; server gates FCM)
+
+    /// Friend/family social push prefs. Missing fields default to enabled on the server.
+    struct NotificationPrefs: Equatable, Sendable {
+        var friend: Bool
+        var family: Bool
+
+        static let `default` = NotificationPrefs(friend: true, family: true)
+    }
+
+    func fetchNotificationPrefs(userId: String) async throws -> NotificationPrefs {
+        let snapshot = try await db.collection("users").document(userId).getDocument()
+        let raw = snapshot.data()?["notificationPrefs"] as? [String: Any]
+        let friend = (raw?["friend"] as? Bool) ?? true
+        let family = (raw?["family"] as? Bool) ?? true
+        return NotificationPrefs(friend: friend, family: family)
+    }
+
+    /// Writes both keys together so merge does not wipe the sibling preference.
+    func updateNotificationPrefs(userId: String, prefs: NotificationPrefs) async throws {
+        try await db.collection("users").document(userId).setData([
+            "notificationPrefs": [
+                "friend": prefs.friend,
+                "family": prefs.family
+            ]
+        ], merge: true)
+    }
 }
 

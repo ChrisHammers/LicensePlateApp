@@ -15,6 +15,7 @@ struct PrivacyPermissionsView: View {
     var deferredSetupTouchSource: String = "settings"
     var onDone: (() -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var authService: FirebaseAuthService
     
     // Privacy & Permissions
     @AppStorage(LocationSettingsKeys.saveLocationWhenMarkingPlates) private var saveLocationWhenMarkingPlates = true
@@ -23,12 +24,17 @@ struct PrivacyPermissionsView: View {
     @AppStorage("notifyPlateFoundByOpponent") private var notifyPlateFoundByOpponent = true
     @AppStorage("notifyPlateFoundByCoPilots") private var notifyPlateFoundByCoPilots = true
     @AppStorage("notifyPromotionsAndNews") private var notifyPromotionsAndNews = false
+    /// Local cache of Firestore `users/{uid}.notificationPrefs.friend` (default ON).
+    @AppStorage("notifyFriendSocialPushes") private var notifyFriendSocialPushes = true
+    /// Local cache of Firestore `users/{uid}.notificationPrefs.family` (default ON).
+    @AppStorage("notifyFamilySocialPushes") private var notifyFamilySocialPushes = true
     
     @ObservedObject private var locationManager = LocationManager.shared
     @State private var microphonePermission: AVAudioSession.RecordPermission = .undetermined
     @State private var speechRecognitionPermission: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     @State private var cameraPermission: AVAuthorizationStatus = .notDetermined
     @State private var notificationPermission: UNAuthorizationStatus = .notDetermined
+    @State private var isSyncingNotificationPrefs = false
     
     var body: some View {
             AppBackgroundView {
@@ -148,6 +154,18 @@ struct PrivacyPermissionsView: View {
                             )
                             
                             SettingToggleRow(
+                                title: "Friend notifications".localized,
+                                description: "Friend requests and other friend alerts".localized,
+                                isOn: $notifyFriendSocialPushes
+                            )
+                            
+                            SettingToggleRow(
+                                title: "Family notifications".localized,
+                                description: "Family invites, join updates, and related alerts".localized,
+                                isOn: $notifyFamilySocialPushes
+                            )
+                            
+                            SettingToggleRow(
                                 title: "Plate found by opponent".localized,
                                 description: "Get notified when an opponent finds a plate".localized,
                                 isOn: $notifyPlateFoundByOpponent
@@ -203,10 +221,52 @@ struct PrivacyPermissionsView: View {
             .onAppear {
                 checkPermissions()
                 DeferredProfileSetupStore.shared.markTouched(.notifications, source: deferredSetupTouchSource)
+                Task { await loadNotificationPrefsFromServer() }
             }
             .onChange(of: locationManager.authorizationStatus) { oldValue, newValue in
                 checkPermissions()
             }
+            .onChange(of: notifyFriendSocialPushes) { _, _ in
+                Task { await persistNotificationPrefsToServer() }
+            }
+            .onChange(of: notifyFamilySocialPushes) { _, _ in
+                Task { await persistNotificationPrefsToServer() }
+            }
+    }
+
+    private var notificationPrefsUserId: String? {
+        authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+    }
+
+    @MainActor
+    private func loadNotificationPrefsFromServer() async {
+        guard let userId = notificationPrefsUserId, !userId.isEmpty else { return }
+        do {
+            let prefs = try await UserRepository.shared.fetchNotificationPrefs(userId: userId)
+            isSyncingNotificationPrefs = true
+            notifyFriendSocialPushes = prefs.friend
+            notifyFamilySocialPushes = prefs.family
+            await Task.yield()
+            isSyncingNotificationPrefs = false
+        } catch {
+            // Keep local AppStorage defaults / last values if offline.
+            isSyncingNotificationPrefs = false
+        }
+    }
+
+    @MainActor
+    private func persistNotificationPrefsToServer() async {
+        guard !isSyncingNotificationPrefs else { return }
+        guard let userId = notificationPrefsUserId, !userId.isEmpty else { return }
+        let prefs = UserRepository.NotificationPrefs(
+            friend: notifyFriendSocialPushes,
+            family: notifyFamilySocialPushes
+        )
+        do {
+            try await UserRepository.shared.updateNotificationPrefs(userId: userId, prefs: prefs)
+        } catch {
+            // Best-effort; toggles remain local until next successful sync.
+        }
     }
     
     // Permission status helpers

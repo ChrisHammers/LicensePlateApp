@@ -7,7 +7,7 @@ import {
   recipientNotRegisteredMessage,
 } from "./utils/validation";
 import { writeAuditLog } from "./audit";
-import { getFCMToken, sendPushNotification } from "./utils/notifications";
+import { getFCMTokenForSocialPush, sendPushNotification } from "./utils/notifications";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
 import { assertRegisteredAccount } from "./callableAuth";
@@ -131,8 +131,8 @@ export const sendFriendInvite = enforcedCallable(
 
     const inviteRef = await db.collection("invites").add(inviteData);
 
-    // Send push notification
-    const fcmToken = await getFCMToken(toUserId);
+    // Send push notification (gated by recipient notificationPrefs.friend)
+    const fcmToken = await getFCMTokenForSocialPush(toUserId, "friend");
     if (fcmToken) {
       await sendPushNotification(
         fcmToken,
