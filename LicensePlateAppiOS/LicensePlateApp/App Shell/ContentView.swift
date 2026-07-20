@@ -45,7 +45,6 @@ struct ContentView: View {
     @AppStorage("boundariesLoaded") private var boundariesLoaded = false
     @AppStorage(FirstSessionStateKeys.hasLoggedFirstFind) private var hasLoggedFirstFind = false
     @ObservedObject private var deferredSetupStore = DeferredProfileSetupStore.shared
-    @ObservedObject private var socialInboxBadges = SocialInboxBadgeService.shared
     @State private var showDeferredSetupBanner = false
     @State private var isShowingDeferredSetupHub = false
     
@@ -151,7 +150,6 @@ struct ContentView: View {
                 isStreakVisible: returnStreakViewModel.presentation.isVisible,
                 displayName: authService.currentUser?.userName,
                 currentUser: authService.currentUser,
-                pendingInviteBadgeCount: socialInboxBadges.totalPendingInviteCount,
                 onStreakTap: { returnStreakViewModel.openExplanation() },
                 onTravelLogTap: { isShowingTravelLog = true },
                 onSettingsTap: { isShowingSettings = true }
@@ -228,16 +226,13 @@ struct ContentView: View {
         homeTripRecapWithPresentation
             .onChange(of: currentUserId) { _, newUserId in
                 returnStreakViewModel.bind(userId: newUserId)
-                SocialInboxBadgeService.shared.bind(
+                ensureSocialInboxListening(
                     userId: newUserId,
                     activeFamilyId: authService.currentUser?.activeFamilyId
                 )
             }
             .onChange(of: authService.currentUser?.activeFamilyId) { _, newFamilyId in
-                SocialInboxBadgeService.shared.bind(
-                    userId: currentUserId,
-                    activeFamilyId: newFamilyId
-                )
+                ensureSocialInboxListening(userId: currentUserId, activeFamilyId: newFamilyId)
             }
             .onChange(of: scenePhase) { _, phase in
                 handleHomeScenePhaseChange(phase)
@@ -253,7 +248,7 @@ struct ContentView: View {
                 pendingTripsViewModel.setAuthService(authService)
                 travelLogViewModel.setAuthService(authService)
                 returnStreakViewModel.bind(userId: currentUserId)
-                SocialInboxBadgeService.shared.bind(
+                ensureSocialInboxListening(
                     userId: currentUserId,
                     activeFamilyId: authService.currentUser?.activeFamilyId
                 )
@@ -330,11 +325,27 @@ struct ContentView: View {
 
     private func handleHomeScenePhaseChange(_ phase: ScenePhase) {
         guard phase == .active else { return }
+        ensureSocialInboxListening(
+            userId: currentUserId,
+            activeFamilyId: authService.currentUser?.activeFamilyId
+        )
         returnStreakViewModel.refresh()
         ReturnStreakReminderService.shared.logReminderOpenedIfNeeded(userId: currentUserId)
         Task {
             await ReturnStreakReminderService.shared.refreshScheduleIfNeeded(userId: currentUserId)
         }
+    }
+
+    /// Keep invite listeners + badge projection aligned with the signed-in user / active family.
+    private func ensureSocialInboxListening(userId: String?, activeFamilyId: String?) {
+        if let userId, !userId.isEmpty {
+            FriendshipRepository.shared.startListening(userId: userId)
+            InviteRepository.shared.startListening(userId: userId)
+        } else {
+            FriendshipRepository.shared.stopListening()
+            InviteRepository.shared.stopListening()
+        }
+        SocialInboxBadgeService.shared.bind(userId: userId, activeFamilyId: activeFamilyId)
     }
 
   private func bootstrapHomeScreen() async {
@@ -352,11 +363,7 @@ struct ContentView: View {
         EntitlementService.shared.setModelContext(modelContext)
 
         pendingTripsViewModel.setAuthService(authService)
-        if let userId = currentUserId {
-            FriendshipRepository.shared.startListening(userId: userId)
-            InviteRepository.shared.startListening(userId: userId)
-        }
-        SocialInboxBadgeService.shared.bind(
+        ensureSocialInboxListening(
             userId: currentUserId,
             activeFamilyId: authService.currentUser?.activeFamilyId
         )

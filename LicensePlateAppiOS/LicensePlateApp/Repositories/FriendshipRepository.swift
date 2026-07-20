@@ -38,6 +38,9 @@ class FriendshipRepository: ObservableObject {
     
     /// Start listening to friendships for a user
     func startListening(userId: String) {
+        if lastListeningUserId == userId, !listeners.isEmpty {
+            return
+        }
         stopListening()
         lastListeningUserId = userId
         

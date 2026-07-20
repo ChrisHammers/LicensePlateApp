@@ -16,6 +16,8 @@ class InviteRepository: ObservableObject {
     
     private let db = Firestore.firestore()
     private var modelContext: ModelContext?
+    /// User id currently covered by Firestore listeners (nil after stop).
+    private var listeningUserId: String?
     nonisolated(unsafe) private var listeners: [ListenerRegistration] = []
     
     @Published var invites: [Invite] = []
@@ -35,7 +37,12 @@ class InviteRepository: ObservableObject {
     /// Start listening to invites for a user (both sent and received)
     /// Listens to ALL invites (not just pending) so we get updates when status changes
     func startListening(userId: String) {
+        // Avoid tearing down live listeners when home re-asserts the same user (appear / scene active).
+        if listeningUserId == userId, !listeners.isEmpty {
+            return
+        }
         stopListening()
+        listeningUserId = userId
         
         // Query ALL invites where user is recipient (not just pending)
         // This ensures we get updates when status changes from pending to declined/accepted

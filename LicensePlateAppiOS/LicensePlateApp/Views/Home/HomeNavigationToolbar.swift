@@ -10,7 +10,8 @@ struct HomeNavigationToolbar: ToolbarContent {
     let isStreakVisible: Bool
     let displayName: String?
     let currentUser: AppUser?
-    let pendingInviteBadgeCount: Int
+    /// Preview / test override. Production passes `nil` so the button observes `SocialInboxBadgeService`.
+    var pendingInviteBadgeCountOverride: Int? = nil
     let onStreakTap: () -> Void
     let onTravelLogTap: () -> Void
     let onSettingsTap: () -> Void
@@ -34,19 +35,42 @@ struct HomeNavigationToolbar: ToolbarContent {
             .accessibilityHint("Review old Trips".localized)
         }
         ToolbarItem(placement: .topBarTrailing) {
-            Button(action: onSettingsTap) {
-                if let user = currentUser {
-                    AvatarView(user: user, size: 34, showRing: true)
-                } else {
-                    Image(systemName: "person.crop.circle")
-                        .font(.system(size: 28))
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                }
-            }
-            .badge(pendingInviteBadgeCount)
-            .accessibilityLabel(settingsAccessibilityLabel)
-            .accessibilityHint("Opens app settings".localized)
+            // Nested View observes the badge service so toolbar chrome updates while staying on home.
+            HomeSettingsAvatarButton(
+                currentUser: currentUser,
+                badgeCountOverride: pendingInviteBadgeCountOverride,
+                onSettingsTap: onSettingsTap
+            )
         }
+    }
+}
+
+/// Settings avatar in the home toolbar. Observes social inbox counts so `.badge` stays live
+/// (plain `ToolbarContent` + passed `Int` often fails to redraw while the root stays mounted).
+private struct HomeSettingsAvatarButton: View {
+    @ObservedObject private var socialInboxBadges = SocialInboxBadgeService.shared
+    let currentUser: AppUser?
+    let badgeCountOverride: Int?
+    let onSettingsTap: () -> Void
+
+    private var pendingInviteBadgeCount: Int {
+        badgeCountOverride ?? socialInboxBadges.totalPendingInviteCount
+    }
+
+    var body: some View {
+        Button(action: onSettingsTap) {
+            if let user = currentUser {
+                AvatarView(user: user, size: 34, showRing: true)
+            } else {
+                Image(systemName: "person.crop.circle")
+                    .font(.system(size: 28))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+            }
+        }
+        .badge(pendingInviteBadgeCount)
+        .id(pendingInviteBadgeCount)
+        .accessibilityLabel(settingsAccessibilityLabel)
+        .accessibilityHint("Opens app settings".localized)
     }
 
     private var settingsAccessibilityLabel: String {
@@ -107,7 +131,7 @@ private struct HomeToolbarPrincipalView: View {
                     isStreakVisible: true,
                     displayName: "Chris",
                     currentUser: nil,
-                    pendingInviteBadgeCount: 2,
+                    pendingInviteBadgeCountOverride: 2,
                     onStreakTap: {},
                     onTravelLogTap: {},
                     onSettingsTap: {}

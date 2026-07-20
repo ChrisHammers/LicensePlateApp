@@ -67,6 +67,12 @@ struct RootView: View {
             AchievementUnlockCelebrationService.shared.resetForSignOut()
             XpGainToastService.shared.resetForSignOut()
             if let newUserId, !newUserId.isEmpty {
+                FriendshipRepository.shared.startListening(userId: newUserId)
+                InviteRepository.shared.startListening(userId: newUserId)
+                SocialInboxBadgeService.shared.bind(
+                    userId: newUserId,
+                    activeFamilyId: authService.currentUser?.activeFamilyId
+                )
                 UserProgressionRepository.shared.startListening(userId: newUserId)
                 XpGrantRemoteRepository.shared.startListening(userId: newUserId)
                 TripActivityEventRecordingService.shared.setProgressionAppendObserver(ProgressionAppendObserverChain.shared)
@@ -78,6 +84,10 @@ struct RootView: View {
                         )
                     }
                 }
+            } else {
+                FriendshipRepository.shared.stopListening()
+                InviteRepository.shared.stopListening()
+                SocialInboxBadgeService.shared.bind(userId: nil, activeFamilyId: nil)
             }
             if let user = authService.currentUser {
                 AchievementUnlockCelebrationService.shared.configure(user: user)
