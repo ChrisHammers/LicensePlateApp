@@ -132,10 +132,11 @@ struct RootView: View {
             syncCoordinator.setGameplaySyncOnlineProvider { authService.isOnline }
             authService.setSyncCoordinator(syncCoordinator)
             let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+            let activeFamilyId = authService.currentUser?.activeFamilyId
             if let userId = userId {
                 FriendshipRepository.shared.startListening(userId: userId)
                 InviteRepository.shared.startListening(userId: userId)
-                SocialInboxBadgeService.shared.bind(userId: userId)
+                SocialInboxBadgeService.shared.bind(userId: userId, activeFamilyId: activeFamilyId)
                 PublicLifetimeStatsRepository.shared.setProfileUserId(userId)
                 PublicLifetimeStatsRepository.shared.ensureObservingProfileUser(userId)
                 UserProgressionRepository.shared.startListening(userId: userId)
@@ -150,7 +151,7 @@ struct RootView: View {
                     }
                 }
             } else {
-                SocialInboxBadgeService.shared.bind(userId: nil)
+                SocialInboxBadgeService.shared.bind(userId: nil, activeFamilyId: nil)
             }
             EntitlementService.shared.setCurrentUserId(userId)
             if let user = authService.currentUser {

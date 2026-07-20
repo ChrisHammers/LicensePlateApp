@@ -77,6 +77,55 @@ class DeepLinkHandler: ObservableObject {
         
         return nil
     }
+
+    /// Route a push/local notification payload into `destination` when it carries an invite deep link.
+    /// Prefer `deepLink`; fall back to `type` + ids for older payloads. Non-invite payloads are ignored.
+    func applyNotificationUserInfo(_ userInfo: [AnyHashable: Any]) {
+        if let destination = Self.destination(fromNotificationUserInfo: userInfo) {
+            self.destination = destination
+        }
+    }
+
+    /// Pure parse of FCM / UNNotification `userInfo` into an invite destination (or nil).
+    static func destination(fromNotificationUserInfo userInfo: [AnyHashable: Any]) -> DeepLinkDestination? {
+        if let deepLink = stringValue(userInfo["deepLink"]) ?? stringValue(userInfo["deep_link"]),
+           let url = URL(string: deepLink),
+           let destination = DeepLinkHandler.shared.handleURL(url) {
+            return destination
+        }
+
+        let type = stringValue(userInfo["type"])
+        let inviteId = stringValue(userInfo["inviteId"]) ?? stringValue(userInfo["invite_id"])
+
+        switch type {
+        case "friend_invite":
+            guard let inviteId else { return nil }
+            AnalyticsService.shared.log(.deepLinkOpened(type: "friend", params: ["inviteId": inviteId, "source": "notification"]))
+            return .friendInvite(inviteId: inviteId)
+        case "family_invite":
+            guard let inviteId,
+                  let familyId = stringValue(userInfo["familyId"]) ?? stringValue(userInfo["family_id"]) else {
+                return nil
+            }
+            AnalyticsService.shared.log(.deepLinkOpened(
+                type: "family",
+                params: ["inviteId": inviteId, "familyId": familyId, "source": "notification"]
+            ))
+            return .familyInvite(inviteId: inviteId, familyId: familyId)
+        case "trip_invite":
+            guard let inviteId else { return nil }
+            AnalyticsService.shared.log(.deepLinkOpened(type: "trip", params: ["inviteId": inviteId, "source": "notification"]))
+            return .tripInvite(inviteId: inviteId)
+        default:
+            return nil
+        }
+    }
+
+    private static func stringValue(_ any: Any?) -> String? {
+        if let string = any as? String, !string.isEmpty { return string }
+        if let number = any as? NSNumber { return number.stringValue }
+        return nil
+    }
     
     /// Generate deep link URL for friend invite
     static func friendInviteURL(inviteId: String) -> URL {
@@ -96,6 +145,15 @@ class DeepLinkHandler: ObservableObject {
             URLQueryItem(name: "inviteId", value: inviteId),
             URLQueryItem(name: "familyId", value: familyId)
         ]
+        return components.url!
+    }
+
+    /// Generate deep link URL for trip invite
+    static func tripInviteURL(inviteId: String) -> URL {
+        var components = URLComponents()
+        components.scheme = "roadtrip-royale"
+        components.path = "/invite/trip"
+        components.queryItems = [URLQueryItem(name: "inviteId", value: inviteId)]
         return components.url!
     }
 }

@@ -8,6 +8,8 @@
 import SwiftUI
 import SwiftData
 import FirebaseCore
+import UserNotifications
+import UIKit
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
@@ -31,6 +33,15 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         AdMobService.shared.startIfNeeded()
         if firebaseConfigured {
             FirebaseMessagingService.shared.configure(application: application)
+        }
+
+        UNUserNotificationCenter.current().delegate = self
+
+        // Cold start from a remote notification payload (tap may also arrive via didReceive).
+        if let remoteUserInfo = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {
+            Task { @MainActor in
+                DeepLinkHandler.shared.applyNotificationUserInfo(remoteUserInfo)
+            }
         }
 
         #if false
@@ -143,6 +154,30 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                      didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         Task { @MainActor in
             FirebaseMessagingService.shared.didRegisterForRemoteNotifications(deviceToken: deviceToken)
+        }
+    }
+}
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    /// Show banners while foregrounded so invite pushes remain tappable.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .badge])
+    }
+
+    /// Notification tap → same invite sheets as URL deep links.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+        Task { @MainActor in
+            DeepLinkHandler.shared.applyNotificationUserInfo(userInfo)
+            completionHandler()
         }
     }
 }

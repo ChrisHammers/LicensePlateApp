@@ -228,7 +228,16 @@ struct ContentView: View {
         homeTripRecapWithPresentation
             .onChange(of: currentUserId) { _, newUserId in
                 returnStreakViewModel.bind(userId: newUserId)
-                SocialInboxBadgeService.shared.bind(userId: newUserId)
+                SocialInboxBadgeService.shared.bind(
+                    userId: newUserId,
+                    activeFamilyId: authService.currentUser?.activeFamilyId
+                )
+            }
+            .onChange(of: authService.currentUser?.activeFamilyId) { _, newFamilyId in
+                SocialInboxBadgeService.shared.bind(
+                    userId: currentUserId,
+                    activeFamilyId: newFamilyId
+                )
             }
             .onChange(of: scenePhase) { _, phase in
                 handleHomeScenePhaseChange(phase)
@@ -244,7 +253,10 @@ struct ContentView: View {
                 pendingTripsViewModel.setAuthService(authService)
                 travelLogViewModel.setAuthService(authService)
                 returnStreakViewModel.bind(userId: currentUserId)
-                SocialInboxBadgeService.shared.bind(userId: currentUserId)
+                SocialInboxBadgeService.shared.bind(
+                    userId: currentUserId,
+                    activeFamilyId: authService.currentUser?.activeFamilyId
+                )
                 NotificationRoutingService.shared.startObservingIfNeeded(userId: currentUserId)
                 refreshDeferredSetupBanner()
             }
@@ -344,7 +356,10 @@ struct ContentView: View {
             FriendshipRepository.shared.startListening(userId: userId)
             InviteRepository.shared.startListening(userId: userId)
         }
-        SocialInboxBadgeService.shared.bind(userId: currentUserId)
+        SocialInboxBadgeService.shared.bind(
+            userId: currentUserId,
+            activeFamilyId: authService.currentUser?.activeFamilyId
+        )
         pendingTripsViewModel.loadIfNeeded()
         activeTripsListViewModel.load(userId: currentUserId)
         TripEndRecapSupport.startMultiplayerListeners(for: activeTripsListViewModel.items)
@@ -867,7 +882,7 @@ struct DefaultSettingsView: View {
                                 title: "Family".localized,
                                 description: "View and manage your family".localized,
                                 icon: "house",
-                                badgeCount: socialInboxBadges.pendingFamilyInvitesCount
+                                badgeCount: socialInboxBadges.pendingFamilyInboxCount
                             ) {
                                 coordinator.navigateToFamily()
                             }

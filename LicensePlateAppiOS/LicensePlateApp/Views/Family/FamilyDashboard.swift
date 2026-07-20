@@ -340,10 +340,6 @@ struct FamilyDashboard: View {
                     Set(viewModel.members.map(\.userId))
                 )
             }
-            .onDisappear {
-                // Stop listening when view disappears to prevent permission errors
-                FamilyRepository.shared.stopListening()
-            }
        // }
     }
 }
