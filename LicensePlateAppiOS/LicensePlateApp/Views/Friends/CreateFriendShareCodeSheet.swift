@@ -37,7 +37,7 @@ struct CreateFriendShareCodeSheet: View {
                                     .cornerRadius(12)
 
                                 if let expiresAt = viewModel.expiresAt {
-                                    Text("Expires in \(viewModel.timeUntilExpiration(expiresAt))".localized)
+                                    Text("Expires in %@".localized(viewModel.timeUntilExpiration(expiresAt)))
                                         .font(.system(.caption, design: .rounded))
                                         .foregroundStyle(Color.Theme.softBrown)
                                 }

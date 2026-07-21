@@ -380,7 +380,7 @@ struct FamilyMemberRow: View {
             HStack {
                 AvatarImageView(avatarId: nil, size: 50)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Member")
+                    Text("Member".localized)
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Theme.primaryBlue)
@@ -408,14 +408,14 @@ struct PendingRequestRow: View {
             if let user = displayUser {
                 UserIdentityRowView(
                     user: user,
-                    subtitle: "Pending",
+                    subtitle: "Pending".localized,
                     avatarSize: 50
                 )
             } else {
                 HStack {
                     AvatarImageView(avatarId: nil, size: 50)
                     VStack(alignment: .leading) {
-                        Text("Pending User")
+                        Text("Pending User".localized)
                             .font(.system(.body, design: .rounded))
                             .fontWeight(.semibold)
                             .foregroundStyle(Color.Theme.primaryBlue)

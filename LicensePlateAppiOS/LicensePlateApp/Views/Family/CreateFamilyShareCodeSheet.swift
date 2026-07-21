@@ -80,7 +80,7 @@ struct CreateFamilyShareCodeSheet: View {
                                             .font(.system(.caption, design: .rounded))
                                             .foregroundStyle(Color.Theme.primaryBlue)
                                     } else {
-                                        Text("Expires in \(expirationText)".localized)
+                                        Text("Expires in %@".localized(expirationText))
                                             .font(.system(.caption, design: .rounded))
                                             .foregroundStyle(Color.Theme.softBrown)
                                     }
@@ -319,9 +319,9 @@ struct CreateFamilyShareCodeSheet: View {
         let seconds = Int(timeInterval.truncatingRemainder(dividingBy: 60))
         
         if minutes > 0 {
-            return "\(minutes) minute\(minutes == 1 ? "" : "s")".localized
+            return "share_code.minutes".localized(minutes)
         } else {
-            return "\(seconds) second\(seconds == 1 ? "" : "s")".localized
+            return "share_code.seconds".localized(seconds)
         }
     }
 }

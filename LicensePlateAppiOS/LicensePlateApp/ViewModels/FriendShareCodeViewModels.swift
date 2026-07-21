@@ -67,8 +67,11 @@ final class CreateFriendShareCodeViewModel: ObservableObject {
 
     func timeUntilExpiration(_ date: Date) -> String {
         let timeInterval = date.timeIntervalSinceNow
-        let minutes = Int(timeInterval / 60)
-        return "\(minutes) minutes".localized
+        guard timeInterval > 0 else {
+            return "Expired".localized
+        }
+        let minutes = max(1, Int(timeInterval / 60))
+        return "share_code.minutes".localized(minutes)
     }
 }
 

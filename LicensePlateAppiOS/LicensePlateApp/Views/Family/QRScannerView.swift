@@ -69,7 +69,7 @@ class QRScannerViewController: UIViewController {
     
     private func setupCamera() {
         guard let videoCaptureDevice = AVCaptureDevice.default(for: .video) else {
-            delegate?.didFailWithError(NSError(domain: "QRScanner", code: -1, userInfo: [NSLocalizedDescriptionKey: "Camera not available"]))
+            delegate?.didFailWithError(NSError(domain: "QRScanner", code: -1, userInfo: [NSLocalizedDescriptionKey: "Camera not available".localized]))
             return
         }
         
@@ -88,7 +88,7 @@ class QRScannerViewController: UIViewController {
         if captureSession.canAddInput(videoInput) {
             captureSession.addInput(videoInput)
         } else {
-            delegate?.didFailWithError(NSError(domain: "QRScanner", code: -1, userInfo: [NSLocalizedDescriptionKey: "Cannot add video input"]))
+            delegate?.didFailWithError(NSError(domain: "QRScanner", code: -1, userInfo: [NSLocalizedDescriptionKey: "Cannot add video input".localized]))
             return
         }
         
@@ -100,7 +100,7 @@ class QRScannerViewController: UIViewController {
             metadataOutput.setMetadataObjectsDelegate(self, queue: DispatchQueue.main)
             metadataOutput.metadataObjectTypes = [.qr]
         } else {
-            delegate?.didFailWithError(NSError(domain: "QRScanner", code: -1, userInfo: [NSLocalizedDescriptionKey: "Cannot add metadata output"]))
+            delegate?.didFailWithError(NSError(domain: "QRScanner", code: -1, userInfo: [NSLocalizedDescriptionKey: "Cannot add metadata output".localized]))
             return
         }
         

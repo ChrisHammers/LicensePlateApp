@@ -122,7 +122,7 @@ struct UserSearchResultRow: View {
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
 
-                        Text("Found by \(result.matchedField.displayName)".localized)
+                        Text("Found by %@".localized(result.matchedField.displayName))
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
                     }

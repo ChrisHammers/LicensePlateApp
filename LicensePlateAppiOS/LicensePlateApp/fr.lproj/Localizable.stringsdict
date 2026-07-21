@@ -34,5 +34,37 @@
 			<string>%d jours d'affilée!</string>
 		</dict>
 	</dict>
+	<key>share_code.minutes</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@minutes@</string>
+		<key>minutes</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d minute</string>
+			<key>other</key>
+			<string>%d minutes</string>
+		</dict>
+	</dict>
+	<key>share_code.seconds</key>
+	<dict>
+		<key>NSStringLocalizedFormatKey</key>
+		<string>%#@seconds@</string>
+		<key>seconds</key>
+		<dict>
+			<key>NSStringFormatSpecTypeKey</key>
+			<string>NSStringPluralRuleType</string>
+			<key>NSStringFormatValueTypeKey</key>
+			<string>d</string>
+			<key>one</key>
+			<string>%d seconde</string>
+			<key>other</key>
+			<string>%d secondes</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

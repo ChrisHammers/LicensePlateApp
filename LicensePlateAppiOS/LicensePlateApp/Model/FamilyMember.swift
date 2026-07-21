@@ -32,11 +32,11 @@ final class FamilyMember {
         
         var displayName: String {
             switch self {
-            case .creator: return "Creator"
-            case .captain: return "Captain"
-            case .sergeant: return "Sergeant"
-            case .scout: return "Scout"
-            case .retiredGeneral: return "Retired General"
+            case .creator: return "Creator".localized
+            case .captain: return "Captain".localized
+            case .sergeant: return "Sergeant".localized
+            case .scout: return "Scout".localized
+            case .retiredGeneral: return "Retired General".localized
             }
         }
     }

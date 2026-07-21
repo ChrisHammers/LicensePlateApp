@@ -255,7 +255,7 @@ struct FamilyMemberSearchResultRow: View {
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
                 
-                Text("Found by \(result.matchedField.displayName)".localized)
+                Text("Found by %@".localized(result.matchedField.displayName))
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
             }
@@ -339,7 +339,7 @@ struct FamilyMemberSearchResultRow: View {
                 } else if errorDescription.contains("unauthenticated") {
                     userFriendlyMessage = "Please sign in to send invites.".localized
                 } else {
-                    userFriendlyMessage = "Failed to send invite: \(errorDescription)".localized
+                    userFriendlyMessage = "Failed to send invite: %@".localized(errorDescription)
                 }
                 
                 await MainActor.run {
