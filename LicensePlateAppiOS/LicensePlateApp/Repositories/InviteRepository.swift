@@ -102,6 +102,14 @@ class InviteRepository: ObservableObject {
                     existing.expiresAt = invite.expiresAt
                     existing.createdAt = invite.createdAt
                     existing.respondedAt = invite.respondedAt
+                    existing.familyName = invite.familyName
+                    existing.creatorDisplayName = invite.creatorDisplayName
+                    existing.creatorUserName = invite.creatorUserName
+                    existing.creatorAvatarId = invite.creatorAvatarId
+                    existing.fromUserDisplayName = invite.fromUserDisplayName
+                    existing.fromUserUserName = invite.fromUserUserName
+                    existing.fromUserAvatarId = invite.fromUserAvatarId
+                    existing.captainsPreviewJSON = invite.captainsPreviewJSON
                 } else {
                     // Insert new
                     modelContext.insert(invite)
@@ -148,6 +156,16 @@ class InviteRepository: ObservableObject {
 
     func getInvite(inviteId: String, userId: String) -> Invite? {
         getInvites(for: userId).first { $0.inviteId == inviteId }
+    }
+
+    /// Lookup by invite id only (SwiftData cache).
+    func getInvite(inviteId: String) -> Invite? {
+        guard let modelContext = modelContext else { return nil }
+        let searchInviteId = inviteId
+        let descriptor = FetchDescriptor<Invite>(
+            predicate: #Predicate<Invite> { $0.inviteId == searchInviteId }
+        )
+        return try? modelContext.fetch(descriptor).first
     }
     
     /// Get incoming invites
@@ -218,6 +236,14 @@ class InviteRepository: ObservableObject {
                 // Update existing with latest status
                 existing.status = invite.status
                 existing.respondedAt = invite.respondedAt
+                existing.familyName = invite.familyName
+                existing.creatorDisplayName = invite.creatorDisplayName
+                existing.creatorUserName = invite.creatorUserName
+                existing.creatorAvatarId = invite.creatorAvatarId
+                existing.fromUserDisplayName = invite.fromUserDisplayName
+                existing.fromUserUserName = invite.fromUserUserName
+                existing.fromUserAvatarId = invite.fromUserAvatarId
+                existing.captainsPreviewJSON = invite.captainsPreviewJSON
                 try? modelContext.save()
             } else {
                 // Insert new if not found

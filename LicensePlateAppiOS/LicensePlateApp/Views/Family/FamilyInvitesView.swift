@@ -114,23 +114,57 @@ struct FamilyInviteRow: View {
     private let familyRepository = FamilyRepository.shared
     @State private var showInviteDetail = false
     @State private var family: Family?
+
+    private var rawFamilyName: String? {
+        if let name = invite.familyName, !name.isEmpty { return name }
+        if let name = family?.name, !name.isEmpty { return name }
+        return nil
+    }
+
+    private var titleText: String {
+        if let name = rawFamilyName {
+            return FamilyDisplayFormatting.quotedFamilyTitle(name)
+        }
+        return "Family Invitation".localized
+    }
+
+    private var subtitleText: String {
+        if let from = invite.fromUserDisplayName, !from.isEmpty {
+            return "From: %@".localized(from)
+        }
+        return "Tap to view details".localized
+    }
     
     var body: some View {
         Button {
             showInviteDetail = true
         } label: {
-            HStack {
-                Circle()
-                    .fill(Color.Theme.primaryBlue.opacity(0.3))
-                    .frame(width: 50, height: 50)
+            HStack(spacing: 12) {
+                FamilyInitialAvatarView(
+                    familyName: rawFamilyName ?? "?",
+                    size: 50
+                )
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(family?.name ?? "Family Invitation".localized)
-                        .font(.system(.body, design: .rounded))
-                        .fontWeight(.semibold)
+                    if let name = rawFamilyName {
+                        (
+                            Text("\"\(name)\"")
+                                .font(.system(.body, design: .rounded))
+                                .fontWeight(.semibold)
+                            + Text(" ")
+                            + Text("Family".localized)
+                                .font(.system(.subheadline, design: .rounded))
+                                .fontWeight(.medium)
+                        )
                         .foregroundStyle(Color.Theme.primaryBlue)
+                    } else {
+                        Text(titleText)
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
                     
-                    Text("Tap to view details".localized)
+                    Text(subtitleText)
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                 }
@@ -144,6 +178,8 @@ struct FamilyInviteRow: View {
             .padding(.vertical, 8)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(titleText), \(subtitleText)")
         .sheet(isPresented: $showInviteDetail) {
             if let familyId = invite.familyId {
                 FamilyInviteDetail(
@@ -160,7 +196,9 @@ struct FamilyInviteRow: View {
     }
     
     private func loadFamily() async {
-        guard let familyId = invite.familyId else { return }
+        // Prefer denormalized name; fetch only to pass Family into detail when allowed
+        guard invite.familyName == nil || invite.familyName?.isEmpty == true,
+              let familyId = invite.familyId else { return }
         
         familyRepository.setModelContext(modelContext)
         

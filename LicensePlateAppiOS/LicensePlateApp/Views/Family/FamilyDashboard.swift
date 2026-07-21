@@ -39,17 +39,22 @@ struct FamilyDashboard: View {
                     List {
                         // Header
                         Section {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text(family.name)
-                                    .font(.system(.title, design: .rounded))
-                                    .fontWeight(.bold)
-                                    .foregroundStyle(Color.Theme.primaryBlue)
-                                
-                                Text("Your family".localized)
-                                    .font(.system(.subheadline, design: .rounded))
-                                    .foregroundStyle(Color.Theme.softBrown)
+                            HStack(spacing: 16) {
+                                FamilyInitialAvatarView(familyName: family.name, size: 56)
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text(family.name)
+                                        .font(.system(.title, design: .rounded))
+                                        .fontWeight(.bold)
+                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                    
+                                    Text("Your family".localized)
+                                        .font(.system(.subheadline, design: .rounded))
+                                        .foregroundStyle(Color.Theme.softBrown)
+                                }
                             }
                             .padding(.vertical, 8)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel("\(family.name), \("Your family".localized)")
                         }
                         .listRowBackground(Color.Theme.cardBackground)
                         

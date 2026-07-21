@@ -37,15 +37,36 @@ struct FamilySettings: View {
                     // Family Name
                     if viewModel.isCaptainOrCreator {
                         Section("Family Name".localized) {
-                            SettingEditableTextRow(
-                                title: "Name".localized,
-                                value: $viewModel.familyName,
-                                placeholder: "Enter family name".localized,
-                                onSave: {
-                                    // Update via Cloud Function
-                                },
-                                onCancel: {}
-                            )
+                            HStack(spacing: 12) {
+                                FamilyInitialAvatarView(
+                                    familyName: viewModel.familyName.isEmpty ? "?" : viewModel.familyName,
+                                    size: 44
+                                )
+                                .accessibilityHidden(true)
+                                SettingEditableTextRow(
+                                    title: "Name".localized,
+                                    value: $viewModel.familyName,
+                                    placeholder: "Enter family name".localized,
+                                    onSave: {
+                                        // Update via Cloud Function
+                                    },
+                                    onCancel: {}
+                                )
+                            }
+                        }
+                        .listRowBackground(Color.Theme.cardBackground)
+                    } else if !viewModel.familyName.isEmpty {
+                        Section("Family Name".localized) {
+                            HStack(spacing: 12) {
+                                FamilyInitialAvatarView(familyName: viewModel.familyName, size: 44)
+                                Text(viewModel.familyName)
+                                    .font(.system(.body, design: .rounded))
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(Color.Theme.primaryBlue)
+                                Spacer(minLength: 0)
+                            }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityLabel(viewModel.familyName)
                         }
                         .listRowBackground(Color.Theme.cardBackground)
                     }

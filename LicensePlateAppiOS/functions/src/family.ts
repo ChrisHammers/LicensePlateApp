@@ -6,6 +6,7 @@ import { getFCMTokenForSocialPush, sendPushNotification } from "./utils/notifica
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
 import { assertRegisteredAccount } from "./callableAuth";
+import { buildFamilyInviteDisplaySnapshot } from "./familyInviteDisplay";
 
 const db = admin.firestore();
 
@@ -187,7 +188,12 @@ export const sendFamilyInvite = enforcedCallable(
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + 15);
 
-    const inviteData = {
+    const displaySnapshot = await buildFamilyInviteDisplaySnapshot(
+      familyId,
+      fromUserId
+    );
+
+    const inviteData: Record<string, unknown> = {
       type: "family",
       fromUserId,
       toUserId,
@@ -198,15 +204,22 @@ export const sendFamilyInvite = enforcedCallable(
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
+    if (displaySnapshot) {
+      Object.assign(inviteData, displaySnapshot);
+    }
+
     const inviteRef = await db.collection("invites").add(inviteData);
 
     // Send push notification (gated by recipient notificationPrefs.family)
     const fcmToken = await getFCMTokenForSocialPush(toUserId, "family");
     if (fcmToken) {
+      const familyLabel = displaySnapshot?.familyName;
       await sendPushNotification(
         fcmToken,
         "Family Invitation",
-        "You've been invited to join a family",
+        familyLabel
+          ? `You've been invited to join ${familyLabel}`
+          : "You've been invited to join a family",
         {
           type: "family_invite",
           inviteId: inviteRef.id,

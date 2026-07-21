@@ -958,3 +958,21 @@
 /* Social inbox badges (Steps 1–3) */
 "social.inbox.a11y.pending_count" = "%d pendientes";
 "social.inbox.a11y.avatar_pending" = "%d solicitudes de amigos o familia pendientes";
+
+/* Family invite display */
+"You've been invited to join the \"%@\" Family." = "Te invitaron a unirte a la familia \"%@\".";
+"\"%@\" Family" = "Familia \"%@\"";
+"Family Invitation" = "Invitación familiar";
+"Family Invite" = "Invitación familiar";
+"Family Invites" = "Invitaciones familiares";
+"Waiting for Captain approval" = "Esperando la aprobación del Capitán";
+"A family captain will review your request" = "Un capitán de la familia revisará tu solicitud";
+"Tap to view details" = "Toca para ver los detalles";
+"Captains" = "Capitanes";
+"Creator" = "Creador";
+"Accept" = "Aceptar";
+"Decline" = "Rechazar";
+"Loading" = "Cargando";
+"No pending invites" = "No hay invitaciones pendientes";
+"You don't have any pending family invitations" = "No tienes invitaciones familiares pendientes";
+"Family" = "Familia";

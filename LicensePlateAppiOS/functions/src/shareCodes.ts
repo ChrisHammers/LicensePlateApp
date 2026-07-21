@@ -4,6 +4,7 @@ import { writeAuditLog } from "./audit";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
 import { assertRegisteredAccount } from "./callableAuth";
+import { buildFamilyInviteDisplaySnapshot } from "./familyInviteDisplay";
 
 const db = admin.firestore();
 
@@ -149,6 +150,15 @@ export const redeemShareCode = enforcedCallable(
 
     if (codeData.familyId) {
       inviteData.familyId = codeData.familyId;
+      if (codeData.type === "family") {
+        const displaySnapshot = await buildFamilyInviteDisplaySnapshot(
+          codeData.familyId,
+          codeData.createdBy
+        );
+        if (displaySnapshot) {
+          Object.assign(inviteData, displaySnapshot);
+        }
+      }
     }
 
     const inviteRef = await db.collection("invites").add(inviteData);

@@ -990,3 +990,21 @@
 /* Social inbox badges (Steps 1–3) */
 "social.inbox.a11y.pending_count" = "%d pending";
 "social.inbox.a11y.avatar_pending" = "%d pending friend or family requests";
+
+/* Family invite display */
+"You've been invited to join the \"%@\" Family." = "You've been invited to join the \"%@\" Family.";
+"\"%@\" Family" = "\"%@\" Family";
+"Family Invitation" = "Family Invitation";
+"Family Invite" = "Family Invite";
+"Family Invites" = "Family Invites";
+"Waiting for Captain approval" = "Waiting for Captain approval";
+"A family captain will review your request" = "A family captain will review your request";
+"Tap to view details" = "Tap to view details";
+"Captains" = "Captains";
+"Creator" = "Creator";
+"Accept" = "Accept";
+"Decline" = "Decline";
+"Loading" = "Loading";
+"No pending invites" = "No pending invites";
+"You don't have any pending family invitations" = "You don't have any pending family invitations";
+"Family" = "Family";
