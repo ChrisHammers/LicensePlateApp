@@ -25,11 +25,24 @@ enum FriendsFamilyGateFeature {
         }
     }
 
-    fileprivate var analyticsFeatureName: String {
+    var analyticsFeatureName: String {
         switch self {
         case .friends: return "friends"
         case .family: return "family"
         }
+    }
+}
+
+@MainActor
+final class FriendsFamilySignUpGateViewModel: ObservableObject {
+    let feature: FriendsFamilyGateFeature
+
+    init(feature: FriendsFamilyGateFeature) {
+        self.feature = feature
+    }
+
+    func onAppear() {
+        AnalyticsService.shared.log(.friendsFamilySignUpGateShown(feature: feature.analyticsFeatureName))
     }
 }
 
@@ -90,6 +103,12 @@ struct FriendsFamilySignUpPrompt: View {
 struct FriendsFamilySignUpGateView: View {
     @EnvironmentObject var authService: FirebaseAuthService
     let feature: FriendsFamilyGateFeature
+    @StateObject private var viewModel: FriendsFamilySignUpGateViewModel
+
+    init(feature: FriendsFamilyGateFeature) {
+        self.feature = feature
+        _viewModel = StateObject(wrappedValue: FriendsFamilySignUpGateViewModel(feature: feature))
+    }
 
     private var combinedAccessibilityLabel: String {
         [
@@ -120,7 +139,7 @@ struct FriendsFamilySignUpGateView: View {
         .navigationTitle(feature.navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            AnalyticsService.shared.log(.friendsFamilySignUpGateShown(feature: feature.analyticsFeatureName))
+            viewModel.onAppear()
         }
     }
 }

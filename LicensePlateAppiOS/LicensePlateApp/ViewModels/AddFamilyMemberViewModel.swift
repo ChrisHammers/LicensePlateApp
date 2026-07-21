@@ -1,5 +1,5 @@
 //
-//  AddFriendViewModel.swift
+//  AddFamilyMemberViewModel.swift
 //  LicensePlateApp
 //
 
@@ -8,57 +8,48 @@ import SwiftData
 import Combine
 
 @MainActor
-final class AddFriendViewModel: ObservableObject {
+final class AddFamilyMemberViewModel: ObservableObject {
+    let familyId: String
+
     @Published var searchQuery = ""
     @Published var searchType: UserRepository.SearchType = .all
     @Published var searchResults: [UserRepository.UserSearchResult] = []
     @Published var isSearching = false
     @Published var hasCompletedSearch = false
+    @Published var isInviting = false
     @Published var errorMessage: String?
     @Published var showError = false
     @Published var showSuccessAlert = false
-    @Published private(set) var invitingUserId: String?
 
-    /// True when a registered search finished with zero hits (not loading / short query / error / guest).
+    private var searchTask: Task<Void, Never>?
+    private var authService: FirebaseAuthService?
+    private let userRepository: UserRepository
+    private let familyRepository: FamilyRepository
+
     var showNoUsersFoundEmptyState: Bool {
         guard let authService else { return false }
-        guard FriendsFamilyAccessPolicy.shared.canUseFriendsAndFamily(for: authService.currentUser) else {
-            return false
-        }
-        return searchQuery.count >= 3
+        return FriendsFamilyAccessPolicy.shared.canUseFriendsAndFamily(for: authService.currentUser)
+            && searchQuery.count >= 3
             && !isSearching
             && hasCompletedSearch
             && searchResults.isEmpty
             && !showError
     }
 
-    private var searchTask: Task<Void, Never>?
-    private var authService: FirebaseAuthService?
-    private var modelContext: ModelContext?
-    private let userRepository: UserRepository
-    private let friendshipRepository: FriendshipRepository
-    private let inviteRepository: InviteRepository
-
     init(
+        familyId: String,
         userRepository: UserRepository = .shared,
-        friendshipRepository: FriendshipRepository = .shared,
-        inviteRepository: InviteRepository = .shared
+        familyRepository: FamilyRepository = .shared
     ) {
+        self.familyId = familyId
         self.userRepository = userRepository
-        self.friendshipRepository = friendshipRepository
-        self.inviteRepository = inviteRepository
+        self.familyRepository = familyRepository
     }
 
     func configure(authService: FirebaseAuthService, modelContext: ModelContext) {
         self.authService = authService
-        self.modelContext = modelContext
         userRepository.setModelContext(modelContext)
-        friendshipRepository.setModelContext(modelContext)
-        inviteRepository.setModelContext(modelContext)
-    }
-
-    func onAppear() {
-        AnalyticsService.shared.log(.addFriendCTATapped)
+        familyRepository.setModelContext(modelContext)
     }
 
     func cancelSearchTask() {
@@ -73,7 +64,7 @@ final class AddFriendViewModel: ObservableObject {
             hasCompletedSearch = false
             return
         }
-        searchTask = Task { @MainActor in
+        searchTask = Task {
             do {
                 try await Task.sleep(nanoseconds: 500_000_000)
                 try Task.checkCancellation()
@@ -90,65 +81,43 @@ final class AddFriendViewModel: ObservableObject {
             return
         }
 
-        isSearching = true
-        errorMessage = nil
-        showError = false
-        hasCompletedSearch = false
-
         guard let authService else {
-            isSearching = false
             errorMessage = "User not authenticated".localized
             showError = true
             return
         }
 
         if !FriendsFamilyAccessPolicy.shared.canUseFriendsAndFamily(for: authService.currentUser) {
-            isSearching = false
             searchResults = []
+            isSearching = false
+            hasCompletedSearch = false
             errorMessage = FriendsFamilyCallableErrors.guestBlockedMessage
             showError = true
             return
         }
 
         guard authService.isOnline else {
-            isSearching = false
             searchResults = []
+            isSearching = false
+            hasCompletedSearch = false
             errorMessage = "Requires network connection".localized
             showError = true
             return
         }
 
-        do {
-            guard let currentUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else {
-                isSearching = false
-                errorMessage = "User not authenticated".localized
-                showError = true
-                return
-            }
+        isSearching = true
+        errorMessage = nil
+        showError = false
+        hasCompletedSearch = false
 
-            var results = try await userRepository.searchUsers(
+        do {
+            let currentUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+            let results = try await userRepository.searchUsers(
                 query: searchQuery,
                 searchType: searchType,
                 excludeUserId: currentUserId,
                 searchingUser: authService.currentUser
             )
-
-            let acceptedFriendships = friendshipRepository.getAcceptedFriendships(for: currentUserId)
-            let friendUserIds = Set(acceptedFriendships.compactMap { $0.otherUser(than: currentUserId) })
-
-            let pendingInvites = inviteRepository.getFriendInvites(for: currentUserId)
-                .filter { $0.statusEnum == .pending }
-            let inviteUserIds = Set(pendingInvites.compactMap { invite in
-                invite.fromUserId == currentUserId ? invite.toUserId : invite.fromUserId
-            })
-
-            let excludedUserIds = friendUserIds.union(inviteUserIds)
-
-            results = results.filter { result in
-                let userId = result.user.firebaseUID ?? result.user.id
-                return !excludedUserIds.contains(userId)
-            }
-
             searchResults = results
             isSearching = false
             hasCompletedSearch = true
@@ -171,7 +140,7 @@ final class AddFriendViewModel: ObservableObject {
     }
 
     func sendInvite(to result: UserRepository.UserSearchResult) {
-        guard let authService = authService, authService.isOnline else {
+        guard let authService, authService.isOnline else {
             errorMessage = "Requires network connection".localized
             showError = true
             return
@@ -184,23 +153,39 @@ final class AddFriendViewModel: ObservableObject {
         }
 
         let toUserId = result.user.firebaseUID ?? result.user.id
+        let inviteMethod = result.matchedField.inviteMethod
+
+        isInviting = true
         errorMessage = nil
 
-        Task { @MainActor in
-            invitingUserId = toUserId
-            defer { invitingUserId = nil }
+        Task {
             do {
-                _ = try await friendshipRepository.sendFriendInvite(
+                _ = try await familyRepository.sendFamilyInvite(
                     toUserId: toUserId,
-                    method: result.matchedField.inviteMethod
+                    familyId: familyId,
+                    method: inviteMethod
                 )
-                AnalyticsService.shared.log(.userSearchResultSelected)
-                AnalyticsService.shared.log(.friendRequestSent)
+                isInviting = false
+                AnalyticsService.shared.log(.familyInviteSent)
                 showSuccessAlert = true
             } catch {
-                errorMessage = error.localizedDescription
-                showError = true
                 FriendsFamilyInviteAnalytics.logInviteFailure(error)
+                let description = error.localizedDescription
+                let userFriendlyMessage: String
+                if description.contains("permission-denied") {
+                    userFriendlyMessage = "You don't have permission to invite members to this family.".localized
+                } else if description.contains("failed-precondition") {
+                    userFriendlyMessage = "Unable to invite this user. They may already be in a family or have reached the limit.".localized
+                } else if description.contains("not-found") {
+                    userFriendlyMessage = "User not found.".localized
+                } else if description.contains("unauthenticated") {
+                    userFriendlyMessage = "Please sign in to send invites.".localized
+                } else {
+                    userFriendlyMessage = "Failed to send invite: %@".localized(description)
+                }
+                isInviting = false
+                errorMessage = userFriendlyMessage
+                showError = true
             }
         }
     }

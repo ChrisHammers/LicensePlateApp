@@ -15,11 +15,7 @@ struct FamilySettings: View {
     @EnvironmentObject var authService: FirebaseAuthService
     @StateObject private var viewModel: FamilySettingsViewModel
     @State private var showLeaveFamilyConfirmation = false
-    @State private var isLeavingFamily = false
-    @State private var leaveFamilyError: String?
-    @State private var showErrorAlert = false
     @State private var showDeleteFamilyConfirmation = false
-    @State private var isDeletingFamily = false
     
     init(familyId: String) {
         self.familyId = familyId
@@ -103,7 +99,7 @@ struct FamilySettings: View {
                             Button(role: .destructive) {
                                 showDeleteFamilyConfirmation = true
                             } label: {
-                                if isDeletingFamily {
+                                if viewModel.isDeletingFamily {
                                     HStack {
                                         ProgressView()
                                             .scaleEffect(0.8)
@@ -114,9 +110,9 @@ struct FamilySettings: View {
                                 }
                             }
                             .foregroundColor(.red)
-                            .disabled(isDeletingFamily)
+                            .disabled(viewModel.isDeletingFamily)
                             .accessibleButton(
-                                label: isDeletingFamily
+                                label: viewModel.isDeletingFamily
                                     ? "Deleting...".localized
                                     : "Delete Family".localized
                             )
@@ -145,97 +141,33 @@ struct FamilySettings: View {
                 viewModel.setAuthService(authService)
                 viewModel.loadData(familyId: familyId)
             }
+            .onChange(of: viewModel.didLeaveOrDelete) { _, didLeave in
+                if didLeave { dismiss() }
+            }
             .alert("Leave Family".localized, isPresented: $showLeaveFamilyConfirmation) {
                 Button("Cancel".localized, role: .cancel) {}
                 Button("Leave".localized, role: .destructive) {
-                    leaveFamily()
+                    viewModel.leaveFamily()
                 }
             } message: {
                 Text("Are you sure you want to leave this family? You will need to be invited again to rejoin.".localized)
             }
-            .alert("Error".localized, isPresented: $showErrorAlert) {
+            .alert("Error".localized, isPresented: $viewModel.showErrorAlert) {
                 Button("OK".localized) {
-                    leaveFamilyError = nil
+                    viewModel.errorMessage = nil
                 }
             } message: {
-                if let error = leaveFamilyError {
+                if let error = viewModel.errorMessage {
                     Text(error)
                 }
             }
             .alert("Delete Family".localized, isPresented: $showDeleteFamilyConfirmation) {
                 Button("Cancel".localized, role: .cancel) {}
                 Button("Delete".localized, role: .destructive) {
-                    deleteFamily()
+                    viewModel.deleteFamily()
                 }
             } message: {
                 Text("Are you sure you want to delete this family? This will permanently remove the family and all its members. This action cannot be undone.".localized)
-            }
-        }
-    }
-    
-    private func leaveFamily() {
-        guard authService.isOnline else {
-            leaveFamilyError = "Requires network connection".localized
-            showErrorAlert = true
-            return
-        }
-        
-        isLeavingFamily = true
-        leaveFamilyError = nil
-        
-        Task {
-            do {
-                try await FamilyRepository.shared.leaveFamily(familyId: familyId)
-                
-                await MainActor.run {
-                    isLeavingFamily = false
-                    dismiss()
-                }
-            } catch {
-                await MainActor.run {
-                    isLeavingFamily = false
-                    leaveFamilyError = error.localizedDescription
-                    showErrorAlert = true
-                }
-            }
-        }
-    }
-    
-    private func deleteFamily() {
-        guard authService.isOnline else {
-            leaveFamilyError = "Requires network connection".localized
-            showErrorAlert = true
-            return
-        }
-        
-        // Prevent multiple calls
-        guard !isDeletingFamily else { return }
-        
-        isDeletingFamily = true
-        leaveFamilyError = nil
-        
-        Task {
-            do {
-                try await FamilyRepository.shared.deleteFamily(familyId: familyId)
-                
-                // Refresh current user from Firestore to get updated activeFamilyId
-                try? await authService.refreshCurrentUserFromFirestore()
-
-                await MainActor.run {
-                    let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
-                    SocialInboxBadgeService.shared.bind(
-                        userId: userId,
-                        activeFamilyId: authService.currentUser?.activeFamilyId
-                    )
-                    isDeletingFamily = false
-                    dismiss()
-                }
-            } catch {
-                await MainActor.run {
-                    isDeletingFamily = false
-                    leaveFamilyError = error.localizedDescription
-                    showErrorAlert = true
-                }
             }
         }
     }

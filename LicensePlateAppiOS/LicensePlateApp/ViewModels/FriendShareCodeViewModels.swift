@@ -97,6 +97,23 @@ final class JoinFriendByCodeViewModel: ObservableObject {
         InviteRepository.shared.setModelContext(modelContext)
     }
 
+    func onAppear() {
+        AnalyticsService.shared.log(.inviteViaCodeOpened)
+    }
+
+    func requestCameraPermissionAndScan(onGranted: @escaping () -> Void) {
+        Task {
+            let hasPermission = await QRCodeService.shared.requestCameraPermission()
+            if hasPermission {
+                AnalyticsService.shared.log(.inviteViaQROpened)
+                onGranted()
+            } else {
+                errorMessage = "Camera permission is required to scan QR codes".localized
+                showError = true
+            }
+        }
+    }
+
     func redeemCode() {
         let trimmedCode = shareCode.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedCode.isEmpty else { return }
@@ -123,6 +140,7 @@ final class JoinFriendByCodeViewModel: ObservableObject {
                     isRedeeming = false
                     errorMessage = error.localizedDescription
                     showError = true
+                    FriendsFamilyInviteAnalytics.logInviteFailure(error)
                 }
             }
         }

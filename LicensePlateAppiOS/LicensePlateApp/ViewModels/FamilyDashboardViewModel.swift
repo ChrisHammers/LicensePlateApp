@@ -177,6 +177,12 @@ class FamilyDashboardViewModel: ObservableObject {
             .store(in: &cancellables)
     }
     
+    func onAppear() {
+        AnalyticsService.shared.log(.familyScreenOpened)
+        AnalyticsService.shared.logScreenView(screenName: "family_dashboard")
+        loadData()
+    }
+
     func loadData() {
         guard let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else {
             return

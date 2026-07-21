@@ -47,7 +47,9 @@ struct JoinFriendByCodeSheet: View {
 
                     Section {
                         Button {
-                            requestCameraPermissionAndScan()
+                            viewModel.requestCameraPermissionAndScan {
+                                showQRScanner = true
+                            }
                         } label: {
                             HStack {
                                 Image(systemName: "qrcode.viewfinder")
@@ -123,6 +125,7 @@ struct JoinFriendByCodeSheet: View {
             }
             .onAppear {
                 viewModel.configure(authService: authService, modelContext: modelContext)
+                viewModel.onAppear()
             }
         }
     }
@@ -134,22 +137,6 @@ struct JoinFriendByCodeSheet: View {
             return codeItem
         }
         return scannedString
-    }
-
-    private func requestCameraPermissionAndScan() {
-        Task {
-            let hasPermission = await QRCodeService.shared.requestCameraPermission()
-            if hasPermission {
-                await MainActor.run {
-                    showQRScanner = true
-                }
-            } else {
-                await MainActor.run {
-                    viewModel.errorMessage = "Camera permission is required to scan QR codes".localized
-                    viewModel.showError = true
-                }
-            }
-        }
     }
 }
 

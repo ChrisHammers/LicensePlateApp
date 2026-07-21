@@ -365,15 +365,8 @@ struct FamilyDashboard: View {
                 // Update ViewModel with the correct authService from environment
                 viewModel.setAuthService(authService)
                 viewModel.setModelContext(modelContext)
-                viewModel.loadData()
-                AnalyticsService.shared.log(.familyScreenOpened)
-                AnalyticsService.shared.logScreenView(screenName: "family_dashboard")
+                viewModel.onAppear()
                 DeferredProfileSetupStore.shared.markTouched(.family, source: "settings")
-                
-                // Start listening to invites for badge counts
-                if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {
-                    // InviteRepository will be set up in ViewModel
-                }
             }
             .onChange(of: viewModel.members.map(\.userId).sorted().joined(separator: ",")) { _, _ in
                 PublicLifetimeStatsRepository.shared.updateFamilyPinnedUserIds(

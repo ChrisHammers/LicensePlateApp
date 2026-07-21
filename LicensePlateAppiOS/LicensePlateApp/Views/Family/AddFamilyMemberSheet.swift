@@ -13,52 +13,36 @@ struct AddFamilyMemberSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    private let userRepository = UserRepository.shared
-    private let familyRepository = FamilyRepository.shared
-    @State private var searchQuery = ""
-    @State private var searchType: UserRepository.SearchType = .all
-    @State private var searchResults: [UserRepository.UserSearchResult] = []
-    @State private var isSearching = false
-    @State private var hasCompletedSearch = false
-    @State private var isInviting = false
-    @State private var errorMessage: String?
-    @State private var showError = false
-    @State private var showSuccessAlert = false
-    @State private var searchTask: Task<Void, Never>?
+    @StateObject private var viewModel: AddFamilyMemberViewModel
 
-    private var showNoUsersFoundEmptyState: Bool {
-        FriendsFamilyAccessPolicy.shared.canUseFriendsAndFamily(for: authService.currentUser)
-            && searchQuery.count >= 3
-            && !isSearching
-            && hasCompletedSearch
-            && searchResults.isEmpty
-            && !showError
-    }    
+    init(familyId: String) {
+        self.familyId = familyId
+        _viewModel = StateObject(wrappedValue: AddFamilyMemberViewModel(familyId: familyId))
+    }
+
     var body: some View {
         NavigationStack {
             AppBackgroundView {
                 List {
                     Section("Search".localized) {
-                        TextField("Username or email".localized, text: $searchQuery)
+                        TextField("Username or email".localized, text: $viewModel.searchQuery)
                             .textFieldStyle(.roundedBorder)
                             .accessibleTextField(
                                 label: "Username or email".localized,
                                 hint: "Enter at least 3 characters to search".localized,
-                                value: searchQuery
+                                value: viewModel.searchQuery
                             )
                             .onSubmit {
-                                Task {
-                                    await performSearch()
-                                }
+                                Task { await viewModel.performSearch() }
                             }
-                        
-                        if searchQuery.count < 3 && !searchQuery.isEmpty {
+
+                        if viewModel.searchQuery.count < 3 && !viewModel.searchQuery.isEmpty {
                             Text("Enter at least 3 characters to search".localized)
                                 .font(.system(.caption, design: .rounded))
                                 .foregroundStyle(Color.Theme.softBrown)
                         }
-                        
-                        if isSearching {
+
+                        if viewModel.isSearching {
                             HStack {
                                 ProgressView()
                                     .scaleEffect(0.8)
@@ -69,23 +53,19 @@ struct AddFamilyMemberSheet: View {
                         }
                     }
                     .listRowBackground(Color.Theme.cardBackground)
-                    
-                    if !searchResults.isEmpty {
+
+                    if !viewModel.searchResults.isEmpty {
                         Section("Results".localized) {
-                            ForEach(Array(searchResults.enumerated()), id: \.element.user.id) { index, result in
+                            ForEach(Array(viewModel.searchResults.enumerated()), id: \.element.user.id) { _, result in
                                 FamilyMemberSearchResultRow(
                                     result: result,
-                                    familyId: familyId,
-                                    familyRepository: familyRepository,
-                                    isInviting: $isInviting,
-                                    errorMessage: $errorMessage,
-                                    showError: $showError,
-                                    showSuccessAlert: $showSuccessAlert
+                                    isInviting: viewModel.isInviting,
+                                    onInvite: { viewModel.sendInvite(to: result) }
                                 )
                             }
                         }
                         .listRowBackground(Color.Theme.cardBackground)
-                    } else if showNoUsersFoundEmptyState {
+                    } else if viewModel.showNoUsersFoundEmptyState {
                         Section {
                             UserSearchEmptyStateView()
                         }
@@ -94,12 +74,12 @@ struct AddFamilyMemberSheet: View {
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
-                .disabled(isInviting)
-                
-                if isInviting {
+                .disabled(viewModel.isInviting)
+
+                if viewModel.isInviting {
                     Color.black.opacity(0.3)
                         .ignoresSafeArea()
-                    
+
                     ProgressView()
                         .scaleEffect(1.5)
                         .tint(.white)
@@ -112,51 +92,26 @@ struct AddFamilyMemberSheet: View {
                     Button("Cancel".localized) {
                         dismiss()
                     }
-                    .disabled(isInviting)
+                    .disabled(viewModel.isInviting)
                 }
             }
             .onAppear {
-                userRepository.setModelContext(modelContext)
-                familyRepository.setModelContext(modelContext)
+                viewModel.configure(authService: authService, modelContext: modelContext)
             }
-            .onChange(of: searchQuery) { oldValue, newValue in
-                // Cancel previous search task
-                searchTask?.cancel()
-                
-                // Clear results if query is too short
-                if newValue.count < 3 {
-                    searchResults = []
-                    isSearching = false
-                    hasCompletedSearch = false
-                    return
-                }
-                
-                // Debounce search - wait 500ms after user stops typing
-                searchTask = Task {
-                    do {
-                        try await Task.sleep(nanoseconds: 500_000_000) // 500ms
-                        
-                        // Check if task was cancelled
-                        try Task.checkCancellation()
-                        
-                        // Perform search
-                        await performSearch()
-                    } catch {
-                        // Task was cancelled or failed - ignore
-                    }
-                }
+            .onChange(of: viewModel.searchQuery) { _, _ in
+                viewModel.onSearchQueryChange()
             }
             .onDisappear {
-                searchTask?.cancel()
+                viewModel.cancelSearchTask()
             }
-            .alert("Error".localized, isPresented: $showError) {
+            .alert("Error".localized, isPresented: $viewModel.showError) {
                 Button("OK".localized) {}
             } message: {
-                if let errorMessage = errorMessage {
+                if let errorMessage = viewModel.errorMessage {
                     Text(errorMessage)
                 }
             }
-            .alert("Invite Sent".localized, isPresented: $showSuccessAlert) {
+            .alert("Invite Sent".localized, isPresented: $viewModel.showSuccessAlert) {
                 Button("OK".localized) {
                     dismiss()
                 }
@@ -165,110 +120,39 @@ struct AddFamilyMemberSheet: View {
             }
         }
     }
-    
-    private func performSearch() async {
-        // Minimum 3 characters required
-        guard searchQuery.count >= 3 else {
-            await MainActor.run {
-                searchResults = []
-                isSearching = false
-                hasCompletedSearch = false
-            }
-            return
-        }
-
-        if !FriendsFamilyAccessPolicy.shared.canUseFriendsAndFamily(for: authService.currentUser) {
-            await MainActor.run {
-                searchResults = []
-                isSearching = false
-                hasCompletedSearch = false
-                errorMessage = FriendsFamilyCallableErrors.guestBlockedMessage
-                showError = true
-            }
-            return
-        }
-
-        guard authService.isOnline else {
-            await MainActor.run {
-                searchResults = []
-                isSearching = false
-                hasCompletedSearch = false
-                errorMessage = "Requires network connection".localized
-                showError = true
-            }
-            return
-        }
-        
-        await MainActor.run {
-            isSearching = true
-            errorMessage = nil
-            showError = false
-            hasCompletedSearch = false
-        }
-        
-        do {
-            // Get current user ID to exclude from results
-            let currentUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
-            let results = try await userRepository.searchUsers(
-                query: searchQuery,
-                searchType: searchType,
-                excludeUserId: currentUserId,
-                searchingUser: authService.currentUser
-            )
-            await MainActor.run {
-                searchResults = results
-                isSearching = false
-                hasCompletedSearch = true
-                AnalyticsService.shared.log(.userSearchPerformed(queryType: searchType == .all ? "all" : searchType == .username ? "username" : searchType == .email ? "email" : "phone"))
-            }
-        } catch {
-            await MainActor.run {
-                isSearching = false
-                hasCompletedSearch = false
-                searchResults = []
-                errorMessage = error.localizedDescription
-                showError = true
-                print("❌ Search error: \(error.localizedDescription)")
-            }
-        }
-    }
 }
 
 struct FamilyMemberSearchResultRow: View {
     let result: UserRepository.UserSearchResult
-    let familyId: String
-    let familyRepository: FamilyRepository
-    @Binding var isInviting: Bool
-    @Binding var errorMessage: String?
-    @Binding var showError: Bool
-    @Binding var showSuccessAlert: Bool
+    let isInviting: Bool
+    let onInvite: () -> Void
     @EnvironmentObject var authService: FirebaseAuthService
-    
+
     var user: AppUser { result.user }
-    
+
     var body: some View {
         HStack {
             AvatarImageView(user: user, size: 50)
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(user.displayName)
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
-                
+
                 Text("@\(user.userName)")
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
-                
+
                 Text("Found by %@".localized(result.matchedField.displayName))
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
             }
-            
+
             Spacer()
-            
+
             Button("Invite".localized) {
-                sendInvite()
+                onInvite()
             }
             .buttonStyle(.borderedProminent)
             .tint(Color.Theme.primaryBlue)
@@ -279,87 +163,9 @@ struct FamilyMemberSearchResultRow: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(user.displayName), @\(user.userName)")
     }
-    
-    private func sendInvite() {
-        guard authService.isOnline else {
-            errorMessage = "Requires network connection".localized
-            showError = true
-            return
-        }
-
-        if !FriendsFamilyAccessPolicy.shared.canUseFriendsAndFamily(for: authService.currentUser) {
-            errorMessage = FriendsFamilyCallableErrors.guestBlockedMessage
-            showError = true
-            return
-        }
-        
-        // Use firebaseUID if available, otherwise fall back to id
-        let toUserId = user.firebaseUID ?? user.id
-        let inviteMethod = result.matchedField.inviteMethod
-        
-        print("📤 Sending family invite:")
-        print("   - To User ID: \(toUserId)")
-        print("   - Family ID: \(familyId)")
-        print("   - Method: \(inviteMethod)")
-        
-        isInviting = true
-        errorMessage = nil
-        
-        Task {
-            do {
-                let inviteId = try await familyRepository.sendFamilyInvite(
-                    toUserId: toUserId,
-                    familyId: familyId,
-                    method: inviteMethod
-                )
-                
-                print("✅ Family invite sent successfully:")
-                print("   - Invite ID: \(inviteId)")
-                print("   - Check Firebase 'invites' collection for document ID: \(inviteId)")
-                
-                await MainActor.run {
-                    isInviting = false
-                    AnalyticsService.shared.log(.familyInviteSent)
-                    showSuccessAlert = true
-                }
-            } catch {
-                let nsError = error as NSError
-                let errorCode = nsError.code
-                let errorDomain = nsError.domain
-                let errorDescription = error.localizedDescription
-                
-                print("❌ Family invite failed:")
-                print("   - Error Domain: \(errorDomain)")
-                print("   - Error Code: \(errorCode)")
-                print("   - Error Description: \(errorDescription)")
-                print("   - Full Error: \(error)")
-                
-                // Provide more user-friendly error messages
-                let userFriendlyMessage: String
-                if errorDescription.contains("permission-denied") {
-                    userFriendlyMessage = "You don't have permission to invite members to this family.".localized
-                } else if errorDescription.contains("failed-precondition") {
-                    userFriendlyMessage = "Unable to invite this user. They may already be in a family or have reached the limit.".localized
-                } else if errorDescription.contains("not-found") {
-                    userFriendlyMessage = "User not found.".localized
-                } else if errorDescription.contains("unauthenticated") {
-                    userFriendlyMessage = "Please sign in to send invites.".localized
-                } else {
-                    userFriendlyMessage = "Failed to send invite: %@".localized(errorDescription)
-                }
-                
-                await MainActor.run {
-                    isInviting = false
-                    errorMessage = userFriendlyMessage
-                    showError = true
-                }
-            }
-        }
-    }
 }
 
 #Preview {
     AddFamilyMemberSheet(familyId: "test")
         .environmentObject(FirebaseAuthService())
 }
-

@@ -12,24 +12,20 @@ struct CreateFamilySheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    private let familyRepository = FamilyRepository.shared
-    @State private var familyName = ""
-    @State private var isCreating = false
-    @State private var errorMessage: String?
-    @State private var showError = false
-    
+    @StateObject private var viewModel = CreateFamilyViewModel()
+
     var body: some View {
         NavigationStack {
             AppBackgroundView {
                 Form {
                     Section {
-                        TextField("Family Name".localized, text: $familyName)
+                        TextField("Family Name".localized, text: $viewModel.familyName)
                             .textInputAutocapitalization(.words)
-                            .disabled(isCreating)
+                            .disabled(viewModel.isCreating)
                             .accessibleTextField(
                                 label: "Family Name".localized,
                                 hint: "Choose a name for your family group".localized,
-                                value: familyName
+                                value: viewModel.familyName
                             )
                     } header: {
                         Text("Family Name".localized)
@@ -41,8 +37,8 @@ struct CreateFamilySheet: View {
                             .foregroundStyle(Color.Theme.softBrown)
                     }
                     .listRowBackground(Color.Theme.cardBackground)
-                    
-                    if let error = errorMessage {
+
+                    if let error = viewModel.errorMessage {
                         Section {
                             Text(error)
                                 .foregroundStyle(.red)
@@ -53,18 +49,17 @@ struct CreateFamilySheet: View {
                 }
                 .formStyle(.grouped)
                 .scrollContentBackground(.hidden)
-                .disabled(isCreating)
-                
-                // Loading overlay
-                if isCreating {
+                .disabled(viewModel.isCreating)
+
+                if viewModel.isCreating {
                     Color.black.opacity(0.3)
                         .ignoresSafeArea()
-                    
+
                     VStack(spacing: 16) {
                         ProgressView()
                             .scaleEffect(1.5)
                             .tint(Color.Theme.primaryBlue)
-                        
+
                         Text("Creating family...".localized)
                             .font(.system(.body, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
@@ -89,60 +84,31 @@ struct CreateFamilySheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Create".localized) {
-                        createFamily()
+                        viewModel.createFamily()
                     }
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
-                    .disabled(familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isCreating || !authService.isOnline)
+                    .disabled(
+                        viewModel.familyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || viewModel.isCreating
+                            || !authService.isOnline
+                    )
                 }
             }
-            .alert("Error".localized, isPresented: $showError) {
+            .alert("Error".localized, isPresented: $viewModel.showError) {
                 Button("OK".localized, role: .cancel) { }
             } message: {
-                if let error = errorMessage {
+                if let error = viewModel.errorMessage {
                     Text(error)
                 }
             }
             .onAppear {
-                familyRepository.setModelContext(modelContext)
-                AnalyticsService.shared.log(.familyCreateCTATapped)
+                viewModel.configure(authService: authService, modelContext: modelContext)
+                viewModel.onAppear()
             }
-        }
-    }
-    
-    private func createFamily() {
-        let trimmedName = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedName.isEmpty else { return }
-        guard authService.isOnline else {
-            errorMessage = "Requires network connection".localized
-            showError = true
-            return
-        }
-        
-        isCreating = true
-        errorMessage = nil
-        
-        Task {
-            do {
-                // Create family via Cloud Function
-                let familyId = try await familyRepository.createFamily(name: trimmedName)
-                
-                // Refresh user data from Firestore to get updated activeFamilyId
-                try await authService.refreshCurrentUserFromFirestore()
-                
-                await MainActor.run {
-                    isCreating = false
-                    AnalyticsService.shared.log(.familyCreated)
-                    dismiss()
-                }
-            } catch {
-                await MainActor.run {
-                    isCreating = false
-                    errorMessage = error.localizedDescription
-                    showError = true
-                    AnalyticsService.shared.log(.familyCreateFailed(error: error.localizedDescription))
-                }
+            .onChange(of: viewModel.didCreateSuccessfully) { _, didCreate in
+                if didCreate { dismiss() }
             }
         }
     }
@@ -152,4 +118,3 @@ struct CreateFamilySheet: View {
     CreateFamilySheet()
         .environmentObject(FirebaseAuthService())
 }
-

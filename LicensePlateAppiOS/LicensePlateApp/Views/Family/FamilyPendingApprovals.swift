@@ -7,39 +7,39 @@
 
 import SwiftUI
 import SwiftData
-import Combine
 
 struct FamilyPendingApprovals: View {
     let familyId: String
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    private let familyRepository = FamilyRepository.shared
-    @State private var pendingRequests: [PendingJoinRequest] = []
-    @State private var pendingObservation: AnyCancellable?
-    
+    @StateObject private var viewModel: FamilyPendingApprovalsViewModel
+
+    init(familyId: String) {
+        self.familyId = familyId
+        _viewModel = StateObject(wrappedValue: FamilyPendingApprovalsViewModel(familyId: familyId))
+    }
+
     var body: some View {
         NavigationStack {
             AppBackgroundView {
                 List {
-                    if pendingRequests.isEmpty {
+                    if viewModel.pendingRequests.isEmpty {
                         Text("No pending requests".localized)
                             .foregroundStyle(Color.Theme.softBrown)
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding()
                             .listRowBackground(Color.Theme.cardBackground)
                     } else {
-                        ForEach(pendingRequests) { request in
+                        ForEach(viewModel.pendingRequests) { request in
                             PendingApprovalRow(
                                 request: request,
-                                familyId: familyId,
-                                onRequestProcessed: {
-                                    // Refresh list after approval/decline
-                                    Task {
-                                        await refreshPendingRequests()
-                                    }
+                                onApprove: {
+                                    await viewModel.approve(request: request)
+                                },
+                                onDecline: {
+                                    await viewModel.decline(request: request)
                                 }
                             )
-                            .environmentObject(authService)
                             .listRowBackground(Color.Theme.cardBackground)
                         }
                     }
@@ -50,51 +50,23 @@ struct FamilyPendingApprovals: View {
             .navigationTitle("Pending Approvals".localized)
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
-                familyRepository.setModelContext(modelContext)
-                UserRepository.shared.setModelContext(modelContext)
-                loadPendingRequests()
-                startObservingPendingRequests()
+                viewModel.configure(authService: authService, modelContext: modelContext)
+                viewModel.onAppear()
             }
             .task(id: familyId) {
-                familyRepository.setModelContext(modelContext)
-                UserRepository.shared.setModelContext(modelContext)
-                await refreshPendingRequests()
+                viewModel.configure(authService: authService, modelContext: modelContext)
+                await viewModel.refreshPendingRequests()
             }
             .onDisappear {
-                pendingObservation?.cancel()
-                pendingObservation = nil
+                viewModel.onDisappear()
             }
             .refreshable {
-                await refreshPendingRequests()
+                await viewModel.refreshPendingRequests()
             }
-        }
-    }
-    
-    private func loadPendingRequests() {
-        pendingRequests = familyRepository.getPendingRequests(familyId: familyId)
-            .filter { $0.statusEnum == .pending }
-    }
-    
-    private func startObservingPendingRequests() {
-        pendingObservation?.cancel()
-        pendingObservation = familyRepository.$pendingRequests
-            .receive(on: DispatchQueue.main)
-            .sink { pendingByFamily in
-                guard pendingByFamily[familyId] != nil else { return }
-                loadPendingRequests()
-            }
-    }
-    
-    private func refreshPendingRequests() async {
-        do {
-            let linked = try await familyRepository.fetchPendingRequests(familyId: familyId)
-            await MainActor.run {
-                pendingRequests = linked.filter { $0.statusEnum == .pending }
-            }
-        } catch {
-            // Error fetching - use cached data
-            await MainActor.run {
-                loadPendingRequests()
+            .alert("Error".localized, isPresented: $viewModel.showError) {
+                Button("OK".localized, role: .cancel) { }
+            } message: {
+                Text(viewModel.errorMessage ?? "Unknown error".localized)
             }
         }
     }
@@ -102,19 +74,16 @@ struct FamilyPendingApprovals: View {
 
 struct PendingApprovalRow: View {
     let request: PendingJoinRequest
-    let familyId: String
-    let onRequestProcessed: () -> Void
-    @EnvironmentObject var authService: FirebaseAuthService
+    let onApprove: () async -> Bool
+    let onDecline: () async -> Bool
     @State private var resolvedUser: AppUser?
     @State private var isProcessing = false
-    @State private var errorMessage: String?
-    @State private var showError = false
     @State private var hasProcessed = false
 
     private var displayUser: AppUser? {
         request.user ?? resolvedUser
     }
-    
+
     var body: some View {
         HStack {
             if let user = displayUser {
@@ -122,18 +91,22 @@ struct PendingApprovalRow: View {
             } else {
                 HStack(spacing: 12) {
                     AvatarImageView(avatarId: nil, size: 50)
-
                     Text("User".localized)
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Theme.primaryBlue)
-
                 }
             }
-            
+
             HStack(spacing: 12) {
                 Button {
-                    Task { await approveRequest() }
+                    Task {
+                        guard !isProcessing && !hasProcessed else { return }
+                        isProcessing = true
+                        let ok = await onApprove()
+                        isProcessing = false
+                        if ok { hasProcessed = true }
+                    }
                 } label: {
                     Text("Approve".localized)
                         .lineLimit(1)
@@ -145,7 +118,13 @@ struct PendingApprovalRow: View {
                 .accessibleButton(label: "family.a11y.approve_join".localized)
 
                 Button {
-                    Task { await declineRequest() }
+                    Task {
+                        guard !isProcessing && !hasProcessed else { return }
+                        isProcessing = true
+                        let ok = await onDecline()
+                        isProcessing = false
+                        if ok { hasProcessed = true }
+                    }
                 } label: {
                     Text("Decline".localized)
                         .lineLimit(1)
@@ -156,18 +135,12 @@ struct PendingApprovalRow: View {
                 .accessibleButton(label: "family.a11y.decline_join".localized)
             }
             .layoutPriority(1)
-            
         }
         .padding(.vertical, 8)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(pendingApprovalAccessibilityLabel)
         .task(id: request.userId) {
             await resolveUserIfNeeded()
-        }
-        .alert("Error".localized, isPresented: $showError) {
-            Button("OK".localized, role: .cancel) { }
-        } message: {
-            Text(errorMessage ?? "Unknown error".localized)
         }
     }
 
@@ -193,80 +166,6 @@ struct PendingApprovalRow: View {
             #if DEBUG
             print("⚠️ PendingApprovalRow failed to resolve user \(request.userId): \(error.localizedDescription)")
             #endif
-        }
-    }
-    
-    private func approveRequest() async {
-        // Prevent duplicate calls
-        guard !isProcessing && !hasProcessed else { return }
-        
-        guard authService.isOnline else {
-            errorMessage = "Requires network connection".localized
-            showError = true
-            return
-        }
-        
-        isProcessing = true
-        errorMessage = nil
-        
-        do {
-            try await FamilyRepository.shared.respondToPendingRequest(
-                familyId: familyId,
-                requestId: request.requestId,
-                approve: true
-            )
-            AnalyticsService.shared.log(.familyJoinRequestApproved)
-            
-            await MainActor.run {
-                hasProcessed = true
-                isProcessing = false
-            }
-            
-            // Notify parent to refresh list
-            onRequestProcessed()
-        } catch {
-            await MainActor.run {
-                errorMessage = error.localizedDescription
-                showError = true
-                isProcessing = false
-            }
-        }
-    }
-    
-    private func declineRequest() async {
-        // Prevent duplicate calls
-        guard !isProcessing && !hasProcessed else { return }
-        
-        guard authService.isOnline else {
-            errorMessage = "Requires network connection".localized
-            showError = true
-            return
-        }
-        
-        isProcessing = true
-        errorMessage = nil
-        
-        do {
-            try await FamilyRepository.shared.respondToPendingRequest(
-                familyId: familyId,
-                requestId: request.requestId,
-                approve: false
-            )
-            AnalyticsService.shared.log(.familyJoinRequestDeclined)
-            
-            await MainActor.run {
-                hasProcessed = true
-                isProcessing = false
-            }
-            
-            // Notify parent to refresh list
-            onRequestProcessed()
-        } catch {
-            await MainActor.run {
-                errorMessage = error.localizedDescription
-                showError = true
-                isProcessing = false
-            }
         }
     }
 }

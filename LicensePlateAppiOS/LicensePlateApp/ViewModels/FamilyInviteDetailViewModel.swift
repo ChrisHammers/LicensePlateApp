@@ -113,6 +113,7 @@ final class FamilyInviteDetailViewModel: ObservableObject {
                 if accept {
                     hasAccepted = true
                     AnalyticsService.shared.log(.familyInviteUserAccepted)
+                    AnalyticsService.shared.log(.familyJoinRequestCreated)
                 } else {
                     AnalyticsService.shared.log(.familyInviteUserDeclined)
                     onDeclineDismiss()
