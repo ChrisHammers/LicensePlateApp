@@ -208,7 +208,14 @@ service cloud.firestore {
 
       // create family allowed for registered accounts; membership enforced via backend
       allow create: if isRegisteredAccount();
-      allow update: if isRegisteredAccount() && (isCreator(familyId) || isCaptain(familyId));
+      // Captains/creators may rename only (name + updatedAt). Other fields are server-managed.
+      allow update: if isRegisteredAccount()
+        && (isCreator(familyId) || isCaptain(familyId))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "updatedAt"])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.updatedAt is timestamp;
       allow delete: if false; // never delete; mark inactive via backend
     }
 

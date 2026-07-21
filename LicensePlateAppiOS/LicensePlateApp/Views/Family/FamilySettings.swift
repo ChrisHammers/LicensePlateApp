@@ -43,10 +43,14 @@ struct FamilySettings: View {
                                     title: "Name".localized,
                                     value: $viewModel.familyName,
                                     placeholder: "Enter family name".localized,
+                                    detail: nil,
+                                    isDisabled: viewModel.isSavingName || !authService.isOnline,
                                     onSave: {
-                                        // Update via Cloud Function
+                                        viewModel.saveFamilyName()
                                     },
-                                    onCancel: {}
+                                    onCancel: {
+                                        viewModel.cancelFamilyNameEditing()
+                                    }
                                 )
                             }
                         }
@@ -55,6 +59,7 @@ struct FamilySettings: View {
                         Section("Family Name".localized) {
                             HStack(spacing: 12) {
                                 FamilyInitialAvatarView(familyName: viewModel.familyName, size: 44)
+                                    .accessibilityHidden(true)
                                 Text(viewModel.familyName)
                                     .font(.system(.body, design: .rounded))
                                     .fontWeight(.semibold)

@@ -101,7 +101,15 @@ service cloud.firestore {
 
       // create family allowed for signed-in user; membership enforced via backend
       allow create: if isSignedIn();
-      allow update: if isSignedIn() && (isCreator(familyId) || isCaptain(familyId));
+      // Captains/creators may rename only (name + updatedAt). Other fields are server-managed.
+      // Live source of truth: firestore.rules (uses isRegisteredAccount).
+      allow update: if isSignedIn()
+        && (isCreator(familyId) || isCaptain(familyId))
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["name", "updatedAt"])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.updatedAt is timestamp;
       allow delete: if false; // never delete; mark inactive via backend
     }
 

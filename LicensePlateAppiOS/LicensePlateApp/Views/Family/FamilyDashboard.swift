@@ -152,18 +152,6 @@ struct FamilyDashboard: View {
                             }
                             .listRowBackground(Color.Theme.cardBackground)
                         }
-                        
-                        // Stats placeholder
-                        Section("Family Stats".localized) {
-                            HStack {
-                                Text("Total Trips: 0")
-                                Spacer()
-                                Text("Total Finds: 0")
-                            }
-                            .font(.system(.body, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
-                        }
-                        .listRowBackground(Color.Theme.cardBackground)
                     }
                     .listStyle(.insetGrouped)
                     .scrollContentBackground(.hidden)

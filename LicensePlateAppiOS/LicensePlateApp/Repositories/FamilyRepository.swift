@@ -708,6 +708,61 @@ class FamilyRepository: ObservableObject {
         ] as [String: Any]).addingClientMetadata())
     }
     
+    /// Rename family via direct Firestore write (captain/creator). Rules allow only `name` + `updatedAt`.
+    func updateFamilyName(familyId: String, name: String) async throws {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw NSError(
+                domain: "FamilyRepository",
+                code: 400,
+                userInfo: [NSLocalizedDescriptionKey: "Enter family name".localized]
+            )
+        }
+        guard trimmed.count <= 80 else {
+            throw NSError(
+                domain: "FamilyRepository",
+                code: 400,
+                userInfo: [NSLocalizedDescriptionKey: "Enter family name".localized]
+            )
+        }
+        guard Auth.auth().currentUser != nil else {
+            throw NSError(
+                domain: "FamilyRepository",
+                code: 401,
+                userInfo: [NSLocalizedDescriptionKey: "User not authenticated".localized]
+            )
+        }
+        guard let modelContext else {
+            throw NSError(
+                domain: "FamilyRepository",
+                code: 500,
+                userInfo: [NSLocalizedDescriptionKey: "Unknown error".localized]
+            )
+        }
+
+        let now = Date()
+        try await db.collection("families").document(familyId).updateData([
+            "name": trimmed,
+            "updatedAt": Timestamp(date: now)
+        ])
+
+        let searchFamilyId = familyId
+        let descriptor = FetchDescriptor<Family>(
+            predicate: #Predicate<Family> { f in
+                f.familyId == searchFamilyId
+            }
+        )
+        if let existing = try? modelContext.fetch(descriptor).first {
+            existing.name = trimmed
+            existing.updatedAt = now
+        }
+        let allDescriptor = FetchDescriptor<Family>()
+        if let allFamilies = try? modelContext.fetch(allDescriptor) {
+            families = allFamilies
+        }
+        try? modelContext.save()
+    }
+
     /// Leave family (remove current user from family)
     func leaveFamily(familyId: String) async throws {
         guard let userId = Auth.auth().currentUser?.uid else {

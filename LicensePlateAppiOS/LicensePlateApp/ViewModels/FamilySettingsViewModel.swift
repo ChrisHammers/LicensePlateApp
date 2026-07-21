@@ -18,11 +18,13 @@ class FamilySettingsViewModel: ObservableObject {
     @Published var showErrorAlert = false
     @Published var isLeavingFamily = false
     @Published var isDeletingFamily = false
+    @Published var isSavingName = false
     @Published var didLeaveOrDelete = false
 
     private let familyRepository: FamilyRepository
     private var authService: FirebaseAuthService
     private(set) var familyId: String = ""
+    private var lastSavedFamilyName: String = ""
 
     var family: Family?
 
@@ -46,6 +48,7 @@ class FamilySettingsViewModel: ObservableObject {
 
         if let family = family {
             familyName = family.name
+            lastSavedFamilyName = family.name
         }
     }
 
@@ -63,6 +66,46 @@ class FamilySettingsViewModel: ObservableObject {
             return false
         }
         return member.isCaptainOrCreator
+    }
+
+    func saveFamilyName() {
+        let trimmed = familyName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            familyName = lastSavedFamilyName
+            errorMessage = "Enter family name".localized
+            showErrorAlert = true
+            return
+        }
+        guard trimmed != lastSavedFamilyName else { return }
+        guard authService.isOnline else {
+            familyName = lastSavedFamilyName
+            errorMessage = "Requires network connection".localized
+            showErrorAlert = true
+            return
+        }
+
+        isSavingName = true
+        errorMessage = nil
+
+        Task {
+            do {
+                try await familyRepository.updateFamilyName(familyId: familyId, name: trimmed)
+                familyName = trimmed
+                lastSavedFamilyName = trimmed
+                family?.name = trimmed
+                isSavingName = false
+                AnalyticsService.shared.log(.familyNameChanged)
+            } catch {
+                familyName = lastSavedFamilyName
+                isSavingName = false
+                errorMessage = error.localizedDescription
+                showErrorAlert = true
+            }
+        }
+    }
+
+    func cancelFamilyNameEditing() {
+        familyName = lastSavedFamilyName
     }
 
     func leaveFamily() {
