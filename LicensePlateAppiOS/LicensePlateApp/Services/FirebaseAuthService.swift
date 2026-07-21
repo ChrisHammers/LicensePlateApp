@@ -1237,54 +1237,79 @@ class FirebaseAuthService: ObservableObject {
             currentUser = existingUser
             isAuthenticated = true
             
-            // Update login tracking
-            await updateLoginTracking()
-            
-            // Load from Firestore to get latest data (for both anonymous and non-anonymous)
-            Task {
-                if let firestoreUser = try? await loadUserDataFromFirestore(userId: firebaseUID) {
-                    // Merge Firestore data with local user
-                    existingUser.userName = firestoreUser.userName
-                    existingUser.firstName = firestoreUser.firstName
-                    existingUser.lastName = firestoreUser.lastName
-                    // For anonymous users, don't use email from Firestore
-                    if !firebaseUser.isAnonymous {
-                        existingUser.email = firestoreUser.email
-                    }
-                    existingUser.phoneNumber = firestoreUser.phoneNumber
-                    existingUser.userImageURL = firestoreUser.userImageURL
-                    existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
-                    existingUser.activeFamilyId = firestoreUser.activeFamilyId
-                    existingUser.friendCount = firestoreUser.friendCount
-                    existingUser.isRetiredGeneral = firestoreUser.isRetiredGeneral
+            // Hydrate from Firestore before login tracking so local identity/contact
+            // match cloud (cloud is source of truth on session restore).
+            do {
+                if let firestoreUser = try await loadUserDataFromFirestore(userId: firebaseUID) {
+                    applyFirestoreProfile(firestoreUser, to: existingUser, isAnonymous: firebaseUser.isAnonymous)
                     try? modelContext.save()
+                    currentUser = existingUser
                 }
+            } catch {
+                #if DEBUG
+                print("⚠️ Failed to hydrate user \(firebaseUID) from Firestore; keeping local profile: \(error)")
+                #endif
             }
+            
+            await updateLoginTracking()
         } else {
-            // Load from Firestore or create new
-            if let firestoreUser = try? await loadUserDataFromFirestore(userId: firebaseUID) {
-                // For anonymous users, don't use email from Firestore if it exists
-                if firebaseUser.isAnonymous && firestoreUser.email != nil {
-                    firestoreUser.email = nil
+            // No local row — load cloud profile, or create only when the doc is confirmed absent.
+            do {
+                if let firestoreUser = try await loadUserDataFromFirestore(userId: firebaseUID) {
+                    if firebaseUser.isAnonymous {
+                        firestoreUser.email = nil
+                    }
+                    
+                    modelContext.insert(firestoreUser)
+                    try? modelContext.save()
+                    currentUser = firestoreUser
+                    isAuthenticated = true
+                    
+                    await updateLoginTracking()
+                } else {
+                    // Confirmed missing Firestore profile for this Auth UID.
+                    let email = firebaseUser.isAnonymous ? nil : firebaseUser.email
+                    await createNewUserFromFirebase(
+                        firebaseUser,
+                        email: email,
+                        userName: nil,
+                        firstName: nil,
+                        lastName: nil,
+                        phoneNumber: nil
+                    )
+                    await updateLoginTracking()
                 }
-                
-                modelContext.insert(firestoreUser)
-                try? modelContext.save()
-                currentUser = firestoreUser
-                isAuthenticated = true
-                
-                // Update login tracking
-                await updateLoginTracking()
-            } else {
-                // Create new user from Firebase auth
-                // Only use email if user is not anonymous (anonymous users don't have emails)
-                let email = firebaseUser.isAnonymous ? nil : firebaseUser.email
-                await createNewUserFromFirebase(firebaseUser, email: email, userName: nil, firstName: nil, lastName: nil, phoneNumber: nil)
-                
-                // Update login tracking
-                await updateLoginTracking()
+            } catch {
+                #if DEBUG
+                print("⚠️ Failed to load user \(firebaseUID) from Firestore; not creating a default profile: \(error)")
+                #endif
+                // Do not invent a guest username or full-save over a possibly existing cloud doc.
             }
         }
+    }
+
+    /// Applies cloud profile fields onto a local SwiftData user (session restore / hydrate).
+    private func applyFirestoreProfile(_ firestoreUser: AppUser, to localUser: AppUser, isAnonymous: Bool) {
+        localUser.userName = firestoreUser.userName
+        localUser.firstName = firestoreUser.firstName
+        localUser.lastName = firestoreUser.lastName
+        if !isAnonymous {
+            localUser.email = firestoreUser.email
+        }
+        localUser.phoneNumber = firestoreUser.phoneNumber
+        localUser.userImageURL = firestoreUser.userImageURL
+        localUser.linkedPlatforms = firestoreUser.linkedPlatforms
+        localUser.avatarId = firestoreUser.avatarId
+        localUser.equippedBadgeId = firestoreUser.equippedBadgeId
+        localUser.wasEverInFamily = firestoreUser.wasEverInFamily
+        localUser.activeFamilyId = firestoreUser.activeFamilyId
+        localUser.friendCount = firestoreUser.friendCount
+        localUser.isRetiredGeneral = firestoreUser.isRetiredGeneral
+        localUser.isUsernameManuallyChanged = firestoreUser.isUsernameManuallyChanged
+        localUser.isEmailPublic = firestoreUser.isEmailPublic
+        localUser.isPhonePublic = firestoreUser.isPhonePublic
+        localUser.lastSyncedToFirebase = .now
+        localUser.needsSync = false
     }
     
     private func createNewUserFromFirebase(_ firebaseUser: User, email: String?, userName: String?, firstName: String?, lastName: String?, phoneNumber: String?) async {
@@ -1312,8 +1337,12 @@ class FirebaseAuthService: ObservableObject {
         currentUser = newUser
         isAuthenticated = true
         
-        Task {
-            try? await saveUserDataToFirestore(newUser)
+        do {
+            try await saveUserDataToFirestore(newUser)
+        } catch {
+            #if DEBUG
+            print("⚠️ Failed to save new user \(firebaseUID) to Firestore: \(error)")
+            #endif
         }
     }
     
@@ -1342,6 +1371,9 @@ class FirebaseAuthService: ObservableObject {
     
     // MARK: - Firestore Serialization
     
+    /// Loads `users/{userId}` (+ own `private/contact` when applicable).
+    /// - Returns: profile when the document exists; `nil` only when it is confirmed absent.
+    /// - Throws: on Firestore/network/read failures (callers must not treat throws as "missing").
     private func loadUserDataFromFirestore(userId: String) async throws -> AppUser? {
         let docRef = db.collection("users").document(userId)
         let document = try await docRef.getDocument()
