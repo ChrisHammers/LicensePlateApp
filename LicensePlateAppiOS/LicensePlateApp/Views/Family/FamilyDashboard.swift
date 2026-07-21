@@ -33,7 +33,7 @@ struct FamilyDashboard: View {
     var body: some View {
      //   NavigationStack {
             AppBackgroundView {
-                if viewModel.isLoading {
+                if viewModel.isLoading && viewModel.family == nil {
                     ProgressView()
                 } else if let family = viewModel.family {
                     List {

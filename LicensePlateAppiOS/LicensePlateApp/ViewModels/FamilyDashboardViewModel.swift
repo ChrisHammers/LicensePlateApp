@@ -25,6 +25,7 @@ class FamilyDashboardViewModel: ObservableObject {
     private var authService: FirebaseAuthService
     private var cancellables = Set<AnyCancellable>()
     private var isLoadingData = false
+    private var hasInviteObservation = false
     
     init(familyRepository: FamilyRepository, userRepository: UserRepository, authService: FirebaseAuthService) {
         self.familyRepository = familyRepository
@@ -50,13 +51,16 @@ class FamilyDashboardViewModel: ObservableObject {
         if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {
             inviteRepository?.startListening(userId: userId)
             
-            // Observe invite changes for real-time badge updates
-            inviteRepository?.$invites
-                .sink { [weak self] _ in
-                    // Trigger view update by accessing the count property
-                    self?.objectWillChange.send()
-                }
-                .store(in: &cancellables)
+            // Observe invite changes once — setAuthService no longer clears sinks every appear.
+            if !hasInviteObservation {
+                inviteRepository?.$invites
+                    .sink { [weak self] _ in
+                        // Trigger view update by accessing the count property
+                        self?.objectWillChange.send()
+                    }
+                    .store(in: &cancellables)
+                hasInviteObservation = true
+            }
         }
     }
     
@@ -92,8 +96,12 @@ class FamilyDashboardViewModel: ObservableObject {
     }
     
     func setAuthService(_ service: FirebaseAuthService) {
+        // Same instance every appear after the first swap from the temp init service.
+        guard service !== authService else { return }
+        
         // Cancel old subscriptions
         cancellables.removeAll()
+        hasInviteObservation = false
         
         // Update authService
         authService = service
@@ -169,9 +177,9 @@ class FamilyDashboardViewModel: ObservableObject {
                     return
                 }
                 
-                // If activeFamilyId changed, reload data
+                // If activeFamilyId changed, reload data without wiping a seeded/cached List.
                 if self.family?.familyId != activeFamilyId {
-                    self.loadData()
+                    self.loadData(showLoading: self.family == nil)
                 }
             }
             .store(in: &cancellables)
@@ -180,11 +188,25 @@ class FamilyDashboardViewModel: ObservableObject {
     func onAppear() {
         AnalyticsService.shared.log(.familyScreenOpened)
         AnalyticsService.shared.logScreenView(screenName: "family_dashboard")
-        loadData()
+        seedFromCacheIfNeeded()
+        // Soft-refresh when cache already painted the List; spinner only on true first load.
+        loadData(showLoading: family == nil)
     }
 
-    func loadData() {
-        guard let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else {
+    /// Paint SwiftData cache immediately so re-entry does not flash empty → spinner → list.
+    private func seedFromCacheIfNeeded() {
+        guard family == nil,
+              let activeFamilyId = authService.currentUser?.activeFamilyId,
+              let cached = familyRepository.getFamily(familyId: activeFamilyId),
+              cached.statusEnum == .active else {
+            return
+        }
+        family = cached
+        loadFamilyData(familyId: activeFamilyId)
+    }
+
+    func loadData(showLoading: Bool = true) {
+        guard (authService.currentUser?.firebaseUID ?? authService.currentUser?.id) != nil else {
             return
         }
         
@@ -214,7 +236,10 @@ class FamilyDashboardViewModel: ObservableObject {
                     return nil
                 }
                 
-                self.isLoading = true
+                // Full-screen spinner only when there is nothing to show yet.
+                if showLoading && self.family == nil {
+                    self.isLoading = true
+                }
                 
                 return activeFamilyId
             }
