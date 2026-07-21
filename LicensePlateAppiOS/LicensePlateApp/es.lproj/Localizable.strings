@@ -1084,3 +1084,31 @@
 "Sergeant" = "Sargento";
 "Retired General" = "General retirado";
 "Username cannot be empty." = "El nombre de usuario no puede estar vacío.";
+
+/* Friends & Family accessibility (quality-bar Step 2) */
+"family.a11y.pending_invites" = "Invitaciones familiares pendientes, %d";
+"family.a11y.pending_approvals" = "Aprobaciones de ingreso pendientes, %d";
+"family.a11y.opens_pending_invites" = "Abre las invitaciones familiares pendientes";
+"family.a11y.opens_pending_approvals" = "Abre las aprobaciones de ingreso pendientes";
+"family.a11y.opens_settings" = "Abre la configuración de la familia";
+"family.a11y.opens_invite_member" = "Abre invitar miembro de la familia";
+"family.a11y.opens_share_code" = "Abre el código familiar para compartir";
+"family.a11y.approve_join" = "Aprobar solicitud de ingreso";
+"family.a11y.decline_join" = "Rechazar solicitud de ingreso";
+"family.a11y.accept_invite" = "Aceptar invitación familiar";
+"family.a11y.decline_invite" = "Rechazar invitación familiar";
+"family.a11y.create_family" = "Crear una familia nueva";
+"family.a11y.join_family" = "Unirse a una familia existente";
+"share_code.a11y.code" = "Código para compartir %@";
+"share_code.a11y.qr" = "Código QR del código %@";
+"share_code.a11y.copy" = "Copiar código para compartir";
+"share_code.a11y.copy_hint" = "Copia el código al portapapeles";
+"share_code.a11y.copied" = "Código copiado";
+"share_code.a11y.generate" = "Generar código para compartir";
+"share_code.a11y.refresh" = "Actualizar código para compartir";
+"share_code.a11y.share_qr" = "Compartir código QR";
+"share_code.a11y.share_qr_hint" = "Abre la hoja para compartir del sistema";
+"qr_scanner.a11y.label" = "Escáner de códigos QR";
+"qr_scanner.a11y.hint" = "Apunta la cámara a un código QR para escanearlo";
+"family.a11y.invite_member_button" = "Invitar a %@";
+"family.a11y.empty_state" = "No hay familia activa. Crea una familia nueva o únete a una existente.";

@@ -1116,3 +1116,31 @@
 "Sergeant" = "Sergeant";
 "Retired General" = "Retired General";
 "Username cannot be empty." = "Username cannot be empty.";
+
+/* Friends & Family accessibility (quality-bar Step 2) */
+"family.a11y.pending_invites" = "Pending family invites, %d";
+"family.a11y.pending_approvals" = "Pending join approvals, %d";
+"family.a11y.opens_pending_invites" = "Opens pending family invites";
+"family.a11y.opens_pending_approvals" = "Opens pending join approvals";
+"family.a11y.opens_settings" = "Opens family settings";
+"family.a11y.opens_invite_member" = "Opens invite family member";
+"family.a11y.opens_share_code" = "Opens family share code";
+"family.a11y.approve_join" = "Approve join request";
+"family.a11y.decline_join" = "Decline join request";
+"family.a11y.accept_invite" = "Accept family invitation";
+"family.a11y.decline_invite" = "Decline family invitation";
+"family.a11y.create_family" = "Create a new family";
+"family.a11y.join_family" = "Join an existing family";
+"share_code.a11y.code" = "Share code %@";
+"share_code.a11y.qr" = "QR code for share code %@";
+"share_code.a11y.copy" = "Copy share code";
+"share_code.a11y.copy_hint" = "Copies the share code to the clipboard";
+"share_code.a11y.copied" = "Share code copied";
+"share_code.a11y.generate" = "Generate share code";
+"share_code.a11y.refresh" = "Refresh share code";
+"share_code.a11y.share_qr" = "Share QR code";
+"share_code.a11y.share_qr_hint" = "Opens the system share sheet";
+"qr_scanner.a11y.label" = "QR code scanner";
+"qr_scanner.a11y.hint" = "Point the camera at a QR code to scan it";
+"family.a11y.invite_member_button" = "Invite %@";
+"family.a11y.empty_state" = "No active family. Create a new family or join an existing one.";

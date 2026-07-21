@@ -32,6 +32,11 @@ struct JoinFamilySheet: View {
                         TextField("Enter Share Code".localized, text: $shareCode)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                            .accessibleTextField(
+                                label: "Share Code".localized,
+                                hint: "Enter a share code or scan a QR code to join a family".localized,
+                                value: shareCode
+                            )
                             .onChange(of: scannedCode) { oldValue, newValue in
                                 if let code = newValue {
                                     shareCode = extractCode(from: code)
@@ -55,10 +60,15 @@ struct JoinFamilySheet: View {
                             HStack {
                                 Image(systemName: "qrcode.viewfinder")
                                     .foregroundStyle(Color.Theme.primaryBlue)
+                                    .accessibleDecorative()
                                 Text("Scan QR Code".localized)
                                     .foregroundStyle(Color.Theme.primaryBlue)
                             }
                         }
+                        .accessibleButton(
+                            label: "Scan QR Code".localized,
+                            hint: "Opens camera to scan QR code".localized
+                        )
                     }
                     .listRowBackground(Color.Theme.cardBackground)
                     

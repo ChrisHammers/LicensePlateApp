@@ -142,6 +142,7 @@ struct PendingApprovalRow: View {
                 .buttonStyle(.borderedProminent)
                 .tint(Color.Theme.primaryBlue)
                 .disabled(isProcessing || hasProcessed)
+                .accessibleButton(label: "family.a11y.approve_join".localized)
 
                 Button {
                     Task { await declineRequest() }
@@ -152,6 +153,7 @@ struct PendingApprovalRow: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(isProcessing || hasProcessed)
+                .accessibleButton(label: "family.a11y.decline_join".localized)
             }
             .layoutPriority(1)
             

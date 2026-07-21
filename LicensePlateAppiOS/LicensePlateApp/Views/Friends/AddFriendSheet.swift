@@ -21,6 +21,11 @@ struct AddFriendSheet: View {
                     Section("Search".localized) {
                         TextField("Username or email".localized, text: $viewModel.searchQuery)
                             .textFieldStyle(.roundedBorder)
+                            .accessibleTextField(
+                                label: "Username or email".localized,
+                                hint: "Enter at least 3 characters to search".localized,
+                                value: viewModel.searchQuery
+                            )
                             .onSubmit {
                                 Task { await viewModel.performSearch() }
                             }
@@ -138,6 +143,7 @@ struct UserSearchResultRow: View {
             .buttonStyle(.borderedProminent)
             .tint(Color.Theme.primaryBlue)
             .disabled(viewModel.invitingUserId != nil || !authService.isOnline)
+            .accessibleButton(label: "Add Friend".localized)
         }
         .padding(.vertical, 8)
         .accessibilityElement(children: .contain)

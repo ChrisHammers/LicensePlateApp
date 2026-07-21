@@ -61,7 +61,7 @@ struct FamilyInviteDetail: View {
                                     .cornerRadius(12)
                             }
                             .disabled(viewModel.isProcessing || !authService.isOnline)
-                            .accessibilityLabel("Accept".localized)
+                            .accessibleButton(label: "family.a11y.accept_invite".localized)
                             
                             Button {
                                 viewModel.respondToInvite(accept: false, onDeclineDismiss: { dismiss() })
@@ -74,7 +74,7 @@ struct FamilyInviteDetail: View {
                                     .cornerRadius(12)
                             }
                             .disabled(viewModel.isProcessing || !authService.isOnline)
-                            .accessibilityLabel("Decline".localized)
+                            .accessibleButton(label: "family.a11y.decline_invite".localized)
                         }
                     
                         if !authService.isOnline {

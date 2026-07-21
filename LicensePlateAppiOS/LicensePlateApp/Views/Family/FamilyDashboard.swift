@@ -71,24 +71,34 @@ struct FamilyDashboard: View {
                                 } label: {
                                     HStack {
                                         Image(systemName: "person.badge.plus")
+                                            .accessibleDecorative()
                                         Text("Invite a Family Member".localized)
                                     }
                                     .font(.system(.body, design: .rounded))
                                     .foregroundStyle(Color.Theme.primaryBlue)
                                 }
                                 .disabled(!authService.isOnline)
+                                .accessibleButton(
+                                    label: "Invite a Family Member".localized,
+                                    hint: "family.a11y.opens_invite_member".localized
+                                )
                                 
                                 Button {
                                     showCreateShareCodeSheet = true
                                 } label: {
                                     HStack {
                                         Image(systemName: "qrcode")
+                                            .accessibleDecorative()
                                         Text(viewModel.shareCodeButtonText)
                                     }
                                     .font(.system(.body, design: .rounded))
                                     .foregroundStyle(Color.Theme.primaryBlue)
                                 }
                                 .disabled(!authService.isOnline)
+                                .accessibleButton(
+                                    label: viewModel.shareCodeButtonText,
+                                    hint: "family.a11y.opens_share_code".localized
+                                )
                             }
                         }
                         .listRowBackground(Color.Theme.cardBackground)
@@ -102,13 +112,19 @@ struct FamilyDashboard: View {
                                     HStack {
                                         Image(systemName: "envelope.fill")
                                             .foregroundStyle(Color.Theme.primaryBlue)
+                                            .accessibleDecorative()
                                         Text("Pending Invites".localized)
                                             .font(.system(.body, design: .rounded))
                                             .foregroundStyle(Color.Theme.primaryBlue)
                                         Spacer()
                                         BadgeView(count: viewModel.pendingFamilyInvitesCount)
+                                            .accessibilityHidden(true)
                                     }
                                 }
+                                .accessibleButton(
+                                    label: "family.a11y.pending_invites".localized(viewModel.pendingFamilyInvitesCount),
+                                    hint: "family.a11y.opens_pending_invites".localized
+                                )
                             }
                             .listRowBackground(Color.Theme.cardBackground)
                         }
@@ -160,6 +176,7 @@ struct FamilyDashboard: View {
                             Image(systemName: "house.fill")
                                 .font(.system(size: 60))
                                 .foregroundStyle(Color.Theme.primaryBlue.opacity(0.6))
+                                .accessibleDecorative()
                             
                             Text("No active family".localized)
                                 .font(.system(.title2, design: .rounded))
@@ -172,6 +189,8 @@ struct FamilyDashboard: View {
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal, 32)
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("family.a11y.empty_state".localized)
                         
                         VStack(spacing: 16) {
                             Button {
@@ -179,6 +198,7 @@ struct FamilyDashboard: View {
                             } label: {
                                 HStack {
                                     Image(systemName: "plus.circle.fill")
+                                        .accessibleDecorative()
                                     Text("Create New Family".localized)
                                 }
                                 .font(.system(.body, design: .rounded))
@@ -190,12 +210,14 @@ struct FamilyDashboard: View {
                                 .cornerRadius(12)
                             }
                             .disabled(!authService.isOnline)
+                            .accessibleButton(label: "family.a11y.create_family".localized)
                             
                             Button {
                                 showJoinFamilySheet = true
                             } label: {
                                 HStack {
                                     Image(systemName: "person.2.badge.plus")
+                                        .accessibleDecorative()
                                     Text("Join Family".localized)
                                 }
                                 .font(.system(.body, design: .rounded))
@@ -207,6 +229,7 @@ struct FamilyDashboard: View {
                                 .cornerRadius(12)
                             }
                             .disabled(!authService.isOnline)
+                            .accessibleButton(label: "family.a11y.join_family".localized)
                         }
                         .padding(.horizontal, 32)
                         
@@ -249,6 +272,10 @@ struct FamilyDashboard: View {
                                 .foregroundStyle(Color.Theme.primaryBlue)
                                 .badge(viewModel.pendingFamilyInvitesCount)
                         }
+                        .accessibleButton(
+                            label: "family.a11y.pending_invites".localized(viewModel.pendingFamilyInvitesCount),
+                            hint: "family.a11y.opens_pending_invites".localized
+                        )
                     }
                 }
                 
@@ -261,6 +288,10 @@ struct FamilyDashboard: View {
                                 Image(systemName: "gearshape")
                                     .foregroundStyle(Color.Theme.primaryBlue)
                             }
+                            .accessibleButton(
+                                label: "Family Settings".localized,
+                                hint: "family.a11y.opens_settings".localized
+                            )
                             if viewModel.pendingMemberRequestsCount > 0 {
                                 Button {
                                     showPendingApprovalsView = true
@@ -270,6 +301,10 @@ struct FamilyDashboard: View {
                                     
                                 }
                                 .badge(viewModel.pendingMemberRequestsCount)
+                                .accessibleButton(
+                                    label: "family.a11y.pending_approvals".localized(viewModel.pendingMemberRequestsCount),
+                                    hint: "family.a11y.opens_pending_approvals".localized
+                                )
                             }
                         }
                     }
@@ -373,12 +408,15 @@ struct FamilyMemberRow: View {
                 )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("\(user.displayName), @\(user.userName), \(memberSubtitle)")
+            .accessibilityHint("Opens profile".localized)
             .task {
                 publicLifetimeStatsRepository.ensureObservingFriend(userId: member.userId)
             }
         } else {
             HStack {
                 AvatarImageView(avatarId: nil, size: 50)
+                    .accessibleDecorative()
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Member".localized)
                         .font(.system(.body, design: .rounded))
@@ -391,6 +429,8 @@ struct FamilyMemberRow: View {
                 Spacer()
             }
             .padding(.vertical, 8)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\("Member".localized), \(member.roleEnum.displayName)")
         }
     }
 }

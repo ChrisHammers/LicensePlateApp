@@ -41,6 +41,11 @@ struct AddFamilyMemberSheet: View {
                     Section("Search".localized) {
                         TextField("Username or email".localized, text: $searchQuery)
                             .textFieldStyle(.roundedBorder)
+                            .accessibleTextField(
+                                label: "Username or email".localized,
+                                hint: "Enter at least 3 characters to search".localized,
+                                value: searchQuery
+                            )
                             .onSubmit {
                                 Task {
                                     await performSearch()
@@ -268,6 +273,7 @@ struct FamilyMemberSearchResultRow: View {
             .buttonStyle(.borderedProminent)
             .tint(Color.Theme.primaryBlue)
             .disabled(isInviting || !authService.isOnline)
+            .accessibleButton(label: "family.a11y.invite_member_button".localized(user.displayName))
         }
         .padding(.vertical, 8)
         .accessibilityElement(children: .contain)

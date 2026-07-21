@@ -55,6 +55,10 @@ class QRScannerViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupCamera()
+        view.isAccessibilityElement = true
+        view.accessibilityLabel = "qr_scanner.a11y.label".localized
+        view.accessibilityHint = "qr_scanner.a11y.hint".localized
+        view.accessibilityTraits = .startsMediaSession
     }
     
     override func viewWillAppear(_ animated: Bool) {

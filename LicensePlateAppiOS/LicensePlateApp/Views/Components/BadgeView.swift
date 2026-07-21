@@ -23,6 +23,8 @@ struct BadgeView: View {
                     Capsule()
                         .fill(Color.red)
                 )
+                .accessibilityLabel("social.inbox.a11y.pending_count".localized(count))
+                .accessibilityAddTraits(.isStaticText)
         }
     }
 }

@@ -88,6 +88,7 @@ struct FamilySettings: View {
                                 Text("Leave Family".localized)
                                     .foregroundColor(.red)
                             }
+                            .accessibleButton(label: "Leave Family".localized)
                         } header: {
                             Text("Leave Family".localized)
                         } footer: {
@@ -114,6 +115,11 @@ struct FamilySettings: View {
                             }
                             .foregroundColor(.red)
                             .disabled(isDeletingFamily)
+                            .accessibleButton(
+                                label: isDeletingFamily
+                                    ? "Deleting...".localized
+                                    : "Delete Family".localized
+                            )
                         } header: {
                             Text("Danger Zone".localized)
                         } footer: {

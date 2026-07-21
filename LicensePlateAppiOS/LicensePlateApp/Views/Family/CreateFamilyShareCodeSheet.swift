@@ -53,6 +53,7 @@ struct CreateFamilyShareCodeSheet: View {
                                         .font(.system(.largeTitle, design: .monospaced))
                                         .fontWeight(.bold)
                                         .foregroundStyle(Color.Theme.primaryBlue)
+                                        .accessibilityLabel("share_code.a11y.code".localized(code))
                                     
                                     Button {
                                         copyShareCode(code)
@@ -61,6 +62,12 @@ struct CreateFamilyShareCodeSheet: View {
                                             .foregroundStyle(Color.Theme.primaryBlue)
                                             .font(.title2)
                                     }
+                                    .accessibleButton(
+                                        label: copiedToClipboard
+                                            ? "share_code.a11y.copied".localized
+                                            : "share_code.a11y.copy".localized,
+                                        hint: "share_code.a11y.copy_hint".localized
+                                    )
                                 }
                                 .padding()
                                 .background(Color.Theme.cardBackground)
@@ -71,6 +78,7 @@ struct CreateFamilyShareCodeSheet: View {
                                         .font(.system(.caption, design: .rounded))
                                         .foregroundStyle(Color.Theme.primaryBlue)
                                         .transition(.opacity)
+                                        .accessibilityHidden(true)
                                 }
                                 
                                 if let expiresAt = expiresAt {
@@ -92,6 +100,7 @@ struct CreateFamilyShareCodeSheet: View {
                                 } label: {
                                     HStack {
                                         Image(systemName: "arrow.clockwise")
+                                            .accessibleDecorative()
                                         Text("Refresh Share Code".localized)
                                     }
                                     .font(.system(.body, design: .rounded))
@@ -99,6 +108,7 @@ struct CreateFamilyShareCodeSheet: View {
                                 }
                                 .buttonStyle(.bordered)
                                 .disabled(isGenerating || !authService.isOnline)
+                                .accessibleButton(label: "share_code.a11y.refresh".localized)
                             }
                             .padding()
                             .frame(maxWidth: .infinity)
@@ -119,18 +129,24 @@ struct CreateFamilyShareCodeSheet: View {
                                         .frame(width: 200, height: 200)
                                         .background(Color.white)
                                         .cornerRadius(12)
+                                        .accessibilityLabel("share_code.a11y.qr".localized(code))
                                     
                                     Button {
                                         showShareSheet = true
                                     } label: {
                                         HStack {
                                             Image(systemName: "square.and.arrow.up")
+                                                .accessibleDecorative()
                                             Text("Share QR Code".localized)
                                         }
                                         .font(.system(.body, design: .rounded))
                                         .foregroundStyle(Color.Theme.primaryBlue)
                                     }
                                     .buttonStyle(.bordered)
+                                    .accessibleButton(
+                                        label: "share_code.a11y.share_qr".localized,
+                                        hint: "share_code.a11y.share_qr_hint".localized
+                                    )
                                 }
                                 .padding()
                                 .frame(maxWidth: .infinity)
@@ -169,6 +185,7 @@ struct CreateFamilyShareCodeSheet: View {
                         .buttonStyle(.borderedProminent)
                         .tint(Color.Theme.primaryBlue)
                         .disabled(!authService.isOnline)
+                        .accessibleButton(label: "share_code.a11y.generate".localized)
                     }
                     .padding()
                 }
@@ -222,6 +239,7 @@ struct CreateFamilyShareCodeSheet: View {
     private func copyShareCode(_ code: String) {
         UIPasteboard.general.string = code
         copiedToClipboard = true
+        UIAccessibility.post(notification: .announcement, argument: "share_code.a11y.copied".localized)
         
         // Reset the checkmark after 2 seconds
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {

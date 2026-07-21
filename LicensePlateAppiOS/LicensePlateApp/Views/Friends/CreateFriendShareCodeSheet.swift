@@ -35,6 +35,7 @@ struct CreateFriendShareCodeSheet: View {
                                     .padding()
                                     .background(Color.Theme.cardBackground)
                                     .cornerRadius(12)
+                                    .accessibilityLabel("share_code.a11y.code".localized(code))
 
                                 if let expiresAt = viewModel.expiresAt {
                                     Text("Expires in %@".localized(viewModel.timeUntilExpiration(expiresAt)))
@@ -60,6 +61,7 @@ struct CreateFriendShareCodeSheet: View {
                                         .frame(width: 200, height: 200)
                                         .background(Color.white)
                                         .cornerRadius(12)
+                                        .accessibilityLabel("share_code.a11y.qr".localized(code))
                                 }
                                 .padding()
                                 .frame(maxWidth: .infinity)
@@ -97,6 +99,7 @@ struct CreateFriendShareCodeSheet: View {
                         .buttonStyle(.borderedProminent)
                         .tint(Color.Theme.primaryBlue)
                         .disabled(!authService.isOnline)
+                        .accessibleButton(label: "share_code.a11y.generate".localized)
                     }
                     .padding()
                 }

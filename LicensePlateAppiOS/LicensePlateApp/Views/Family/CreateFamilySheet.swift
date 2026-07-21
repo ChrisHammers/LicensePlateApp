@@ -26,6 +26,11 @@ struct CreateFamilySheet: View {
                         TextField("Family Name".localized, text: $familyName)
                             .textInputAutocapitalization(.words)
                             .disabled(isCreating)
+                            .accessibleTextField(
+                                label: "Family Name".localized,
+                                hint: "Choose a name for your family group".localized,
+                                value: familyName
+                            )
                     } header: {
                         Text("Family Name".localized)
                             .font(.system(.headline, design: .rounded))
@@ -68,6 +73,8 @@ struct CreateFamilySheet: View {
                     .background(Color.Theme.background)
                     .cornerRadius(12)
                     .shadow(radius: 10)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Creating family...".localized)
                 }
             }
             .navigationTitle("Create Family".localized)
