@@ -65,6 +65,7 @@ struct AnalyticsServiceTests {
             (.quickSoloTripStarted(tripSessionId: "t1", gameInstanceId: "g1", offline: false, elapsedMs: 100), "quick_solo_trip_started"),
             (.firstFindCompleted(tripSessionId: "t1", gameInstanceId: "g1", targetId: "us-ca", elapsedMs: 200, inputMethod: "list"), "first_find_completed"),
             (.userSearchPerformed(queryType: "all"), "user_search_performed"),
+            (.authProfileHydrateFailed(outcome: "keep_local"), "auth_profile_hydrate_failed"),
         ]
         for (event, expectedName) in expectations {
             #expect(event.name == expectedName)
@@ -75,6 +76,9 @@ struct AnalyticsServiceTests {
         // userSearchPerformed uses query_type (snake_case)
         let searchEvent = AnalyticsService.Event.userSearchPerformed(queryType: "username")
         #expect(searchEvent.parameters?["query_type"] as? String == "username")
+
+        let hydrateEvent = AnalyticsService.Event.authProfileHydrateFailed(outcome: "abort_no_create")
+        #expect(hydrateEvent.parameters?["outcome"] as? String == "abort_no_create")
 
         // avatar events
         let savedEvent = AnalyticsService.Event.avatarSaved(avatarId: "av1", source: "onboarding")
