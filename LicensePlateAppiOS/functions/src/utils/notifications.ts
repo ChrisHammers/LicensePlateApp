@@ -1,7 +1,8 @@
 import * as admin from "firebase-admin";
 import {
-  isSocialPushEnabled,
+  isPushEnabled,
   notificationPrefsFromUserData,
+  PushCategory,
   SocialPushCategory,
 } from "../notificationPrefs";
 
@@ -47,21 +48,30 @@ export async function getFCMToken(userId: string): Promise<string | null> {
 }
 
 /**
- * FCM token for friend/family social pushes, gated by `users/{uid}.notificationPrefs`.
- * Missing prefs default to allowed (older clients). Single Firestore read.
+ * FCM token gated by `users/{uid}.notificationPrefs` for any push category.
+ * Missing prefs default per `isPushEnabled`. Single Firestore read.
  */
-export async function getFCMTokenForSocialPush(
+export async function getFCMTokenForPush(
   userId: string,
-  category: SocialPushCategory
+  category: PushCategory
 ): Promise<string | null> {
   const userDoc = await admin.firestore().collection("users").doc(userId).get();
   const data = userDoc.data();
   if (!data) {
     return null;
   }
-  if (!isSocialPushEnabled(notificationPrefsFromUserData(data as Record<string, unknown>), category)) {
+  if (!isPushEnabled(notificationPrefsFromUserData(data as Record<string, unknown>), category)) {
     return null;
   }
   return data.fcmToken || null;
 }
 
+/**
+ * @deprecated Use getFCMTokenForPush
+ */
+export async function getFCMTokenForSocialPush(
+  userId: string,
+  category: SocialPushCategory
+): Promise<string | null> {
+  return getFCMTokenForPush(userId, category);
+}

@@ -18,12 +18,12 @@ final class ReturnStreakReminderService {
     )
 
     private static let reminderIdentifier = "return-streak-daily"
-    private static let userDefaultsEnabledKey = "returnStreakRemindersEnabled"
 
     private let remoteConfig: RemoteConfigValueProviding
     private let streakService: ReturnStreakService
     private let eligibilityService: NotificationEligibilityService
     private let scheduler: LocalNotificationScheduling
+    private let prefsReader: NotificationPrefsReading
     private let defaults: UserDefaults
 
     init(
@@ -31,24 +31,19 @@ final class ReturnStreakReminderService {
         streakService: ReturnStreakService,
         eligibilityService: NotificationEligibilityService,
         scheduler: LocalNotificationScheduling,
+        prefsReader: NotificationPrefsReading = NotificationPrefsStore.shared,
         defaults: UserDefaults = .standard
     ) {
         self.remoteConfig = remoteConfig
         self.streakService = streakService
         self.eligibilityService = eligibilityService
         self.scheduler = scheduler
+        self.prefsReader = prefsReader
         self.defaults = defaults
     }
 
     var isUserEnabled: Bool {
-        defaults.object(forKey: Self.userDefaultsEnabledKey) as? Bool ?? true
-    }
-
-    func setUserEnabled(_ enabled: Bool) {
-        defaults.set(enabled, forKey: Self.userDefaultsEnabledKey)
-        if !enabled {
-            cancelReminder(reason: "user_disabled")
-        }
+        prefsReader.prefs.returnStreakReminder
     }
 
     func refreshScheduleIfNeeded(userId: String?) async {

@@ -244,6 +244,11 @@ service cloud.firestore {
       allow create: if false; // server-only
       allow update, delete: if false;
     }
+
+    // Plate-found FCM coalesce buffers (Admin SDK only)
+    match /plate_found_notify_buffers/{bufferId} {
+      allow read, write: if false;
+    }
   }
 }
 

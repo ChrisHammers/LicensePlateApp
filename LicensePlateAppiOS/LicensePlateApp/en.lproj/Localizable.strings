@@ -228,6 +228,12 @@
 "Friend requests and other friend alerts" = "Friend requests and other friend alerts";
 "Family notifications" = "Family notifications";
 "Family invites, join updates, and related alerts" = "Family invites, join updates, and related alerts";
+"Trip invite notifications" = "Trip invite notifications";
+"Get notified when someone invites you to a trip" = "Get notified when someone invites you to a trip";
+"Trip ended notifications" = "Trip ended notifications";
+"Get notified when a trip you are on ends" = "Get notified when a trip you are on ends";
+"Inactive trip reminders" = "Inactive trip reminders";
+"Remind you about active trips waiting for more finds" = "Remind you about active trips waiting for more finds";
 "Get notified about plates found and more" = "Get notified about plates found and more";
 "Show your position on the map, where you found a plate and track your trip" = "Show your position on the map, where you found a plate and track your trip";
 "Voice input for logging plates" = "Voice input for logging plates";

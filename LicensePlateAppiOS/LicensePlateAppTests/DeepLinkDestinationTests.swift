@@ -76,6 +76,28 @@ final class DeepLinkDestinationTests: XCTestCase {
         XCTAssertEqual(destination, .familyHome(familyId: "fam-9"))
     }
 
+    func testNotificationUserInfoPlateFoundOpensTripSession() {
+        let userInfo: [AnyHashable: Any] = [
+            "type": "plate_found",
+            "tripSessionId": "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"
+        ]
+        let destination = DeepLinkHandler.destination(fromNotificationUserInfo: userInfo)
+        XCTAssertEqual(
+            destination,
+            .tripSession(tripSessionId: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")
+        )
+    }
+
+    func testHandleURLTripSession() {
+        let dest = DeepLinkHandler.shared.handleURL(
+            URL(string: "roadtrip-royale://trip/AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
+        )
+        XCTAssertEqual(
+            dest,
+            .tripSession(tripSessionId: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")
+        )
+    }
+
     func testHandleURLFamilyPendingAndHome() {
         let pending = DeepLinkHandler.shared.handleURL(
             URL(string: "roadtrip-royale://family/fam-1/pending")!

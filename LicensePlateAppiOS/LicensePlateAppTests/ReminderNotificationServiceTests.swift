@@ -29,16 +29,26 @@ private final class FixedNotificationPermissionProvider: NotificationPermissionP
 }
 
 @MainActor
+private final class ReminderMockPrefsReader: NotificationPrefsReading {
+    var prefs: UserRepository.NotificationPrefs
+    init(prefs: UserRepository.NotificationPrefs = .default) {
+        self.prefs = prefs
+    }
+}
+
+@MainActor
 struct ReminderNotificationServiceTests {
     @Test func schedulesWhenEnabledAndAuthorized() async {
         let scheduler = LocalNotificationSchedulerSpy()
+        let prefs = ReminderMockPrefsReader()
         let service = ReminderNotificationService(
             remoteConfig: MockRemoteConfigValues(
                 bools: [.remindersEnabled: true],
                 ints: [.inactiveActiveTripReminderHours: 12]
             ),
             eligibilityService: NotificationEligibilityService(
-                permissionProvider: FixedNotificationPermissionProvider(status: .authorized)
+                permissionProvider: FixedNotificationPermissionProvider(status: .authorized),
+                prefsReader: prefs
             ),
             scheduler: scheduler
         )
@@ -50,10 +60,12 @@ struct ReminderNotificationServiceTests {
 
     @Test func permissionSuppressionDoesNotSchedule() async {
         let scheduler = LocalNotificationSchedulerSpy()
+        let prefs = ReminderMockPrefsReader()
         let service = ReminderNotificationService(
             remoteConfig: MockRemoteConfigValues(bools: [.remindersEnabled: true]),
             eligibilityService: NotificationEligibilityService(
-                permissionProvider: FixedNotificationPermissionProvider(status: .denied)
+                permissionProvider: FixedNotificationPermissionProvider(status: .denied),
+                prefsReader: prefs
             ),
             scheduler: scheduler
         )
@@ -66,10 +78,12 @@ struct ReminderNotificationServiceTests {
     @Test func remoteConfigDisabledCancelsPendingReminder() async {
         let scheduler = LocalNotificationSchedulerSpy()
         let sessionId = UUID()
+        let prefs = ReminderMockPrefsReader()
         let service = ReminderNotificationService(
             remoteConfig: MockRemoteConfigValues(bools: [.remindersEnabled: false]),
             eligibilityService: NotificationEligibilityService(
-                permissionProvider: FixedNotificationPermissionProvider(status: .authorized)
+                permissionProvider: FixedNotificationPermissionProvider(status: .authorized),
+                prefsReader: prefs
             ),
             scheduler: scheduler
         )
@@ -78,5 +92,27 @@ struct ReminderNotificationServiceTests {
 
         #expect(scheduler.addedRequests.isEmpty)
         #expect(scheduler.removedIdentifiers.contains("inactive-trip-\(sessionId.uuidString)"))
+    }
+
+    @Test func disabledInactiveTripPrefDoesNotSchedule() async {
+        let scheduler = LocalNotificationSchedulerSpy()
+        var prefsValue = UserRepository.NotificationPrefs.default
+        prefsValue.inactiveTripReminder = false
+        let prefs = ReminderMockPrefsReader(prefs: prefsValue)
+        let service = ReminderNotificationService(
+            remoteConfig: MockRemoteConfigValues(
+                bools: [.remindersEnabled: true],
+                ints: [.inactiveActiveTripReminderHours: 12]
+            ),
+            eligibilityService: NotificationEligibilityService(
+                permissionProvider: FixedNotificationPermissionProvider(status: .authorized),
+                prefsReader: prefs
+            ),
+            scheduler: scheduler
+        )
+
+        await service.scheduleInactiveActiveTripReminder(sessionId: UUID(), tripName: "Test Trip")
+
+        #expect(scheduler.addedRequests.isEmpty)
     }
 }

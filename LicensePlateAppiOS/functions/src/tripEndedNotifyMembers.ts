@@ -5,7 +5,7 @@
 
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import { getFCMToken, sendPushNotification } from "./utils/notifications";
+import { getFCMTokenForPush, sendPushNotification } from "./utils/notifications";
 import { KIND_TRIP_ENDED } from "./publicLifetimeStatsCore";
 
 const db = admin.firestore();
@@ -41,7 +41,7 @@ export const onTripEndedNotifyMembers = functions.firestore
         if (actorId && uid === actorId) {
           return;
         }
-        const fcmToken = await getFCMToken(uid);
+        const fcmToken = await getFCMTokenForPush(uid, "tripEnded");
         if (!fcmToken) {
           return;
         }
@@ -49,6 +49,7 @@ export const onTripEndedNotifyMembers = functions.firestore
           await sendPushNotification(fcmToken, title, body, {
             type: "trip_ended",
             tripSessionId: sessionId,
+            deepLink: `roadtrip-royale://trip/${sessionId}`,
           });
         } catch (error) {
           console.error(`trip_ended push failed for ${uid}:`, error);

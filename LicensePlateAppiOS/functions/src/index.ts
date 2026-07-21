@@ -37,6 +37,7 @@ export { onAuthUserDeleted } from "./auth";
 export { writeAuditLog } from "./audit";
 export { onTripEndedUpdatePublicLifetimeStats } from "./publicLifetimeStatsOnTripEnded";
 export { onTripEndedNotifyMembers } from "./tripEndedNotifyMembers";
+export { onRegionFoundNotifyMembers, flushPlateFoundNotifyBuffers } from "./plateFoundNotifyMembers";
 export { onActivityEventUpdateUserProgression } from "./progressionOnActivityEvent";
 export { ensureUserProgressionDocument } from "./progressionBootstrap";
 export { ensureFounderEntitlementIfEligible } from "./founderEntitlement";

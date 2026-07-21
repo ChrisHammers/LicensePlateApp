@@ -228,6 +228,12 @@
 "Friend requests and other friend alerts" = "Solicitudes de amistad y otras alertas de amigos";
 "Family notifications" = "Notificaciones de familia";
 "Family invites, join updates, and related alerts" = "Invitaciones familiares, actualizaciones de unión y alertas relacionadas";
+"Trip invite notifications" = "Notificaciones de invitación a viaje";
+"Get notified when someone invites you to a trip" = "Recibir notificación cuando alguien te invita a un viaje";
+"Trip ended notifications" = "Notificaciones de fin de viaje";
+"Get notified when a trip you are on ends" = "Recibir notificación cuando termina un viaje en el que estás";
+"Inactive trip reminders" = "Recordatorios de viaje inactivo";
+"Remind you about active trips waiting for more finds" = "Recordarte sobre viajes activos que esperan más hallazgos";
 "Get notified about plates found and more" = "Recibir notificaciones sobre placas encontradas y más";
 "Show your position on the map, where you found a plate and track your trip" = "Mostrar tu posición en el mapa, dónde encontraste una placa y rastrear tu viaje";
 "Voice input for logging plates" = "Entrada de voz para registrar placas";

@@ -17,6 +17,8 @@ enum DeepLinkDestination: Hashable, Identifiable {
     case familyPendingApprovals(familyId: String)
     /// Open Family dashboard (e.g. after join approved).
     case familyHome(familyId: String)
+    /// Open an existing trip session (plate-found / trip-ended pushes).
+    case tripSession(tripSessionId: String)
 
     var id: String {
         switch self {
@@ -30,6 +32,8 @@ enum DeepLinkDestination: Hashable, Identifiable {
             return "family-pending-\(familyId)"
         case .familyHome(let familyId):
             return "family-home-\(familyId)"
+        case .tripSession(let tripSessionId):
+            return "trip-session-\(tripSessionId)"
         }
     }
 }
@@ -67,7 +71,7 @@ class DeepLinkHandler: ObservableObject {
 
         // Normalize `roadtrip-royale://invite/friend` (host+path) and `roadtrip-royale:/invite/friend` (path only).
         let routePath: String = {
-            if path.hasPrefix("/invite/") || path.hasPrefix("/family/") {
+            if path.hasPrefix("/invite/") || path.hasPrefix("/family/") || path.hasPrefix("/trip/") {
                 return path
             }
             if !host.isEmpty {
@@ -94,6 +98,16 @@ class DeepLinkHandler: ObservableObject {
                 AnalyticsService.shared.log(.deepLinkOpened(type: "trip", params: params))
                 return .tripInvite(inviteId: inviteId)
             }
+        } else if routePath.hasPrefix("/trip/") {
+            let segments = routePath
+                .split(separator: "/")
+                .map(String.init)
+            // ["trip", "{tripSessionId}"]
+            guard segments.count >= 2, segments[0] == "trip" else { return nil }
+            let tripSessionId = segments[1]
+            guard !tripSessionId.isEmpty else { return nil }
+            AnalyticsService.shared.log(.deepLinkOpened(type: "trip_session", params: ["tripSessionId": tripSessionId]))
+            return .tripSession(tripSessionId: tripSessionId)
         } else if routePath.hasPrefix("/family/") {
             let segments = routePath
                 .split(separator: "/")
@@ -166,6 +180,14 @@ class DeepLinkHandler: ObservableObject {
                 params: ["familyId": familyId, "source": "notification"]
             ))
             return .familyHome(familyId: familyId)
+        case "plate_found", "trip_ended":
+            let tripSessionId = stringValue(userInfo["tripSessionId"]) ?? stringValue(userInfo["trip_session_id"])
+            guard let tripSessionId, !tripSessionId.isEmpty else { return nil }
+            AnalyticsService.shared.log(.deepLinkOpened(
+                type: type ?? "trip_session",
+                params: ["tripSessionId": tripSessionId, "source": "notification"]
+            ))
+            return .tripSession(tripSessionId: tripSessionId)
         default:
             return nil
         }
@@ -220,6 +242,14 @@ class DeepLinkHandler: ObservableObject {
         var components = URLComponents()
         components.scheme = "roadtrip-royale"
         components.path = "/family/\(familyId)"
+        return components.url!
+    }
+
+    /// Open a trip session (plate found / trip ended).
+    static func tripSessionURL(tripSessionId: String) -> URL {
+        var components = URLComponents()
+        components.scheme = "roadtrip-royale"
+        components.path = "/trip/\(tripSessionId)"
         return components.url!
     }
 }

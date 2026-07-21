@@ -27,6 +27,10 @@ struct RootView: View {
                       authService.currentUser != nil else {
                     return nil
                 }
+                // Trip session opens via MainCoordinator in ContentView (not a sheet).
+                if case .tripSession = deepLinkHandler.destination {
+                    return nil
+                }
                 return deepLinkHandler.destination
             },
             set: { deepLinkHandler.destination = $0 }
@@ -228,6 +232,8 @@ struct RootView: View {
                             .environmentObject(authService)
                     }
                 }
+            case .tripSession:
+                EmptyView()
             }
         }
     }

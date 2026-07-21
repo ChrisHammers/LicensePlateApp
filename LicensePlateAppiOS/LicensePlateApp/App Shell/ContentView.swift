@@ -41,6 +41,7 @@ struct ContentView: View {
         authService: FirebaseAuthService()
     )
     @StateObject private var returnStreakViewModel = ReturnStreakViewModel()
+    @ObservedObject private var deepLinkHandler = DeepLinkHandler.shared
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("boundariesLoaded") private var boundariesLoaded = false
     @AppStorage(FirstSessionStateKeys.hasLoggedFirstFind) private var hasLoggedFirstFind = false
@@ -158,6 +159,10 @@ struct ContentView: View {
     }
 
     private var homeTripRecapWithPresentation: some View {
+        homeTripRecapPresentationOverlays
+    }
+
+    private var homeTripRecapPresentationSheets: some View {
         homeTripRecapCore
             .sheet(isPresented: $isShowingSettings) {
                 DefaultSettingsView()
@@ -183,6 +188,10 @@ struct ContentView: View {
                     tripLimitPaywallViewModel.setTripLimitContext()
                 }
             }
+    }
+
+    private var homeTripRecapPresentationOverlays: some View {
+        homeTripRecapPresentationSheets
             .alert("Error".localized, isPresented: activeTripsDeleteErrorPresented) {
                 Button("OK".localized, role: .cancel) { activeTripsListViewModel.clearError() }
                 Button("Retry".localized) {
@@ -223,16 +232,17 @@ struct ContentView: View {
     }
 
     private var homeTripRecapWithLifecycle: some View {
+        homeTripRecapLifecycleObservers
+    }
+
+    /// First half of home lifecycle modifiers (keeps type-checking tractable).
+    private var homeTripRecapLifecycleCore: some View {
         homeTripRecapWithPresentation
             .onChange(of: currentUserId) { _, newUserId in
-                returnStreakViewModel.bind(userId: newUserId)
-                ensureSocialInboxListening(
-                    userId: newUserId,
-                    activeFamilyId: authService.currentUser?.activeFamilyId
-                )
+                handleCurrentUserIdChange(newUserId)
             }
             .onChange(of: authService.currentUser?.activeFamilyId) { _, newFamilyId in
-                ensureSocialInboxListening(userId: currentUserId, activeFamilyId: newFamilyId)
+                handleActiveFamilyIdChange(newFamilyId)
             }
             .onChange(of: scenePhase) { _, phase in
                 handleHomeScenePhaseChange(phase)
@@ -241,19 +251,18 @@ struct ContentView: View {
                 await bootstrapHomeScreen()
             }
             .onReceive(TripCanonicalRemoteSyncService.shared.hydrationSignal) { _ in
-                activeTripsListViewModel.load(userId: currentUserId)
-                TripEndRecapSupport.startMultiplayerListeners(for: activeTripsListViewModel.items)
+                handleTripHydrationSignal()
             }
             .onAppear {
-                pendingTripsViewModel.setAuthService(authService)
-                travelLogViewModel.setAuthService(authService)
-                returnStreakViewModel.bind(userId: currentUserId)
-                ensureSocialInboxListening(
-                    userId: currentUserId,
-                    activeFamilyId: authService.currentUser?.activeFamilyId
-                )
-                NotificationRoutingService.shared.startObservingIfNeeded(userId: currentUserId)
-                refreshDeferredSetupBanner()
+                handleHomeOnAppear()
+            }
+    }
+
+    /// Second half of home lifecycle modifiers.
+    private var homeTripRecapLifecycleObservers: some View {
+        homeTripRecapLifecycleCore
+            .onChange(of: deepLinkHandler.destination) { _, destination in
+                handleTripSessionDeepLink(destination)
             }
             .onChange(of: hasLoggedFirstFind) { _, _ in
                 refreshDeferredSetupBanner()
@@ -268,9 +277,7 @@ struct ContentView: View {
                 refreshDeferredSetupBanner()
             }
             .onChange(of: isShowingCreateSheet) { _, isShowing in
-                if !isShowing {
-                    activeTripsListViewModel.load(userId: currentUserId)
-                }
+                handleCreateSheetVisibilityChange(isShowing)
             }
     }
 
@@ -334,6 +341,56 @@ struct ContentView: View {
         Task {
             await ReturnStreakReminderService.shared.refreshScheduleIfNeeded(userId: currentUserId)
         }
+    }
+
+    private func handleTripSessionDeepLink(_ destination: DeepLinkDestination?) {
+        guard let destination else { return }
+        guard case .tripSession(let tripSessionId) = destination else { return }
+        guard let sessionId = UUID(uuidString: tripSessionId) else { return }
+        activeTripsListViewModel.load(userId: currentUserId)
+        mainCoordinator.openSession(sessionId)
+        deepLinkHandler.clearDestination()
+    }
+
+    private func handleCurrentUserIdChange(_ newUserId: String?) {
+        returnStreakViewModel.bind(userId: newUserId)
+        ensureSocialInboxListening(
+            userId: newUserId,
+            activeFamilyId: authService.currentUser?.activeFamilyId
+        )
+    }
+
+    private func handleActiveFamilyIdChange(_ newFamilyId: String?) {
+        ensureSocialInboxListening(userId: currentUserId, activeFamilyId: newFamilyId)
+    }
+
+    private func handleTripHydrationSignal() {
+        activeTripsListViewModel.load(userId: currentUserId)
+        TripEndRecapSupport.startMultiplayerListeners(for: activeTripsListViewModel.items)
+    }
+
+    private func handleHomeOnAppear() {
+        pendingTripsViewModel.setAuthService(authService)
+        travelLogViewModel.setAuthService(authService)
+        returnStreakViewModel.bind(userId: currentUserId)
+        ensureSocialInboxListening(
+            userId: currentUserId,
+            activeFamilyId: authService.currentUser?.activeFamilyId
+        )
+        NotificationRoutingService.shared.startObservingIfNeeded(userId: currentUserId)
+        let userId = currentUserId
+        Task {
+            if let userId, !userId.isEmpty {
+                await NotificationPrefsStore.shared.load(userId: userId)
+            }
+            await ReturnStreakReminderService.shared.refreshScheduleIfNeeded(userId: userId)
+        }
+        refreshDeferredSetupBanner()
+    }
+
+    private func handleCreateSheetVisibilityChange(_ isShowing: Bool) {
+        guard !isShowing else { return }
+        activeTripsListViewModel.load(userId: currentUserId)
     }
 
     /// Keep invite listeners + badge projection aligned with the signed-in user / active family.

@@ -9,7 +9,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
-import { getFCMToken, sendPushNotification } from "./utils/notifications";
+import { getFCMTokenForPush, sendPushNotification } from "./utils/notifications";
 import { KIND_PARTICIPANT_INVITED, KIND_PARTICIPANT_JOINED, PK } from "./gameplayEventResolver";
 import { syncCanonicalParticipantsFromMembers } from "./tripSessionCanonical";
 import { normalizeClientMetadata } from "./clientMetadata";
@@ -145,7 +145,7 @@ export const sendTripInvite = enforcedCallable(async (data, context) => {
   await batch.commit();
   await syncCanonicalParticipantsFromMembers(tripSessionId);
 
-  const fcmToken = await getFCMToken(toUserId);
+  const fcmToken = await getFCMTokenForPush(toUserId, "tripInvite");
   if (fcmToken) {
     await sendPushNotification(
       fcmToken,
@@ -159,7 +159,6 @@ export const sendTripInvite = enforcedCallable(async (data, context) => {
       }
     );
   }
-  // TODO(step-08-ux): Wire trip invite deep-link route in iOS DeepLinkHandler + pending invites entry point.
 
   await writeAuditLog({
     eventType: "AUDIT_TRIP_INVITE_SENT",

@@ -832,29 +832,84 @@ class UserRepository: ObservableObject {
 
     // MARK: - Notification preferences (Firestore-only; server gates FCM)
 
-    /// Friend/family social push prefs. Missing fields default to enabled on the server.
+    /// Account-level push prefs. Missing fields default to enabled on the server (promotions default off).
     struct NotificationPrefs: Equatable, Sendable {
         var friend: Bool
         var family: Bool
+        var tripInvite: Bool
+        var tripEnded: Bool
+        var plateFoundByOpponent: Bool
+        var plateFoundByCoPilots: Bool
+        var inactiveTripReminder: Bool
+        var returnStreakReminder: Bool
+        var promotionsAndNews: Bool
 
-        static let `default` = NotificationPrefs(friend: true, family: true)
+        static let `default` = NotificationPrefs(
+            friend: true,
+            family: true,
+            tripInvite: true,
+            tripEnded: true,
+            plateFoundByOpponent: true,
+            plateFoundByCoPilots: true,
+            inactiveTripReminder: true,
+            returnStreakReminder: true,
+            promotionsAndNews: false
+        )
+
+        /// Parse Firestore map; missing keys use `default` semantics.
+        static func fromFirestoreMap(_ raw: [String: Any]?) -> NotificationPrefs {
+            let d = NotificationPrefs.default
+            guard let raw else { return d }
+            return NotificationPrefs(
+                friend: (raw["friend"] as? Bool) ?? d.friend,
+                family: (raw["family"] as? Bool) ?? d.family,
+                tripInvite: (raw["tripInvite"] as? Bool) ?? d.tripInvite,
+                tripEnded: (raw["tripEnded"] as? Bool) ?? d.tripEnded,
+                plateFoundByOpponent: (raw["plateFoundByOpponent"] as? Bool) ?? d.plateFoundByOpponent,
+                plateFoundByCoPilots: (raw["plateFoundByCoPilots"] as? Bool) ?? d.plateFoundByCoPilots,
+                inactiveTripReminder: (raw["inactiveTripReminder"] as? Bool) ?? d.inactiveTripReminder,
+                returnStreakReminder: (raw["returnStreakReminder"] as? Bool) ?? d.returnStreakReminder,
+                promotionsAndNews: (raw["promotionsAndNews"] as? Bool) ?? d.promotionsAndNews
+            )
+        }
+
+        /// Full map so merge does not wipe sibling preferences.
+        var firestoreMap: [String: Bool] {
+            [
+                "friend": friend,
+                "family": family,
+                "tripInvite": tripInvite,
+                "tripEnded": tripEnded,
+                "plateFoundByOpponent": plateFoundByOpponent,
+                "plateFoundByCoPilots": plateFoundByCoPilots,
+                "inactiveTripReminder": inactiveTripReminder,
+                "returnStreakReminder": returnStreakReminder,
+                "promotionsAndNews": promotionsAndNews
+            ]
+        }
+
+        func isEnabled(for kind: NotificationEligibilityKind) -> Bool {
+            switch kind {
+            case .tripInvite: return tripInvite
+            case .friendInvite: return friend
+            case .familyInvite: return family
+            case .inactiveActiveTripReminder: return inactiveTripReminder
+            case .returnStreakReminder: return returnStreakReminder
+            case .milestone: return true
+            }
+        }
     }
 
     func fetchNotificationPrefs(userId: String) async throws -> NotificationPrefs {
         let snapshot = try await db.collection("users").document(userId).getDocument()
         let raw = snapshot.data()?["notificationPrefs"] as? [String: Any]
-        let friend = (raw?["friend"] as? Bool) ?? true
-        let family = (raw?["family"] as? Bool) ?? true
-        return NotificationPrefs(friend: friend, family: family)
+        return NotificationPrefs.fromFirestoreMap(raw)
     }
 
-    /// Writes both keys together so merge does not wipe the sibling preference.
+    /// Writes all keys together so merge does not wipe sibling preferences.
     func updateNotificationPrefs(userId: String, prefs: NotificationPrefs) async throws {
         try await db.collection("users").document(userId).setData([
-            "notificationPrefs": [
-                "friend": prefs.friend,
-                "family": prefs.family
-            ]
+            "notificationPrefs": prefs.firestoreMap
         ], merge: true)
     }
 }

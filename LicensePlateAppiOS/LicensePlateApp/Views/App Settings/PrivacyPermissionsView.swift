@@ -21,20 +21,13 @@ struct PrivacyPermissionsView: View {
     @AppStorage(LocationSettingsKeys.saveLocationWhenMarkingPlates) private var saveLocationWhenMarkingPlates = true
     @AppStorage(LocationSettingsKeys.showMyLocationOnLargeMap) private var showMyLocationOnLargeMap = true
     @AppStorage(LocationSettingsKeys.trackMyLocationDuringTrips) private var trackMyLocationDuringTrips = true
-    @AppStorage("notifyPlateFoundByOpponent") private var notifyPlateFoundByOpponent = true
-    @AppStorage("notifyPlateFoundByCoPilots") private var notifyPlateFoundByCoPilots = true
-    @AppStorage("notifyPromotionsAndNews") private var notifyPromotionsAndNews = false
-    /// Local cache of Firestore `users/{uid}.notificationPrefs.friend` (default ON).
-    @AppStorage("notifyFriendSocialPushes") private var notifyFriendSocialPushes = true
-    /// Local cache of Firestore `users/{uid}.notificationPrefs.family` (default ON).
-    @AppStorage("notifyFamilySocialPushes") private var notifyFamilySocialPushes = true
-    
+
+    @StateObject private var notificationSettings = NotificationSettingsViewModel()
     @ObservedObject private var locationManager = LocationManager.shared
     @State private var microphonePermission: AVAudioSession.RecordPermission = .undetermined
     @State private var speechRecognitionPermission: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     @State private var cameraPermission: AVAuthorizationStatus = .notDetermined
     @State private var notificationPermission: UNAuthorizationStatus = .notDetermined
-    @State private var isSyncingNotificationPrefs = false
     
     var body: some View {
             AppBackgroundView {
@@ -156,31 +149,49 @@ struct PrivacyPermissionsView: View {
                             SettingToggleRow(
                                 title: "Friend notifications".localized,
                                 description: "Friend requests and other friend alerts".localized,
-                                isOn: $notifyFriendSocialPushes
+                                isOn: $notificationSettings.friend
                             )
-                            
+
                             SettingToggleRow(
                                 title: "Family notifications".localized,
                                 description: "Family invites, join updates, and related alerts".localized,
-                                isOn: $notifyFamilySocialPushes
+                                isOn: $notificationSettings.family
                             )
-                            
+
+                            SettingToggleRow(
+                                title: "Trip invite notifications".localized,
+                                description: "Get notified when someone invites you to a trip".localized,
+                                isOn: $notificationSettings.tripInvite
+                            )
+
+                            SettingToggleRow(
+                                title: "Trip ended notifications".localized,
+                                description: "Get notified when a trip you are on ends".localized,
+                                isOn: $notificationSettings.tripEnded
+                            )
+
                             SettingToggleRow(
                                 title: "Plate found by opponent".localized,
                                 description: "Get notified when an opponent finds a plate".localized,
-                                isOn: $notifyPlateFoundByOpponent
+                                isOn: $notificationSettings.plateFoundByOpponent
                             )
-                            
+
                             SettingToggleRow(
                                 title: "Plate found by co-pilots".localized,
                                 description: "Get notified when a co-pilot finds a plate".localized,
-                                isOn: $notifyPlateFoundByCoPilots
+                                isOn: $notificationSettings.plateFoundByCoPilots
                             )
-                            
+
+                            SettingToggleRow(
+                                title: "Inactive trip reminders".localized,
+                                description: "Remind you about active trips waiting for more finds".localized,
+                                isOn: $notificationSettings.inactiveTripReminder
+                            )
+
                             SettingToggleRow(
                                 title: "Promotion & News".localized,
                                 description: "Receive promotional offers and app news".localized,
-                                isOn: $notifyPromotionsAndNews
+                                isOn: $notificationSettings.promotionsAndNews
                             )
                         }
                         .padding(.horizontal, 16)
@@ -221,52 +232,40 @@ struct PrivacyPermissionsView: View {
             .onAppear {
                 checkPermissions()
                 DeferredProfileSetupStore.shared.markTouched(.notifications, source: deferredSetupTouchSource)
-                Task { await loadNotificationPrefsFromServer() }
+                notificationSettings.configure(userId: notificationPrefsUserId)
+                Task { await notificationSettings.loadIfNeeded() }
             }
             .onChange(of: locationManager.authorizationStatus) { oldValue, newValue in
                 checkPermissions()
             }
-            .onChange(of: notifyFriendSocialPushes) { _, _ in
-                Task { await persistNotificationPrefsToServer() }
+            .onChange(of: notificationSettings.friend) { _, _ in
+                Task { await notificationSettings.persistFromUI() }
             }
-            .onChange(of: notifyFamilySocialPushes) { _, _ in
-                Task { await persistNotificationPrefsToServer() }
+            .onChange(of: notificationSettings.family) { _, _ in
+                Task { await notificationSettings.persistFromUI() }
+            }
+            .onChange(of: notificationSettings.tripInvite) { _, _ in
+                Task { await notificationSettings.persistFromUI() }
+            }
+            .onChange(of: notificationSettings.tripEnded) { _, _ in
+                Task { await notificationSettings.persistFromUI() }
+            }
+            .onChange(of: notificationSettings.plateFoundByOpponent) { _, _ in
+                Task { await notificationSettings.persistFromUI() }
+            }
+            .onChange(of: notificationSettings.plateFoundByCoPilots) { _, _ in
+                Task { await notificationSettings.persistFromUI() }
+            }
+            .onChange(of: notificationSettings.inactiveTripReminder) { _, _ in
+                Task { await notificationSettings.persistFromUI() }
+            }
+            .onChange(of: notificationSettings.promotionsAndNews) { _, _ in
+                Task { await notificationSettings.persistFromUI() }
             }
     }
 
     private var notificationPrefsUserId: String? {
         authService.currentUser?.firebaseUID ?? authService.currentUser?.id
-    }
-
-    @MainActor
-    private func loadNotificationPrefsFromServer() async {
-        guard let userId = notificationPrefsUserId, !userId.isEmpty else { return }
-        do {
-            let prefs = try await UserRepository.shared.fetchNotificationPrefs(userId: userId)
-            isSyncingNotificationPrefs = true
-            notifyFriendSocialPushes = prefs.friend
-            notifyFamilySocialPushes = prefs.family
-            await Task.yield()
-            isSyncingNotificationPrefs = false
-        } catch {
-            // Keep local AppStorage defaults / last values if offline.
-            isSyncingNotificationPrefs = false
-        }
-    }
-
-    @MainActor
-    private func persistNotificationPrefsToServer() async {
-        guard !isSyncingNotificationPrefs else { return }
-        guard let userId = notificationPrefsUserId, !userId.isEmpty else { return }
-        let prefs = UserRepository.NotificationPrefs(
-            friend: notifyFriendSocialPushes,
-            family: notifyFamilySocialPushes
-        )
-        do {
-            try await UserRepository.shared.updateNotificationPrefs(userId: userId, prefs: prefs)
-        } catch {
-            // Best-effort; toggles remain local until next successful sync.
-        }
     }
     
     // Permission status helpers

@@ -10,7 +10,8 @@ import SwiftUI
 struct AppPreferencesView: View {
   @Environment(\.dismiss) private var dismiss
   @Environment(\.colorScheme) private var systemColorScheme
-  
+  @EnvironmentObject private var authService: FirebaseAuthService
+
   // App Preferences
   @AppStorage("appDarkMode") private var appDarkModeRaw: String = AppDarkMode.system.rawValue
   @AppStorage("appBackgroundStyle") private var appBackgroundStyleRaw: String = AppBackgroundStyle.paths.rawValue
@@ -23,9 +24,9 @@ struct AppPreferencesView: View {
   @AppStorage("useTileOverlayRendering") private var useTileOverlayRendering = false // For performance testing
   @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
   @AppStorage("appUseVibrations") private var appUseVibrations = true
-  @AppStorage("returnStreakRemindersEnabled") private var returnStreakRemindersEnabled = true
   @AppStorage("appMapProvider") private var appMapProviderRaw: String = AppPreferences.defaultMapProvider().rawValue
-  
+
+  @StateObject private var notificationSettings = NotificationSettingsViewModel()
   @State private var currentColorScheme: ColorScheme?
   
   // Computed properties for picker bindings
@@ -134,10 +135,10 @@ struct AppPreferencesView: View {
             SettingToggleRow(
               title: "return_streak.settings.reminder.title".localized,
               description: "return_streak.settings.reminder.detail".localized,
-              isOn: $returnStreakRemindersEnabled
+              isOn: $notificationSettings.returnStreakReminder
             )
-            .onChange(of: returnStreakRemindersEnabled) { _, enabled in
-              ReturnStreakReminderService.shared.setUserEnabled(enabled)
+            .onChange(of: notificationSettings.returnStreakReminder) { _, _ in
+              Task { await notificationSettings.persistFromUI() }
             }
             .accessibilityLabel("return_streak.settings.reminder.title".localized)
             .accessibilityHint("return_streak.settings.reminder.detail".localized)
@@ -225,6 +226,9 @@ struct AppPreferencesView: View {
     .preferredColorScheme(currentColorScheme)
     .onAppear {
       updateColorScheme()
+      let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+      notificationSettings.configure(userId: userId)
+      Task { await notificationSettings.loadIfNeeded() }
     }
     .onChange(of: appDarkModeRaw) { oldValue, newValue in
       updateColorScheme()

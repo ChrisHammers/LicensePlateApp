@@ -2,7 +2,7 @@
 //  NotificationEligibility.swift
 //  LicensePlateApp
 //
-//  Step 08 — Lightweight eligibility model for notifications. No persistence; permission-based only.
+//  Step 08 — Eligibility model for notifications (permission ∧ account prefs).
 //
 
 import Foundation
@@ -21,7 +21,7 @@ enum NotificationEligibilityKind: String, CaseIterable {
 struct NotificationEligibility: Sendable {
     let kind: NotificationEligibilityKind
     let isEligible: Bool
-    /// When not eligible, a short reason for analytics (e.g. "denied", "notDetermined").
+    /// When not eligible, a short reason for analytics (e.g. "denied", "notDetermined", "pref_disabled").
     let denialReason: String?
 
     init(kind: NotificationEligibilityKind, isEligible: Bool, denialReason: String? = nil) {
