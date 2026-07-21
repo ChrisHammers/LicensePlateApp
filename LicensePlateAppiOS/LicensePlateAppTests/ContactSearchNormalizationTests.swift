@@ -22,6 +22,32 @@ struct ContactSearchNormalizationTests {
     @Test func userNameLower() {
         #expect(ContactSearchNormalization.userNameLower(" RoadTrip ") == "roadtrip")
     }
+
+    @Test func privateContactMergeFieldsOmitsMissingValues() {
+        #expect(ContactSearchNormalization.privateContactMergeFields(email: nil, phoneNumber: nil) == nil)
+        #expect(ContactSearchNormalization.privateContactMergeFields(email: "  ", phoneNumber: "") == nil)
+
+        let emailOnly = ContactSearchNormalization.privateContactMergeFields(
+            email: "  John@Gmail.COM ",
+            phoneNumber: nil
+        )
+        #expect(emailOnly == [
+            "email": "John@Gmail.COM",
+            "emailLower": "john@gmail.com",
+        ])
+        #expect(emailOnly?["phoneNumber"] == nil)
+        #expect(emailOnly?["phoneE164"] == nil)
+
+        let phoneOnly = ContactSearchNormalization.privateContactMergeFields(
+            email: nil,
+            phoneNumber: "(203) 555-1111"
+        )
+        #expect(phoneOnly == [
+            "phoneNumber": "(203) 555-1111",
+            "phoneE164": "+12035551111",
+        ])
+        #expect(phoneOnly?["email"] == nil)
+    }
 }
 
 @MainActor

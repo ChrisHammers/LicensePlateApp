@@ -1157,14 +1157,28 @@ class FirebaseAuthService: ObservableObject {
         // If location not authorized, silently skip (don't ask user)
         
         try? modelContext.save()
-        user.needsSync = true
-        
-        // Sync to Firestore if online
-        if isOnline {
+
+        // Login tracking must not full-profile sync (avoids overwriting username/contact
+        // with stale local SwiftData before Firestore hydrate).
+        if isOnline, let firebaseUID = user.firebaseUID {
             Task {
-                try? await saveUserDataToFirestore(user)
+                do {
+                    try await updateLoginTimestampsInFirestore(userId: firebaseUID, loginDate: loginDate)
+                } catch {
+                    #if DEBUG
+                    print("⚠️ Failed to update login timestamps: \(error)")
+                    #endif
+                }
             }
         }
+    }
+
+    /// Patches only login timestamps — never identity or private contact.
+    private func updateLoginTimestampsInFirestore(userId: String, loginDate: Date) async throws {
+        try await db.collection("users").document(userId).setData([
+            "lastDateLoggedIn": Timestamp(date: loginDate),
+            "lastUpdated": Timestamp(date: loginDate),
+        ], merge: true)
     }
     
     /// Get current location (one-time request)
@@ -1390,30 +1404,16 @@ class FirebaseAuthService: ObservableObject {
     }
 
     /// Writes normalized contact under users/{uid}/private/contact for search indexes.
+    /// Non-destructive: missing local email/phone are omitted (never cleared with null).
     private func savePrivateContact(for user: AppUser, userId: String) async throws {
-        let email = user.email?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let phone = user.phoneNumber?.trimmingCharacters(in: .whitespacesAndNewlines)
-        var contact: [String: Any] = [
-            "updatedAt": FieldValue.serverTimestamp(),
-        ]
-        if let email, !email.isEmpty {
-            contact["email"] = email
-            contact["emailLower"] = ContactSearchNormalization.emailLower(email) ?? email.lowercased()
-        } else {
-            contact["email"] = NSNull()
-            contact["emailLower"] = NSNull()
+        guard let mergeFields = ContactSearchNormalization.privateContactMergeFields(
+            email: user.email,
+            phoneNumber: user.phoneNumber
+        ) else {
+            return
         }
-        if let phone, !phone.isEmpty {
-            contact["phoneNumber"] = phone
-            if let e164 = ContactSearchNormalization.phoneE164US(phone) {
-                contact["phoneE164"] = e164
-            } else {
-                contact["phoneE164"] = NSNull()
-            }
-        } else {
-            contact["phoneNumber"] = NSNull()
-            contact["phoneE164"] = NSNull()
-        }
+        var contact: [String: Any] = mergeFields
+        contact["updatedAt"] = FieldValue.serverTimestamp()
         try await db.collection("users").document(userId)
             .collection("private").document("contact")
             .setData(contact, merge: true)
