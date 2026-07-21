@@ -262,7 +262,7 @@ struct ContentView: View {
     private var homeTripRecapLifecycleObservers: some View {
         homeTripRecapLifecycleCore
             .onChange(of: deepLinkHandler.destination) { _, destination in
-                handleTripSessionDeepLink(destination)
+                handleDeepLinkDestinationChange(destination)
             }
             .onChange(of: hasLoggedFirstFind) { _, _ in
                 refreshDeferredSetupBanner()
@@ -343,8 +343,57 @@ struct ContentView: View {
         }
     }
 
-    private func handleTripSessionDeepLink(_ destination: DeepLinkDestination?) {
+    /// Deep links present from RootView (invite sheets) or navigate via MainCoordinator
+    /// (trip session). Competing ContentView sheets block RootView presentation, so dismiss
+    /// them first; when a sheet was up, republish the destination so `.sheet(item:)` retries.
+    private func handleDeepLinkDestinationChange(_ destination: DeepLinkDestination?) {
         guard let destination else { return }
+
+        let dismissedCompetingSheet = dismissCompetingHomeSheetsIfNeeded()
+
+        if case .tripSession = destination {
+            handleTripSessionDeepLink(destination)
+            return
+        }
+
+        if dismissedCompetingSheet {
+            republishDeepLinkAfterDismissingHomeSheets(destination)
+        }
+    }
+
+    @discardableResult
+    private func dismissCompetingHomeSheetsIfNeeded() -> Bool {
+        let hadSheet = isShowingSettings
+            || isShowingTravelLog
+            || isShowingCreateSheet
+            || isShowingDeferredSetupHub
+            || returnStreakViewModel.isShowingExplanation
+            || pendingTripsViewModel.shouldPresentTripLimitPaywall
+
+        guard hadSheet else { return false }
+
+        isShowingSettings = false
+        isShowingTravelLog = false
+        isShowingCreateSheet = false
+        isShowingDeferredSetupHub = false
+        returnStreakViewModel.isShowingExplanation = false
+        pendingTripsViewModel.dismissTripLimitPaywall()
+        return true
+    }
+
+    private func republishDeepLinkAfterDismissingHomeSheets(_ destination: DeepLinkDestination) {
+        deepLinkHandler.clearDestination()
+        Task { @MainActor in
+            // Let competing ContentView sheets finish dismissing before RootView presents.
+            try? await Task.sleep(for: .milliseconds(150))
+            // Avoid clobbering a newer deep link that arrived while sheets were dismissing.
+            if deepLinkHandler.destination == nil {
+                deepLinkHandler.destination = destination
+            }
+        }
+    }
+
+    private func handleTripSessionDeepLink(_ destination: DeepLinkDestination) {
         guard case .tripSession(let tripSessionId) = destination else { return }
         guard let sessionId = UUID(uuidString: tripSessionId) else { return }
         activeTripsListViewModel.load(userId: currentUserId)
