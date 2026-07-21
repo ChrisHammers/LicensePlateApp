@@ -103,13 +103,6 @@ class InviteRepository: ObservableObject {
                     existing.createdAt = invite.createdAt
                     existing.respondedAt = invite.respondedAt
                     existing.familyName = invite.familyName
-                    existing.creatorDisplayName = invite.creatorDisplayName
-                    existing.creatorUserName = invite.creatorUserName
-                    existing.creatorAvatarId = invite.creatorAvatarId
-                    existing.fromUserDisplayName = invite.fromUserDisplayName
-                    existing.fromUserUserName = invite.fromUserUserName
-                    existing.fromUserAvatarId = invite.fromUserAvatarId
-                    existing.captainsPreviewJSON = invite.captainsPreviewJSON
                 } else {
                     // Insert new
                     modelContext.insert(invite)
@@ -237,13 +230,6 @@ class InviteRepository: ObservableObject {
                 existing.status = invite.status
                 existing.respondedAt = invite.respondedAt
                 existing.familyName = invite.familyName
-                existing.creatorDisplayName = invite.creatorDisplayName
-                existing.creatorUserName = invite.creatorUserName
-                existing.creatorAvatarId = invite.creatorAvatarId
-                existing.fromUserDisplayName = invite.fromUserDisplayName
-                existing.fromUserUserName = invite.fromUserUserName
-                existing.fromUserAvatarId = invite.fromUserAvatarId
-                existing.captainsPreviewJSON = invite.captainsPreviewJSON
                 try? modelContext.save()
             } else {
                 // Insert new if not found

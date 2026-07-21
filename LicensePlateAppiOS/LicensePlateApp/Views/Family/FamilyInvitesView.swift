@@ -111,13 +111,11 @@ struct FamilyInviteRow: View {
     let invite: Invite
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject var authService: FirebaseAuthService
-    private let familyRepository = FamilyRepository.shared
     @State private var showInviteDetail = false
-    @State private var family: Family?
+    @State private var inviterDisplayName: String?
 
     private var rawFamilyName: String? {
         if let name = invite.familyName, !name.isEmpty { return name }
-        if let name = family?.name, !name.isEmpty { return name }
         return nil
     }
 
@@ -129,7 +127,7 @@ struct FamilyInviteRow: View {
     }
 
     private var subtitleText: String {
-        if let from = invite.fromUserDisplayName, !from.isEmpty {
+        if let from = inviterDisplayName, !from.isEmpty {
             return "From: %@".localized(from)
         }
         return "Tap to view details".localized
@@ -185,31 +183,23 @@ struct FamilyInviteRow: View {
                 FamilyInviteDetail(
                     inviteId: invite.inviteId,
                     familyId: familyId,
-                    family: family
+                    family: nil
                 )
                 .environmentObject(authService)
             }
         }
         .task {
-            await loadFamily()
+            await loadInviter()
         }
     }
     
-    private func loadFamily() async {
-        // Prefer denormalized name; fetch only to pass Family into detail when allowed
-        guard invite.familyName == nil || invite.familyName?.isEmpty == true,
-              let familyId = invite.familyId else { return }
-        
-        familyRepository.setModelContext(modelContext)
-        
-        do {
-            if let fetchedFamily = try await familyRepository.fetchFamily(familyId: familyId) {
-                await MainActor.run {
-                    family = fetchedFamily
-                }
+    private func loadInviter() async {
+        UserRepository.shared.setModelContext(modelContext)
+        guard !invite.fromUserId.isEmpty else { return }
+        if let user = try? await UserRepository.shared.getUser(userId: invite.fromUserId) {
+            await MainActor.run {
+                inviterDisplayName = user.displayName
             }
-        } catch {
-            print("❌ Failed to load family: \(error.localizedDescription)")
         }
     }
 }

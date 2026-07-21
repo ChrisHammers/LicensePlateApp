@@ -9,19 +9,6 @@ import Foundation
 import SwiftData
 import FirebaseFirestore
 
-/// Denormalized captain/creator row stamped on family invites for invitee UI.
-struct FamilyInviteCaptainPreview: Equatable, Codable, Identifiable {
-    var displayName: String
-    var userName: String
-    var role: String // "creator" | "captain"
-    var avatarId: String?
-    var userId: String?
-
-    var id: String { "\(userId ?? userName)-\(role)-\(displayName)" }
-
-    var isCreator: Bool { role == "creator" }
-}
-
 @Model
 final class Invite {
     @Attribute(.unique) var inviteId: String
@@ -36,15 +23,8 @@ final class Invite {
     var createdAt: Date
     var respondedAt: Date?
 
-    // Family invite display snapshot (optional; older invites omit these)
+    /// Denormalized family name for invitees (cannot read families/ until members).
     var familyName: String?
-    var creatorDisplayName: String?
-    var creatorUserName: String?
-    var creatorAvatarId: String?
-    var fromUserDisplayName: String?
-    var fromUserUserName: String?
-    var fromUserAvatarId: String?
-    var captainsPreviewJSON: String?
     
     enum InviteType: String, Codable, CaseIterable {
         case friend
@@ -78,14 +58,7 @@ final class Invite {
         expiresAt: Date,
         createdAt: Date = .now,
         respondedAt: Date? = nil,
-        familyName: String? = nil,
-        creatorDisplayName: String? = nil,
-        creatorUserName: String? = nil,
-        creatorAvatarId: String? = nil,
-        fromUserDisplayName: String? = nil,
-        fromUserUserName: String? = nil,
-        fromUserAvatarId: String? = nil,
-        captainsPreviewJSON: String? = nil
+        familyName: String? = nil
     ) {
         self.inviteId = inviteId
         self.type = type.rawValue
@@ -99,13 +72,6 @@ final class Invite {
         self.createdAt = createdAt
         self.respondedAt = respondedAt
         self.familyName = familyName
-        self.creatorDisplayName = creatorDisplayName
-        self.creatorUserName = creatorUserName
-        self.creatorAvatarId = creatorAvatarId
-        self.fromUserDisplayName = fromUserDisplayName
-        self.fromUserUserName = fromUserUserName
-        self.fromUserAvatarId = fromUserAvatarId
-        self.captainsPreviewJSON = captainsPreviewJSON
     }
     
     var isExpired: Bool {
@@ -145,55 +111,6 @@ final class Invite {
             method = newValue.rawValue
         }
     }
-
-    /// Decoded captains/creator preview for family invite UI.
-    var captainsPreview: [FamilyInviteCaptainPreview] {
-        Self.decodeCaptainsPreview(from: captainsPreviewJSON)
-    }
-
-    static func decodeCaptainsPreview(from json: String?) -> [FamilyInviteCaptainPreview] {
-        guard let json, let data = json.data(using: .utf8) else { return [] }
-        if let decoded = try? JSONDecoder().decode([FamilyInviteCaptainPreview].self, from: data) {
-            return decoded
-        }
-        // Defensive fallback when null avatarId / mixed types trip Codable
-        guard let raw = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
-            return []
-        }
-        return raw.compactMap { Self.captainPreview(from: $0) }
-    }
-
-    static func captainPreview(from dict: [String: Any]) -> FamilyInviteCaptainPreview? {
-        guard let displayName = dict["displayName"] as? String,
-              let role = dict["role"] as? String else { return nil }
-        let userName = dict["userName"] as? String ?? ""
-        let avatarId = dict["avatarId"] as? String
-        let userId = dict["userId"] as? String
-        return FamilyInviteCaptainPreview(
-            displayName: displayName,
-            userName: userName,
-            role: role,
-            avatarId: (avatarId?.isEmpty == false) ? avatarId : nil,
-            userId: (userId?.isEmpty == false) ? userId : nil
-        )
-    }
-
-    static func encodeCaptainsPreview(_ captains: [FamilyInviteCaptainPreview]) -> String? {
-        guard let data = try? JSONEncoder().encode(captains) else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    static func captainsPreviewJSON(fromFirestoreCaptainsPreview value: Any?) -> String? {
-        if let json = value as? String {
-            return json
-        }
-        guard let array = value as? [Any] else { return nil }
-        let captains: [FamilyInviteCaptainPreview] = array.compactMap { item in
-            guard let dict = item as? [String: Any] else { return nil }
-            return captainPreview(from: dict)
-        }
-        return encodeCaptainsPreview(captains)
-    }
 }
 
 // MARK: - Firestore Conversion
@@ -223,11 +140,6 @@ extension Invite {
         } else {
             respondedAt = nil
         }
-
-        // Server may store captains as JSON string or as a native array
-        let captainsPreviewJSON = Self.captainsPreviewJSON(
-            fromFirestoreCaptainsPreview: data["captainsPreviewJSON"] ?? data["captainsPreview"]
-        )
         
         self.init(
             inviteId: id,
@@ -241,14 +153,7 @@ extension Invite {
             expiresAt: expiresAtTimestamp.dateValue(),
             createdAt: createdAtTimestamp.dateValue(),
             respondedAt: respondedAt,
-            familyName: data["familyName"] as? String,
-            creatorDisplayName: data["creatorDisplayName"] as? String,
-            creatorUserName: data["creatorUserName"] as? String,
-            creatorAvatarId: data["creatorAvatarId"] as? String,
-            fromUserDisplayName: data["fromUserDisplayName"] as? String,
-            fromUserUserName: data["fromUserUserName"] as? String,
-            fromUserAvatarId: data["fromUserAvatarId"] as? String,
-            captainsPreviewJSON: captainsPreviewJSON
+            familyName: data["familyName"] as? String
         )
     }
     
@@ -280,27 +185,6 @@ extension Invite {
 
         if let familyName = familyName {
             data["familyName"] = familyName
-        }
-        if let creatorDisplayName = creatorDisplayName {
-            data["creatorDisplayName"] = creatorDisplayName
-        }
-        if let creatorUserName = creatorUserName {
-            data["creatorUserName"] = creatorUserName
-        }
-        if let creatorAvatarId = creatorAvatarId {
-            data["creatorAvatarId"] = creatorAvatarId
-        }
-        if let fromUserDisplayName = fromUserDisplayName {
-            data["fromUserDisplayName"] = fromUserDisplayName
-        }
-        if let fromUserUserName = fromUserUserName {
-            data["fromUserUserName"] = fromUserUserName
-        }
-        if let fromUserAvatarId = fromUserAvatarId {
-            data["fromUserAvatarId"] = fromUserAvatarId
-        }
-        if let captainsPreviewJSON = captainsPreviewJSON {
-            data["captainsPreviewJSON"] = captainsPreviewJSON
         }
         
         return data
