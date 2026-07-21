@@ -392,30 +392,67 @@ struct FamilyMemberRow: View {
 
 struct PendingRequestRow: View {
     let request: PendingJoinRequest
+    @State private var resolvedUser: AppUser?
+
+    private var displayUser: AppUser? {
+        request.user ?? resolvedUser
+    }
     
     var body: some View {
-        if let user = request.user {
-            UserIdentityRowView(
-                user: user,
-                subtitle: "Pending",
-                avatarSize: 50
-            )
-        } else {
-            HStack {
-                AvatarImageView(avatarId: nil, size: 50)
-                VStack(alignment: .leading) {
-                    Text("Pending User")
-                    .font(.system(.body, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                
-                Text("Waiting for approval".localized)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
+        Group {
+            if let user = displayUser {
+                UserIdentityRowView(
+                    user: user,
+                    subtitle: "Pending",
+                    avatarSize: 50
+                )
+            } else {
+                HStack {
+                    AvatarImageView(avatarId: nil, size: 50)
+                    VStack(alignment: .leading) {
+                        Text("Pending User")
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                        
+                        Text("Waiting for approval".localized)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    Spacer()
                 }
-                Spacer()
+                .padding(.vertical, 8)
             }
-            .padding(.vertical, 8)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(pendingRequestAccessibilityLabel)
+        .task(id: request.userId) {
+            await resolveUserIfNeeded()
+        }
+    }
+
+    private var pendingRequestAccessibilityLabel: String {
+        if let user = displayUser {
+            return "\(user.displayName), @\(user.userName), \("Pending".localized)"
+        }
+        return "Pending User".localized
+    }
+
+    private func resolveUserIfNeeded() async {
+        if request.user != nil {
+            await MainActor.run { resolvedUser = nil }
+            return
+        }
+        do {
+            if let fetched = try await UserRepository.shared.getUser(userId: request.userId) {
+                await MainActor.run {
+                    self.resolvedUser = fetched
+                }
+            }
+        } catch {
+            #if DEBUG
+            print("⚠️ PendingRequestRow failed to resolve user \(request.userId): \(error.localizedDescription)")
+            #endif
         }
     }
 }

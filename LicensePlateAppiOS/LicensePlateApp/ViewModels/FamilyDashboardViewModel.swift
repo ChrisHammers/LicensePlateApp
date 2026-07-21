@@ -40,6 +40,7 @@ class FamilyDashboardViewModel: ObservableObject {
     
     func setModelContext(_ context: ModelContext) {
         familyRepository.setModelContext(context)
+        userRepository.setModelContext(context)
         if inviteRepository == nil {
             inviteRepository = InviteRepository.shared
         }

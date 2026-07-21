@@ -61,8 +61,7 @@ struct UserIdentityRowView: View {
                         .foregroundStyle(Color.Theme.softBrown)
                 }
             }
-            
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 6)
     }

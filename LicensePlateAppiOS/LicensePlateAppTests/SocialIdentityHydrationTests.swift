@@ -105,4 +105,49 @@ struct SocialIdentityHydrationTests {
         #expect(pendingRequests.first?.user?.displayName == "Pat Pending")
         #expect(pendingRequests.first?.user?.avatarId == "scout_otter")
     }
+
+    @Test func linkUserToMembersAttachesCachedUserToPendingRequest() async throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let familyId = "family-link-pending"
+        let pendingUserId = "pending-link-1"
+
+        let cachedUser = AppUser(
+            id: pendingUserId,
+            userName: "link_pat",
+            firstName: "Link",
+            lastName: "Pat",
+            firebaseUID: pendingUserId
+        )
+        cachedUser.avatarId = "scout_otter"
+        context.insert(cachedUser)
+
+        let pending = PendingJoinRequest(
+            requestId: "req-link-1",
+            familyId: familyId,
+            userId: pendingUserId,
+            requestedBy: "captain-1",
+            method: .search,
+            status: .pending,
+            user: nil
+        )
+        context.insert(pending)
+        try context.save()
+
+        let familyRepository = FamilyRepository.shared
+        familyRepository.setModelContext(context)
+        UserRepository.shared.setModelContext(context)
+
+        #expect(familyRepository.getPendingRequests(familyId: familyId).first?.user == nil)
+
+        // Simulate post-getUser link (cache hit path used by fetchAndCacheUsers).
+        let fetched = try await UserRepository.shared.getUser(userId: pendingUserId)
+        #expect(fetched?.displayName == "Link Pat")
+        familyRepository.linkUserToMembers(userId: pendingUserId, familyId: familyId)
+
+        let linked = familyRepository.getPendingRequests(familyId: familyId)
+        #expect(linked.count == 1)
+        #expect(linked.first?.user?.displayName == "Link Pat")
+        #expect(linked.first?.user?.avatarId == "scout_otter")
+    }
 }

@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import Combine
 
 struct FamilyPendingApprovals: View {
     let familyId: String
@@ -14,6 +15,7 @@ struct FamilyPendingApprovals: View {
     @EnvironmentObject var authService: FirebaseAuthService
     private let familyRepository = FamilyRepository.shared
     @State private var pendingRequests: [PendingJoinRequest] = []
+    @State private var pendingObservation: AnyCancellable?
     
     var body: some View {
         NavigationStack {
@@ -49,7 +51,18 @@ struct FamilyPendingApprovals: View {
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 familyRepository.setModelContext(modelContext)
+                UserRepository.shared.setModelContext(modelContext)
                 loadPendingRequests()
+                startObservingPendingRequests()
+            }
+            .task(id: familyId) {
+                familyRepository.setModelContext(modelContext)
+                UserRepository.shared.setModelContext(modelContext)
+                await refreshPendingRequests()
+            }
+            .onDisappear {
+                pendingObservation?.cancel()
+                pendingObservation = nil
             }
             .refreshable {
                 await refreshPendingRequests()
@@ -60,6 +73,16 @@ struct FamilyPendingApprovals: View {
     private func loadPendingRequests() {
         pendingRequests = familyRepository.getPendingRequests(familyId: familyId)
             .filter { $0.statusEnum == .pending }
+    }
+    
+    private func startObservingPendingRequests() {
+        pendingObservation?.cancel()
+        pendingObservation = familyRepository.$pendingRequests
+            .receive(on: DispatchQueue.main)
+            .sink { pendingByFamily in
+                guard pendingByFamily[familyId] != nil else { return }
+                loadPendingRequests()
+            }
     }
     
     private func refreshPendingRequests() async {
@@ -82,14 +105,19 @@ struct PendingApprovalRow: View {
     let familyId: String
     let onRequestProcessed: () -> Void
     @EnvironmentObject var authService: FirebaseAuthService
+    @State private var resolvedUser: AppUser?
     @State private var isProcessing = false
     @State private var errorMessage: String?
     @State private var showError = false
     @State private var hasProcessed = false
+
+    private var displayUser: AppUser? {
+        request.user ?? resolvedUser
+    }
     
     var body: some View {
         HStack {
-            if let user = request.user {
+            if let user = displayUser {
                 UserIdentityRowView(user: user, subtitle: nil, avatarSize: 50)
             } else {
                 HStack(spacing: 12) {
@@ -103,30 +131,37 @@ struct PendingApprovalRow: View {
                 }
             }
             
-            Spacer()
-            
             HStack(spacing: 12) {
-                Button("Approve".localized) {
-                    Task {
-                        await approveRequest()
-                    }
+                Button {
+                    Task { await approveRequest() }
+                } label: {
+                    Text("Approve".localized)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.Theme.primaryBlue)
                 .disabled(isProcessing || hasProcessed)
-                
-                Button("Decline".localized) {
-                    Task {
-                        await declineRequest()
-                    }
+
+                Button {
+                    Task { await declineRequest() }
+                } label: {
+                    Text("Decline".localized)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 .buttonStyle(.bordered)
                 .disabled(isProcessing || hasProcessed)
             }
+            .layoutPriority(1)
+            
         }
         .padding(.vertical, 8)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(pendingApprovalAccessibilityLabel)
+        .task(id: request.userId) {
+            await resolveUserIfNeeded()
+        }
         .alert("Error".localized, isPresented: $showError) {
             Button("OK".localized, role: .cancel) { }
         } message: {
@@ -135,10 +170,28 @@ struct PendingApprovalRow: View {
     }
 
     private var pendingApprovalAccessibilityLabel: String {
-        if let user = request.user {
+        if let user = displayUser {
             return "\(user.displayName), @\(user.userName)"
         }
         return "User".localized
+    }
+
+    private func resolveUserIfNeeded() async {
+        if request.user != nil {
+            await MainActor.run { resolvedUser = nil }
+            return
+        }
+        do {
+            if let fetched = try await UserRepository.shared.getUser(userId: request.userId) {
+                await MainActor.run {
+                    self.resolvedUser = fetched
+                }
+            }
+        } catch {
+            #if DEBUG
+            print("⚠️ PendingApprovalRow failed to resolve user \(request.userId): \(error.localizedDescription)")
+            #endif
+        }
     }
     
     private func approveRequest() async {
@@ -221,4 +274,3 @@ struct PendingApprovalRow: View {
         .environmentObject(FirebaseAuthService())
         .modelContainer(for: [PendingJoinRequest.self], inMemory: true)
 }
-

@@ -279,54 +279,24 @@ class FamilyRepository: ObservableObject {
     /// Links `user` relationships on SwiftData entities before returning.
     private func fetchAndCacheUsers(userIds: [String], familyId: String) async {
         guard let modelContext = modelContext else { return }
-        
+
+        // Keep UserRepository on the same store so getUser cache + Firestore merge land here.
+        UserRepository.shared.setModelContext(modelContext)
+
         let uniqueIds = Array(Set(userIds)).filter { !$0.isEmpty }
         for userId in uniqueIds {
-            let searchUserId = userId
-            let userDescriptor = FetchDescriptor<AppUser>(
-                predicate: #Predicate<AppUser> { user in
-                    user.id == searchUserId || user.firebaseUID == searchUserId
+            do {
+                if try await UserRepository.shared.getUser(userId: userId) != nil {
+                    linkUserToMembers(userId: userId, familyId: familyId)
+                } else {
+                    #if DEBUG
+                    print("⚠️ FamilyRepository.fetchAndCacheUsers: getUser returned nil for \(userId)")
+                    #endif
                 }
-            )
-            
-            if (try? modelContext.fetch(userDescriptor).first) != nil {
-                linkUserToMembers(userId: userId, familyId: familyId)
-                continue
-            }
-            
-            let userDoc = try? await db.collection("users").document(userId).getDocument()
-            
-            if let userDoc = userDoc,
-               let data = userDoc.data(),
-               let userName = (data["userName"] as? String) ?? (data["username"] as? String),
-               !userName.isEmpty {
-                
-                let privacyFlags = UserPrivacyFirestore.decode(from: data)
-                let user = AppUser(
-                    id: userId,
-                    userName: userName,
-                    firstName: data["firstName"] as? String,
-                    lastName: data["lastName"] as? String,
-                    email: data["email"] as? String,
-                    phoneNumber: data["phoneNumber"] as? String,
-                    createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? .now,
-                    lastUpdated: (data["updatedAt"] as? Timestamp)?.dateValue() ?? .now,
-                    isEmailPublic: privacyFlags.isEmailPublic,
-                    isPhonePublic: privacyFlags.isPhonePublic,
-                    isRetiredGeneral: data["isRetiredGeneral"] as? Bool ?? false,
-                    activeFamilyId: data["activeFamilyId"] as? String,
-                    friendCount: data["friendCount"] as? Int ?? 0,
-                    firebaseUID: userId
-                )
-                
-                user.avatarId = data["avatarId"] as? String
-                user.equippedBadgeId = data["equippedBadgeId"] as? String
-                user.wasEverInFamily = data["wasEverInFamily"] as? Bool ?? false
-                
-                modelContext.insert(user)
-                try? modelContext.save()
-                
-                linkUserToMembers(userId: userId, familyId: familyId)
+            } catch {
+                #if DEBUG
+                print("⚠️ FamilyRepository.fetchAndCacheUsers: getUser failed for \(userId): \(error.localizedDescription)")
+                #endif
             }
         }
     }
@@ -337,8 +307,9 @@ class FamilyRepository: ObservableObject {
         pendingRequests[familyId] = getPendingRequests(familyId: familyId)
     }
     
-    /// Link cached AppUser to FamilyMember and PendingJoinRequest
-    private func linkUserToMembers(userId: String, familyId: String) {
+    /// Link cached AppUser to FamilyMember and PendingJoinRequest.
+    /// Internal for unit tests that verify post-cache linking.
+    func linkUserToMembers(userId: String, familyId: String) {
         guard let modelContext = modelContext else { return }
         
         let searchUserId = userId
