@@ -318,30 +318,58 @@ extension UserDriversLicense {
     }
 
     static var sample: UserDriversLicense {
+        previewSample(isRoyale: true, isFamilyMember: true)
+    }
+
+    /// Shared preview factory. Completion drives `licenseClass` / default accent when no palette.
+    /// Thresholds: D under 20%, C 20%+, B 45%+, A 75%+, S 100%.
+    static func previewSample(
+        statesProvincesFound: Int = 48,
+        totalStatesProvinces: Int = 101,
+        isRoyale: Bool = false,
+        isFamilyMember: Bool = false,
+        includeBadges: Bool = true
+    ) -> UserDriversLicense {
         UserDriversLicense(
             holderName: "Chris Hammers",
             issueDate: Calendar.current.date(from: DateComponents(year: 2024, month: 3, day: 9)) ?? .now,
             rankLevel: 27,
             rankTitle: "Highway Legend",
-            statesProvincesFound: 48,
+            statesProvincesFound: statesProvincesFound,
+            totalStatesProvinces: totalStatesProvinces,
             platesFound: 1240,
             tripsTaken: 36,
             gamesPlayed: 184,
             gamesWon: 121,
             xp: 86_400,
             score: 245_980,
-            isRoyale: true,
-            isFamilyMember: true,
-            badges: [
-                LicenseBadge(symbol: "flame.fill",          label: "Hot Streak",    color: .orange),
-                LicenseBadge(symbol: "bolt.fill",           label: "Speed Spotter", color: .yellow),
-                LicenseBadge(symbol: "star.fill",           label: "All-Star",      color: .blue),
-                LicenseBadge(symbol: "map.fill",            label: "Explorer",      color: .green),
-                LicenseBadge(symbol: "crown.fill",          label: "Champion",      color: .purple),
-                LicenseBadge(symbol: "checkmark.seal.fill", label: "Verified",      color: .teal)
-            ]
+            isRoyale: isRoyale,
+            isFamilyMember: isFamilyMember,
+            badges: includeBadges ? previewBadges : []
         )
     }
+
+    /// Non-Royale card for each class letter (default accent / header when style has no palette).
+    static func sampleForClass(_ licenseClass: String) -> UserDriversLicense {
+        let found: Int
+        switch licenseClass.uppercased() {
+        case "S": found = 101
+        case "A": found = 80
+        case "B": found = 50
+        case "C": found = 25
+        default:  found = 10
+        }
+        return previewSample(statesProvincesFound: found, isRoyale: false, isFamilyMember: false)
+    }
+
+    private static let previewBadges: [LicenseBadge] = [
+        LicenseBadge(symbol: "flame.fill",          label: "Hot Streak",    color: .orange),
+        LicenseBadge(symbol: "bolt.fill",           label: "Speed Spotter", color: .yellow),
+        LicenseBadge(symbol: "star.fill",           label: "All-Star",      color: .blue),
+        LicenseBadge(symbol: "map.fill",            label: "Explorer",      color: .green),
+        LicenseBadge(symbol: "crown.fill",          label: "Champion",      color: .purple),
+        LicenseBadge(symbol: "checkmark.seal.fill", label: "Verified",      color: .teal)
+    ]
 }
 
 // MARK: - Portrait helpers
@@ -970,35 +998,102 @@ private struct AccessoryDemo: View {
     .padding()
 }
 
-/// Gallery of grantable cosmetics.
-#Preview("Cosmetics — Light") {
-    ScrollView {
-        VStack(spacing: 22) {
-            label("Standard");
-                UserDriversLicenseCard(license: .sample, width: 320, style: .standard) { PreviewPortrait() }
-            label("Gold Foil (rank-up)"); UserDriversLicenseCard(license: .sample, width: 320, style: .goldFoil) { PreviewPortrait(accent: .orange) }
-            label("Founder (prestige)");  UserDriversLicenseCard(license: .sample, width: 320, style: .founder) { PreviewPortrait(accent: .orange) }
-            label("Neon Nights (season pass)"); UserDriversLicenseCard(license: .sample, width: 320, style: .neonNights) { PreviewPortrait(accent: .pink) }
-            label("Carbon Edition"); UserDriversLicenseCard(license: .sample, width: 320, style: .carbonEdition) { PreviewPortrait(accent: .gray) }
-            label("Rank-up Lv 50");  UserDriversLicenseCard(license: .sample, width: 320, style: .rankUp(level: 50, palette: .midnight)) { PreviewPortrait(accent: .indigo) }
-        }
-        .padding()
-    }
-    .preferredColorScheme(.light)
+/// Full grantable catalog (`LicenseCosmetic.catalog`), shine disabled for canvas perf.
+#Preview("Catalog — Light") {
+    LicenseCatalogPreviewGallery()
+        .preferredColorScheme(.light)
 }
 
-#Preview("Cosmetics — Dark") {
+#Preview("Catalog — Dark") {
+    LicenseCatalogPreviewGallery()
+        .preferredColorScheme(.dark)
+}
+
+/// Default accent / header / outline when no palette — driven by completion class.
+#Preview("Class Accents") {
     ScrollView {
         VStack(spacing: 22) {
-            label("Winter Frost");   UserDriversLicenseCard(license: .sample, width: 320, style: .winterFrost) { PreviewPortrait(accent: .cyan) }
-            label("Summer Road");    UserDriversLicenseCard(license: .sample, width: 320, style: .summerRoad) { PreviewPortrait(accent: .orange) }
-            label("Emerald Trail");  UserDriversLicenseCard(license: .sample, width: 320, style: .emeraldTrail) { PreviewPortrait(accent: .green) }
-            label("Platinum Foil");  UserDriversLicenseCard(license: .sample, width: 320, style: .platinumFoil) { PreviewPortrait(accent: .gray) }
-            label("Custom season pass"); UserDriversLicenseCard(license: .sample, width: 320, style: .seasonPass("Route 66", palette: .summerRoad)) { PreviewPortrait(accent: .orange) }
+            ForEach(["D", "C", "B", "A", "S"], id: \.self) { licenseClass in
+                let license = UserDriversLicense.sampleForClass(licenseClass)
+                label("Class \(licenseClass) · \(license.statesProvincesFound)/\(license.totalStatesProvinces)")
+                UserDriversLicenseCard(license: license, width: 320, style: .standard) {
+                    PreviewPortrait(accent: license.accent)
+                }
+            }
         }
         .padding()
     }
-    .preferredColorScheme(.dark)
+}
+
+/// Front chips + Royale crown / standard trim vs hairline.
+#Preview("Membership") {
+    ScrollView {
+        VStack(spacing: 22) {
+            label("Royale + Family")
+            UserDriversLicenseCard(
+                license: .previewSample(isRoyale: true, isFamilyMember: true),
+                width: 320,
+                style: .standard
+            ) { PreviewPortrait(accent: .orange) }
+
+            label("Family only")
+            UserDriversLicenseCard(
+                license: .previewSample(isRoyale: false, isFamilyMember: true),
+                width: 320,
+                style: .standard
+            ) { PreviewPortrait(accent: .teal) }
+
+            label("Standard (neither)")
+            UserDriversLicenseCard(
+                license: .previewSample(isRoyale: false, isFamilyMember: false),
+                width: 320,
+                style: .standard
+            ) { PreviewPortrait(accent: .gray) }
+        }
+        .padding()
+    }
+}
+
+/// Stamp builders not represented as distinct catalog rows.
+#Preview("Stamps / Builders") {
+    ScrollView {
+        VStack(spacing: 22) {
+            label("Rank-up Lv 50")
+            UserDriversLicenseCard(
+                license: .sample,
+                width: 320,
+                style: .rankUp(level: 50, palette: .midnight)
+            ) { PreviewPortrait(accent: .indigo) }
+
+            label("Season pass · Route 66")
+            UserDriversLicenseCard(
+                license: .sample,
+                width: 320,
+                style: .seasonPass("Route 66", palette: .summerRoad)
+            ) { PreviewPortrait(accent: .orange) }
+        }
+        .padding()
+    }
+}
+
+private struct LicenseCatalogPreviewGallery: View {
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 22) {
+                ForEach(LicenseCosmetic.catalog) { cosmetic in
+                    label("\(cosmetic.name) · \(cosmetic.rarity.title)")
+                    UserDriversLicenseCard(
+                        license: .sample,
+                        width: 320,
+                        style: cosmetic.style.staticPreview
+                    ) {
+                        PreviewPortrait(accent: cosmetic.style.palette?.accent ?? .blue)
+                    }
+                }
+            }
+            .padding()
+        }
+    }
 }
 
 @ViewBuilder private func label(_ text: String) -> some View {
