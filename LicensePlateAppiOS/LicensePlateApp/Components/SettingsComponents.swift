@@ -25,37 +25,42 @@ struct SettingToggleRow: View {
     }
     
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(alignment: .center, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
+                    .fixedSize(horizontal: false, vertical: true)
                 
                 if let description = description {
                     Text(description)
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 
                 if let detail = detail {
                     Text(detail)
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
             
             Toggle("", isOn: $isOn)
                 .tint(Color.Theme.primaryBlue)
                 .labelsHidden()
+                .layoutPriority(0)
                 .accessibilityLabel(title)
                 .accessibilityValue(isOn ? "On" : "Off")
                 .accessibilityHint(description ?? title) //TODO: allow this to be passed in, I imagine title is useless since it's up above.
         }
         .padding(.vertical, 12) //TODO: allow changeable values since CountryRow has 8,12
         .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color.Theme.cardBackground)
