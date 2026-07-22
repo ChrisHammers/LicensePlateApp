@@ -16,11 +16,16 @@ class InviteRepository: ObservableObject {
     
     private let db = Firestore.firestore()
     private var modelContext: ModelContext?
-    /// User id currently covered by Firestore listeners (nil after stop).
+    /// User id currently covered by personal Firestore listeners (nil after stop).
     private var listeningUserId: String?
+    /// Family id currently covered by the family-scoped invite listener.
+    private var listeningFamilyId: String?
     nonisolated(unsafe) private var listeners: [ListenerRegistration] = []
+    nonisolated(unsafe) private var familyListeners: [ListenerRegistration] = []
     
     @Published var invites: [Invite] = []
+    /// Pending + historical family invites for `listeningFamilyId` (member-visible).
+    @Published var familyInvites: [Invite] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -41,7 +46,7 @@ class InviteRepository: ObservableObject {
         if listeningUserId == userId, !listeners.isEmpty {
             return
         }
-        stopListening()
+        stopPersonalListening()
         listeningUserId = userId
         
         // Query ALL invites where user is recipient (not just pending)
@@ -51,7 +56,7 @@ class InviteRepository: ObservableObject {
         
         let listener = query.addSnapshotListener { [weak self] snapshot, error in
             Task { @MainActor in
-                self?.handleSnapshot(snapshot: snapshot, error: error, userId: userId, isIncoming: true)
+                self?.handlePersonalSnapshot(snapshot: snapshot, error: error, userId: userId)
             }
         }
         
@@ -63,14 +68,34 @@ class InviteRepository: ObservableObject {
         
         let sentListener = sentQuery.addSnapshotListener { [weak self] snapshot, error in
             Task { @MainActor in
-                self?.handleSnapshot(snapshot: snapshot, error: error, userId: userId, isIncoming: false)
+                self?.handlePersonalSnapshot(snapshot: snapshot, error: error, userId: userId)
             }
         }
         
         listeners.append(sentListener)
     }
+
+    /// Listen to all family-type invites for a family so every member sees outgoing pending invites.
+    func startListeningForFamily(familyId: String) {
+        if listeningFamilyId == familyId, !familyListeners.isEmpty {
+            return
+        }
+        stopListeningForFamily()
+        listeningFamilyId = familyId
+
+        let query = db.collection("invites")
+            .whereField("familyId", isEqualTo: familyId)
+            .whereField("type", isEqualTo: "family")
+
+        let listener = query.addSnapshotListener { [weak self] snapshot, error in
+            Task { @MainActor in
+                self?.handleFamilySnapshot(snapshot: snapshot, error: error, familyId: familyId)
+            }
+        }
+        familyListeners.append(listener)
+    }
     
-    private func handleSnapshot(snapshot: QuerySnapshot?, error: Error?, userId: String, isIncoming: Bool) {
+    private func handlePersonalSnapshot(snapshot: QuerySnapshot?, error: Error?, userId: String) {
         if let error = error {
             errorMessage = "Error fetching invites: \(error.localizedDescription)"
             return
@@ -78,37 +103,7 @@ class InviteRepository: ObservableObject {
         
         guard let snapshot = snapshot, let modelContext = modelContext else { return }
         
-        // Process all documents in the snapshot (including status changes)
-        // Since we're listening to ALL invites (not just pending), we'll get updates when status changes
-        for document in snapshot.documents {
-            if let invite = Invite(from: document) {
-                // Sync to SwiftData - always update status
-                let searchInviteId = invite.inviteId
-                let descriptor = FetchDescriptor<Invite>(
-                    predicate: #Predicate<Invite> { i in
-                        i.inviteId == searchInviteId
-                    }
-                )
-                
-                if let existing = try? modelContext.fetch(descriptor).first {
-                    // Update existing - including status changes (pending -> declined/accepted)
-                    existing.type = invite.type
-                    existing.fromUserId = invite.fromUserId
-                    existing.toUserId = invite.toUserId
-                    existing.familyId = invite.familyId
-                    existing.status = invite.status  // This will update when declined/accepted
-                    existing.method = invite.method
-                    existing.codeId = invite.codeId
-                    existing.expiresAt = invite.expiresAt
-                    existing.createdAt = invite.createdAt
-                    existing.respondedAt = invite.respondedAt
-                    existing.familyName = invite.familyName
-                } else {
-                    // Insert new
-                    modelContext.insert(invite)
-                }
-            }
-        }
+        upsertInvites(from: snapshot, into: modelContext)
         
         // Update published invites array with all invites for this user
         // The ViewModel will filter for pending status
@@ -124,21 +119,94 @@ class InviteRepository: ObservableObject {
         }
         
         try? modelContext.save()
+
+        // Family members may also see these invites via the family listener projection.
+        if let listeningFamilyId {
+            refreshFamilyInvitesFromCache(familyId: listeningFamilyId)
+        }
+    }
+
+    private func handleFamilySnapshot(snapshot: QuerySnapshot?, error: Error?, familyId: String) {
+        if let error = error {
+            errorMessage = "Error fetching family invites: \(error.localizedDescription)"
+            return
+        }
+
+        guard let snapshot = snapshot, let modelContext = modelContext else { return }
+
+        upsertInvites(from: snapshot, into: modelContext)
+        try? modelContext.save()
+        refreshFamilyInvitesFromCache(familyId: familyId)
+
+        if let listeningUserId {
+            refreshInvitesFromCache(userId: listeningUserId)
+        }
+    }
+
+    private func upsertInvites(from snapshot: QuerySnapshot, into modelContext: ModelContext) {
+        for document in snapshot.documents {
+            guard let invite = Invite(from: document) else { continue }
+
+            let searchInviteId = invite.inviteId
+            let descriptor = FetchDescriptor<Invite>(
+                predicate: #Predicate<Invite> { i in
+                    i.inviteId == searchInviteId
+                }
+            )
+
+            if let existing = try? modelContext.fetch(descriptor).first {
+                existing.type = invite.type
+                existing.fromUserId = invite.fromUserId
+                existing.toUserId = invite.toUserId
+                existing.familyId = invite.familyId
+                existing.status = invite.status
+                existing.method = invite.method
+                existing.codeId = invite.codeId
+                existing.expiresAt = invite.expiresAt
+                existing.createdAt = invite.createdAt
+                existing.respondedAt = invite.respondedAt
+                existing.familyName = invite.familyName
+            } else {
+                modelContext.insert(invite)
+            }
+        }
     }
     
-    /// Stop listening to Firestore updates
+    /// Stop personal + family Firestore listeners.
     nonisolated func stopListening() {
+        for listener in listeners {
+            listener.remove()
+        }
+        listeners.removeAll()
+        for listener in familyListeners {
+            listener.remove()
+        }
+        familyListeners.removeAll()
+    }
+
+    private func stopPersonalListening() {
         for listener in listeners {
             listener.remove()
         }
         listeners.removeAll()
     }
 
+    func stopListeningForFamily() {
+        for listener in familyListeners {
+            listener.remove()
+        }
+        familyListeners.removeAll()
+        listeningFamilyId = nil
+        familyInvites = []
+    }
+
     /// Hard sign-out: wipe all cached invites and clear published state.
     func deleteAllLocal() throws {
         stopListening()
         listeningUserId = nil
+        listeningFamilyId = nil
         invites = []
+        familyInvites = []
         errorMessage = nil
         guard let modelContext else { return }
         try modelContext.delete(model: Invite.self)
@@ -211,6 +279,14 @@ class InviteRepository: ObservableObject {
     func getFamilyInvites(for userId: String) -> [Invite] {
         getInvites(for: userId).filter { $0.typeEnum == .family }
     }
+
+    /// Pending family invites for a family (any sender), from local cache.
+    func getPendingFamilyInvites(familyId: String) -> [Invite] {
+        FamilyOutgoingInviteFilter.pendingOutgoing(
+            from: cachedFamilyInvites(familyId: familyId),
+            familyId: familyId
+        )
+    }
     
     /// Refresh a specific invite from Firestore to get latest status
     /// Also refreshes the published invites array from cache
@@ -250,6 +326,9 @@ class InviteRepository: ObservableObject {
             
             // Refresh published array from cache
             refreshInvitesFromCache(userId: userId)
+            if let listeningFamilyId {
+                refreshFamilyInvitesFromCache(familyId: listeningFamilyId)
+            }
         } catch {
             print("⚠️ Failed to refresh invite \(inviteId): \(error.localizedDescription)")
             // Still refresh from cache even if Firestore fetch failed
@@ -272,9 +351,24 @@ class InviteRepository: ObservableObject {
             invites = allInvites
         }
     }
+
+    private func refreshFamilyInvitesFromCache(familyId: String) {
+        familyInvites = cachedFamilyInvites(familyId: familyId)
+    }
+
+    private func cachedFamilyInvites(familyId: String) -> [Invite] {
+        guard let modelContext = modelContext else { return [] }
+        let searchFamilyId = familyId
+        let familyType = Invite.InviteType.family.rawValue
+        let descriptor = FetchDescriptor<Invite>(
+            predicate: #Predicate<Invite> { invite in
+                invite.familyId == searchFamilyId && invite.type == familyType
+            }
+        )
+        return (try? modelContext.fetch(descriptor)) ?? []
+    }
     
     deinit {
         stopListening()
     }
 }
-

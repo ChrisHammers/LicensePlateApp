@@ -128,6 +128,16 @@ struct FamilyDashboard: View {
                             }
                             .listRowBackground(Color.Theme.cardBackground)
                         }
+
+                        // Outgoing invites waiting for invitee response (visible to all members)
+                        if !viewModel.outgoingPendingInvites.isEmpty {
+                            Section("Waiting for response".localized) {
+                                ForEach(viewModel.outgoingPendingInvites) { invite in
+                                    FamilyOutgoingInviteRow(invite: invite)
+                                }
+                            }
+                            .listRowBackground(Color.Theme.cardBackground)
+                        }
                         
                         // Pending Member Requests (for creators/captains)
                         if viewModel.canManageFamily && viewModel.pendingMemberRequestsCount > 0 {
@@ -419,6 +429,77 @@ struct FamilyMemberRow: View {
             .padding(.vertical, 8)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\("Member".localized), \(member.roleEnum.displayName)")
+        }
+    }
+}
+
+private struct FamilyOutgoingInviteRow: View {
+    let invite: Invite
+    @State private var resolvedUser: AppUser?
+
+    private var displayUser: AppUser? {
+        resolvedUser
+    }
+
+    private var inviteeUserId: String? {
+        invite.toUserId
+    }
+
+    var body: some View {
+        Group {
+            if let user = displayUser {
+                UserDetailNavigationLink(user: user) {
+                    UserIdentityRowView(
+                        user: user,
+                        subtitle: "Waiting for response".localized,
+                        avatarSize: 50
+                    )
+                }
+                .accessibilityLabel(outgoingInviteAccessibilityLabel)
+            } else {
+                HStack {
+                    AvatarImageView(avatarId: nil, size: 50)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Pending User".localized)
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+
+                        Text("Waiting for response".localized)
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
+                    Spacer()
+                }
+                .padding(.vertical, 8)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(outgoingInviteAccessibilityLabel)
+            }
+        }
+        .task(id: inviteeUserId) {
+            await resolveUserIfNeeded()
+        }
+    }
+
+    private var outgoingInviteAccessibilityLabel: String {
+        if let user = displayUser {
+            return "family.a11y.outgoing_invite".localized(user.displayName, user.userName)
+        }
+        return "family.a11y.outgoing_invite_unknown".localized
+    }
+
+    private func resolveUserIfNeeded() async {
+        guard let inviteeUserId else { return }
+        do {
+            if let fetched = try await UserRepository.shared.getUser(userId: inviteeUserId) {
+                await MainActor.run {
+                    self.resolvedUser = fetched
+                }
+            }
+        } catch {
+            #if DEBUG
+            print("⚠️ FamilyOutgoingInviteRow failed to resolve user \(inviteeUserId): \(error.localizedDescription)")
+            #endif
         }
     }
 }

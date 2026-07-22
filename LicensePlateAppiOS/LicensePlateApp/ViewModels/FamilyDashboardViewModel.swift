@@ -15,6 +15,8 @@ class FamilyDashboardViewModel: ObservableObject {
     @Published var family: Family?
     @Published var members: [FamilyMember] = []
     @Published var pendingRequests: [PendingJoinRequest] = []
+    /// Pending outgoing family invites (any sender) for the active family — visible to all members.
+    @Published var outgoingPendingInvites: [Invite] = []
     @Published var activeShareCode: ShareCode?
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -55,10 +57,17 @@ class FamilyDashboardViewModel: ObservableObject {
             if !hasInviteObservation {
                 inviteRepository?.$invites
                     .sink { [weak self] _ in
-                        // Trigger view update by accessing the count property
+                        self?.refreshOutgoingPendingInvites()
                         self?.objectWillChange.send()
                     }
                     .store(in: &cancellables)
+
+                inviteRepository?.$familyInvites
+                    .sink { [weak self] _ in
+                        self?.refreshOutgoingPendingInvites()
+                    }
+                    .store(in: &cancellables)
+
                 hasInviteObservation = true
             }
         }
@@ -172,7 +181,9 @@ class FamilyDashboardViewModel: ObservableObject {
                         self?.family = nil
                         self?.members = []
                         self?.pendingRequests = []
+                        self?.outgoingPendingInvites = []
                         self?.activeShareCode = nil
+                        self?.inviteRepository?.stopListeningForFamily()
                     }
                     return
                 }
@@ -203,6 +214,8 @@ class FamilyDashboardViewModel: ObservableObject {
         }
         family = cached
         loadFamilyData(familyId: activeFamilyId)
+        inviteRepository?.startListeningForFamily(familyId: activeFamilyId)
+        refreshOutgoingPendingInvites(familyId: activeFamilyId)
     }
 
     func loadData(showLoading: Bool = true) {
@@ -230,8 +243,10 @@ class FamilyDashboardViewModel: ObservableObject {
                     self.family = nil
                     self.members = []
                     self.pendingRequests = []
+                    self.outgoingPendingInvites = []
                     self.activeShareCode = nil
                     self.isLoading = false
+                    self.inviteRepository?.stopListeningForFamily()
                     self.handFamilyListeningBackToBadge()
                     return nil
                 }
@@ -259,8 +274,10 @@ class FamilyDashboardViewModel: ObservableObject {
                             self.family = nil
                             self.members = []
                             self.pendingRequests = []
+                            self.outgoingPendingInvites = []
                             self.activeShareCode = nil
                             self.isLoading = false
+                            self.inviteRepository?.stopListeningForFamily()
                         }
                         // Clear activeFamilyId from user document
                         await self.clearActiveFamilyId()
@@ -277,6 +294,8 @@ class FamilyDashboardViewModel: ObservableObject {
                     // Only start listening if we successfully fetched members (have permissions)
                     await MainActor.run {
                         self.familyRepository.startListening(familyId: activeFamilyId)
+                        self.inviteRepository?.startListeningForFamily(familyId: activeFamilyId)
+                        self.refreshOutgoingPendingInvites(familyId: activeFamilyId)
                         // Keep badge projection in sync with the shared family listen.
                         SocialInboxBadgeService.shared.reassertBoundFamilyListening()
                     }
@@ -303,8 +322,10 @@ class FamilyDashboardViewModel: ObservableObject {
                         self.family = nil
                         self.members = []
                         self.pendingRequests = []
+                        self.outgoingPendingInvites = []
                         self.activeShareCode = nil
                         self.isLoading = false
+                        self.inviteRepository?.stopListeningForFamily()
                     }
                     // Clear activeFamilyId from user document
                     await self.clearActiveFamilyId()
@@ -325,8 +346,10 @@ class FamilyDashboardViewModel: ObservableObject {
                         self.family = nil
                         self.members = []
                         self.pendingRequests = []
+                        self.outgoingPendingInvites = []
                         self.activeShareCode = nil
                         self.isLoading = false
+                        self.inviteRepository?.stopListeningForFamily()
                         self.handFamilyListeningBackToBadge()
                     }
                 } else {
@@ -335,6 +358,10 @@ class FamilyDashboardViewModel: ObservableObject {
                     let canManage = await MainActor.run {
                         self.family = cachedFamily
                         self.loadFamilyData(familyId: activeFamilyId)
+                        if cachedFamily != nil {
+                            self.inviteRepository?.startListeningForFamily(familyId: activeFamilyId)
+                            self.refreshOutgoingPendingInvites(familyId: activeFamilyId)
+                        }
                         self.isLoading = false
                         
                         if self.family == nil {
@@ -370,6 +397,17 @@ class FamilyDashboardViewModel: ObservableObject {
     private func loadFamilyData(familyId: String) {
         members = familyRepository.getMembers(familyId: familyId)
         pendingRequests = familyRepository.getPendingRequests(familyId: familyId)
+        refreshOutgoingPendingInvites(familyId: familyId)
+    }
+
+    private func refreshOutgoingPendingInvites(familyId: String? = nil) {
+        let resolvedFamilyId = familyId ?? family?.familyId
+        guard let resolvedFamilyId,
+              let inviteRepository else {
+            outgoingPendingInvites = []
+            return
+        }
+        outgoingPendingInvites = inviteRepository.getPendingFamilyInvites(familyId: resolvedFamilyId)
     }
     
     /// Load active share code for the family

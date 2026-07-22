@@ -6,6 +6,7 @@
 import Foundation
 import SwiftData
 import Combine
+import FirebaseFunctions
 
 @MainActor
 final class AddFamilyMemberViewModel: ObservableObject {
@@ -25,6 +26,7 @@ final class AddFamilyMemberViewModel: ObservableObject {
     private var authService: FirebaseAuthService?
     private let userRepository: UserRepository
     private let familyRepository: FamilyRepository
+    private let inviteRepository: InviteRepository
 
     var showNoUsersFoundEmptyState: Bool {
         guard let authService else { return false }
@@ -39,17 +41,25 @@ final class AddFamilyMemberViewModel: ObservableObject {
     init(
         familyId: String,
         userRepository: UserRepository = .shared,
-        familyRepository: FamilyRepository = .shared
+        familyRepository: FamilyRepository = .shared,
+        inviteRepository: InviteRepository = .shared
     ) {
         self.familyId = familyId
         self.userRepository = userRepository
         self.familyRepository = familyRepository
+        self.inviteRepository = inviteRepository
     }
 
     func configure(authService: FirebaseAuthService, modelContext: ModelContext) {
         self.authService = authService
         userRepository.setModelContext(modelContext)
         familyRepository.setModelContext(modelContext)
+        inviteRepository.setModelContext(modelContext)
+        // Keep pending exclusions fresh while the sheet is open (also feeds Family Dashboard).
+        inviteRepository.startListeningForFamily(familyId: familyId)
+        if let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id {
+            inviteRepository.startListening(userId: userId)
+        }
     }
 
     func cancelSearchTask() {
@@ -112,12 +122,29 @@ final class AddFamilyMemberViewModel: ObservableObject {
 
         do {
             let currentUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
-            let results = try await userRepository.searchUsers(
+            var results = try await userRepository.searchUsers(
                 query: searchQuery,
                 searchType: searchType,
                 excludeUserId: currentUserId,
                 searchingUser: authService.currentUser
             )
+
+            let memberIds = Set(familyRepository.getMembers(familyId: familyId).map(\.userId))
+            let pendingJoinIds = Set(
+                familyRepository.getPendingRequests(familyId: familyId)
+                    .filter { $0.statusEnum == .pending }
+                    .map(\.userId)
+            )
+            let pendingInviteeIds = Set(
+                inviteRepository.getPendingFamilyInvites(familyId: familyId).compactMap(\.toUserId)
+            )
+            let excludedUserIds = memberIds.union(pendingJoinIds).union(pendingInviteeIds)
+
+            results = results.filter { result in
+                let userId = result.user.firebaseUID ?? result.user.id
+                return !excludedUserIds.contains(userId)
+            }
+
             searchResults = results
             isSearching = false
             hasCompletedSearch = true
@@ -170,23 +197,38 @@ final class AddFamilyMemberViewModel: ObservableObject {
                 showSuccessAlert = true
             } catch {
                 FriendsFamilyInviteAnalytics.logInviteFailure(error)
-                let description = error.localizedDescription
-                let userFriendlyMessage: String
-                if description.contains("permission-denied") {
-                    userFriendlyMessage = "You don't have permission to invite members to this family.".localized
-                } else if description.contains("failed-precondition") {
-                    userFriendlyMessage = "Unable to invite this user. They may already be in a family or have reached the limit.".localized
-                } else if description.contains("not-found") {
-                    userFriendlyMessage = "User not found.".localized
-                } else if description.contains("unauthenticated") {
-                    userFriendlyMessage = "Please sign in to send invites.".localized
-                } else {
-                    userFriendlyMessage = "Failed to send invite: %@".localized(description)
-                }
                 isInviting = false
-                errorMessage = userFriendlyMessage
+                errorMessage = Self.userFacingSendError(error)
                 showError = true
             }
         }
+    }
+
+    private static func userFacingSendError(_ error: Error) -> String {
+        let nsError = error as NSError
+        if nsError.domain == FunctionsErrorDomain,
+           let code = FunctionsErrorCode(rawValue: nsError.code),
+           code == .alreadyExists {
+            return "Pending invite already exists.".localized
+        }
+
+        let description = error.localizedDescription
+        if description.contains("already-exists")
+            || description.localizedCaseInsensitiveContains("Pending invite already exists") {
+            return "Pending invite already exists.".localized
+        }
+        if description.contains("permission-denied") {
+            return "You don't have permission to invite members to this family.".localized
+        }
+        if description.contains("failed-precondition") {
+            return "Unable to invite this user. They may already be in a family or have reached the limit.".localized
+        }
+        if description.contains("not-found") {
+            return "User not found.".localized
+        }
+        if description.contains("unauthenticated") {
+            return "Please sign in to send invites.".localized
+        }
+        return "Failed to send invite: %@".localized(description)
     }
 }

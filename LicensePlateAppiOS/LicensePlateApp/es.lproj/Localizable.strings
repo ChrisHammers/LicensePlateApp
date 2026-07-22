@@ -1121,3 +1121,6 @@
 "qr_scanner.a11y.hint" = "Apunta la cámara a un código QR para escanearlo";
 "family.a11y.invite_member_button" = "Invitar a %@";
 "family.a11y.empty_state" = "No hay familia activa. Crea una familia nueva o únete a una existente.";
+"family.a11y.outgoing_invite" = "Invitación familiar enviada a %@, @%@, esperando respuesta";
+"family.a11y.outgoing_invite_unknown" = "Invitación familiar enviada, esperando respuesta";
+"Pending invite already exists." = "Ya existe una invitación pendiente.";

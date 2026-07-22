@@ -184,8 +184,13 @@ service cloud.firestore {
 
     // INVITES
     match /invites/{inviteId} {
+      // Parties can always read; family members can read family invites for their family.
       allow read: if isSignedIn() &&
-        (uid() == resource.data.fromUserId || uid() == resource.data.toUserId);
+        (uid() == resource.data.fromUserId
+          || uid() == resource.data.toUserId
+          || (resource.data.type == "family"
+              && resource.data.familyId is string
+              && isFamilyMember(resource.data.familyId)));
 
       allow create: if isRegisteredAccount();
       allow update: if isRegisteredAccount() &&

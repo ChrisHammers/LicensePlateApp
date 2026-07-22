@@ -8,6 +8,10 @@ import { enforcedCallable } from "./callableOptions";
 import { assertRegisteredAccount } from "./callableAuth";
 import { loadFamilyName } from "./familyInviteDisplay";
 import {
+  PENDING_FAMILY_INVITE_EXISTS_MESSAGE,
+  shouldRejectDuplicatePendingFamilyInvite,
+} from "./familyInviteDuplicate";
+import {
   familyMembershipGrantUserUpdate,
   familyMembershipLeaveUserUpdate,
 } from "./wasEverInFamilyUserUpdates";
@@ -186,6 +190,23 @@ export const sendFamilyInvite = enforcedCallable(
           "User is not searchable by this method"
         );
       }
+    }
+
+    // Reject duplicate pending invites for the same family + invitee (any captain/creator)
+    const existingInvite = await db
+      .collection("invites")
+      .where("familyId", "==", familyId)
+      .where("toUserId", "==", toUserId)
+      .where("type", "==", "family")
+      .where("status", "==", "pending")
+      .limit(1)
+      .get();
+
+    if (shouldRejectDuplicatePendingFamilyInvite(existingInvite.empty)) {
+      throw new functions.https.HttpsError(
+        "already-exists",
+        PENDING_FAMILY_INVITE_EXISTS_MESSAGE
+      );
     }
 
     // Create invite
