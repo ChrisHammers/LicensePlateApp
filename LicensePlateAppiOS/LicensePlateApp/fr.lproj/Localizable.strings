@@ -1121,6 +1121,13 @@
 "qr_scanner.a11y.hint" = "Pointez la caméra vers un code QR pour le numériser";
 "family.a11y.invite_member_button" = "Inviter %@";
 "family.a11y.empty_state" = "Aucune famille active. Créez une famille ou rejoignez-en une.";
+"family.a11y.awaiting_approval" = "Vous avez demandé à rejoindre la famille %@. En attente de l’approbation du capitaine";
+"family.a11y.awaiting_approval_generic" = "Vous avez demandé à rejoindre une famille. En attente de l’approbation du capitaine";
+"family.a11y.awaiting_approval_actions_disabled" = "Indisponible tant qu’une demande d’adhésion est en attente d’approbation";
+"family.awaiting_approval.title" = "Famille %@";
+"family.awaiting_approval.request" = "Vous avez demandé à rejoindre la famille %@";
+"family.awaiting_approval.request_generic" = "Vous avez demandé à rejoindre une famille";
+"family.awaiting_approval.actions_locked" = "Créer et Rejoindre sont indisponibles jusqu’à ce que cette demande soit traitée.";
 "family.a11y.outgoing_invite" = "Invitation familiale envoyée à %@, @%@, en attente de réponse";
 "family.a11y.outgoing_invite_unknown" = "Invitation familiale envoyée, en attente de réponse";
 "Pending invite already exists." = "Une invitation en attente existe déjà.";

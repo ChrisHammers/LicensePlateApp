@@ -1153,6 +1153,13 @@
 "qr_scanner.a11y.hint" = "Point the camera at a QR code to scan it";
 "family.a11y.invite_member_button" = "Invite %@";
 "family.a11y.empty_state" = "No active family. Create a new family or join an existing one.";
+"family.a11y.awaiting_approval" = "You requested to join the %@ family. Waiting for captain approval";
+"family.a11y.awaiting_approval_generic" = "You requested to join a family. Waiting for captain approval";
+"family.a11y.awaiting_approval_actions_disabled" = "Unavailable while a join request is waiting for approval";
+"family.awaiting_approval.title" = "%@ family";
+"family.awaiting_approval.request" = "You requested to join the %@ family";
+"family.awaiting_approval.request_generic" = "You requested to join a family";
+"family.awaiting_approval.actions_locked" = "Create and Join are unavailable until this request is resolved.";
 "family.a11y.outgoing_invite" = "Outgoing family invite to %@, @%@, waiting for response";
 "family.a11y.outgoing_invite_unknown" = "Outgoing family invite, waiting for response";
 "Pending invite already exists." = "Pending invite already exists.";

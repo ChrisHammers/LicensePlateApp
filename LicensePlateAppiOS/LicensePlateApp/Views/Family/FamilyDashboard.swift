@@ -166,29 +166,73 @@ struct FamilyDashboard: View {
                     .listStyle(.insetGrouped)
                     .scrollContentBackground(.hidden)
                 } else {
-                    // No active family - show create/join options
+                    // No active family — awaiting captain approval, or create/join options
+                    let isAwaitingApproval = viewModel.awaitingApprovalInvite != nil
                     VStack(spacing: 24) {
                         Spacer()
                         
                         VStack(spacing: 12) {
-                            Image(systemName: "house.fill")
+                            Image(systemName: isAwaitingApproval ? "hourglass.circle.fill" : "house.fill")
                                 .font(.system(size: 60))
                                 .foregroundStyle(Color.Theme.primaryBlue.opacity(0.6))
                                 .accessibleDecorative()
                             
-                            Text("No active family".localized)
-                                .font(.system(.title2, design: .rounded))
-                                .fontWeight(.bold)
-                                .foregroundStyle(Color.Theme.primaryBlue)
-                            
-                            Text("Create a new family or join an existing one".localized)
-                                .font(.system(.body, design: .rounded))
-                                .foregroundStyle(Color.Theme.softBrown)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 32)
+                            if let invite = viewModel.awaitingApprovalInvite {
+                                let familyName: String? = {
+                                    let name = invite.familyName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                                    return name.isEmpty ? nil : name
+                                }()
+                                Text(
+                                    familyName.map { "family.awaiting_approval.title".localized($0) }
+                                        ?? "Family".localized
+                                )
+                                    .font(.system(.title2, design: .rounded))
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(Color.Theme.primaryBlue)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 32)
+                                    .padding(.bottom, 15)
+                                
+                                Text(
+                                    familyName.map { "family.awaiting_approval.request".localized($0) }
+                                        ?? "family.awaiting_approval.request_generic".localized
+                                )
+                                    .font(.system(.body, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 32)
+                                
+                                Text("Waiting for Captain approval".localized)
+                                    .font(.system(.subheadline, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown.opacity(0.9))
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 32)
+                                    .padding(.bottom, 35)
+                            } else {
+                                Text("No active family".localized)
+                                    .font(.system(.title2, design: .rounded))
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(Color.Theme.primaryBlue)
+                                
+                                Text("Create a new family or join an existing one".localized)
+                                    .font(.system(.body, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown)
+                                    .multilineTextAlignment(.center)
+                                    .padding(.horizontal, 32)
+                            }
                         }
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel("family.a11y.empty_state".localized)
+                        .accessibilityLabel(
+                            isAwaitingApproval
+                                ? {
+                                    let name = viewModel.awaitingApprovalInvite?.familyName?
+                                        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                                    return name.isEmpty
+                                        ? "family.a11y.awaiting_approval_generic".localized
+                                        : "family.a11y.awaiting_approval".localized(name)
+                                }()
+                                : "family.a11y.empty_state".localized
+                        )
                         
                         VStack(spacing: 16) {
                             Button {
@@ -203,12 +247,17 @@ struct FamilyDashboard: View {
                                 .fontWeight(.semibold)
                                 .frame(maxWidth: .infinity)
                                 .padding()
-                                .background(Color.Theme.primaryBlue)
+                                .background(Color.Theme.primaryBlue.opacity(isAwaitingApproval ? 0.45 : 1))
                                 .foregroundColor(.white)
                                 .cornerRadius(12)
                             }
-                            .disabled(!authService.isOnline)
-                            .accessibleButton(label: "family.a11y.create_family".localized)
+                            .disabled(!authService.isOnline || isAwaitingApproval)
+                            .accessibleButton(
+                                label: "family.a11y.create_family".localized,
+                                hint: isAwaitingApproval
+                                    ? "family.a11y.awaiting_approval_actions_disabled".localized
+                                    : nil
+                            )
                             
                             Button {
                                 showJoinFamilySheet = true
@@ -223,15 +272,28 @@ struct FamilyDashboard: View {
                                 .frame(maxWidth: .infinity)
                                 .padding()
                                 .background(Color.Theme.cardBackground)
-                                .foregroundColor(Color.Theme.primaryBlue)
+                                .foregroundColor(
+                                    Color.Theme.primaryBlue.opacity(isAwaitingApproval ? 0.45 : 1)
+                                )
                                 .cornerRadius(12)
                             }
-                            .disabled(!authService.isOnline)
-                            .accessibleButton(label: "family.a11y.join_family".localized)
+                            .disabled(!authService.isOnline || isAwaitingApproval)
+                            .accessibleButton(
+                                label: "family.a11y.join_family".localized,
+                                hint: isAwaitingApproval
+                                    ? "family.a11y.awaiting_approval_actions_disabled".localized
+                                    : nil
+                            )
                         }
                         .padding(.horizontal, 32)
                         
-                        if !authService.isOnline {
+                        if isAwaitingApproval {
+                            Text("family.awaiting_approval.actions_locked".localized)
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 32)
+                        } else if !authService.isOnline {
                             Text("Requires network connection".localized)
                                 .font(.system(.caption, design: .rounded))
                                 .foregroundStyle(Color.Theme.softBrown)

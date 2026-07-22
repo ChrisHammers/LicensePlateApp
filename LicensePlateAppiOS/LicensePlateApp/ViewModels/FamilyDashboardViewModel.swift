@@ -17,6 +17,8 @@ class FamilyDashboardViewModel: ObservableObject {
     @Published var pendingRequests: [PendingJoinRequest] = []
     /// Pending outgoing family invites (any sender) for the active family — visible to all members.
     @Published var outgoingPendingInvites: [Invite] = []
+    /// Accepted family invite while the user has no active family (awaiting captain approval).
+    @Published var awaitingApprovalInvite: Invite?
     @Published var activeShareCode: ShareCode?
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -58,6 +60,7 @@ class FamilyDashboardViewModel: ObservableObject {
                 inviteRepository?.$invites
                     .sink { [weak self] _ in
                         self?.refreshOutgoingPendingInvites()
+                        self?.refreshAwaitingApprovalInvite()
                         self?.objectWillChange.send()
                     }
                     .store(in: &cancellables)
@@ -69,6 +72,7 @@ class FamilyDashboardViewModel: ObservableObject {
                     .store(in: &cancellables)
 
                 hasInviteObservation = true
+                refreshAwaitingApprovalInvite()
             }
         }
     }
@@ -184,6 +188,7 @@ class FamilyDashboardViewModel: ObservableObject {
                         self?.outgoingPendingInvites = []
                         self?.activeShareCode = nil
                         self?.inviteRepository?.stopListeningForFamily()
+                        self?.refreshAwaitingApprovalInvite()
                     }
                     return
                 }
@@ -216,6 +221,7 @@ class FamilyDashboardViewModel: ObservableObject {
         loadFamilyData(familyId: activeFamilyId)
         inviteRepository?.startListeningForFamily(familyId: activeFamilyId)
         refreshOutgoingPendingInvites(familyId: activeFamilyId)
+        awaitingApprovalInvite = nil
     }
 
     func loadData(showLoading: Bool = true) {
@@ -247,6 +253,7 @@ class FamilyDashboardViewModel: ObservableObject {
                     self.activeShareCode = nil
                     self.isLoading = false
                     self.inviteRepository?.stopListeningForFamily()
+                    self.refreshAwaitingApprovalInvite()
                     self.handFamilyListeningBackToBadge()
                     return nil
                 }
@@ -278,6 +285,7 @@ class FamilyDashboardViewModel: ObservableObject {
                             self.activeShareCode = nil
                             self.isLoading = false
                             self.inviteRepository?.stopListeningForFamily()
+                            self.refreshAwaitingApprovalInvite()
                         }
                         // Clear activeFamilyId from user document
                         await self.clearActiveFamilyId()
@@ -304,6 +312,7 @@ class FamilyDashboardViewModel: ObservableObject {
                         self.family = fetchedFamily
                         self.members = membersWithUsers
                         self.pendingRequests = pendingWithUsers
+                        self.awaitingApprovalInvite = nil
                         self.isLoading = false
                         
                         // Check if user can manage family (needs members to be set first)
@@ -326,6 +335,7 @@ class FamilyDashboardViewModel: ObservableObject {
                         self.activeShareCode = nil
                         self.isLoading = false
                         self.inviteRepository?.stopListeningForFamily()
+                        self.refreshAwaitingApprovalInvite()
                     }
                     // Clear activeFamilyId from user document
                     await self.clearActiveFamilyId()
@@ -350,6 +360,7 @@ class FamilyDashboardViewModel: ObservableObject {
                         self.activeShareCode = nil
                         self.isLoading = false
                         self.inviteRepository?.stopListeningForFamily()
+                        self.refreshAwaitingApprovalInvite()
                         self.handFamilyListeningBackToBadge()
                     }
                 } else {
@@ -361,6 +372,9 @@ class FamilyDashboardViewModel: ObservableObject {
                         if cachedFamily != nil {
                             self.inviteRepository?.startListeningForFamily(familyId: activeFamilyId)
                             self.refreshOutgoingPendingInvites(familyId: activeFamilyId)
+                            self.awaitingApprovalInvite = nil
+                        } else {
+                            self.refreshAwaitingApprovalInvite()
                         }
                         self.isLoading = false
                         
@@ -408,6 +422,21 @@ class FamilyDashboardViewModel: ObservableObject {
             return
         }
         outgoingPendingInvites = inviteRepository.getPendingFamilyInvites(familyId: resolvedFamilyId)
+    }
+
+    /// Accepted invite(s) while the user has no active family — empty dashboard "waiting for approval".
+    private func refreshAwaitingApprovalInvite() {
+        guard family == nil,
+              authService.currentUser?.activeFamilyId == nil,
+              let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id,
+              let inviteRepository else {
+            awaitingApprovalInvite = nil
+            return
+        }
+        awaitingApprovalInvite = FamilyAwaitingApprovalFilter.primaryAwaitingApprovalInvite(
+            from: inviteRepository.invites,
+            userId: userId
+        )
     }
     
     /// Load active share code for the family

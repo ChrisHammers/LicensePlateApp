@@ -570,18 +570,38 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         clientMetadata,
       });
     } else {
-      // Decline request
+      // Decline request — also flip the matching accepted invite so the requester's empty dashboard clears
       batch.update(requestDoc.ref, {
         status: "declined",
         resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
+      const matchingInvites = await db
+        .collection("invites")
+        .where("familyId", "==", familyId)
+        .where("toUserId", "==", requestData.userId)
+        .where("type", "==", "family")
+        .where("status", "==", "accepted")
+        .limit(5)
+        .get();
+
+      for (const inviteDoc of matchingInvites.docs) {
+        batch.update(inviteDoc.ref, {
+          status: "declined",
+          respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
 
       await writeAuditLog({
         eventType: "family_join_request_declined",
         actorId: userId,
         subjectType: "family",
         subjectId: familyId,
-        metadata: { requestId, userId: requestData.userId },
+        metadata: {
+          requestId,
+          userId: requestData.userId,
+          declinedInviteCount: matchingInvites.size,
+        },
         clientMetadata,
       });
     }
