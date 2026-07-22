@@ -139,6 +139,7 @@ struct RootView: View {
             TripRoutePointRepository.shared.setModelContext(modelContext)
             PublicLifetimeStatsRepository.shared.setModelContext(modelContext)
             FamilyMemberUserIdsRepository.shared.setModelContext(modelContext)
+            FriendUserIdsRepository.shared.setModelContext(modelContext)
             EntitlementService.shared.setModelContext(modelContext)
             LifetimeStatsCoordinator.shared.authService = authService
             let syncCoordinator = SyncCoordinator.shared

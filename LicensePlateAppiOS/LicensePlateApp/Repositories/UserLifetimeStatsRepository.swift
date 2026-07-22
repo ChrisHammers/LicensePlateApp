@@ -44,6 +44,9 @@ final class UserLifetimeStatsRepository {
             totalDiscoveries: entity.totalDiscoveries,
             totalWeightedScore: entity.totalWeightedScore,
             familyOnlyTripsCount: entity.familyOnlyTripsCount,
+            friendsOnlyTripsCount: entity.friendsOnlyTripsCount,
+            mixedFriendsFamilyTripsCount: entity.mixedFriendsFamilyTripsCount,
+            entireFamilyTripsCount: entity.entireFamilyTripsCount,
             lastComputedAt: entity.lastComputedAt
         )
     }
@@ -65,6 +68,9 @@ final class UserLifetimeStatsRepository {
         entity.totalDiscoveries = stats.totalDiscoveries
         entity.totalWeightedScore = stats.totalWeightedScore
         entity.familyOnlyTripsCount = stats.familyOnlyTripsCount
+        entity.friendsOnlyTripsCount = stats.friendsOnlyTripsCount
+        entity.mixedFriendsFamilyTripsCount = stats.mixedFriendsFamilyTripsCount
+        entity.entireFamilyTripsCount = stats.entireFamilyTripsCount
         entity.lastComputedAt = stats.lastComputedAt
         do {
             try ctx.save()

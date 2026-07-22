@@ -27,6 +27,7 @@ final class LifetimeStatsCoordinator: ObservableObject {
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
     private let userLifetimeStatsRepository: UserLifetimeStatsRepository
     private let familyMemberUserIdsRepository: FamilyMemberUserIdsRepository
+    private let friendUserIdsRepository: FriendUserIdsRepository
     let publicLifetimeStatsRepository: PublicLifetimeStatsRepository
 
     private var boundProfileUserId: String?
@@ -42,6 +43,7 @@ final class LifetimeStatsCoordinator: ObservableObject {
         tripActivityEventRepository: TripActivityEventRepositoryProtocol = TripActivityEventRepository.shared,
         userLifetimeStatsRepository: UserLifetimeStatsRepository = .shared,
         familyMemberUserIdsRepository: FamilyMemberUserIdsRepository = .shared,
+        friendUserIdsRepository: FriendUserIdsRepository = .shared,
         publicLifetimeStatsRepository: PublicLifetimeStatsRepository = .shared
     ) {
         self.tripSessionRepository = tripSessionRepository
@@ -49,6 +51,7 @@ final class LifetimeStatsCoordinator: ObservableObject {
         self.tripActivityEventRepository = tripActivityEventRepository
         self.userLifetimeStatsRepository = userLifetimeStatsRepository
         self.familyMemberUserIdsRepository = familyMemberUserIdsRepository
+        self.friendUserIdsRepository = friendUserIdsRepository
         self.publicLifetimeStatsRepository = publicLifetimeStatsRepository
 
         publicLifetimeStatsRepository.objectWillChange
@@ -125,7 +128,10 @@ final class LifetimeStatsCoordinator: ObservableObject {
                 AnalyticsService.shared.log(
                     .lifetimeStatsRecomputeSucceeded(
                         completedTripCount: computed.totalCompletedTrips,
-                        familyOnlyTripCount: computed.familyOnlyTripsCount
+                        familyOnlyTripCount: computed.familyOnlyTripsCount,
+                        friendsOnlyTripCount: computed.friendsOnlyTripsCount,
+                        mixedFriendsFamilyTripCount: computed.mixedFriendsFamilyTripsCount,
+                        entireFamilyTripCount: computed.entireFamilyTripsCount
                     )
                 )
                 AnalyticsService.shared.log(.lifetimeStatsFallbackRecomputeUsed(reason: "offline_or_retry"))
@@ -179,6 +185,7 @@ final class LifetimeStatsCoordinator: ObservableObject {
 
     private func buildRecomputeInput(userId: String) throws -> LifetimeStatsRecomputeInput {
         let familyIds = try familyMemberUserIdsRepository.activeFamilyMemberUserIds(forAppUserId: userId)
+        let friendIds = try friendUserIdsRepository.activeFriendUserIds(forAppUserId: userId)
         let archived = try tripSessionRepository.loadArchivedSessions(
             userId: userId,
             limit: Self.archivedTripFetchLimit,
@@ -208,6 +215,7 @@ final class LifetimeStatsCoordinator: ObservableObject {
         return LifetimeStatsRecomputeInput(
             subjectUserId: userId,
             familyMemberUserIds: familyIds,
+            friendUserIds: friendIds,
             trips: trips
         )
     }

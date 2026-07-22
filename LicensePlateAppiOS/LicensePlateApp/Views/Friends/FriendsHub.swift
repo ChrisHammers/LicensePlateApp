@@ -272,6 +272,7 @@ struct FriendRow: View {
     @Environment(\.modelContext) private var modelContext
     @ObservedObject private var publicLifetimeStatsRepository = PublicLifetimeStatsRepository.shared
     @State private var user: AppUser?
+    @State private var relationshipLabel: String = ""
 
     private var otherUserId: String? {
         guard let currentUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else {
@@ -296,6 +297,7 @@ struct FriendRow: View {
                     publicLifetimeStatsRepository.ensureObservingFriend(userId: oid)
                 }
                 await loadUser()
+                refreshRelationshipLabel()
             }
         } else {
             rowContent
@@ -306,6 +308,7 @@ struct FriendRow: View {
                         publicLifetimeStatsRepository.ensureObservingFriend(userId: oid)
                     }
                     await loadUser()
+                    refreshRelationshipLabel()
                 }
         }
     }
@@ -329,6 +332,13 @@ struct FriendRow: View {
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
 
+                    if !relationshipLabel.isEmpty {
+                        Text(relationshipLabel)
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown.opacity(0.9))
+                            .accessibilityHidden(true)
+                    }
+
                     if let oid = otherUserId, let stats = publicLifetimeStatsRepository.snapshot(forUserId: oid) {
                         Text("friends.public_lifetime_stats.trips_line".localized(stats.totalCompletedTrips))
                             .font(.system(.caption2, design: .rounded))
@@ -338,7 +348,7 @@ struct FriendRow: View {
                             )
                     }
                 } else {
-                    Text("Friend".localized)
+                    Text(relationshipLabel.isEmpty ? "Friend".localized : relationshipLabel)
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Theme.primaryBlue)
@@ -371,13 +381,27 @@ struct FriendRow: View {
     }
 
     private var accessibilityLabelText: String {
+        let relationship = relationshipLabel.isEmpty ? "Friend".localized : relationshipLabel
         if let user = user {
             if let oid = otherUserId, let stats = publicLifetimeStatsRepository.snapshot(forUserId: oid) {
-                return "\(user.displayName), @\(user.userName), \("friends.public_lifetime_stats.trips_line".localized(stats.totalCompletedTrips))"
+                return "\(user.displayName), @\(user.userName), \(relationship), \("friends.public_lifetime_stats.trips_line".localized(stats.totalCompletedTrips))"
             }
-            return "\(user.displayName), @\(user.userName)"
+            return "\(user.displayName), @\(user.userName), \(relationship)"
         }
-        return "Friend".localized
+        return relationship
+    }
+
+    private func refreshRelationshipLabel() {
+        guard let oid = otherUserId,
+              let currentUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else {
+            relationshipLabel = "Friend".localized
+            return
+        }
+        let familyIds = (try? FamilyMemberUserIdsRepository.shared.activeFamilyMemberUserIds(forAppUserId: currentUserId)) ?? []
+        relationshipLabel = SocialRelationshipLabel.localizedLabel(
+            isFamily: familyIds.contains(oid),
+            isFriend: true
+        )
     }
 
     private func loadUser() async {

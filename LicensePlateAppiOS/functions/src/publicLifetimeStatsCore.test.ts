@@ -3,6 +3,8 @@ import * as admin from "firebase-admin";
 import { KIND_REGION_FOUND, PK } from "./gameplayEventResolver";
 import {
   isFamilyOnlyTrip,
+  isEntireFamilyTrip,
+  classifySocialTrip,
   previewTripEndedAggregates,
   KIND_TRIP_ENDED,
   parseCommonConfigGameMode,
@@ -53,8 +55,32 @@ describe("publicLifetimeStatsCore", () => {
     expect(isFamilyOnlyTrip([], new Set(["a"]))).toBe(false);
   });
 
-  it("isFamilyOnlyTrip true when roster subset of family", () => {
+  it("isFamilyOnlyTrip false for solo even when in family", () => {
+    expect(isFamilyOnlyTrip(["a"], new Set(["a", "b"]))).toBe(false);
+  });
+
+  it("isFamilyOnlyTrip true when roster subset of family with 2+", () => {
     expect(isFamilyOnlyTrip(["a", "b"], new Set(["a", "b", "c"]))).toBe(true);
+  });
+
+  it("isEntireFamilyTrip requires full family on roster", () => {
+    expect(isEntireFamilyTrip(["a", "b"], new Set(["a", "b"]))).toBe(true);
+    expect(isEntireFamilyTrip(["a", "b"], new Set(["a", "b", "c"]))).toBe(false);
+    expect(isEntireFamilyTrip(["a", "b", "x"], new Set(["a", "b"]))).toBe(true);
+    expect(isEntireFamilyTrip(["a"], new Set(["a"]))).toBe(false);
+  });
+
+  it("classifySocialTrip family wins for dual peers", () => {
+    expect(classifySocialTrip(["me", "sis"], "me", new Set(["me", "sis"]), new Set(["sis"]))).toBe(
+      "familyOnly"
+    );
+  });
+
+  it("classifySocialTrip friendsOnly and mixed", () => {
+    expect(classifySocialTrip(["me", "pal"], "me", new Set(["me"]), new Set(["pal"]))).toBe("friendsOnly");
+    expect(
+      classifySocialTrip(["me", "sis", "pal"], "me", new Set(["me", "sis"]), new Set(["pal", "sis"]))
+    ).toBe("mixed");
   });
 
   it("preview returns null for cancelled session", () => {
@@ -64,6 +90,7 @@ describe("publicLifetimeStatsCore", () => {
       gameDocs: [],
       activityEventDocs: [],
       familyMemberIdsByUser: { u1: new Set() },
+      friendUserIdsByUser: { u1: new Set() },
     });
     expect(p).toBeNull();
   });
@@ -84,6 +111,7 @@ describe("publicLifetimeStatsCore", () => {
       gameDocs: [mockGameDoc(gid, "competitive")],
       activityEventDocs: events,
       familyMemberIdsByUser: { u1: new Set(["u1", "u2"]), u2: new Set(["u1", "u2"]) },
+      friendUserIdsByUser: { u1: new Set(), u2: new Set() },
     });
     expect(preview).not.toBeNull();
     expect(preview!.perUser.u1.totalCompletedTrips).toBe(1);
@@ -92,6 +120,9 @@ describe("publicLifetimeStatsCore", () => {
     expect(preview!.perUser.u2.totalDiscoveries).toBe(0);
     expect(preview!.perUser.u1.familyOnlyTripsCount).toBe(1);
     expect(preview!.perUser.u2.familyOnlyTripsCount).toBe(1);
+    expect(preview!.perUser.u1.entireFamilyTripsCount).toBe(1);
+    expect(preview!.perUser.u1.friendsOnlyTripsCount).toBe(0);
+    expect(preview!.perUser.u1.mixedFriendsFamilyTripsCount).toBe(0);
   });
 
   it("parseCommonConfigGameMode defaults collaborative on bad base64", () => {

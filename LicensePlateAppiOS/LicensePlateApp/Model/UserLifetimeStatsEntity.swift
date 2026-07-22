@@ -2,7 +2,7 @@
 //  UserLifetimeStatsEntity.swift
 //  LicensePlateApp
 //
-//  SwiftData cache row for profile lifetime stats (Schema V17+).
+//  SwiftData cache row for profile lifetime stats.
 //
 
 import Foundation
@@ -16,6 +16,9 @@ final class UserLifetimeStatsEntity {
     var totalDiscoveries: Int
     var totalWeightedScore: Double
     var familyOnlyTripsCount: Int
+    var friendsOnlyTripsCount: Int
+    var mixedFriendsFamilyTripsCount: Int
+    var entireFamilyTripsCount: Int
     var lastComputedAt: Date
 
     init(
@@ -25,6 +28,9 @@ final class UserLifetimeStatsEntity {
         totalDiscoveries: Int = 0,
         totalWeightedScore: Double = 0,
         familyOnlyTripsCount: Int = 0,
+        friendsOnlyTripsCount: Int = 0,
+        mixedFriendsFamilyTripsCount: Int = 0,
+        entireFamilyTripsCount: Int = 0,
         lastComputedAt: Date = .now
     ) {
         self.userId = userId
@@ -33,6 +39,9 @@ final class UserLifetimeStatsEntity {
         self.totalDiscoveries = totalDiscoveries
         self.totalWeightedScore = totalWeightedScore
         self.familyOnlyTripsCount = familyOnlyTripsCount
+        self.friendsOnlyTripsCount = friendsOnlyTripsCount
+        self.mixedFriendsFamilyTripsCount = mixedFriendsFamilyTripsCount
+        self.entireFamilyTripsCount = entireFamilyTripsCount
         self.lastComputedAt = lastComputedAt
     }
 }

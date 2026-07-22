@@ -111,7 +111,10 @@ final class InvitePlayersViewModel: ObservableObject {
         var rows: [InviteCandidate] = []
         rows.reserveCapacity(ids.count)
         for id in ids {
-            let source = familyIds.contains(id) ? (friendIds.contains(id) ? "Friend & Family".localized : "Family".localized) : "Friend".localized
+            let source = SocialRelationshipLabel.localizedLabel(
+                isFamily: familyIds.contains(id),
+                isFriend: friendIds.contains(id)
+            )
             rows.append(
                 InviteCandidate(
                     userId: id,

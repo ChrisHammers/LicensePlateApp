@@ -7,15 +7,6 @@
 
 import Foundation
 
-/// Family-only trip rule for lifetime stats (active roster ⊆ family members). Shared with unit tests.
-enum LifetimeStatsFamilyClassification: Sendable {
-    static func isFamilyOnlyTrip(activeParticipants: [TripParticipant], familyMemberUserIds: Set<String>) -> Bool {
-        guard !familyMemberUserIds.isEmpty else { return false }
-        guard !activeParticipants.isEmpty else { return false }
-        return activeParticipants.allSatisfy { familyMemberUserIds.contains($0.userId) }
-    }
-}
-
 enum LifetimeStatsRecomputeEngine {
 
     static func compute(_ input: LifetimeStatsRecomputeInput) throws -> UserLifetimeStats {
@@ -24,6 +15,9 @@ enum LifetimeStatsRecomputeEngine {
         var totalDiscoveries = 0
         var totalWeightedScore: Double = 0
         var familyOnlyTripsCount = 0
+        var friendsOnlyTripsCount = 0
+        var mixedFriendsFamilyTripsCount = 0
+        var entireFamilyTripsCount = 0
         let now = Date()
 
         for trip in input.trips {
@@ -49,11 +43,28 @@ enum LifetimeStatsRecomputeEngine {
             }
 
             let activeRoster = session.participants.filter { $0.leftAt == nil }
-            if LifetimeStatsFamilyClassification.isFamilyOnlyTrip(
+            let bucket = LifetimeStatsSocialClassification.classifySocialTrip(
+                activeParticipants: activeRoster,
+                subjectUserId: input.subjectUserId,
+                familyMemberUserIds: input.familyMemberUserIds,
+                friendUserIds: input.friendUserIds
+            )
+            switch bucket {
+            case .familyOnly:
+                familyOnlyTripsCount += 1
+            case .friendsOnly:
+                friendsOnlyTripsCount += 1
+            case .mixed:
+                mixedFriendsFamilyTripsCount += 1
+            case .neither:
+                break
+            }
+
+            if LifetimeStatsSocialClassification.isEntireFamilyTrip(
                 activeParticipants: activeRoster,
                 familyMemberUserIds: input.familyMemberUserIds
             ) {
-                familyOnlyTripsCount += 1
+                entireFamilyTripsCount += 1
             }
         }
 
@@ -63,6 +74,9 @@ enum LifetimeStatsRecomputeEngine {
             totalDiscoveries: totalDiscoveries,
             totalWeightedScore: totalWeightedScore,
             familyOnlyTripsCount: familyOnlyTripsCount,
+            friendsOnlyTripsCount: friendsOnlyTripsCount,
+            mixedFriendsFamilyTripsCount: mixedFriendsFamilyTripsCount,
+            entireFamilyTripsCount: entireFamilyTripsCount,
             lastComputedAt: now
         )
     }

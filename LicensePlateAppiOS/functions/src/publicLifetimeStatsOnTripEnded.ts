@@ -19,6 +19,23 @@ async function familyMemberIdsForUser(userId: string): Promise<Set<string>> {
   return new Set(memSnap.docs.map((d) => d.id));
 }
 
+async function friendUserIdsForUser(userId: string): Promise<Set<string>> {
+  const [asA, asB] = await Promise.all([
+    db.collection("friends").where("userA", "==", userId).where("status", "==", "accepted").get(),
+    db.collection("friends").where("userB", "==", userId).where("status", "==", "accepted").get(),
+  ]);
+  const peers = new Set<string>();
+  for (const doc of asA.docs) {
+    const other = doc.data()?.userB as string | undefined;
+    if (other) peers.add(other);
+  }
+  for (const doc of asB.docs) {
+    const other = doc.data()?.userA as string | undefined;
+    if (other) peers.add(other);
+  }
+  return peers;
+}
+
 export const onTripEndedUpdatePublicLifetimeStats = functions.firestore
   .document("trip_sessions/{sessionId}/activity_events/{eventId}")
   .onCreate(async (snap, context) => {
@@ -45,9 +62,15 @@ export const onTripEndedUpdatePublicLifetimeStats = functions.firestore
     const memberUserIds = membersSnap.docs.map((d) => d.id);
 
     const familyMemberIdsByUser: Record<string, Set<string>> = {};
+    const friendUserIdsByUser: Record<string, Set<string>> = {};
     await Promise.all(
       memberUserIds.map(async (uid) => {
-        familyMemberIdsByUser[uid] = await familyMemberIdsForUser(uid);
+        const [fam, friends] = await Promise.all([
+          familyMemberIdsForUser(uid),
+          friendUserIdsForUser(uid),
+        ]);
+        familyMemberIdsByUser[uid] = fam;
+        friendUserIdsByUser[uid] = friends;
       })
     );
 
@@ -57,6 +80,7 @@ export const onTripEndedUpdatePublicLifetimeStats = functions.firestore
       gameDocs: gamesSnap.docs,
       activityEventDocs: eventsSnap.docs,
       familyMemberIdsByUser,
+      friendUserIdsByUser,
     });
 
     if (!preview) {
@@ -85,6 +109,11 @@ export const onTripEndedUpdatePublicLifetimeStats = functions.firestore
             totalDiscoveries: admin.firestore.FieldValue.increment(deltas.totalDiscoveries),
             totalWeightedScore: admin.firestore.FieldValue.increment(deltas.totalWeightedScore),
             familyOnlyTripsCount: admin.firestore.FieldValue.increment(deltas.familyOnlyTripsCount),
+            friendsOnlyTripsCount: admin.firestore.FieldValue.increment(deltas.friendsOnlyTripsCount),
+            mixedFriendsFamilyTripsCount: admin.firestore.FieldValue.increment(
+              deltas.mixedFriendsFamilyTripsCount
+            ),
+            entireFamilyTripsCount: admin.firestore.FieldValue.increment(deltas.entireFamilyTripsCount),
             lastComputedAt: admin.firestore.FieldValue.serverTimestamp(),
             schemaVersion: 1,
             source: "server_v1",

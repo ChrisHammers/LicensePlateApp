@@ -71,6 +71,7 @@ struct InvitePlayersView: View {
                             .opacity(candidate.isSelectable ? 1.0 : 0.65)
                             .listRowBackground(Color.Theme.cardBackground)
                             .accessibilityLabel(candidate.displayName)
+                            .accessibilityValue(candidate.sourceLabel)
                             .accessibilityHint(candidate.isSelectable ? "Double tap to select passenger".localized : "Unavailable for invite".localized)
                         }
                     }

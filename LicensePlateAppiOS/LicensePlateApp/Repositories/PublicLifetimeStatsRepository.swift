@@ -104,6 +104,9 @@ final class PublicLifetimeStatsRepository: ObservableObject {
             totalDiscoveries: entity.totalDiscoveries,
             totalWeightedScore: entity.totalWeightedScore,
             familyOnlyTripsCount: entity.familyOnlyTripsCount,
+            friendsOnlyTripsCount: entity.friendsOnlyTripsCount,
+            mixedFriendsFamilyTripsCount: entity.mixedFriendsFamilyTripsCount,
+            entireFamilyTripsCount: entity.entireFamilyTripsCount,
             lastComputedAt: entity.lastServerUpdatedAt
         )
     }
@@ -233,6 +236,9 @@ final class PublicLifetimeStatsRepository: ObservableObject {
             return 0
         }()
         let familyOnly = (data["familyOnlyTripsCount"] as? Int) ?? 0
+        let friendsOnly = (data["friendsOnlyTripsCount"] as? Int) ?? 0
+        let mixed = (data["mixedFriendsFamilyTripsCount"] as? Int) ?? 0
+        let entireFamily = (data["entireFamilyTripsCount"] as? Int) ?? 0
         let lastComputed = (data["lastComputedAt"] as? Timestamp)?.dateValue() ?? now
 
         let stats = UserLifetimeStats(
@@ -241,6 +247,9 @@ final class PublicLifetimeStatsRepository: ObservableObject {
             totalDiscoveries: discoveries,
             totalWeightedScore: score,
             familyOnlyTripsCount: familyOnly,
+            friendsOnlyTripsCount: friendsOnly,
+            mixedFriendsFamilyTripsCount: mixed,
+            entireFamilyTripsCount: entireFamily,
             lastComputedAt: lastComputed
         )
         snapshots[userId] = stats
@@ -276,6 +285,9 @@ final class PublicLifetimeStatsRepository: ObservableObject {
             entity.totalDiscoveries = stats.totalDiscoveries
             entity.totalWeightedScore = stats.totalWeightedScore
             entity.familyOnlyTripsCount = stats.familyOnlyTripsCount
+            entity.friendsOnlyTripsCount = stats.friendsOnlyTripsCount
+            entity.mixedFriendsFamilyTripsCount = stats.mixedFriendsFamilyTripsCount
+            entity.entireFamilyTripsCount = stats.entireFamilyTripsCount
             entity.lastServerUpdatedAt = stats.lastComputedAt
             entity.lastFetchedAt = lastFetchedAt
             entity.isFamilyPinned = reason != .friend

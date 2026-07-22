@@ -165,7 +165,13 @@ class AnalyticsService: AnalyticsLogging {
 
         /// Profile lifetime stats — emitted from `LifetimeStatsCoordinator` only (no PII).
         case lifetimeStatsRecomputeStarted
-        case lifetimeStatsRecomputeSucceeded(completedTripCount: Int, familyOnlyTripCount: Int)
+        case lifetimeStatsRecomputeSucceeded(
+            completedTripCount: Int,
+            familyOnlyTripCount: Int,
+            friendsOnlyTripCount: Int,
+            mixedFriendsFamilyTripCount: Int,
+            entireFamilyTripCount: Int
+        )
         case lifetimeStatsRecomputeFailed(error: String)
         /// User tapped retry on profile stats error row (`LifetimeStatsProfileViewModel` only).
         case lifetimeStatsProfileRetryTapped
@@ -641,10 +647,19 @@ class AnalyticsService: AnalyticsLogging {
                 return ["sort_key": sortKey]
             case .lifetimeStatsRecomputeStarted:
                 return nil
-            case .lifetimeStatsRecomputeSucceeded(let completedTripCount, let familyOnlyTripCount):
+            case .lifetimeStatsRecomputeSucceeded(
+                let completedTripCount,
+                let familyOnlyTripCount,
+                let friendsOnlyTripCount,
+                let mixedFriendsFamilyTripCount,
+                let entireFamilyTripCount
+            ):
                 return [
                     "completed_trip_count": completedTripCount,
-                    "family_only_trip_count": familyOnlyTripCount
+                    "family_only_trip_count": familyOnlyTripCount,
+                    "friends_only_trip_count": friendsOnlyTripCount,
+                    "mixed_friends_family_trip_count": mixedFriendsFamilyTripCount,
+                    "entire_family_trip_count": entireFamilyTripCount
                 ]
             case .lifetimeStatsRecomputeFailed(let error):
                 return ["error_type": error]

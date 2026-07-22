@@ -1,5 +1,5 @@
 /**
- * Pure aggregation for public lifetime stats (Swift parity: TripSummaryBuilder + ParticipantContributionBuilder + family-only rule).
+ * Pure aggregation for public lifetime stats (Swift parity: TripSummaryBuilder + ParticipantContributionBuilder + social trip classification).
  */
 
 import * as admin from "firebase-admin";
@@ -177,10 +177,55 @@ function mergeWithRoster(rosterUserIds: string[], contributions: ParticipantCont
   return [...byId.values()].sort((a, b) => a.participantId.localeCompare(b.participantId));
 }
 
+export type SocialTripBucket = "familyOnly" | "friendsOnly" | "mixed" | "neither";
+
+/** Active roster ⊆ family, and at least two people still on the trip. */
 export function isFamilyOnlyTrip(activeUserIds: string[], familyMemberUserIds: Set<string>): boolean {
   if (familyMemberUserIds.size === 0) return false;
-  if (activeUserIds.length === 0) return false;
+  if (activeUserIds.length < 2) return false;
   return activeUserIds.every((id) => familyMemberUserIds.has(id));
+}
+
+/** Every active family member is still on the trip (`|F| >= 2` ∧ `F ⊆ R`). */
+export function isEntireFamilyTrip(activeUserIds: string[], familyMemberUserIds: Set<string>): boolean {
+  if (familyMemberUserIds.size < 2) return false;
+  const roster = new Set(activeUserIds);
+  for (const id of familyMemberUserIds) {
+    if (!roster.has(id)) return false;
+  }
+  return true;
+}
+
+/**
+ * Family-wins for peers who are both family and friend (`Friends \ F`).
+ * Parity: LifetimeStatsSocialClassification.classifySocialTrip
+ */
+export function classifySocialTrip(
+  activeUserIds: string[],
+  subjectUserId: string,
+  familyMemberUserIds: Set<string>,
+  friendUserIds: Set<string>
+): SocialTripBucket {
+  if (activeUserIds.length < 2) return "neither";
+
+  if (isFamilyOnlyTrip(activeUserIds, familyMemberUserIds)) {
+    return "familyOnly";
+  }
+
+  const effectiveFriends = new Set([...friendUserIds].filter((id) => !familyMemberUserIds.has(id)));
+  const peers = activeUserIds.filter((id) => id !== subjectUserId);
+  const famPeers = peers.filter((id) => familyMemberUserIds.has(id));
+  const friendPeers = peers.filter((id) => effectiveFriends.has(id));
+
+  if (famPeers.length > 0 && friendPeers.length > 0) {
+    return "mixed";
+  }
+
+  if (peers.length > 0 && peers.every((id) => effectiveFriends.has(id))) {
+    return "friendsOnly";
+  }
+
+  return "neither";
 }
 
 export type TripEndedApplyPreview = {
@@ -193,6 +238,9 @@ export type TripEndedApplyPreview = {
       totalDiscoveries: number;
       totalWeightedScore: number;
       familyOnlyTripsCount: number;
+      friendsOnlyTripsCount: number;
+      mixedFriendsFamilyTripsCount: number;
+      entireFamilyTripsCount: number;
     }
   >;
 };
@@ -206,6 +254,7 @@ export function previewTripEndedAggregates(input: {
   gameDocs: admin.firestore.QueryDocumentSnapshot[];
   activityEventDocs: admin.firestore.QueryDocumentSnapshot[];
   familyMemberIdsByUser: Record<string, Set<string>>;
+  friendUserIdsByUser: Record<string, Set<string>>;
 }): TripEndedApplyPreview | null {
   const status = input.canonicalStatus;
   if (status !== "ended") {
@@ -249,14 +298,18 @@ export function previewTripEndedAggregates(input: {
 
   for (const uid of memberUserIds) {
     const fam = input.familyMemberIdsByUser[uid] || new Set<string>();
-    const famOnly = isFamilyOnlyTrip(memberUserIds, fam) ? 1 : 0;
+    const friends = input.friendUserIdsByUser[uid] || new Set<string>();
+    const bucket = classifySocialTrip(memberUserIds, uid, fam, friends);
     const row = mergedByUser.get(uid);
     perUser[uid] = {
       totalCompletedTrips: 1,
       totalGamesPlayed: gameCount,
       totalDiscoveries: row?.discoveryCount ?? 0,
       totalWeightedScore: row?.weightedScore ?? 0,
-      familyOnlyTripsCount: famOnly,
+      familyOnlyTripsCount: bucket === "familyOnly" ? 1 : 0,
+      friendsOnlyTripsCount: bucket === "friendsOnly" ? 1 : 0,
+      mixedFriendsFamilyTripsCount: bucket === "mixed" ? 1 : 0,
+      entireFamilyTripsCount: isEntireFamilyTrip(memberUserIds, fam) ? 1 : 0,
     };
   }
 

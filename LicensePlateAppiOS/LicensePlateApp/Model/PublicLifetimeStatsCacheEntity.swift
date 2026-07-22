@@ -2,7 +2,7 @@
 //  PublicLifetimeStatsCacheEntity.swift
 //  LicensePlateApp
 //
-//  SwiftData cache for Firestore `public_lifetime_stats` (Schema V18+).
+//  SwiftData cache for Firestore `public_lifetime_stats`.
 //
 
 import Foundation
@@ -16,6 +16,9 @@ final class PublicLifetimeStatsCacheEntity {
     var totalDiscoveries: Int
     var totalWeightedScore: Double
     var familyOnlyTripsCount: Int
+    var friendsOnlyTripsCount: Int
+    var mixedFriendsFamilyTripsCount: Int
+    var entireFamilyTripsCount: Int
     /// Mirrors server `lastComputedAt` from the public aggregate document.
     var lastServerUpdatedAt: Date
     /// When this device last received a snapshot for this user.
@@ -32,6 +35,9 @@ final class PublicLifetimeStatsCacheEntity {
         totalDiscoveries: Int = 0,
         totalWeightedScore: Double = 0,
         familyOnlyTripsCount: Int = 0,
+        friendsOnlyTripsCount: Int = 0,
+        mixedFriendsFamilyTripsCount: Int = 0,
+        entireFamilyTripsCount: Int = 0,
         lastServerUpdatedAt: Date = .distantPast,
         lastFetchedAt: Date = .now,
         isFamilyPinned: Bool = false,
@@ -43,6 +49,9 @@ final class PublicLifetimeStatsCacheEntity {
         self.totalDiscoveries = totalDiscoveries
         self.totalWeightedScore = totalWeightedScore
         self.familyOnlyTripsCount = familyOnlyTripsCount
+        self.friendsOnlyTripsCount = friendsOnlyTripsCount
+        self.mixedFriendsFamilyTripsCount = mixedFriendsFamilyTripsCount
+        self.entireFamilyTripsCount = entireFamilyTripsCount
         self.lastServerUpdatedAt = lastServerUpdatedAt
         self.lastFetchedAt = lastFetchedAt
         self.isFamilyPinned = isFamilyPinned

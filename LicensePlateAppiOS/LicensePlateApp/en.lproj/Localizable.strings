@@ -757,7 +757,13 @@
 "profile.lifetime_stats.weighted_score" = "Weighted score";
 "profile.lifetime_stats.weighted_score.a11y" = "Your combined weighted score from trip summaries.";
 "profile.lifetime_stats.family_trips" = "Family-only trips";
-"profile.lifetime_stats.family_trips.a11y" = "Ended trips where everyone still on the trip was in your family.";
+"profile.lifetime_stats.family_trips.a11y" = "Ended trips with more than one person still on the trip, where everyone still on the trip was in your family. Solo trips are not counted.";
+"profile.lifetime_stats.friends_trips" = "Friends-only trips";
+"profile.lifetime_stats.friends_trips.a11y" = "Ended trips with more than one person still on the trip, where everyone else was a friend who is not also in your family.";
+"profile.lifetime_stats.mixed_friends_family_trips" = "Friends and family trips";
+"profile.lifetime_stats.mixed_friends_family_trips.a11y" = "Ended trips with more than one person still on the trip that included both family and friends who are not family.";
+"profile.lifetime_stats.entire_family_trips" = "Entire family trips";
+"profile.lifetime_stats.entire_family_trips.a11y" = "Ended trips where every member of your family was still on the trip. Requires a family of at least two people.";
 "profile.lifetime_stats.pending_sync" = "Updating on server… numbers below may be from this device until sync finishes.";
 "profile.lifetime_stats.pending_sync.a11y" = "Lifetime statistics are pending server sync.";
 "friends.public_lifetime_stats.trips_line" = "%d completed trips";
@@ -765,6 +771,7 @@
 "family.member.public_stats_line" = "%d trips";
 "trip_settings.leave_trip_impact" = "You will leave this trip on this device right away. If you are offline, leaving will sync when you are back online. After you leave, this trip no longer counts toward your lifetime statistics and won’t appear in your travel log once sync completes.";
 "error.family_lookup_no_context" = "Family data isn’t available yet. Try again in a moment.";
+"error.friend_lookup_no_context" = "Friend data isn’t available yet. Try again in a moment.";
 "error.lifetime_stats_no_context" = "Statistics aren’t available yet. Try again in a moment.";
 "error.user_achievement_no_context" = "Achievement progress isn’t available yet. Try again in a moment.";
 
@@ -1032,6 +1039,7 @@
 "Friend Request" = "Friend Request";
 "Friend Invite" = "Friend Invite";
 "Friend" = "Friend";
+"Friend & Family" = "Friend & Family";
 "Friends hub section" = "Friends hub section";
 "Pending incoming friend requests" = "Pending incoming friend requests";
 "Incoming friend request" = "Incoming friend request";

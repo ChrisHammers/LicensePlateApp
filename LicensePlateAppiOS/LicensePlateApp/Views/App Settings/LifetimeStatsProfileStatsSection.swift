@@ -100,6 +100,21 @@ struct LifetimeStatsProfileStatsSectionContent: View {
                         value: "\(s.familyOnlyTripsCount)",
                         a11yHint: "profile.lifetime_stats.family_trips.a11y"
                     )
+                    statRow(
+                        titleKey: "profile.lifetime_stats.friends_trips",
+                        value: "\(s.friendsOnlyTripsCount)",
+                        a11yHint: "profile.lifetime_stats.friends_trips.a11y"
+                    )
+                    statRow(
+                        titleKey: "profile.lifetime_stats.mixed_friends_family_trips",
+                        value: "\(s.mixedFriendsFamilyTripsCount)",
+                        a11yHint: "profile.lifetime_stats.mixed_friends_family_trips.a11y"
+                    )
+                    statRow(
+                        titleKey: "profile.lifetime_stats.entire_family_trips",
+                        value: "\(s.entireFamilyTripsCount)",
+                        a11yHint: "profile.lifetime_stats.entire_family_trips.a11y"
+                    )
                 } else if !isRecomputing && (lastError == nil || lastError?.isEmpty == true) {
                     Text("profile.lifetime_stats.empty".localized)
                         .font(.system(.caption, design: .rounded))
@@ -170,6 +185,9 @@ struct LifetimeStatsProfileStatsSectionContent: View {
                 totalDiscoveries: 42,
                 totalWeightedScore: 40.5,
                 familyOnlyTripsCount: 1,
+                friendsOnlyTripsCount: 0,
+                mixedFriendsFamilyTripsCount: 1,
+                entireFamilyTripsCount: 0,
                 lastComputedAt: Date()
             ),
             isRecomputing: false,

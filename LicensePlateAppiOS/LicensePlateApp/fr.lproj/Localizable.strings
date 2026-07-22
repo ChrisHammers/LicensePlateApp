@@ -727,7 +727,13 @@
 "profile.lifetime_stats.weighted_score" = "Score pondéré";
 "profile.lifetime_stats.weighted_score.a11y" = "Votre score pondéré combiné d’après les récapitulatifs de trajet.";
 "profile.lifetime_stats.family_trips" = "Trajets famille uniquement";
-"profile.lifetime_stats.family_trips.a11y" = "Trajets terminés où tous les participants encore présents faisaient partie de votre famille.";
+"profile.lifetime_stats.family_trips.a11y" = "Trajets terminés avec plus d’une personne encore présente, où tous les participants encore présents faisaient partie de votre famille. Les trajets en solo ne comptent pas.";
+"profile.lifetime_stats.friends_trips" = "Trajets amis uniquement";
+"profile.lifetime_stats.friends_trips.a11y" = "Trajets terminés avec plus d’une personne encore présente, où tous les autres étaient des amis qui ne font pas aussi partie de votre famille.";
+"profile.lifetime_stats.mixed_friends_family_trips" = "Trajets amis et famille";
+"profile.lifetime_stats.mixed_friends_family_trips.a11y" = "Trajets terminés avec plus d’une personne encore présente qui incluaient à la fois de la famille et des amis qui ne sont pas de la famille.";
+"profile.lifetime_stats.entire_family_trips" = "Trajets famille entière";
+"profile.lifetime_stats.entire_family_trips.a11y" = "Trajets terminés où chaque membre de votre famille était encore présent. Nécessite une famille d’au moins deux personnes.";
 "profile.lifetime_stats.pending_sync" = "Mise à jour sur le serveur… les chiffres ci-dessous peuvent provenir de cet appareil jusqu’à la fin de la synchro.";
 "profile.lifetime_stats.pending_sync.a11y" = "Les statistiques à vie sont en attente de synchronisation serveur.";
 "friends.public_lifetime_stats.trips_line" = "%d trajets terminés";
@@ -735,6 +741,7 @@
 "family.member.public_stats_line" = "%d trajets";
 "trip_settings.leave_trip_impact" = "Vous quitterez ce trajet sur cet appareil immédiatement. Hors ligne, la sortie se synchronisera lorsque vous serez de nouveau en ligne. Après votre départ, ce trajet ne compte plus dans vos statistiques à vie et n’apparaîtra plus dans votre carnet de voyage une fois la synchronisation terminée.";
 "error.family_lookup_no_context" = "Les données famille ne sont pas encore disponibles. Réessayez dans un instant.";
+"error.friend_lookup_no_context" = "Les données d’amis ne sont pas encore disponibles. Réessayez dans un moment.";
 "error.lifetime_stats_no_context" = "Les statistiques ne sont pas encore disponibles. Réessayez dans un instant.";
 "error.user_achievement_no_context" = "La progression des succès n’est pas encore disponible. Réessayez dans un instant.";
 
@@ -1000,6 +1007,7 @@
 "Friend Request" = "Demande d’ami";
 "Friend Invite" = "Invitation d’ami";
 "Friend" = "Ami";
+"Friend & Family" = "Ami et famille";
 "Friends hub section" = "Section Amis";
 "Pending incoming friend requests" = "Demandes d’ami reçues en attente";
 "Incoming friend request" = "Demande d’ami reçue";

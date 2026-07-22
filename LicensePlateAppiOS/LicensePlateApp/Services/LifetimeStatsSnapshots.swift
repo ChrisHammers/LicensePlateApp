@@ -10,6 +10,7 @@ import Foundation
 struct LifetimeStatsRecomputeInput: Sendable {
     var subjectUserId: String
     var familyMemberUserIds: Set<String>
+    var friendUserIds: Set<String>
     var trips: [LifetimeStatsTripInput]
 }
 
