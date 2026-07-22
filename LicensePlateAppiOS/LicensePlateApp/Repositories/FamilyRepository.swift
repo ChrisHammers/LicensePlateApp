@@ -839,13 +839,16 @@ class FamilyRepository: ObservableObject {
             }
         }
         
-        // Clear activeFamilyId for current user if not retired general
+        // Clear activeFamilyId for current user if not retired general;
+        // sticky-flag locally so unlocks remain until hydrate.
         let userDescriptor = FetchDescriptor<AppUser>(
             predicate: #Predicate<AppUser> { $0.firebaseUID == userId || $0.id == userId }
         )
-        if let user = try? modelContext.fetch(userDescriptor).first,
-           !user.isRetiredGeneral {
-            user.activeFamilyId = nil
+        if let user = try? modelContext.fetch(userDescriptor).first {
+            user.wasEverInFamily = true
+            if !user.isRetiredGeneral {
+                user.activeFamilyId = nil
+            }
         }
         
         // Update published arrays

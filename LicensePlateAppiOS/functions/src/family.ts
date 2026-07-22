@@ -7,6 +7,10 @@ import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
 import { assertRegisteredAccount } from "./callableAuth";
 import { loadFamilyName } from "./familyInviteDisplay";
+import {
+  familyMembershipGrantUserUpdate,
+  familyMembershipLeaveUserUpdate,
+} from "./wasEverInFamilyUserUpdates";
 
 const db = admin.firestore();
 
@@ -64,12 +68,12 @@ export const createFamily = enforcedCallable(
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    // Update user's activeFamilyId (if not retired general)
-    if (!userData.isRetiredGeneral) {
-      await db.collection("users").doc(userId).update({
-        activeFamilyId: familyRef.id,
-      });
-    }
+    await db.collection("users").doc(userId).update(
+      familyMembershipGrantUserUpdate({
+        familyId: familyRef.id,
+        isRetiredGeneral: !!userData.isRetiredGeneral,
+      })
+    );
 
     await writeAuditLog({
       eventType: "AUDIT_FAMILY_CREATED",
@@ -506,12 +510,14 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         memberData
       );
 
-      // Update user's activeFamilyId (if not retired general)
-      if (!targetUserData.isRetiredGeneral) {
-        batch.update(db.collection("users").doc(requestData.userId), {
-          activeFamilyId: familyId,
-        });
-      }
+      // Sticky family unlock + activeFamilyId (skip activeFamilyId for retired general)
+      batch.update(
+        db.collection("users").doc(requestData.userId),
+        familyMembershipGrantUserUpdate({
+          familyId,
+          isRetiredGeneral: !!targetUserData.isRetiredGeneral,
+        })
+      );
 
       // Update request status
       batch.update(requestDoc.ref, {
@@ -629,13 +635,16 @@ export const removeFamilyMember = enforcedCallable(
     // Remove member
     batch.delete(targetMemberDoc.ref);
 
-    // Clear activeFamilyId if not retired general
+    // Clear activeFamilyId if not retired general; sticky-flag for legacy members
     const userDoc = await db.collection("users").doc(memberId).get();
     const userData = userDoc.data();
-    if (userData && !userData.isRetiredGeneral) {
-      batch.update(db.collection("users").doc(memberId), {
-        activeFamilyId: admin.firestore.FieldValue.delete(),
-      });
+    if (userData) {
+      batch.update(
+        db.collection("users").doc(memberId),
+        familyMembershipLeaveUserUpdate({
+          isRetiredGeneral: !!userData.isRetiredGeneral,
+        })
+      );
     }
 
     await batch.commit();
@@ -799,13 +808,16 @@ export const inactivateFamily = enforcedCallable(
       // Remove member
       batch.delete(memberDoc.ref);
 
-      // Clear activeFamilyId if not retired general
+      // Clear activeFamilyId if not retired general; sticky-flag for legacy members
       const userDoc = await db.collection("users").doc(memberId).get();
       const userData = userDoc.data();
-      if (userData && !userData.isRetiredGeneral) {
-        batch.update(db.collection("users").doc(memberId), {
-          activeFamilyId: admin.firestore.FieldValue.delete(),
-        });
+      if (userData) {
+        batch.update(
+          db.collection("users").doc(memberId),
+          familyMembershipLeaveUserUpdate({
+            isRetiredGeneral: !!userData.isRetiredGeneral,
+          })
+        );
       }
     }
 

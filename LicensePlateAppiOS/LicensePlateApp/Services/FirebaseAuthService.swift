@@ -1648,7 +1648,7 @@ class FirebaseAuthService: ObservableObject {
         if let equippedBadgeId = user.equippedBadgeId {
             data["equippedBadgeId"] = equippedBadgeId
         }
-        data["wasEverInFamily"] = user.wasEverInFamily
+        // wasEverInFamily is server-owned (set on family join/leave); never overwrite from client.
         data["deviceIdentifier"] = FieldValue.delete()
         // Soft-retire legacy avatar identity (catalog avatarId is source of truth).
         data["avatarColor"] = FieldValue.delete()

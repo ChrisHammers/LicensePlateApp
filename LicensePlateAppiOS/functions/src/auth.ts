@@ -1,6 +1,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
+import { familyMembershipLeaveUserUpdate } from "./wasEverInFamilyUserUpdates";
 
 const db = admin.firestore();
 
@@ -43,13 +44,16 @@ export const onAuthUserDeleted = functions.auth
         // Remove member
         batch.delete(memberDoc.ref);
 
-        // Clear activeFamilyId if not retired general
+        // Clear activeFamilyId if not retired general; sticky-flag for legacy members
         const userDoc = await db.collection("users").doc(memberId).get();
         const userData = userDoc.data();
-        if (userData && !userData.isRetiredGeneral) {
-          batch.update(db.collection("users").doc(memberId), {
-            activeFamilyId: admin.firestore.FieldValue.delete(),
-          });
+        if (userData) {
+          batch.update(
+            db.collection("users").doc(memberId),
+            familyMembershipLeaveUserUpdate({
+              isRetiredGeneral: !!userData.isRetiredGeneral,
+            })
+          );
         }
       }
 

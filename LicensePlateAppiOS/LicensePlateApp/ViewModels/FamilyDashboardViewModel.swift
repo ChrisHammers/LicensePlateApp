@@ -394,9 +394,10 @@ class FamilyDashboardViewModel: ObservableObject {
             return
         }
         
-        // Clear from SwiftData
+        // Clear from SwiftData; sticky family unlock until cloud hydrate
         await MainActor.run {
             user.activeFamilyId = nil
+            user.wasEverInFamily = true
         }
         
         do {
