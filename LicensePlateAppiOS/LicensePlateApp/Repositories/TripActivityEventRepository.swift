@@ -258,6 +258,13 @@ final class TripActivityEventRepository: ObservableObject, TripActivityEventRepo
         try ctx.save()
     }
 
+    /// Hard sign-out: delete all activity events locally (no remote lifecycle calls).
+    func deleteAllLocal() throws {
+        guard let ctx = modelContext else { throw TripActivityEventRepositoryError.noModelContext }
+        try ctx.delete(model: TripActivityEventEntity.self)
+        try ctx.save()
+    }
+
     private static func fetchEntity(id: String, context: ModelContext) throws -> TripActivityEventEntity? {
         let searchId = id
         let descriptor = FetchDescriptor<TripActivityEventEntity>(

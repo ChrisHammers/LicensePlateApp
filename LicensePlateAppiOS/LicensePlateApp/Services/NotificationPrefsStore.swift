@@ -33,6 +33,14 @@ final class NotificationPrefsStore: ObservableObject, NotificationPrefsReading {
         self.prefs = prefs
     }
 
+    /// Hard sign-out: drop cached account prefs.
+    func resetToDefaults() {
+        prefs = .default
+        loadedUserId = nil
+        lastErrorMessage = nil
+        isLoading = false
+    }
+
     /// Load from Firestore into the cache. Safe to call on app foreground / settings appear.
     func load(userId: String) async {
         guard !userId.isEmpty else { return }

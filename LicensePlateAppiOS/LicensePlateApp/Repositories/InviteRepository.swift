@@ -133,7 +133,18 @@ class InviteRepository: ObservableObject {
         }
         listeners.removeAll()
     }
-    
+
+    /// Hard sign-out: wipe all cached invites and clear published state.
+    func deleteAllLocal() throws {
+        stopListening()
+        listeningUserId = nil
+        invites = []
+        errorMessage = nil
+        guard let modelContext else { return }
+        try modelContext.delete(model: Invite.self)
+        try modelContext.save()
+    }
+
     // MARK: - Local Queries
     
     /// Get all invites for a user (from SwiftData)

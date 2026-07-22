@@ -78,4 +78,11 @@ final class UserLifetimeStatsRepository {
             throw UserLifetimeStatsRepositoryError.saveFailed(underlying: error)
         }
     }
+
+    /// Hard sign-out: delete all cached lifetime stats rows.
+    func deleteAllLocal() throws {
+        guard let ctx = modelContext else { throw UserLifetimeStatsRepositoryError.noModelContext }
+        try ctx.delete(model: UserLifetimeStatsEntity.self)
+        try ctx.save()
+    }
 }

@@ -82,4 +82,11 @@ final class DiscoveryResolutionRepository: ObservableObject, DiscoveryResolution
             return $0.resolutionId < $1.resolutionId
         }
     }
+
+    /// Hard sign-out: delete all discovery resolutions.
+    func deleteAllLocal() throws {
+        guard let ctx = modelContext else { throw DiscoveryResolutionRepositoryError.noModelContext }
+        try ctx.delete(model: DiscoveryResolutionEntity.self)
+        try ctx.save()
+    }
 }

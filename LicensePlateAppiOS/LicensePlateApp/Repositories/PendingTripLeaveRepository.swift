@@ -69,6 +69,13 @@ final class PendingTripLeaveRepository: ObservableObject, PendingTripLeaveReposi
         }
         return out
     }
+
+    /// Hard sign-out: drop all pending leave rows locally (do not send leave callables).
+    func deleteAllLocal() throws {
+        guard let ctx = modelContext else { throw PendingTripLeaveRepositoryError.noModelContext }
+        try ctx.delete(model: PendingTripLeaveEntity.self)
+        try ctx.save()
+    }
 }
 
 enum PendingTripLeaveRepositoryError: Error, LocalizedError {

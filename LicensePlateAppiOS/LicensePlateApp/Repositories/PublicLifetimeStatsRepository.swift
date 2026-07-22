@@ -125,6 +125,17 @@ final class PublicLifetimeStatsRepository: ObservableObject {
         listeners.removeAll()
         listenerReason.removeAll()
         snapshots.removeAll()
+        profileUserId = nil
+        familyPinnedUserIds.removeAll()
+        profileInitialSnapshotReceivedForUserId = nil
+    }
+
+    /// Hard sign-out: clear disk cache after listeners are stopped.
+    func deleteAllLocalCache() throws {
+        guard let ctx = modelContext else { return }
+        try ctx.delete(model: PublicLifetimeStatsCacheEntity.self)
+        try ctx.save()
+        snapshots.removeAll()
     }
 
     // MARK: - Private

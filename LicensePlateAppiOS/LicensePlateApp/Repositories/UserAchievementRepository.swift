@@ -152,6 +152,14 @@ final class UserAchievementRepository: ObservableObject {
         }
     }
 
+    /// Hard sign-out: delete all local achievement unlock rows.
+    func deleteAllLocal() throws {
+        guard let ctx = modelContext else { throw UserAchievementRepositoryError.noModelContext }
+        try ctx.delete(model: UserAchievementEntity.self)
+        try ctx.save()
+        objectWillChange.send()
+    }
+
     private func map(_ entity: UserAchievementEntity) -> UserAchievementRecord {
         UserAchievementRecord(
             userId: entity.userId,

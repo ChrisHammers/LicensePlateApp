@@ -75,6 +75,18 @@ final class ReturnStreakService: ObservableObject {
         }
     }
 
+    /// Hard sign-out: remove streak keys for the prior user (and legacy device keys).
+    func clearLocalState(forUserId userId: String?) {
+        if let userId, !userId.isEmpty {
+            defaults.removeObject(forKey: streakKey(userId: userId))
+            defaults.removeObject(forKey: lastDayKey(userId: userId))
+        }
+        defaults.removeObject(forKey: LegacyDefaultsKey.currentStreak)
+        defaults.removeObject(forKey: LegacyDefaultsKey.lastReturnDay)
+        lastRecordOutcome = nil
+        activeUserId = nil
+    }
+
     func consumeLastRecordOutcome() -> ReturnStreakRecordOutcome? {
         defer { lastRecordOutcome = nil }
         return lastRecordOutcome

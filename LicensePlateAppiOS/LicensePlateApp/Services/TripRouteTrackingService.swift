@@ -91,6 +91,18 @@ final class TripRouteTrackingService: ObservableObject {
         routePoints = []
     }
 
+    /// Hard sign-out: stop capture without flushing points (store is about to be wiped).
+    func stopForAccountPurge() {
+        locationCancellable = nil
+        if isCapturing {
+            isCapturing = false
+            locationSource.endRouteTracking()
+        }
+        unpersistedPoints = []
+        routePoints = []
+        activeTripSessionId = nil
+    }
+
     // MARK: - Capture
 
     private func evaluateCapture() {

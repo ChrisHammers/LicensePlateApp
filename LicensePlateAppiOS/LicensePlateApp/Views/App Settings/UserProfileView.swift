@@ -379,7 +379,7 @@ struct UserProfileView: View {
                               Button {
                                   Task {
                                       do {
-                                          try await authService.signOut()
+                                          try await authService.hardSignOutAndResetToGuest()
                                       } catch {
                                           errorMessage = error.localizedDescription
                                           showError = true

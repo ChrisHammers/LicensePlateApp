@@ -108,4 +108,19 @@ struct MainCoordinatorTests {
         coordinator.clearPendingPostEndSummary()
         #expect(coordinator.pendingPostEndSummarySessionId == nil)
     }
+
+    @Test func resetPendingStateClearsPathAndPendingFlags() async throws {
+        let coordinator = MainCoordinator()
+        let sessionId = UUID()
+        let gameId = UUID()
+        coordinator.openSession(sessionId)
+        coordinator.pendingPostEndSummarySessionId = sessionId
+        coordinator.openQuickSoloGameplay(intent: QuickSoloLaunchIntent(sessionId: sessionId, gameId: gameId))
+
+        coordinator.resetPendingState()
+
+        #expect(coordinator.path.isEmpty)
+        #expect(coordinator.pendingPostEndSummarySessionId == nil)
+        #expect(coordinator.pendingQuickSoloGameplay == nil)
+    }
 }

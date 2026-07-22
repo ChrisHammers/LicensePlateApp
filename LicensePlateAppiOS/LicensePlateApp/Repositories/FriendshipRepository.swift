@@ -123,7 +123,18 @@ class FriendshipRepository: ObservableObject {
         }
         listeners.removeAll()
     }
-    
+
+    /// Hard sign-out: wipe all cached friendships and clear published state.
+    func deleteAllLocal() throws {
+        stopListening()
+        friendships = []
+        lastListeningUserId = nil
+        errorMessage = nil
+        guard let modelContext else { return }
+        try modelContext.delete(model: Friendship.self)
+        try modelContext.save()
+    }
+
     // MARK: - Local Queries
     
     /// Get all friendships for a user (from SwiftData)

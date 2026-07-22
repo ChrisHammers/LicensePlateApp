@@ -41,7 +41,13 @@ final class EntitlementService: ObservableObject {
     func setCurrentUserId(_ id: String?) {
         currentAppUserId = id
     }
-    
+
+    /// Hard sign-out: clear current user binding and in-memory entitlement tags.
+    func resetForAccountPurge() {
+        currentAppUserId = nil
+        userRepository.clearEntitlementTags()
+    }
+
     // MARK: - Entitlement State
     
     /// Build entitlement state for a user (uses cached family and creator when available; merges RevenueCat tier/tags for current user)

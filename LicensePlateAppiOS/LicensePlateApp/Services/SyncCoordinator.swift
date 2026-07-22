@@ -58,6 +58,7 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     private var gameplayDebouncedFlushTask: Task<Void, Never>?
     private var gameplayFlushInProgress = false
     private var pendingAnotherGameplayFlush = false
+    private var processingSuspendedForPurge = false
 
     init(repository: SyncQueueRepositoryProtocol, userSyncExecutor: UserSyncExecutorProtocol? = nil) {
         self.repository = repository
@@ -73,6 +74,7 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     }
 
     func scheduleDebouncedGameplaySyncFlushIfOnline() {
+        guard !processingSuspendedForPurge else { return }
         gameplayDebouncedFlushTask?.cancel()
         let debounce = Self.gameplaySyncDebounceNanoseconds
         gameplayDebouncedFlushTask = Task { @MainActor [weak self] in
@@ -81,6 +83,18 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
             guard self.gameplaySyncOnlineProvider() else { return }
             await self.processPendingSyncItems()
         }
+    }
+
+    /// Cancels in-flight debounce and blocks queue processing during hard sign-out wipe.
+    func suspendProcessingForPurge() {
+        processingSuspendedForPurge = true
+        gameplayDebouncedFlushTask?.cancel()
+        gameplayDebouncedFlushTask = nil
+        pendingAnotherGameplayFlush = false
+    }
+
+    func resumeProcessingAfterPurge() {
+        processingSuspendedForPurge = false
     }
 
     func enqueueForSync(sessionId: UUID, eventId: String) throws {
@@ -123,6 +137,7 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     }
 
     func processPendingSyncItems() async {
+        guard !processingSuspendedForPurge else { return }
         if gameplayFlushInProgress {
             pendingAnotherGameplayFlush = true
             return

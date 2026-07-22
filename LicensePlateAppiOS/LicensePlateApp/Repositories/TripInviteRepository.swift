@@ -410,6 +410,18 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
         tripInvites = (try? ctx.fetch(descriptor)) ?? []
     }
 
+    /// Hard sign-out: wipe trip invites and stop listeners (also clears trip incremental sync).
+    func deleteAllLocal() throws {
+        stopListening()
+        guard let ctx = modelContext else {
+            tripInvites = []
+            return
+        }
+        try ctx.delete(model: TripInvite.self)
+        try ctx.save()
+        tripInvites = []
+    }
+
     deinit {
         stopListening()
     }

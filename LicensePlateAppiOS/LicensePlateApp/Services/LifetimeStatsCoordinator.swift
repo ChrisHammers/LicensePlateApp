@@ -87,6 +87,18 @@ final class LifetimeStatsCoordinator: ObservableObject {
         lastError = nil
     }
 
+    /// Hard sign-out: clear bound profile state and stop public stats listeners.
+    func resetForAccountPurge() {
+        boundProfileUserId = nil
+        pendingUserId = nil
+        awaitingServerAfterLocalTripEnd = false
+        stats = nil
+        isPendingServerSync = false
+        isRecomputing = false
+        lastError = nil
+        publicLifetimeStatsRepository.stopAllListeners()
+    }
+
     /// Local gameplay ended while online: server aggregate updates asynchronously.
     func onLocalTripEnded(userId: String) {
         let selfId = authService?.currentUser?.firebaseUID ?? authService?.currentUser?.id

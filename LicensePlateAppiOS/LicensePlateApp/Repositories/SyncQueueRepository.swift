@@ -168,6 +168,14 @@ final class SyncQueueRepository: ObservableObject, SyncQueueRepositoryProtocol {
         try ctx.save()
     }
 
+    /// Hard sign-out: delete all queue rows and remote sync metadata without uploading.
+    func deleteAllLocal() throws {
+        guard let ctx = modelContext else { throw SyncQueueRepositoryError.noModelContext }
+        try ctx.delete(model: SyncQueueItemEntity.self)
+        try ctx.delete(model: RemoteSyncMetadataEntity.self)
+        try ctx.save()
+    }
+
     // MARK: - Private
 
     private func updateState(id: String, state: SyncQueueItemState) throws {

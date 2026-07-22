@@ -150,6 +150,14 @@ final class GameInstanceRepository: ObservableObject, GameInstanceRepositoryProt
         try ctx.save()
     }
 
+    /// Hard sign-out: delete all games and score snapshots locally.
+    func deleteAllLocal() throws {
+        guard let ctx = modelContext else { throw GameInstanceRepositoryError.noModelContext }
+        try ctx.delete(model: GameScoreSnapshotEntity.self)
+        try ctx.delete(model: GameInstanceEntity.self)
+        try ctx.save()
+    }
+
     func instance(byId id: UUID) throws -> GameInstance? {
         guard let ctx = modelContext else { throw GameInstanceRepositoryError.noModelContext }
         let descriptor = FetchDescriptor<GameInstanceEntity>(

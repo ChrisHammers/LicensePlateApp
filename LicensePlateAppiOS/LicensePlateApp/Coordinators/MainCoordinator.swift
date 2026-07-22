@@ -63,4 +63,12 @@ final class MainCoordinator: ObservableObject {
     func clearPendingPostEndSummary() {
         pendingPostEndSummarySessionId = nil
     }
+
+    /// Hard sign-out: clear navigation and pending trip UI state.
+    func resetPendingState() {
+        path.removeAll()
+        pendingPostEndSummarySessionId = nil
+        pendingQuickSoloGameplay = nil
+        UserProfileListenCoordinator.shared.setPinnedUsers(selfUserId: nil, rosterUserIds: [])
+    }
 }

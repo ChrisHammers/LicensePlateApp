@@ -76,4 +76,11 @@ final class TripRoutePointRepository {
         )
         try modelContext.save()
     }
+
+    /// Hard sign-out: delete all local route telemetry.
+    func deleteAllLocal() throws {
+        guard let modelContext else { throw TripRoutePointRepositoryError.noModelContext }
+        try modelContext.delete(model: TripRoutePointEntity.self)
+        try modelContext.save()
+    }
 }

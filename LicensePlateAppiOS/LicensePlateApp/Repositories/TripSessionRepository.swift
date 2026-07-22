@@ -162,6 +162,13 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
         nil
     }
 
+    /// Hard sign-out: delete all local trip sessions (no remote cancel).
+    func deleteAllLocal() throws {
+        guard let ctx = modelContext else { throw TripSessionRepositoryError.noModelContext }
+        try ctx.delete(model: TripSessionEntity.self)
+        try ctx.save()
+    }
+
     // MARK: - Helpers
 
     private func fetchEntity(byId id: String, context: ModelContext) throws -> TripSessionEntity? {

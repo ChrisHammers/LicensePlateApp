@@ -151,6 +151,14 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
         return events.reduce(0) { $0 + $1.xpDelta }
     }
 
+    /// Hard sign-out exception to append-only rule: wipe the local ledger.
+    func deleteAllLocal() throws {
+        guard let ctx = modelContext else { throw XpLedgerRepositoryError.noModelContext }
+        try ctx.delete(model: XpLedgerEventEntity.self)
+        try ctx.save()
+        objectWillChange.send()
+    }
+
     private func sortedDomainEvents(from rows: [XpLedgerEventEntity], statuses: Set<XpLedgerStatus>?) throws -> [XpLedgerEvent] {
         var mapped: [XpLedgerEvent] = []
         mapped.reserveCapacity(rows.count)

@@ -253,6 +253,12 @@ struct ContentView: View {
             .onReceive(TripCanonicalRemoteSyncService.shared.hydrationSignal) { _ in
                 handleTripHydrationSignal()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .accountWillHardSignOut)) { _ in
+                handleHardSignOutWillBegin()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .accountDidHardSignOut)) { _ in
+                handleHardSignOutUIReset()
+            }
             .onAppear {
                 handleHomeOnAppear()
             }
@@ -407,6 +413,21 @@ struct ContentView: View {
             userId: newUserId,
             activeFamilyId: authService.currentUser?.activeFamilyId
         )
+        activeTripsListViewModel.load(userId: newUserId)
+    }
+
+    private func handleHardSignOutWillBegin() {
+        mainCoordinator.resetPendingState()
+        isShowingSettings = false
+        isShowingTravelLog = false
+        isShowingCreateSheet = false
+    }
+
+    private func handleHardSignOutUIReset() {
+        activeTripsListViewModel.load(userId: currentUserId)
+        if let userId = currentUserId {
+            pendingTripsViewModel.loadInvites(userId: userId)
+        }
     }
 
     private func handleActiveFamilyIdChange(_ newFamilyId: String?) {

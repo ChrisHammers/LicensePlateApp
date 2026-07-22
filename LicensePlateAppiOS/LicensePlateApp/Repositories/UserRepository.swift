@@ -66,6 +66,21 @@ class UserRepository: ObservableObject {
         }
     }
 
+    /// Hard sign-out: delete all local AppUser rows (self + peer cache).
+    func deleteAllLocalUsers() throws {
+        guard let modelContext else { return }
+        try modelContext.delete(model: AppUser.self)
+        try modelContext.save()
+        clearInMemoryState()
+    }
+
+    func clearInMemoryState() {
+        entitlementTagsByUserId.removeAll()
+        searchResults = []
+        errorMessage = nil
+        isLoading = false
+    }
+
     static func parseEntitlementTags(from data: [String: Any]) -> Set<String> {
         guard let raw = data["entitlementTags"] as? [Any] else { return [] }
         return Set(raw.compactMap { value in

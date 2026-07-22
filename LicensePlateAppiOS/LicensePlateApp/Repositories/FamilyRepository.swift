@@ -356,7 +356,28 @@ class FamilyRepository: ObservableObject {
         isListening = false
         currentFamilyId = nil
     }
-    
+
+    /// Hard sign-out: wipe family social cache tables and published state.
+    func deleteAllLocal() throws {
+        stopListening()
+        guard let modelContext else {
+            families = []
+            familyMembers = [:]
+            pendingRequests = [:]
+            errorMessage = nil
+            return
+        }
+        try modelContext.delete(model: PendingJoinRequest.self)
+        try modelContext.delete(model: FamilyMember.self)
+        try modelContext.delete(model: Family.self)
+        try modelContext.delete(model: ShareCode.self)
+        try modelContext.save()
+        families = []
+        familyMembers = [:]
+        pendingRequests = [:]
+        errorMessage = nil
+    }
+
     // MARK: - Local Queries
     
     /// Get family by ID (from SwiftData)

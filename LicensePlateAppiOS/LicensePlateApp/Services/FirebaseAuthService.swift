@@ -178,14 +178,25 @@ class FirebaseAuthService: ObservableObject {
     
     /// Create default user with device-based username
     private func createDefaultUser() async throws {
+        try createFreshLocalGuestUser()
+
+        // If online, immediately sign in anonymously
+        if isOnline {
+            Task {
+                try? await signInAnonymously()
+            }
+        }
+    }
+
+    /// Inserts a new local guest `AppUser` with device default username. Does not touch Auth.
+    private func createFreshLocalGuestUser() throws {
         guard let modelContext = modelContext else {
             throw AuthError.noModelContext
         }
-        
+
         let deviceId = DeviceIdentifier.getDeviceIdentifier()
         let defaultUsername = DeviceIdentifier.generateDefaultUsername(deviceId: deviceId)
-        
-        // Create local user first
+
         let localID = UUID().uuidString
         let newUser = AppUser(
             id: localID,
@@ -196,23 +207,16 @@ class FirebaseAuthService: ObservableObject {
         )
         let randomAvatarId = AvatarCatalog.randomGuestAvatarId()
         newUser.avatarId = randomAvatarId
-        
+
         modelContext.insert(newUser)
         try modelContext.save()
-        
+
         currentUser = newUser
         isAuthenticated = true
-        
-        // If online, immediately sign in anonymously
-        if isOnline {
-            Task {
-                try? await signInAnonymously()
-            }
-        }
     }
-    
+
     // MARK: - Anonymous Authentication
-    
+
     /// Sign in anonymously (creates Firebase anonymous account and links to local user)
     func signInAnonymously() async throws {
         guard let modelContext = modelContext,
@@ -479,7 +483,46 @@ class FirebaseAuthService: ObservableObject {
         
         isAuthenticated = false
     }
-    
+
+    /// Profile Sign Out: wipe all local user-associated data, then recreate a device-username guest.
+    /// Does not cancel remote multiplayer trips. When online, signs in anonymously afterward.
+    func hardSignOutAndResetToGuest() async throws {
+        guard modelContext != nil else {
+            throw AuthError.noModelContext
+        }
+        guard let user = currentUser else {
+            throw AuthError.noUser
+        }
+
+        let oldUserId = user.firebaseUID ?? user.id
+        // Let settings/profile dismiss before SwiftData rows are deleted.
+        NotificationCenter.default.post(name: .accountWillHardSignOut, object: nil)
+        try await Task.yield()
+
+        try LocalUserDataPurgeService.shared.purgeAllLocalUserData(oldUserId: oldUserId)
+
+        currentUser = nil
+        isAuthenticated = false
+        founderEntitlementAttemptedUserIds.removeAll()
+
+        if isOnline {
+            do {
+                try auth.signOut()
+            } catch {
+                print("⚠️ Firebase sign out failed during hard sign-out: \(error)")
+            }
+        }
+        GIDSignIn.sharedInstance.signOut()
+        await RevenueCatEntitlementBridge.shared.identify(userId: nil)
+
+        try createFreshLocalGuestUser()
+        if isOnline {
+            try await signInAnonymously()
+        }
+        SyncCoordinator.shared.resumeProcessingAfterPurge()
+        NotificationCenter.default.post(name: .accountDidHardSignOut, object: nil)
+    }
+
     /// Resets the current local user to default guest values. Call when switching to a fresh guest experience.
     /// Single place to clear local user profile data for reuse elsewhere (e.g., sign out and switch account).
     func resetLocalUserToGuest() throws {

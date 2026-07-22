@@ -26,6 +26,7 @@ final class ReminderNotificationService {
     private let remoteConfig: RemoteConfigValueProviding
     private let eligibilityService: NotificationEligibilityService
     private let scheduler: LocalNotificationScheduling
+    private var scheduledSessionIds: Set<UUID> = []
 
     init(
         remoteConfig: RemoteConfigValueProviding,
@@ -66,6 +67,7 @@ final class ReminderNotificationService {
 
         do {
             try await scheduler.add(request)
+            scheduledSessionIds.insert(sessionId)
             AnalyticsService.shared.log(.reminderScheduled(sessionId: sessionId.uuidString, hours: hours))
         } catch {
             AnalyticsService.shared.log(.notificationDeliveryFailed(error: error.localizedDescription))
@@ -75,7 +77,17 @@ final class ReminderNotificationService {
 
     func cancelReminder(sessionId: UUID, reason: String) {
         scheduler.removePendingNotificationRequests(withIdentifiers: [reminderIdentifier(sessionId: sessionId)])
+        scheduledSessionIds.remove(sessionId)
         AnalyticsService.shared.log(.reminderCancelled(sessionId: sessionId.uuidString, reason: reason))
+    }
+
+    /// Hard sign-out: cancel every tracked inactive-trip reminder.
+    func cancelAllReminders(reason: String) {
+        let ids = Array(scheduledSessionIds)
+        for sessionId in ids {
+            cancelReminder(sessionId: sessionId, reason: reason)
+        }
+        scheduledSessionIds.removeAll()
     }
 
     private func reminderIdentifier(sessionId: UUID) -> String {
