@@ -150,11 +150,13 @@ struct FamilyInviteDetail: View {
         } else if let inviter = viewModel.inviter {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    UserIdentityRowView(
-                        user: inviter,
-                        subtitle: nil,
-                        avatarSize: 40
-                    )
+                    UserDetailNavigationLink(user: inviter) {
+                        UserIdentityRowView(
+                            user: inviter,
+                            subtitle: nil,
+                            avatarSize: 40
+                        )
+                    }
 
                     Text("Captain".localized)
                         .font(.system(.caption, design: .rounded))

@@ -180,36 +180,59 @@ struct FamilySettings: View {
 
 struct FamilyMemberSettingsRow: View {
     let member: FamilyMember
-    
+    @EnvironmentObject private var authService: FirebaseAuthService
+
+    private var currentUserId: String? {
+        authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+    }
+
     var body: some View {
+        if let user = member.user {
+            UserDetailNavigationLink(
+                user: user,
+                isSelfProfile: UserDetailNavigation.isSelfProfile(
+                    user: user,
+                    currentUserId: currentUserId
+                )
+            ) {
+                settingsRowContent(user: user)
+            }
+            .padding(.vertical, 8)
+            .accessibilityLabel(settingsMemberAccessibilityLabel)
+        } else {
+            settingsRowContent(user: nil)
+                .padding(.vertical, 8)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(settingsMemberAccessibilityLabel)
+        }
+    }
+
+    private func settingsRowContent(user: AppUser?) -> some View {
         HStack {
-            if let user = member.user {
+            if let user {
                 AvatarImageView(user: user, size: 40)
             } else {
                 AvatarImageView(avatarId: nil, size: 40)
             }
-            
+
             VStack(alignment: .leading, spacing: 4) {
-                Text(member.user?.displayName ?? "Member".localized)
+                Text(user?.displayName ?? "Member".localized)
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(Color.Theme.primaryBlue)
-                
-                if let userName = member.user?.userName {
+
+                if let userName = user?.userName {
                     Text("@\(userName)")
                         .font(.system(.caption, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                 }
-                
+
                 Text(member.roleEnum.displayName)
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
             }
-            
+
             Spacer()
         }
-        .padding(.vertical, 8)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(settingsMemberAccessibilityLabel)
     }
 
     private var settingsMemberAccessibilityLabel: String {

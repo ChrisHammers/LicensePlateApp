@@ -30,22 +30,7 @@ struct TripParticipantsView: View {
 
                     Section("Passengers".localized) {
                         ForEach(viewModel.passengers) { passenger in
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(passenger.displayName)
-                                        .font(.system(.body, design: .rounded))
-                                        .foregroundStyle(Color.Theme.primaryBlue)
-                                    Text(passenger.roleLabel)
-                                        .font(.system(.caption, design: .rounded))
-                                        .foregroundStyle(Color.Theme.softBrown)
-                                }
-                                Spacer()
-                                if passenger.isCreator {
-                                    Text("Creator".localized)
-                                        .font(.system(.caption2, design: .rounded))
-                                        .foregroundStyle(.green)
-                                }
-                            }
+                            PassengerListRow(passenger: passenger)
                         }
                     }
                     .listRowBackground(Color.Theme.cardBackground)
@@ -104,6 +89,74 @@ struct TripParticipantsView: View {
             .onAppear {
                 viewModel.onAppear()
             }
+        }
+    }
+}
+
+private struct PassengerListRow: View {
+    let passenger: PassengerDisplayRow
+    @EnvironmentObject private var authService: FirebaseAuthService
+    @State private var user: AppUser?
+
+    private var currentUserId: String? {
+        authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+    }
+
+    var body: some View {
+        Group {
+            if let user {
+                UserDetailNavigationLink(
+                    user: user,
+                    isSelfProfile: UserDetailNavigation.isSelfProfile(
+                        user: user,
+                        currentUserId: currentUserId
+                    )
+                ) {
+                    passengerRowContent
+                }
+            } else {
+                passengerRowContent
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabelText)
+        .task {
+            await loadUser()
+        }
+    }
+
+    private var passengerRowContent: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(user?.displayName ?? passenger.displayName)
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                Text(passenger.roleLabel)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+            }
+            Spacer()
+            if passenger.isCreator {
+                Text("Creator".localized)
+                    .font(.system(.caption2, design: .rounded))
+                    .foregroundStyle(.green)
+            }
+        }
+    }
+
+    private var accessibilityLabelText: String {
+        var parts = [user?.displayName ?? passenger.displayName, passenger.roleLabel]
+        if passenger.isCreator {
+            parts.append("Creator".localized)
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    private func loadUser() async {
+        do {
+            user = try await UserRepository.shared.getUser(userId: passenger.userId)
+        } catch {
+            user = nil
         }
     }
 }

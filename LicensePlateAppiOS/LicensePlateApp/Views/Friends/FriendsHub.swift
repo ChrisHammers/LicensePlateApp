@@ -283,15 +283,11 @@ struct FriendRow: View {
 
     var body: some View {
         if let user {
-            NavigationLink {
-                StandardProfileView(user: user)
-            } label: {
+            UserDetailNavigationLink(user: user) {
                 rowContent
             }
-            .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(accessibilityLabelText)
-            .accessibilityHint("Opens profile".localized)
             .task {
                 if let oid = otherUserId {
                     publicLifetimeStatsRepository.ensureObservingFriend(userId: oid)
@@ -438,59 +434,74 @@ struct FriendInviteRow: View {
     }
 
     var body: some View {
-        Button {
-            if !isOutgoing {
-                showInviteDetail = true
+        Group {
+            if isOutgoing, let user {
+                UserDetailNavigationLink(user: user) {
+                    identityContent(user: user, showsRespondChevron: false)
+                }
+                .accessibilityLabel(friendInviteAccessibilityLabel)
+            } else if isOutgoing {
+                identityContent(user: nil, showsRespondChevron: false)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(friendInviteAccessibilityLabel)
+            } else {
+                Button {
+                    showInviteDetail = true
+                } label: {
+                    identityContent(user: user, showsRespondChevron: true)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(friendInviteAccessibilityLabel)
+                .accessibilityHint("Opens request details".localized)
             }
-        } label: {
-            HStack {
-                if let user = user {
-                    AvatarImageView(user: user, size: 50)
-                } else {
-                    AvatarImageView(avatarId: nil, size: 50)
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    if let user = user {
-                        Text(user.displayName)
-                            .font(.system(.body, design: .rounded))
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Color.Theme.primaryBlue)
-
-                        Text("@\(user.userName)")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
-                    } else {
-                        Text("Friend Request".localized)
-                            .font(.system(.body, design: .rounded))
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Color.Theme.primaryBlue)
-
-                        Text(isOutgoing ? "Waiting for response".localized : "Tap to respond".localized)
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
-                    }
-                }
-
-                Spacer()
-
-                if !isOutgoing {
-                    Image(systemName: "chevron.right")
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-                }
-            }
-            .padding(.vertical, 8)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(friendInviteAccessibilityLabel)
-        .accessibilityHint(isOutgoing ? "" : "Opens request details".localized)
+        .padding(.vertical, 8)
         .sheet(isPresented: $showInviteDetail) {
             FriendInviteDetail(inviteId: invite.inviteId)
                 .environmentObject(authService)
         }
         .task {
             await loadUser()
+        }
+    }
+
+    private func identityContent(user: AppUser?, showsRespondChevron: Bool) -> some View {
+        HStack {
+            if let user {
+                AvatarImageView(user: user, size: 50)
+            } else {
+                AvatarImageView(avatarId: nil, size: 50)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                if let user {
+                    Text(user.displayName)
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+
+                    Text("@\(user.userName)")
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                } else {
+                    Text("Friend Request".localized)
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+
+                    Text(isOutgoing ? "Waiting for response".localized : "Tap to respond".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            if showsRespondChevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+            }
         }
     }
 

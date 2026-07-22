@@ -111,9 +111,7 @@ struct UserSearchResultRow: View {
 
     var body: some View {
         HStack {
-            NavigationLink {
-                StandardProfileView(user: user)
-            } label: {
+            UserDetailNavigationLink(user: user) {
                 HStack(spacing: 12) {
                     AvatarImageView(user: user, size: 50)
 
@@ -135,7 +133,6 @@ struct UserSearchResultRow: View {
                     Spacer(minLength: 0)
                 }
             }
-            .buttonStyle(.plain)
 
             Button("Add".localized) {
                 viewModel.sendInvite(to: result)

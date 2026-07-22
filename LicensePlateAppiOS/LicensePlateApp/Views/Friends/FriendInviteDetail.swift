@@ -27,16 +27,22 @@ struct FriendInviteDetail: View {
                             .padding()
                             .accessibilityLabel("Loading".localized)
                     } else if let user = viewModel.user {
-                        AvatarImageView(user: user, size: 100)
+                        UserDetailNavigationLink(user: user) {
+                            VStack(spacing: 12) {
+                                AvatarImageView(user: user, size: 100)
 
-                        Text(user.displayName)
-                            .font(.system(.title2, design: .rounded))
-                            .fontWeight(.bold)
-                            .foregroundStyle(Color.Theme.primaryBlue)
+                                Text(user.displayName)
+                                    .font(.system(.title2, design: .rounded))
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(Color.Theme.primaryBlue)
 
-                        Text("@\(user.userName)")
-                            .font(.system(.body, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
+                                Text("@\(user.userName)")
+                                    .font(.system(.body, design: .rounded))
+                                    .foregroundStyle(Color.Theme.softBrown)
+                            }
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("\(user.displayName), @\(user.userName)")
                     } else {
                         Text("Friend Request".localized)
                             .font(.system(.title2, design: .rounded))

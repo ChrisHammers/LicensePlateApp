@@ -132,24 +132,28 @@ struct FamilyMemberSearchResultRow: View {
 
     var body: some View {
         HStack {
-            AvatarImageView(user: user, size: 50)
+            UserDetailNavigationLink(user: user) {
+                HStack(spacing: 12) {
+                    AvatarImageView(user: user, size: 50)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(user.displayName)
-                    .font(.system(.body, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(user.displayName)
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Theme.primaryBlue)
 
-                Text("@\(user.userName)")
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
+                        Text("@\(user.userName)")
+                            .font(.system(.caption, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
 
-                Text("Found by %@".localized(result.matchedField.displayName))
-                    .font(.system(.caption2, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+                        Text("Found by %@".localized(result.matchedField.displayName))
+                            .font(.system(.caption2, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+                    }
+
+                    Spacer(minLength: 0)
+                }
             }
-
-            Spacer()
 
             Button("Invite".localized) {
                 onInvite()

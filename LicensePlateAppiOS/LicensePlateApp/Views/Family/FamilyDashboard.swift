@@ -367,6 +367,7 @@ struct FamilyDashboard: View {
 
 struct FamilyMemberRow: View {
     let member: FamilyMember
+    @EnvironmentObject private var authService: FirebaseAuthService
     @ObservedObject private var publicLifetimeStatsRepository = PublicLifetimeStatsRepository.shared
 
     private var memberSubtitle: String {
@@ -377,20 +378,26 @@ struct FamilyMemberRow: View {
         return role
     }
 
+    private var currentUserId: String? {
+        authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+    }
+
     var body: some View {
         if let user = member.user {
-            NavigationLink {
-                StandardProfileView(user: user)
-            } label: {
+            UserDetailNavigationLink(
+                user: user,
+                isSelfProfile: UserDetailNavigation.isSelfProfile(
+                    user: user,
+                    currentUserId: currentUserId
+                )
+            ) {
                 UserIdentityRowView(
                     user: user,
                     subtitle: memberSubtitle,
                     avatarSize: 50
                 )
             }
-            .buttonStyle(.plain)
             .accessibilityLabel("\(user.displayName), @\(user.userName), \(memberSubtitle)")
-            .accessibilityHint("Opens profile".localized)
             .task {
                 publicLifetimeStatsRepository.ensureObservingFriend(userId: member.userId)
             }
@@ -427,11 +434,14 @@ struct PendingRequestRow: View {
     var body: some View {
         Group {
             if let user = displayUser {
-                UserIdentityRowView(
-                    user: user,
-                    subtitle: "Pending".localized,
-                    avatarSize: 50
-                )
+                UserDetailNavigationLink(user: user) {
+                    UserIdentityRowView(
+                        user: user,
+                        subtitle: "Pending".localized,
+                        avatarSize: 50
+                    )
+                }
+                .accessibilityLabel(pendingRequestAccessibilityLabel)
             } else {
                 HStack {
                     AvatarImageView(avatarId: nil, size: 50)
@@ -448,10 +458,10 @@ struct PendingRequestRow: View {
                     Spacer()
                 }
                 .padding(.vertical, 8)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(pendingRequestAccessibilityLabel)
             }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(pendingRequestAccessibilityLabel)
         .task(id: request.userId) {
             await resolveUserIfNeeded()
         }
