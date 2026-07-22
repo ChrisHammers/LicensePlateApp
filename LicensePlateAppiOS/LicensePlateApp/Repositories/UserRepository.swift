@@ -845,6 +845,14 @@ class UserRepository: ObservableObject {
         ], merge: true)
     }
 
+    /// Removes push routing for this user (hard sign-out). Call while Auth still matches `userId`.
+    func clearFCMToken(userId: String) async throws {
+        try await db.collection("users").document(userId).updateData([
+            "fcmToken": FieldValue.delete(),
+            "fcmTokenUpdatedAt": FieldValue.delete()
+        ])
+    }
+
     // MARK: - Notification preferences (Firestore-only; server gates FCM)
 
     /// Account-level push prefs. Missing fields default to enabled on the server (promotions default off).

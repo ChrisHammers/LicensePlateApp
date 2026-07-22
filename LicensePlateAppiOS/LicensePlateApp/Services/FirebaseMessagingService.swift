@@ -48,6 +48,42 @@ final class FirebaseMessagingService: NSObject {
         #endif
     }
 
+    /// Clears Firestore `fcmToken` for `userId` and deletes the device Messaging token.
+    /// Call while Auth still represents that user, before `auth.signOut()`.
+    func clearTokenForSignOut(userId: String) async {
+        guard !userId.isEmpty else { return }
+
+        #if canImport(FirebaseAuth)
+        // Prefer clearing the Auth uid's doc so security rules allow the write.
+        let cloudUserId = Auth.auth().currentUser?.uid ?? userId
+        do {
+            try await UserRepository.shared.clearFCMToken(userId: cloudUserId)
+        } catch {
+            CrashReportingService.shared.record(error: error, context: "fcm_token_clear")
+        }
+        #endif
+
+        #if canImport(FirebaseMessaging)
+        do {
+            try await Messaging.messaging().deleteToken()
+        } catch {
+            CrashReportingService.shared.record(error: error, context: "fcm_token_delete_local")
+        }
+        #endif
+    }
+
+    /// After guest rebirth / anonymous Auth, attach a fresh token to the new uid.
+    func refreshAndPersistTokenIfPossible() async {
+        #if canImport(FirebaseMessaging)
+        do {
+            let token = try await Messaging.messaging().token()
+            await persistTokenIfPossible(token)
+        } catch {
+            CrashReportingService.shared.record(error: error, context: "fcm_token_refresh")
+        }
+        #endif
+    }
+
     private func persistTokenIfPossible(_ token: String?) async {
         guard let token, !token.isEmpty else { return }
         #if canImport(FirebaseAuth)

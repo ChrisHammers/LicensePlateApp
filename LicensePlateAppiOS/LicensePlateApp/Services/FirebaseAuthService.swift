@@ -499,6 +499,11 @@ class FirebaseAuthService: ObservableObject {
         NotificationCenter.default.post(name: .accountWillHardSignOut, object: nil)
         try await Task.yield()
 
+        // Clear push routing while Auth still matches the signed-out account.
+        if user.firebaseUID != nil {
+            await FirebaseMessagingService.shared.clearTokenForSignOut(userId: oldUserId)
+        }
+
         try LocalUserDataPurgeService.shared.purgeAllLocalUserData(oldUserId: oldUserId)
 
         currentUser = nil
@@ -518,6 +523,7 @@ class FirebaseAuthService: ObservableObject {
         try createFreshLocalGuestUser()
         if isOnline {
             try await signInAnonymously()
+            await FirebaseMessagingService.shared.refreshAndPersistTokenIfPossible()
         }
         SyncCoordinator.shared.resumeProcessingAfterPurge()
         NotificationCenter.default.post(name: .accountDidHardSignOut, object: nil)
