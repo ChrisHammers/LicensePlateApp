@@ -124,5 +124,5 @@ struct AchievementProgressSnapshotBuilderTests {
 
 private final class FixedProgressionCatalogProvider: ProgressionCatalogProviding, @unchecked Sendable {
     var current: ProgressionCatalog { .bundledDefault }
-    func refresh(presentationOverrideJSON: String?) {}
+    func refresh(presentationOverrideJSON: String?, xpToastOverrideJSON: String?) {}
 }

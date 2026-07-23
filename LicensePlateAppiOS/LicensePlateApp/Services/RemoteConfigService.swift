@@ -30,7 +30,8 @@ struct RemoteConfigDefaultsProvider: RemoteConfigValueProviding {
              .returnStreakMinDisplay, .returnStreakCelebrationMinStreak, .returnStreakReminderHour,
              .quickSoloSplashDelayMs:
             return int(for: key) != 0
-        case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1, .progressionCatalogXpToastV1:
+        case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1, .progressionCatalogXpToastV1,
+             .appUpdatePolicyV1:
             return !string(for: key).isEmpty
         }
     }
@@ -54,14 +55,16 @@ struct RemoteConfigDefaultsProvider: RemoteConfigValueProviding {
             return bool(for: key) ? 1 : 0
         case .returnStreakReminderEnabled:
             return 0
-        case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1, .progressionCatalogXpToastV1:
+        case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1, .progressionCatalogXpToastV1,
+             .appUpdatePolicyV1:
             return string(for: key).isEmpty ? 0 : 1
         }
     }
 
     func string(for key: RemoteConfigService.Key) -> String {
         switch key {
-        case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1, .progressionCatalogXpToastV1:
+        case .progressionRewardsPresentationV1, .progressionCatalogPresentationV1, .progressionCatalogXpToastV1,
+             .appUpdatePolicyV1:
             return ""
         default:
             return ""
@@ -90,6 +93,7 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
         case progressionCatalogXpToastV1 = "progression_catalog_xp_toast_v1"
         case quickSoloFirstSessionEnabled = "quick_solo_first_session_enabled"
         case quickSoloSplashDelayMs = "quick_solo_splash_delay_ms"
+        case appUpdatePolicyV1 = "app_update_policy_v1"
     }
 
     static let shared = RemoteConfigService()
@@ -173,6 +177,7 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
     var founderProgramEnabled: Bool { bool(for: .founderProgramEnabled) }
     var quickSoloFirstSessionEnabled: Bool { bool(for: .quickSoloFirstSessionEnabled) }
     var quickSoloSplashDelayMs: Int { max(0, int(for: .quickSoloSplashDelayMs)) }
+    var appUpdatePolicyJSON: String { string(for: .appUpdatePolicyV1) }
 
     private var defaultValues: [String: NSObject] {
         [
@@ -193,7 +198,8 @@ final class RemoteConfigService: ObservableObject, RemoteConfigValueProviding {
             Key.progressionCatalogPresentationV1.rawValue: defaults.string(for: .progressionCatalogPresentationV1) as NSString,
             Key.progressionCatalogXpToastV1.rawValue: defaults.string(for: .progressionCatalogXpToastV1) as NSString,
             Key.quickSoloFirstSessionEnabled.rawValue: defaults.bool(for: .quickSoloFirstSessionEnabled) as NSNumber,
-            Key.quickSoloSplashDelayMs.rawValue: defaults.int(for: .quickSoloSplashDelayMs) as NSNumber
+            Key.quickSoloSplashDelayMs.rawValue: defaults.int(for: .quickSoloSplashDelayMs) as NSNumber,
+            Key.appUpdatePolicyV1.rawValue: defaults.string(for: .appUpdatePolicyV1) as NSString
         ]
     }
 }

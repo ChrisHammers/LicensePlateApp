@@ -1131,3 +1131,13 @@
 "family.a11y.outgoing_invite" = "Invitation familiale envoyée à %@, @%@, en attente de réponse";
 "family.a11y.outgoing_invite_unknown" = "Invitation familiale envoyée, en attente de réponse";
 "Pending invite already exists." = "Une invitation en attente existe déjà.";
+
+/* App update gate */
+"Update Required" = "Mise à jour requise";
+"Update Available" = "Mise à jour disponible";
+"A new version of RoadTrip Royale is required to continue. Please update from the App Store." = "Une nouvelle version de RoadTrip Royale est requise pour continuer. Veuillez mettre à jour depuis l’App Store.";
+"A newer version of RoadTrip Royale is available with improvements and fixes." = "Une version plus récente de RoadTrip Royale est disponible avec des améliorations et des correctifs.";
+"Update" = "Mettre à jour";
+"Not Now" = "Pas maintenant";
+"Opens the App Store to download the latest version" = "Ouvre l’App Store pour télécharger la dernière version";
+"Dismisses the update prompt and continues using this version" = "Ferme l’invite de mise à jour et continue avec cette version";

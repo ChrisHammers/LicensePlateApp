@@ -8,11 +8,12 @@
 import SwiftUI
 import Combine
 
-/// Root-level coordinator for app flow: Splash → Quick Start / Legacy Onboarding → Main App
+/// Root-level coordinator for app flow: Splash → Force Update / Quick Start / Legacy Onboarding → Main App
 @MainActor
 final class AppCoordinator: ObservableObject {
     enum RootView: Equatable {
         case splash
+        case forceUpdate
         case quickStart
         case legacyOnboarding
         case main
@@ -30,6 +31,10 @@ final class AppCoordinator: ObservableObject {
     }
 
     // MARK: - Navigation Methods
+
+    func showForceUpdate() {
+        rootView = .forceUpdate
+    }
 
     /// Transition from splash to next view (main, quick start, or legacy onboarding).
     func transitionFromSplash(quickSoloEnabled: Bool) {

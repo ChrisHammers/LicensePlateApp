@@ -53,6 +53,10 @@ struct AnalyticsServiceTests {
             (.avatarSaved(avatarId: "id", source: "profile"), "avatar_saved"),
             (.notificationDeliveryFailed(error: "err"), "notification_delivery_failed"),
             (.remoteConfigFetchSucceeded, "remote_config_fetch_succeeded"),
+            (.forceUpdateGateShown(gateKind: "hard", clientCompat: 1, appVersion: "1.0", appBuild: "4"), "force_update_gate_shown"),
+            (.softUpdatePromptShown(gateKind: "soft", clientCompat: 1, appVersion: "1.0", appBuild: "4"), "soft_update_prompt_shown"),
+            (.softUpdatePromptDismissed(gateKind: "soft", clientCompat: 1, appVersion: "1.0", appBuild: "4"), "soft_update_prompt_dismissed"),
+            (.updateStoreCTATapped(gateKind: "hard", clientCompat: 1, appVersion: "1.0", appBuild: "4"), "update_store_cta_tapped"),
             (.adEligibilityEvaluated(surface: "travel_log", eligible: true, reason: "free_tier"), "ad_eligibility_evaluated"),
             (.reviewPromptPresented(sessionId: "session-1"), "review_prompt_presented"),
             (.reminderScheduled(sessionId: "session-1", hours: 24), "reminder_scheduled"),
@@ -79,6 +83,17 @@ struct AnalyticsServiceTests {
 
         let hydrateEvent = AnalyticsService.Event.authProfileHydrateFailed(outcome: "abort_no_create")
         #expect(hydrateEvent.parameters?["outcome"] as? String == "abort_no_create")
+
+        let forceUpdate = AnalyticsService.Event.forceUpdateGateShown(
+            gateKind: "hard",
+            clientCompat: 1,
+            appVersion: "0.1",
+            appBuild: "4"
+        )
+        #expect(forceUpdate.parameters?["gate_kind"] as? String == "hard")
+        #expect(forceUpdate.parameters?["client_compat"] as? Int == 1)
+        #expect(forceUpdate.parameters?["app_version"] as? String == "0.1")
+        #expect(forceUpdate.parameters?["app_build"] as? String == "4")
 
         // avatar events
         let savedEvent = AnalyticsService.Event.avatarSaved(avatarId: "av1", source: "onboarding")

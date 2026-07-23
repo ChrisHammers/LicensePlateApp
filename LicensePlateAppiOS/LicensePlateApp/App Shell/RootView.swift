@@ -8,7 +8,7 @@
 import SwiftUI
 import SwiftData
 
-/// Root view that orchestrates Splash → Quick Start / Legacy Onboarding → Main App flow
+/// Root view that orchestrates Splash → Force Update / Quick Start / Legacy Onboarding → Main App flow
 struct RootView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -17,8 +17,10 @@ struct RootView: View {
     @StateObject private var appCoordinator = AppCoordinator()
     @StateObject private var onboardingCoordinator = OnboardingCoordinator()
     @ObservedObject private var remoteConfig = RemoteConfigService.shared
+    @ObservedObject private var appUpdateGate = AppUpdateGateService.shared
 
     @AppStorage("boundariesLoaded") private var boundariesLoaded = false
+    @State private var showSoftUpdateSheet = false
 
     private var deepLinkSheetBinding: Binding<DeepLinkDestination?> {
         Binding(
@@ -42,6 +44,9 @@ struct RootView: View {
             switch appCoordinator.rootView {
             case .splash:
                 SplashScreenView()
+                    .transition(.opacity)
+            case .forceUpdate:
+                ForceUpdateView(mode: .hard, gate: appUpdateGate)
                     .transition(.opacity)
             case .quickStart:
                 OnboardingContainerBackground {
@@ -118,7 +123,10 @@ struct RootView: View {
             }
         }
         .task {
+            let splashStartedAt = Date()
             await remoteConfig.fetchAndActivate()
+            appUpdateGate.refresh(remoteConfig: remoteConfig)
+
             await authService.initializeAuthState(modelContext: modelContext)
             FriendshipRepository.shared.setModelContext(modelContext)
             InviteRepository.shared.setModelContext(modelContext)
@@ -178,13 +186,19 @@ struct RootView: View {
                 Task { await SyncCoordinator.shared.processPendingSyncItems() }
             }
             TripParticipationService.shared.bindAuthService(authService)
+
+            await leaveSplashWhenReady(startedAt: splashStartedAt)
         }
-        .onAppear {
-            let delaySeconds = Double(remoteConfig.quickSoloSplashDelayMs) / 1000.0
-            DispatchQueue.main.asyncAfter(deadline: .now() + delaySeconds) {
-                boundariesLoaded = true
-                appCoordinator.transitionFromSplash(quickSoloEnabled: remoteConfig.quickSoloFirstSessionEnabled)
+        .sheet(isPresented: $showSoftUpdateSheet, onDismiss: {
+            // Swipe-dismiss still records soft dismiss for this fingerprint.
+            if appUpdateGate.shouldPresentSoftPrompt {
+                appUpdateGate.dismissSoft()
             }
+        }) {
+            ForceUpdateView(mode: .soft, gate: appUpdateGate) {
+                showSoftUpdateSheet = false
+            }
+            .presentationDetents([.medium, .large])
         }
         .sheet(item: deepLinkSheetBinding) { destination in
             switch destination {
@@ -236,6 +250,28 @@ struct RootView: View {
             case .tripSession:
                 EmptyView()
             }
+        }
+    }
+
+    /// Honors splash minimum delay after RC fetch + update-policy refresh, then gates or continues.
+    private func leaveSplashWhenReady(startedAt: Date) async {
+        let minimumDelay = Double(remoteConfig.quickSoloSplashDelayMs) / 1000.0
+        let elapsed = Date().timeIntervalSince(startedAt)
+        let remaining = max(0, minimumDelay - elapsed)
+        if remaining > 0 {
+            try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+        }
+
+        boundariesLoaded = true
+
+        if appUpdateGate.decision.isHard {
+            appCoordinator.showForceUpdate()
+            return
+        }
+
+        appCoordinator.transitionFromSplash(quickSoloEnabled: remoteConfig.quickSoloFirstSessionEnabled)
+        if appUpdateGate.shouldPresentSoftPrompt {
+            showSoftUpdateSheet = true
         }
     }
 }

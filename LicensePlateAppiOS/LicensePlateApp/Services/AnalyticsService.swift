@@ -268,6 +268,10 @@ class AnalyticsService: AnalyticsLogging {
         // Step 18 — launch operations, growth, and monetization
         case remoteConfigFetchSucceeded
         case remoteConfigFetchFailed(error: String)
+        case forceUpdateGateShown(gateKind: String, clientCompat: Int, appVersion: String, appBuild: String)
+        case softUpdatePromptShown(gateKind: String, clientCompat: Int, appVersion: String, appBuild: String)
+        case softUpdatePromptDismissed(gateKind: String, clientCompat: Int, appVersion: String, appBuild: String)
+        case updateStoreCTATapped(gateKind: String, clientCompat: Int, appVersion: String, appBuild: String)
         case crashReportingConfigured
         case crashReportingNonFatalRecorded(context: String)
         case adEligibilityEvaluated(surface: String, eligible: Bool, reason: String)
@@ -467,6 +471,10 @@ class AnalyticsService: AnalyticsLogging {
             case .notificationDeliveryFailed: return "notification_delivery_failed"
             case .remoteConfigFetchSucceeded: return "remote_config_fetch_succeeded"
             case .remoteConfigFetchFailed: return "remote_config_fetch_failed"
+            case .forceUpdateGateShown: return "force_update_gate_shown"
+            case .softUpdatePromptShown: return "soft_update_prompt_shown"
+            case .softUpdatePromptDismissed: return "soft_update_prompt_dismissed"
+            case .updateStoreCTATapped: return "update_store_cta_tapped"
             case .crashReportingConfigured: return "crash_reporting_configured"
             case .crashReportingNonFatalRecorded: return "crash_reporting_non_fatal_recorded"
             case .adEligibilityEvaluated: return "ad_eligibility_evaluated"
@@ -882,6 +890,16 @@ class AnalyticsService: AnalyticsLogging {
                 return nil
             case .remoteConfigFetchFailed(let error):
                 return ["error": error]
+            case .forceUpdateGateShown(let gateKind, let clientCompat, let appVersion, let appBuild),
+                 .softUpdatePromptShown(let gateKind, let clientCompat, let appVersion, let appBuild),
+                 .softUpdatePromptDismissed(let gateKind, let clientCompat, let appVersion, let appBuild),
+                 .updateStoreCTATapped(let gateKind, let clientCompat, let appVersion, let appBuild):
+                return [
+                    "gate_kind": gateKind,
+                    "client_compat": clientCompat,
+                    "app_version": appVersion,
+                    "app_build": appBuild
+                ]
             case .crashReportingConfigured:
                 return nil
             case .crashReportingNonFatalRecorded(let context):
