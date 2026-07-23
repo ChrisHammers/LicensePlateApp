@@ -280,6 +280,8 @@ class AnalyticsService: AnalyticsLogging {
         case reviewPromptEligible(completedTripCount: Int)
         case reviewPromptPresented(sessionId: String)
         case reviewPromptSuppressed(reason: String, completedTripCount: Int)
+        /// User-initiated Rate App from Settings / Help. `method`: `app_store` or `system_prompt`.
+        case reviewLinkOpened(source: String, method: String)
         case reminderScheduled(sessionId: String, hours: Int)
         case reminderCancelled(sessionId: String, reason: String)
         case returnStreakUpdated(currentStreak: Int, reason: String)
@@ -483,6 +485,7 @@ class AnalyticsService: AnalyticsLogging {
             case .reviewPromptEligible: return "review_prompt_eligible"
             case .reviewPromptPresented: return "review_prompt_presented"
             case .reviewPromptSuppressed: return "review_prompt_suppressed"
+            case .reviewLinkOpened: return "review_link_opened"
             case .reminderScheduled: return "reminder_scheduled"
             case .reminderCancelled: return "reminder_cancelled"
             case .returnStreakUpdated: return "return_streak_updated"
@@ -916,6 +919,8 @@ class AnalyticsService: AnalyticsLogging {
                 return ["session_id": sessionId]
             case .reviewPromptSuppressed(let reason, let completedTripCount):
                 return ["reason": reason, "completed_trip_count": completedTripCount]
+            case .reviewLinkOpened(let source, let method):
+                return ["source": source, "method": method]
             case .reminderScheduled(let sessionId, let hours):
                 return ["session_id": sessionId, "hours": hours]
             case .reminderCancelled(let sessionId, let reason):

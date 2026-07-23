@@ -140,6 +140,44 @@ struct HelpAboutView: View {
                             Divider()
                             
                             Button {
+                                openRateApp()
+                            } label: {
+                                HStack(spacing: 16) {
+                                    Image(systemName: "star.fill")
+                                        .font(.system(size: 20))
+                                        .foregroundStyle(Color.Theme.primaryBlue)
+                                        .frame(width: 24)
+                                        .accessibilityHidden(true)
+                                    
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Text("Rate RoadTrip Royale".localized)
+                                            .font(.system(.body, design: .rounded))
+                                            .fontWeight(.semibold)
+                                            .foregroundStyle(Color.Theme.primaryBlue)
+                                        
+                                        Text("Share your App Store review".localized)
+                                            .font(.system(.caption, design: .rounded))
+                                            .foregroundStyle(Color.Theme.softBrown)
+                                    }
+                                    
+                                    Spacer()
+                                }
+                                .padding(.vertical, 12)
+                                .padding(.horizontal, 16)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                        .fill(Color.Theme.cardBackground)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+                            .accessibilityLabel("Rate RoadTrip Royale".localized)
+                            .accessibilityHint("Opens the App Store so you can leave a review".localized)
+                            .accessibilityAddTraits(.isButton)
+                            
+                            Divider()
+                            
+                            Button {
                                 sendEmail(to: "hammerstechllc@gmail.com", subject: "RoadTrip Royale Support Issue")
                             } label: {
                                 HStack(spacing: 16) {
@@ -276,6 +314,21 @@ struct HelpAboutView: View {
         if let url = URL(string: "mailto:\(email)?subject=\(encodedSubject)") {
             UIApplication.shared.open(url)
         }
+    }
+
+    /// Prefer App Store write-review URL when an Apple ID is configured (Info.plist or update-policy store URL).
+    /// Otherwise fall back to the system review prompt so the control still does something pre-listing.
+    private func openRateApp() {
+        let storeURLString = AppUpdatePolicy.parse(json: RemoteConfigService.shared.appUpdatePolicyJSON)?
+            .ios?
+            .storeUrl
+        if let url = AppStoreLinks.writeReviewURL(storeURLString: storeURLString) {
+            AnalyticsService.shared.log(.reviewLinkOpened(source: "help_about", method: "app_store"))
+            UIApplication.shared.open(url)
+            return
+        }
+        AnalyticsService.shared.log(.reviewLinkOpened(source: "help_about", method: "system_prompt"))
+        StoreKitReviewPromptPresenter().requestReview()
     }
 }
 

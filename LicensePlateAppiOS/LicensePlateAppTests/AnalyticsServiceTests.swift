@@ -59,6 +59,7 @@ struct AnalyticsServiceTests {
             (.updateStoreCTATapped(gateKind: "hard", clientCompat: 1, appVersion: "1.0", appBuild: "4"), "update_store_cta_tapped"),
             (.adEligibilityEvaluated(surface: "travel_log", eligible: true, reason: "free_tier"), "ad_eligibility_evaluated"),
             (.reviewPromptPresented(sessionId: "session-1"), "review_prompt_presented"),
+            (.reviewLinkOpened(source: "help_about", method: "app_store"), "review_link_opened"),
             (.reminderScheduled(sessionId: "session-1", hours: 24), "reminder_scheduled"),
             (.returnStreakUpdated(currentStreak: 2, reason: "consecutive_return"), "return_streak_updated"),
             (.returnStreakQualified(currentStreak: 2, reason: "continued"), "return_streak_qualified"),
@@ -116,6 +117,10 @@ struct AnalyticsServiceTests {
         let reviewEvent = AnalyticsService.Event.reviewPromptSuppressed(reason: "cooldown", completedTripCount: 2)
         #expect(reviewEvent.parameters?["reason"] as? String == "cooldown")
         #expect(reviewEvent.parameters?["completed_trip_count"] as? Int == 2)
+
+        let reviewLink = AnalyticsService.Event.reviewLinkOpened(source: "help_about", method: "app_store")
+        #expect(reviewLink.parameters?["source"] as? String == "help_about")
+        #expect(reviewLink.parameters?["method"] as? String == "app_store")
 
         let reminderEvent = AnalyticsService.Event.reminderScheduled(sessionId: "session-1", hours: 24)
         #expect(reminderEvent.parameters?["session_id"] as? String == "session-1")
