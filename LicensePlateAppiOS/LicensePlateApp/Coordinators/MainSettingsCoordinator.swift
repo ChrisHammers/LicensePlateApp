@@ -47,7 +47,7 @@ final class MainSettingsCoordinator: ObservableObject {
         path.append(SettingsDestination.appPreferences)
     }
     
-    /// Navigate to the New Trip Defaults view
+    /// Navigate to the New Trip/Game Defaults view
     func navigateToNewTripDefaults() {
         path.append(SettingsDestination.newTripDefaults)
     }

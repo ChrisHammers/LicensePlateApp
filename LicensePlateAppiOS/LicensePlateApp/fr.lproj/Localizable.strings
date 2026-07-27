@@ -182,8 +182,11 @@
 "This will delete the trip and all scores will be removed." = "Cela supprimera le voyage et tous les scores seront supprimés.";
 "Done" = "Terminé";
 
-// Settings - New Trip Defaults View
+// Settings - New Trip/Game Defaults View
+"New Trip/Game Defaults" = "Valeurs par Défaut des Nouveaux Voyages/Jeux";
 "New Trip Defaults" = "Valeurs par Défaut des Nouveaux Voyages";
+"Trip Defaults" = "Valeurs par Défaut du Voyage";
+"Game Defaults" = "Valeurs par Défaut du Jeu";
 "Start Trip right away" = "Démarrer le voyage immédiatement";
 "Automatically start the trip when created" = "Démarrer automatiquement le voyage lors de sa création";
 "Automatically start new trips when created" = "Démarrer automatiquement les nouveaux voyages lors de leur création";
@@ -380,12 +383,17 @@
 
 // Settings - ContentView Settings Navigation
 "Manage location, microphone, notifications, and other permissions" = "Gérer l'emplacement, le microphone, les notifications et autres autorisations";
+"Set default countries, tracking, and voice settings for new trips and games" = "Définir les pays par défaut, le suivi et les paramètres vocaux pour les nouveaux voyages et jeux";
 "Set default countries, tracking, and voice settings for new trips" = "Définir les pays par défaut, le suivi et les paramètres vocaux pour les nouveaux voyages";
 "Configure default voice recognition settings for new trips" = "Configurer les paramètres de reconnaissance vocale par défaut pour les nouveaux voyages";
 
 // Settings - Additional
 "Trip Settings" = "Réglages du Voyage";
 "Opens settings for this trip" = "Ouvre les réglages de ce voyage";
+"Opens settings for this license plate game" = "Ouvre les réglages de ce jeu de plaques";
+"Opens settings for this license plate game: scope, voice, and game actions" = "Ouvre les réglages de ce jeu de plaques : portée, voix et actions du jeu";
+"Trip name, tracking and privacy, start or end trip, delete trip, or leave trip if you are a passenger" = "Nom du voyage, suivi et confidentialité, démarrer ou terminer le voyage, supprimer le voyage, ou quitter le voyage si vous êtes passager";
+"Trip name, start or end trip, delete trip, or leave trip if you are a passenger" = "Nom du voyage, démarrer ou terminer le voyage, supprimer le voyage, ou quitter le voyage si vous êtes passager";
 "Open Settings" = "Ouvrir les Réglages";
 "Recording" = "Enregistrement";
 "Not recording" = "Pas d'enregistrement";
@@ -423,7 +431,10 @@
 "Cancels creating a new trip" = "Annule la création d'un nouveau voyage";
 "Creates the trip with selected games and options" = "Crée le voyage avec les jeux et options sélectionnés";
 "Done editing changes, saves changes, and dismisses the settings view" = "Termine la modification, enregistre les changements et ferme la vue des réglages";
+"Saves new trip/game defaults and closes this view" = "Enregistre les valeurs par défaut des nouveaux voyages/jeux et ferme cette vue";
 "Saves new trip defaults and closes this view" = "Enregistre les valeurs par défaut des nouveaux voyages et ferme cette vue";
+"Saves trip name and dismisses trip settings" = "Enregistre le nom du voyage et ferme les réglages du voyage";
+"Done editing changes, saves game scope, and dismisses game settings" = "Termine les modifications, enregistre la portée du jeu et ferme les réglages du jeu";
 "Select at least one country before saving." = "Sélectionnez au moins un pays avant d'enregistrer.";
 "Enable location tracking during trip first" = "Activez d'abord le suivi de position pendant le voyage";
 

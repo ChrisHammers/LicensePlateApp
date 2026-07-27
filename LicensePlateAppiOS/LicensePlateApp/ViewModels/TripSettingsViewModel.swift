@@ -2,7 +2,7 @@
 //  TripSettingsViewModel.swift
 //  LicensePlateApp
 //
-//  Step 6.9.3.1 — Trip-level settings only (name, start/end/delete trip). No game or SwiftData in views.
+//  Step 6.9.3.1 — Trip-level settings only (name, start/end/delete trip). Tracking & Privacy toggles use @AppStorage in TripSettingsView.
 //
 
 import Foundation

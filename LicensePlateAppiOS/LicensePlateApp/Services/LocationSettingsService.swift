@@ -45,16 +45,16 @@ protocol LocationSettingsProviding: AnyObject {
 
 /// Effective value = global kill switch (`LocationSettingsKeys`, Privacy & Permissions)
 /// AND per-trip value (`NewTripDefaultsKeys` "default*" keys, edited in trip setup,
-/// New Trip Defaults, and GameSettingsView). Turning either side off disables the behavior.
+/// New Trip/Game Defaults, and TripSettingsView). Turning either side off disables the behavior.
 ///
 /// The per-trip side is not yet persisted on TripSession; the "default*" keys double as the
-/// current-trip value because GameSettingsView live-writes them mid-trip. Revisit when
+/// current-trip value because TripSettingsView live-writes them mid-trip. Revisit when
 /// route tracking gives trips a persisted location config.
 ///
 /// Privacy: this type deals only in booleans. It must never read, hold, or log coordinates,
 /// and no location-derived value may reach AnalyticsService from here.
 /// ObservableObject so views re-evaluate effective flags live when a toggle changes
-/// (Privacy & Permissions and Game Settings both write through @AppStorage → UserDefaults).
+/// (Privacy & Permissions and Trip Settings both write through @AppStorage → UserDefaults).
 final class LocationSettingsService: LocationSettingsProviding, ObservableObject {
 
     static let shared = LocationSettingsService()

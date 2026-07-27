@@ -2,10 +2,12 @@
 //  TripSettingsView.swift
 //  LicensePlateApp
 //
-//  Step 6.9.3.1 — Trip-level settings: name, start/end trip, delete trip. Opened from TripSessionView.
+//  Step 6.9.3.1 — Trip-level settings: name, start/end trip, delete trip, tracking & privacy.
+//  Opened from TripSessionView.
 //
 
 import SwiftUI
+import CoreLocation
 
 struct TripSettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -19,6 +21,14 @@ struct TripSettingsView: View {
     @State private var showLeaveTripConfirmation = false
     @State private var retryAction: (() -> Void)?
     @StateObject private var tripLimitPaywallViewModel = PaywallViewModel()
+
+    @AppStorage(NewTripDefaultsKeys.saveLocationWhenMarkingPlates) private var saveLocationWhenMarkingPlates = true
+    @AppStorage(NewTripDefaultsKeys.showMyLocationOnLargeMap) private var showMyLocationOnLargeMap = true
+    @AppStorage(NewTripDefaultsKeys.trackMyLocationDuringTrip) private var trackMyLocationDuringTrip = true
+    @AppStorage(NewTripDefaultsKeys.showMyActiveTripOnLargeMap) private var showMyActiveTripOnLargeMap = true
+    @AppStorage(NewTripDefaultsKeys.showMyActiveTripOnSmallMap) private var showMyActiveTripOnSmallMap = true
+
+    @ObservedObject private var locationManager = LocationManager.shared
 
     private var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
@@ -39,6 +49,20 @@ struct TripSettingsView: View {
                         .cornerRadius(20)
                     } header: {
                         Text("Trip Info".localized)
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    .textCase(nil)
+                    .listRowBackground(Color.clear)
+
+                    Section {
+                        VStack {
+                            trackingPrivacySettings
+                        }
+                        .background(Color.Theme.cardBackground)
+                        .cornerRadius(20)
+                    } header: {
+                        Text("Tracking & Privacy".localized)
                             .font(.system(.headline, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
@@ -298,6 +322,82 @@ struct TripSettingsView: View {
             }
         } message: {
             Text("trip_settings.leave_trip_impact".localized)
+        }
+    }
+
+    private var trackingPrivacySettings: some View {
+        Group {
+            let locationAuthorized = locationManager.authorizationStatus == .authorizedWhenInUse
+                || locationManager.authorizationStatus == .authorizedAlways
+            // Match prior Game Settings rule: editable unless the trip has ended.
+            let canEditTracking = viewModel.currentSession.status != .ended
+
+            SettingToggleRow(
+                title: "Save location when marking plates".localized,
+                description: "Store location data when you mark a plate as found".localized,
+                isOn: $saveLocationWhenMarkingPlates
+            )
+            .disabled(!locationAuthorized || !canEditTracking)
+            .opacity((locationAuthorized && canEditTracking) ? 1.0 : 0.5)
+
+            Divider()
+
+            SettingToggleRow(
+                title: "Show my location on large map".localized,
+                description: "Display your current location on the full-screen map".localized,
+                isOn: $showMyLocationOnLargeMap
+            )
+            .disabled(!canEditTracking)
+            .opacity(canEditTracking ? 1.0 : 0.5)
+
+            Divider()
+
+            SettingToggleRow(
+                title: "Track my location during trip".localized,
+                description: "Continuously track your location while a trip is active".localized,
+                isOn: $trackMyLocationDuringTrip
+            )
+            .disabled(!canEditTracking)
+            .opacity(canEditTracking ? 1.0 : 0.5)
+
+            Divider()
+
+            SettingToggleRow(
+                title: "Show my active trip on the large map".localized,
+                description: "Display your active trip on the full-screen map".localized,
+                isOn: $showMyActiveTripOnLargeMap
+            )
+            .disabled(!trackMyLocationDuringTrip || !canEditTracking)
+            .opacity((trackMyLocationDuringTrip && canEditTracking) ? 1.0 : 0.5)
+            .accessibilityHintWhenDisabled(
+                !trackMyLocationDuringTrip || !canEditTracking,
+                hint: "Enable location tracking during trip first".localized
+            )
+
+            Divider()
+
+            SettingToggleRow(
+                title: "Show my active trip on the small map".localized,
+                description: "Display your active trip on the small map".localized,
+                isOn: $showMyActiveTripOnSmallMap
+            )
+            .disabled(!trackMyLocationDuringTrip || !canEditTracking)
+            .opacity((trackMyLocationDuringTrip && canEditTracking) ? 1.0 : 0.5)
+            .accessibilityHintWhenDisabled(
+                !trackMyLocationDuringTrip || !canEditTracking,
+                hint: "Enable location tracking during trip first".localized
+            )
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func accessibilityHintWhenDisabled(_ isDisabled: Bool, hint: String) -> some View {
+        if isDisabled {
+            self.accessibilityHint(hint)
+        } else {
+            self
         }
     }
 }

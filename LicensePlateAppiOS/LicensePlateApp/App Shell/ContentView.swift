@@ -1045,10 +1045,10 @@ struct DefaultSettingsView: View {
                             
                             Divider()
                             
-                            // New Trip Defaults
+                            // New Trip/Game Defaults
                             SettingNavigationRow(
-                                title: "New Trip Defaults".localized,
-                                description: "Set default countries, tracking, and voice settings for new trips".localized,
+                                title: "New Trip/Game Defaults".localized,
+                                description: "Set default countries, tracking, and voice settings for new trips and games".localized,
                                 icon: "plus.circle.fill"
                             ) {
                                 coordinator.navigateToNewTripDefaults()
@@ -1203,7 +1203,7 @@ struct DefaultSettingsView: View {
     // Removed: All settings content moved to separate view files
     // - PrivacyPermissionsView
     // - AppPreferencesView
-    // - NewTripDefaultsView
+    // - NewTripDefaultsView (New Trip/Game Defaults)
     // - VoiceDefaultsView
     // - HelpAboutView
 }

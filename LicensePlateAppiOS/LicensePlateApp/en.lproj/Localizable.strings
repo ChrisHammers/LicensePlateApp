@@ -182,8 +182,11 @@
 "This will delete the trip and all scores will be removed." = "This will delete the trip and all scores will be removed.";
 "Done" = "Done";
 
-// Settings - New Trip Defaults View
+// Settings - New Trip/Game Defaults View
+"New Trip/Game Defaults" = "New Trip/Game Defaults";
 "New Trip Defaults" = "New Trip Defaults";
+"Trip Defaults" = "Trip Defaults";
+"Game Defaults" = "Game Defaults";
 "Start Trip right away" = "Start Trip right away";
 "Automatically start the trip when created" = "Automatically start the trip when created";
 "Automatically start new trips when created" = "Automatically start new trips when created";
@@ -380,12 +383,17 @@
 
 // Settings - ContentView Settings Navigation
 "Manage location, microphone, notifications, and other permissions" = "Manage location, microphone, notifications, and other permissions";
+"Set default countries, tracking, and voice settings for new trips and games" = "Set default countries, tracking, and voice settings for new trips and games";
 "Set default countries, tracking, and voice settings for new trips" = "Set default countries, tracking, and voice settings for new trips";
 "Configure default voice recognition settings for new trips" = "Configure default voice recognition settings for new trips";
 
 // Settings - Additional
 "Trip Settings" = "Trip Settings";
 "Opens settings for this trip" = "Opens settings for this trip";
+"Opens settings for this license plate game" = "Opens settings for this license plate game";
+"Opens settings for this license plate game: scope, voice, and game actions" = "Opens settings for this license plate game: scope, voice, and game actions";
+"Trip name, tracking and privacy, start or end trip, delete trip, or leave trip if you are a passenger" = "Trip name, tracking and privacy, start or end trip, delete trip, or leave trip if you are a passenger";
+"Trip name, start or end trip, delete trip, or leave trip if you are a passenger" = "Trip name, start or end trip, delete trip, or leave trip if you are a passenger";
 "Open Settings" = "Open Settings";
 "Recording" = "Recording";
 "Not recording" = "Not recording";
@@ -423,7 +431,10 @@
 "Cancels creating a new trip" = "Cancels creating a new trip";
 "Creates the trip with selected games and options" = "Creates the trip with selected games and options";
 "Done editing changes, saves changes, and dismisses the settings view" = "Done editing changes, saves changes, and dismisses the settings view";
+"Saves new trip/game defaults and closes this view" = "Saves new trip/game defaults and closes this view";
 "Saves new trip defaults and closes this view" = "Saves new trip defaults and closes this view";
+"Saves trip name and dismisses trip settings" = "Saves trip name and dismisses trip settings";
+"Done editing changes, saves game scope, and dismisses game settings" = "Done editing changes, saves game scope, and dismisses game settings";
 "Select at least one country before saving." = "Select at least one country before saving.";
 "Enable location tracking during trip first" = "Enable location tracking during trip first";
 

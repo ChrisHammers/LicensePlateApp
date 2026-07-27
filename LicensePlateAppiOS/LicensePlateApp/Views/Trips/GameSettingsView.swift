@@ -2,11 +2,11 @@
 //  GameSettingsView.swift
 //  LicensePlateApp
 //
-//  Step 6.9.3.1 — Game-level settings: scope, reset/remove game, tracking & voice defaults. Opened from LicensePlateGameView.
+//  Step 6.9.3.1 — Game-level settings: scope, reset/remove game, voice defaults. Opened from LicensePlateGameView.
+//  Tracking & Privacy lives on TripSettingsView (trip-scoped).
 //
 
 import SwiftUI
-import CoreLocation
 
 struct GameSettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -16,18 +16,12 @@ struct GameSettingsView: View {
     @State private var retryAction: (() -> Void)?
     @State private var showEndGameConfirmation = false
 
-    @AppStorage(NewTripDefaultsKeys.saveLocationWhenMarkingPlates) private var saveLocationWhenMarkingPlates = true
-    @AppStorage(NewTripDefaultsKeys.showMyLocationOnLargeMap) private var showMyLocationOnLargeMap = true
-    @AppStorage(NewTripDefaultsKeys.trackMyLocationDuringTrip) private var trackMyLocationDuringTrip = true
-    @AppStorage("defaultShowMyActiveTripOnLargeMap") private var showMyActiveTripOnLargeMap = true
-    @AppStorage("defaultShowMyActiveTripOnSmallMap") private var showMyActiveTripOnSmallMap = true
     @AppStorage("defaultSkipVoiceConfirmation") private var skipVoiceConfirmation = false
     @AppStorage("defaultHoldToTalk") private var holdToTalk = true
 
     enum SettingsSection: String, CaseIterable {
         case gameInfo = "Game info"
         case gameSettings = "Game Settings"
-        case trackingPrivacy = "Tracking & Privacy"
         case voice = "Voice"
         case gameActions = "Game actions"
 
@@ -37,7 +31,6 @@ struct GameSettingsView: View {
             switch self {
             case .gameInfo: return "Game info".localized
             case .gameSettings: return "Game Settings".localized
-            case .trackingPrivacy: return "Tracking & Privacy".localized
             case .voice: return "Voice".localized
             case .gameActions: return "Game actions".localized
             }
@@ -50,8 +43,6 @@ struct GameSettingsView: View {
         formatter.timeStyle = .short
         return formatter
     }
-
-    @ObservedObject private var locationManager = LocationManager.shared
 
     @State private var showResetConfirmation = false
     @State private var showRemoveGameConfirmation = false
@@ -72,8 +63,6 @@ struct GameSettingsView: View {
                                     gameInfoContent
                                 case .gameSettings:
                                     gameSettings
-                                case .trackingPrivacy:
-                                    trackingPrivacySettings
                                 case .voice:
                                     voiceSettings
                                 case .gameActions:
@@ -350,61 +339,6 @@ struct GameSettingsView: View {
             }
         } message: {
             Text("This removes only this game from the trip. The trip continues with your other games.".localized)
-        }
-    }
-
-    private var trackingPrivacySettings: some View {
-        Group {
-            let locationAuthorized = locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways
-            let canEditTracking = viewModel.currentSession.status != .ended
-
-            SettingToggleRow(
-                title: "Save location when marking plates".localized,
-                description: "Store location data when you mark a plate as found".localized,
-                isOn: $saveLocationWhenMarkingPlates
-            )
-            .disabled(!locationAuthorized || !canEditTracking)
-            .opacity((locationAuthorized && canEditTracking) ? 1.0 : 0.5)
-
-            Divider()
-
-            SettingToggleRow(
-                title: "Show my location on large map".localized,
-                description: "Display your current location on the full-screen map".localized,
-                isOn: $showMyLocationOnLargeMap
-            )
-            .disabled(!canEditTracking)
-            .opacity(canEditTracking ? 1.0 : 0.5)
-
-            Divider()
-
-            SettingToggleRow(
-                title: "Track my location during trip".localized,
-                description: "Continuously track your location while a trip is active".localized,
-                isOn: $trackMyLocationDuringTrip
-            )
-            .disabled(!canEditTracking)
-            .opacity(canEditTracking ? 1.0 : 0.5)
-
-            Divider()
-
-            SettingToggleRow(
-                title: "Show my active trip on the large map".localized,
-                description: "Display your active trip on the full-screen map".localized,
-                isOn: $showMyActiveTripOnLargeMap
-            )
-            .disabled(!trackMyLocationDuringTrip || !canEditTracking)
-            .opacity((trackMyLocationDuringTrip && canEditTracking) ? 1.0 : 0.5)
-
-            Divider()
-
-            SettingToggleRow(
-                title: "Show my active trip on the small map".localized,
-                description: "Display your active trip on the small map".localized,
-                isOn: $showMyActiveTripOnSmallMap
-            )
-            .disabled(!trackMyLocationDuringTrip || !canEditTracking)
-            .opacity((trackMyLocationDuringTrip && canEditTracking) ? 1.0 : 0.5)
         }
     }
 

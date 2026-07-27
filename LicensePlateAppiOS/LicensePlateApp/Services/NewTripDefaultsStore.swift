@@ -2,7 +2,7 @@
 //  NewTripDefaultsStore.swift
 //  LicensePlateApp
 //
-//  UserDefaults keys and persistence for "New Trip Defaults" settings.
+//  UserDefaults keys and persistence for "New Trip/Game Defaults" settings.
 //
 
 import Foundation

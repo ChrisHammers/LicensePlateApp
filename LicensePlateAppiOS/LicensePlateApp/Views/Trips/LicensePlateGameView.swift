@@ -149,7 +149,7 @@ struct LicensePlateGameView: View {
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
                     .accessibilityLabel("Game settings".localized)
-                    .accessibilityHint("Opens settings for this license plate game".localized)
+                    .accessibilityHint("Opens settings for this license plate game: scope, voice, and game actions".localized)
                 }
             }
         }

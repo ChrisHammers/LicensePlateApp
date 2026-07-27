@@ -14,7 +14,7 @@ struct NewTripDefaultsView: View {
     var body: some View {
         AppBackgroundView {
             List {
-                Section("Trip Defaults") {
+                Section {
                     VStack(spacing: 12) {
                         // Start Trip - First item
                         SettingToggleRow(
@@ -82,9 +82,12 @@ struct NewTripDefaultsView: View {
                     .cornerRadius(20)
                     .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                     .listRowBackground(Color.clear)
+                } header: {
+                    Text("Trip Defaults".localized)
                 }
+                .textCase(nil)
                 
-                Section("Game Defaults") {
+                Section {
                     VStack(spacing: 12) {
                         // Countries
                         VStack(alignment: .leading, spacing: 12) {
@@ -126,13 +129,15 @@ struct NewTripDefaultsView: View {
                     .cornerRadius(20)
                     .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
                     .listRowBackground(Color.clear)
+                } header: {
+                    Text("Game Defaults".localized)
                 }
                 .textCase(nil)
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
         }
-        .navigationTitle("New Trip Defaults".localized)
+        .navigationTitle("New Trip/Game Defaults".localized)
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
         .toolbar {
@@ -149,7 +154,7 @@ struct NewTripDefaultsView: View {
                 .accessibilityHint(
                     !viewModel.canSave
                         ? "Select at least one country before saving.".localized
-                        : "Saves new trip defaults and closes this view".localized
+                        : "Saves new trip/game defaults and closes this view".localized
                 )
             }
         }
