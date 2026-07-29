@@ -33,6 +33,7 @@ enum UserDriversLicenseBuilder {
 
         return UserDriversLicense(
             holderName: inputs.user.displayName,
+            userName: inputs.user.userName,
             issueDate: inputs.user.createdAt,
             rankLevel: rank.level,
             rankTitle: rank.title,

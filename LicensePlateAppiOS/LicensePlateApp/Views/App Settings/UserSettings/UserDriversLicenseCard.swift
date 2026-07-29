@@ -212,6 +212,7 @@ extension LicenseStyle {
 struct UserDriversLicense {
 
     var holderName: String
+    var userName: String
     var issueDate: Date
     var rankLevel: Int
     var rankTitle: String
@@ -233,6 +234,7 @@ struct UserDriversLicense {
     var licenseNumber: String?
 
     init(holderName: String,
+         userName: String,
          issueDate: Date,
          rankLevel: Int,
          rankTitle: String,
@@ -249,6 +251,7 @@ struct UserDriversLicense {
          badges: [LicenseBadge] = [],
          licenseNumber: String? = nil) {
         self.holderName = holderName
+        self.userName = userName
         self.issueDate = issueDate
         self.rankLevel = rankLevel
         self.rankTitle = rankTitle
@@ -332,6 +335,7 @@ extension UserDriversLicense {
     ) -> UserDriversLicense {
         UserDriversLicense(
             holderName: "Chris Hammers",
+            userName: "chammers",
             issueDate: Calendar.current.date(from: DateComponents(year: 2024, month: 3, day: 9)) ?? .now,
             rankLevel: 27,
             rankTitle: "Highway Legend",
@@ -456,7 +460,7 @@ struct UserDriversLicenseCard<Portrait: View>: View {
             withAnimation(.linear(duration: 2.8).repeatForever(autoreverses: false)) { shinePhase = 1 }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(license.holderName), RoadTrip Royale license. Double tap to flip.")
+        .accessibilityLabel("\(license.holderName), @\(license.userName), RoadTrip Royale license. Double tap to flip.")
     }
     
     // MARK: Accessory slot
@@ -572,8 +576,9 @@ struct UserDriversLicenseCard<Portrait: View>: View {
     }
 
     private var frontFields: some View {
-        VStack(alignment: .leading, spacing: 8 * s) {
+        VStack(alignment: .leading, spacing: 6 * s) {
             field("HOLDER", license.holderName)
+            field("USERNAME", "@\(license.userName)", valueSize: 11 * s)
             HStack(alignment: .top, spacing: 10 * s) {
                 miniStat("SCORE", license.score.formatted())
                 miniStat("XP", license.xp.formatted())
@@ -705,10 +710,10 @@ struct UserDriversLicenseCard<Portrait: View>: View {
 
     // MARK: Reusable bits
 
-    private func field(_ label: String, _ value: String) -> some View {
+    private func field(_ label: String, _ value: String, valueSize: CGFloat? = nil) -> some View {
         VStack(alignment: .leading, spacing: 1 * s) {
             Text(label).font(.system(size: 7 * s, weight: .bold)).kerning(0.8 * s).foregroundStyle(.secondary)
-            Text(value).font(.system(size: 14 * s, weight: .bold)).foregroundStyle(.primary)
+            Text(value).font(.system(size: valueSize ?? 14 * s, weight: .bold)).foregroundStyle(.primary)
                 .lineLimit(1).minimumScaleFactor(0.55)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
