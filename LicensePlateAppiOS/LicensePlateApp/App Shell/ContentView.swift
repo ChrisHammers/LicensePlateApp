@@ -452,6 +452,7 @@ struct ContentView: View {
         Task {
             if let userId, !userId.isEmpty {
                 await NotificationPrefsStore.shared.load(userId: userId)
+                await AppPrefsStore.shared.load(userId: userId)
             }
             await ReturnStreakReminderService.shared.refreshScheduleIfNeeded(userId: userId)
         }
@@ -797,18 +798,6 @@ struct ContentView: View {
         .accessibilityHint("Opens a sheet to create a new trip".localized)
         .accessibilityAddTraits(.isButton)
     }
-
-    @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
-    @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
-    @AppStorage("defaultStartTripRightAway") private var defaultStartTripRightAway = true
-    @AppStorage("defaultIncludeUS") private var defaultIncludeUS = true
-    @AppStorage("defaultIncludeCanada") private var defaultIncludeCanada = true
-    @AppStorage("defaultIncludeMexico") private var defaultIncludeMexico = true
-    @AppStorage("defaultSaveLocationWhenMarkingPlates") private var defaultSaveLocationWhenMarkingPlates = true
-    @AppStorage("defaultShowMyLocationOnLargeMap") private var defaultShowMyLocationOnLargeMap = true
-    @AppStorage("defaultTrackMyLocationDuringTrip") private var defaultTrackMyLocationDuringTrip = true
-    @AppStorage("defaultShowMyActiveTripOnLargeMap") private var defaultShowMyActiveTripOnLargeMap = true
-    @AppStorage("defaultShowMyActiveTripOnSmallMap") private var defaultShowMyActiveTripOnSmallMap = true
 }
 
 private struct PendingInviteCard: View {
@@ -905,17 +894,6 @@ struct DefaultSettingsView: View {
     
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var systemColorScheme
-    @AppStorage("defaultSkipVoiceConfirmation") private var defaultSkipVoiceConfirmation = false
-    @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
-    @AppStorage("defaultStartTripRightAway") private var defaultStartTripRightAway = true
-    @AppStorage("defaultIncludeUS") private var defaultIncludeUS = true
-    @AppStorage("defaultIncludeCanada") private var defaultIncludeCanada = true
-    @AppStorage("defaultIncludeMexico") private var defaultIncludeMexico = true
-    @AppStorage("defaultSaveLocationWhenMarkingPlates") private var defaultSaveLocationWhenMarkingPlates = true
-    @AppStorage("defaultShowMyLocationOnLargeMap") private var defaultShowMyLocationOnLargeMap = true
-    @AppStorage("defaultTrackMyLocationDuringTrip") private var defaultTrackMyLocationDuringTrip = true
-    @AppStorage("defaultShowMyActiveTripOnLargeMap") private var defaultShowMyActiveTripOnLargeMap = true
-    @AppStorage("defaultShowMyActiveTripOnSmallMap") private var defaultShowMyActiveTripOnSmallMap = true
     
     // App Preferences
     @AppStorage("appDarkMode") private var appDarkModeRaw: String = AppDarkMode.system.rawValue
@@ -937,9 +915,11 @@ struct DefaultSettingsView: View {
             currentColorScheme = systemColorScheme
         }
     }
-    @AppStorage("appDistanceUnit") private var appDistanceUnitRaw: String = AppDistanceUnit.miles.rawValue
+    // TODO(cloud-prefs): re-enable when wired — no production distance formatting consumer.
+    // @AppStorage("appDistanceUnit") private var appDistanceUnitRaw: String = AppDistanceUnit.miles.rawValue
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
-    @AppStorage("appLanguage") private var appLanguageRaw: String = AppLanguage.english.rawValue
+    // TODO(cloud-prefs): re-enable when wired — String.localized does not apply this override.
+    // @AppStorage("appLanguage") private var appLanguageRaw: String = AppLanguage.english.rawValue
     @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
     @AppStorage("appUseVibrations") private var appUseVibrations = true
 
@@ -961,12 +941,13 @@ struct DefaultSettingsView: View {
         )
     }
     
-    private var appDistanceUnit: Binding<AppDistanceUnit> {
-        Binding(
-            get: { AppDistanceUnit(rawValue: appDistanceUnitRaw) ?? .miles },
-            set: { appDistanceUnitRaw = $0.rawValue }
-        )
-    }
+    // TODO(cloud-prefs): re-enable when wired — no production distance formatting consumer.
+    // private var appDistanceUnit: Binding<AppDistanceUnit> {
+    //     Binding(
+    //         get: { AppDistanceUnit(rawValue: appDistanceUnitRaw) ?? .miles },
+    //         set: { appDistanceUnitRaw = $0.rawValue }
+    //     )
+    // }
     
     private var appMapStyle: Binding<AppMapStyle> {
         Binding(
@@ -975,12 +956,13 @@ struct DefaultSettingsView: View {
         )
     }
     
-    private var appLanguage: Binding<AppLanguage> {
-        Binding(
-            get: { AppLanguage(rawValue: appLanguageRaw) ?? .english },
-            set: { appLanguageRaw = $0.rawValue }
-        )
-    }
+    // TODO(cloud-prefs): re-enable when wired — String.localized does not apply this override.
+    // private var appLanguage: Binding<AppLanguage> {
+    //     Binding(
+    //         get: { AppLanguage(rawValue: appLanguageRaw) ?? .english },
+    //         set: { appLanguageRaw = $0.rawValue }
+    //     )
+    // }
     
     var body: some View {
       NavigationStack(path: $coordinator.path) { //NavigationStack(path: Binding(get: { coordinator.path }, set: { coordinator.path = $0 })) {

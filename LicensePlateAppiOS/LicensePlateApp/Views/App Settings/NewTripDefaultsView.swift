@@ -9,6 +9,7 @@ import SwiftUI
 
 struct NewTripDefaultsView: View {
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var authService: FirebaseAuthService
     @StateObject private var viewModel = NewTripDefaultsViewModel()
 
     var body: some View {
@@ -51,29 +52,31 @@ struct NewTripDefaultsView: View {
                                 isOn: $viewModel.trackMyLocationDuringTrip
                             )
                             
-                            SettingToggleRow(
-                                title: "Show my active trip on the large map".localized,
-                                description: "Display active trip on full-screen map (default for new trips)".localized,
-                                isOn: $viewModel.showMyActiveTripOnLargeMap
-                            )
-                            .disabled(!viewModel.trackMyLocationDuringTrip)
-                            .opacity(viewModel.trackMyLocationDuringTrip ? 1.0 : 0.5)
-                            .accessibilityHintWhenDisabled(
-                                !viewModel.trackMyLocationDuringTrip,
-                                hint: "Enable location tracking during trip first".localized
-                            )
+                            // TODO(cloud-prefs): re-enable when wired — no behavioral consumers today.
+                            // SettingToggleRow(
+                            //     title: "Show my active trip on the large map".localized,
+                            //     description: "Display active trip on full-screen map (default for new trips)".localized,
+                            //     isOn: $viewModel.showMyActiveTripOnLargeMap
+                            // )
+                            // .disabled(!viewModel.trackMyLocationDuringTrip)
+                            // .opacity(viewModel.trackMyLocationDuringTrip ? 1.0 : 0.5)
+                            // .accessibilityHintWhenDisabled(
+                            //     !viewModel.trackMyLocationDuringTrip,
+                            //     hint: "Enable location tracking during trip first".localized
+                            // )
                             
-                            SettingToggleRow(
-                                title: "Show my active trip on the small map".localized,
-                                description: "Display active trip on small map (default for new trips)".localized,
-                                isOn: $viewModel.showMyActiveTripOnSmallMap
-                            )
-                            .disabled(!viewModel.trackMyLocationDuringTrip)
-                            .opacity(viewModel.trackMyLocationDuringTrip ? 1.0 : 0.5)
-                            .accessibilityHintWhenDisabled(
-                                !viewModel.trackMyLocationDuringTrip,
-                                hint: "Enable location tracking during trip first".localized
-                            )
+                            // TODO(cloud-prefs): re-enable when wired — no behavioral consumers today.
+                            // SettingToggleRow(
+                            //     title: "Show my active trip on the small map".localized,
+                            //     description: "Display active trip on small map (default for new trips)".localized,
+                            //     isOn: $viewModel.showMyActiveTripOnSmallMap
+                            // )
+                            // .disabled(!viewModel.trackMyLocationDuringTrip)
+                            // .opacity(viewModel.trackMyLocationDuringTrip ? 1.0 : 0.5)
+                            // .accessibilityHintWhenDisabled(
+                            //     !viewModel.trackMyLocationDuringTrip,
+                            //     hint: "Enable location tracking during trip first".localized
+                            // )
                         }
                     }
                     .padding(.horizontal, 16)
@@ -143,8 +146,10 @@ struct NewTripDefaultsView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("Done".localized) {
-                    viewModel.save()
-                    dismiss()
+                    Task {
+                        await viewModel.save()
+                        dismiss()
+                    }
                 }
                 .font(.system(.body, design: .rounded))
                 .fontWeight(.semibold)
@@ -159,7 +164,9 @@ struct NewTripDefaultsView: View {
             }
         }
         .onAppear {
-            viewModel.reloadFromStore()
+            let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+            viewModel.configure(userId: userId)
+            Task { await viewModel.loadIfNeeded() }
         }
     }
 }

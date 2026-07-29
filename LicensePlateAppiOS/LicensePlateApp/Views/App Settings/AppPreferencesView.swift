@@ -15,7 +15,8 @@ struct AppPreferencesView: View {
   // App Preferences
   @AppStorage("appDarkMode") private var appDarkModeRaw: String = AppDarkMode.system.rawValue
   @AppStorage("appBackgroundStyle") private var appBackgroundStyleRaw: String = AppBackgroundStyle.paths.rawValue
-  @AppStorage("appDistanceUnit") private var appDistanceUnitRaw: String = AppDistanceUnit.miles.rawValue
+  // TODO(cloud-prefs): re-enable when wired — no production distance formatting consumer.
+  // @AppStorage("appDistanceUnit") private var appDistanceUnitRaw: String = AppDistanceUnit.miles.rawValue
   @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
   @AppStorage("appShowRegionBorders") private var appShowRegionBorders = false
   @AppStorage("appShowMapMarkers") private var appShowMapMarkers = true
@@ -44,12 +45,13 @@ struct AppPreferencesView: View {
     )
   }
   
-  private var appDistanceUnit: Binding<AppDistanceUnit> {
-    Binding(
-      get: { AppDistanceUnit(rawValue: appDistanceUnitRaw) ?? .miles },
-      set: { appDistanceUnitRaw = $0.rawValue }
-    )
-  }
+  // TODO(cloud-prefs): re-enable when wired — no production distance formatting consumer.
+  // private var appDistanceUnit: Binding<AppDistanceUnit> {
+  //   Binding(
+  //     get: { AppDistanceUnit(rawValue: appDistanceUnitRaw) ?? .miles },
+  //     set: { appDistanceUnitRaw = $0.rawValue }
+  //   )
+  // }
   
   private var appMapStyle: Binding<AppMapStyle> {
     Binding(
@@ -86,13 +88,14 @@ struct AppPreferencesView: View {
             
             Divider()
             
-            SettingPickerRow(
-              title: "Distance Unit".localized,
-              description: "Select miles or kilometers".localized,
-              selection: appDistanceUnit
-            )
-            
-            Divider()
+            // TODO(cloud-prefs): re-enable when wired — no production distance formatting consumer.
+            // SettingPickerRow(
+            //   title: "Distance Unit".localized,
+            //   description: "Select miles or kilometers".localized,
+            //   selection: appDistanceUnit
+            // )
+            //
+            // Divider()
             
             SettingPickerRow(
               title: "Map Style".localized,

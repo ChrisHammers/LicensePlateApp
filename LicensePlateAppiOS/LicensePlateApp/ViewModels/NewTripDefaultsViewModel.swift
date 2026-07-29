@@ -21,9 +21,15 @@ final class NewTripDefaultsViewModel: ObservableObject {
     @Published var showMyActiveTripOnSmallMap: Bool
 
     private let store: NewTripDefaultsStoring
+    private let appPrefsStore: AppPrefsStore
+    private var userId: String?
 
-    init(store: NewTripDefaultsStoring = UserDefaultsNewTripDefaultsStore()) {
+    init(
+        store: NewTripDefaultsStoring = UserDefaultsNewTripDefaultsStore(),
+        appPrefsStore: AppPrefsStore = .shared
+    ) {
         self.store = store
+        self.appPrefsStore = appPrefsStore
         let s = store.load()
         includeUS = s.includeUS
         includeCanada = s.includeCanada
@@ -52,6 +58,18 @@ final class NewTripDefaultsViewModel: ObservableObject {
         if includeCanada { list.append(.canada) }
         if includeMexico { list.append(.mexico) }
         return list
+    }
+
+    func configure(userId: String?) {
+        self.userId = userId
+    }
+
+    /// Hydrate cloud game defaults (when signed in), then reload the full local snapshot into UI.
+    func loadIfNeeded() async {
+        if let userId, !userId.isEmpty {
+            await appPrefsStore.load(userId: userId)
+        }
+        reloadFromStore()
     }
 
     func reloadFromStore() {
@@ -85,7 +103,17 @@ final class NewTripDefaultsViewModel: ObservableObject {
         )
     }
 
-    func save() {
-        store.save(snapshot())
+    /// Persists full snapshot to UserDefaults; when signed in, also pushes the four cloud fields.
+    func save() async {
+        let snap = snapshot()
+        store.save(snap)
+        guard let userId, !userId.isEmpty else { return }
+        let cloud = UserRepository.GameDefaults(
+            includeUS: snap.includeUS,
+            includeCanada: snap.includeCanada,
+            includeMexico: snap.includeMexico,
+            startTripRightAway: snap.startTripRightAway
+        )
+        await appPrefsStore.save(userId: userId, defaults: cloud)
     }
 }

@@ -11,7 +11,8 @@ struct VoiceDefaultsView: View {
     @Environment(\.dismiss) private var dismiss
     
     // Voice Defaults
-    @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
+    // TODO(cloud-prefs): re-enable when wired — no runtime consumer for hold-to-talk.
+    // @AppStorage("defaultHoldToTalk") private var defaultHoldToTalk = true
     
     var body: some View {
             AppBackgroundView {

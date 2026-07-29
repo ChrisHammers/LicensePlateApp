@@ -935,5 +935,68 @@ class UserRepository: ObservableObject {
             "notificationPrefs": prefs.firestoreMap
         ], merge: true)
     }
+
+    // MARK: - Game defaults (Firestore account prefs; UserDefaults is local cache)
+
+    /// Account-level new-trip / game defaults that sync across devices.
+    /// Missing fields default to enabled (`true`), matching factory New Trip Defaults.
+    struct GameDefaults: Equatable, Sendable {
+        var includeUS: Bool
+        var includeCanada: Bool
+        var includeMexico: Bool
+        var startTripRightAway: Bool
+
+        static let `default` = GameDefaults(
+            includeUS: true,
+            includeCanada: true,
+            includeMexico: true,
+            startTripRightAway: true
+        )
+
+        /// Parse Firestore map; missing keys use `default` semantics.
+        static func fromFirestoreMap(_ raw: [String: Any]?) -> GameDefaults {
+            let d = GameDefaults.default
+            guard let raw else { return d }
+            return GameDefaults(
+                includeUS: (raw["includeUS"] as? Bool) ?? d.includeUS,
+                includeCanada: (raw["includeCanada"] as? Bool) ?? d.includeCanada,
+                includeMexico: (raw["includeMexico"] as? Bool) ?? d.includeMexico,
+                startTripRightAway: (raw["startTripRightAway"] as? Bool) ?? d.startTripRightAway
+            )
+        }
+
+        /// Full map so merge does not wipe sibling keys inside `gameDefaults`.
+        var firestoreMap: [String: Bool] {
+            [
+                "includeUS": includeUS,
+                "includeCanada": includeCanada,
+                "includeMexico": includeMexico,
+                "startTripRightAway": startTripRightAway
+            ]
+        }
+    }
+
+    /// Result of reading `appPrefs.gameDefaults`. `cloudMapPresent` is false when the nested map was never written (migrate-from-local opportunity).
+    struct GameDefaultsFetchResult: Equatable, Sendable {
+        var defaults: GameDefaults
+        var cloudMapPresent: Bool
+    }
+
+    func fetchGameDefaults(userId: String) async throws -> GameDefaultsFetchResult {
+        let snapshot = try await db.collection("users").document(userId).getDocument()
+        let appPrefs = snapshot.data()?["appPrefs"] as? [String: Any]
+        let raw = appPrefs?["gameDefaults"] as? [String: Any]
+        return GameDefaultsFetchResult(
+            defaults: GameDefaults.fromFirestoreMap(raw),
+            cloudMapPresent: raw != nil
+        )
+    }
+
+    /// Writes all keys under `appPrefs.gameDefaults` via dotted-path merge so sibling `appPrefs` fields survive.
+    func updateGameDefaults(userId: String, defaults: GameDefaults) async throws {
+        try await db.collection("users").document(userId).setData([
+            "appPrefs.gameDefaults": defaults.firestoreMap
+        ], merge: true)
+    }
 }
 

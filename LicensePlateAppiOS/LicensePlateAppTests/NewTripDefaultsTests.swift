@@ -51,28 +51,38 @@ struct NewTripDefaultsTests {
         #expect(vm.canSave == true)
     }
 
-    @Test func viewModel_save_persistsForNextInit() {
+    @Test func viewModel_save_persistsForNextInit() async {
         let defaults = makeFreshDefaults()
         let store = UserDefaultsNewTripDefaultsStore(defaults: defaults)
         let vm = NewTripDefaultsViewModel(store: store)
         vm.includeUS = false
         vm.includeCanada = true
         vm.includeMexico = false
-        vm.save()
+        await vm.save()
         let vm2 = NewTripDefaultsViewModel(store: store)
         #expect(vm2.includeUS == false)
         #expect(vm2.includeCanada == true)
         #expect(vm2.includeMexico == false)
     }
 
-    @Test func viewModel_reloadFromStore_discardsUnsavedEdits() {
+    @Test func viewModel_reloadFromStore_discardsUnsavedEdits() async {
         let defaults = makeFreshDefaults()
         let store = UserDefaultsNewTripDefaultsStore(defaults: defaults)
         let vm = NewTripDefaultsViewModel(store: store)
         vm.includeUS = false
-        vm.save()
+        await vm.save()
         vm.includeUS = true
         vm.reloadFromStore()
         #expect(vm.includeUS == false)
+    }
+
+    @Test func viewModel_save_persistsStartTripRightAway() async {
+        let defaults = makeFreshDefaults()
+        let store = UserDefaultsNewTripDefaultsStore(defaults: defaults)
+        let vm = NewTripDefaultsViewModel(store: store)
+        vm.startTripRightAway = false
+        await vm.save()
+        let loaded = store.load()
+        #expect(loaded.startTripRightAway == false)
     }
 }

@@ -102,6 +102,7 @@ final class LocalUserDataPurgeService {
         EntitlementService.shared.resetForAccountPurge()
         LifetimeStatsCoordinator.shared.resetForAccountPurge()
         NotificationPrefsStore.shared.resetToDefaults()
+        AppPrefsStore.shared.resetToDefaults()
         DeepLinkHandler.shared.clearDestination()
         ReturnStreakService.shared.setActiveUserId(nil)
     }

@@ -17,7 +17,8 @@ struct GameSettingsView: View {
     @State private var showEndGameConfirmation = false
 
     @AppStorage("defaultSkipVoiceConfirmation") private var skipVoiceConfirmation = false
-    @AppStorage("defaultHoldToTalk") private var holdToTalk = true
+    // TODO(cloud-prefs): re-enable when wired — no runtime consumer for hold-to-talk.
+    // @AppStorage("defaultHoldToTalk") private var holdToTalk = true
 
     enum SettingsSection: String, CaseIterable {
         case gameInfo = "Game info"
@@ -353,15 +354,14 @@ struct GameSettingsView: View {
             )
             .disabled(!canEditSettings)
             .opacity(canEditSettings ? 1.0 : 0.5)
-            if false {
-                SettingToggleRow(
-                    title: "Hold to Talk",
-                    description: "Press and hold the microphone button to record. If disabled the system will listen until you hit stop.",
-                    isOn: $holdToTalk
-                )
-                .disabled(!canEditSettings)
-                .opacity(canEditSettings ? 1.0 : 0.5)
-            }
+            // TODO(cloud-prefs): re-enable when wired — no runtime consumer for hold-to-talk.
+            // SettingToggleRow(
+            //     title: "Hold to Talk",
+            //     description: "Press and hold the microphone button to record. If disabled the system will listen until you hit stop.",
+            //     isOn: $holdToTalk
+            // )
+            // .disabled(!canEditSettings)
+            // .opacity(canEditSettings ? 1.0 : 0.5)
         }
     }
 }
