@@ -7,11 +7,23 @@
 
 import Foundation
 import SwiftData
+import Combine
+import CoreLocation
 import Testing
 @testable import LicensePlateApp
 
 @MainActor
 struct TripSessionViewModelTests {
+
+    private final class FakeRouteLocationSource: RouteTrackingLocationSource {
+        let locationSubject = PassthroughSubject<CLLocation?, Never>()
+        let authorizationSubject = CurrentValueSubject<Bool, Never>(false)
+        var locationPublisher: AnyPublisher<CLLocation?, Never> { locationSubject.eraseToAnyPublisher() }
+        var locationAuthorizationPublisher: AnyPublisher<Bool, Never> { authorizationSubject.eraseToAnyPublisher() }
+        var isAuthorizedForLocation: Bool { authorizationSubject.value }
+        func beginRouteTracking() {}
+        func endRouteTracking() {}
+    }
 
     private func creatorAuth(userId: String = "user1") -> FirebaseAuthService {
         let auth = FirebaseAuthService()
@@ -92,6 +104,27 @@ struct TripSessionViewModelTests {
 
         #expect(viewModel.session == nil)
         #expect(viewModel.gameRowItems.isEmpty)
+    }
+
+    @Test func loadActiveSessionResumesTripRouteTracking() async throws {
+        let sessionId = UUID()
+        let session = makeSession(id: sessionId, name: "Tracked Trip")
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let routeTracking = TripRouteTrackingService(locationSource: FakeRouteLocationSource())
+
+        let viewModel = TripSessionViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: MockGameInstanceRepository(),
+            tripActivityEventRepository: MockTripActivityEventRepository(),
+            authService: creatorAuth(),
+            routeTrackingService: routeTracking
+        )
+
+        viewModel.load()
+
+        #expect(routeTracking.activeTripSessionId == sessionId)
     }
 
     // MARK: - canAddGame (button enablement only; add flow tested in GameSetupViewModelTests)

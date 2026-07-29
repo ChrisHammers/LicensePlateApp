@@ -86,6 +86,12 @@ extension LocationManager: RouteTrackingLocationSource {
         $location.eraseToAnyPublisher()
     }
 
+    var locationAuthorizationPublisher: AnyPublisher<Bool, Never> {
+        $authorizationStatus
+            .map { $0 == .authorizedWhenInUse || $0 == .authorizedAlways }
+            .eraseToAnyPublisher()
+    }
+
     /// Automotive tuning while a trip tracks; restored to map-grade defaults when it stops.
     /// GPS Step 8 — background updates stay on only while tracking, with the visible
     /// indicator for user trust. Requires the `location` UIBackgroundMode (Info.plist);

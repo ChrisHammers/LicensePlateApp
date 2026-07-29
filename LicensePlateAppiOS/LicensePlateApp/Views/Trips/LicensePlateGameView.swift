@@ -399,6 +399,7 @@ struct LicensePlateGameView: View {
 
           // Map view (game-scoped)
           RegionMapView(
+              tripSessionId: viewModel.sessionId,
               enabledCountries: gameScopedEnabledCountries,
               foundRegionIDs: viewModel.displayFoundRegionIDsForMap,
               foundRegions: viewModel.foundRegions,

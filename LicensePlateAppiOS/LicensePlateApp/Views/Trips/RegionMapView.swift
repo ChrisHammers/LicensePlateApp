@@ -10,6 +10,7 @@ import GoogleMaps
 
 /// Provider-switching compact region map shared by game and trip screens.
 struct RegionMapView: View {
+    let tripSessionId: UUID
     let enabledCountries: [PlateRegion.Country]
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
@@ -20,9 +21,16 @@ struct RegionMapView: View {
     @ObservedObject var locationManager: LocationManager
 
     @AppStorage("appMapProvider") private var appMapProviderRaw: String = AppPreferences.defaultMapProvider().rawValue
+    @AppStorage(NewTripDefaultsKeys.showMyActiveTripOnSmallMap) private var showActiveTripRoute = true
+    @ObservedObject private var routeTracking = TripRouteTrackingService.shared
 
     private var mapProvider: AppMapProvider {
         AppMapProvider(rawValue: appMapProviderRaw) ?? AppPreferences.defaultMapProvider()
+    }
+
+    private var routeCoordinates: [CLLocationCoordinate2D] {
+        guard showActiveTripRoute, routeTracking.activeTripSessionId == tripSessionId else { return [] }
+        return routeTracking.routePoints.map(\.coordinate)
     }
 
     var body: some View {
@@ -32,6 +40,7 @@ struct RegionMapView: View {
                     enabledCountries: enabledCountries,
                     foundRegionIDs: foundRegionIDs,
                     foundRegions: foundRegions,
+                    routeCoordinates: routeCoordinates,
                     visibleCountry: visibleCountry,
                     cameraPosition: $cameraPosition,
                     namespace: namespace,
@@ -42,6 +51,7 @@ struct RegionMapView: View {
                 RegionAppleMapView(
                     country: visibleCountry,
                     foundRegionIDs: foundRegionIDs,
+                    routeCoordinates: routeCoordinates,
                     namespace: namespace,
                     showFullScreen: $showFullScreen,
                     locationManager: locationManager
@@ -56,6 +66,7 @@ struct RegionGoogleMapView: View {
     let enabledCountries: [PlateRegion.Country]
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
+    let routeCoordinates: [CLLocationCoordinate2D]
     let visibleCountry: PlateRegion.Country
     @Binding var cameraPosition: GMSCameraPosition
     let namespace: Namespace.ID
@@ -64,10 +75,11 @@ struct RegionGoogleMapView: View {
     
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     
-    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], visibleCountry: PlateRegion.Country, cameraPosition: Binding<GMSCameraPosition>, namespace: Namespace.ID, showFullScreen: Binding<Bool>, locationManager: LocationManager) {
+    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], routeCoordinates: [CLLocationCoordinate2D], visibleCountry: PlateRegion.Country, cameraPosition: Binding<GMSCameraPosition>, namespace: Namespace.ID, showFullScreen: Binding<Bool>, locationManager: LocationManager) {
         self.enabledCountries = enabledCountries
         self.foundRegionIDs = foundRegionIDs
         self.foundRegions = foundRegions
+        self.routeCoordinates = routeCoordinates
         self.visibleCountry = visibleCountry
         self._cameraPosition = cameraPosition
         self.namespace = namespace
@@ -120,6 +132,7 @@ struct RegionGoogleMapView: View {
                 cameraPosition: $cameraPosition,
                 foundRegionIDs: foundRegionIDs,
                 foundRegions: foundRegions,
+                routeCoordinates: routeCoordinates,
                 showUserLocation: false,
                 userLocation: locationManager.location?.coordinate,
                 mapType: mapType,
@@ -274,37 +287,21 @@ struct RegionGoogleMapView: View {
 struct RegionAppleMapView: View {
     let country: PlateRegion.Country
     let foundRegionIDs: [String]
+    let routeCoordinates: [CLLocationCoordinate2D]
     let namespace: Namespace.ID
     @Binding var showFullScreen: Bool
     @ObservedObject var locationManager: LocationManager
     
-    @State private var mapRegion: MKCoordinateRegion
+    @State private var mapCameraPosition: MapCameraPosition
     
-    init(country: PlateRegion.Country, foundRegionIDs: [String], namespace: Namespace.ID, showFullScreen: Binding<Bool>, locationManager: LocationManager) {
+    init(country: PlateRegion.Country, foundRegionIDs: [String], routeCoordinates: [CLLocationCoordinate2D], namespace: Namespace.ID, showFullScreen: Binding<Bool>, locationManager: LocationManager) {
         self.country = country
         self.foundRegionIDs = foundRegionIDs
+        self.routeCoordinates = routeCoordinates
         self.namespace = namespace
         self._showFullScreen = showFullScreen
         self.locationManager = locationManager
-        
-        // Initialize map region based on country
-        switch country {
-        case .unitedStates:
-            _mapRegion = State(initialValue: MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795),
-                span: MKCoordinateSpan(latitudeDelta: 50, longitudeDelta: 50)
-            ))
-        case .canada:
-            _mapRegion = State(initialValue: MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468),
-                span: MKCoordinateSpan(latitudeDelta: 30, longitudeDelta: 60)
-            ))
-        case .mexico:
-            _mapRegion = State(initialValue: MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528),
-                span: MKCoordinateSpan(latitudeDelta: 15, longitudeDelta: 20)
-            ))
-        }
+        _mapCameraPosition = State(initialValue: .region(Self.mapRegion(for: country)))
     }
     
     private var regionsForCurrentCountry: [PlateRegion] {
@@ -317,24 +314,13 @@ struct RegionAppleMapView: View {
     
     var body: some View {
         ZStack {
-          
-          //          Map(initialPosition: .region(mapRegion)){
-          //              ForEach(regionsFound) { region in
-          //                Annotation(region.name, coordinate: coordinateForRegion(region)) {
-          //                  Circle()
-          //                      .fill(foundRegionIDs.contains(region.id) ? Color.Theme.accentYellow : Color.Theme.primaryBlue.opacity(0.6))
-          //                      .frame(width: 12, height: 12)
-          //                      .overlay(
-          //                          Circle()
-          //                              .stroke(Color.white, lineWidth: 2)
-          //                      )
-          //                      .shadow(color: Color.black.opacity(0.3), radius: 2, x: 0, y: 1)
-          //                }
-          //              }
-          //            }
-                    
-            Map(coordinateRegion: $mapRegion, annotationItems: regionsFound) { region in
-                MapAnnotation(coordinate: coordinateForRegion(region)) {
+            Map(position: $mapCameraPosition) {
+                if routeCoordinates.count >= 2 {
+                    MapPolyline(coordinates: routeCoordinates)
+                        .stroke(Color.Theme.primaryBlue, lineWidth: 4)
+                }
+                ForEach(regionsFound) { region in
+                    Annotation(region.name, coordinate: coordinateForRegion(region)) {
                     Circle()
                         .fill(foundRegionIDs.contains(region.id) ? Color.Theme.accentYellow : Color.Theme.primaryBlue.opacity(0.6))
                         .frame(width: 12, height: 12)
@@ -343,6 +329,7 @@ struct RegionAppleMapView: View {
                                 .stroke(Color.white, lineWidth: 2)
                         )
                         .shadow(color: Color.black.opacity(0.3), radius: 2, x: 0, y: 1)
+                    }
                 }
             }
             .mapStyle(AppPreferences.mapStyleFromPreference())
@@ -364,24 +351,28 @@ struct RegionAppleMapView: View {
         .onChange(of: country) { oldValue, newValue in
             // Update map region when country changes
             withAccessibleAnimation(.easeInOut(duration: 0.5)) {
-                switch newValue {
-                case .unitedStates:
-                    mapRegion = MKCoordinateRegion(
-                        center: CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795),
-                        span: MKCoordinateSpan(latitudeDelta: 50, longitudeDelta: 50)
-                    )
-                case .canada:
-                    mapRegion = MKCoordinateRegion(
-                        center: CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468),
-                        span: MKCoordinateSpan(latitudeDelta: 30, longitudeDelta: 60)
-                    )
-                case .mexico:
-                    mapRegion = MKCoordinateRegion(
-                        center: CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528),
-                        span: MKCoordinateSpan(latitudeDelta: 15, longitudeDelta: 20)
-                    )
-                }
+                mapCameraPosition = .region(Self.mapRegion(for: newValue))
             }
+        }
+    }
+
+    private static func mapRegion(for country: PlateRegion.Country) -> MKCoordinateRegion {
+        switch country {
+        case .unitedStates:
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795),
+                span: MKCoordinateSpan(latitudeDelta: 50, longitudeDelta: 50)
+            )
+        case .canada:
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468),
+                span: MKCoordinateSpan(latitudeDelta: 30, longitudeDelta: 60)
+            )
+        case .mexico:
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528),
+                span: MKCoordinateSpan(latitudeDelta: 15, longitudeDelta: 20)
+            )
         }
     }
     

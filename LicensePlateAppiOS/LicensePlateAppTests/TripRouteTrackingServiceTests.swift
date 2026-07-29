@@ -17,8 +17,14 @@ struct TripRouteTrackingServiceTests {
 
     private final class FakeLocationSource: RouteTrackingLocationSource {
         let subject = PassthroughSubject<CLLocation?, Never>()
+        let authorizationSubject = CurrentValueSubject<Bool, Never>(true)
         var locationPublisher: AnyPublisher<CLLocation?, Never> { subject.eraseToAnyPublisher() }
-        var isAuthorizedForLocation = true
+        var locationAuthorizationPublisher: AnyPublisher<Bool, Never> {
+            authorizationSubject.eraseToAnyPublisher()
+        }
+        var isAuthorizedForLocation = true {
+            didSet { authorizationSubject.send(isAuthorizedForLocation) }
+        }
         private(set) var beginCount = 0
         private(set) var endCount = 0
         func beginRouteTracking() { beginCount += 1 }
@@ -90,6 +96,20 @@ struct TripRouteTrackingServiceTests {
         service.tripDidStart(sessionId: sessionId, viewerUserId: "user-a")
 
         #expect(service.isCapturing == false)
+    }
+
+    @Test func startsCaptureWhenAuthorizationBecomesGranted() async {
+        let source = FakeLocationSource()
+        source.isAuthorizedForLocation = false
+        let (service, sessionId) = makeService(source: source, track: true)
+        service.tripDidStart(sessionId: sessionId, viewerUserId: "user-a")
+        #expect(service.isCapturing == false)
+
+        source.isAuthorizedForLocation = true
+        await Task.yield()
+
+        #expect(service.isCapturing == true)
+        #expect(source.beginCount == 1)
     }
 
     @Test func stopsCaptureAndClearsSessionOnTripEnd() {

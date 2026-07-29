@@ -17,6 +17,7 @@ import CoreLocation
 @MainActor
 protocol RouteTrackingLocationSource: AnyObject {
     var locationPublisher: AnyPublisher<CLLocation?, Never> { get }
+    var locationAuthorizationPublisher: AnyPublisher<Bool, Never> { get }
     var isAuthorizedForLocation: Bool { get }
     func beginRouteTracking()
     func endRouteTracking()
@@ -43,6 +44,7 @@ final class TripRouteTrackingService: ObservableObject {
     private let repository: TripRoutePointRepository
     private var locationCancellable: AnyCancellable?
     private var settingsCancellable: AnyCancellable?
+    private var authorizationCancellable: AnyCancellable?
     private var unpersistedPoints: [CLLocation] = []
 
     init(
@@ -54,6 +56,12 @@ final class TripRouteTrackingService: ObservableObject {
         self.resolver = resolver
         self.repository = repository
         settingsCancellable = resolver.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.evaluateCapture()
+            }
+        authorizationCancellable = locationSource.locationAuthorizationPublisher
+            .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 self?.evaluateCapture()

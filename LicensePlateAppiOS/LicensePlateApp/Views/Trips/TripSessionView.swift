@@ -253,6 +253,7 @@ struct TripSessionView: View {
     private var tripMapHeader: some View {
         VStack(spacing: 16) {
             RegionMapView(
+                tripSessionId: sessionId,
                 enabledCountries: mapEnabledCountries,
                 foundRegionIDs: viewModel.tripFoundRegionIDs,
                 foundRegions: viewModel.tripFoundRegions,

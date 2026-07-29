@@ -56,10 +56,15 @@ final class TripSessionViewModel: ObservableObject {
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol?
     private let lifecycleService: TripSessionLifecycleServiceProtocol
     private let authService: FirebaseAuthService
+    private let routeTrackingService: TripRouteTrackingService
+    private let participantPrefsStore: TripParticipantPrefsStore
+    private let appPrefsStore: AppPrefsStore
     private var didLogTripDashboardLeaderboard = false
     private var cancellables = Set<AnyCancellable>()
     /// One-time bootstrap merge per distinct roster (listeners handle ongoing updates).
     private var lastRosterProfileBootstrapSignature: String?
+    /// One-time remote participant-preference load per signed-in viewer.
+    private var lastParticipantPrefsBootstrapUserId: String?
 
     var isTripCreator: Bool {
         guard let session else { return false }
@@ -111,7 +116,10 @@ final class TripSessionViewModel: ObservableObject {
         gameInstanceRepository: GameInstanceRepositoryProtocol,
         tripActivityEventRepository: TripActivityEventRepositoryProtocol? = nil,
         lifecycleService: TripSessionLifecycleServiceProtocol = TripSessionLifecycleService.shared,
-        authService: FirebaseAuthService
+        authService: FirebaseAuthService,
+        routeTrackingService: TripRouteTrackingService = .shared,
+        participantPrefsStore: TripParticipantPrefsStore = .shared,
+        appPrefsStore: AppPrefsStore = .shared
     ) {
         self.sessionId = sessionId
         self.tripSessionRepository = tripSessionRepository
@@ -119,6 +127,9 @@ final class TripSessionViewModel: ObservableObject {
         self.tripActivityEventRepository = tripActivityEventRepository
         self.lifecycleService = lifecycleService
         self.authService = authService
+        self.routeTrackingService = routeTrackingService
+        self.participantPrefsStore = participantPrefsStore
+        self.appPrefsStore = appPrefsStore
 
         TripCanonicalRemoteSyncService.shared.hydrationSignal
             .filter { [weak self] hydratedId in
@@ -142,11 +153,13 @@ final class TripSessionViewModel: ObservableObject {
                 gameRowItems = []
                 clearTripPlateProjection()
                 lastRosterProfileBootstrapSignature = nil
+                lastParticipantPrefsBootstrapUserId = nil
                 let selfUid = Auth.auth().currentUser?.uid
                 UserProfileListenCoordinator.shared.setPinnedUsers(selfUserId: selfUid, rosterUserIds: [])
                 return
             }
             session = s
+            bootstrapParticipantLocationState(for: s)
             syncPinnedUserProfileListenersAndBootstrapRosterIfNeeded(for: s)
             if s.mode == .multiplayer {
                 TripCanonicalRemoteSyncService.shared.startIncrementalListeningIfNeeded(sessionId: sessionId)
@@ -194,6 +207,7 @@ final class TripSessionViewModel: ObservableObject {
             showsTripCompetitiveLeaderboard = false
             tripLeaderboardRows = []
             lastRosterProfileBootstrapSignature = nil
+            lastParticipantPrefsBootstrapUserId = nil
             let selfUid = Auth.auth().currentUser?.uid
             UserProfileListenCoordinator.shared.setPinnedUsers(selfUserId: selfUid, rosterUserIds: [])
         }
@@ -215,6 +229,26 @@ final class TripSessionViewModel: ObservableObject {
             ids.insert(createdBy)
         }
         return ids
+    }
+
+    private func bootstrapParticipantLocationState(for session: TripSession) {
+        let viewerId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        routeTrackingService.resumeIfActive(
+            session: session,
+            viewerUserId: viewerId.isEmpty ? nil : viewerId
+        )
+
+        guard !viewerId.isEmpty, lastParticipantPrefsBootstrapUserId != viewerId else { return }
+        lastParticipantPrefsBootstrapUserId = viewerId
+        Task { @MainActor [participantPrefsStore, appPrefsStore] in
+            let fallback = appPrefsStore.participationDefaults.asParticipantPrefs()
+            await participantPrefsStore.load(
+                sessionId: session.id,
+                userId: viewerId,
+                fallback: fallback,
+                backfillIfMissing: true
+            )
+        }
     }
 
     private func syncPinnedUserProfileListenersAndBootstrapRosterIfNeeded(for session: TripSession) {

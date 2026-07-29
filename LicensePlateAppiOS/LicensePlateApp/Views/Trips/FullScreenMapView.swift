@@ -22,9 +22,16 @@ struct FullScreenMapView: View {
     @Binding var isPresented: Bool
 
     @AppStorage("appMapProvider") private var appMapProviderRaw: String = AppPreferences.defaultMapProvider().rawValue
+    @AppStorage(NewTripDefaultsKeys.showMyActiveTripOnLargeMap) private var showActiveTripRoute = true
+    @ObservedObject private var routeTracking = TripRouteTrackingService.shared
 
     private var mapProvider: AppMapProvider {
         AppMapProvider(rawValue: appMapProviderRaw) ?? AppPreferences.defaultMapProvider()
+    }
+
+    private var routeCoordinates: [CLLocationCoordinate2D] {
+        guard showActiveTripRoute, routeTracking.activeTripSessionId == tripSessionId else { return [] }
+        return routeTracking.routePoints.map(\.coordinate)
     }
 
     var body: some View {
@@ -36,6 +43,7 @@ struct FullScreenMapView: View {
                     foundRegionIDs: foundRegionIDs,
                     foundRegions: foundRegions,
                     finderIdentities: finderIdentities,
+                    routeCoordinates: routeCoordinates,
                     cameraPosition: $cameraPosition,
                     locationManager: locationManager,
                     namespace: namespace,
@@ -48,6 +56,7 @@ struct FullScreenMapView: View {
                     foundRegionIDs: foundRegionIDs,
                     foundRegions: foundRegions,
                     finderIdentities: finderIdentities,
+                    routeCoordinates: routeCoordinates,
                     locationManager: locationManager,
                     namespace: namespace,
                     isPresented: $isPresented
@@ -64,6 +73,7 @@ struct FullScreenGoogleMapView: View {
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
     let finderIdentities: [String: UserRepository.UserIdentitySnapshot]
+    let routeCoordinates: [CLLocationCoordinate2D]
     @Binding var cameraPosition: GMSCameraPosition
     @ObservedObject var locationManager: LocationManager
     let namespace: Namespace.ID
@@ -73,7 +83,6 @@ struct FullScreenGoogleMapView: View {
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     @AppStorage("appShowUserAvatarOnMap") private var appShowUserAvatarOnMap = false
     @ObservedObject private var effectiveSettings = EffectiveSettingsResolver.shared
-    @ObservedObject private var routeTracking = TripRouteTrackingService.shared
 
     init(
         tripSessionId: UUID,
@@ -81,6 +90,7 @@ struct FullScreenGoogleMapView: View {
         foundRegionIDs: [String],
         foundRegions: [FoundRegion],
         finderIdentities: [String: UserRepository.UserIdentitySnapshot],
+        routeCoordinates: [CLLocationCoordinate2D],
         cameraPosition: Binding<GMSCameraPosition>,
         locationManager: LocationManager,
         namespace: Namespace.ID,
@@ -91,6 +101,7 @@ struct FullScreenGoogleMapView: View {
         self.foundRegionIDs = foundRegionIDs
         self.foundRegions = foundRegions
         self.finderIdentities = finderIdentities
+        self.routeCoordinates = routeCoordinates
         self._cameraPosition = cameraPosition
         self.locationManager = locationManager
         self.namespace = namespace
@@ -149,7 +160,7 @@ struct FullScreenGoogleMapView: View {
                 foundRegions: foundRegions,
                 finderPinIcons: finderPinIcons,
                 finderDisplayNames: finderDisplayNames,
-                routeCoordinates: routeTracking.routePoints.map(\.coordinate),
+                routeCoordinates: routeCoordinates,
                 showUserLocation: showUserLocation,
                 userLocation: locationManager.location?.coordinate,
                 showUserAvatarOnMap: appShowUserAvatarOnMap,
@@ -304,6 +315,7 @@ struct FullScreenAppleMapView: View {
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
     let finderIdentities: [String: UserRepository.UserIdentitySnapshot]
+    let routeCoordinates: [CLLocationCoordinate2D]
     @ObservedObject var locationManager: LocationManager
     let namespace: Namespace.ID
     @Binding var isPresented: Bool
@@ -311,7 +323,6 @@ struct FullScreenAppleMapView: View {
     @EnvironmentObject private var authService: FirebaseAuthService
     @AppStorage("appShowUserAvatarOnMap") private var appShowUserAvatarOnMap = false
     @ObservedObject private var effectiveSettings = EffectiveSettingsResolver.shared
-    @ObservedObject private var routeTracking = TripRouteTrackingService.shared
     @State private var mapCameraPosition: MapCameraPosition
 
     private static let foundDateFormatter: DateFormatter = {
@@ -327,6 +338,7 @@ struct FullScreenAppleMapView: View {
         foundRegionIDs: [String],
         foundRegions: [FoundRegion],
         finderIdentities: [String: UserRepository.UserIdentitySnapshot] = [:],
+        routeCoordinates: [CLLocationCoordinate2D] = [],
         locationManager: LocationManager,
         namespace: Namespace.ID,
         isPresented: Binding<Bool>
@@ -336,6 +348,7 @@ struct FullScreenAppleMapView: View {
         self.foundRegionIDs = foundRegionIDs
         self.foundRegions = foundRegions
         self.finderIdentities = finderIdentities
+        self.routeCoordinates = routeCoordinates
         self.locationManager = locationManager
         self.namespace = namespace
         self._isPresented = isPresented
@@ -498,8 +511,8 @@ struct FullScreenAppleMapView: View {
                 }
                 
                 // Live route ribbon (GPS Step 6) — parity with GoogleMapView.renderRoutePolyline
-                if routeTracking.routePoints.count >= 2 {
-                    MapPolyline(coordinates: routeTracking.routePoints.map(\.coordinate))
+                if routeCoordinates.count >= 2 {
+                    MapPolyline(coordinates: routeCoordinates)
                         .stroke(Color.Theme.primaryBlue, lineWidth: 4)
                 }
 
