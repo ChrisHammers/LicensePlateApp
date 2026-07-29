@@ -477,7 +477,10 @@ struct ContentView: View {
     }
 
   private func bootstrapHomeScreen() async {
-        await authService.initializeAuthState(modelContext: modelContext)
+        // RootView completes auth and repository setup before presenting ContentView.
+        // Load local trips immediately instead of blocking them behind a second
+        // Firestore profile hydration.
+        activeTripsListViewModel.load(userId: currentUserId)
 
         FriendshipRepository.shared.setModelContext(modelContext)
         InviteRepository.shared.setModelContext(modelContext)
@@ -496,7 +499,6 @@ struct ContentView: View {
             activeFamilyId: authService.currentUser?.activeFamilyId
         )
         pendingTripsViewModel.loadIfNeeded()
-        activeTripsListViewModel.load(userId: currentUserId)
         TripEndRecapSupport.startMultiplayerListeners(for: activeTripsListViewModel.items)
         returnStreakViewModel.bind(userId: currentUserId)
         await ReturnStreakReminderService.shared.refreshScheduleIfNeeded(userId: currentUserId)
