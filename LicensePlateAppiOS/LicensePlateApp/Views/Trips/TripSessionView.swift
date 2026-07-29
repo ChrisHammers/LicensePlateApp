@@ -293,10 +293,11 @@ private struct TripSessionLeaderboardSection: View {
 
     private func displayName(for participantId: String) -> String {
         let name = displayNames[participantId] ?? "Unknown player".localized
-        guard let currentUserId, !currentUserId.isEmpty, participantId == currentUserId else {
-            return name
-        }
-        return "\(name) [You]"
+        return ParticipantDisplayName.decorated(
+            name,
+            userId: participantId,
+            currentUserId: currentUserId
+        )
     }
 
     private func leaderboardRowAccessibilityLabel(row: RankedParticipantContribution) -> String {

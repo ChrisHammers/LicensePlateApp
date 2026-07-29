@@ -186,14 +186,22 @@ struct FamilyMemberSettingsRow: View {
         authService.currentUser?.firebaseUID ?? authService.currentUser?.id
     }
 
+    private var isSelfMember: Bool {
+        guard let user = member.user else { return false }
+        return UserDetailNavigation.isSelfProfile(user: user, currentUserId: currentUserId)
+    }
+
+    private func decoratedMemberName(for user: AppUser?) -> String {
+        let raw = user?.displayName ?? "Member".localized
+        guard user != nil else { return raw }
+        return ParticipantDisplayName.decorated(raw, isCurrentUser: isSelfMember)
+    }
+
     var body: some View {
         if let user = member.user {
             UserDetailNavigationLink(
                 user: user,
-                isSelfProfile: UserDetailNavigation.isSelfProfile(
-                    user: user,
-                    currentUserId: currentUserId
-                )
+                isSelfProfile: isSelfMember
             ) {
                 settingsRowContent(user: user)
             }
@@ -216,7 +224,7 @@ struct FamilyMemberSettingsRow: View {
             }
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(user?.displayName ?? "Member".localized)
+                Text(decoratedMemberName(for: user))
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(Color.Theme.primaryBlue)
 
@@ -237,7 +245,7 @@ struct FamilyMemberSettingsRow: View {
 
     private var settingsMemberAccessibilityLabel: String {
         if let user = member.user {
-            return "\(user.displayName), @\(user.userName), \(member.roleEnum.displayName)"
+            return "\(decoratedMemberName(for: user)), @\(user.userName), \(member.roleEnum.displayName)"
         }
         return "\("Member".localized), \(member.roleEnum.displayName)"
     }

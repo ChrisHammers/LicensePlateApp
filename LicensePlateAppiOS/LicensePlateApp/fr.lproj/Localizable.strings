@@ -690,6 +690,7 @@
 
 // Step 10 — Collaborative mode / discovery replay
 "Discovery highlights" = "Faits marquants des découvertes";
+"%@ [You]" = "%@ [Vous]";
 "Found by %@" = "Trouvé par %@";
 "%d finders" = "%d personnes";
 "Sign in to remove a find." = "Connectez-vous pour retirer une découverte.";

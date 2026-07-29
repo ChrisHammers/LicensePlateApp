@@ -102,10 +102,11 @@ final class LicensePlateGameViewModel: ObservableObject {
     }
 
     private func nameForParticipant(_ participantId: String, displayName: String) -> String {
-        guard !currentUserId.isEmpty, participantId == currentUserId else {
-            return displayName
-        }
-        return "\(displayName) [You]"
+        ParticipantDisplayName.decorated(
+            displayName,
+            userId: participantId,
+            currentUserId: currentUserId.isEmpty ? nil : currentUserId
+        )
     }
 
     /// Trip container is in progress (user has started the trip).

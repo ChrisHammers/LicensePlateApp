@@ -501,10 +501,20 @@ struct LicensePlateGameView: View {
 
     private func competitiveDisplayName(for participantId: String) -> String {
         let name = competitiveDisplayNames[participantId] ?? participantId
-        guard !currentUserId.isEmpty, participantId == currentUserId else {
-            return name
-        }
-        return "\(name) [You]"
+        return ParticipantDisplayName.decorated(
+            name,
+            userId: participantId,
+            currentUserId: currentUserId.isEmpty ? nil : currentUserId
+        )
+    }
+
+    private func progressionScoringDisplayName(for participantId: String) -> String {
+        let name = progressionScoringNames[participantId] ?? participantId
+        return ParticipantDisplayName.decorated(
+            name,
+            userId: participantId,
+            currentUserId: currentUserId.isEmpty ? nil : currentUserId
+        )
     }
 
     private func competitiveStandingAccessibility(row: RankedParticipantContribution) -> String {
@@ -694,7 +704,7 @@ struct LicensePlateGameView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Text("Rank #%d".localized(row.rank))
-                                Text(progressionScoringNames[c.participantId] ?? c.participantId)
+                                Text(progressionScoringDisplayName(for: c.participantId))
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                                 Spacer()
@@ -1943,7 +1953,17 @@ private struct FullScreenGoogleMapView: View {
     }
 
     private var finderDisplayNames: [String: String] {
-        finderIdentities.mapValues(\.displayName)
+        let currentId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+        return Dictionary(uniqueKeysWithValues: finderIdentities.map { userId, identity in
+            (
+                userId,
+                ParticipantDisplayName.decorated(
+                    identity.displayName,
+                    userId: userId,
+                    currentUserId: currentId
+                )
+            )
+        })
     }
     
     private var regions: [PlateRegion] {
@@ -2541,8 +2561,14 @@ struct FullScreenAppleMapView: View {
                         let regionName = PlateRegion.all.first(where: { $0.id == foundRegion.regionID })?.name ?? foundRegion.regionID
                         let finderIdentity = foundRegion.foundBy.flatMap { finderIdentities[$0] }
                         let dateText = Self.foundDateFormatter.string(from: foundRegion.foundAt)
-                        let foundText = finderIdentity.map { "Found by %@ on %@".localized($0.displayName, dateText) }
-                            ?? "Found on %@".localized(dateText)
+                        let foundText = finderIdentity.map { identity in
+                            let name = ParticipantDisplayName.decorated(
+                                identity.displayName,
+                                userId: foundRegion.foundBy ?? "",
+                                currentUserId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+                            )
+                            return "Found by %@ on %@".localized(name, dateText)
+                        } ?? "Found on %@".localized(dateText)
                         Annotation(regionName, coordinate: CLLocationCoordinate2D(
                             latitude: locationData.latitude,
                             longitude: locationData.longitude

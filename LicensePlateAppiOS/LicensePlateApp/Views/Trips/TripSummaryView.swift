@@ -93,10 +93,11 @@ struct TripSummaryView: View {
 
     private func displayName(for participantId: String) -> String {
         let name = participantDisplayNames[participantId] ?? participantId
-        guard let currentUserId, !currentUserId.isEmpty, participantId == currentUserId else {
-            return name
-        }
-        return "\(name) [You]"
+        return ParticipantDisplayName.decorated(
+            name,
+            userId: participantId,
+            currentUserId: currentUserId
+        )
     }
 
     private func decoratedParticipantDisplayNames(for participantIds: [String]) -> [String: String] {

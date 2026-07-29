@@ -102,6 +102,15 @@ private struct PassengerListRow: View {
         authService.currentUser?.firebaseUID ?? authService.currentUser?.id
     }
 
+    private var decoratedDisplayName: String {
+        let raw = user?.displayName ?? passenger.displayName
+        return ParticipantDisplayName.decorated(
+            raw,
+            userId: passenger.userId,
+            currentUserId: currentUserId
+        )
+    }
+
     var body: some View {
         Group {
             if let user {
@@ -128,7 +137,7 @@ private struct PassengerListRow: View {
     private var passengerRowContent: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(user?.displayName ?? passenger.displayName)
+                Text(decoratedDisplayName)
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(Color.Theme.primaryBlue)
                 Text(passenger.roleLabel)
@@ -145,7 +154,7 @@ private struct PassengerListRow: View {
     }
 
     private var accessibilityLabelText: String {
-        var parts = [user?.displayName ?? passenger.displayName, passenger.roleLabel]
+        var parts = [decoratedDisplayName, passenger.roleLabel]
         if passenger.isCreator {
             parts.append("Creator".localized)
         }

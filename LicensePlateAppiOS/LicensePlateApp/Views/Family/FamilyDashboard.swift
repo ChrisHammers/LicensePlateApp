@@ -456,20 +456,26 @@ struct FamilyMemberRow: View {
 
     var body: some View {
         if let user = member.user {
+            let isSelf = UserDetailNavigation.isSelfProfile(
+                user: user,
+                currentUserId: currentUserId
+            )
+            let decoratedName = ParticipantDisplayName.decorated(
+                user.displayName,
+                isCurrentUser: isSelf
+            )
             UserDetailNavigationLink(
                 user: user,
-                isSelfProfile: UserDetailNavigation.isSelfProfile(
-                    user: user,
-                    currentUserId: currentUserId
-                )
+                isSelfProfile: isSelf
             ) {
                 UserIdentityRowView(
                     user: user,
                     subtitle: memberSubtitle,
-                    avatarSize: 50
+                    avatarSize: 50,
+                    isCurrentUser: isSelf
                 )
             }
-            .accessibilityLabel("\(user.displayName), @\(user.userName), \(memberSubtitle)")
+            .accessibilityLabel("\(decoratedName), @\(user.userName), \(memberSubtitle)")
             .task {
                 publicLifetimeStatsRepository.ensureObservingFriend(userId: member.userId)
             }
