@@ -23,6 +23,7 @@ export {
   updateFairnessAckWatermark,
   removeTripParticipantAsOwner,
 } from "./tripSessionCanonical";
+export { upsertTripParticipantPrefs } from "./tripParticipantPrefs";
 export {
   createFamily,
   sendFamilyInvite,

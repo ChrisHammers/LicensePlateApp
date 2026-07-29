@@ -9,47 +9,29 @@ import Foundation
 
 struct LocationSettingsServiceTests {
 
-    /// Fresh suite with both bootstraps registered, matching app launch.
+    /// Fresh suite with privacy bootstrap registered.
     private func makeFreshDefaults() -> UserDefaults {
         let name = "test.LocationSettings.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: name) else {
             fatalError("Could not create UserDefaults suite")
         }
         defaults.removePersistentDomain(forName: name)
-        NewTripDefaultsBootstrap.registerFactoryDefaults(using: defaults)
         LocationSettingsBootstrap.registerFactoryDefaults(using: defaults)
         return defaults
     }
 
-    @Test func effectiveFlags_allTrueWhenUnset() {
+    @Test func privacyFlags_allTrueWhenUnset() {
         let service = LocationSettingsService(defaults: makeFreshDefaults())
         #expect(service.saveLocationWhenMarkingPlates == true)
         #expect(service.showMyLocationOnLargeMap == true)
         #expect(service.trackMyLocationDuringTrips == true)
     }
 
-    @Test func globalOff_killsEffectiveFlag_evenWhenTripDefaultOn() {
+    @Test func globalOff_killsPrivacyFlag() {
         let defaults = makeFreshDefaults()
         defaults.set(false, forKey: LocationSettingsKeys.saveLocationWhenMarkingPlates)
         defaults.set(false, forKey: LocationSettingsKeys.showMyLocationOnLargeMap)
         defaults.set(false, forKey: LocationSettingsKeys.trackMyLocationDuringTrips)
-        defaults.set(true, forKey: NewTripDefaultsKeys.saveLocationWhenMarkingPlates)
-        defaults.set(true, forKey: NewTripDefaultsKeys.showMyLocationOnLargeMap)
-        defaults.set(true, forKey: NewTripDefaultsKeys.trackMyLocationDuringTrip)
-        let service = LocationSettingsService(defaults: defaults)
-        #expect(service.saveLocationWhenMarkingPlates == false)
-        #expect(service.showMyLocationOnLargeMap == false)
-        #expect(service.trackMyLocationDuringTrips == false)
-    }
-
-    @Test func tripDefaultOff_killsEffectiveFlag_evenWhenGlobalOn() {
-        let defaults = makeFreshDefaults()
-        defaults.set(true, forKey: LocationSettingsKeys.saveLocationWhenMarkingPlates)
-        defaults.set(true, forKey: LocationSettingsKeys.showMyLocationOnLargeMap)
-        defaults.set(true, forKey: LocationSettingsKeys.trackMyLocationDuringTrips)
-        defaults.set(false, forKey: NewTripDefaultsKeys.saveLocationWhenMarkingPlates)
-        defaults.set(false, forKey: NewTripDefaultsKeys.showMyLocationOnLargeMap)
-        defaults.set(false, forKey: NewTripDefaultsKeys.trackMyLocationDuringTrip)
         let service = LocationSettingsService(defaults: defaults)
         #expect(service.saveLocationWhenMarkingPlates == false)
         #expect(service.showMyLocationOnLargeMap == false)

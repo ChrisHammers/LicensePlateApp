@@ -14,6 +14,10 @@ import { KIND_PARTICIPANT_INVITED, KIND_PARTICIPANT_JOINED, PK } from "./gamepla
 import { syncCanonicalParticipantsFromMembers } from "./tripSessionCanonical";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
+import {
+  loadParticipationDefaultsForUser,
+  seedParticipantPrefsIfNeeded,
+} from "./tripParticipantPrefs";
 
 const db = admin.firestore();
 
@@ -264,6 +268,8 @@ export const respondToTripInvite = enforcedCallable(
         },
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      const joinerDefaults = await loadParticipationDefaultsForUser(db, userId);
+      await seedParticipantPrefsIfNeeded(batch, sessionDocRef, userId, joinerDefaults);
     }
 
     await batch.commit();

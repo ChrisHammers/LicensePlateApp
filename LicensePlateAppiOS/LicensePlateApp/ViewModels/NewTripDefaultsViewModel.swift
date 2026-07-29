@@ -103,17 +103,24 @@ final class NewTripDefaultsViewModel: ObservableObject {
         )
     }
 
-    /// Persists full snapshot to UserDefaults; when signed in, also pushes the four cloud fields.
+    /// Persists full snapshot to UserDefaults; when signed in, also pushes cloud account prefs.
     func save() async {
         let snap = snapshot()
         store.save(snap)
         guard let userId, !userId.isEmpty else { return }
-        let cloud = UserRepository.GameDefaults(
+        let game = UserRepository.GameDefaults(
             includeUS: snap.includeUS,
             includeCanada: snap.includeCanada,
             includeMexico: snap.includeMexico,
             startTripRightAway: snap.startTripRightAway
         )
-        await appPrefsStore.save(userId: userId, defaults: cloud)
+        let participation = ParticipationDefaults(
+            skipVoiceConfirmation: snap.skipVoiceConfirmation,
+            saveLocationWhenMarkingPlates: snap.saveLocationWhenMarkingPlates,
+            showMyLocationOnLargeMap: snap.showMyLocationOnLargeMap,
+            trackMyLocationDuringTrip: snap.trackMyLocationDuringTrip
+        )
+        await appPrefsStore.saveGameDefaults(userId: userId, defaults: game)
+        await appPrefsStore.saveParticipationDefaults(userId: userId, defaults: participation)
     }
 }

@@ -74,7 +74,7 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         let tripStartedEvent = TripActivityEvent(sessionId: sessionId, kind: .tripStarted, actorId: actorId)
         try tripActivityEventRecording.recordForSync(tripStartedEvent)
         AnalyticsService.shared.log(.tripSessionStarted(tripId: sessionId.uuidString, tripActiveGameCount: games.count))
-        TripRouteTrackingService.shared.tripDidStart(sessionId: sessionId)
+        TripRouteTrackingService.shared.tripDidStart(sessionId: sessionId, viewerUserId: actorId)
         Task { @MainActor in
             await ReminderNotificationService.shared.scheduleInactiveActiveTripReminder(sessionId: sessionId, tripName: session.name)
             try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionId)

@@ -174,7 +174,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         authService: FirebaseAuthService,
         xpLedger: XpLedgerRepositoryProtocol = XpLedgerRepository.shared,
         discoveryResolutionRepository: DiscoveryResolutionRepositoryProtocol = DiscoveryResolutionRepository.shared,
-        locationSettings: LocationSettingsProviding = LocationSettingsService.shared,
+        locationSettings: LocationSettingsProviding? = nil,
         currentLocationFix: @escaping @MainActor () -> CLLocation? = { LocationManager.shared.location },
         warmLocationFix: @escaping @MainActor () -> Void = {
             LocationManager.shared.requestOneShotLocationIfStale(maxAge: LicensePlateGameViewModel.locationWarmInterval)
@@ -194,7 +194,9 @@ final class LicensePlateGameViewModel: ObservableObject {
         self.tripActivityEventRecording = tripActivityEventRecording
         self.regionRemovalCooldownService = regionRemovalCooldownService
         self.authService = authService
+        let viewerId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
         self.locationSettings = locationSettings
+            ?? SessionBoundLocationSettings(sessionId: session.id, userId: viewerId)
         self.currentLocationFix = currentLocationFix
         self.warmLocationFix = warmLocationFix
         self.foundRegions = (try? tripActivityEventRepository.foundRegions(sessionId: session.id, gameInstanceId: game.id)) ?? []
@@ -202,7 +204,22 @@ final class LicensePlateGameViewModel: ObservableObject {
 
         // GPS Step 6 — after app relaunch the lifecycle start hook never fired in this
         // process; resume route capture for an already-active trip.
-        TripRouteTrackingService.shared.resumeIfActive(session: session)
+        TripRouteTrackingService.shared.resumeIfActive(
+            session: session,
+            viewerUserId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+        )
+
+        if !viewerId.isEmpty {
+            Task { @MainActor in
+                let fallback = AppPrefsStore.shared.participationDefaults.asParticipantPrefs()
+                await TripParticipantPrefsStore.shared.load(
+                    sessionId: session.id,
+                    userId: viewerId,
+                    fallback: fallback,
+                    backfillIfMissing: true
+                )
+            }
+        }
 
         let selfUid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
         UserProfileListenCoordinator.shared.setPinnedUsers(
@@ -1084,8 +1101,37 @@ final class LicensePlateGameViewModel: ObservableObject {
         licensePlateScopeDraft = nil
     }
 
+    /// Viewer’s effective skip-voice preference for this trip (not account defaults).
+    var skipVoiceConfirmation: Bool {
+        let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        return EffectiveSettingsResolver.shared.resolve(sessionId: sessionId, userId: uid).skipVoiceConfirmation
+    }
+
+    /// Persist viewer participant prefs (voice) for this trip.
+    func updateSkipVoiceConfirmation(_ value: Bool) {
+        let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        guard !uid.isEmpty else { return }
+        var prefs = TripParticipantPrefsStore.shared.prefs(sessionId: sessionId, userId: uid)
+        prefs.skipVoiceConfirmation = value
+        prefs.source = .userEdit
+        TripParticipantPrefsStore.shared.apply(sessionId: sessionId, userId: uid, prefs: prefs)
+        objectWillChange.send()
+        Task {
+            await TripParticipantPrefsStore.shared.saveLocalAndRemote(
+                sessionId: sessionId,
+                userId: uid,
+                prefs: prefs
+            )
+        }
+    }
+
     /// Encode and persist draft to `game` (normalization applied in assembler). Clears draft on success.
+    /// Owner-only: passengers must not mutate shared country scope.
     func commitLicensePlateScopeDraft() throws {
+        guard isTripCreator else {
+            licensePlateScopeDraft = nil
+            return
+        }
         guard let draft = licensePlateScopeDraft else { return }
         var countries: [PlateRegion.Country] = []
         if draft.includeUS { countries.append(.unitedStates) }

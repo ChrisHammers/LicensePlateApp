@@ -14,6 +14,10 @@ import {
 import { mergeFairnessAckSeconds } from "./fairnessWatermarkMerge";
 import { clientMetadataWrite, normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
+import {
+  loadParticipationDefaultsForUser,
+  seedParticipantPrefsIfNeeded,
+} from "./tripParticipantPrefs";
 
 const db = admin.firestore();
 
@@ -316,6 +320,14 @@ export const publishTripCanonicalState = enforcedCallable(async (data, context) 
 
   if (ops > 0) {
     await batch.commit();
+  }
+
+  // Seed owner participant prefs once from account participationDefaults (idempotent).
+  const seedBatch = db.batch();
+  const ownerDefaults = await loadParticipationDefaultsForUser(db, userId);
+  const seeded = await seedParticipantPrefsIfNeeded(seedBatch, ref, userId, ownerDefaults);
+  if (seeded) {
+    await seedBatch.commit();
   }
 
   const membersAfterPublish = await ref.collection("members").get();

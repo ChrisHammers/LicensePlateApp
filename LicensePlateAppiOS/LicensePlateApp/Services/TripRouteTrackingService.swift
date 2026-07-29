@@ -38,7 +38,8 @@ final class TripRouteTrackingService: ObservableObject {
     static let persistenceBatchSize = 10
 
     private let locationSource: RouteTrackingLocationSource
-    private let settings: LocationSettingsProviding
+    private let resolver: EffectiveSettingsResolver
+    private var viewerUserId: String?
     private let repository: TripRoutePointRepository
     private var locationCancellable: AnyCancellable?
     private var settingsCancellable: AnyCancellable?
@@ -46,14 +47,13 @@ final class TripRouteTrackingService: ObservableObject {
 
     init(
         locationSource: RouteTrackingLocationSource = LocationManager.shared,
-        settings: LocationSettingsProviding = LocationSettingsService.shared,
+        resolver: EffectiveSettingsResolver = .shared,
         repository: TripRoutePointRepository = .shared
     ) {
         self.locationSource = locationSource
-        self.settings = settings
+        self.resolver = resolver
         self.repository = repository
-        // Live re-evaluation when either toggle namespace changes mid-trip.
-        settingsCancellable = (settings as? LocationSettingsService)?.objectWillChange
+        settingsCancellable = resolver.objectWillChange
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 self?.evaluateCapture()
@@ -62,7 +62,10 @@ final class TripRouteTrackingService: ObservableObject {
 
     // MARK: - Lifecycle hooks (called by TripSessionLifecycleService / ViewModel resume)
 
-    func tripDidStart(sessionId: UUID) {
+    func tripDidStart(sessionId: UUID, viewerUserId: String? = nil) {
+        if let viewerUserId, !viewerUserId.isEmpty {
+            self.viewerUserId = viewerUserId
+        }
         if activeTripSessionId != sessionId {
             activeTripSessionId = sessionId
             unpersistedPoints = []
@@ -73,9 +76,9 @@ final class TripRouteTrackingService: ObservableObject {
     }
 
     /// Resume after app relaunch: the lifecycle start hook never fired in this process.
-    func resumeIfActive(session: TripSession) {
+    func resumeIfActive(session: TripSession, viewerUserId: String? = nil) {
         guard session.status == .active else { return }
-        tripDidStart(sessionId: session.id)
+        tripDidStart(sessionId: session.id, viewerUserId: viewerUserId)
     }
 
     func tripDidEnd(sessionId: UUID) {
@@ -106,9 +109,12 @@ final class TripRouteTrackingService: ObservableObject {
     // MARK: - Capture
 
     private func evaluateCapture() {
-        let shouldCapture = activeTripSessionId != nil
-            && settings.trackMyLocationDuringTrips
-            && locationSource.isAuthorizedForLocation
+        guard let sessionId = activeTripSessionId, let userId = viewerUserId, !userId.isEmpty else {
+            if isCapturing { stopCapture() }
+            return
+        }
+        let track = resolver.resolve(sessionId: sessionId, userId: userId).trackMyLocationDuringTrips
+        let shouldCapture = track && locationSource.isAuthorizedForLocation
         if shouldCapture && !isCapturing {
             startCapture()
         } else if !shouldCapture && isCapturing {

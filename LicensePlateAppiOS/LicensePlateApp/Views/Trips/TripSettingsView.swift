@@ -22,9 +22,7 @@ struct TripSettingsView: View {
     @State private var retryAction: (() -> Void)?
     @StateObject private var tripLimitPaywallViewModel = PaywallViewModel()
 
-    @AppStorage(NewTripDefaultsKeys.saveLocationWhenMarkingPlates) private var saveLocationWhenMarkingPlates = true
-    @AppStorage(NewTripDefaultsKeys.showMyLocationOnLargeMap) private var showMyLocationOnLargeMap = true
-    @AppStorage(NewTripDefaultsKeys.trackMyLocationDuringTrip) private var trackMyLocationDuringTrip = true
+    // Device-local map chrome (not participant prefs / account participationDefaults).
     @AppStorage(NewTripDefaultsKeys.showMyActiveTripOnLargeMap) private var showMyActiveTripOnLargeMap = true
     @AppStorage(NewTripDefaultsKeys.showMyActiveTripOnSmallMap) private var showMyActiveTripOnSmallMap = true
 
@@ -77,6 +75,7 @@ struct TripSettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done".localized) {
+                        viewModel.persistParticipantPrefs()
                         viewModel.saveSession()
                         dismiss()
                     }
@@ -120,6 +119,9 @@ struct TripSettingsView: View {
             .onAppear {
                 tripLimitPaywallViewModel.setTripLimitContext()
             }
+        }
+        .task {
+            await viewModel.loadParticipantPrefs()
         }
     }
 
@@ -335,7 +337,13 @@ struct TripSettingsView: View {
             SettingToggleRow(
                 title: "Save location when marking plates".localized,
                 description: "Store location data when you mark a plate as found".localized,
-                isOn: $saveLocationWhenMarkingPlates
+                isOn: Binding(
+                    get: { viewModel.participantPrefs.saveLocationWhenMarkingPlates },
+                    set: {
+                        viewModel.participantPrefs.saveLocationWhenMarkingPlates = $0
+                        viewModel.persistParticipantPrefs()
+                    }
+                )
             )
             .disabled(!locationAuthorized || !canEditTracking)
             .opacity((locationAuthorized && canEditTracking) ? 1.0 : 0.5)
@@ -345,7 +353,13 @@ struct TripSettingsView: View {
             SettingToggleRow(
                 title: "Show my location on large map".localized,
                 description: "Display your current location on the full-screen map".localized,
-                isOn: $showMyLocationOnLargeMap
+                isOn: Binding(
+                    get: { viewModel.participantPrefs.showMyLocationOnLargeMap },
+                    set: {
+                        viewModel.participantPrefs.showMyLocationOnLargeMap = $0
+                        viewModel.persistParticipantPrefs()
+                    }
+                )
             )
             .disabled(!canEditTracking)
             .opacity(canEditTracking ? 1.0 : 0.5)
@@ -355,7 +369,13 @@ struct TripSettingsView: View {
             SettingToggleRow(
                 title: "Track my location during trip".localized,
                 description: "Continuously track your location while a trip is active".localized,
-                isOn: $trackMyLocationDuringTrip
+                isOn: Binding(
+                    get: { viewModel.participantPrefs.trackMyLocationDuringTrip },
+                    set: {
+                        viewModel.participantPrefs.trackMyLocationDuringTrip = $0
+                        viewModel.persistParticipantPrefs()
+                    }
+                )
             )
             .disabled(!canEditTracking)
             .opacity(canEditTracking ? 1.0 : 0.5)
@@ -367,10 +387,10 @@ struct TripSettingsView: View {
                 description: "Display your active trip on the full-screen map".localized,
                 isOn: $showMyActiveTripOnLargeMap
             )
-            .disabled(!trackMyLocationDuringTrip || !canEditTracking)
-            .opacity((trackMyLocationDuringTrip && canEditTracking) ? 1.0 : 0.5)
+            .disabled(!viewModel.participantPrefs.trackMyLocationDuringTrip || !canEditTracking)
+            .opacity((viewModel.participantPrefs.trackMyLocationDuringTrip && canEditTracking) ? 1.0 : 0.5)
             .accessibilityHintWhenDisabled(
-                !trackMyLocationDuringTrip || !canEditTracking,
+                !viewModel.participantPrefs.trackMyLocationDuringTrip || !canEditTracking,
                 hint: "Enable location tracking during trip first".localized
             )
 
@@ -381,10 +401,10 @@ struct TripSettingsView: View {
                 description: "Display your active trip on the small map".localized,
                 isOn: $showMyActiveTripOnSmallMap
             )
-            .disabled(!trackMyLocationDuringTrip || !canEditTracking)
-            .opacity((trackMyLocationDuringTrip && canEditTracking) ? 1.0 : 0.5)
+            .disabled(!viewModel.participantPrefs.trackMyLocationDuringTrip || !canEditTracking)
+            .opacity((viewModel.participantPrefs.trackMyLocationDuringTrip && canEditTracking) ? 1.0 : 0.5)
             .accessibilityHintWhenDisabled(
-                !trackMyLocationDuringTrip || !canEditTracking,
+                !viewModel.participantPrefs.trackMyLocationDuringTrip || !canEditTracking,
                 hint: "Enable location tracking during trip first".localized
             )
         }

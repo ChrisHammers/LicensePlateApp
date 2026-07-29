@@ -182,6 +182,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // Per-participant voice/location prefs (writes via upsertTripParticipantPrefs / seed on join)
+    match /trip_sessions/{sessionId}/participant_prefs/{userId} {
+      allow read: if isSignedIn() && isTripSessionMember(sessionId, uid()) && userId == uid();
+      allow create, update, delete: if false;
+    }
+
     // INVITES
     match /invites/{inviteId} {
       // Parties can always read; family members can read family invites for their family.

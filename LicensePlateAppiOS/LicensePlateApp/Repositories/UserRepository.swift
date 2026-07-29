@@ -998,5 +998,28 @@ class UserRepository: ObservableObject {
             "appPrefs.gameDefaults": defaults.firestoreMap
         ], merge: true)
     }
+
+    // MARK: - Participation defaults (account seed for per-trip participant prefs)
+
+    struct ParticipationDefaultsFetchResult: Equatable, Sendable {
+        var defaults: ParticipationDefaults
+        var cloudMapPresent: Bool
+    }
+
+    func fetchParticipationDefaults(userId: String) async throws -> ParticipationDefaultsFetchResult {
+        let snapshot = try await db.collection("users").document(userId).getDocument()
+        let appPrefs = snapshot.data()?["appPrefs"] as? [String: Any]
+        let raw = appPrefs?["participationDefaults"] as? [String: Any]
+        return ParticipationDefaultsFetchResult(
+            defaults: ParticipationDefaults.fromFirestoreMap(raw),
+            cloudMapPresent: raw != nil
+        )
+    }
+
+    func updateParticipationDefaults(userId: String, defaults: ParticipationDefaults) async throws {
+        try await db.collection("users").document(userId).setData([
+            "appPrefs.participationDefaults": defaults.firestoreMap
+        ], merge: true)
+    }
 }
 

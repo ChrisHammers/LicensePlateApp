@@ -2,7 +2,7 @@
 //  TripSettingsViewModel.swift
 //  LicensePlateApp
 //
-//  Step 6.9.3.1 — Trip-level settings only (name, start/end/delete trip). Tracking & Privacy toggles use @AppStorage in TripSettingsView.
+//  Step 6.9.3.1 — Trip-level settings (name, start/end/delete) + viewer participant location prefs.
 //
 
 import Foundation
@@ -14,6 +14,7 @@ final class TripSettingsViewModel: ObservableObject {
     @Published private(set) var currentSession: TripSession
     @Published private(set) var errorMessage: String?
     @Published private(set) var shouldPresentTripLimitPaywall = false
+    @Published var participantPrefs: TripParticipantPrefs
 
     let sessionId: UUID
 
@@ -22,6 +23,12 @@ final class TripSettingsViewModel: ObservableObject {
     private let tripEntitlementGate: TripEntitlementGate
     private let authService: FirebaseAuthService
     private let participationService: TripParticipationServiceProtocol
+    private let prefsStore: TripParticipantPrefsStore
+    private let appPrefsStore: AppPrefsStore
+
+    var viewerUserId: String {
+        authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+    }
 
     var isTripCreator: Bool {
         let currentUserID = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
@@ -44,7 +51,9 @@ final class TripSettingsViewModel: ObservableObject {
         lifecycleService: TripSessionLifecycleServiceProtocol,
         authService: FirebaseAuthService,
         tripEntitlementGate: TripEntitlementGate = .shared,
-        participationService: TripParticipationServiceProtocol = TripParticipationService.shared
+        participationService: TripParticipationServiceProtocol = TripParticipationService.shared,
+        prefsStore: TripParticipantPrefsStore = .shared,
+        appPrefsStore: AppPrefsStore = .shared
     ) {
         self.sessionId = session.id
         self.currentSession = session
@@ -53,6 +62,40 @@ final class TripSettingsViewModel: ObservableObject {
         self.tripEntitlementGate = tripEntitlementGate
         self.authService = authService
         self.participationService = participationService
+        self.prefsStore = prefsStore
+        self.appPrefsStore = appPrefsStore
+        let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        self.participantPrefs = prefsStore.prefs(sessionId: session.id, userId: uid)
+    }
+
+    /// Load remote prefs (backfill missing docs from account defaults).
+    func loadParticipantPrefs() async {
+        let uid = viewerUserId
+        guard !uid.isEmpty else { return }
+        let fallback = appPrefsStore.participationDefaults.asParticipantPrefs()
+        await prefsStore.load(
+            sessionId: sessionId,
+            userId: uid,
+            fallback: fallback,
+            backfillIfMissing: true
+        )
+        participantPrefs = prefsStore.prefs(sessionId: sessionId, userId: uid)
+    }
+
+    func persistParticipantPrefs() {
+        let uid = viewerUserId
+        guard !uid.isEmpty else { return }
+        var edited = participantPrefs
+        edited.source = .userEdit
+        participantPrefs = edited
+        prefsStore.apply(sessionId: sessionId, userId: uid, prefs: edited)
+        Task {
+            await prefsStore.saveLocalAndRemote(
+                sessionId: sessionId,
+                userId: uid,
+                prefs: edited
+            )
+        }
     }
 
     func refreshSession() {

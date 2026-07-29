@@ -16,7 +16,6 @@ struct GameSettingsView: View {
     @State private var retryAction: (() -> Void)?
     @State private var showEndGameConfirmation = false
 
-    @AppStorage("defaultSkipVoiceConfirmation") private var skipVoiceConfirmation = false
     // TODO(cloud-prefs): re-enable when wired — no runtime consumer for hold-to-talk.
     // @AppStorage("defaultHoldToTalk") private var holdToTalk = true
 
@@ -98,10 +97,17 @@ struct GameSettingsView: View {
                     }
                     .font(.system(.body, design: .rounded))
                     .fontWeight(.semibold)
-                    .foregroundStyle(!(viewModel.licensePlateScopeDraft?.canSave ?? false) ? .secondary : Color.Theme.primaryBlue)
-                    .disabled(!(viewModel.licensePlateScopeDraft?.canSave ?? false))
+                    .foregroundStyle(
+                        viewModel.isTripCreator && !(viewModel.licensePlateScopeDraft?.canSave ?? false)
+                            ? .secondary
+                            : Color.Theme.primaryBlue
+                    )
+                    .disabled(viewModel.isTripCreator && !(viewModel.licensePlateScopeDraft?.canSave ?? false))
                     .accessibilityLabel("Done".localized)
-                    .accessibilityHint(!(viewModel.licensePlateScopeDraft?.canSave ?? false) ? "Select at least one country before saving.".localized : "Done editing changes, saves game scope, and dismisses game settings".localized
+                    .accessibilityHint(
+                        viewModel.isTripCreator && !(viewModel.licensePlateScopeDraft?.canSave ?? false)
+                            ? "Select at least one country before saving.".localized
+                            : "Done editing changes, saves game scope, and dismisses game settings".localized
                     )
                 }
             }
@@ -245,7 +251,9 @@ struct GameSettingsView: View {
 
     private var gameSettings: some View {
         Group {
-            let canEditCountries = viewModel.currentSession.startedAt == nil && !viewModel.game.commonConfig.configLocked
+            let canEditCountries = viewModel.isTripCreator
+                && viewModel.currentSession.startedAt == nil
+                && !viewModel.game.commonConfig.configLocked
 
             if let draft = viewModel.licensePlateScopeDraft {
                 LicensePlateGameScopeDraftSection(draft: draft, canEditCountries: canEditCountries)
@@ -350,7 +358,10 @@ struct GameSettingsView: View {
             SettingToggleRow(
                 title: "Skip Voice Confirmation".localized,
                 description: "Automatically add license plates without confirmation when using Voice".localized,
-                isOn: $skipVoiceConfirmation
+                isOn: Binding(
+                    get: { viewModel.skipVoiceConfirmation },
+                    set: { viewModel.updateSkipVoiceConfirmation($0) }
+                )
             )
             .disabled(!canEditSettings)
             .opacity(canEditSettings ? 1.0 : 0.5)

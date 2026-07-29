@@ -27,7 +27,7 @@ struct AppPrefsStoreTests {
             userRepository: .shared,
             localDefaultsStore: localStore
         )
-        store.apply(
+        store.applyGameDefaults(
             UserRepository.GameDefaults(
                 includeUS: false,
                 includeCanada: false,
@@ -38,6 +38,7 @@ struct AppPrefsStoreTests {
         #expect(store.gameDefaults.includeUS == false)
         store.resetToDefaults()
         #expect(store.gameDefaults == .default)
+        #expect(store.participationDefaults == .default)
     }
 
     @Test func applyDoesNotRequireCloud() {
@@ -53,7 +54,7 @@ struct AppPrefsStoreTests {
             includeMexico: false,
             startTripRightAway: false
         )
-        store.apply(cloud)
+        store.applyGameDefaults(cloud)
         #expect(store.gameDefaults == cloud)
     }
 

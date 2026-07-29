@@ -2,7 +2,8 @@
 //  LocationSettingsService.swift
 //  LicensePlateApp
 //
-//  GPS Step 1 — Single source of truth for effective location settings.
+//  GPS Step 1 — Device privacy kill switches (Privacy & Permissions).
+//  Trip-scoped personal prefs are resolved via EffectiveSettingsResolver + participant_prefs.
 //
 
 import Foundation
@@ -11,7 +12,7 @@ import Combine
 // MARK: - Keys
 
 /// Global (app-wide) location toggle keys, owned by the Privacy & Permissions screen.
-/// Distinct from `NewTripDefaultsKeys` ("default*" prefix), which hold the per-trip values.
+/// Distinct from account `participationDefaults` / per-trip `participant_prefs`.
 enum LocationSettingsKeys {
     static let saveLocationWhenMarkingPlates = "saveLocationWhenMarkingPlates"
     static let showMyLocationOnLargeMap = "showMyLocationOnLargeMap"
@@ -35,26 +36,19 @@ enum LocationSettingsBootstrap {
 
 // MARK: - Providing
 
-/// Read-only effective location settings. Consumers (map, discovery, route tracking)
-/// ask this — never the raw UserDefaults keys — whether a location behavior is enabled.
+/// Read-only effective location settings for consumers that do not yet have a trip context.
+/// Prefer `EffectiveSettingsResolver` / `SessionBoundLocationSettings` inside an active trip.
 protocol LocationSettingsProviding: AnyObject {
     var saveLocationWhenMarkingPlates: Bool { get }
     var showMyLocationOnLargeMap: Bool { get }
     var trackMyLocationDuringTrips: Bool { get }
 }
 
-/// Effective value = global kill switch (`LocationSettingsKeys`, Privacy & Permissions)
-/// AND per-trip value (`NewTripDefaultsKeys` "default*" keys, edited in trip setup,
-/// New Trip/Game Defaults, and TripSettingsView). Turning either side off disables the behavior.
-///
-/// The per-trip side is not yet persisted on TripSession; the "default*" keys double as the
-/// current-trip value because TripSettingsView live-writes them mid-trip. Revisit when
-/// route tracking gives trips a persisted location config.
+/// Device privacy kill switches only. Trip participation prefs are AND-ed in
+/// `EffectiveSettingsResolver`, not here — so editing trip settings cannot mutate account defaults.
 ///
 /// Privacy: this type deals only in booleans. It must never read, hold, or log coordinates,
 /// and no location-derived value may reach AnalyticsService from here.
-/// ObservableObject so views re-evaluate effective flags live when a toggle changes
-/// (Privacy & Permissions and Trip Settings both write through @AppStorage → UserDefaults).
 final class LocationSettingsService: LocationSettingsProviding, ObservableObject {
 
     static let shared = LocationSettingsService()
@@ -74,16 +68,13 @@ final class LocationSettingsService: LocationSettingsProviding, ObservableObject
 
     var saveLocationWhenMarkingPlates: Bool {
         defaults.bool(forKey: LocationSettingsKeys.saveLocationWhenMarkingPlates)
-            && defaults.bool(forKey: NewTripDefaultsKeys.saveLocationWhenMarkingPlates)
     }
 
     var showMyLocationOnLargeMap: Bool {
         defaults.bool(forKey: LocationSettingsKeys.showMyLocationOnLargeMap)
-            && defaults.bool(forKey: NewTripDefaultsKeys.showMyLocationOnLargeMap)
     }
 
     var trackMyLocationDuringTrips: Bool {
         defaults.bool(forKey: LocationSettingsKeys.trackMyLocationDuringTrips)
-            && defaults.bool(forKey: NewTripDefaultsKeys.trackMyLocationDuringTrip)
     }
 }

@@ -2,8 +2,8 @@
 //  AppPrefsStore.swift
 //  LicensePlateApp
 //
-//  In-memory cache of Firestore appPrefs.gameDefaults for Settings + setup hydrate.
-//  UserDefaults remains the local cache read by GameSetup / TripSetup / QuickSolo.
+//  In-memory cache of Firestore appPrefs (gameDefaults + participationDefaults).
+//  UserDefaults remains the local cache read by setup / New Trip Defaults.
 //
 
 import Foundation
@@ -12,6 +12,7 @@ import Combine
 @MainActor
 protocol AppPrefsReading: AnyObject {
     var gameDefaults: UserRepository.GameDefaults { get }
+    var participationDefaults: ParticipationDefaults { get }
 }
 
 @MainActor
@@ -19,6 +20,7 @@ final class AppPrefsStore: ObservableObject, AppPrefsReading {
     static let shared = AppPrefsStore()
 
     @Published private(set) var gameDefaults: UserRepository.GameDefaults = .default
+    @Published private(set) var participationDefaults: ParticipationDefaults = .default
     @Published private(set) var isLoading = false
     @Published private(set) var lastErrorMessage: String?
 
@@ -34,30 +36,35 @@ final class AppPrefsStore: ObservableObject, AppPrefsReading {
         self.localDefaultsStore = localDefaultsStore
     }
 
-    func apply(_ defaults: UserRepository.GameDefaults) {
+    func applyGameDefaults(_ defaults: UserRepository.GameDefaults) {
         gameDefaults = defaults
+    }
+
+    func applyParticipationDefaults(_ defaults: ParticipationDefaults) {
+        participationDefaults = defaults
     }
 
     /// Hard sign-out: drop cached account prefs (local UserDefaults left for guest).
     func resetToDefaults() {
         gameDefaults = .default
+        participationDefaults = .default
         loadedUserId = nil
         lastErrorMessage = nil
         isLoading = false
     }
 
-    /// Load from Firestore into the cache and write-through the four cloud fields to UserDefaults.
-    /// If the cloud map is absent, upload current local UserDefaults values once (migration).
+    /// Load from Firestore into the cache and write-through to UserDefaults.
+    /// Missing cloud maps are migrated once from local UserDefaults.
     func load(userId: String) async {
         guard !userId.isEmpty else { return }
         isLoading = true
         lastErrorMessage = nil
         defer { isLoading = false }
         do {
-            let result = try await userRepository.fetchGameDefaults(userId: userId)
-            if result.cloudMapPresent {
-                gameDefaults = result.defaults
-                writeThroughToLocalCache(result.defaults)
+            let gameResult = try await userRepository.fetchGameDefaults(userId: userId)
+            if gameResult.cloudMapPresent {
+                gameDefaults = gameResult.defaults
+                writeThroughGameDefaults(gameResult.defaults)
             } else {
                 let local = localDefaultsStore.load()
                 let migrated = UserRepository.GameDefaults(
@@ -68,21 +75,37 @@ final class AppPrefsStore: ObservableObject, AppPrefsReading {
                 )
                 gameDefaults = migrated
                 try await userRepository.updateGameDefaults(userId: userId, defaults: migrated)
-                writeThroughToLocalCache(migrated)
+                writeThroughGameDefaults(migrated)
             }
+
+            let partResult = try await userRepository.fetchParticipationDefaults(userId: userId)
+            if partResult.cloudMapPresent {
+                participationDefaults = partResult.defaults
+                writeThroughParticipationDefaults(partResult.defaults)
+            } else {
+                let local = localDefaultsStore.load()
+                let migrated = ParticipationDefaults(
+                    skipVoiceConfirmation: local.skipVoiceConfirmation,
+                    saveLocationWhenMarkingPlates: local.saveLocationWhenMarkingPlates,
+                    showMyLocationOnLargeMap: local.showMyLocationOnLargeMap,
+                    trackMyLocationDuringTrip: local.trackMyLocationDuringTrip
+                )
+                participationDefaults = migrated
+                try await userRepository.updateParticipationDefaults(userId: userId, defaults: migrated)
+                writeThroughParticipationDefaults(migrated)
+            }
+
             loadedUserId = userId
         } catch {
             lastErrorMessage = error.localizedDescription
-            // Keep last known / defaults when offline; still mirror cache if we have in-memory values.
         }
     }
 
-    /// Persist full gameDefaults map, update cache, and write-through to UserDefaults.
-    func save(userId: String, defaults: UserRepository.GameDefaults) async {
+    func saveGameDefaults(userId: String, defaults: UserRepository.GameDefaults) async {
         guard !userId.isEmpty else { return }
         gameDefaults = defaults
         loadedUserId = userId
-        writeThroughToLocalCache(defaults)
+        writeThroughGameDefaults(defaults)
         do {
             try await userRepository.updateGameDefaults(userId: userId, defaults: defaults)
             lastErrorMessage = nil
@@ -91,13 +114,39 @@ final class AppPrefsStore: ObservableObject, AppPrefsReading {
         }
     }
 
-    /// Updates only the four cloud-synced keys in the local New Trip Defaults cache.
-    private func writeThroughToLocalCache(_ defaults: UserRepository.GameDefaults) {
+    func saveParticipationDefaults(userId: String, defaults: ParticipationDefaults) async {
+        guard !userId.isEmpty else { return }
+        participationDefaults = defaults
+        loadedUserId = userId
+        writeThroughParticipationDefaults(defaults)
+        do {
+            try await userRepository.updateParticipationDefaults(userId: userId, defaults: defaults)
+            lastErrorMessage = nil
+        } catch {
+            lastErrorMessage = error.localizedDescription
+        }
+    }
+
+    /// Convenience: persist both maps from a full NewTripDefaults snapshot when signed in.
+    func save(userId: String, defaults: UserRepository.GameDefaults) async {
+        await saveGameDefaults(userId: userId, defaults: defaults)
+    }
+
+    private func writeThroughGameDefaults(_ defaults: UserRepository.GameDefaults) {
         var snapshot = localDefaultsStore.load()
         snapshot.includeUS = defaults.includeUS
         snapshot.includeCanada = defaults.includeCanada
         snapshot.includeMexico = defaults.includeMexico
         snapshot.startTripRightAway = defaults.startTripRightAway
+        localDefaultsStore.save(snapshot)
+    }
+
+    private func writeThroughParticipationDefaults(_ defaults: ParticipationDefaults) {
+        var snapshot = localDefaultsStore.load()
+        snapshot.skipVoiceConfirmation = defaults.skipVoiceConfirmation
+        snapshot.saveLocationWhenMarkingPlates = defaults.saveLocationWhenMarkingPlates
+        snapshot.showMyLocationOnLargeMap = defaults.showMyLocationOnLargeMap
+        snapshot.trackMyLocationDuringTrip = defaults.trackMyLocationDuringTrip
         localDefaultsStore.save(snapshot)
     }
 }

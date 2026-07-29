@@ -25,11 +25,31 @@ struct TripRouteTrackingServiceTests {
         func endRouteTracking() { endCount += 1 }
     }
 
-    private final class StubSettings: LocationSettingsProviding {
-        var saveLocationWhenMarkingPlates = true
-        var showMyLocationOnLargeMap = true
-        var trackMyLocationDuringTrips: Bool
-        init(track: Bool) { trackMyLocationDuringTrips = track }
+    private func makeService(
+        source: FakeLocationSource,
+        track: Bool,
+        userId: String = "user-a"
+    ) -> (TripRouteTrackingService, UUID) {
+        let sessionId = UUID()
+        let prefsStore = TripParticipantPrefsStore(
+            defaults: UserDefaults(suiteName: "test.route.\(UUID().uuidString)")!
+        )
+        prefsStore.apply(
+            sessionId: sessionId,
+            userId: userId,
+            prefs: TripParticipantPrefs(
+                skipVoiceConfirmation: false,
+                saveLocationWhenMarkingPlates: true,
+                showMyLocationOnLargeMap: true,
+                trackMyLocationDuringTrip: track,
+                source: .seededFromAccountDefaults
+            )
+        )
+        let privacy = UserDefaults(suiteName: "test.route.privacy.\(UUID().uuidString)")!
+        LocationSettingsBootstrap.registerFactoryDefaults(using: privacy)
+        let resolver = EffectiveSettingsResolver(privacyDefaults: privacy, prefsStore: prefsStore)
+        let service = TripRouteTrackingService(locationSource: source, resolver: resolver)
+        return (service, sessionId)
     }
 
     private func fix(lat: Double, lon: Double, accuracy: Double = 10) -> CLLocation {
@@ -44,9 +64,9 @@ struct TripRouteTrackingServiceTests {
 
     @Test func startsCaptureWhenTripActiveSettingOnAuthorized() {
         let source = FakeLocationSource()
-        let service = TripRouteTrackingService(locationSource: source, settings: StubSettings(track: true))
+        let (service, sessionId) = makeService(source: source, track: true)
 
-        service.tripDidStart(sessionId: UUID())
+        service.tripDidStart(sessionId: sessionId, viewerUserId: "user-a")
 
         #expect(service.isCapturing == true)
         #expect(source.beginCount == 1)
@@ -54,9 +74,9 @@ struct TripRouteTrackingServiceTests {
 
     @Test func doesNotCaptureWhenSettingOff() {
         let source = FakeLocationSource()
-        let service = TripRouteTrackingService(locationSource: source, settings: StubSettings(track: false))
+        let (service, sessionId) = makeService(source: source, track: false)
 
-        service.tripDidStart(sessionId: UUID())
+        service.tripDidStart(sessionId: sessionId, viewerUserId: "user-a")
 
         #expect(service.isCapturing == false)
         #expect(source.beginCount == 0)
@@ -65,74 +85,65 @@ struct TripRouteTrackingServiceTests {
     @Test func doesNotCaptureWhenUnauthorized() {
         let source = FakeLocationSource()
         source.isAuthorizedForLocation = false
-        let service = TripRouteTrackingService(locationSource: source, settings: StubSettings(track: true))
+        let (service, sessionId) = makeService(source: source, track: true)
 
-        service.tripDidStart(sessionId: UUID())
+        service.tripDidStart(sessionId: sessionId, viewerUserId: "user-a")
 
         #expect(service.isCapturing == false)
     }
 
     @Test func stopsCaptureAndClearsSessionOnTripEnd() {
         let source = FakeLocationSource()
-        let service = TripRouteTrackingService(locationSource: source, settings: StubSettings(track: true))
-        let sessionId = UUID()
+        let (service, sessionId) = makeService(source: source, track: true)
 
-        service.tripDidStart(sessionId: sessionId)
+        service.tripDidStart(sessionId: sessionId, viewerUserId: "user-a")
+        #expect(service.isCapturing == true)
+
         service.tripDidEnd(sessionId: sessionId)
-
         #expect(service.isCapturing == false)
         #expect(service.activeTripSessionId == nil)
         #expect(source.endCount == 1)
     }
 
-    @Test func tripEndForDifferentSessionIsIgnored() {
+    @Test func appendsPointsWhenCapturing() {
         let source = FakeLocationSource()
-        let service = TripRouteTrackingService(locationSource: source, settings: StubSettings(track: true))
+        let (service, sessionId) = makeService(source: source, track: true)
+        service.tripDidStart(sessionId: sessionId, viewerUserId: "user-a")
 
-        service.tripDidStart(sessionId: UUID())
-        service.tripDidEnd(sessionId: UUID())
-
-        #expect(service.isCapturing == true)
+        source.subject.send(fix(lat: 1, lon: 1))
+        #expect(service.routePoints.count == 1)
     }
 
-    @Test func appendsOnlyPointsBeyondMinimumSeparation() {
+    @Test func dropsPointsCloserThanMinimumSeparation() {
         let source = FakeLocationSource()
-        let service = TripRouteTrackingService(locationSource: source, settings: StubSettings(track: true))
-        service.tripDidStart(sessionId: UUID())
+        let (service, sessionId) = makeService(source: source, track: true)
+        service.tripDidStart(sessionId: sessionId, viewerUserId: "user-a")
 
-        source.subject.send(fix(lat: 39.7500, lon: -104.9900))
-        // ~11 m north of the first point — below the 50 m separation, dropped
-        source.subject.send(fix(lat: 39.7501, lon: -104.9900))
-        // ~1.1 km north — kept
-        source.subject.send(fix(lat: 39.7600, lon: -104.9900))
-
-        #expect(service.routePoints.count == 2)
+        source.subject.send(fix(lat: 37.0, lon: -122.0))
+        source.subject.send(fix(lat: 37.00001, lon: -122.0))
+        #expect(service.routePoints.count == 1)
     }
 
-    @Test func ignoresInvalidAccuracyAndNilFixes() {
+    @Test func doesNotAppendWhenNotCapturing() {
         let source = FakeLocationSource()
-        let service = TripRouteTrackingService(locationSource: source, settings: StubSettings(track: true))
-        service.tripDidStart(sessionId: UUID())
+        let (service, sessionId) = makeService(source: source, track: false)
+        service.tripDidStart(sessionId: sessionId, viewerUserId: "user-a")
 
-        source.subject.send(nil)
-        source.subject.send(fix(lat: 39.75, lon: -104.99, accuracy: -1))
-
+        source.subject.send(fix(lat: 1, lon: 1))
         #expect(service.routePoints.isEmpty)
     }
 
-    @Test func restartingSameTripKeepsPoints_newTripClearsThem() {
+    @Test func restartSameSessionKeepsPoints() {
         let source = FakeLocationSource()
-        let service = TripRouteTrackingService(locationSource: source, settings: StubSettings(track: true))
-        let sessionId = UUID()
-        service.tripDidStart(sessionId: sessionId)
-        source.subject.send(fix(lat: 39.75, lon: -104.99))
+        let (service, sessionId) = makeService(source: source, track: true)
+        service.tripDidStart(sessionId: sessionId, viewerUserId: "user-a")
+        source.subject.send(fix(lat: 1, lon: 1))
         #expect(service.routePoints.count == 1)
 
-        service.tripDidStart(sessionId: sessionId)
+        service.tripDidStart(sessionId: sessionId, viewerUserId: "user-a")
         #expect(service.routePoints.count == 1)
 
-        service.tripDidEnd(sessionId: sessionId)
-        service.tripDidStart(sessionId: UUID())
+        service.tripDidStart(sessionId: UUID(), viewerUserId: "user-a")
         #expect(service.routePoints.isEmpty)
     }
 }

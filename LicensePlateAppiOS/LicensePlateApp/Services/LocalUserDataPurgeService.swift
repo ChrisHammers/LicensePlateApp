@@ -103,6 +103,7 @@ final class LocalUserDataPurgeService {
         LifetimeStatsCoordinator.shared.resetForAccountPurge()
         NotificationPrefsStore.shared.resetToDefaults()
         AppPrefsStore.shared.resetToDefaults()
+        TripParticipantPrefsStore.shared.resetForSignOut()
         DeepLinkHandler.shared.clearDestination()
         ReturnStreakService.shared.setActiveUserId(nil)
     }

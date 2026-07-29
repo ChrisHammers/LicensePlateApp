@@ -57,7 +57,6 @@ struct LicensePlateGameView: View {
     // App Preferences for feedback
     @AppStorage("appPlaySoundEffects") private var appPlaySoundEffects = true
     @AppStorage("appUseVibrations") private var appUseVibrations = true
-    @AppStorage("defaultSkipVoiceConfirmation") private var skipVoiceConfirmation = false
     @AppStorage(FirstSessionStateKeys.hasLoggedFirstFind) private var hasLoggedFirstFind = false
 
     @State private var selectedTab: Tab = .list
@@ -227,6 +226,7 @@ struct LicensePlateGameView: View {
         .overlay {
             if showFullScreenMap {
                 FullScreenMapView(
+                    tripSessionId: viewModel.sessionId,
                     enabledCountries: gameScopedEnabledCountries,
                     foundRegionIDs: viewModel.displayFoundRegionIDsForMap,
                     foundRegions: viewModel.foundRegions,
@@ -348,7 +348,10 @@ struct LicensePlateGameView: View {
                         showVoiceMatchConfirmation = false
                         lastMatchedRegion = nil
                     },
-                    skipConfirmation: $skipVoiceConfirmation
+                    skipConfirmation: Binding(
+                        get: { viewModel.skipVoiceConfirmation },
+                        set: { viewModel.updateSkipVoiceConfirmation($0) }
+                    )
                 )
             }
         }
@@ -1605,7 +1608,7 @@ struct LicensePlateGameView: View {
             lastMatchedRegion = region
             
             // Check if user wants to skip confirmation
-            if skipVoiceConfirmation {
+            if viewModel.skipVoiceConfirmation {
                 // Auto-add without confirmation
               confirmAddRegion(region, usingTab: .voice)
             } else {
@@ -1917,6 +1920,7 @@ private struct VoiceConfirmationDialog: View {
 
 // Full screen map view with location support (Google Maps)
 private struct FullScreenGoogleMapView: View {
+    let tripSessionId: UUID
     let enabledCountries: [PlateRegion.Country]
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
@@ -1929,10 +1933,21 @@ private struct FullScreenGoogleMapView: View {
     @EnvironmentObject private var authService: FirebaseAuthService
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     @AppStorage("appShowUserAvatarOnMap") private var appShowUserAvatarOnMap = false
-    @ObservedObject private var locationSettings = LocationSettingsService.shared
+    @ObservedObject private var effectiveSettings = EffectiveSettingsResolver.shared
     @ObservedObject private var routeTracking = TripRouteTrackingService.shared
 
-    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], finderIdentities: [String: UserRepository.UserIdentitySnapshot], cameraPosition: Binding<GMSCameraPosition>, locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
+    init(
+        tripSessionId: UUID,
+        enabledCountries: [PlateRegion.Country],
+        foundRegionIDs: [String],
+        foundRegions: [FoundRegion],
+        finderIdentities: [String: UserRepository.UserIdentitySnapshot],
+        cameraPosition: Binding<GMSCameraPosition>,
+        locationManager: LocationManager,
+        namespace: Namespace.ID,
+        isPresented: Binding<Bool>
+    ) {
+        self.tripSessionId = tripSessionId
         self.enabledCountries = enabledCountries
         self.foundRegionIDs = foundRegionIDs
         self.foundRegions = foundRegions
@@ -1976,8 +1991,10 @@ private struct FullScreenGoogleMapView: View {
     }
     
     private var showUserLocation: Bool {
-        (locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways)
-            && locationSettings.showMyLocationOnLargeMap
+        let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+        let show = effectiveSettings.resolve(sessionId: tripSessionId, userId: uid).showMyLocationOnLargeMap
+        return (locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways)
+            && show
     }
     
     private var userAvatarImage: UIImage? {
@@ -2362,6 +2379,7 @@ private struct UserLocationPulseView: View {
 /// Internal (not private) so `FullScreenMapPreviews.swift` can preview it — canvas thunks
 /// for this 2900-line file time out, so previews live in that small dedicated file.
 struct FullScreenAppleMapView: View {
+    let tripSessionId: UUID
     let country: PlateRegion.Country
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
@@ -2372,7 +2390,7 @@ struct FullScreenAppleMapView: View {
     
     @EnvironmentObject private var authService: FirebaseAuthService
     @AppStorage("appShowUserAvatarOnMap") private var appShowUserAvatarOnMap = false
-    @ObservedObject private var locationSettings = LocationSettingsService.shared
+    @ObservedObject private var effectiveSettings = EffectiveSettingsResolver.shared
     @ObservedObject private var routeTracking = TripRouteTrackingService.shared
     @State private var mapCameraPosition: MapCameraPosition
 
@@ -2383,7 +2401,17 @@ struct FullScreenAppleMapView: View {
         return formatter
     }()
 
-    init(country: PlateRegion.Country, foundRegionIDs: [String], foundRegions: [FoundRegion], finderIdentities: [String: UserRepository.UserIdentitySnapshot] = [:], locationManager: LocationManager, namespace: Namespace.ID, isPresented: Binding<Bool>) {
+    init(
+        tripSessionId: UUID = UUID(),
+        country: PlateRegion.Country,
+        foundRegionIDs: [String],
+        foundRegions: [FoundRegion],
+        finderIdentities: [String: UserRepository.UserIdentitySnapshot] = [:],
+        locationManager: LocationManager,
+        namespace: Namespace.ID,
+        isPresented: Binding<Bool>
+    ) {
+        self.tripSessionId = tripSessionId
         self.country = country
         self.foundRegionIDs = foundRegionIDs
         self.foundRegions = foundRegions
@@ -2585,7 +2613,10 @@ struct FullScreenAppleMapView: View {
                 // User location: single annotation with ZStack so green is behind, avatar on top
                 if let userLocation = locationManager.location,
                    locationManager.authorizationStatus == .authorizedWhenInUse || locationManager.authorizationStatus == .authorizedAlways,
-                   locationSettings.showMyLocationOnLargeMap {
+                   effectiveSettings.resolve(
+                    sessionId: tripSessionId,
+                    userId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
+                   ).showMyLocationOnLargeMap {
                     Annotation("Your Location".localized, coordinate: userLocation.coordinate) {
                         ZStack {
                             // Green pulse ring (and dot when no avatar) — back layer
@@ -2900,6 +2931,7 @@ private extension View {
 
 // Unified wrapper for full screen map view that switches between providers
 private struct FullScreenMapView: View {
+    let tripSessionId: UUID
     let enabledCountries: [PlateRegion.Country]
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
@@ -2919,6 +2951,7 @@ private struct FullScreenMapView: View {
         Group {
             if mapProvider == .google {
                 FullScreenGoogleMapView(
+                    tripSessionId: tripSessionId,
                     enabledCountries: enabledCountries,
                     foundRegionIDs: foundRegionIDs,
                     foundRegions: foundRegions,
@@ -2932,6 +2965,7 @@ private struct FullScreenMapView: View {
                 // For Apple Maps, use the first enabled country (or default to US)
                 let country = enabledCountries.first ?? .unitedStates
                 FullScreenAppleMapView(
+                    tripSessionId: tripSessionId,
                     country: country,
                     foundRegionIDs: foundRegionIDs,
                     foundRegions: foundRegions,
