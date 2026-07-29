@@ -36,13 +36,25 @@ final class TripSessionViewModel: ObservableObject {
     @Published private(set) var tripLeaderboardRows: [RankedParticipantContribution] = []
     /// True when the trip has at least one competitive game and leaderboard rows were built successfully.
     @Published private(set) var showsTripCompetitiveLeaderboard: Bool = false
+    /// Unique configured plate regions found anywhere on the trip (any participant, any game).
+    @Published private(set) var tripFoundCount: Int = 0
+    /// Unique union of configured target region IDs across all license-plate games on the trip.
+    @Published private(set) var tripTotalCount: Int = 0
+    /// Region IDs shown as found on the trip map (unique, configured-scope).
+    @Published private(set) var tripFoundRegionIDs: [String] = []
+    /// One representative `FoundRegion` per unique found region (earliest active discovery).
+    @Published private(set) var tripFoundRegions: [FoundRegion] = []
+    /// Countries covered by the trip-wide configured plate scope (for map framing).
+    @Published private(set) var tripEnabledCountries: [PlateRegion.Country] = []
+    /// Finder identity snapshots for where-found pin attribution on the trip map.
+    @Published private(set) var tripFinderIdentitiesByUserId: [String: UserRepository.UserIdentitySnapshot] = [:]
     @Published var errorMessage: String?
 
     private let sessionId: UUID
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol?
-    private let gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol
+    private let lifecycleService: TripSessionLifecycleServiceProtocol
     private let authService: FirebaseAuthService
     private var didLogTripDashboardLeaderboard = false
     private var cancellables = Set<AnyCancellable>()
@@ -52,6 +64,17 @@ final class TripSessionViewModel: ObservableObject {
     var isTripCreator: Bool {
         guard let session else { return false }
         return isTripCreator(for: session)
+    }
+
+    /// Trip container is in progress (driver has started the trip).
+    var isTripContainerActive: Bool {
+        guard let session else { return false }
+        return session.status == .active && session.startedAt != nil
+    }
+
+    /// Driver-only; trip must be active (started and not ended/cancelled).
+    var canEndTrip: Bool {
+        isTripCreator && isTripContainerActive
     }
 
     var canAddGame: Bool {
@@ -75,19 +98,26 @@ final class TripSessionViewModel: ObservableObject {
         return "Adds another license plate game to this trip".localized
     }
 
+    var endTripAccessibilityHint: String {
+        if isTripCreator {
+            return "Ends the trip and all open games".localized
+        }
+        return "Only the Driver can end the trip".localized
+    }
+
     init(
         sessionId: UUID,
         tripSessionRepository: TripSessionRepositoryProtocol,
         gameInstanceRepository: GameInstanceRepositoryProtocol,
         tripActivityEventRepository: TripActivityEventRepositoryProtocol? = nil,
-        gameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol = GameInstanceLifecycleService.shared,
+        lifecycleService: TripSessionLifecycleServiceProtocol = TripSessionLifecycleService.shared,
         authService: FirebaseAuthService
     ) {
         self.sessionId = sessionId
         self.tripSessionRepository = tripSessionRepository
         self.gameInstanceRepository = gameInstanceRepository
         self.tripActivityEventRepository = tripActivityEventRepository
-        self.gameInstanceLifecycleService = gameInstanceLifecycleService
+        self.lifecycleService = lifecycleService
         self.authService = authService
 
         TripCanonicalRemoteSyncService.shared.hydrationSignal
@@ -110,6 +140,7 @@ final class TripSessionViewModel: ObservableObject {
             guard let s = try tripSessionRepository.session(byId: sessionId) else {
                 session = nil
                 gameRowItems = []
+                clearTripPlateProjection()
                 lastRosterProfileBootstrapSignature = nil
                 let selfUid = Auth.auth().currentUser?.uid
                 UserProfileListenCoordinator.shared.setPinnedUsers(selfUserId: selfUid, rosterUserIds: [])
@@ -153,17 +184,29 @@ final class TripSessionViewModel: ObservableObject {
             }
             gameRowItems = rows
 
+            refreshTripPlateProjection(games: games)
             refreshTripLeaderboard(session: s, games: games)
         } catch {
             errorMessage = error.localizedDescription
             session = nil
             gameRowItems = []
+            clearTripPlateProjection()
             showsTripCompetitiveLeaderboard = false
             tripLeaderboardRows = []
             lastRosterProfileBootstrapSignature = nil
             let selfUid = Auth.auth().currentUser?.uid
             UserProfileListenCoordinator.shared.setPinnedUsers(selfUserId: selfUid, rosterUserIds: [])
         }
+    }
+
+    /// Ends the trip via canonical lifecycle (closes open games, records events, syncs). Driver-only; call from confirmation UI.
+    func endTrip() throws {
+        guard canEndTrip else {
+            throw TripSessionViewModelError.endTripNotAllowed
+        }
+        let endedBy = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+        try lifecycleService.endTrip(sessionId: sessionId, endedBy: endedBy)
+        load()
     }
 
     private func rosterUserIds(for session: TripSession) -> Set<String> {
@@ -219,6 +262,72 @@ final class TripSessionViewModel: ObservableObject {
         }
     }
 
+    /// Unique configured plate progress across all license-plate games on the trip.
+    /// Same region in two games or found by two participants counts once; any active find marks it found.
+    private func refreshTripPlateProjection(games: [GameInstance]) {
+        let lpGames = games.filter { $0.definitionId == GameType.licensePlate.rawValue }
+        var configuredIds = Set<String>()
+        for game in lpGames {
+            let config = game.licensePlateConfig() ?? LicensePlateGameConfig()
+            configuredIds.formUnion(LicensePlateScopeCalculator.targetRegionIds(for: config))
+        }
+
+        guard !configuredIds.isEmpty else {
+            clearTripPlateProjection()
+            return
+        }
+
+        let lpGameIds = Set(lpGames.map(\.id))
+        let discoveries: [GameDiscovery]
+        if let eventRepo = tripActivityEventRepository {
+            discoveries = ((try? eventRepo.discoveries(sessionId: sessionId, gameInstanceId: nil)) ?? [])
+                .filter { lpGameIds.contains($0.gameInstanceId) }
+        } else {
+            discoveries = []
+        }
+
+        var earliestByRegion: [String: GameDiscovery] = [:]
+        for discovery in discoveries.sorted(by: GameDiscovery.orderingAscending) {
+            if earliestByRegion[discovery.targetId] == nil {
+                earliestByRegion[discovery.targetId] = discovery
+            }
+        }
+
+        let foundIds = configuredIds.filter { earliestByRegion[$0] != nil }.sorted()
+        let representatives: [FoundRegion] = foundIds.compactMap { regionId in
+            guard let discovery = earliestByRegion[regionId] else { return nil }
+            return FoundRegion(
+                regionID: discovery.targetId,
+                foundAt: discovery.discoveredAt,
+                inputMethod: discovery.inputMethod,
+                foundBy: discovery.participantId.isEmpty ? nil : discovery.participantId,
+                foundAtLocation: discovery.location
+            )
+        }
+
+        tripTotalCount = configuredIds.count
+        tripFoundCount = foundIds.count
+        tripFoundRegionIDs = foundIds
+        tripFoundRegions = representatives
+        tripEnabledCountries = Array(
+            Set(PlateRegion.all.filter { configuredIds.contains($0.id) }.map(\.country))
+        ).sorted { $0.rawValue < $1.rawValue }
+
+        let finderIds = Set(representatives.compactMap(\.foundBy).filter { !$0.isEmpty })
+        tripFinderIdentitiesByUserId = finderIds.isEmpty
+            ? [:]
+            : UserRepository.shared.cachedIdentityMap(forUserIds: finderIds)
+    }
+
+    private func clearTripPlateProjection() {
+        tripFoundCount = 0
+        tripTotalCount = 0
+        tripFoundRegionIDs = []
+        tripFoundRegions = []
+        tripEnabledCountries = []
+        tripFinderIdentitiesByUserId = [:]
+    }
+
     private func isTripCreator(for session: TripSession) -> Bool {
         let uid = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
         guard let uid, let createdBy = session.createdBy else { return false }
@@ -244,5 +353,16 @@ final class TripSessionViewModel: ObservableObject {
             return name.isEmpty ? "1 team".localized : name
         }
         return "%d teams".localized(teams.count)
+    }
+}
+
+enum TripSessionViewModelError: LocalizedError, Equatable {
+    case endTripNotAllowed
+
+    var errorDescription: String? {
+        switch self {
+        case .endTripNotAllowed:
+            return "Only the Driver can end the trip".localized
+        }
     }
 }

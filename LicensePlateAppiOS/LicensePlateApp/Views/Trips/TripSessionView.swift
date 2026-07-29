@@ -3,9 +3,13 @@
 //  LicensePlateApp
 //
 //  Step 6.8 — Trip dashboard: name, status, participants, game list. Tap game → coordinator.openGame (no NavigationLink).
+//  Trip map header: found/total across all license-plate games; End ends the trip.
 //
 
 import SwiftUI
+import MapKit
+import CoreLocation
+import GoogleMaps
 
 struct TripSessionView: View {
     let sessionId: UUID
@@ -13,9 +17,21 @@ struct TripSessionView: View {
     @EnvironmentObject private var coordinator: MainCoordinator
     @EnvironmentObject private var authService: FirebaseAuthService
     @StateObject private var viewModel: TripSessionViewModel
+    @ObservedObject private var locationManager = LocationManager.shared
     @State private var showTripSettings = false
     @State private var showPassengerList = false
     @State private var isShowingGameSetup = false
+    @State private var showEndTripConfirmation = false
+    @State private var showFullScreenMap = false
+    @State private var chipWidth: CGFloat = 0
+    @State private var chipHeight: CGFloat = 0
+    @State private var retryAction: (() -> Void)?
+    @State private var visibleCountry: PlateRegion.Country = .unitedStates
+    @State private var cameraPosition: GMSCameraPosition = {
+        let center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
+        return GMSCameraPosition.from(coordinate: center, zoom: 4.0)
+    }()
+    @Namespace private var mapNamespace
 
     init(sessionId: UUID, authService: FirebaseAuthService) {
         self.sessionId = sessionId
@@ -24,6 +40,7 @@ struct TripSessionView: View {
             tripSessionRepository: TripSessionRepository.shared,
             gameInstanceRepository: GameInstanceRepository.shared,
             tripActivityEventRepository: TripActivityEventRepository.shared,
+            lifecycleService: TripSessionLifecycleService.shared,
             authService: authService
         ))
     }
@@ -46,83 +63,122 @@ struct TripSessionView: View {
         }
         .navigationTitle(viewModel.session?.name ?? "Trip".localized)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(showFullScreenMap ? .hidden : .visible, for: .navigationBar)
         .onAppear {
             viewModel.load()
+            requestLocationIfNeeded()
+            initializeCameraIfNeeded()
         }
         .alert("Error".localized, isPresented: Binding(
             get: { viewModel.errorMessage != nil },
-            set: { if !$0 { viewModel.errorMessage = nil } }
+            set: { if !$0 { viewModel.errorMessage = nil; retryAction = nil } }
         )) {
             Button("OK".localized, role: .cancel) {
                 viewModel.errorMessage = nil
+                retryAction = nil
+            }
+            if retryAction != nil {
+                Button("Retry".localized) {
+                    retryAction?()
+                    viewModel.errorMessage = nil
+                    retryAction = nil
+                }
             }
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
+        .overlay {
+            if showFullScreenMap {
+                FullScreenMapView(
+                    tripSessionId: sessionId,
+                    enabledCountries: mapEnabledCountries,
+                    foundRegionIDs: viewModel.tripFoundRegionIDs,
+                    foundRegions: viewModel.tripFoundRegions,
+                    finderIdentities: viewModel.tripFinderIdentitiesByUserId,
+                    cameraPosition: $cameraPosition,
+                    locationManager: locationManager,
+                    namespace: mapNamespace,
+                    isPresented: $showFullScreenMap
+                )
+                .accessibleTransition(.opacity)
+                .zIndex(1000)
+            }
+        }
+    }
+
+    private var mapEnabledCountries: [PlateRegion.Country] {
+        if viewModel.tripEnabledCountries.isEmpty {
+            return [.unitedStates, .canada, .mexico]
+        }
+        return viewModel.tripEnabledCountries
     }
 
     private func content(session: TripSession) -> some View {
-        List {
-            Section {
-                tripStatusRow(session: session)
-                Button {
-                    FeedbackService.shared.buttonTap()
-                    showPassengerList = true
-                } label: {
-                    HStack {
-                        Text("Driver & Passengers".localized)
-                            .font(.system(.body, design: .rounded))
-                            .foregroundStyle(Color.Theme.primaryBlue)
-                        Spacer()
-                        Text("\(session.participants.count)")
-                            .font(.system(.caption, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown)
-                    }
-                }
-            } header: {
-                Text("Trip".localized)
-            }
-            .listRowBackground(Color.Theme.cardBackground)
+        VStack(spacing: 0) {
+            tripMapHeader
 
-            if viewModel.showsTripCompetitiveLeaderboard, !viewModel.tripLeaderboardRows.isEmpty {
-                TripSessionLeaderboardSection(
-                    gameRowCount: viewModel.gameRowItems.count,
-                    rows: viewModel.tripLeaderboardRows,
-                    currentUserId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id
-                )
-            }
-
-            Section {
-                ForEach(viewModel.gameRowItems) { item in
+            List {
+                Section {
+                    tripStatusRow(session: session)
                     Button {
                         FeedbackService.shared.buttonTap()
-                        coordinator.openGame(sessionId: session.id, gameId: item.gameId)
+                        showPassengerList = true
                     } label: {
-                        GameRowView(item: item)
+                        HStack {
+                            Text("Driver & Passengers".localized)
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                            Spacer()
+                            Text("\(session.participants.count)")
+                                .font(.system(.caption, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                        }
                     }
-                    .disabled(!item.isEnterable)
-                    .opacity(item.isEnterable ? 1.0 : 0.7)
-                    .listRowBackground(Color.Theme.cardBackground)
+                } header: {
+                    Text("Trip".localized)
+                }
+                .listRowBackground(Color.Theme.cardBackground)
+
+                if viewModel.showsTripCompetitiveLeaderboard, !viewModel.tripLeaderboardRows.isEmpty {
+                    TripSessionLeaderboardSection(
+                        gameRowCount: viewModel.gameRowItems.count,
+                        rows: viewModel.tripLeaderboardRows,
+                        currentUserId: authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+                    )
                 }
 
-                Button {
-                    FeedbackService.shared.buttonTap()
-                    isShowingGameSetup = true
-                } label: {
-                    Label("Add Game".localized, systemImage: "plus.circle")
-                        .font(.system(.body, design: .rounded))
-                        .foregroundStyle(Color.Theme.primaryBlue)
+                Section {
+                    ForEach(viewModel.gameRowItems) { item in
+                        Button {
+                            FeedbackService.shared.buttonTap()
+                            coordinator.openGame(sessionId: session.id, gameId: item.gameId)
+                        } label: {
+                            GameRowView(item: item)
+                        }
+                        .disabled(!item.isEnterable)
+                        .opacity(item.isEnterable ? 1.0 : 0.7)
+                        .listRowBackground(Color.Theme.cardBackground)
+                    }
+
+                    Button {
+                        FeedbackService.shared.buttonTap()
+                        isShowingGameSetup = true
+                    } label: {
+                        Label("Add Game".localized, systemImage: "plus.circle")
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    .disabled(!viewModel.canAddGame)
+                    .opacity(viewModel.canAddGame ? 1.0 : 0.5)
+                    .accessibilityHint(viewModel.addGameAccessibilityHint)
+                    .listRowBackground(Color.Theme.cardBackground)
+                } header: {
+                    Text("Games".localized)
                 }
-                .disabled(!viewModel.canAddGame)
-                .opacity(viewModel.canAddGame ? 1.0 : 0.5)
-                .accessibilityHint(viewModel.addGameAccessibilityHint)
-                .listRowBackground(Color.Theme.cardBackground)
-            } header: {
-                Text("Games".localized)
             }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
@@ -182,6 +238,249 @@ struct TripSessionView: View {
                 viewModel.load()
             }
         }
+        .alert("End Trip".localized, isPresented: $showEndTripConfirmation) {
+            Button("Cancel".localized, role: .cancel) {}
+            Button("End Trip".localized, role: .destructive) {
+                performEndTrip()
+            }
+        } message: {
+            Text("This ends the trip and all open games. Make sure all participants have synced so all discoveries are counted.".localized)
+        }
+    }
+
+    // MARK: - Trip map header
+
+    private var tripMapHeader: some View {
+        VStack(spacing: 16) {
+            RegionMapView(
+                enabledCountries: mapEnabledCountries,
+                foundRegionIDs: viewModel.tripFoundRegionIDs,
+                foundRegions: viewModel.tripFoundRegions,
+                visibleCountry: visibleCountry,
+                cameraPosition: $cameraPosition,
+                namespace: mapNamespace,
+                showFullScreen: $showFullScreenMap,
+                locationManager: locationManager
+            )
+            .frame(height: 150)
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .padding(.horizontal, 32)
+            .accessibilityLabel("Trip map".localized)
+            .accessibilityHint("Shows plates found across all games on this trip".localized)
+
+            HStack(spacing: 24) {
+                summaryChip(
+                    title: "Found".localized,
+                    value: "\(viewModel.tripFoundCount)",
+                    measuredWidth: $chipWidth,
+                    measuredHeight: $chipHeight
+                )
+                startEndTripButton(height: chipHeight)
+                summaryChip(
+                    title: "Total".localized,
+                    value: "\(viewModel.tripTotalCount)",
+                    measuredWidth: $chipWidth,
+                    measuredHeight: $chipHeight
+                )
+            }
+            .padding(.horizontal, 32)
+        }
+        .padding(.vertical, 24)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+                .padding(.horizontal, 12)
+        )
+        .padding(.top, 6)
+        .padding(.bottom, 6)
+    }
+
+    private struct ChipSizePreference: PreferenceKey {
+        static var defaultValue: CGSize = .zero
+        static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
+            value = CGSize(
+                width: max(value.width, nextValue().width),
+                height: max(value.height, nextValue().height)
+            )
+        }
+    }
+
+    private func summaryChip(
+        title: String,
+        value: String,
+        measuredWidth: Binding<CGFloat>,
+        measuredHeight: Binding<CGFloat>
+    ) -> some View {
+        VStack(spacing: 6) {
+            Text(value)
+                .font(.system(.title, design: .rounded))
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.Theme.primaryBlue)
+                .lineLimit(1)
+            Text(title.uppercased())
+                .font(.system(.caption, design: .rounded))
+                .fontWeight(.medium)
+                .foregroundStyle(Color.Theme.softBrown)
+                .lineLimit(1)
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .fixedSize(horizontal: true, vertical: false)
+        .background(
+            GeometryReader { geometry in
+                Color.clear
+                    .preference(key: ChipSizePreference.self, value: geometry.size)
+            }
+        )
+        .frame(
+            width: measuredWidth.wrappedValue > 0 ? measuredWidth.wrappedValue : nil,
+            height: measuredHeight.wrappedValue > 0 ? measuredHeight.wrappedValue : nil
+        )
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.Theme.background)
+        )
+        .onPreferenceChange(ChipSizePreference.self) { size in
+            if size.width > measuredWidth.wrappedValue {
+                measuredWidth.wrappedValue = size.width
+            }
+            if size.height > measuredHeight.wrappedValue {
+                measuredHeight.wrappedValue = size.height
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value)")
+    }
+
+    private func startEndTripButton(height: CGFloat) -> some View {
+        Group {
+            if let session = viewModel.session,
+               session.status == .ended || session.status == .cancelled {
+                VStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(.title2, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .accessibilityHidden(true)
+                    Text(session.status == .cancelled ? "CANCELLED".localized : "ENDED".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.softBrown)
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity)
+                .frame(height: height > 0 ? height : nil)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.Theme.background)
+                )
+                .accessibilityLabel(session.status == .cancelled ? "Trip cancelled".localized : "Trip ended".localized)
+                .accessibilityValue(session.status == .cancelled ? "This trip was cancelled".localized : "This trip has ended".localized)
+                .accessibilityAddTraits(.isStaticText)
+            } else if !viewModel.isTripContainerActive {
+                VStack(spacing: 6) {
+                    Image(systemName: "car.circle")
+                        .font(.system(.title2, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .accessibilityHidden(true)
+                    Text("Trip not started".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 8)
+                .frame(maxWidth: .infinity)
+                .frame(height: height > 0 ? height : nil)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.Theme.background)
+                )
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Trip not started".localized)
+                .accessibilityValue("Start the trip from trip settings before ending it".localized)
+                .accessibilityAddTraits(.isStaticText)
+            } else {
+                Button {
+                    FeedbackService.shared.buttonTap()
+                    showEndTripConfirmation = true
+                } label: {
+                    VStack(spacing: 6) {
+                        Image(systemName: "stop.circle.fill")
+                            .font(.system(.title2, design: .rounded))
+                            .foregroundStyle(.white)
+                            .accessibilityHidden(true)
+                        Text("END".localized)
+                            .font(.system(.caption, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(Color.red)
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(!viewModel.canEndTrip)
+                .opacity(viewModel.canEndTrip ? 1.0 : 0.5)
+                .frame(height: height > 0 ? height : nil)
+                .accessibilityLabel("End Trip".localized)
+                .accessibilityHint(viewModel.endTripAccessibilityHint)
+                .accessibilityAddTraits(.isButton)
+            }
+        }
+    }
+
+    private func performEndTrip() {
+        do {
+            try viewModel.endTrip()
+            coordinator.completeTripEndFlow(sessionId: sessionId)
+        } catch {
+            viewModel.errorMessage = error.localizedDescription
+            retryAction = {
+                do {
+                    try viewModel.endTrip()
+                    coordinator.completeTripEndFlow(sessionId: sessionId)
+                } catch {
+                    viewModel.errorMessage = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func requestLocationIfNeeded() {
+        if locationManager.authorizationStatus == .notDetermined {
+            locationManager.requestAuthorization()
+        }
+    }
+
+    private func initializeCameraIfNeeded() {
+        let countries = mapEnabledCountries
+        visibleCountry = countries.first ?? .unitedStates
+        let center: CLLocationCoordinate2D
+        let zoom: Float
+        if countries.count == 1, let only = countries.first {
+            switch only {
+            case .unitedStates:
+                center = CLLocationCoordinate2D(latitude: 39.8283, longitude: -98.5795)
+                zoom = 3.5
+            case .canada:
+                center = CLLocationCoordinate2D(latitude: 56.1304, longitude: -106.3468)
+                zoom = 3.0
+            case .mexico:
+                center = CLLocationCoordinate2D(latitude: 23.6345, longitude: -102.5528)
+                zoom = 4.5
+            }
+        } else {
+            center = CLLocationCoordinate2D(latitude: 40.8283, longitude: -106.5795)
+            zoom = 3.2
+        }
+        cameraPosition = GMSCameraPosition.from(coordinate: center, zoom: zoom)
     }
 
     private func tripStatusRow(session: TripSession) -> some View {
@@ -368,7 +667,27 @@ private struct GameRowView: View {
     }
 }
 
-#Preview("Trip session") {
+#Preview("Trip session — active driver") {
+    let auth = FirebaseAuthService()
+    auth.currentUser = AppUser(id: PreviewConstants.userId1, userName: "Preview Driver", firebaseUID: PreviewConstants.userId1)
+    return NavigationStack {
+        TripSessionView(sessionId: PreviewConstants.sessionIdSolo, authService: auth)
+            .environmentObject(MainCoordinator())
+            .environmentObject(auth)
+    }
+}
+
+#Preview("Trip session — passenger") {
+    let auth = FirebaseAuthService()
+    auth.currentUser = AppUser(id: PreviewConstants.userId2, userName: "Preview Passenger", firebaseUID: PreviewConstants.userId2)
+    return NavigationStack {
+        TripSessionView(sessionId: PreviewConstants.sessionIdSolo, authService: auth)
+            .environmentObject(MainCoordinator())
+            .environmentObject(auth)
+    }
+}
+
+#Preview("Trip session — ended") {
     let auth = FirebaseAuthService()
     auth.currentUser = AppUser(id: PreviewConstants.userId1, userName: "Preview Driver", firebaseUID: PreviewConstants.userId1)
     return NavigationStack {

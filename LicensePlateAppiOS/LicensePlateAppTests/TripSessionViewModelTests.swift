@@ -242,4 +242,278 @@ struct TripSessionViewModelTests {
         #expect(viewModel.showsTripCompetitiveLeaderboard == false)
         #expect(viewModel.tripLeaderboardRows.isEmpty)
     }
+
+    // MARK: - Trip-wide plate projection (map header)
+
+    private func licensePlateGame(
+        sessionId: UUID,
+        countries: [PlateRegion.Country],
+        lifecycle: GameInstanceState = .started
+    ) throws -> GameInstance {
+        var game = GameInstance(
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameType.licensePlate.defaultRuleSet(),
+            commonConfig: CommonGameConfig(lifecycleState: lifecycle, gameMode: .collaborative)
+        )
+        game.id = UUID()
+        let config = LicensePlateGameConfig(
+            selectedCountriesRawValues: countries.map(\.rawValue),
+            territoryOptions: LicensePlateTerritoryOptions(
+                includeUSTerritories: false,
+                includeCanadianTerritories: false,
+                includeDC: false
+            )
+        )
+        game.gameSpecificPayloadData = try JSONEncoder().encode(config)
+        return game
+    }
+
+    private func appendFound(
+        to eventRepo: MockTripActivityEventRepository,
+        sessionId: UUID,
+        gameId: UUID,
+        regionId: String,
+        participantId: String,
+        at date: Date = Date()
+    ) throws {
+        try eventRepo.append(TripActivityEvent(
+            sessionId: sessionId,
+            kind: .regionFound,
+            timestamp: date,
+            actorId: participantId,
+            payload: [
+                TripActivityEventPayloadKey.regionId: regionId,
+                TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+                TripActivityEventPayloadKey.participantId: participantId,
+                TripActivityEventPayloadKey.inputMethod: FoundRegion.InputMethod.list.rawValue
+            ]
+        ))
+    }
+
+    @Test func loadAggregatesUniqueFoundAcrossGamesAndParticipants() async throws {
+        let sessionId = UUID()
+        let session = makeSession(id: sessionId, name: "Multi-game")
+        let gameA = try licensePlateGame(sessionId: sessionId, countries: [.unitedStates])
+        let gameB = try licensePlateGame(sessionId: sessionId, countries: [.unitedStates])
+        let usGoal = LicensePlateScopeCalculator.completionGoal(for: gameA.licensePlateConfig()!)
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        gameRepo.seed(gameA)
+        gameRepo.seed(gameB)
+        let eventRepo = MockTripActivityEventRepository()
+        // Same region in two games + two participants on one region → counts once
+        try appendFound(to: eventRepo, sessionId: sessionId, gameId: gameA.id, regionId: "us-ca", participantId: "user1")
+        try appendFound(to: eventRepo, sessionId: sessionId, gameId: gameB.id, regionId: "us-ca", participantId: "user2")
+        try appendFound(to: eventRepo, sessionId: sessionId, gameId: gameA.id, regionId: "us-ny", participantId: "user2")
+
+        let viewModel = TripSessionViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            authService: creatorAuth()
+        )
+        viewModel.load()
+
+        #expect(viewModel.tripFoundCount == 2)
+        #expect(viewModel.tripTotalCount == usGoal)
+        #expect(Set(viewModel.tripFoundRegionIDs) == Set(["us-ca", "us-ny"]))
+        #expect(viewModel.tripFoundRegions.count == 2)
+        #expect(viewModel.tripEnabledCountries.contains(.unitedStates))
+    }
+
+    @Test func loadCountsPeerFindWithoutViewerAttribution() async throws {
+        let sessionId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "Peer find",
+            status: .active,
+            createdAt: Date(),
+            createdBy: "user1",
+            startedAt: Date(),
+            participants: [
+                TripParticipant(userId: "user1", role: .owner, joinedAt: Date()),
+                TripParticipant(userId: "user2", role: .member, joinedAt: Date())
+            ]
+        )
+        let game = try licensePlateGame(sessionId: sessionId, countries: [.unitedStates])
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        gameRepo.seed(game)
+        let eventRepo = MockTripActivityEventRepository()
+        try appendFound(to: eventRepo, sessionId: sessionId, gameId: game.id, regionId: "us-tx", participantId: "user2")
+
+        let viewModel = TripSessionViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            authService: creatorAuth(userId: "user1")
+        )
+        viewModel.load()
+
+        #expect(viewModel.tripFoundCount == 1)
+        #expect(viewModel.tripFoundRegionIDs == ["us-tx"])
+        #expect(viewModel.tripFoundRegions.first?.foundBy == "user2")
+    }
+
+    @Test func loadUnionsConfiguredScopeAcrossGames() async throws {
+        let sessionId = UUID()
+        let session = makeSession(id: sessionId, name: "Scope union")
+        let usGame = try licensePlateGame(sessionId: sessionId, countries: [.unitedStates])
+        let caGame = try licensePlateGame(sessionId: sessionId, countries: [.canada])
+        let usIds = Set(LicensePlateScopeCalculator.targetRegionIds(for: usGame.licensePlateConfig()!))
+        let caIds = Set(LicensePlateScopeCalculator.targetRegionIds(for: caGame.licensePlateConfig()!))
+        let expectedTotal = usIds.union(caIds).count
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        gameRepo.seed(usGame)
+        gameRepo.seed(caGame)
+        let eventRepo = MockTripActivityEventRepository()
+
+        let viewModel = TripSessionViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            authService: creatorAuth()
+        )
+        viewModel.load()
+
+        #expect(viewModel.tripTotalCount == expectedTotal)
+        #expect(viewModel.tripFoundCount == 0)
+        #expect(Set(viewModel.tripEnabledCountries) == Set([.unitedStates, .canada]))
+    }
+
+    // MARK: - End trip
+
+    @Test func canEndTripTrueForActiveDriver() async throws {
+        let sessionId = UUID()
+        let session = makeSession(id: sessionId)
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+
+        let viewModel = TripSessionViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            authService: creatorAuth()
+        )
+        viewModel.load()
+
+        #expect(viewModel.isTripCreator == true)
+        #expect(viewModel.isTripContainerActive == true)
+        #expect(viewModel.canEndTrip == true)
+    }
+
+    @Test func canEndTripFalseForPassenger() async throws {
+        let sessionId = UUID()
+        let session = makeSession(id: sessionId)
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+
+        let viewModel = TripSessionViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            authService: creatorAuth(userId: "passenger")
+        )
+        viewModel.load()
+
+        #expect(viewModel.isTripCreator == false)
+        #expect(viewModel.canEndTrip == false)
+    }
+
+    @Test func endTripDelegatesToCanonicalLifecycle() async throws {
+        let sessionId = UUID()
+        let session = makeSession(id: sessionId)
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let lifecycle = MockTripSessionLifecycleService()
+
+        let viewModel = TripSessionViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: lifecycle,
+            authService: creatorAuth()
+        )
+        viewModel.load()
+
+        try viewModel.endTrip()
+
+        #expect(lifecycle.endTripCallCount == 1)
+        #expect(lifecycle.endTripSessionIds == [sessionId])
+    }
+
+    @Test func endTripThrowsForPassengerWithoutCallingLifecycle() async throws {
+        let sessionId = UUID()
+        let session = makeSession(id: sessionId)
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let lifecycle = MockTripSessionLifecycleService()
+
+        let viewModel = TripSessionViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: lifecycle,
+            authService: creatorAuth(userId: "passenger")
+        )
+        viewModel.load()
+
+        #expect(throws: TripSessionViewModelError.self) {
+            try viewModel.endTrip()
+        }
+        #expect(lifecycle.endTripCallCount == 0)
+    }
+
+    @Test func endTripPropagatesLifecycleFailure() async throws {
+        let sessionId = UUID()
+        let session = makeSession(id: sessionId)
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let lifecycle = MockTripSessionLifecycleService()
+        lifecycle.shouldThrow = true
+
+        let viewModel = TripSessionViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: lifecycle,
+            authService: creatorAuth()
+        )
+        viewModel.load()
+
+        var didThrow = false
+        do {
+            try viewModel.endTrip()
+        } catch {
+            didThrow = true
+        }
+        #expect(didThrow)
+        #expect(lifecycle.endTripCallCount == 0)
+    }
 }

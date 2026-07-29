@@ -24,6 +24,7 @@
 "Voice" = "Voz";
 "Found" = "Encontradas";
 "Remaining" = "Restantes";
+"Total" = "Total";
 "START" = "INICIAR";
 "END" = "TERMINAR";
 "ENDED" = "TERMINADO";
@@ -32,7 +33,14 @@
 "Only the Driver can start the trip" = "Solo el Conductor puede iniciar el viaje";
 "End Trip" = "Terminar Viaje";
 "Ends the trip and stops tracking" = "Termina el viaje y detiene el seguimiento";
+"Ends the trip and all open games" = "Termina el viaje y todos los juegos abiertos";
 "Only the Driver can end the trip" = "Solo el Conductor puede terminar el viaje";
+"Trip map" = "Mapa del viaje";
+"Shows plates found across all games on this trip" = "Muestra las placas encontradas en todos los juegos de este viaje";
+"Trip not started" = "Viaje no iniciado";
+"Trip ended" = "Viaje terminado";
+"Start the trip from trip settings before ending it" = "Inicia el viaje desde la configuración del viaje antes de terminarlo";
+"Start the trip from trip settings before starting this game" = "Inicia el viaje desde la configuración del viaje antes de empezar este juego";
 "Only the Driver can add a game" = "Solo el Conductor puede agregar un juego";
 "Only the Driver can add a game." = "Solo el Conductor puede agregar un juego.";
 "Only the Driver can start the game" = "Solo el Conductor puede iniciar el juego";

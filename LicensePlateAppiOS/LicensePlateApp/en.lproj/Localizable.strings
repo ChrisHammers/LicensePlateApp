@@ -24,6 +24,7 @@
 "Voice" = "Voice";
 "Found" = "Found";
 "Remaining" = "Remaining";
+"Total" = "Total";
 "START" = "START";
 "END" = "END";
 "ENDED" = "ENDED";
@@ -32,7 +33,14 @@
 "Only the Driver can start the trip" = "Only the Driver can start the trip";
 "End Trip" = "End Trip";
 "Ends the trip and stops tracking" = "Ends the trip and stops tracking";
+"Ends the trip and all open games" = "Ends the trip and all open games";
 "Only the Driver can end the trip" = "Only the Driver can end the trip";
+"Trip map" = "Trip map";
+"Shows plates found across all games on this trip" = "Shows plates found across all games on this trip";
+"Trip not started" = "Trip not started";
+"Trip ended" = "Trip ended";
+"Start the trip from trip settings before ending it" = "Start the trip from trip settings before ending it";
+"Start the trip from trip settings before starting this game" = "Start the trip from trip settings before starting this game";
 "Only the Driver can add a game" = "Only the Driver can add a game";
 "Only the Driver can add a game." = "Only the Driver can add a game.";
 "Only the Driver can start the game" = "Only the Driver can start the game";
