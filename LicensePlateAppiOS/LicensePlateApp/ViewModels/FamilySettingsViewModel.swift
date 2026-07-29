@@ -53,8 +53,13 @@ class FamilySettingsViewModel: ObservableObject {
     }
 
     var isCreator: Bool {
-        guard let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id,
-              let member = members.first(where: { $0.userId == userId }) else {
+        guard let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else {
+            return false
+        }
+        if let creatorId = family?.creatorId {
+            return creatorId == userId
+        }
+        guard let member = members.first(where: { $0.userId == userId }) else {
             return false
         }
         return member.roleEnum == .creator

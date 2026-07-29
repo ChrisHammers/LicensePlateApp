@@ -39,7 +39,7 @@ enum CombinedTripSetupError: LocalizedError {
         case .noCountriesSelected: return "Select at least one country.".localized
         case .noGameTypesSelected: return "Select at least one game.".localized
         case .sessionNotFound: return "Trip not found.".localized
-        case .notTripCreator: return "Only the trip creator can add a game.".localized
+        case .notTripCreator: return "Only the Driver can add a game.".localized
         case .tripTerminal: return "This trip can’t be changed anymore.".localized
         case .couldNotAddGame: return "Could not add game.".localized
         }

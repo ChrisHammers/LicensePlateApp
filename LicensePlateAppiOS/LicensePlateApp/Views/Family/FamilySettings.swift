@@ -75,7 +75,10 @@ struct FamilySettings: View {
                     // Members
                     Section("Members".localized) {
                         ForEach(viewModel.members) { member in
-                            FamilyMemberSettingsRow(member: member)
+                            FamilyMemberSettingsRow(
+                                member: member,
+                                familyCreatorId: viewModel.family?.creatorId
+                            )
                         }
                     }
                     .listRowBackground(Color.Theme.cardBackground)
@@ -180,7 +183,16 @@ struct FamilySettings: View {
 
 struct FamilyMemberSettingsRow: View {
     let member: FamilyMember
+    let familyCreatorId: String?
     @EnvironmentObject private var authService: FirebaseAuthService
+
+    private var rolePresentation: FamilyMemberRolePresentation {
+        FamilyMemberRolePresentation.make(
+            role: member.roleEnum,
+            memberUserId: member.userId,
+            familyCreatorId: familyCreatorId
+        )
+    }
 
     private var currentUserId: String? {
         authService.currentUser?.firebaseUID ?? authService.currentUser?.id
@@ -234,20 +246,24 @@ struct FamilyMemberSettingsRow: View {
                         .foregroundStyle(Color.Theme.softBrown)
                 }
 
-                Text(member.roleEnum.displayName)
+                Text(rolePresentation.roleText)
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
             }
 
             Spacer()
+
+            if rolePresentation.showsCreatorBadge {
+                FamilyCreatorBadge()
+            }
         }
     }
 
     private var settingsMemberAccessibilityLabel: String {
         if let user = member.user {
-            return "\(decoratedMemberName(for: user)), @\(user.userName), \(member.roleEnum.displayName)"
+            return "\(decoratedMemberName(for: user)), @\(user.userName), \(rolePresentation.accessibilityText)"
         }
-        return "\("Member".localized), \(member.roleEnum.displayName)"
+        return "\("Member".localized), \(rolePresentation.accessibilityText)"
     }
 }
 

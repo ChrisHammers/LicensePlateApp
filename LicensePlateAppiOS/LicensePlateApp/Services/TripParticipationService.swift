@@ -20,7 +20,7 @@ enum TripParticipationServiceError: Error, LocalizedError {
         case .notAParticipant:
             return "You are not a participant in this trip."
         case .tripOwnerCannotLeaveViaLeaveAction:
-            return "Trip owners should end or delete the trip instead of leaving."
+            return "Drivers should end or delete the trip instead of leaving.".localized
         case .sessionNotActiveForLeave:
             return "This trip cannot be left in its current state."
         }

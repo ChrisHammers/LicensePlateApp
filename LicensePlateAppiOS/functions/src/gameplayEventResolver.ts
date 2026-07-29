@@ -694,7 +694,7 @@ export async function resolveGameplayAppendTransaction(
       if (role === "owner") {
         throw new functions.https.HttpsError(
           "failed-precondition",
-          "Trip owner cannot leave via participant_left; end or cancel the trip instead"
+          "Driver cannot leave via participant_left; end or cancel the trip instead"
         );
       }
 
@@ -741,7 +741,7 @@ export async function runOwnerRemoveParticipantTransaction(
     }
     const ownerRole = (ownerSnap.data()?.role as string) || "member";
     if (ownerRole !== "owner") {
-      throw new functions.https.HttpsError("permission-denied", "Only the trip owner can remove participants");
+      throw new functions.https.HttpsError("permission-denied", "Only the Driver can remove participants");
     }
     const removedRef = ref.collection("members").doc(removedUserId);
     const removedSnap = await tx.get(removedRef);
@@ -750,7 +750,7 @@ export async function runOwnerRemoveParticipantTransaction(
     }
     const removedRole = (removedSnap.data()?.role as string) || "member";
     if (removedRole === "owner") {
-      throw new functions.https.HttpsError("failed-precondition", "Cannot remove trip owner");
+      throw new functions.https.HttpsError("failed-precondition", "Cannot remove Driver");
     }
     const sessionSnap = await tx.get(ref);
     if (!sessionSnap.exists) {

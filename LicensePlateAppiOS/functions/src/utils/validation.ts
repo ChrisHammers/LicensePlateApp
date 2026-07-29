@@ -47,7 +47,7 @@ export async function canAddMemberToFamily(
 
   // Check role-specific limits
   if (newRole === "captain" && counts.captains >= 2) {
-    return { canAdd: false, reason: "Maximum 2 captains allowed" };
+    return { canAdd: false, reason: "Maximum 2 Captains allowed" };
   }
 
   if (

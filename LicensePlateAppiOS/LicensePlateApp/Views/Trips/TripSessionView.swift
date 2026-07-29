@@ -70,7 +70,7 @@ struct TripSessionView: View {
                     showPassengerList = true
                 } label: {
                     HStack {
-                        Text("Passenger List".localized)
+                        Text("Driver & Passengers".localized)
                             .font(.system(.body, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                         Spacer()
@@ -292,7 +292,7 @@ private struct TripSessionLeaderboardSection: View {
     }
 
     private func displayName(for participantId: String) -> String {
-        let name = displayNames[participantId] ?? "Unknown player".localized
+        let name = displayNames[participantId] ?? "Unknown participant".localized
         return ParticipantDisplayName.decorated(
             name,
             userId: participantId,

@@ -61,7 +61,10 @@ struct FamilyDashboard: View {
                         // Members
                         Section("Members".localized) {
                             ForEach(viewModel.members) { member in
-                                FamilyMemberRow(member: member)
+                                FamilyMemberRow(
+                                    member: member,
+                                    familyCreatorId: family.creatorId
+                                )
                             }
                             
                             // Invite buttons for creators/captains
@@ -439,11 +442,20 @@ struct FamilyDashboard: View {
 
 struct FamilyMemberRow: View {
     let member: FamilyMember
+    let familyCreatorId: String?
     @EnvironmentObject private var authService: FirebaseAuthService
     @ObservedObject private var publicLifetimeStatsRepository = PublicLifetimeStatsRepository.shared
 
+    private var rolePresentation: FamilyMemberRolePresentation {
+        FamilyMemberRolePresentation.make(
+            role: member.roleEnum,
+            memberUserId: member.userId,
+            familyCreatorId: familyCreatorId
+        )
+    }
+
     private var memberSubtitle: String {
-        let role = member.roleEnum.displayName
+        let role = rolePresentation.roleText
         if let stats = publicLifetimeStatsRepository.snapshot(forUserId: member.userId) {
             return "\(role) · \("family.member.public_stats_line".localized(stats.totalCompletedTrips))"
         }
@@ -468,14 +480,19 @@ struct FamilyMemberRow: View {
                 user: user,
                 isSelfProfile: isSelf
             ) {
-                UserIdentityRowView(
-                    user: user,
-                    subtitle: memberSubtitle,
-                    avatarSize: 50,
-                    isCurrentUser: isSelf
-                )
+                HStack(spacing: 8) {
+                    UserIdentityRowView(
+                        user: user,
+                        subtitle: memberSubtitle,
+                        avatarSize: 50,
+                        isCurrentUser: isSelf
+                    )
+                    if rolePresentation.showsCreatorBadge {
+                        FamilyCreatorBadge()
+                    }
+                }
             }
-            .accessibilityLabel("\(decoratedName), @\(user.userName), \(memberSubtitle)")
+            .accessibilityLabel("\(decoratedName), @\(user.userName), \(rolePresentation.accessibilityText)\(publicStatsAccessibilitySuffix)")
             .task {
                 publicLifetimeStatsRepository.ensureObservingFriend(userId: member.userId)
             }
@@ -488,16 +505,26 @@ struct FamilyMemberRow: View {
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Theme.primaryBlue)
-                    Text(member.roleEnum.displayName)
+                    Text(rolePresentation.roleText)
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
                 }
                 Spacer()
+                if rolePresentation.showsCreatorBadge {
+                    FamilyCreatorBadge()
+                }
             }
             .padding(.vertical, 8)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\("Member".localized), \(member.roleEnum.displayName)")
+            .accessibilityLabel("\("Member".localized), \(rolePresentation.accessibilityText)")
         }
+    }
+
+    private var publicStatsAccessibilitySuffix: String {
+        guard let stats = publicLifetimeStatsRepository.snapshot(forUserId: member.userId) else {
+            return ""
+        }
+        return ", \("family.member.public_stats_line".localized(stats.totalCompletedTrips))"
     }
 }
 

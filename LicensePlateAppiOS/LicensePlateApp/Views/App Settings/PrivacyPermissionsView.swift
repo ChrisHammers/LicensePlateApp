@@ -171,14 +171,14 @@ struct PrivacyPermissionsView: View {
                             )
 
                             SettingToggleRow(
-                                title: "Plate found by opponent".localized,
-                                description: "Get notified when an opponent finds a plate".localized,
+                                title: "Plates found by opponents".localized,
+                                description: "Get notified when another Passenger finds a plate in a competitive game, unless they’re on your team.".localized,
                                 isOn: $notificationSettings.plateFoundByOpponent
                             )
 
                             SettingToggleRow(
-                                title: "Plate found by co-pilots".localized,
-                                description: "Get notified when a co-pilot finds a plate".localized,
+                                title: "Plates found by teammates".localized,
+                                description: "Get notified when another Passenger finds a plate in a collaborative game or on your team in a competitive game.".localized,
                                 isOn: $notificationSettings.plateFoundByCoPilots
                             )
 

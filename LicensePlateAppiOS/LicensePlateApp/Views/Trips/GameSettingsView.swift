@@ -180,7 +180,7 @@ struct GameSettingsView: View {
                 .disabled(!viewModel.isTripCreator)
                 .opacity(viewModel.isTripCreator ? 1.0 : 0.5)
                 .accessibilityLabel("Start Game".localized)
-                .accessibilityHint(viewModel.isTripCreator ? "Starts this game so you can mark plates".localized : "Only the trip creator can start the game".localized)
+                .accessibilityHint(viewModel.isTripCreator ? "Starts this game so you can mark plates".localized : "Only the Driver can start the game".localized)
 
                 Divider()
             } else if viewModel.game.commonConfig.lifecycleState == .started {
@@ -207,7 +207,7 @@ struct GameSettingsView: View {
                 .disabled(!viewModel.isTripCreator)
                 .opacity(viewModel.isTripCreator ? 1.0 : 0.5)
                 .accessibilityLabel("End Game".localized)
-                .accessibilityHint(viewModel.isTripCreator ? "Ends this game for this trip".localized : "Only the trip creator can end the game".localized)
+                .accessibilityHint(viewModel.isTripCreator ? "Ends this game for this trip".localized : "Only the Driver can end the game".localized)
 
                 Divider()
             } else {

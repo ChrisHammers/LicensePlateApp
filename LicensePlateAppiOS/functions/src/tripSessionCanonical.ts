@@ -136,7 +136,7 @@ async function assertTripOwner(sessionId: string, userId: string): Promise<void>
   if (role !== "owner") {
     throw new functions.https.HttpsError(
       "permission-denied",
-      "Only the trip owner can publish canonical state"
+      "Only the Driver can publish canonical state"
     );
   }
 }

@@ -15,7 +15,7 @@ struct InvitePlayersView: View {
 
     init(
         viewModel: InvitePlayersViewModel,
-        title: String = "Invite Players".localized,
+        title: String = "Invite Passengers".localized,
         onDoneSelection: ((Set<String>) -> Void)? = nil
     ) {
         _viewModel = StateObject(wrappedValue: viewModel)
@@ -118,7 +118,7 @@ struct InvitePlayersView: View {
     }
 }
 
-#Preview("Invite Players") {
+#Preview("Invite Passengers") {
     let auth = FirebaseAuthService()
     auth.currentUser = AppUser(id: "preview-user", userName: "Preview", firebaseUID: "preview-user")
     return InvitePlayersView(

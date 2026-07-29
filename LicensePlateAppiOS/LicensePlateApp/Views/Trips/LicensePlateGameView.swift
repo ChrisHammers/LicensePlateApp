@@ -946,7 +946,7 @@ struct LicensePlateGameView: View {
                 .opacity(viewModel.isTripCreator ? 1.0 : 0.5)
                 .frame(height: height > 0 ? height : nil)
                 .accessibilityLabel("Start Game".localized)
-                .accessibilityHint(viewModel.isTripCreator ? "Starts this game so you can mark plates".localized : "Only the trip creator can start the game".localized)
+                .accessibilityHint(viewModel.isTripCreator ? "Starts this game so you can mark plates".localized : "Only the Driver can start the game".localized)
                 .accessibilityAddTraits(.isButton)
             } else if viewModel.game.commonConfig.lifecycleState == .started {
                 Button {
@@ -976,7 +976,7 @@ struct LicensePlateGameView: View {
                 .opacity(viewModel.isTripCreator ? 1.0 : 0.5)
                 .frame(height: height > 0 ? height : nil)
                 .accessibilityLabel("End Game".localized)
-                .accessibilityHint(viewModel.isTripCreator ? "Ends this game for this trip".localized : "Only the trip creator can end the game".localized)
+                .accessibilityHint(viewModel.isTripCreator ? "Ends this game for this trip".localized : "Only the Driver can end the game".localized)
                 .accessibilityAddTraits(.isButton)
             } else {
                 VStack(spacing: 6) {

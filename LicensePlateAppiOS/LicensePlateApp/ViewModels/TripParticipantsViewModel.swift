@@ -86,7 +86,7 @@ final class TripParticipantsViewModel: ObservableObject {
                 PassengerDisplayRow(
                     userId: participant.userId,
                     displayName: displayNames[participant.userId] ?? unknown,
-                    roleLabel: participant.role == .owner ? "Creator".localized : "Passenger".localized,
+                    roleLabel: participant.role == .owner ? "Driver".localized : "Passenger".localized,
                     isCreator: participant.role == .owner
                 )
             }.sorted { lhs, rhs in

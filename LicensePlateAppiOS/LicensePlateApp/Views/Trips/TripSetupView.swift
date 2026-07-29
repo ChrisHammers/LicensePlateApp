@@ -74,7 +74,7 @@ struct TripSetupView: View {
                     selectedUserIds: viewModel.selectedPassengerIds,
                     authService: authService
                 ),
-                title: "Passenger List".localized
+                title: "Invite Passengers".localized
             ) { selected in
                 viewModel.selectedPassengerIds = selected
             }
@@ -118,7 +118,7 @@ struct TripSetupView: View {
     private var tripParticipationSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Passenger List".localized)
+                Text("Invite Passengers".localized)
                     .font(.system(.headline, design: .rounded))
                     .foregroundStyle(Color.Theme.primaryBlue)
 
@@ -133,7 +133,7 @@ struct TripSetupView: View {
                     isShowingPassengerSelector = true
                 } label: {
                     HStack {
-                        Label("Passenger List".localized, systemImage: "person.2.fill")
+                        Label("Invite Passengers".localized, systemImage: "person.2.fill")
                             .font(.system(.subheadline, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                         Spacer()
@@ -149,7 +149,7 @@ struct TripSetupView: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Passenger List".localized)
+                .accessibilityLabel("Invite Passengers".localized)
                 .accessibilityHint("Select friends or family to invite after trip creation".localized)
             }
             .padding(.horizontal, 16)

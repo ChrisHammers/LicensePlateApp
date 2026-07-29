@@ -57,6 +57,8 @@ struct TripParticipantsViewModelTests {
         #expect(vm.tripName == "Road Trip")
         #expect(vm.passengers.count == 2)
         #expect(vm.passengers.first?.isCreator == true)
+        #expect(vm.passengers.first?.roleLabel == "Driver".localized)
+        #expect(vm.passengers.last?.roleLabel == "Passenger".localized)
         #expect(vm.pendingInviteRows.count == 1)
         #expect(vm.pendingInviteRows.first?.inviteeDisplayName == "name-pending-user")
     }

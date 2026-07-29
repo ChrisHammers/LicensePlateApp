@@ -28,7 +28,7 @@ struct TripParticipantsView: View {
                             .listRowBackground(Color.Theme.cardBackground)
                     }
 
-                    Section("Passengers".localized) {
+                    Section("Driver & Passengers".localized) {
                         ForEach(viewModel.passengers) { passenger in
                             PassengerListRow(passenger: passenger)
                         }
@@ -60,14 +60,14 @@ struct TripParticipantsView: View {
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
             }
-            .navigationTitle("Passenger List".localized)
+            .navigationTitle("Driver & Passengers".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close".localized) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Invite Players".localized) {
+                    Button("Invite Passengers".localized) {
                         isShowingInviteSheet = true
                     }
                 }
@@ -80,7 +80,7 @@ struct TripParticipantsView: View {
                         tripName: viewModel.tripName,
                         authService: authService
                     ),
-                    title: "Invite Players".localized
+                    title: "Invite Passengers".localized
                 ) { _ in
                     Task { await viewModel.reload() }
                 }
@@ -146,7 +146,7 @@ private struct PassengerListRow: View {
             }
             Spacer()
             if passenger.isCreator {
-                Text("Creator".localized)
+                Text("Driver".localized)
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(.green)
             }
@@ -156,7 +156,7 @@ private struct PassengerListRow: View {
     private var accessibilityLabelText: String {
         var parts = [decoratedDisplayName, passenger.roleLabel]
         if passenger.isCreator {
-            parts.append("Creator".localized)
+            parts.append("Driver".localized)
         }
         return parts.joined(separator: ", ")
     }
@@ -170,7 +170,7 @@ private struct PassengerListRow: View {
     }
 }
 
-#Preview("Passenger List") {
+#Preview("Driver & Passengers") {
     let auth = FirebaseAuthService()
     auth.currentUser = AppUser(id: "preview-user", userName: "Preview", firebaseUID: "preview-user")
     return TripParticipantsView(sessionId: UUID())

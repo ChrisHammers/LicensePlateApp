@@ -32,8 +32,7 @@ final class FamilyMember {
         
         var displayName: String {
             switch self {
-            case .creator: return "Creator".localized
-            case .captain: return "Captain".localized
+            case .creator, .captain: return "Captain".localized
             case .sergeant: return "Sergeant".localized
             case .scout: return "Scout".localized
             case .retiredGeneral: return "Retired General".localized

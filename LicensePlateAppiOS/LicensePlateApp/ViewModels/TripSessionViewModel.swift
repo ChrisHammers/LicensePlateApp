@@ -63,7 +63,7 @@ final class TripSessionViewModel: ObservableObject {
 
     var addGameAccessibilityHint: String {
         if !isTripCreator {
-            return "Only the trip creator can add a game".localized
+            return "Only the Driver can add a game".localized
         }
         if let session, session.status == .ended || session.status == .cancelled {
             return "This trip can't be changed anymore.".localized

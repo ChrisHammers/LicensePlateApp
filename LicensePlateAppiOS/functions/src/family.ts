@@ -138,7 +138,7 @@ export const sendFamilyInvite = enforcedCallable(
     if (memberRole !== "creator" && memberRole !== "captain") {
       throw new functions.https.HttpsError(
         "permission-denied",
-        "Only creators and captains can invite"
+        "Only Captains can invite"
       );
     }
 
@@ -461,7 +461,7 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
     if (memberRole !== "creator" && memberRole !== "captain") {
       throw new functions.https.HttpsError(
         "permission-denied",
-        "Only creators and captains can approve requests"
+        "Only Captains can approve requests"
       );
     }
 
@@ -662,12 +662,12 @@ export const removeFamilyMember = enforcedCallable(
     } else if (memberRole === "captain" && targetMemberRole === "captain") {
       throw new functions.https.HttpsError(
         "permission-denied",
-        "Captains cannot remove other captains"
+        "Captains cannot remove other Captains"
       );
     } else if (memberRole !== "captain") {
       throw new functions.https.HttpsError(
         "permission-denied",
-        "Only creators and captains can remove members"
+        "Only Captains can remove members"
       );
     }
 
@@ -737,7 +737,7 @@ export const changeFamilyMemberRole = enforcedCallable(
     if (memberRole !== "creator" && memberRole !== "captain") {
       throw new functions.https.HttpsError(
         "permission-denied",
-        "Only creators and captains can change roles"
+        "Only Captains can change roles"
       );
     }
 
@@ -766,7 +766,7 @@ export const changeFamilyMemberRole = enforcedCallable(
     if (currentRole === "creator" || currentRole === "captain") {
       throw new functions.https.HttpsError(
         "permission-denied",
-        "Cannot change creator or captain roles"
+        "Cannot change Captain roles"
       );
     }
 
@@ -817,7 +817,7 @@ export const inactivateFamily = enforcedCallable(
     if (familyData.creatorId !== userId) {
       throw new functions.https.HttpsError(
         "permission-denied",
-        "Only the creator can inactivate the family"
+        "Only the Captain who created the family can delete it"
       );
     }
 
