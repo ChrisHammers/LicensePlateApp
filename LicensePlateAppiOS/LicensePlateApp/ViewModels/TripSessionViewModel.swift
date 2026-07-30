@@ -130,6 +130,7 @@ final class TripSessionViewModel: ObservableObject {
         self.routeTrackingService = routeTrackingService
         self.participantPrefsStore = participantPrefsStore
         self.appPrefsStore = appPrefsStore
+        self.session = try? tripSessionRepository.session(byId: sessionId)
 
         TripCanonicalRemoteSyncService.shared.hydrationSignal
             .filter { [weak self] hydratedId in

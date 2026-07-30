@@ -74,6 +74,8 @@ struct TripSessionViewModelTests {
             authService: creatorAuth()
         )
 
+        #expect(viewModel.session?.name == "My Trip")
+
         viewModel.load()
 
         #expect(viewModel.session != nil)
