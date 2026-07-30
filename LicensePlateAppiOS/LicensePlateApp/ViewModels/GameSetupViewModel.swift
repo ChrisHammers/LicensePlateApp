@@ -23,8 +23,11 @@ final class GameSetupViewModel: ObservableObject {
 
     @Published private(set) var errorMessage: String?
     @Published private(set) var isSubmitting: Bool = false
+    @Published private(set) var isSendingInvites: Bool = false
     @Published private(set) var shouldPresentTripLimitPaywall = false
     @Published private(set) var selectableGameTypes: [GameType] = GameType.availableTypes
+    /// Set when trip creation succeeded but one or more setup invites failed.
+    @Published var showInvitePartialFailureAlert = false
 
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
@@ -36,6 +39,15 @@ final class GameSetupViewModel: ObservableObject {
     private let newTripDefaultsStore: NewTripDefaultsStoring
 
     var primaryActionTitle: String {
+        if isSubmitting {
+            if isSendingInvites {
+                return "Sending invites...".localized
+            }
+            switch context {
+            case .newTrip: return "Creating...".localized
+            case .addToExistingTrip: return "Adding...".localized
+            }
+        }
         switch context {
         case .newTrip: return "Create".localized
         case .addToExistingTrip: return "Add Game".localized
@@ -139,6 +151,10 @@ final class GameSetupViewModel: ObservableObject {
         errorMessage = nil
     }
 
+    func dismissInvitePartialFailureAlert() {
+        showInvitePartialFailureAlert = false
+    }
+
     func dismissTripLimitPaywall() {
         shouldPresentTripLimitPaywall = false
     }
@@ -147,15 +163,23 @@ final class GameSetupViewModel: ObservableObject {
         errorMessage = message
     }
 
+    func beginSubmitting() {
+        isSubmitting = true
+        isSendingInvites = false
+        errorMessage = nil
+        shouldPresentTripLimitPaywall = false
+        showInvitePartialFailureAlert = false
+    }
+
+    func endSubmitting() {
+        isSubmitting = false
+        isSendingInvites = false
+    }
+
     func createTrip() throws -> TripSession {
         guard case .newTrip(let draft) = context else {
             throw CombinedTripSetupError.couldNotAddGame
         }
-
-        errorMessage = nil
-        shouldPresentTripLimitPaywall = false
-        isSubmitting = true
-        defer { isSubmitting = false }
 
         let types = Array(selectedGameTypes.filter { $0.isAvailable })
         guard !types.isEmpty else {
@@ -300,11 +324,17 @@ final class GameSetupViewModel: ObservableObject {
         }
     }
 
-    func sendSetupInvites(for session: TripSession) async {
-        guard case .newTrip(let draft) = context else { return }
-        guard !draft.selectedPassengerIds.isEmpty else { return }
-        guard let fromUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else { return }
+    /// Sends deferred setup invites. Returns the number of failed sends. Does not roll back the trip.
+    @discardableResult
+    func sendSetupInvites(for session: TripSession) async -> Int {
+        guard case .newTrip(let draft) = context else { return 0 }
+        guard !draft.selectedPassengerIds.isEmpty else { return 0 }
+        guard let fromUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else { return 0 }
 
+        isSendingInvites = true
+        defer { isSendingInvites = false }
+
+        var failureCount = 0
         for toUserId in draft.selectedPassengerIds {
             do {
                 _ = try await tripInviteRepository.sendTripInvite(
@@ -315,12 +345,14 @@ final class GameSetupViewModel: ObservableObject {
                     expiresAt: nil
                 )
             } catch {
+                failureCount += 1
                 AnalyticsService.shared.log(.tripInviteSendFailed(
                     tripSessionId: session.id.uuidString,
                     error: error.localizedDescription
                 ))
             }
         }
+        return failureCount
     }
 
     private func loadAddGameContext() {

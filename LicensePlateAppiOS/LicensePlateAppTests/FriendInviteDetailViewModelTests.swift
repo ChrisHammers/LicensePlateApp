@@ -14,5 +14,7 @@ struct FriendInviteDetailViewModelTests {
         #expect(vm.inviteId == "invite-123")
         #expect(!vm.hasAccepted)
         #expect(vm.user == nil)
+        #expect(vm.processingAction == nil)
+        #expect(!vm.isProcessing)
     }
 }

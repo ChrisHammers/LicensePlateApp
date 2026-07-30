@@ -73,6 +73,7 @@ struct JoinFamilySheet: View {
                 }
                 .formStyle(.grouped)
                 .scrollContentBackground(.hidden)
+                .disabled(viewModel.isJoining)
             }
             .navigationTitle("Join Family".localized)
             .navigationBarTitleDisplayMode(.inline)
@@ -83,15 +84,27 @@ struct JoinFamilySheet: View {
                     }
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(Color.Theme.primaryBlue)
+                    .disabled(viewModel.isJoining)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Join".localized) {
+                    Button {
                         viewModel.joinWithCode()
+                    } label: {
+                        InviteActionLabel(
+                            title: "Join".localized,
+                            isBusy: viewModel.isJoining,
+                            busyKind: .join
+                        )
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
                     }
-                    .font(.system(.body, design: .rounded))
-                    .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
                     .disabled(viewModel.shareCode.isEmpty || viewModel.isJoining || !authService.isOnline)
+                    .accessibleButton(
+                        label: viewModel.isJoining
+                            ? InviteBusyKind.join.localizedBusyTitle
+                            : "Join".localized
+                    )
                 }
             }
             .alert("Error".localized, isPresented: $viewModel.showError) {

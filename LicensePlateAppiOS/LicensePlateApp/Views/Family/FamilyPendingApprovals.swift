@@ -33,6 +33,9 @@ struct FamilyPendingApprovals: View {
                         ForEach(viewModel.pendingRequests) { request in
                             PendingApprovalRow(
                                 request: request,
+                                isApproveBusy: viewModel.isBusy(requestId: request.requestId, kind: .approve),
+                                isDeclineBusy: viewModel.isBusy(requestId: request.requestId, kind: .decline),
+                                isDisabled: viewModel.isRowDisabled(requestId: request.requestId),
                                 onApprove: {
                                     await viewModel.approve(request: request)
                                 },
@@ -74,11 +77,12 @@ struct FamilyPendingApprovals: View {
 
 struct PendingApprovalRow: View {
     let request: PendingJoinRequest
+    let isApproveBusy: Bool
+    let isDeclineBusy: Bool
+    let isDisabled: Bool
     let onApprove: () async -> Bool
     let onDecline: () async -> Bool
     @State private var resolvedUser: AppUser?
-    @State private var isProcessing = false
-    @State private var hasProcessed = false
 
     private var displayUser: AppUser? {
         request.user ?? resolvedUser
@@ -101,38 +105,46 @@ struct PendingApprovalRow: View {
             HStack(spacing: 12) {
                 Button {
                     Task {
-                        guard !isProcessing && !hasProcessed else { return }
-                        isProcessing = true
-                        let ok = await onApprove()
-                        isProcessing = false
-                        if ok { hasProcessed = true }
+                        guard !isDisabled else { return }
+                        _ = await onApprove()
                     }
                 } label: {
-                    Text("Approve".localized)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
+                    InviteActionLabel(
+                        title: "Approve".localized,
+                        isBusy: isApproveBusy,
+                        busyKind: .approve
+                    )
+                    .fixedSize(horizontal: true, vertical: false)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(Color.Theme.primaryBlue)
-                .disabled(isProcessing || hasProcessed)
-                .accessibleButton(label: "family.a11y.approve_join".localized)
+                .disabled(isDisabled)
+                .accessibleButton(
+                    label: isApproveBusy
+                        ? InviteBusyKind.approve.localizedBusyTitle
+                        : "family.a11y.approve_join".localized
+                )
 
                 Button {
                     Task {
-                        guard !isProcessing && !hasProcessed else { return }
-                        isProcessing = true
-                        let ok = await onDecline()
-                        isProcessing = false
-                        if ok { hasProcessed = true }
+                        guard !isDisabled else { return }
+                        _ = await onDecline()
                     }
                 } label: {
-                    Text("Decline".localized)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
+                    InviteActionLabel(
+                        title: "Decline".localized,
+                        isBusy: isDeclineBusy,
+                        busyKind: .decline
+                    )
+                    .fixedSize(horizontal: true, vertical: false)
                 }
                 .buttonStyle(.bordered)
-                .disabled(isProcessing || hasProcessed)
-                .accessibleButton(label: "family.a11y.decline_join".localized)
+                .disabled(isDisabled)
+                .accessibleButton(
+                    label: isDeclineBusy
+                        ? InviteBusyKind.decline.localizedBusyTitle
+                        : "family.a11y.decline_join".localized
+                )
             }
             .layoutPriority(1)
         }

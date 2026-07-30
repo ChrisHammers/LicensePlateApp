@@ -301,4 +301,75 @@ struct PendingTripsViewModelTests {
         #expect(snapshot.gamesOnTripLine == "%d games".localized(2))
         #expect(snapshot.counterpartyLine.contains("Friend Name"))
     }
+
+    @Test func declineInviteFailureSetsErrorAndClearsBusyState() async throws {
+        let mock = MockTripInviteRepository()
+        let userId = "test-user"
+        let invite = TripInvite(
+            inviteId: UUID().uuidString,
+            tripSessionId: UUID().uuidString,
+            tripName: "Decline Fail",
+            fromUserId: "other",
+            toUserId: userId,
+            status: .pending,
+            createdAt: Date(),
+            expiresAt: Date().addingTimeInterval(86400)
+        )
+        mock.seed(invite)
+
+        let viewModel = PendingTripsViewModel(
+            tripInviteRepository: mock,
+            authService: auth(for: userId),
+            gameInstanceRepository: MockGameInstanceRepository(),
+            resolveInviteDisplayNames: { _ in [:] }
+        )
+        viewModel.loadInvites(userId: userId)
+        let pending = try #require(viewModel.incomingInvites.first)
+
+        mock.shouldThrow = true
+        viewModel.decline(invite: pending)
+        try await Task.sleep(nanoseconds: 150_000_000)
+
+        #expect(viewModel.errorMessage != nil)
+        #expect(viewModel.busyInviteId == nil)
+        #expect(viewModel.busyKind == nil)
+        #expect(!viewModel.isProcessingInvite)
+
+        mock.shouldThrow = false
+        viewModel.loadInvites(userId: userId)
+        #expect(viewModel.incomingInvites.count == 1)
+    }
+
+    @Test func cancelInviteFailureSetsErrorAndClearsBusyState() async throws {
+        let mock = MockTripInviteRepository()
+        let userId = "test-user"
+        let invite = TripInvite(
+            inviteId: UUID().uuidString,
+            tripSessionId: UUID().uuidString,
+            tripName: "Cancel Fail",
+            fromUserId: userId,
+            toUserId: "other",
+            status: .pending,
+            createdAt: Date(),
+            expiresAt: Date().addingTimeInterval(86400)
+        )
+        mock.seed(invite)
+
+        let viewModel = PendingTripsViewModel(
+            tripInviteRepository: mock,
+            authService: auth(for: userId),
+            gameInstanceRepository: MockGameInstanceRepository(),
+            resolveInviteDisplayNames: { _ in [:] }
+        )
+        viewModel.loadInvites(userId: userId)
+        let pending = try #require(viewModel.outgoingInvites.first)
+
+        mock.shouldThrow = true
+        viewModel.cancel(invite: pending)
+        try await Task.sleep(nanoseconds: 150_000_000)
+
+        #expect(viewModel.errorMessage != nil)
+        #expect(viewModel.busyInviteId == nil)
+        #expect(viewModel.busyKind == nil)
+    }
 }

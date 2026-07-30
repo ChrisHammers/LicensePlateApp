@@ -11,11 +11,13 @@ import Combine
 final class FriendInviteDetailViewModel: ObservableObject {
     let inviteId: String
 
-    @Published var isProcessing = false
+    @Published private(set) var processingAction: InviteBusyKind?
     @Published var hasAccepted = false
     @Published var errorMessage: String?
     @Published var user: AppUser?
     @Published var isLoadingUser = true
+
+    var isProcessing: Bool { processingAction != nil }
 
     private var authService: FirebaseAuthService?
     private var modelContext: ModelContext?
@@ -88,16 +90,18 @@ final class FriendInviteDetailViewModel: ObservableObject {
 
     func respondToInvite(accept: Bool, onDeclineDismiss: @escaping () -> Void) {
         guard let authService = authService else { return }
+        guard processingAction == nil else { return }
 
         guard authService.isOnline else {
             errorMessage = "Requires network connection".localized
             return
         }
 
-        isProcessing = true
+        processingAction = accept ? .accept : .decline
         errorMessage = nil
 
         Task { @MainActor in
+            defer { processingAction = nil }
             do {
                 try await friendshipRepository.respondToFriendInvite(inviteId: inviteId, accept: accept)
 
@@ -105,7 +109,6 @@ final class FriendInviteDetailViewModel: ObservableObject {
                     await inviteRepository.refreshInvite(inviteId: inviteId, userId: userId)
                 }
 
-                isProcessing = false
                 if accept {
                     hasAccepted = true
                     AnalyticsService.shared.log(.friendRequestAccepted)
@@ -114,11 +117,7 @@ final class FriendInviteDetailViewModel: ObservableObject {
                     onDeclineDismiss()
                 }
             } catch {
-                isProcessing = false
                 errorMessage = error.localizedDescription
-                if !accept {
-                    onDeclineDismiss()
-                }
             }
         }
     }

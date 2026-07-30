@@ -32,6 +32,7 @@ struct InvitePlayersViewModelTests {
         let success = await vm.sendSelectedInvites()
         #expect(success)
         #expect(vm.errorMessage == nil)
+        #expect(!vm.isSubmitting)
     }
 
     @Test func sendSelectedInvitesFailureSetsError() async {
@@ -50,5 +51,6 @@ struct InvitePlayersViewModelTests {
         let success = await vm.sendSelectedInvites()
         #expect(!success)
         #expect(vm.errorMessage != nil)
+        #expect(!vm.isSubmitting)
     }
 }

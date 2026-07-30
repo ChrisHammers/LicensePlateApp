@@ -53,41 +53,50 @@ struct FamilyInviteDetail: View {
                             Button {
                                 viewModel.respondToInvite(accept: true, onDeclineDismiss: { })
                             } label: {
-                                Text("Accept".localized)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(Color.Theme.primaryBlue)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(12)
+                                InviteActionLabel(
+                                    title: "Accept".localized,
+                                    isBusy: viewModel.processingAction == .accept,
+                                    busyKind: .accept
+                                )
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.Theme.primaryBlue)
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
                             }
                             .disabled(viewModel.isProcessing || !authService.isOnline)
-                            .accessibleButton(label: "family.a11y.accept_invite".localized)
+                            .accessibleButton(
+                                label: viewModel.processingAction == .accept
+                                    ? InviteBusyKind.accept.localizedBusyTitle
+                                    : "family.a11y.accept_invite".localized
+                            )
                             
                             Button {
                                 viewModel.respondToInvite(accept: false, onDeclineDismiss: { dismiss() })
                             } label: {
-                                Text("Decline".localized)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(Color.Theme.cardBackground)
-                                    .foregroundColor(Color.Theme.primaryBlue)
-                                    .cornerRadius(12)
+                                InviteActionLabel(
+                                    title: "Decline".localized,
+                                    isBusy: viewModel.processingAction == .decline,
+                                    busyKind: .decline
+                                )
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.Theme.cardBackground)
+                                .foregroundColor(Color.Theme.primaryBlue)
+                                .cornerRadius(12)
                             }
                             .disabled(viewModel.isProcessing || !authService.isOnline)
-                            .accessibleButton(label: "family.a11y.decline_invite".localized)
+                            .accessibleButton(
+                                label: viewModel.processingAction == .decline
+                                    ? InviteBusyKind.decline.localizedBusyTitle
+                                    : "family.a11y.decline_invite".localized
+                            )
                         }
                     
                         if !authService.isOnline {
                             Text("Requires network connection".localized)
                                 .font(.system(.caption, design: .rounded))
                                 .foregroundStyle(Color.Theme.softBrown)
-                        }
-                    
-                        if let error = viewModel.errorMessage {
-                            Text(error)
-                                .font(.system(.caption, design: .rounded))
-                                .foregroundStyle(.red)
-                                .padding(.top, 8)
                         }
                     }
                     .padding()

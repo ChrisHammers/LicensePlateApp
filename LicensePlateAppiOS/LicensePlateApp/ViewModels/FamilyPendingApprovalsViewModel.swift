@@ -14,6 +14,11 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
     @Published var pendingRequests: [PendingJoinRequest] = []
     @Published var errorMessage: String?
     @Published var showError = false
+    @Published private(set) var busyRequestId: String?
+    @Published private(set) var busyKind: InviteBusyKind?
+    @Published private(set) var processedRequestIds: Set<String> = []
+
+    var isProcessing: Bool { busyRequestId != nil }
 
     private var authService: FirebaseAuthService?
     private var pendingObservation: AnyCancellable?
@@ -22,6 +27,14 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
     init(familyId: String, familyRepository: FamilyRepository = .shared) {
         self.familyId = familyId
         self.familyRepository = familyRepository
+    }
+
+    func isBusy(requestId: String, kind: InviteBusyKind) -> Bool {
+        busyRequestId == requestId && busyKind == kind
+    }
+
+    func isRowDisabled(requestId: String) -> Bool {
+        processedRequestIds.contains(requestId) || busyRequestId == requestId
     }
 
     func configure(authService: FirebaseAuthService, modelContext: ModelContext) {
@@ -58,10 +71,20 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
     }
 
     private func respond(to request: PendingJoinRequest, approve: Bool) async -> Bool {
+        guard busyRequestId == nil else { return false }
+        guard !processedRequestIds.contains(request.requestId) else { return false }
+
         guard let authService, authService.isOnline else {
             errorMessage = "Requires network connection".localized
             showError = true
             return false
+        }
+
+        busyRequestId = request.requestId
+        busyKind = approve ? .approve : .decline
+        defer {
+            busyRequestId = nil
+            busyKind = nil
         }
 
         do {
@@ -75,6 +98,7 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
             } else {
                 AnalyticsService.shared.log(.familyJoinRequestDeclined)
             }
+            processedRequestIds.insert(request.requestId)
             await refreshPendingRequests()
             return true
         } catch {

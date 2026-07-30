@@ -77,28 +77,44 @@ struct FriendInviteDetail: View {
                         Button {
                             viewModel.respondToInvite(accept: true, onDeclineDismiss: { dismiss() })
                         } label: {
-                            Text("Accept".localized)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.Theme.primaryBlue)
-                                .foregroundColor(.white)
-                                .cornerRadius(12)
+                            InviteActionLabel(
+                                title: "Accept".localized,
+                                isBusy: viewModel.processingAction == .accept,
+                                busyKind: .accept
+                            )
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.Theme.primaryBlue)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
                         }
                         .disabled(viewModel.isProcessing || !authService.isOnline)
-                        .accessibilityLabel("Accept friend request".localized)
+                        .accessibleButton(
+                            label: viewModel.processingAction == .accept
+                                ? InviteBusyKind.accept.localizedBusyTitle
+                                : "Accept friend request".localized
+                        )
 
                         Button {
                             viewModel.respondToInvite(accept: false, onDeclineDismiss: { dismiss() })
                         } label: {
-                            Text("Decline".localized)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.Theme.cardBackground)
-                                .foregroundColor(Color.Theme.primaryBlue)
-                                .cornerRadius(12)
+                            InviteActionLabel(
+                                title: "Decline".localized,
+                                isBusy: viewModel.processingAction == .decline,
+                                busyKind: .decline
+                            )
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.Theme.cardBackground)
+                            .foregroundColor(Color.Theme.primaryBlue)
+                            .cornerRadius(12)
                         }
                         .disabled(viewModel.isProcessing || !authService.isOnline)
-                        .accessibilityLabel("Decline friend request".localized)
+                        .accessibleButton(
+                            label: viewModel.processingAction == .decline
+                                ? InviteBusyKind.decline.localizedBusyTitle
+                                : "Decline friend request".localized
+                        )
                     }
 
                     if !authService.isOnline {

@@ -31,6 +31,7 @@ struct InvitePlayersView: View {
                         ProgressView()
                             .frame(maxWidth: .infinity)
                             .listRowBackground(Color.clear)
+                            .accessibilityLabel("Loading".localized)
                     } else if viewModel.candidates.isEmpty {
                         Text("No eligible friends or family to invite yet.".localized)
                             .font(.system(.body, design: .rounded))
@@ -67,7 +68,7 @@ struct InvitePlayersView: View {
                                 }
                             }
                             .buttonStyle(.plain)
-                            .disabled(!candidate.isSelectable)
+                            .disabled(!candidate.isSelectable || viewModel.isSubmitting)
                             .opacity(candidate.isSelectable ? 1.0 : 0.65)
                             .listRowBackground(Color.Theme.cardBackground)
                             .accessibilityLabel(candidate.displayName)
@@ -84,9 +85,10 @@ struct InvitePlayersView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel".localized) { dismiss() }
+                        .disabled(viewModel.isSubmitting)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(viewModel.mode == .sendInvites ? "Send".localized : "Done".localized) {
+                    Button {
                         Task { @MainActor in
                             if viewModel.mode == .sendInvites {
                                 let success = await viewModel.sendSelectedInvites()
@@ -99,8 +101,25 @@ struct InvitePlayersView: View {
                                 dismiss()
                             }
                         }
+                    } label: {
+                        if viewModel.mode == .sendInvites {
+                            InviteActionLabel(
+                                title: "Send".localized,
+                                isBusy: viewModel.isSubmitting,
+                                busyKind: .send
+                            )
+                        } else {
+                            Text("Done".localized)
+                        }
                     }
                     .disabled(viewModel.selectedUserIds.isEmpty || viewModel.isSubmitting)
+                    .accessibleButton(
+                        label: viewModel.mode == .sendInvites
+                            ? (viewModel.isSubmitting
+                                ? InviteBusyKind.send.localizedBusyTitle
+                                : "Send".localized)
+                            : "Done".localized
+                    )
                 }
             }
             .task {

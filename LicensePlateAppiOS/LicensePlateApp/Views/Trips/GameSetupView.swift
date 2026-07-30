@@ -12,6 +12,7 @@ struct GameSetupView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: GameSetupViewModel
     @StateObject private var tripLimitPaywallViewModel = PaywallViewModel()
+    @State private var pendingCreatedSession: TripSession?
 
     var onCreated: ((TripSession) -> Void)?
     var onAdded: (() -> Void)?
@@ -60,12 +61,19 @@ struct GameSetupView: View {
                         dismiss()
                     }
                     .foregroundStyle(Color.Theme.primaryBlue)
+                    .disabled(viewModel.isSubmitting)
                     .accessibilityLabel("Cancel".localized)
                 }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button(viewModel.primaryActionTitle) {
+                Button {
                     primaryActionTapped()
+                } label: {
+                    InviteActionLabel(
+                        title: viewModel.primaryActionTitle,
+                        isBusy: viewModel.isSubmitting,
+                        busyTitle: viewModel.primaryActionTitle
+                    )
                 }
                 .fontWeight(.semibold)
                 .foregroundStyle(!viewModel.canConfirm || viewModel.isSubmitting ? .secondary : Color.Theme.primaryBlue)
@@ -83,6 +91,16 @@ struct GameSetupView: View {
             if let msg = viewModel.errorMessage {
                 Text(msg)
             }
+        }
+        .alert("Some invites failed".localized, isPresented: $viewModel.showInvitePartialFailureAlert) {
+            Button("OK".localized) {
+                viewModel.dismissInvitePartialFailureAlert()
+                if let session = pendingCreatedSession {
+                    finishCreatedTrip(session)
+                }
+            }
+        } message: {
+            Text("Some trip invites could not be sent. Your trip was created successfully.".localized)
         }
         .sheet(isPresented: Binding(
             get: { viewModel.shouldPresentTripLimitPaywall },
@@ -202,25 +220,31 @@ struct GameSetupView: View {
 
         switch viewModel.context {
         case .newTrip:
-            do {
-                let session = try viewModel.createTrip()
-                Task {
-                    await viewModel.sendSetupInvites(for: session)
+            guard !viewModel.isSubmitting else { return }
+            viewModel.beginSubmitting()
+            Task { @MainActor in
+                defer { viewModel.endSubmitting() }
+                do {
+                    let session = try viewModel.createTrip()
+                    let inviteFailures = await viewModel.sendSetupInvites(for: session)
                     await viewModel.publishCanonicalToRemote(session: session)
-                }
-                FeedbackService.shared.actionSuccess()
-                onCreated?(session)
-                if onCreated == nil {
-                    dismiss()
-                }
-            } catch {
-                if error is TripEntitlementGateError {
-                    tripLimitPaywallViewModel.setTripLimitContext()
+                    if inviteFailures > 0 {
+                        pendingCreatedSession = session
+                        viewModel.showInvitePartialFailureAlert = true
+                        FeedbackService.shared.actionError()
+                        return
+                    }
+                    FeedbackService.shared.actionSuccess()
+                    finishCreatedTrip(session)
+                } catch {
+                    if error is TripEntitlementGateError {
+                        tripLimitPaywallViewModel.setTripLimitContext()
+                        FeedbackService.shared.actionError()
+                        return
+                    }
+                    viewModel.setError(error.localizedDescription)
                     FeedbackService.shared.actionError()
-                    return
                 }
-                viewModel.setError(error.localizedDescription)
-                FeedbackService.shared.actionError()
             }
 
         case .addToExistingTrip:
@@ -237,6 +261,14 @@ struct GameSetupView: View {
                 viewModel.setError(error.localizedDescription)
                 FeedbackService.shared.actionError()
             }
+        }
+    }
+
+    private func finishCreatedTrip(_ session: TripSession) {
+        pendingCreatedSession = nil
+        onCreated?(session)
+        if onCreated == nil {
+            dismiss()
         }
     }
 }

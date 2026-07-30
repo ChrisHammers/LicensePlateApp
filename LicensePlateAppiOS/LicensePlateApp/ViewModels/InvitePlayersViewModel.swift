@@ -130,6 +130,7 @@ final class InvitePlayersViewModel: ObservableObject {
     }
 
     func toggleSelection(userId: String) {
+        guard !isSubmitting else { return }
         guard let candidate = candidates.first(where: { $0.userId == userId }), candidate.isSelectable else { return }
         if selectedUserIds.contains(userId) {
             selectedUserIds.remove(userId)

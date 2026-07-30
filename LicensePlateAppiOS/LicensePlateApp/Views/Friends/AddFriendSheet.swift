@@ -134,13 +134,24 @@ struct UserSearchResultRow: View {
                 }
             }
 
-            Button("Add".localized) {
+            let isSendingThisUser = viewModel.invitingUserId == (user.firebaseUID ?? user.id)
+            Button {
                 viewModel.sendInvite(to: result)
+            } label: {
+                InviteActionLabel(
+                    title: "Add".localized,
+                    isBusy: isSendingThisUser,
+                    busyKind: .send
+                )
             }
             .buttonStyle(.borderedProminent)
             .tint(Color.Theme.primaryBlue)
             .disabled(viewModel.invitingUserId != nil || !authService.isOnline)
-            .accessibleButton(label: "Add Friend".localized)
+            .accessibleButton(
+                label: isSendingThisUser
+                    ? InviteBusyKind.send.localizedBusyTitle
+                    : "Add Friend".localized
+            )
         }
         .padding(.vertical, 8)
         .accessibilityElement(children: .contain)

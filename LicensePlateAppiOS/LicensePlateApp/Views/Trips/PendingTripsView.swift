@@ -29,18 +29,11 @@ struct PendingTripsView: View {
             AppBackgroundView {
                 if viewModel.isLoading {
                     ProgressView()
+                        .accessibilityLabel("Loading".localized)
                 } else if viewModel.incomingInvites.isEmpty && viewModel.outgoingInvites.isEmpty {
                     emptyState
                 } else {
                     List {
-                        if let error = viewModel.errorMessage {
-                            Section {
-                                Text(error)
-                                    .font(.system(.body, design: .rounded))
-                                    .foregroundStyle(.red)
-                            }
-                            .listRowBackground(Color.Theme.cardBackground)
-                        }
                         if !viewModel.incomingInvites.isEmpty {
                             Section("Incoming Invites".localized) {
                                 ForEach(viewModel.incomingInvites, id: \.inviteId) { invite in
@@ -48,6 +41,10 @@ struct PendingTripsView: View {
                                         invite: invite,
                                         snapshot: viewModel.displaySnapshot(for: invite, isIncoming: true),
                                         isIncoming: true,
+                                        isAcceptBusy: viewModel.isBusy(inviteId: invite.inviteId, kind: .accept),
+                                        isDeclineBusy: viewModel.isBusy(inviteId: invite.inviteId, kind: .decline),
+                                        isCancelBusy: false,
+                                        isDisabled: viewModel.isInviteDisabled(invite.inviteId),
                                         onAccept: { viewModel.accept(invite: invite) },
                                         onDecline: { viewModel.decline(invite: invite) },
                                         onCancel: nil
@@ -63,9 +60,15 @@ struct PendingTripsView: View {
                                         invite: invite,
                                         snapshot: viewModel.displaySnapshot(for: invite, isIncoming: false),
                                         isIncoming: false,
+                                        isAcceptBusy: false,
+                                        isDeclineBusy: false,
+                                        isCancelBusy: viewModel.isBusy(inviteId: invite.inviteId, kind: .cancel),
+                                        isDisabled: viewModel.isInviteDisabled(invite.inviteId),
                                         onAccept: nil,
                                         onDecline: nil,
-                                        onCancel: invite.statusEnum == .sent || invite.statusEnum == .pending ? { viewModel.cancel(invite: invite) } : nil
+                                        onCancel: invite.statusEnum == .sent || invite.statusEnum == .pending
+                                            ? { viewModel.cancel(invite: invite) }
+                                            : nil
                                     )
                                 }
                             }
@@ -90,6 +93,16 @@ struct PendingTripsView: View {
                     .accessibilityHint("Closes the Pending Trips screen".localized)
                     .accessibilityIdentifier("pendingTrips_closeButton")
                 }
+            }
+            .alert("Error".localized, isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )) {
+                Button("OK".localized, role: .cancel) {
+                    viewModel.errorMessage = nil
+                }
+            } message: {
+                Text(viewModel.errorMessage ?? "")
             }
             .onAppear {
                 TripInviteRepository.shared.setModelContext(modelContext)
@@ -146,6 +159,10 @@ private struct TripInviteRow: View {
     let invite: TripInvite
     let snapshot: InviteDisplaySnapshot
     let isIncoming: Bool
+    let isAcceptBusy: Bool
+    let isDeclineBusy: Bool
+    let isCancelBusy: Bool
+    let isDisabled: Bool
     let onAccept: (() -> Void)?
     let onDecline: (() -> Void)?
     let onCancel: (() -> Void)?
@@ -175,30 +192,63 @@ private struct TripInviteRow: View {
 
             if isIncoming, invite.statusEnum == .pending {
                 HStack(spacing: 12) {
-                    Button("Accept".localized) {
+                    Button {
                         onAccept?()
+                    } label: {
+                        InviteActionLabel(
+                            title: "Accept".localized,
+                            isBusy: isAcceptBusy,
+                            busyKind: .accept
+                        )
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.Theme.primaryBlue)
-                    .accessibilityLabel("Accept invite".localized)
-                    .accessibilityHint("Accepts this trip invite".localized)
+                    .disabled(isDisabled)
+                    .accessibleButton(
+                        label: isAcceptBusy
+                            ? InviteBusyKind.accept.localizedBusyTitle
+                            : "Accept invite".localized,
+                        hint: "Accepts this trip invite".localized
+                    )
 
-                    Button("Decline".localized) {
+                    Button {
                         onDecline?()
+                    } label: {
+                        InviteActionLabel(
+                            title: "Decline".localized,
+                            isBusy: isDeclineBusy,
+                            busyKind: .decline
+                        )
                     }
                     .buttonStyle(.bordered)
                     .foregroundStyle(Color.Theme.primaryBlue)
-                    .accessibilityLabel("Decline invite".localized)
-                    .accessibilityHint("Declines this trip invite".localized)
+                    .disabled(isDisabled)
+                    .accessibleButton(
+                        label: isDeclineBusy
+                            ? InviteBusyKind.decline.localizedBusyTitle
+                            : "Decline invite".localized,
+                        hint: "Declines this trip invite".localized
+                    )
                 }
             } else if !isIncoming, let onCancel = onCancel {
-                Button("Cancel Invite".localized) {
+                Button {
                     onCancel()
+                } label: {
+                    InviteActionLabel(
+                        title: "Cancel Invite".localized,
+                        isBusy: isCancelBusy,
+                        busyKind: .cancel
+                    )
                 }
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
-                .accessibilityLabel("Cancel invite".localized)
-                .accessibilityHint("Cancels this outgoing invite".localized)
+                .disabled(isDisabled)
+                .accessibleButton(
+                    label: isCancelBusy
+                        ? InviteBusyKind.cancel.localizedBusyTitle
+                        : "Cancel invite".localized,
+                    hint: "Cancels this outgoing invite".localized
+                )
             }
         }
         .padding()

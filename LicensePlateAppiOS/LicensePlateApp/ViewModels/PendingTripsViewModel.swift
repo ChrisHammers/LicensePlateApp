@@ -17,6 +17,8 @@ final class PendingTripsViewModel: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published private(set) var shouldPresentTripLimitPaywall = false
+    @Published private(set) var busyInviteId: String?
+    @Published private(set) var busyKind: InviteBusyKind?
 
     private let tripInviteRepository: TripInviteRepositoryProtocol
     private let resolveInviteDisplayNames: (Set<String>) async -> [String: String]
@@ -26,6 +28,16 @@ final class PendingTripsViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     /// True after we have subscribed to `inviteSnapshotSignal` once; prevents accumulating subscribers on every loadIfNeeded().
     private var hasSubscribedToInvites = false
+
+    var isProcessingInvite: Bool { busyInviteId != nil }
+
+    func isBusy(inviteId: String, kind: InviteBusyKind) -> Bool {
+        busyInviteId == inviteId && busyKind == kind
+    }
+
+    func isInviteDisabled(_ inviteId: String) -> Bool {
+        busyInviteId == inviteId
+    }
 
     init(
         tripInviteRepository: TripInviteRepositoryProtocol,
@@ -112,10 +124,17 @@ final class PendingTripsViewModel: ObservableObject {
 
     func accept(invite: TripInvite) {
         guard let userId = currentUserId else { return }
+        guard busyInviteId == nil else { return }
         FeedbackService.shared.buttonTap()
         errorMessage = nil
         shouldPresentTripLimitPaywall = false
+        busyInviteId = invite.inviteId
+        busyKind = .accept
         Task { @MainActor in
+            defer {
+                busyInviteId = nil
+                busyKind = nil
+            }
             do {
                 try tripEntitlementGate.validateCanAddActiveTrip(
                     user: authService.currentUser,
@@ -154,9 +173,16 @@ final class PendingTripsViewModel: ObservableObject {
 
     func decline(invite: TripInvite) {
         guard let userId = currentUserId else { return }
+        guard busyInviteId == nil else { return }
         FeedbackService.shared.buttonTap()
         errorMessage = nil
-        Task {
+        busyInviteId = invite.inviteId
+        busyKind = .decline
+        Task { @MainActor in
+            defer {
+                busyInviteId = nil
+                busyKind = nil
+            }
             do {
                 try await tripInviteRepository.declineInvite(inviteId: invite.inviteId, userId: userId)
                 AnalyticsService.shared.log(.tripInviteDeclinedWithContext(
@@ -174,9 +200,16 @@ final class PendingTripsViewModel: ObservableObject {
 
     func cancel(invite: TripInvite) {
         guard let userId = currentUserId else { return }
+        guard busyInviteId == nil else { return }
         FeedbackService.shared.buttonTap()
         errorMessage = nil
-        Task {
+        busyInviteId = invite.inviteId
+        busyKind = .cancel
+        Task { @MainActor in
+            defer {
+                busyInviteId = nil
+                busyKind = nil
+            }
             do {
                 try await tripInviteRepository.cancelInvite(inviteId: invite.inviteId, userId: userId)
                 AnalyticsService.shared.log(.tripInviteCanceled)

@@ -17,10 +17,12 @@ final class AddFamilyMemberViewModel: ObservableObject {
     @Published var searchResults: [UserRepository.UserSearchResult] = []
     @Published var isSearching = false
     @Published var hasCompletedSearch = false
-    @Published var isInviting = false
+    @Published private(set) var invitingUserId: String?
     @Published var errorMessage: String?
     @Published var showError = false
     @Published var showSuccessAlert = false
+
+    var isInviting: Bool { invitingUserId != nil }
 
     private var searchTask: Task<Void, Never>?
     private var authService: FirebaseAuthService?
@@ -179,25 +181,26 @@ final class AddFamilyMemberViewModel: ObservableObject {
             return
         }
 
+        guard invitingUserId == nil else { return }
+
         let toUserId = result.user.firebaseUID ?? result.user.id
         let inviteMethod = result.matchedField.inviteMethod
 
-        isInviting = true
+        invitingUserId = toUserId
         errorMessage = nil
 
         Task {
+            defer { invitingUserId = nil }
             do {
                 _ = try await familyRepository.sendFamilyInvite(
                     toUserId: toUserId,
                     familyId: familyId,
                     method: inviteMethod
                 )
-                isInviting = false
                 AnalyticsService.shared.log(.familyInviteSent)
                 showSuccessAlert = true
             } catch {
                 FriendsFamilyInviteAnalytics.logInviteFailure(error)
-                isInviting = false
                 errorMessage = Self.userFacingSendError(error)
                 showError = true
             }

@@ -59,7 +59,7 @@ struct AddFamilyMemberSheet: View {
                             ForEach(Array(viewModel.searchResults.enumerated()), id: \.element.user.id) { _, result in
                                 FamilyMemberSearchResultRow(
                                     result: result,
-                                    isInviting: viewModel.isInviting,
+                                    invitingUserId: viewModel.invitingUserId,
                                     onInvite: { viewModel.sendInvite(to: result) }
                                 )
                             }
@@ -74,16 +74,6 @@ struct AddFamilyMemberSheet: View {
                 }
                 .listStyle(.insetGrouped)
                 .scrollContentBackground(.hidden)
-                .disabled(viewModel.isInviting)
-
-                if viewModel.isInviting {
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-
-                    ProgressView()
-                        .scaleEffect(1.5)
-                        .tint(.white)
-                }
             }
             .navigationTitle("Invite Member".localized)
             .navigationBarTitleDisplayMode(.inline)
@@ -124,11 +114,14 @@ struct AddFamilyMemberSheet: View {
 
 struct FamilyMemberSearchResultRow: View {
     let result: UserRepository.UserSearchResult
-    let isInviting: Bool
+    let invitingUserId: String?
     let onInvite: () -> Void
     @EnvironmentObject var authService: FirebaseAuthService
 
     var user: AppUser { result.user }
+
+    private var userId: String { user.firebaseUID ?? user.id }
+    private var isSendingThisUser: Bool { invitingUserId == userId }
 
     var body: some View {
         HStack {
@@ -155,13 +148,23 @@ struct FamilyMemberSearchResultRow: View {
                 }
             }
 
-            Button("Invite".localized) {
+            Button {
                 onInvite()
+            } label: {
+                InviteActionLabel(
+                    title: "Invite".localized,
+                    isBusy: isSendingThisUser,
+                    busyKind: .send
+                )
             }
             .buttonStyle(.borderedProminent)
             .tint(Color.Theme.primaryBlue)
-            .disabled(isInviting || !authService.isOnline)
-            .accessibleButton(label: "family.a11y.invite_member_button".localized(user.displayName))
+            .disabled(invitingUserId != nil || !authService.isOnline)
+            .accessibleButton(
+                label: isSendingThisUser
+                    ? InviteBusyKind.send.localizedBusyTitle
+                    : "family.a11y.invite_member_button".localized(user.displayName)
+            )
         }
         .padding(.vertical, 8)
         .accessibilityElement(children: .contain)

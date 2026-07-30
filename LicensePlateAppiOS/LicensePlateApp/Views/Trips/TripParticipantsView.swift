@@ -21,13 +21,6 @@ struct TripParticipantsView: View {
         NavigationStack {
             AppBackgroundView {
                 List {
-                    if let errorMessage = viewModel.errorMessage {
-                        Text(errorMessage)
-                            .font(.system(.footnote, design: .rounded))
-                            .foregroundStyle(.red)
-                            .listRowBackground(Color.Theme.cardBackground)
-                    }
-
                     Section("Driver & Passengers".localized) {
                         ForEach(viewModel.passengers) { passenger in
                             PassengerListRow(passenger: passenger)
@@ -71,6 +64,16 @@ struct TripParticipantsView: View {
                         isShowingInviteSheet = true
                     }
                 }
+            }
+            .alert("Error".localized, isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { if !$0 { viewModel.errorMessage = nil } }
+            )) {
+                Button("OK".localized, role: .cancel) {
+                    viewModel.errorMessage = nil
+                }
+            } message: {
+                Text(viewModel.errorMessage ?? "")
             }
             .sheet(isPresented: $isShowingInviteSheet) {
                 InvitePlayersView(

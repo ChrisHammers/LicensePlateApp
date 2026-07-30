@@ -77,15 +77,7 @@ struct JoinFriendByCodeSheet: View {
                 }
                 .formStyle(.grouped)
                 .scrollContentBackground(.hidden)
-
-                if viewModel.isRedeeming {
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-
-                    ProgressView()
-                        .scaleEffect(1.5)
-                        .tint(.white)
-                }
+                .disabled(viewModel.isRedeeming)
             }
             .navigationTitle("Add Friend by Code".localized)
             .navigationBarTitleDisplayMode(.inline)
@@ -96,15 +88,27 @@ struct JoinFriendByCodeSheet: View {
                     }
                     .font(.system(.body, design: .rounded))
                     .foregroundStyle(Color.Theme.primaryBlue)
+                    .disabled(viewModel.isRedeeming)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Send Request".localized) {
+                    Button {
                         viewModel.redeemCode()
+                    } label: {
+                        InviteActionLabel(
+                            title: "Send Request".localized,
+                            isBusy: viewModel.isRedeeming,
+                            busyKind: .send
+                        )
+                        .font(.system(.body, design: .rounded))
+                        .fontWeight(.semibold)
                     }
-                    .font(.system(.body, design: .rounded))
-                    .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)
                     .disabled(viewModel.shareCode.isEmpty || viewModel.isRedeeming || !authService.isOnline)
+                    .accessibleButton(
+                        label: viewModel.isRedeeming
+                            ? InviteBusyKind.send.localizedBusyTitle
+                            : "Send Request".localized
+                    )
                 }
             }
             .alert("Error".localized, isPresented: $viewModel.showError) {

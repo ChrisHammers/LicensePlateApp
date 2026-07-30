@@ -94,7 +94,11 @@ struct OnboardingJoinFamilyView: View {
                 Button {
                     joinWithCode()
                 } label: {
-                    Text("Continue".localized)
+                    InviteActionLabel(
+                        title: "Continue".localized,
+                        isBusy: isJoining,
+                        busyKind: .join
+                    )
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
@@ -105,7 +109,12 @@ struct OnboardingJoinFamilyView: View {
                         )
                         .foregroundStyle(.white)
                 }
-                .accessibleButton(label: "Continue".localized, hint: "Continues to next screen".localized)
+                .accessibleButton(
+                    label: isJoining
+                        ? InviteBusyKind.join.localizedBusyTitle
+                        : "Continue".localized,
+                    hint: "Continues to next screen".localized
+                )
                 .disabled(shareCode.isEmpty || isJoining || !authService.isOnline)
                 .opacity((shareCode.isEmpty || isJoining || !authService.isOnline) ? 0.6 : 1)
                 
@@ -116,6 +125,7 @@ struct OnboardingJoinFamilyView: View {
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                 }
+                .disabled(isJoining)
                 .accessibleButton(label: "Skip".localized, hint: "Skips joining a family".localized)
             }
             .padding(.horizontal, 24)
@@ -130,7 +140,7 @@ struct OnboardingJoinFamilyView: View {
             QRScannerView(scannedCode: $scannedCode)
         }
         .alert("Error".localized, isPresented: $showError) {
-            Button("OK", role: .cancel) { }
+            Button("OK".localized, role: .cancel) { }
         } message: {
             if let error = errorMessage {
                 Text(error)
