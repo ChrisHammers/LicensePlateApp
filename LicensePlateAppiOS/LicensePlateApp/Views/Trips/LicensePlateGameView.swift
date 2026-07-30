@@ -136,9 +136,23 @@ struct LicensePlateGameView: View {
         }
         .ignoresSafeArea(.all, edges: .bottom)
         .navigationBarTitleDisplayMode(.inline)
-        .navigationTitle(viewModel.currentSession.name)
+        .navigationTitle(gameDisplayName)
         .toolbar {
             if !showFullScreenMap {
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 0) {
+                        Text(gameDisplayName)
+                            .font(.headline)
+                            .lineLimit(1)
+
+                        Text(viewModel.currentSession.name)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                        // FeedbackService.shared.buttonTap()
@@ -355,6 +369,10 @@ struct LicensePlateGameView: View {
                 )
             }
         }
+    }
+
+    private var gameDisplayName: String {
+        GameType(rawValue: viewModel.game.definitionId)?.displayName ?? viewModel.game.definitionId
     }
 
     /// Game-scoped enabled countries (and regions) for board/progress. Uses game's license-plate config when available; else North America default.
