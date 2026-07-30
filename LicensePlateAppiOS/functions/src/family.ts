@@ -15,6 +15,7 @@ import {
   familyMembershipGrantUserUpdate,
   familyMembershipLeaveUserUpdate,
 } from "./wasEverInFamilyUserUpdates";
+import { canRemoveFamilyMember } from "./familyMemberRemovalPolicy";
 
 const db = admin.firestore();
 
@@ -655,20 +656,14 @@ export const removeFamilyMember = enforcedCallable(
     }
 
     const targetMemberRole = targetMemberDoc.data()!.role;
-
-    // Creator can remove anyone, captain can only remove non-captains
-    if (memberRole === "creator") {
-      // Creator can remove anyone
-    } else if (memberRole === "captain" && targetMemberRole === "captain") {
-      throw new functions.https.HttpsError(
-        "permission-denied",
-        "Captains cannot remove other Captains"
-      );
-    } else if (memberRole !== "captain") {
-      throw new functions.https.HttpsError(
-        "permission-denied",
-        "Only Captains can remove members"
-      );
+    const isSelf = memberId === userId;
+    const decision = canRemoveFamilyMember({
+      actorRole: memberRole,
+      targetRole: targetMemberRole,
+      isSelf,
+    });
+    if (!decision.allowed) {
+      throw new functions.https.HttpsError(decision.code, decision.message);
     }
 
     const batch = db.batch();

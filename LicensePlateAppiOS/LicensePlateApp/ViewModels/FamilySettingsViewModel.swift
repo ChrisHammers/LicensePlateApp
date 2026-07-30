@@ -19,7 +19,9 @@ class FamilySettingsViewModel: ObservableObject {
     @Published var isLeavingFamily = false
     @Published var isDeletingFamily = false
     @Published var isSavingName = false
+    @Published var isRemovingMember = false
     @Published var didLeaveOrDelete = false
+    @Published var memberIdPendingRemoval: String?
 
     private let familyRepository: FamilyRepository
     private var authService: FirebaseAuthService
@@ -52,8 +54,12 @@ class FamilySettingsViewModel: ObservableObject {
         }
     }
 
+    var currentUserId: String? {
+        authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+    }
+
     var isCreator: Bool {
-        guard let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else {
+        guard let userId = currentUserId else {
             return false
         }
         if let creatorId = family?.creatorId {
@@ -65,12 +71,20 @@ class FamilySettingsViewModel: ObservableObject {
         return member.roleEnum == .creator
     }
 
+    var canRemoveMembers: Bool { isCreator }
+
     var isCaptainOrCreator: Bool {
-        guard let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id,
+        guard let userId = currentUserId,
               let member = members.first(where: { $0.userId == userId }) else {
             return false
         }
         return member.isCaptainOrCreator
+    }
+
+    func canRemove(memberId: String) -> Bool {
+        guard canRemoveMembers else { return false }
+        guard let userId = currentUserId else { return false }
+        return memberId != userId
     }
 
     func saveFamilyName() {
@@ -131,6 +145,51 @@ class FamilySettingsViewModel: ObservableObject {
                 didLeaveOrDelete = true
             } catch {
                 isLeavingFamily = false
+                errorMessage = error.localizedDescription
+                showErrorAlert = true
+            }
+        }
+    }
+
+    func confirmRemoveMember(memberId: String) {
+        guard canRemove(memberId: memberId) else { return }
+        memberIdPendingRemoval = memberId
+    }
+
+    func cancelRemoveMember() {
+        memberIdPendingRemoval = nil
+    }
+
+    func removePendingMember() {
+        guard let memberId = memberIdPendingRemoval else { return }
+        memberIdPendingRemoval = nil
+        removeMember(memberId: memberId)
+    }
+
+    func removeMember(memberId: String) {
+        guard canRemove(memberId: memberId) else {
+            errorMessage = "Only the family creator can remove members.".localized
+            showErrorAlert = true
+            return
+        }
+        guard authService.isOnline else {
+            errorMessage = "Requires network connection".localized
+            showErrorAlert = true
+            return
+        }
+        guard !isRemovingMember else { return }
+
+        isRemovingMember = true
+        errorMessage = nil
+
+        Task {
+            do {
+                try await familyRepository.removeMember(familyId: familyId, memberId: memberId)
+                AnalyticsService.shared.log(.familyMemberRemoved)
+                members = familyRepository.getMembers(familyId: familyId)
+                isRemovingMember = false
+            } catch {
+                isRemovingMember = false
                 errorMessage = error.localizedDescription
                 showErrorAlert = true
             }

@@ -790,14 +790,28 @@ class FamilyRepository: ObservableObject {
             throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
         }
         
-        // Use removeFamilyMember function, but allow users to remove themselves
-        // The cloud function will need to allow this case
+        // Use removeFamilyMember function; server allows non-creator self-leave
         let functions = Functions.functions()
         let removeFunction = functions.httpsCallable("removeFamilyMember")
         
         _ = try await removeFunction.call(([
             "familyId": familyId,
             "memberId": userId
+        ] as [String: Any]).addingClientMetadata())
+    }
+
+    /// Remove another family member (creator/captain; UI gates to creator)
+    func removeMember(familyId: String, memberId: String) async throws {
+        guard Auth.auth().currentUser != nil else {
+            throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
+        }
+
+        let functions = Functions.functions()
+        let removeFunction = functions.httpsCallable("removeFamilyMember")
+
+        _ = try await removeFunction.call(([
+            "familyId": familyId,
+            "memberId": memberId
         ] as [String: Any]).addingClientMetadata())
     }
     

@@ -214,7 +214,7 @@ struct TripSessionView: View {
             .environmentObject(authService)
         }
         .sheet(isPresented: $showPassengerList) {
-            TripParticipantsView(sessionId: session.id)
+            TripParticipantsView(sessionId: session.id, authService: authService)
                 .environmentObject(authService)
         }
         .sheet(isPresented: $isShowingGameSetup) {

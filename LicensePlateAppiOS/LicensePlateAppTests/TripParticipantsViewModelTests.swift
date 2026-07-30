@@ -11,6 +11,12 @@ import Testing
 
 @MainActor
 struct TripParticipantsViewModelTests {
+    private func auth(userId: String) -> FirebaseAuthService {
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: userId, userName: userId, firebaseUID: userId)
+        return auth
+    }
+
     @Test func reloadBuildsPassengersAndPendingInvites() async {
         let sessionId = UUID()
         let sessionRepo = MockTripSessionRepository()
@@ -45,6 +51,7 @@ struct TripParticipantsViewModelTests {
             sessionId: sessionId,
             tripSessionRepository: sessionRepo,
             tripInviteRepository: inviteRepo,
+            authService: auth(userId: "owner"),
             displayNamesProvider: { ids in
                 var names: [String: String] = [:]
                 for id in ids { names[id] = "name-\(id)" }
@@ -61,5 +68,74 @@ struct TripParticipantsViewModelTests {
         #expect(vm.passengers.last?.roleLabel == "Passenger".localized)
         #expect(vm.pendingInviteRows.count == 1)
         #expect(vm.pendingInviteRows.first?.inviteeDisplayName == "name-pending-user")
+        #expect(vm.isTripCreator)
+        #expect(vm.canInvitePassengers)
+        #expect(vm.canRemove(passengerUserId: "member"))
+        #expect(!vm.canRemove(passengerUserId: "owner"))
+    }
+
+    @Test func passengerCannotInviteOrRemove() async {
+        let sessionId = UUID()
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(
+            TripSession(
+                id: sessionId,
+                name: "Road Trip",
+                status: .active,
+                createdBy: "owner",
+                participants: [
+                    TripParticipant(userId: "owner", role: .owner),
+                    TripParticipant(userId: "member", role: .member)
+                ]
+            )
+        )
+
+        let vm = TripParticipantsViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            tripInviteRepository: MockTripInviteRepository(),
+            authService: auth(userId: "member"),
+            displayNamesProvider: { _ in [:] }
+        )
+
+        await vm.reload()
+
+        #expect(!vm.isTripCreator)
+        #expect(!vm.canInvitePassengers)
+        #expect(!vm.canRemove(passengerUserId: "owner"))
+        #expect(!vm.canRemove(passengerUserId: "member"))
+    }
+
+    @Test func driverRemovePassengerCallsRemoteSync() async {
+        let sessionId = UUID()
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(
+            TripSession(
+                id: sessionId,
+                name: "Road Trip",
+                status: .active,
+                createdBy: "owner",
+                participants: [
+                    TripParticipant(userId: "owner", role: .owner),
+                    TripParticipant(userId: "member", role: .member)
+                ]
+            )
+        )
+        let sync = MockTripCanonicalRemoteSync()
+        let vm = TripParticipantsViewModel(
+            sessionId: sessionId,
+            tripSessionRepository: sessionRepo,
+            tripInviteRepository: MockTripInviteRepository(),
+            authService: auth(userId: "owner"),
+            remoteSync: sync,
+            displayNamesProvider: { _ in ["owner": "Owner", "member": "Member"] }
+        )
+
+        await vm.reload()
+        await vm.removePassenger(userId: "member")
+
+        #expect(sync.removeParticipantAsOwnerCallCount == 1)
+        #expect(sync.lastRemovedUserId == "member")
+        #expect(vm.errorMessage == nil)
     }
 }

@@ -21,6 +21,7 @@ final class MockTripInviteRepository: TripInviteRepositoryProtocol {
 
     var shouldThrow = false
     private(set) var acceptInviteCallCount = 0
+    private(set) var sendTripInviteCallCount = 0
 
     func setModelContext(_ context: ModelContext) {
         _ = context
@@ -104,6 +105,7 @@ final class MockTripInviteRepository: TripInviteRepositoryProtocol {
         expiresAt: Date?
     ) async throws -> String {
         if shouldThrow { throw NSError(domain: "MockTripInviteRepository", code: -1, userInfo: nil) }
+        sendTripInviteCallCount += 1
         let id = UUID().uuidString
         let exp = expiresAt ?? Date().addingTimeInterval(86400 * 7)
         let invite = TripInvite(
@@ -129,5 +131,6 @@ final class MockTripInviteRepository: TripInviteRepositoryProtocol {
     func clear() {
         invites.removeAll()
         acceptInviteCallCount = 0
+        sendTripInviteCallCount = 0
     }
 }

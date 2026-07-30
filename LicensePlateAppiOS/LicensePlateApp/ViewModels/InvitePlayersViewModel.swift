@@ -144,6 +144,13 @@ final class InvitePlayersViewModel: ObservableObject {
         guard let fromUserId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id else { return false }
         guard !selectedUserIds.isEmpty else { return true }
 
+        if let session = try? tripSessionRepository.session(byId: tripSessionId),
+           let createdBy = session.createdBy,
+           createdBy != fromUserId {
+            errorMessage = "Only the Driver can invite passengers.".localized
+            return false
+        }
+
         isSubmitting = true
         errorMessage = nil
         defer { isSubmitting = false }

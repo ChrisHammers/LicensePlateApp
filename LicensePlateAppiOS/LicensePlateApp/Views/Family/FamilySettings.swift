@@ -55,33 +55,30 @@ struct FamilySettings: View {
                             }
                         }
                         .listRowBackground(Color.Theme.cardBackground)
-                    } else if !viewModel.familyName.isEmpty {
-                        Section("Family Name".localized) {
-                            HStack(spacing: 12) {
-                                FamilyInitialAvatarView(familyName: viewModel.familyName, size: 44)
-                                    .accessibilityHidden(true)
-                                Text(viewModel.familyName)
-                                    .font(.system(.body, design: .rounded))
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(Color.Theme.primaryBlue)
-                                Spacer(minLength: 0)
+                        
+                        // Members
+                        Section("Members".localized) {
+                            ForEach(viewModel.members) { member in
+                                FamilyMemberSettingsRow(
+                                    member: member,
+                                    familyCreatorId: viewModel.family?.creatorId
+                                )
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    if viewModel.canRemove(memberId: member.userId) {
+                                        Button(role: .destructive) {
+                                            viewModel.confirmRemoveMember(memberId: member.userId)
+                                        } label: {
+                                            Label("Remove".localized, systemImage: "person.fill.xmark")
+                                        }
+                                        .disabled(viewModel.isRemovingMember)
+                                    }
+                                }
                             }
-                            .accessibilityElement(children: .combine)
-                            .accessibilityLabel(viewModel.familyName)
                         }
                         .listRowBackground(Color.Theme.cardBackground)
+
                     }
-                    
-                    // Members
-                    Section("Members".localized) {
-                        ForEach(viewModel.members) { member in
-                            FamilyMemberSettingsRow(
-                                member: member,
-                                familyCreatorId: viewModel.family?.creatorId
-                            )
-                        }
-                    }
-                    .listRowBackground(Color.Theme.cardBackground)
+
                     
                     // Leave Family (All members except creator)
                     if !viewModel.isCreator {
@@ -89,9 +86,18 @@ struct FamilySettings: View {
                             Button(role: .destructive) {
                                 showLeaveFamilyConfirmation = true
                             } label: {
-                                Text("Leave Family".localized)
-                                    .foregroundColor(.red)
+                                if viewModel.isLeavingFamily {
+                                    HStack {
+                                        ProgressView()
+                                            .scaleEffect(0.8)
+                                        Text("Leaving...".localized)
+                                    }
+                                } else {
+                                    Text("Leave Family".localized)
+                                        .foregroundColor(.red)
+                                }
                             }
+                            .disabled(viewModel.isLeavingFamily)
                             .accessibleButton(label: "Leave Family".localized)
                         } header: {
                             Text("Leave Family".localized)
@@ -160,6 +166,22 @@ struct FamilySettings: View {
             } message: {
                 Text("Are you sure you want to leave this family? You will need to be invited again to rejoin.".localized)
             }
+            .alert(
+                "Remove Family Member".localized,
+                isPresented: Binding(
+                    get: { viewModel.memberIdPendingRemoval != nil },
+                    set: { if !$0 { viewModel.cancelRemoveMember() } }
+                )
+            ) {
+                Button("Cancel".localized, role: .cancel) {
+                    viewModel.cancelRemoveMember()
+                }
+                Button("Remove".localized, role: .destructive) {
+                    viewModel.removePendingMember()
+                }
+            } message: {
+                Text("They will be removed from this family and must be invited again to rejoin.".localized)
+            }
             .alert("Error".localized, isPresented: $viewModel.showErrorAlert) {
                 Button("OK".localized) {
                     viewModel.errorMessage = nil
@@ -199,7 +221,9 @@ struct FamilyMemberSettingsRow: View {
     }
 
     private var isSelfMember: Bool {
-        guard let user = member.user else { return false }
+        guard let user = member.user else {
+            return member.userId == currentUserId
+        }
         return UserDetailNavigation.isSelfProfile(user: user, currentUserId: currentUserId)
     }
 
@@ -267,8 +291,12 @@ struct FamilyMemberSettingsRow: View {
     }
 }
 
-#Preview {
+#Preview("Family settings — creator") {
     FamilySettings(familyId: "test")
         .environmentObject(FirebaseAuthService())
 }
 
+#Preview("Family settings — member") {
+    FamilySettings(familyId: "test")
+        .environmentObject(FirebaseAuthService())
+}

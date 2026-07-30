@@ -342,9 +342,9 @@ struct FamilyDashboard: View {
                     }
                 }
                 
-                if viewModel.canManageFamily {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        HStack(spacing: 16) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    HStack(spacing: 16) {
+                        if viewModel.family != nil {
                             Button {
                                 showSettings = true
                             } label: {
@@ -353,22 +353,23 @@ struct FamilyDashboard: View {
                             }
                             .accessibleButton(
                                 label: "Family Settings".localized,
-                                hint: "family.a11y.opens_settings".localized
+                                hint: viewModel.canManageFamily
+                                    ? "family.a11y.opens_settings".localized
+                                    : "family.a11y.opens_settings_member".localized
                             )
-                            if viewModel.pendingMemberRequestsCount > 0 {
-                                Button {
-                                    showPendingApprovalsView = true
-                                } label: {
-                                    Image(systemName: "person.badge.clock")
-                                        .foregroundStyle(Color.Theme.primaryBlue)
-                                    
-                                }
-                                .badge(viewModel.pendingMemberRequestsCount)
-                                .accessibleButton(
-                                    label: "family.a11y.pending_approvals".localized(viewModel.pendingMemberRequestsCount),
-                                    hint: "family.a11y.opens_pending_approvals".localized
-                                )
+                        }
+                        if viewModel.canManageFamily, viewModel.pendingMemberRequestsCount > 0 {
+                            Button {
+                                showPendingApprovalsView = true
+                            } label: {
+                                Image(systemName: "person.badge.clock")
+                                    .foregroundStyle(Color.Theme.primaryBlue)
                             }
+                            .badge(viewModel.pendingMemberRequestsCount)
+                            .accessibleButton(
+                                label: "family.a11y.pending_approvals".localized(viewModel.pendingMemberRequestsCount),
+                                hint: "family.a11y.opens_pending_approvals".localized
+                            )
                         }
                     }
                 }

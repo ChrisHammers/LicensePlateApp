@@ -18,15 +18,26 @@ struct InvitePlayersViewModelTests {
     }
 
     @Test func sendSelectedInvitesSucceeds() async {
+        let sessionId = UUID()
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(
+            TripSession(
+                id: sessionId,
+                name: "Trip",
+                status: .created,
+                createdBy: "owner",
+                participants: [TripParticipant(userId: "owner", role: .owner)]
+            )
+        )
         let repo = MockTripInviteRepository()
         let vm = InvitePlayersViewModel(
             mode: .sendInvites,
-            tripSessionId: UUID(),
+            tripSessionId: sessionId,
             tripName: "Trip",
             selectedUserIds: ["friend-1"],
             authService: auth(),
             tripInviteRepository: repo,
-            tripSessionRepository: MockTripSessionRepository()
+            tripSessionRepository: sessionRepo
         )
 
         let success = await vm.sendSelectedInvites()
@@ -36,21 +47,64 @@ struct InvitePlayersViewModelTests {
     }
 
     @Test func sendSelectedInvitesFailureSetsError() async {
+        let sessionId = UUID()
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(
+            TripSession(
+                id: sessionId,
+                name: "Trip",
+                status: .created,
+                createdBy: "owner",
+                participants: [TripParticipant(userId: "owner", role: .owner)]
+            )
+        )
         let repo = MockTripInviteRepository()
         repo.shouldThrow = true
         let vm = InvitePlayersViewModel(
             mode: .sendInvites,
-            tripSessionId: UUID(),
+            tripSessionId: sessionId,
             tripName: "Trip",
             selectedUserIds: ["friend-1"],
             authService: auth(),
             tripInviteRepository: repo,
-            tripSessionRepository: MockTripSessionRepository()
+            tripSessionRepository: sessionRepo
         )
 
         let success = await vm.sendSelectedInvites()
         #expect(!success)
         #expect(vm.errorMessage != nil)
         #expect(!vm.isSubmitting)
+    }
+
+    @Test func sendSelectedInvitesRejectsNonDriver() async {
+        let sessionId = UUID()
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(
+            TripSession(
+                id: sessionId,
+                name: "Trip",
+                status: .active,
+                createdBy: "owner",
+                participants: [
+                    TripParticipant(userId: "owner", role: .owner),
+                    TripParticipant(userId: "member", role: .member)
+                ]
+            )
+        )
+        let repo = MockTripInviteRepository()
+        let vm = InvitePlayersViewModel(
+            mode: .sendInvites,
+            tripSessionId: sessionId,
+            tripName: "Trip",
+            selectedUserIds: ["friend-1"],
+            authService: auth(userId: "member"),
+            tripInviteRepository: repo,
+            tripSessionRepository: sessionRepo
+        )
+
+        let success = await vm.sendSelectedInvites()
+        #expect(!success)
+        #expect(vm.errorMessage == "Only the Driver can invite passengers.".localized)
+        #expect(repo.sendTripInviteCallCount == 0)
     }
 }

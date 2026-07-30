@@ -1160,6 +1160,9 @@
 "family.a11y.opens_pending_invites" = "Abre las invitaciones familiares pendientes";
 "family.a11y.opens_pending_approvals" = "Abre las aprobaciones de ingreso pendientes";
 "family.a11y.opens_settings" = "Abre la configuración de la familia";
+"family.a11y.opens_settings_member" = "Abre la configuración de la familia para salir o ver miembros";
+"family.a11y.remove_member" = "Quitar a %@ de la familia";
+"family.a11y.remove_member_hint" = "Quita a esta persona de la familia";
 "family.a11y.opens_invite_member" = "Abre invitar miembro de la familia";
 "family.a11y.opens_share_code" = "Abre el código familiar para compartir";
 "family.a11y.approve_join" = "Aprobar solicitud de ingreso";
@@ -1191,6 +1194,18 @@
 "family.a11y.outgoing_invite" = "Invitación familiar enviada a %@, @%@, esperando respuesta";
 "family.a11y.outgoing_invite_unknown" = "Invitación familiar enviada, esperando respuesta";
 "Pending invite already exists." = "Ya existe una invitación pendiente.";
+
+/* Role permission — family leave / remove + trip passenger management */
+"Leaving..." = "Saliendo...";
+"Remove Family Member" = "Quitar miembro de la familia";
+"They will be removed from this family and must be invited again to rejoin." = "Se quitará de esta familia y deberá ser invitado de nuevo para volver a unirse.";
+"Only the family creator can remove members." = "Solo el creador de la familia puede quitar miembros.";
+"Only the Driver can invite passengers." = "Solo el Conductor puede invitar pasajeros.";
+"Only the Driver can remove passengers." = "Solo el Conductor puede quitar pasajeros.";
+"Remove Passenger" = "Quitar pasajero";
+"They will leave this trip and need a new invite to rejoin." = "Saldrá de este viaje y necesitará una nueva invitación para volver.";
+"trip.a11y.remove_passenger" = "Quitar pasajero %@";
+"trip.a11y.remove_passenger_hint" = "Quita a este pasajero del viaje";
 
 /* App update gate */
 "Update Required" = "Actualización requerida";

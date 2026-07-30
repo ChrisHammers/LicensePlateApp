@@ -1192,6 +1192,9 @@
 "family.a11y.opens_pending_invites" = "Opens pending family invites";
 "family.a11y.opens_pending_approvals" = "Opens pending join approvals";
 "family.a11y.opens_settings" = "Opens family settings";
+"family.a11y.opens_settings_member" = "Opens family settings to leave or view members";
+"family.a11y.remove_member" = "Remove %@ from family";
+"family.a11y.remove_member_hint" = "Removes this person from the family";
 "family.a11y.opens_invite_member" = "Opens invite family member";
 "family.a11y.opens_share_code" = "Opens family share code";
 "family.a11y.approve_join" = "Approve join request";
@@ -1223,6 +1226,18 @@
 "family.a11y.outgoing_invite" = "Outgoing family invite to %@, @%@, waiting for response";
 "family.a11y.outgoing_invite_unknown" = "Outgoing family invite, waiting for response";
 "Pending invite already exists." = "Pending invite already exists.";
+
+/* Role permission — family leave / remove + trip passenger management */
+"Leaving..." = "Leaving...";
+"Remove Family Member" = "Remove Family Member";
+"They will be removed from this family and must be invited again to rejoin." = "They will be removed from this family and must be invited again to rejoin.";
+"Only the family creator can remove members." = "Only the family creator can remove members.";
+"Only the Driver can invite passengers." = "Only the Driver can invite passengers.";
+"Only the Driver can remove passengers." = "Only the Driver can remove passengers.";
+"Remove Passenger" = "Remove Passenger";
+"They will leave this trip and need a new invite to rejoin." = "They will leave this trip and need a new invite to rejoin.";
+"trip.a11y.remove_passenger" = "Remove passenger %@";
+"trip.a11y.remove_passenger_hint" = "Removes this passenger from the trip";
 
 /* App update gate */
 "Update Required" = "Update Required";

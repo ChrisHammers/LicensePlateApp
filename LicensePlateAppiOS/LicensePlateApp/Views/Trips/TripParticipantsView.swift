@@ -13,8 +13,16 @@ struct TripParticipantsView: View {
     @StateObject private var viewModel: TripParticipantsViewModel
     @State private var isShowingInviteSheet = false
 
-    init(sessionId: UUID) {
-        _viewModel = StateObject(wrappedValue: TripParticipantsViewModel(sessionId: sessionId))
+    init(sessionId: UUID, authService: FirebaseAuthService) {
+        _viewModel = StateObject(wrappedValue: TripParticipantsViewModel(
+            sessionId: sessionId,
+            authService: authService
+        ))
+    }
+
+    /// Preview / tests
+    init(viewModel: TripParticipantsViewModel) {
+        _viewModel = StateObject(wrappedValue: viewModel)
     }
 
     var body: some View {
@@ -23,7 +31,14 @@ struct TripParticipantsView: View {
                 List {
                     Section("Driver & Passengers".localized) {
                         ForEach(viewModel.passengers) { passenger in
-                            PassengerListRow(passenger: passenger)
+                            PassengerListRow(
+                                passenger: passenger,
+                                canRemove: viewModel.canRemove(passengerUserId: passenger.userId),
+                                isRemoving: viewModel.isRemovingPassenger,
+                                onRemove: {
+                                    viewModel.confirmRemovePassenger(userId: passenger.userId)
+                                }
+                            )
                         }
                     }
                     .listRowBackground(Color.Theme.cardBackground)
@@ -59,9 +74,11 @@ struct TripParticipantsView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Close".localized) { dismiss() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Invite Passengers".localized) {
-                        isShowingInviteSheet = true
+                if viewModel.canInvitePassengers {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Invite Passengers".localized) {
+                            isShowingInviteSheet = true
+                        }
                     }
                 }
             }
@@ -74,6 +91,22 @@ struct TripParticipantsView: View {
                 }
             } message: {
                 Text(viewModel.errorMessage ?? "")
+            }
+            .alert(
+                "Remove Passenger".localized,
+                isPresented: Binding(
+                    get: { viewModel.passengerIdPendingRemoval != nil },
+                    set: { if !$0 { viewModel.cancelRemovePassenger() } }
+                )
+            ) {
+                Button("Cancel".localized, role: .cancel) {
+                    viewModel.cancelRemovePassenger()
+                }
+                Button("Remove".localized, role: .destructive) {
+                    viewModel.removePendingPassenger()
+                }
+            } message: {
+                Text("They will leave this trip and need a new invite to rejoin.".localized)
             }
             .sheet(isPresented: $isShowingInviteSheet) {
                 InvitePlayersView(
@@ -98,6 +131,9 @@ struct TripParticipantsView: View {
 
 private struct PassengerListRow: View {
     let passenger: PassengerDisplayRow
+    var canRemove: Bool = false
+    var isRemoving: Bool = false
+    var onRemove: (() -> Void)? = nil
     @EnvironmentObject private var authService: FirebaseAuthService
     @State private var user: AppUser?
 
@@ -153,6 +189,20 @@ private struct PassengerListRow: View {
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(.green)
             }
+            if canRemove {
+                Button(role: .destructive) {
+                    onRemove?()
+                } label: {
+                    Text("Remove".localized)
+                        .font(.system(.subheadline, design: .rounded))
+                        .fontWeight(.semibold)
+                }
+                .disabled(isRemoving)
+                .accessibleButton(
+                    label: "trip.a11y.remove_passenger".localized(decoratedDisplayName),
+                    hint: "trip.a11y.remove_passenger_hint".localized
+                )
+            }
         }
     }
 
@@ -173,9 +223,16 @@ private struct PassengerListRow: View {
     }
 }
 
-#Preview("Driver & Passengers") {
+#Preview("Driver & Passengers — driver") {
     let auth = FirebaseAuthService()
     auth.currentUser = AppUser(id: "preview-user", userName: "Preview", firebaseUID: "preview-user")
-    return TripParticipantsView(sessionId: UUID())
+    return TripParticipantsView(sessionId: UUID(), authService: auth)
+        .environmentObject(auth)
+}
+
+#Preview("Driver & Passengers — passenger") {
+    let auth = FirebaseAuthService()
+    auth.currentUser = AppUser(id: "passenger", userName: "Passenger", firebaseUID: "passenger")
+    return TripParticipantsView(sessionId: UUID(), authService: auth)
         .environmentObject(auth)
 }
