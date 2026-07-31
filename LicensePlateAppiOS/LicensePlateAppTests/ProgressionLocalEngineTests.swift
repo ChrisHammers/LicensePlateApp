@@ -38,7 +38,7 @@ struct ProgressionLocalEngineTests {
             gamesById: games,
             rewards: rewards
         )
-        #expect(d.totalXp == rewards.xp.baseDiscoveryXp)
+        #expect(d.totalXp == rewards.xp.baseDiscoveryXp + rewards.xp.firstFinderBonusXp)
         #expect(d.acceptedRegionFindCount == 1)
     }
 
@@ -164,8 +164,8 @@ struct ProgressionLocalEngineTests {
         )
         #expect(d1.competitiveFirstPlaceFinishes == 1)
         #expect(d2.competitiveFirstPlaceFinishes == 1)
-        #expect(d1.totalXp == rewards.xp.baseDiscoveryXp + rewards.xp.competitiveFirstPlaceFinishBonusXp)
-        #expect(d2.totalXp == rewards.xp.baseDiscoveryXp + rewards.xp.competitiveFirstPlaceFinishBonusXp)
+        #expect(d1.totalXp == rewards.xp.baseDiscoveryXp + rewards.xp.firstFinderBonusXp + rewards.xp.competitiveFirstPlaceFinishBonusXp)
+        #expect(d2.totalXp == rewards.xp.baseDiscoveryXp + rewards.xp.firstFinderBonusXp + rewards.xp.competitiveFirstPlaceFinishBonusXp)
     }
 
     @Test func sameScopedRefindDoesNotAddPendingAgain() {
@@ -217,10 +217,8 @@ struct ProgressionLocalEngineTests {
             rewards: rewards
         )
         #expect(d.acceptedRegionFindCount == 1)
-        #expect(d.totalXp == GameProgressionXPRewards.baseDiscoveryXp)
+        #expect(d.totalXp == GameProgressionXPRewards.baseDiscoveryXp + GameProgressionXPRewards.firstFinderBonusXp)
     }
-
-    @Test func sameItemDifferentGameCanGrantAgain() {
         let game2 = UUID(uuidString: "550e8400-e29b-41d4-a716-446655440002")!
         let g1 = TripActivityEvent(
             id: "rf1",

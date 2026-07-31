@@ -53,11 +53,34 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
         let descriptor = FetchDescriptor<XpLedgerEventEntity>(
             predicate: #Predicate<XpLedgerEventEntity> { entity in
                 entity.xpUniquenessKey == key
+                    && entity.status != "voided"
                     && (entity.grantKind == "provisional_discovery_xp" || entity.grantKind == "final_discovery_award")
             }
         )
         let count = try ctx.fetchCount(descriptor)
         return count > 0
+    }
+
+    @discardableResult
+    func voidProvisionalRows(forUniquenessKey key: String, resolvedAt: Date) throws -> Int {
+        guard let ctx = modelContext else { throw XpLedgerRepositoryError.noModelContext }
+        let descriptor = FetchDescriptor<XpLedgerEventEntity>(
+            predicate: #Predicate<XpLedgerEventEntity> { entity in
+                entity.xpUniquenessKey == key
+                    && entity.status == "provisional"
+            }
+        )
+        let rows = try ctx.fetch(descriptor)
+        var voidedSum = 0
+        for row in rows {
+            voidedSum += row.xpDelta
+            row.status = XpLedgerStatus.voided.rawValue
+            row.resolvedAt = resolvedAt
+        }
+        guard !rows.isEmpty else { return 0 }
+        try ctx.save()
+        objectWillChange.send()
+        return voidedSum
     }
 
     func ledgerEvents(userId: String, sessionId: UUID, gameInstanceId: UUID, itemId: String?) throws -> [XpLedgerEvent] {

@@ -2,7 +2,7 @@
 //  XpProgressViewModel.swift
 //  LicensePlateApp
 //
-//  Profile: server snapshot XP (unlock authority) vs local ledger provisional (Step XP 03).
+//  Profile: server progression XP + open provisional ledger (settlement-aware).
 //
 
 import Foundation
@@ -18,12 +18,17 @@ final class XpProgressViewModel: ObservableObject {
     @Published private(set) var lastError: String?
 
     var displayedTotalXp: Int {
-        let base = verifiedServerXp ?? serverFinalXp ?? 0
-        return base + ledgerProvisionalPending
+        ProgressionDisplayTotalsResolver.resolve(
+            userId: userId,
+            ledgerEvents: (try? xpLedger.ledgerEvents(userId: userId)) ?? [],
+            serverSnapshot: UserProgressionRepository.shared.snapshot,
+            verifiedGrantSum: verifiedProvider().verified,
+            hasReceivedGrantSnapshot: XpGrantRemoteRepository.shared.hasReceivedInitialSnapshot
+        ).displayedTotalXp
     }
 
     var isUsingLocalFallback: Bool {
-        verifiedServerXp == nil && serverFinalXp == nil
+        UserProgressionRepository.shared.snapshot == nil
     }
 
     private let userId: String
@@ -50,7 +55,8 @@ final class XpProgressViewModel: ObservableObject {
             let verified = repo.verifiedTotalXp
             let serverTotal = UserProgressionRepository.shared.snapshot?.totalXp ?? 0
             let matches = verified == serverTotal
-            return (verified > 0 || serverTotal == 0 ? verified : nil, matches)
+            // Audit only — never override mismatched progression totals.
+            return (matches || serverTotal == 0 ? verified : nil, matches)
         }
         refresh()
         if wiresLiveUpdates {
@@ -78,13 +84,21 @@ final class XpProgressViewModel: ObservableObject {
     }
 
     func refresh() {
-        serverFinalXp = snapshotProvider()
+        let snapshot = UserProgressionRepository.shared.snapshot
+        serverFinalXp = snapshotProvider() ?? snapshot?.totalXp
         let verified = verifiedProvider()
         verifiedServerXp = verified.verified
         isXpGrantLedgerVerified = verified.matchesServerTotal
         do {
             let events = try xpLedger.ledgerEvents(userId: userId)
-            ledgerProvisionalPending = LedgerPendingXpTotals.fromLedgerEvents(events).provisionalSum
+            let totals = ProgressionDisplayTotalsResolver.resolve(
+                userId: userId,
+                ledgerEvents: events,
+                serverSnapshot: snapshot,
+                verifiedGrantSum: verified.verified,
+                hasReceivedGrantSnapshot: XpGrantRemoteRepository.shared.hasReceivedInitialSnapshot
+            )
+            ledgerProvisionalPending = totals.openProvisionalXp
             lastError = nil
         } catch {
             lastError = error.localizedDescription

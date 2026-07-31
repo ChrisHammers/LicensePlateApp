@@ -1007,10 +1007,15 @@
 "reward.popup.kicker.rank_up" = "RANK UP";
 "reward.popup.kicker.achievement" = "ACHIEVEMENT UNLOCKED";
 "reward.popup.kicker.unlock" = "NEW UNLOCK";
+"reward.popup.kicker.xp_removed" = "XP REMOVED";
 "reward.popup.rank_up.detail" = "You reached Rank %d.";
 "reward.popup.rank_up.detail_unlocks" = "Rank %d · Unlocked %@";
 "reward.popup.xp_bonus" = "+%@ XP";
 "reward.popup.continue" = "Tap to continue";
+"reward.popup.xp_removed.title" = "-%d XP · %@";
+"reward.popup.xp_removed.detail" = "This find was not counted after sync. Your XP was updated.";
+"reward.popup.achievement_removed.title" = "Achievement removed";
+"reward.popup.achievement_removed.detail" = "“%@” was not confirmed and was removed from your unlocked list.";
 
 "return_streak.a11y.hint" = "Find a plate today to keep your streak.";
 "return_streak.explanation.title" = "Plate Find Streak";

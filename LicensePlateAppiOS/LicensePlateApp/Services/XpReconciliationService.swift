@@ -2,15 +2,26 @@
 //  XpReconciliationService.swift
 //  LicensePlateApp
 //
-//  Provisional/final discovery XP reconciliation (append-only ledger).
+//  Provisional discovery XP for offline UX; final local ledger rows only after cloud confirmation.
 //
 
 import Foundation
+
+struct XpClawbackNotice: Equatable, Sendable {
+    var regionId: String
+    var xpRemoved: Int
+    var sourceEventId: String
+    var sessionId: UUID
+    var gameInstanceId: UUID
+}
 
 @MainActor
 final class XpReconciliationService {
 
     static let shared = XpReconciliationService()
+
+    /// Last clawback produced by settlement (consumed by toast / reward presentation).
+    private(set) var lastClawbackNotice: XpClawbackNotice?
 
     private let xpLedger: XpLedgerRepositoryProtocol
     private let resolutionRepo: DiscoveryResolutionRepositoryProtocol
@@ -18,6 +29,7 @@ final class XpReconciliationService {
     private let gameRepository: GameInstanceRepositoryProtocol
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let rewardsConfig: ProgressionRewardsConfigProviding
+    private let clawbackHandler: ((XpClawbackNotice) -> Void)?
 
     init(
         xpLedger: XpLedgerRepositoryProtocol = XpLedgerRepository.shared,
@@ -25,7 +37,8 @@ final class XpReconciliationService {
         tripActivityEvents: TripActivityEventRepositoryProtocol = TripActivityEventRepository.shared,
         gameRepository: GameInstanceRepositoryProtocol = GameInstanceRepository.shared,
         tripSessionRepository: TripSessionRepositoryProtocol = TripSessionRepository.shared,
-        rewardsConfig: ProgressionRewardsConfigProviding = ProgressionRewardsConfigProvider.shared
+        rewardsConfig: ProgressionRewardsConfigProviding = ProgressionRewardsConfigProvider.shared,
+        clawbackHandler: ((XpClawbackNotice) -> Void)? = nil
     ) {
         self.xpLedger = xpLedger
         self.resolutionRepo = resolutionRepo
@@ -33,6 +46,12 @@ final class XpReconciliationService {
         self.gameRepository = gameRepository
         self.tripSessionRepository = tripSessionRepository
         self.rewardsConfig = rewardsConfig
+        self.clawbackHandler = clawbackHandler
+    }
+
+    func consumeLastClawbackNotice() -> XpClawbackNotice? {
+        defer { lastClawbackNotice = nil }
+        return lastClawbackNotice
     }
 
     /// Called after a gameplay event is durably inserted (same timing as progression observer).
@@ -73,87 +92,52 @@ final class XpReconciliationService {
         ).storageString
 
         let rewards = rewardsConfig.current
-        let baseDiscoveryXp = rewards.xp.baseDiscoveryXp
+        let expectedXp = expectedProvisionalXp(
+            tripMode: tripMode,
+            gameMode: game.commonConfig.gameMode,
+            rewards: rewards
+        )
+        guard expectedXp > 0 else { return }
 
-        if tripMode == .solo {
-            let soloFinal = XpLedgerEvent(
-                userId: participantId,
-                sessionId: event.sessionId,
-                gameInstanceId: gameInstanceId,
-                sourceEventId: event.id,
-                sourceEventType: TripActivityEventKind.regionFound.rawValue,
-                itemId: regionId,
-                grantKind: .finalDiscoveryAward,
-                status: .final,
-                xpDelta: baseDiscoveryXp,
-                reasonCode: .soloNewDiscovery,
-                xpUniquenessKey: key,
-                metadata: [XpLedgerMetadataKey.originalDiscoveryEventId: event.id]
-            )
-            let inserted = try xpLedger.appendBaseDiscoveryIfAbsent(soloFinal)
-            logBaseGrantOutcome(
-                inserted: inserted,
-                sessionId: event.sessionId,
-                gameInstanceId: gameInstanceId,
-                regionId: regionId,
-                participantId: participantId
-            )
-            return
-        }
-
-        switch game.commonConfig.gameMode {
-        case .competitive:
+        if tripMode != .solo, game.commonConfig.gameMode == .competitive {
             guard let first = forTarget.first, first.id == event.id else { return }
-            let provisional = XpLedgerEvent(
-                userId: participantId,
-                sessionId: event.sessionId,
-                gameInstanceId: gameInstanceId,
-                sourceEventId: event.id,
-                sourceEventType: TripActivityEventKind.regionFound.rawValue,
-                itemId: regionId,
-                grantKind: .provisionalDiscoveryXp,
-                status: .provisional,
-                xpDelta: baseDiscoveryXp,
-                reasonCode: .discoveryClaimPendingResolution,
-                xpUniquenessKey: key,
-                metadata: [XpLedgerMetadataKey.originalDiscoveryEventId: event.id]
-            )
-            let inserted = try xpLedger.appendBaseDiscoveryIfAbsent(provisional)
-            logBaseGrantOutcome(
-                inserted: inserted,
-                sessionId: event.sessionId,
-                gameInstanceId: gameInstanceId,
-                regionId: regionId,
-                participantId: participantId
-            )
-
-        case .collaborative:
-            let finalEvent = XpLedgerEvent(
-                userId: participantId,
-                sessionId: event.sessionId,
-                gameInstanceId: gameInstanceId,
-                sourceEventId: event.id,
-                sourceEventType: TripActivityEventKind.regionFound.rawValue,
-                itemId: regionId,
-                grantKind: .finalDiscoveryAward,
-                status: .final,
-                xpDelta: baseDiscoveryXp,
-                reasonCode: .collaborativeSharedFinder,
-                xpUniquenessKey: key,
-                metadata: [XpLedgerMetadataKey.originalDiscoveryEventId: event.id]
-            )
-            let inserted = try xpLedger.appendBaseDiscoveryIfAbsent(finalEvent)
-            logBaseGrantOutcome(
-                inserted: inserted,
-                sessionId: event.sessionId,
-                gameInstanceId: gameInstanceId,
-                regionId: regionId,
-                participantId: participantId
-            )
         }
+
+        let reason: XpReasonCode
+        if tripMode == .solo {
+            reason = .soloNewDiscovery
+        } else {
+            switch game.commonConfig.gameMode {
+            case .competitive: reason = .discoveryClaimPendingResolution
+            case .collaborative: reason = .collaborativeSharedFinder
+            }
+        }
+
+        let provisional = XpLedgerEvent(
+            userId: participantId,
+            sessionId: event.sessionId,
+            gameInstanceId: gameInstanceId,
+            sourceEventId: event.id,
+            sourceEventType: TripActivityEventKind.regionFound.rawValue,
+            itemId: regionId,
+            grantKind: .provisionalDiscoveryXp,
+            status: .provisional,
+            xpDelta: expectedXp,
+            reasonCode: reason,
+            xpUniquenessKey: key,
+            metadata: [XpLedgerMetadataKey.originalDiscoveryEventId: event.id]
+        )
+        let inserted = try xpLedger.appendBaseDiscoveryIfAbsent(provisional)
+        logBaseGrantOutcome(
+            inserted: inserted,
+            sessionId: event.sessionId,
+            gameInstanceId: gameInstanceId,
+            regionId: regionId,
+            participantId: participantId
+        )
     }
 
-    /// Persists resolution and applies compensating ledger rows so net XP matches the award engine.
+    /// Persists resolution, closes provisional rows, and writes a final local mirror only when cloud confirms XP.
     func consumeResolution(
         _ resolution: DiscoveryResolution,
         gameMode: GameMode,
@@ -169,7 +153,7 @@ final class XpReconciliationService {
             xpCategory: .baseRegionDiscovery
         ).storageString
 
-        if try hasAdjustmentForResolution(resolutionId: resolution.resolutionId, baseUniquenessKey: baseKey) {
+        if try hasSettledResolution(resolutionId: resolution.resolutionId, baseUniquenessKey: baseKey) {
             return
         }
 
@@ -183,38 +167,123 @@ final class XpReconciliationService {
             rewards: rewards
         )
         let targetNet = award.xpNet
+        let resolvedAt = Date()
 
-        let rows = try xpLedger.ledgerEvents(forUniquenessKey: baseKey)
-        let currentNet = rows.reduce(0) { $0 + $1.xpDelta }
-        let rawDelta = targetNet - currentNet
-        let delta = max(rewards.policy.minimumLocalReconciliationDelta, rawDelta)
-        guard delta != 0 else { return }
-
-        var meta: [String: String] = [XpLedgerMetadataKey.resolutionId: resolution.resolutionId]
-        meta[XpLedgerMetadataKey.originalDiscoveryEventId] = resolution.sourceEventId
-
-        let adjustment = XpLedgerEvent(
-            userId: resolution.actorUserId,
-            sessionId: resolution.sessionId,
-            gameInstanceId: resolution.gameInstanceId,
-            sourceEventId: resolution.resolutionId,
-            sourceEventType: "discovery_resolution",
-            itemId: resolution.itemId,
-            grantKind: .reconciliationAdjustment,
-            status: .final,
-            xpDelta: delta,
-            reasonCode: award.xpReason,
-            xpUniquenessKey: baseKey,
-            metadata: meta
+        let voidedProvisionalXp = try xpLedger.voidProvisionalRows(
+            forUniquenessKey: baseKey,
+            resolvedAt: resolvedAt
         )
-        try xpLedger.append(adjustment)
+
+        let activeRows = try xpLedger.ledgerEvents(forUniquenessKey: baseKey)
+            .filter { $0.status != .voided }
+
+        if targetNet > 0 {
+            let hasFinal = activeRows.contains { $0.grantKind == .finalDiscoveryAward }
+            if !hasFinal {
+                let finalEvent = XpLedgerEvent(
+                    userId: resolution.actorUserId,
+                    sessionId: resolution.sessionId,
+                    gameInstanceId: resolution.gameInstanceId,
+                    sourceEventId: resolution.sourceEventId,
+                    sourceEventType: TripActivityEventKind.regionFound.rawValue,
+                    itemId: resolution.itemId,
+                    grantKind: .finalDiscoveryAward,
+                    status: .final,
+                    xpDelta: targetNet,
+                    reasonCode: award.xpReason,
+                    xpUniquenessKey: baseKey,
+                    resolvedAt: resolvedAt,
+                    metadata: [
+                        XpLedgerMetadataKey.resolutionId: resolution.resolutionId,
+                        XpLedgerMetadataKey.originalDiscoveryEventId: resolution.sourceEventId,
+                    ]
+                )
+                try xpLedger.append(finalEvent)
+            }
+        }
+
+        let rowsAfterFinal = try xpLedger.ledgerEvents(forUniquenessKey: baseKey)
+            .filter { $0.status != .voided }
+        let netAfterFinal = rowsAfterFinal.reduce(0) { $0 + $1.xpDelta }
+        let rawDelta = targetNet - netAfterFinal
+        // Allow negative clawbacks so rejected finds clear provisional XP.
+        let delta = rawDelta
+        if delta != 0 {
+            var meta: [String: String] = [XpLedgerMetadataKey.resolutionId: resolution.resolutionId]
+            meta[XpLedgerMetadataKey.originalDiscoveryEventId] = resolution.sourceEventId
+            let adjustment = XpLedgerEvent(
+                userId: resolution.actorUserId,
+                sessionId: resolution.sessionId,
+                gameInstanceId: resolution.gameInstanceId,
+                sourceEventId: resolution.resolutionId,
+                sourceEventType: "discovery_resolution",
+                itemId: resolution.itemId,
+                grantKind: .reconciliationAdjustment,
+                status: .final,
+                xpDelta: delta,
+                reasonCode: award.xpReason,
+                xpUniquenessKey: baseKey,
+                resolvedAt: resolvedAt,
+                metadata: meta
+            )
+            try xpLedger.append(adjustment)
+        } else if targetNet == 0 {
+            // Idempotency marker when clawback only voided provisional rows.
+            let marker = XpLedgerEvent(
+                userId: resolution.actorUserId,
+                sessionId: resolution.sessionId,
+                gameInstanceId: resolution.gameInstanceId,
+                sourceEventId: resolution.resolutionId,
+                sourceEventType: "discovery_resolution",
+                itemId: resolution.itemId,
+                grantKind: .reconciliationAdjustment,
+                status: .final,
+                xpDelta: 0,
+                reasonCode: award.xpReason,
+                xpUniquenessKey: baseKey,
+                resolvedAt: resolvedAt,
+                metadata: [
+                    XpLedgerMetadataKey.resolutionId: resolution.resolutionId,
+                    XpLedgerMetadataKey.originalDiscoveryEventId: resolution.sourceEventId,
+                ]
+            )
+            try xpLedger.append(marker)
+        }
+
+        if targetNet == 0, voidedProvisionalXp > 0 {
+            let notice = XpClawbackNotice(
+                regionId: resolution.itemId,
+                xpRemoved: voidedProvisionalXp,
+                sourceEventId: resolution.sourceEventId,
+                sessionId: resolution.sessionId,
+                gameInstanceId: resolution.gameInstanceId
+            )
+            lastClawbackNotice = notice
+            clawbackHandler?(notice)
+            XpClawbackPresentationService.shared.enqueue(notice)
+        }
     }
 
-    private func hasAdjustmentForResolution(resolutionId: String, baseUniquenessKey: String) throws -> Bool {
+    private func expectedProvisionalXp(
+        tripMode: TripMode?,
+        gameMode: GameMode,
+        rewards: ProgressionRewardsConfig
+    ) -> Int {
+        if tripMode == .solo {
+            return rewards.xp.baseDiscoveryXp
+        }
+        switch gameMode {
+        case .competitive:
+            return rewards.xp.baseDiscoveryXp + rewards.xp.firstFinderBonusXp
+        case .collaborative:
+            return rewards.xp.baseDiscoveryXp
+        }
+    }
+
+    private func hasSettledResolution(resolutionId: String, baseUniquenessKey: String) throws -> Bool {
         let rows = try xpLedger.ledgerEvents(forUniquenessKey: baseUniquenessKey)
         return rows.contains { row in
-            row.grantKind == .reconciliationAdjustment
-                && row.metadata?[XpLedgerMetadataKey.resolutionId] == resolutionId
+            row.metadata?[XpLedgerMetadataKey.resolutionId] == resolutionId
         }
     }
 

@@ -241,6 +241,75 @@ struct XpGainToastServiceTests {
         #expect(service.presentation?.totalXp == 10)
     }
 
+    @Test func offlineProvisionalToastsWithoutRemoteSnapshot() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        remote.hasReceivedInitialSnapshot = false
+
+        let service = XpGainToastService(
+            xpLedger: ledger,
+            remoteReader: remote,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: "u1")
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        try? ledger.append(
+            sampleLedgerRow(
+                id: "prov-1",
+                grantKind: .provisionalDiscoveryXp,
+                reasonCode: .discoveryClaimPendingResolution,
+                status: .provisional
+            )
+        )
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == 10)
+        #expect(service.presentation?.lines.first?.id == "discovery")
+    }
+
+    @Test func settledFinalDoesNotRetoastSameScope() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = XpGainToastService(
+            xpLedger: ledger,
+            remoteReader: remote,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: "u1")
+        service.performImmediateRefresh()
+
+        let provisional = sampleLedgerRow(
+            id: "prov-1",
+            grantKind: .provisionalDiscoveryXp,
+            reasonCode: .discoveryClaimPendingResolution,
+            status: .provisional
+        )
+        try? ledger.append(provisional)
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == 10)
+        service.dismissManually()
+
+        var final = provisional
+        final = XpLedgerEvent(
+            id: "final-1",
+            userId: provisional.userId,
+            sessionId: provisional.sessionId,
+            gameInstanceId: provisional.gameInstanceId,
+            sourceEventId: provisional.sourceEventId,
+            sourceEventType: provisional.sourceEventType,
+            itemId: provisional.itemId,
+            grantKind: .finalDiscoveryAward,
+            status: .final,
+            xpDelta: 10,
+            reasonCode: .soloNewDiscovery,
+            xpUniquenessKey: provisional.xpUniquenessKey
+        )
+        try? ledger.append(final)
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+    }
+
     @Test func coalescesMultipleDiscoveriesIntoOneGroupedLine() async {
         let ledger = MockXpLedgerRepository()
         let remote = MockXpGainToastRemoteReader()

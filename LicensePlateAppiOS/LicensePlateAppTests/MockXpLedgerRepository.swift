@@ -18,7 +18,13 @@ final class MockXpLedgerRepository: XpLedgerRepositoryProtocol {
     }
 
     func appendBaseDiscoveryIfAbsent(_ event: XpLedgerEvent) throws -> Bool {
-        if stored.contains(where: { $0.xpUniquenessKey == event.xpUniquenessKey }) { return false }
+        if stored.contains(where: {
+            $0.xpUniquenessKey == event.xpUniquenessKey
+                && $0.status != .voided
+                && ($0.grantKind == .provisionalDiscoveryXp || $0.grantKind == .finalDiscoveryAward)
+        }) {
+            return false
+        }
         stored.append(event)
         return true
     }
@@ -75,7 +81,22 @@ final class MockXpLedgerRepository: XpLedgerRepositoryProtocol {
     }
 
     func hasBaseDiscoveryForUniquenessKey(_ key: String) throws -> Bool {
-        stored.contains { $0.xpUniquenessKey == key }
+        stored.contains {
+            $0.xpUniquenessKey == key
+                && $0.status != .voided
+                && ($0.grantKind == .provisionalDiscoveryXp || $0.grantKind == .finalDiscoveryAward)
+        }
+    }
+
+    @discardableResult
+    func voidProvisionalRows(forUniquenessKey key: String, resolvedAt: Date) throws -> Int {
+        var sum = 0
+        for index in stored.indices where stored[index].xpUniquenessKey == key && stored[index].status == .provisional {
+            sum += stored[index].xpDelta
+            stored[index].status = .voided
+            stored[index].resolvedAt = resolvedAt
+        }
+        return sum
     }
 
     private func sortLedger(_ a: XpLedgerEvent, _ b: XpLedgerEvent) -> Bool {

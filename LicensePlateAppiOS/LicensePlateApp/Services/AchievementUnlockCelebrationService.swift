@@ -3,6 +3,7 @@
 //  LicensePlateApp
 //
 //  Observes progression snapshots and queues rank/achievement celebration popups.
+//  Offline-capable: baselines historical state at attach, then celebrates in-session transitions.
 //
 
 import Combine
@@ -24,11 +25,13 @@ final class AchievementUnlockCelebrationService: ObservableObject {
     private let userAchievementRemoteRepository: UserAchievementRemoteRepository
     private let achievementUnlockSyncService: AchievementUnlockSyncService
     private let rewardPresenter: RewardPresenter
+    private let deliveryOutbox: RewardDeliveryOutbox
     private var cancellables = Set<AnyCancellable>()
     private var refreshWorkItem: DispatchWorkItem?
 
     private var user: AppUser?
     private var previousSnapshot: AchievementProgressSnapshot?
+    private var firstSnapshotAfterConfigure: AchievementProgressSnapshot?
     private var hasBaseline = false
     private var persistedAchievementIds: Set<String> = []
 
@@ -43,7 +46,8 @@ final class AchievementUnlockCelebrationService: ObservableObject {
         userAchievementRepository: UserAchievementRepository = .shared,
         userAchievementRemoteRepository: UserAchievementRemoteRepository = .shared,
         achievementUnlockSyncService: AchievementUnlockSyncService = .shared,
-        rewardPresenter: RewardPresenter = .shared
+        rewardPresenter: RewardPresenter = .shared,
+        deliveryOutbox: RewardDeliveryOutbox = .shared
     ) {
         self.catalogProvider = catalogProvider
         self.userProgressionService = userProgressionService
@@ -56,6 +60,7 @@ final class AchievementUnlockCelebrationService: ObservableObject {
         self.userAchievementRemoteRepository = userAchievementRemoteRepository
         self.achievementUnlockSyncService = achievementUnlockSyncService
         self.rewardPresenter = rewardPresenter
+        self.deliveryOutbox = deliveryOutbox
 
         userProgressionService.objectWillChange
             .receive(on: DispatchQueue.main)
@@ -97,6 +102,7 @@ final class AchievementUnlockCelebrationService: ObservableObject {
         refreshWorkItem?.cancel()
         self.user = user
         previousSnapshot = nil
+        firstSnapshotAfterConfigure = nil
         hasBaseline = false
         persistedAchievementIds = []
         userAchievementRemoteRepository.stopListening()
@@ -113,11 +119,13 @@ final class AchievementUnlockCelebrationService: ObservableObject {
         refreshWorkItem = nil
         user = nil
         previousSnapshot = nil
+        firstSnapshotAfterConfigure = nil
         hasBaseline = false
         persistedAchievementIds = []
         userAchievementRemoteRepository.stopListening()
         achievementUnlockSyncService.resetForSignOut()
         rewardPresenter.reset()
+        XpClawbackPresentationService.shared.resetForSignOut()
     }
 
     private func scheduleRefresh() {
@@ -148,15 +156,22 @@ final class AchievementUnlockCelebrationService: ObservableObject {
             remotePersistedRecords: userAchievementRemoteRepository.records
         )
 
+        if firstSnapshotAfterConfigure == nil {
+            firstSnapshotAfterConfigure = snapshot
+        }
+
         guard isHydrated(for: user) else {
-            previousSnapshot = snapshot
             return
         }
 
-        guard hasBaseline, let previousSnapshot else {
-            establishBaseline(snapshot: snapshot, userId: userId)
-            return
+        if !hasBaseline {
+            let baseline = firstSnapshotAfterConfigure ?? snapshot
+            establishBaseline(snapshot: baseline, userId: userId)
+            previousSnapshot = baseline
+            hasBaseline = true
         }
+
+        guard let previousSnapshot else { return }
 
         let catalog = catalogProvider.current
         let ladder = ProgressionCatalogProjection.rankLadder(from: catalog)
@@ -168,10 +183,14 @@ final class AchievementUnlockCelebrationService: ObservableObject {
                nextLevel: snapshot.rankLevel
            ),
            let rank = ladder.ranks.first(where: { $0.level == newLevel }) {
-            rewardPresenter.show(.rankUp(rank))
-            AnalyticsService.shared.log(
-                .rankUpCelebrated(level: newLevel, totalXp: snapshot.totalXp)
-            )
+            let semanticId = "rank-\(newLevel)"
+            if !deliveryOutbox.hasPresentedOrDismissed(userId: userId, semanticId: semanticId) {
+                rewardPresenter.show(.rankUp(rank))
+                deliveryOutbox.mark(userId: userId, semanticId: semanticId, state: .presented)
+                AnalyticsService.shared.log(
+                    .rankUpCelebrated(level: newLevel, totalXp: snapshot.totalXp)
+                )
+            }
         }
 
         if catalog.presentation.achievementsEnabled {
@@ -186,7 +205,12 @@ final class AchievementUnlockCelebrationService: ObservableObject {
             for id in celebrateIds {
                 guard let achievement = achievementsById[id],
                       let status = snapshot.statuses[id] else { continue }
+                let semanticId = "ach-\(id)"
+                if deliveryOutbox.hasPresentedOrDismissed(userId: userId, semanticId: semanticId) {
+                    continue
+                }
                 rewardPresenter.show(.achievement(achievement))
+                deliveryOutbox.mark(userId: userId, semanticId: semanticId, state: .presented)
                 AnalyticsService.shared.log(
                     .achievementUnlocked(
                         achievementId: id,
@@ -228,13 +252,15 @@ final class AchievementUnlockCelebrationService: ObservableObject {
                 achievementId: id,
                 lastProgress: status.progress
             )
+            deliveryOutbox.mark(userId: userId, semanticId: "ach-\(id)", state: .presented)
+        }
+        if snapshot.rankLevel > 1 {
+            deliveryOutbox.mark(userId: userId, semanticId: "rank-\(snapshot.rankLevel)", state: .presented)
         }
         persistedAchievementIds = AchievementProgressPersistence.persistedAchievementIds(
             local: (try? userAchievementRepository.fetchRecords(forUserId: userId)) ?? [:],
             remote: userAchievementRemoteRepository.records
         )
-        previousSnapshot = snapshot
-        hasBaseline = true
         if let user {
             let entitlement = entitlementService.entitlementState(for: user)
             Task {
@@ -256,22 +282,31 @@ final class AchievementUnlockCelebrationService: ObservableObject {
     }
 
     private func resolveTotalXp(for user: AppUser) -> Int {
-        if let effective = userProgressionService.effectiveTotals {
-            return max(0, effective.totalXp)
-        }
         let userId = user.firebaseUID ?? user.id
-        let server = userProgressionRepository.snapshot?.totalXp ?? 0
-        guard let events = try? xpLedger.ledgerEvents(userId: userId) else {
-            return max(0, server)
+        let events = (try? xpLedger.ledgerEvents(userId: userId)) ?? []
+        let display = ProgressionDisplayTotalsResolver.resolve(
+            userId: userId,
+            ledgerEvents: events,
+            serverSnapshot: userProgressionRepository.snapshot,
+            verifiedGrantSum: nil,
+            hasReceivedGrantSnapshot: false
+        )
+        // Prefer event-replay effective totals when they exceed ledger provisional (e.g. game_ended pending).
+        if let effective = userProgressionService.effectiveTotals {
+            return max(display.displayedTotalXp, effective.totalXp)
         }
-        return max(0, server + LedgerPendingXpTotals.fromLedgerEvents(events).provisionalSum)
+        return display.displayedTotalXp
     }
 
+    /// Offline-friendly: local effective progression is enough; remote achievement snapshot is optional.
     private func isHydrated(for user: AppUser) -> Bool {
-        guard userProgressionRepository.hasReceivedInitialSnapshot else { return false }
-        guard userProgressionService.effectiveTotals != nil else { return false }
-        guard isLifetimeStatsHydrated(for: user) else { return false }
-        return userAchievementRemoteRepository.hasReceivedInitialSnapshot
+        let hasLocalProgression = userProgressionService.effectiveTotals != nil
+        let hasRemoteProgression = userProgressionRepository.hasReceivedInitialSnapshot
+        guard hasLocalProgression || hasRemoteProgression else { return false }
+        return isLifetimeStatsHydrated(for: user)
+            || lifetimeStatsCoordinator.stats != nil
+            || userAchievementRemoteRepository.hasReceivedInitialSnapshot
+            || hasLocalProgression
     }
 
     private func isLifetimeStatsHydrated(for user: AppUser) -> Bool {

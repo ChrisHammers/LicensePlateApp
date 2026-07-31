@@ -2,7 +2,7 @@
 //  XpDisplayedTotalResolver.swift
 //  LicensePlateApp
 //
-//  Mirrors `XpProgressViewModel.displayedTotalXp` for toast rank band snapshots.
+//  Shared displayed XP for toast rank band snapshots (same as profile / celebrations).
 //
 
 import Foundation
@@ -15,16 +15,21 @@ enum XpDisplayedTotalResolver {
         xpLedger: XpLedgerRepositoryProtocol,
         remoteReader: XpGainToastRemoteReading
     ) -> Int {
-        let server = UserProgressionRepository.shared.snapshot?.totalXp ?? 0
-        var verified: Int?
-        if let remote = remoteReader as? XpGrantRemoteRepository,
-           remote.hasReceivedInitialSnapshot {
-            let value = remote.verifiedTotalXp
-            verified = value > 0 || server == 0 ? value : nil
-        }
-        let base = verified ?? server
         let events = (try? xpLedger.ledgerEvents(userId: userId)) ?? []
-        let pending = LedgerPendingXpTotals.fromLedgerEvents(events).provisionalSum
-        return max(0, base + pending)
+        var verified: Int?
+        var hasGrantSnapshot = false
+        if let remote = remoteReader as? XpGrantRemoteRepository {
+            hasGrantSnapshot = remote.hasReceivedInitialSnapshot
+            if hasGrantSnapshot {
+                verified = remote.verifiedTotalXp
+            }
+        }
+        return ProgressionDisplayTotalsResolver.resolve(
+            userId: userId,
+            ledgerEvents: events,
+            serverSnapshot: UserProgressionRepository.shared.snapshot,
+            verifiedGrantSum: verified,
+            hasReceivedGrantSnapshot: hasGrantSnapshot
+        ).displayedTotalXp
     }
 }

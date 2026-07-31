@@ -31,7 +31,8 @@ struct XpReconciliationServiceTests {
             resolutionRepo: DiscoveryResolutionRepository.shared,
             tripActivityEvents: events,
             gameRepository: games,
-            tripSessionRepository: trips
+            tripSessionRepository: trips,
+            clawbackHandler: { _ in }
         )
     }
 
@@ -56,36 +57,14 @@ struct XpReconciliationServiceTests {
         )
     }
 
-    @Test func competitiveFirstFinderWritesProvisionalPlus10() throws {
+    @Test func competitiveFirstFinderWritesProvisionalPlus15() throws {
         _ = try makeContext()
         let sessionId = UUID()
         let gameId = UUID()
         let events = MockTripActivityEventRepository()
         let games = MockGameInstanceRepository()
         let trips = MockTripSessionRepository()
-        let session = TripSession(
-            id: sessionId,
-            name: "T",
-            participants: [
-                TripParticipant(userId: "u1", role: .owner, joinedAt: Date()),
-                TripParticipant(userId: "u2", role: .member, joinedAt: Date()),
-            ]
-        )
-        trips.seed(session)
-        let cc = CommonGameConfig(
-            lifecycleState: .started,
-            gameMode: .competitive,
-            configLocked: true,
-            configLockReason: .gameStarted
-        )
-        let game = GameInstance(
-            id: gameId,
-            definitionId: GameType.licensePlate.rawValue,
-            sessionId: sessionId,
-            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
-            commonConfig: cc
-        )
-        games.seed(game)
+        seedCompetitiveGame(sessionId: sessionId, gameId: gameId, games: games, trips: trips)
 
         let ev = regionFoundEvent(id: "find-1", sessionId: sessionId, gameId: gameId, regionId: "TX", participantId: "u1")
         try events.append(ev)
@@ -102,14 +81,15 @@ struct XpReconciliationServiceTests {
         )
         #expect(rows.count == 1)
         #expect(rows[0].grantKind == .provisionalDiscoveryXp)
-        #expect(rows[0].xpDelta == 10)
+        #expect(rows[0].xpDelta == 15)
+        #expect(rows[0].status == .provisional)
     }
 
-    @Test func consumeAcceptedFirstKeepsNet10() throws {
+    @Test func consumeAcceptedFirstSettlesToFinalNet15() throws {
         _ = try makeContext()
         let sessionId = UUID()
         let gameId = UUID()
-        try competitiveProvisionalSeed(sessionId: sessionId, gameId: gameId)
+        try competitiveProvisionalSeed(sessionId: sessionId, gameId: gameId, xpDelta: 15)
 
         let resolution = DiscoveryResolution(
             resolutionId: "xp_res:v1:find-1:accepted_first",
@@ -121,7 +101,7 @@ struct XpReconciliationServiceTests {
             finalOutcome: .acceptedFirst,
             tripScoringOutcome: .acceptedFirst,
             personalHistoryOutcome: .acceptedFirst,
-            finalXpAward: 10,
+            finalXpAward: 15,
             xpReason: .competitiveFirstFinder
         )
         let events = MockTripActivityEventRepository()
@@ -140,20 +120,32 @@ struct XpReconciliationServiceTests {
             xpCategory: .baseRegionDiscovery
         ).storageString
         let rows = try XpLedgerRepository.shared.ledgerEvents(forUniquenessKey: key)
-        #expect(rows.count == 1)
-        #expect(rows.reduce(0) { $0 + $1.xpDelta } == 10)
+        let active = rows.filter { $0.status != .voided }
+        #expect(rows.contains { $0.status == .voided && $0.grantKind == .provisionalDiscoveryXp })
+        #expect(active.contains { $0.grantKind == .finalDiscoveryAward && $0.xpDelta == 15 })
+        #expect(active.reduce(0) { $0 + $1.xpDelta } == 15)
     }
 
-    @Test func consumeAcceptedLateDoesNotClawBackBaseXp() throws {
+    @Test func consumeAcceptedLateClawsBackProvisionalXp() throws {
         _ = try makeContext()
         let sessionId = UUID()
         let gameId = UUID()
-        try competitiveProvisionalSeed(sessionId: sessionId, gameId: gameId)
+        try competitiveProvisionalSeed(sessionId: sessionId, gameId: gameId, xpDelta: 15)
 
         let events = MockTripActivityEventRepository()
         let games = MockGameInstanceRepository()
         let trips = MockTripSessionRepository()
         seedCompetitiveGame(sessionId: sessionId, gameId: gameId, games: games, trips: trips)
+
+        var clawbacks: [XpClawbackNotice] = []
+        let svc = XpReconciliationService(
+            xpLedger: XpLedgerRepository.shared,
+            resolutionRepo: DiscoveryResolutionRepository.shared,
+            tripActivityEvents: events,
+            gameRepository: games,
+            tripSessionRepository: trips,
+            clawbackHandler: { clawbacks.append($0) }
+        )
 
         let resolution = DiscoveryResolution(
             resolutionId: "xp_res:v1:find-1:accepted_late",
@@ -165,10 +157,9 @@ struct XpReconciliationServiceTests {
             finalOutcome: .acceptedLate,
             tripScoringOutcome: .acceptedLate,
             personalHistoryOutcome: .acceptedLate,
-            finalXpAward: GameProgressionXPRewards.baseDiscoveryXp,
+            finalXpAward: 0,
             xpReason: .competitiveLateFinder
         )
-        let svc = makeService(events: events, games: games, trips: trips)
         try svc.consumeResolution(resolution, gameMode: .competitive, tripMode: .multiplayer)
 
         let key = XpLedgerKeyBuilder.uniquenessKey(
@@ -179,21 +170,32 @@ struct XpReconciliationServiceTests {
             xpCategory: .baseRegionDiscovery
         ).storageString
         let rows = try XpLedgerRepository.shared.ledgerEvents(forUniquenessKey: key)
-        let net = rows.reduce(0) { $0 + $1.xpDelta }
-        #expect(net == GameProgressionXPRewards.baseDiscoveryXp)
-        #expect(rows.contains { $0.grantKind == .reconciliationAdjustment && $0.xpDelta < 0 } == false)
+        let activeNet = rows.filter { $0.status != .voided }.reduce(0) { $0 + $1.xpDelta }
+        #expect(activeNet == 0)
+        #expect(clawbacks.count == 1)
+        #expect(clawbacks[0].xpRemoved == 15)
     }
 
-    @Test func consumeRejectedDuplicateDoesNotClawBackPreviouslyGrantedXp() throws {
+    @Test func consumeRejectedDuplicateClawsBackPreviouslyGrantedXp() throws {
         _ = try makeContext()
         let sessionId = UUID()
         let gameId = UUID()
-        try competitiveProvisionalSeed(sessionId: sessionId, gameId: gameId)
+        try competitiveProvisionalSeed(sessionId: sessionId, gameId: gameId, xpDelta: 15)
 
         let events = MockTripActivityEventRepository()
         let games = MockGameInstanceRepository()
         let trips = MockTripSessionRepository()
         seedCompetitiveGame(sessionId: sessionId, gameId: gameId, games: games, trips: trips)
+
+        var clawbacks: [XpClawbackNotice] = []
+        let svc = XpReconciliationService(
+            xpLedger: XpLedgerRepository.shared,
+            resolutionRepo: DiscoveryResolutionRepository.shared,
+            tripActivityEvents: events,
+            gameRepository: games,
+            tripSessionRepository: trips,
+            clawbackHandler: { clawbacks.append($0) }
+        )
 
         let resolution = DiscoveryResolution(
             resolutionId: "xp_res:v1:find-1:rejected_duplicate",
@@ -208,7 +210,6 @@ struct XpReconciliationServiceTests {
             finalXpAward: 0,
             xpReason: .duplicateNoXp
         )
-        let svc = makeService(events: events, games: games, trips: trips)
         try svc.consumeResolution(resolution, gameMode: .competitive, tripMode: .multiplayer)
 
         let key = XpLedgerKeyBuilder.uniquenessKey(
@@ -219,9 +220,9 @@ struct XpReconciliationServiceTests {
             xpCategory: .baseRegionDiscovery
         ).storageString
         let rows = try XpLedgerRepository.shared.ledgerEvents(forUniquenessKey: key)
-        let net = rows.reduce(0) { $0 + $1.xpDelta }
-        #expect(net == GameProgressionXPRewards.baseDiscoveryXp)
-        #expect(rows.contains { $0.grantKind == .reconciliationAdjustment && $0.xpDelta < 0 } == false)
+        let activeNet = rows.filter { $0.status != .voided }.reduce(0) { $0 + $1.xpDelta }
+        #expect(activeNet == 0)
+        #expect(clawbacks.count == 1)
     }
 
     @Test func secondCompetitiveFindSameUserDoesNotMintMoreBaseXp() throws {
@@ -258,7 +259,7 @@ struct XpReconciliationServiceTests {
         #expect(rows.count == 1)
     }
 
-    @Test func soloTripWritesFinalDiscoveryXpImmediately() throws {
+    @Test func soloTripWritesProvisionalDiscoveryXpImmediately() throws {
         _ = try makeContext()
         let sessionId = UUID()
         let gameId = UUID()
@@ -300,15 +301,17 @@ struct XpReconciliationServiceTests {
             statuses: nil
         )
         #expect(rows.count == 1)
-        #expect(rows[0].grantKind == .finalDiscoveryAward)
+        #expect(rows[0].grantKind == .provisionalDiscoveryXp)
+        #expect(rows[0].status == .provisional)
         #expect(rows[0].reasonCode == .soloNewDiscovery)
+        #expect(rows[0].xpDelta == 10)
     }
 
     @Test func consumeResolutionIsIdempotentPerResolutionId() throws {
         _ = try makeContext()
         let sessionId = UUID()
         let gameId = UUID()
-        try competitiveProvisionalSeed(sessionId: sessionId, gameId: gameId)
+        try competitiveProvisionalSeed(sessionId: sessionId, gameId: gameId, xpDelta: 15)
 
         let events = MockTripActivityEventRepository()
         let games = MockGameInstanceRepository()
@@ -325,7 +328,7 @@ struct XpReconciliationServiceTests {
             finalOutcome: .acceptedLate,
             tripScoringOutcome: .acceptedLate,
             personalHistoryOutcome: .acceptedLate,
-            finalXpAward: GameProgressionXPRewards.baseDiscoveryXp,
+            finalXpAward: 0,
             xpReason: .competitiveLateFinder
         )
         let svc = makeService(events: events, games: games, trips: trips)
@@ -339,12 +342,12 @@ struct XpReconciliationServiceTests {
             itemId: "TX",
             xpCategory: .baseRegionDiscovery
         ).storageString
-        let adjustments = try XpLedgerRepository.shared.ledgerEvents(forUniquenessKey: key)
-            .filter { $0.grantKind == .reconciliationAdjustment }
-        #expect(adjustments.count == 1)
+        let markers = try XpLedgerRepository.shared.ledgerEvents(forUniquenessKey: key)
+            .filter { $0.metadata?[XpLedgerMetadataKey.resolutionId] == resolution.resolutionId }
+        #expect(markers.count == 1)
     }
 
-    @Test func collaborativeMultiplayerWritesFinalPlus10() throws {
+    @Test func collaborativeMultiplayerWritesProvisionalPlus10() throws {
         _ = try makeContext()
         let sessionId = UUID()
         let gameId = UUID()
@@ -389,13 +392,14 @@ struct XpReconciliationServiceTests {
             statuses: nil
         )
         #expect(rows.count == 1)
-        #expect(rows[0].grantKind == .finalDiscoveryAward)
-        #expect(rows[0].status == .final)
+        #expect(rows[0].grantKind == .provisionalDiscoveryXp)
+        #expect(rows[0].status == .provisional)
+        #expect(rows[0].xpDelta == 10)
     }
 
-    // MARK: - Seeds
-
-    private func competitiveProvisionalSeed(sessionId: UUID, gameId: UUID) throws {
+    @Test func openProvisionalExcludesServerAppliedSourceEvent() {
+        let sessionId = UUID()
+        let gameId = UUID()
         let key = XpLedgerKeyBuilder.uniquenessKey(
             userId: "u1",
             sessionId: sessionId,
@@ -412,7 +416,42 @@ struct XpReconciliationServiceTests {
             itemId: "TX",
             grantKind: .provisionalDiscoveryXp,
             status: .provisional,
-            xpDelta: 10,
+            xpDelta: 15,
+            reasonCode: .discoveryClaimPendingResolution,
+            xpUniquenessKey: key
+        )
+        let open = LedgerPendingXpTotals.openProvisionalSum(
+            from: [provisional],
+            appliedProgressionEventIds: ["find-1"]
+        )
+        #expect(open == 0)
+        let stillOpen = LedgerPendingXpTotals.openProvisionalSum(
+            from: [provisional],
+            appliedProgressionEventIds: []
+        )
+        #expect(stillOpen == 15)
+    }
+
+    // MARK: - Seeds
+
+    private func competitiveProvisionalSeed(sessionId: UUID, gameId: UUID, xpDelta: Int = 15) throws {
+        let key = XpLedgerKeyBuilder.uniquenessKey(
+            userId: "u1",
+            sessionId: sessionId,
+            gameInstanceId: gameId,
+            itemId: "TX",
+            xpCategory: .baseRegionDiscovery
+        ).storageString
+        let provisional = XpLedgerEvent(
+            userId: "u1",
+            sessionId: sessionId,
+            gameInstanceId: gameId,
+            sourceEventId: "find-1",
+            sourceEventType: TripActivityEventKind.regionFound.rawValue,
+            itemId: "TX",
+            grantKind: .provisionalDiscoveryXp,
+            status: .provisional,
+            xpDelta: xpDelta,
             reasonCode: .discoveryClaimPendingResolution,
             xpUniquenessKey: key,
             metadata: [XpLedgerMetadataKey.originalDiscoveryEventId: "find-1"]

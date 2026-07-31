@@ -975,10 +975,15 @@
 "reward.popup.kicker.rank_up" = "SUBISTE DE RANGO";
 "reward.popup.kicker.achievement" = "LOGRO DESBLOQUEADO";
 "reward.popup.kicker.unlock" = "NUEVO DESBLOQUEO";
+"reward.popup.kicker.xp_removed" = "XP ELIMINADO";
 "reward.popup.rank_up.detail" = "Alcanzaste el rango %d.";
 "reward.popup.rank_up.detail_unlocks" = "Rango %d · Desbloqueaste %@";
 "reward.popup.xp_bonus" = "+%@ XP";
 "reward.popup.continue" = "Toca para continuar";
+"reward.popup.xp_removed.title" = "-%d XP · %@";
+"reward.popup.xp_removed.detail" = "Este hallazgo no se contó tras la sincronización. Se actualizó tu XP.";
+"reward.popup.achievement_removed.title" = "Logro eliminado";
+"reward.popup.achievement_removed.detail" = "“%@” no se confirmó y se eliminó de tus logros desbloqueados.";
 
 "return_streak.a11y.hint" = "Encuentra una placa hoy para mantener tu racha.";
 "return_streak.explanation.title" = "Racha de placas";

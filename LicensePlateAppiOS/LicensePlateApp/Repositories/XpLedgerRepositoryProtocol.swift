@@ -36,4 +36,8 @@ protocol XpLedgerRepositoryProtocol: AnyObject {
     func ledgerEvents(userId: String) throws -> [XpLedgerEvent]
     /// Ledger rows for this user scoped to one trip session, sorted by `createdAt` then `id`.
     func ledgerEvents(userId: String, sessionId: UUID) throws -> [XpLedgerEvent]
+    /// Settlement exception to append-only: mark open provisional rows voided for a uniqueness key.
+    /// Returns the sum of voided provisional `xpDelta` values.
+    @discardableResult
+    func voidProvisionalRows(forUniquenessKey key: String, resolvedAt: Date) throws -> Int
 }

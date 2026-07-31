@@ -116,6 +116,23 @@ final class UserAchievementRepository: ObservableObject {
         }
     }
 
+    /// Removes a local unlock after the server rejects the candidate so a later valid unlock can celebrate again.
+    func removeUnlock(userId: String, achievementId: String) throws {
+        guard let ctx = modelContext else { throw UserAchievementRepositoryError.noModelContext }
+        let key = UserAchievementEntity.makeRecordKey(userId: userId, achievementId: achievementId)
+        let descriptor = FetchDescriptor<UserAchievementEntity>(
+            predicate: #Predicate<UserAchievementEntity> { $0.recordKey == key }
+        )
+        guard let entity = try ctx.fetch(descriptor).first else { return }
+        ctx.delete(entity)
+        do {
+            try ctx.save()
+            objectWillChange.send()
+        } catch {
+            throw UserAchievementRepositoryError.saveFailed(underlying: error)
+        }
+    }
+
     private func upsert(
         userId: String,
         achievementId: String,

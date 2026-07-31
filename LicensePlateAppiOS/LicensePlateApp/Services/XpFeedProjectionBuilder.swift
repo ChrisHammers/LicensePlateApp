@@ -24,6 +24,10 @@ enum XpFeedProjectionBuilder {
     }
 
     private static func line(from row: XpLedgerEvent, itemTitle: (String) -> String) -> XpFeedProjection? {
+        guard row.status != .voided else { return nil }
+        // Settlement markers with no XP change are not shown in the trip recap feed.
+        if row.grantKind == .reconciliationAdjustment, row.xpDelta == 0 { return nil }
+
         let name = itemTitle(row.itemId)
         let state: XpFeedLineState = row.status == .provisional ? .provisional : .final
         let (title, subtitle, xpText): (String, String?, String)
@@ -33,8 +37,12 @@ enum XpFeedProjectionBuilder {
             subtitle = "Pending resolution".localized
             xpText = "+%d XP pending".localized(row.xpDelta)
         case .reconciliationAdjustment:
-            title = "%@ resolved".localized(name)
-            subtitle = row.reasonCode.rawValue.replacingOccurrences(of: "_", with: " ")
+            title = row.xpDelta < 0
+                ? "reward.popup.kicker.xp_removed".localized
+                : "%@ resolved".localized(name)
+            subtitle = row.xpDelta < 0
+                ? "reward.popup.xp_removed.detail".localized
+                : row.reasonCode.rawValue.replacingOccurrences(of: "_", with: " ")
             xpText = row.xpDelta >= 0
                 ? "+%d XP".localized(row.xpDelta)
                 : "%d XP".localized(row.xpDelta)

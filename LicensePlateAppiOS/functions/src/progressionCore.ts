@@ -10,6 +10,12 @@ export const KIND_GAME_ENDED = "game_ended";
 
 /** XP awarded per accepted `region_found` (canonical event on server). Parity: ProgressionRewardsConfig.v1.json → xp.baseDiscoveryXp */
 export const XP_PER_ACCEPTED_REGION_FOUND = 10;
+/**
+ * Competitive first-finder bonus stacked on base discovery XP for an accepted `region_found`.
+ * Only first finds are accepted server-side in competitive mode, so competitive accepted finds are always +15.
+ * Parity: ProgressionRewardsConfig.v1.json → xp.firstFinderBonusXp
+ */
+export const XP_PER_COMPETITIVE_FIRST_FINDER_BONUS = 5;
 /** XP awarded per competitive first-place finish at `game_ended` (ties: each rank-1 receives this). Parity: ProgressionRewardsConfig.v1.json → xp.competitiveFirstPlaceFinishBonusXp */
 export const XP_PER_COMPETITIVE_FIRST_PLACE_FINISH = 15;
 
@@ -268,8 +274,20 @@ export function previewProgressionDeltasForActivityEvent(input: {
   if (input.kind === KIND_REGION_FOUND) {
     const participantId = payload[PK.participantId] || (input.actorId ?? "");
     if (!participantId) return {};
+    const gameInstanceId = payload[PK.gameInstanceId];
+    const gameDoc = gameInstanceId
+      ? input.gameDocs.find((d) => d.id === gameInstanceId)
+      : undefined;
+    const mode = gameDoc
+      ? parseCommonConfigGameMode(gameDoc.data().commonConfigDataBase64 as string | undefined)
+      : "collaborative";
+    // Competitive accepted finds are always first-finder (late claims are rejected/superseded).
+    const totalXp =
+      mode === "competitive"
+        ? XP_PER_ACCEPTED_REGION_FOUND + XP_PER_COMPETITIVE_FIRST_FINDER_BONUS
+        : XP_PER_ACCEPTED_REGION_FOUND;
     add(participantId, {
-      totalXp: XP_PER_ACCEPTED_REGION_FOUND,
+      totalXp,
       acceptedRegionFindCount: 1,
       competitiveFirstPlaceFinishes: 0,
       awardEverCompetitiveFirstPlace: false,

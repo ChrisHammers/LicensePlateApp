@@ -580,8 +580,15 @@ final class LicensePlateGameViewModel: ObservableObject {
         )
         let rows = (try? xpLedger.ledgerEvents(userId: uid, sessionId: sessionId)) ?? []
         let now = Date()
+        let applied = UserProgressionRepository.shared.snapshot?.appliedProgressionEventIds ?? []
+        let appliedScopes = UserProgressionRepository.shared.snapshot?.appliedProgressionScopeKeys ?? []
         sessionLedgerEvents = rows
-        localSessionLedgerPending = LedgerPendingXpTotals.fromLedgerEvents(rows, now: now)
+        localSessionLedgerPending = LedgerPendingXpTotals.openProvisional(
+            from: rows,
+            appliedProgressionEventIds: applied,
+            appliedProgressionScopeKeys: appliedScopes,
+            now: now
+        )
         localGameLedgerBalance = XpBalanceProjectionBuilder.build(
             userId: uid,
             sessionId: sessionId,
@@ -590,7 +597,12 @@ final class LicensePlateGameViewModel: ObservableObject {
             now: now
         )
         let allUserLedger = (try? xpLedger.ledgerEvents(userId: uid)) ?? []
-        accountLedgerProvisionalPending = LedgerPendingXpTotals.fromLedgerEvents(allUserLedger, now: now).provisionalSum
+        accountLedgerProvisionalPending = LedgerPendingXpTotals.openProvisionalSum(
+            from: allUserLedger,
+            appliedProgressionEventIds: applied,
+            appliedProgressionScopeKeys: appliedScopes,
+            now: now
+        )
     }
 
     private func defaultLicensePlateGameConfig() -> LicensePlateGameConfig {

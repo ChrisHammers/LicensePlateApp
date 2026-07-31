@@ -25,6 +25,7 @@ enum RewardEvent: Identifiable {
     case achievement(Achievement)
     case unlock(title: String, detail: String, icon: String, rarity: LicenseRarity)
     case returnStreak(days: Int)
+    case xpRemoved(regionLabel: String, xpAmount: Int, sourceEventId: String)
 
     var id: String {
         switch self {
@@ -32,6 +33,7 @@ enum RewardEvent: Identifiable {
         case .achievement(let a):  return "ach-\(a.id)"
         case .unlock(let t, _, _, _): return "unlock-\(t)"
         case .returnStreak(let days): return "return-streak-\(days)"
+        case .xpRemoved(_, _, let sourceEventId): return "xp-removed-\(sourceEventId)"
         }
     }
 
@@ -47,6 +49,7 @@ enum RewardEvent: Identifiable {
         case .achievement: return "reward.popup.kicker.achievement".localized
         case .unlock: return "reward.popup.kicker.unlock".localized
         case .returnStreak: return "return_streak.celebration.kicker".localized
+        case .xpRemoved: return "reward.popup.kicker.xp_removed".localized
         }
     }
 
@@ -57,6 +60,8 @@ enum RewardEvent: Identifiable {
         case .unlock(let t, _, _, _): return t
         case .returnStreak(let days):
             return String(format: "return_streak.celebration.title".localized, days)
+        case .xpRemoved(let regionLabel, let xpAmount, _):
+            return "reward.popup.xp_removed.title".localized(xpAmount, regionLabel)
         }
     }
 
@@ -71,6 +76,7 @@ enum RewardEvent: Identifiable {
         case .achievement(let a): return a.detail
         case .unlock(_, let d, _, _): return d
         case .returnStreak: return "return_streak.celebration.detail".localized
+        case .xpRemoved: return "reward.popup.xp_removed.detail".localized
         }
     }
 
@@ -80,6 +86,7 @@ enum RewardEvent: Identifiable {
         case .achievement(let a): return a.icon
         case .unlock(_, _, let i, _): return i
         case .returnStreak: return "flame.fill"
+        case .xpRemoved: return "minus.circle.fill"
         }
     }
 
@@ -89,6 +96,7 @@ enum RewardEvent: Identifiable {
         case .achievement(let a): return a.rarity.color
         case .unlock(_, _, _, let r): return r.color
         case .returnStreak: return .orange
+        case .xpRemoved: return .red
         }
     }
 
@@ -103,6 +111,7 @@ enum RewardEvent: Identifiable {
         case .achievement: return "achievement"
         case .unlock: return "unlock"
         case .returnStreak: return "return_streak"
+        case .xpRemoved: return "xp_removed"
         }
     }
 }

@@ -975,10 +975,15 @@
 "reward.popup.kicker.rank_up" = "MONTÉE DE RANG";
 "reward.popup.kicker.achievement" = "SUCCÈS DÉBLOQUÉ";
 "reward.popup.kicker.unlock" = "NOUVEAU DÉBLOQUAGE";
+"reward.popup.kicker.xp_removed" = "XP RETIRÉ";
 "reward.popup.rank_up.detail" = "Vous avez atteint le rang %d.";
 "reward.popup.rank_up.detail_unlocks" = "Rang %d · Débloqué : %@";
 "reward.popup.xp_bonus" = "+%@ XP";
 "reward.popup.continue" = "Appuyez pour continuer";
+"reward.popup.xp_removed.title" = "-%d XP · %@";
+"reward.popup.xp_removed.detail" = "Cette découverte n’a pas été comptée après la synchronisation. Votre XP a été mis à jour.";
+"reward.popup.achievement_removed.title" = "Succès retiré";
+"reward.popup.achievement_removed.detail" = "« %@ » n’a pas été confirmé et a été retiré de vos succès débloqués.";
 
 "return_streak.a11y.hint" = "Trouvez une plaque aujourd'hui pour garder votre série.";
 "return_streak.explanation.title" = "Série de plaques";

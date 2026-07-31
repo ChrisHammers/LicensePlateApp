@@ -47,7 +47,13 @@ enum ProgressionLocalEngine {
                 guard let pid = regionFoundParticipantId(event), pid == subjectUserId else { continue }
                 guard let key = baseDiscoveryScopedKey(for: event, participantId: pid) else { continue }
                 guard firstFindEventIdByScopedKey[key] == event.id else { continue }
-                delta.totalXp += rewards.xp.baseDiscoveryXp
+                guard let gameId = gameInstanceUUID(from: event) else { continue }
+                let game = gamesById[gameId]
+                var findXp = rewards.xp.baseDiscoveryXp
+                if game?.gameMode == .competitive {
+                    findXp += rewards.xp.firstFinderBonusXp
+                }
+                delta.totalXp += findXp
                 delta.acceptedRegionFindCount += 1
 
             case .gameEnded:

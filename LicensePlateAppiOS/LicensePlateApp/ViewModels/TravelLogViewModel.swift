@@ -62,6 +62,8 @@ final class TravelLogViewModel: ObservableObject {
     private var authService: FirebaseAuthService
     private let usePreviewEntries: Bool
     private var savedTripLimitAnalyticsSignature: String?
+    private var cancellables = Set<AnyCancellable>()
+    private var openSummarySessionId: UUID?
 
     init(
         travelLogRepository: TravelLogRepositoryProtocol,
@@ -89,6 +91,12 @@ final class TravelLogViewModel: ObservableObject {
             self.entries = entries
             self.hiddenSavedTripCount = previewHiddenSavedTripCount
             self.savedTripCapKind = previewSavedTripCapKind
+        }
+        if let ledger = xpLedger as? XpLedgerRepository {
+            ledger.objectWillChange
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in self?.refreshOpenSummaryXpRecapIfNeeded() }
+                .store(in: &cancellables)
         }
     }
 
@@ -183,6 +191,7 @@ final class TravelLogViewModel: ObservableObject {
         do {
             let summary = try buildSummary(sessionId: sessionId)
             selectedSummary = summary
+            openSummarySessionId = sessionId
             if source != .travelLog {
                 autoPresentedSummarySessionIds.insert(sessionId)
                 removePendingAutoRecap(sessionId: sessionId)
@@ -267,6 +276,13 @@ final class TravelLogViewModel: ObservableObject {
         summaryErrorMessage = nil
         recapSectionAnalyticsLoggedSessionId = nil
         summaryPresentationSource = nil
+        openSummarySessionId = nil
+    }
+
+    private func refreshOpenSummaryXpRecapIfNeeded() {
+        guard let sessionId = openSummarySessionId, selectedSummary != nil else { return }
+        guard let rebuilt = try? buildSummary(sessionId: sessionId) else { return }
+        selectedSummary = rebuilt
     }
 
     var presentsSummaryInTravelLog: Bool {

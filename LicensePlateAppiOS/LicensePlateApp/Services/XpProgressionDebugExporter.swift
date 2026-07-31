@@ -344,7 +344,7 @@ enum XpProgressionDebugExporter {
                 id: "firstFinderBonusXp",
                 xpAmount: xp.firstFinderBonusXp,
                 isWiredToGrant: true,
-                grantPath: "Local ledger reconciliation only (competitive first finder); not added on server region_found."
+                grantPath: "Server: competitive region_found awards base+bonus (15). Local: provisional expected XP then final mirror after sync."
             ),
             Payload.ConfiguredXpSource(
                 id: "competitiveFirstPlaceFinishBonusXp",

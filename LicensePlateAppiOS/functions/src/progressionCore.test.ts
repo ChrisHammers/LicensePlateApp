@@ -7,6 +7,7 @@ import {
   previewProgressionDeltasForActivityEvent,
   rankContributionsSwiftParity,
   XP_PER_ACCEPTED_REGION_FOUND,
+  XP_PER_COMPETITIVE_FIRST_FINDER_BONUS,
   XP_PER_COMPETITIVE_FIRST_PLACE_FINISH,
   KIND_GAME_ENDED,
 } from "./progressionCore";
@@ -65,7 +66,41 @@ describe("progressionCore", () => {
     expect(ids.sort()).toEqual(["x", "y"]);
   });
 
-  it("region_found awards XP and find count to participant", () => {
+  it("region_found collaborative awards base XP and find count", () => {
+    const d = previewProgressionDeltasForActivityEvent({
+      kind: KIND_REGION_FOUND,
+      actorId: "u1",
+      payload: { [PK.gameInstanceId]: gid, [PK.regionId]: "US-TX", [PK.participantId]: "u1", [PK.inputMethod]: "list" },
+      memberUserIds: ["u1"],
+      gameDocs: [mockGameDoc(gid, "collaborative")],
+      activityEventDocs: [],
+    });
+    expect(d.u1).toEqual({
+      totalXp: XP_PER_ACCEPTED_REGION_FOUND,
+      acceptedRegionFindCount: 1,
+      competitiveFirstPlaceFinishes: 0,
+      awardEverCompetitiveFirstPlace: false,
+    });
+  });
+
+  it("region_found competitive awards base plus first-finder bonus", () => {
+    const d = previewProgressionDeltasForActivityEvent({
+      kind: KIND_REGION_FOUND,
+      actorId: "u1",
+      payload: { [PK.gameInstanceId]: gid, [PK.regionId]: "US-TX", [PK.participantId]: "u1", [PK.inputMethod]: "list" },
+      memberUserIds: ["u1", "u2"],
+      gameDocs: [mockGameDoc(gid, "competitive")],
+      activityEventDocs: [],
+    });
+    expect(d.u1).toEqual({
+      totalXp: XP_PER_ACCEPTED_REGION_FOUND + XP_PER_COMPETITIVE_FIRST_FINDER_BONUS,
+      acceptedRegionFindCount: 1,
+      competitiveFirstPlaceFinishes: 0,
+      awardEverCompetitiveFirstPlace: false,
+    });
+  });
+
+  it("region_found without game doc defaults to base collaborative XP", () => {
     const d = previewProgressionDeltasForActivityEvent({
       kind: KIND_REGION_FOUND,
       actorId: "u1",
