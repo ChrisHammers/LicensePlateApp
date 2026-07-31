@@ -5,12 +5,23 @@
 
 import SwiftUI
 
-struct ProfileXpProgressSection: View {
+struct ProfileXpProgressSection<ProgressionLinks: View>: View {
     @ObservedObject var viewModel: XpProgressViewModel
+    @ViewBuilder private let progressionLinks: () -> ProgressionLinks
+
+    init(
+        viewModel: XpProgressViewModel,
+        @ViewBuilder progressionLinks: @escaping () -> ProgressionLinks
+    ) {
+        self.viewModel = viewModel
+        self.progressionLinks = progressionLinks
+    }
 
     var body: some View {
         Section {
             VStack(spacing: 12) {
+                progressionLinks()
+                
                 if let err = viewModel.lastError, !err.isEmpty {
                     Text(err)
                         .font(.system(.caption, design: .rounded))
@@ -86,6 +97,12 @@ struct ProfileXpProgressSection: View {
         .textCase(nil)
         .listRowBackground(Color.clear)
         .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
+    }
+}
+
+extension ProfileXpProgressSection where ProgressionLinks == EmptyView {
+    init(viewModel: XpProgressViewModel) {
+        self.init(viewModel: viewModel, progressionLinks: { EmptyView() })
     }
 }
 

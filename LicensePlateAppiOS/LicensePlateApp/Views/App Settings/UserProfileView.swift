@@ -258,42 +258,25 @@ struct UserProfileView: View {
                     .listRowBackground(Color.clear)
                     .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
 
-                    LifetimeStatsProfileStatsSection(viewModel: lifetimeStatsViewModel)
-
-                    ProfileXpProgressSection(viewModel: xpProgressViewModel)
-
-                    Section {
-                        VStack(spacing: 12) {
-                            SettingNavigationRow(
-                                title: "profile.progression.achievements.title".localized,
-                                description: "profile.progression.achievements.description".localized,
-                                icon: "rosette"
-                            ) {
-                                coordinator.navigateToAchievements()
-                            }
-
-                            SettingNavigationRow(
-                                title: "profile.progression.ranks.title".localized,
-                                description: "profile.progression.ranks.description".localized,
-                                icon: "chart.line.uptrend.xyaxis"
-                            ) {
-                                coordinator.navifateToRankProgression()
-                            }
+                    ProfileXpProgressSection(viewModel: xpProgressViewModel) {
+                        SettingNavigationRow(
+                            title: "profile.progression.achievements.title".localized,
+                            description: "profile.progression.achievements.description".localized,
+                            icon: "rosette"
+                        ) {
+                            coordinator.navigateToAchievements()
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 16)
-                        .background(Color.Theme.cardBackground)
-                        .cornerRadius(20)
-                        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
-                        .listRowBackground(Color.clear)
-                    } header: {
-                        Text("profile.progression.section_title".localized)
-                            .font(.system(.headline, design: .rounded))
-                            .foregroundStyle(Color.Theme.primaryBlue)
+
+                        SettingNavigationRow(
+                            title: "profile.progression.ranks.title".localized,
+                            description: "profile.progression.ranks.description".localized,
+                            icon: "chart.line.uptrend.xyaxis"
+                        ) {
+                            coordinator.navifateToRankProgression()
+                        }
                     }
-                    .textCase(nil)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(.init(top: 8, leading: 20, bottom: 8, trailing: 20))
+
+                    LifetimeStatsProfileStatsSection(viewModel: lifetimeStatsViewModel)
 
                   // Authentication Status Section
                   Section {

@@ -848,7 +848,7 @@
 "xp.toast.a11y.label" = "XP earned: %@";
 "xp.toast.a11y.hint" = "Dismisses automatically. Double tap to dismiss now.";
 
-"profile.xp.section_title" = "XP & progress";
+"profile.xp.section_title" = "XP & Progression";
 "profile.xp.server_total" = "Synced XP (account)";
 "profile.xp.server_total_loading" = "Synced XP will appear when you are online.";
 "profile.xp.local_fallback_total" = "Current XP on this device";

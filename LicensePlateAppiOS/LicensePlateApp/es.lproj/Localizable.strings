@@ -817,7 +817,7 @@
 "xp.toast.a11y.label" = "XP ganada: %@";
 "xp.toast.a11y.hint" = "Se cierra sola. Toca dos veces para cerrar ahora.";
 
-"profile.xp.section_title" = "XP y progreso";
+"profile.xp.section_title" = "XP y progresión";
 "profile.xp.server_total" = "XP sincronizada (cuenta)";
 "profile.xp.server_total_loading" = "La XP sincronizada aparecerá cuando estés en línea.";
 "profile.xp.local_fallback_total" = "XP actual en este dispositivo";
