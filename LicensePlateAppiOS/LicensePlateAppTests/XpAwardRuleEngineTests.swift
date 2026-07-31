@@ -29,7 +29,7 @@ struct XpAwardRuleEngineTests {
         #expect(c.xpReason == .competitiveFirstFinder)
     }
 
-    @Test func competitiveLateNet0() {
+    @Test func competitiveLateNet10() {
         let r = DiscoveryResolution(
             sourceEventId: "e1",
             sessionId: UUID(),
@@ -43,7 +43,7 @@ struct XpAwardRuleEngineTests {
             xpReason: .discoveryClaimPendingResolution
         )
         let c = XpAwardRuleEngine.compute(from: r, gameMode: .competitive, tripMode: .multiplayer, rewards: rewards)
-        #expect(c.xpNet == 0)
+        #expect(c.xpNet == rewards.xp.baseDiscoveryXp)
         #expect(c.xpReason == .competitiveLateFinder)
     }
 

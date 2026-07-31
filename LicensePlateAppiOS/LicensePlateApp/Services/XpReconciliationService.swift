@@ -269,15 +269,10 @@ final class XpReconciliationService {
         gameMode: GameMode,
         rewards: ProgressionRewardsConfig
     ) -> Int {
-        if tripMode == .solo {
-            return rewards.xp.baseDiscoveryXp
-        }
-        switch gameMode {
-        case .competitive:
-            return rewards.xp.baseDiscoveryXp + rewards.xp.firstFinderBonusXp
-        case .collaborative:
-            return rewards.xp.baseDiscoveryXp
-        }
+        // Always provisional base discovery XP. First-finder +5 is added only after cloud confirms acceptedFirst.
+        _ = tripMode
+        _ = gameMode
+        return rewards.xp.baseDiscoveryXp
     }
 
     private func hasSettledResolution(resolutionId: String, baseUniquenessKey: String) throws -> Bool {

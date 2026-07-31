@@ -63,8 +63,8 @@ enum XpAwardRuleEngine {
             
             return (baseDiscovery, reason)
         case .acceptedLate:
-            // Competitive late finds are not credited; only the first finder earns XP.
-            return (0, .competitiveLateFinder)
+            // Late competitive find keeps base discovery XP; first-finder bonus is not awarded.
+            return (baseDiscovery, .competitiveLateFinder)
         case .acceptedShared:
             return (baseDiscovery, .collaborativeSharedFinder)
         case .rejectedDuplicate:

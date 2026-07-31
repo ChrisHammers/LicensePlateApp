@@ -11,8 +11,8 @@ export const KIND_GAME_ENDED = "game_ended";
 /** XP awarded per accepted `region_found` (canonical event on server). Parity: ProgressionRewardsConfig.v1.json → xp.baseDiscoveryXp */
 export const XP_PER_ACCEPTED_REGION_FOUND = 10;
 /**
- * Competitive first-finder bonus stacked on base discovery XP for an accepted `region_found`.
- * Only first finds are accepted server-side in competitive mode, so competitive accepted finds are always +15.
+ * Competitive first-finder bonus stacked on base discovery XP for an accepted first `region_found`.
+ * Late competitive finds keep base XP locally after settlement; only first-finder confirmation adds this bonus.
  * Parity: ProgressionRewardsConfig.v1.json → xp.firstFinderBonusXp
  */
 export const XP_PER_COMPETITIVE_FIRST_FINDER_BONUS = 5;
@@ -281,7 +281,7 @@ export function previewProgressionDeltasForActivityEvent(input: {
     const mode = gameDoc
       ? parseCommonConfigGameMode(gameDoc.data().commonConfigDataBase64 as string | undefined)
       : "collaborative";
-    // Competitive accepted finds are always first-finder (late claims are rejected/superseded).
+    // Competitive accepted finds are first-finder (late claims are superseded locally and keep base XP only).
     const totalXp =
       mode === "competitive"
         ? XP_PER_ACCEPTED_REGION_FOUND + XP_PER_COMPETITIVE_FIRST_FINDER_BONUS
