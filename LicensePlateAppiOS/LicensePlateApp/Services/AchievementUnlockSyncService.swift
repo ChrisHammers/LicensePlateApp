@@ -25,22 +25,14 @@ final class AchievementUnlockSyncService {
     static let shared = AchievementUnlockSyncService()
 
     private let functions: Functions
-    private let userAchievementRepository: UserAchievementRepository
-    private let deliveryOutbox: RewardDeliveryOutbox
     private var pendingCandidates: [AchievementUnlockSyncCandidate] = []
     private var pendingUser: AppUser?
     private var pendingEntitlement: EntitlementState?
     private var pendingRetryCount = 0
     private let maxRetryAttempts = 3
 
-    init(
-        functions: Functions = Functions.functions(),
-        userAchievementRepository: UserAchievementRepository = .shared,
-        deliveryOutbox: RewardDeliveryOutbox = .shared
-    ) {
+    init(functions: Functions = Functions.functions()) {
         self.functions = functions
-        self.userAchievementRepository = userAchievementRepository
-        self.deliveryOutbox = deliveryOutbox
     }
 
     func syncUnlocks(
@@ -70,15 +62,9 @@ final class AchievementUnlockSyncService {
                     rejectedCount: parsed.rejectedIds.count
                 )
             )
-            applyRejectedIds(parsed.rejectedIds, user: user)
-            // Keep only rejected/failed candidates for retry; clear accepted ones.
-            let rejected = Set(parsed.rejectedIds)
-            let remaining = candidates.filter { rejected.contains($0.achievementId) }
-            if remaining.isEmpty {
-                clearPendingRetryState()
-            } else {
-                storePendingRetry(user: user, entitlement: entitlement, candidates: remaining)
-            }
+            // Do not claw back local unlocks or show "removed" UI on rejectedIds.
+            // Achievements stay unlocked locally unless removed from the backend.
+            clearPendingRetryState()
         } catch {
             storePendingRetry(user: user, entitlement: entitlement, candidates: candidates)
             AnalyticsService.shared.log(
@@ -167,28 +153,5 @@ final class AchievementUnlockSyncService {
         [
             "isRoyale": entitlement.effectiveTier >= .royale
         ]
-    }
-
-    private func applyRejectedIds(_ rejectedIds: [String], user: AppUser) {
-        guard !rejectedIds.isEmpty else { return }
-        let userId = user.firebaseUID ?? user.id
-        let achievementsById = Dictionary(
-            uniqueKeysWithValues: ProgressionCatalogProjection.achievements(
-                from: ProgressionCatalogProvider.shared.current
-            ).map { ($0.id, $0) }
-        )
-        for id in rejectedIds {
-            try? userAchievementRepository.removeUnlock(userId: userId, achievementId: id)
-            deliveryOutbox.mark(userId: userId, semanticId: "ach-\(id)", state: .clawedBack)
-            let title = achievementsById[id]?.title ?? id
-            RewardPresenter.shared.show(
-                .unlock(
-                    title: "reward.popup.achievement_removed.title".localized,
-                    detail: "reward.popup.achievement_removed.detail".localized(title),
-                    icon: "xmark.circle.fill",
-                    rarity: .common
-                )
-            )
-        }
     }
 }
