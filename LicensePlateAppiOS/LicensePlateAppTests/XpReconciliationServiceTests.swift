@@ -348,6 +348,99 @@ struct XpReconciliationServiceTests {
         #expect(markers.count == 1)
     }
 
+    @Test func consumeResolutionPostsSettlementNotificationOnce() throws {
+        _ = try makeContext()
+        let sessionId = UUID()
+        let gameId = UUID()
+        try competitiveProvisionalSeed(sessionId: sessionId, gameId: gameId, xpDelta: 10)
+
+        let events = MockTripActivityEventRepository()
+        let games = MockGameInstanceRepository()
+        let trips = MockTripSessionRepository()
+        seedCompetitiveGame(sessionId: sessionId, gameId: gameId, games: games, trips: trips)
+
+        final class Box: @unchecked Sendable {
+            var count = 0
+            var lastSessionId: UUID?
+            var lastGameId: UUID?
+        }
+        let box = Box()
+        let observer = NotificationCenter.default.addObserver(
+            forName: .discoveryXpResolutionSettled,
+            object: nil,
+            queue: nil
+        ) { note in
+            box.count += 1
+            box.lastSessionId = note.userInfo?[DiscoveryXpResolutionSettledUserInfoKey.sessionId] as? UUID
+            box.lastGameId = note.userInfo?[DiscoveryXpResolutionSettledUserInfoKey.gameInstanceId] as? UUID
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        let resolution = DiscoveryResolution(
+            resolutionId: "xp_res:v1:find-1:accepted_late",
+            sourceEventId: "find-1",
+            sessionId: sessionId,
+            gameInstanceId: gameId,
+            itemId: "TX",
+            actorUserId: "u1",
+            finalOutcome: .acceptedLate,
+            tripScoringOutcome: .acceptedLate,
+            personalHistoryOutcome: .acceptedLate,
+            finalXpAward: GameProgressionXPRewards.baseDiscoveryXp,
+            xpReason: .competitiveLateFinder
+        )
+        let svc = makeService(events: events, games: games, trips: trips)
+        try svc.consumeResolution(resolution, gameMode: .competitive, tripMode: .multiplayer)
+        try svc.consumeResolution(resolution, gameMode: .competitive, tripMode: .multiplayer)
+
+        #expect(box.count == 1)
+        #expect(box.lastSessionId == sessionId)
+        #expect(box.lastGameId == gameId)
+    }
+
+    @Test func consumePendingOutcomeDoesNotPostSettlementNotification() throws {
+        _ = try makeContext()
+        let sessionId = UUID()
+        let gameId = UUID()
+        try competitiveProvisionalSeed(sessionId: sessionId, gameId: gameId, xpDelta: 10)
+
+        let events = MockTripActivityEventRepository()
+        let games = MockGameInstanceRepository()
+        let trips = MockTripSessionRepository()
+        seedCompetitiveGame(sessionId: sessionId, gameId: gameId, games: games, trips: trips)
+
+        final class Box: @unchecked Sendable {
+            var count = 0
+        }
+        let box = Box()
+        let observer = NotificationCenter.default.addObserver(
+            forName: .discoveryXpResolutionSettled,
+            object: nil,
+            queue: nil
+        ) { _ in
+            box.count += 1
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        let resolution = DiscoveryResolution(
+            resolutionId: "xp_res:v1:find-1:pending",
+            sourceEventId: "find-1",
+            sessionId: sessionId,
+            gameInstanceId: gameId,
+            itemId: "TX",
+            actorUserId: "u1",
+            finalOutcome: .pending,
+            tripScoringOutcome: .pending,
+            personalHistoryOutcome: .pending,
+            finalXpAward: 0,
+            xpReason: .discoveryClaimPendingResolution
+        )
+        let svc = makeService(events: events, games: games, trips: trips)
+        try svc.consumeResolution(resolution, gameMode: .competitive, tripMode: .multiplayer)
+
+        #expect(box.count == 0)
+    }
+
     @Test func collaborativeMultiplayerWritesProvisionalPlus10() throws {
         _ = try makeContext()
         let sessionId = UUID()

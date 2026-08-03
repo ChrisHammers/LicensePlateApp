@@ -47,11 +47,13 @@ enum RegionPlateRowPresentationBuilder {
         regionName: String,
         projection: DiscoveryUiProjection?,
         foundFallback: Bool,
+        competitivePendingEligible: Bool,
         orderedFinders: [FinderAvatarPresentation] = [],
         findersAccessibilityValue: String? = nil
     ) -> RegionPlateRowPresentation {
         let isFound = projection.map { $0.displayState == .foundVisuallyActive } ?? foundFallback
-        let pending = projection.map { $0.xpPhase == .provisional || $0.syncState == .localOnly } ?? false
+        let ledgerPending = projection.map { $0.xpPhase == .provisional || $0.syncState == .localOnly } ?? false
+        let pending = competitivePendingEligible && ledgerPending
         let showBadge = pending && isFound
 
         let detailLine: String?
@@ -59,8 +61,13 @@ enum RegionPlateRowPresentationBuilder {
         if let p = projection, isFound {
             switch p.xpPhase {
             case .provisional:
-                detailLine = "xp.row.detail.pending_resolution".localized
-                detailStyle = .pending
+                if competitivePendingEligible {
+                    detailLine = "xp.row.detail.pending_resolution".localized
+                    detailStyle = .pending
+                } else {
+                    detailLine = nil
+                    detailStyle = nil
+                }
             case .final, .finalPending:
                 if let badge = p.statusBadgeText, !badge.isEmpty {
                     detailLine = badge

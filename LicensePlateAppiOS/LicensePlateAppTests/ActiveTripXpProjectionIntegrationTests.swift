@@ -11,9 +11,64 @@ import Testing
 struct ActiveTripXpProjectionIntegrationTests {
 
     @Test func plateRowStaysFoundWhileLedgerProvisional() throws {
+        let row = try makeVMWithProvisionalFind(
+            participantCount: 2,
+            gameMode: .competitive,
+            reasonCode: .discoveryClaimPendingResolution
+        ).plateRowPresentationsByRegionId["us-tx"]
+
+        #expect(row?.isVisuallyFound == true)
+        #expect(row?.showPendingBadge == true)
+        #expect(row?.detailLine == "xp.row.detail.pending_resolution".localized)
+        #expect(row?.detailStyle == .pending)
+        #expect(!(row?.accessibilityValue.localizedCaseInsensitiveContains("xp") ?? true))
+    }
+
+    @Test func soloPlateRowHidesPendingChromeWhileLedgerProvisional() throws {
+        let vm = try makeVMWithProvisionalFind(
+            participantCount: 1,
+            gameMode: .competitive,
+            reasonCode: .soloNewDiscovery
+        )
+        let row = vm.plateRowPresentationsByRegionId["us-tx"]
+        let projection = vm.discoveryProjectionsByItemId["us-tx"]
+
+        #expect(row?.isVisuallyFound == true)
+        #expect(row?.showPendingBadge == false)
+        #expect(row?.detailLine == nil)
+        #expect(row?.detailStyle == nil)
+        #expect(projection?.xpPhase == .provisional)
+    }
+
+    @Test func collaborativePlateRowHidesPendingChromeWhileLedgerProvisional() throws {
+        let vm = try makeVMWithProvisionalFind(
+            participantCount: 2,
+            gameMode: .collaborative,
+            reasonCode: .collaborativeSharedFinder
+        )
+        let row = vm.plateRowPresentationsByRegionId["us-tx"]
+        let projection = vm.discoveryProjectionsByItemId["us-tx"]
+
+        #expect(row?.isVisuallyFound == true)
+        #expect(row?.showPendingBadge == false)
+        #expect(row?.detailLine == nil)
+        #expect(row?.detailStyle == nil)
+        #expect(projection?.xpPhase == .provisional)
+    }
+
+    private func makeVMWithProvisionalFind(
+        participantCount: Int,
+        gameMode: GameMode,
+        reasonCode: XpReasonCode
+    ) throws -> LicensePlateGameViewModel {
         let sessionId = UUID()
         let gameId = UUID()
         let uid = "user1"
+
+        var participants = [TripParticipant(userId: uid, role: .owner, joinedAt: Date())]
+        if participantCount > 1 {
+            participants.append(TripParticipant(userId: "user2", role: .member, joinedAt: Date()))
+        }
 
         let session = TripSession(
             id: sessionId,
@@ -22,19 +77,16 @@ struct ActiveTripXpProjectionIntegrationTests {
             createdAt: Date(),
             createdBy: uid,
             startedAt: Date(),
-            participants: [
-                TripParticipant(userId: uid, role: .owner, joinedAt: Date()),
-                TripParticipant(userId: "user2", role: .member, joinedAt: Date())
-            ]
+            participants: participants
         )
 
         let lpPayload = try JSONEncoder().encode(LicensePlateGameConfig())
-        var game = GameInstance(
+        let game = GameInstance(
             id: gameId,
             definitionId: GameType.licensePlate.rawValue,
             sessionId: sessionId,
             ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
-            commonConfig: CommonGameConfig(lifecycleState: .started, gameMode: .competitive),
+            commonConfig: CommonGameConfig(lifecycleState: .started, gameMode: gameMode),
             gameSpecificPayloadType: "license_plate",
             gameSpecificPayloadVersion: "1",
             gameSpecificPayloadData: lpPayload
@@ -80,7 +132,7 @@ struct ActiveTripXpProjectionIntegrationTests {
                 grantKind: .provisionalDiscoveryXp,
                 status: .provisional,
                 xpDelta: 10,
-                reasonCode: .discoveryClaimPendingResolution,
+                reasonCode: reasonCode,
                 xpUniquenessKey: key
             )
         )
@@ -104,7 +156,7 @@ struct ActiveTripXpProjectionIntegrationTests {
         let auth = FirebaseAuthService()
         auth.currentUser = AppUser(id: uid, userName: "U", firebaseUID: uid)
 
-        let vm = LicensePlateGameViewModel(
+        return LicensePlateGameViewModel(
             session: session,
             game: game,
             tripSessionRepository: sessionRepo,
@@ -116,14 +168,5 @@ struct ActiveTripXpProjectionIntegrationTests {
             xpLedger: mockLedger,
             discoveryResolutionRepository: mockRes
         )
-
-        let row = vm.plateRowPresentationsByRegionId["us-tx"]
-        #expect(row?.isVisuallyFound == true)
-        #expect(row?.showPendingBadge == true)
-        #expect(row?.detailLine == "xp.row.detail.pending_resolution".localized)
-        #expect(row?.detailStyle == .pending)
-        #expect(!(row?.accessibilityValue.localizedCaseInsensitiveContains("xp") ?? true))
-        let projection = vm.discoveryProjectionsByItemId["us-tx"]
-        #expect(projection?.xpPhase == .provisional)
     }
 }

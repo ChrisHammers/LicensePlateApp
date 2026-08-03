@@ -7,6 +7,17 @@
 
 import Foundation
 
+extension Notification.Name {
+    /// Posted after `XpReconciliationService.consumeResolution` successfully settles a discovery claim.
+    /// `userInfo` keys: `sessionId` (`UUID`), `gameInstanceId` (`UUID`).
+    static let discoveryXpResolutionSettled = Notification.Name("XpReconciliationService.discoveryXpResolutionSettled")
+}
+
+enum DiscoveryXpResolutionSettledUserInfoKey {
+    static let sessionId = "sessionId"
+    static let gameInstanceId = "gameInstanceId"
+}
+
 struct XpClawbackNotice: Equatable, Sendable {
     var regionId: String
     var xpRemoved: Int
@@ -262,6 +273,15 @@ final class XpReconciliationService {
             clawbackHandler?(notice)
             XpClawbackPresentationService.shared.enqueue(notice)
         }
+
+        NotificationCenter.default.post(
+            name: .discoveryXpResolutionSettled,
+            object: nil,
+            userInfo: [
+                DiscoveryXpResolutionSettledUserInfoKey.sessionId: resolution.sessionId,
+                DiscoveryXpResolutionSettledUserInfoKey.gameInstanceId: resolution.gameInstanceId,
+            ]
+        )
     }
 
     private func expectedProvisionalXp(

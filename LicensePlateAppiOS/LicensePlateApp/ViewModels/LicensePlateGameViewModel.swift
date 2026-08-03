@@ -265,6 +265,21 @@ final class LicensePlateGameViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        NotificationCenter.default.publisher(for: .discoveryXpResolutionSettled)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] notification in
+                guard let self else { return }
+                let info = notification.userInfo
+                guard let settledSessionId = info?[DiscoveryXpResolutionSettledUserInfoKey.sessionId] as? UUID,
+                      settledSessionId == self.sessionId,
+                      let settledGameId = info?[DiscoveryXpResolutionSettledUserInfoKey.gameInstanceId] as? UUID,
+                      settledGameId == self.game.id
+                else { return }
+                self.refreshPlateProjections()
+                self.refreshProgressionDebugState()
+            }
+            .store(in: &cancellables)
+
         if currentSession.mode == .multiplayer {
             TripCanonicalRemoteSyncService.shared.startIncrementalListeningIfNeeded(sessionId: sessionId)
         }
@@ -687,6 +702,8 @@ final class LicensePlateGameViewModel: ObservableObject {
                 regionName: regionName,
                 projection: projection,
                 foundFallback: foundFallback,
+                competitivePendingEligible:
+                    currentSession.mode == .multiplayer && game.commonConfig.gameMode == .competitive,
                 orderedFinders: orderedFinders,
                 findersAccessibilityValue: findersA11y
             )

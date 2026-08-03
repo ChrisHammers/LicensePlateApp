@@ -153,7 +153,8 @@ struct DiscoveryUiProjectionBuilderTests {
                 xpShownDelta: 10,
                 syncState: .localOnly
             ),
-            foundFallback: false
+            foundFallback: false,
+            competitivePendingEligible: true
         )
 
         #expect(row.isVisuallyFound)
@@ -161,6 +162,27 @@ struct DiscoveryUiProjectionBuilderTests {
         #expect(row.detailLine == "xp.row.detail.pending_resolution".localized)
         #expect(row.detailStyle == .pending)
         #expect(!row.accessibilityValue.localizedCaseInsensitiveContains("xp"))
+    }
+
+    @Test func rowPresentationHidesPendingChromeWhenNotCompetitiveEligible() {
+        let row = RegionPlateRowPresentationBuilder.build(
+            regionId: "TX",
+            regionName: "Texas",
+            projection: makeProjection(
+                displayState: .foundVisuallyActive,
+                xpPhase: .provisional,
+                xpShownDelta: 10,
+                syncState: .localOnly
+            ),
+            foundFallback: false,
+            competitivePendingEligible: false
+        )
+
+        #expect(row.isVisuallyFound)
+        #expect(!row.showPendingBadge)
+        #expect(row.detailLine == nil)
+        #expect(row.detailStyle == nil)
+        #expect(!(row.accessibilityValue.localizedCaseInsensitiveContains("pending")))
     }
 
     @Test func rowPresentationKeepsFairnessStatusWithoutXpAmount() {
@@ -174,7 +196,8 @@ struct DiscoveryUiProjectionBuilderTests {
                 syncState: .synced,
                 statusBadgeText: "xp.discovery.badge.accepted_late".localized
             ),
-            foundFallback: false
+            foundFallback: false,
+            competitivePendingEligible: true
         )
 
         #expect(row.isVisuallyFound)
@@ -195,7 +218,8 @@ struct DiscoveryUiProjectionBuilderTests {
                 xpShownDelta: 10,
                 syncState: .synced
             ),
-            foundFallback: false
+            foundFallback: false,
+            competitivePendingEligible: false
         )
 
         #expect(row.isVisuallyFound)
