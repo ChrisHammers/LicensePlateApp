@@ -2,7 +2,7 @@
 //  AchievementListView.swift
 //  RoadTrip Royale
 //
-//  Browse all achievements — unlocked and locked — with status + category
+//  Browse all milestones — unlocked and locked — with status + category
 //  filters, progress meters, and how-to-unlock detail.
 //
 //      AchievementListView(statuses: player.achievementStatuses)
@@ -299,14 +299,14 @@ private enum AchievementListPreviewSupport {
     }
 }
 
-#Preview("Achievements — Light") {
+#Preview("Milestones — Light") {
     AchievementListView(
         achievements: AchievementListPreviewSupport.sampleAchievements,
         statuses: AchievementListPreviewSupport.sampleStatuses
     )
 }
 
-#Preview("Achievements — Dark") {
+#Preview("Milestones — Dark") {
     AchievementListView(
         achievements: AchievementListPreviewSupport.sampleAchievements,
         statuses: AchievementListPreviewSupport.sampleStatuses

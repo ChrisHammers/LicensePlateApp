@@ -643,11 +643,11 @@
 "avatar" = "avatar";
 "locked avatar" = "locked avatar";
 "Lifetime" = "Lifetime";
-"Achievement" = "Achievement";
+"Achievement" = "Milestone";
 "Lifetime entitlement" = "Lifetime entitlement";
-"Achievement unlock" = "Achievement unlock";
+"Achievement unlock" = "Milestone unlock";
 "This avatar unlocks with an eligible Lifetime entitlement." = "This avatar unlocks with an eligible Lifetime entitlement.";
-"This avatar unlocks by completing an achievement." = "This avatar unlocks by completing an achievement.";
+"This avatar unlocks by completing an achievement." = "This avatar unlocks by completing a milestone.";
 
 // Notifications (Step 08)
 "New trip invite" = "New trip invite";
@@ -810,7 +810,7 @@
 "error.family_lookup_no_context" = "Family data isn’t available yet. Try again in a moment.";
 "error.friend_lookup_no_context" = "Friend data isn’t available yet. Try again in a moment.";
 "error.lifetime_stats_no_context" = "Statistics aren’t available yet. Try again in a moment.";
-"error.user_achievement_no_context" = "Achievement progress isn’t available yet. Try again in a moment.";
+"error.user_achievement_no_context" = "Milestone progress isn’t available yet. Try again in a moment.";
 
 /* XP Ledger Step 03 — gameplay row + profile + recap */
 "xp.row.detail.pending_resolution" = "Pending competitive resolution";
@@ -833,8 +833,8 @@
 "xp.toast.group.discovery.double" = "Discovered %@ and %@";
 "xp.toast.group.discovery.multi" = "Discovered %@ and %d others";
 "xp.toast.group.discovery.detail" = "Pending resolution";
-"xp.toast.group.achievement.single" = "%d achievement unlocked";
-"xp.toast.group.achievement.multi" = "%d achievements unlocked";
+"xp.toast.group.achievement.single" = "%d milestone unlocked";
+"xp.toast.group.achievement.multi" = "%d milestones unlocked";
 "xp.toast.group.return_streak.single" = "%d day streak";
 "xp.toast.group.return_streak.multi" = "%d day streak";
 "xp.toast.group.competitive_win.single" = "%d competitive win";
@@ -919,26 +919,26 @@
 "trip_end.remote_toast.generic" = "%@ has ended. Showing your recap.";
 "trip_summary.error.trip_not_ended" = "This trip recap is available after the trip has ended.";
 
-/* Profile progression (achievements + rank ladder) */
+/* Profile progression (milestones + rank ladder) */
 "profile.progression.section_title" = "Progression";
-"profile.progression.achievements.title" = "Achievements";
+"profile.progression.achievements.title" = "Milestones";
 "profile.progression.achievements.description" = "Track unlocks and progress toward rewards";
 "profile.progression.ranks.title" = "Rank progression";
 "profile.progression.ranks.description" = "See your rank ladder and upcoming unlocks";
 
-"achievement.list.title" = "Achievements";
+"achievement.list.title" = "Milestones";
 "achievement.list.xp_earned" = "%@ XP earned";
 "achievement.list.unlocked_label" = "UNLOCKED";
 "achievement.filter.all" = "All";
 "achievement.filter.unlocked" = "Unlocked";
 "achievement.filter.locked" = "Locked";
-"achievement.filter.status.a11y" = "Achievement status filter";
+"achievement.filter.status.a11y" = "Milestone status filter";
 "achievement.row.xp_reward" = "%@ XP";
 
 "achievement.category.exploration" = "Exploration";
 "achievement.category.collection" = "Collection";
 "achievement.category.competition" = "Competition";
-"achievement.category.milestones" = "Milestones";
+"achievement.category.milestones" = "Journey";
 "achievement.category.social" = "Social";
 
 "achievement.first_win.title" = "First Victory";
@@ -1005,7 +1005,7 @@
 "rank.progression.progress.a11y" = "Progress toward next rank";
 
 "reward.popup.kicker.rank_up" = "RANK UP";
-"reward.popup.kicker.achievement" = "ACHIEVEMENT UNLOCKED";
+"reward.popup.kicker.achievement" = "MILESTONE UNLOCKED";
 "reward.popup.kicker.unlock" = "NEW UNLOCK";
 "reward.popup.kicker.xp_removed" = "XP REMOVED";
 "reward.popup.rank_up.detail" = "You reached Rank %d.";
@@ -1014,7 +1014,7 @@
 "reward.popup.continue" = "Tap to continue";
 "reward.popup.xp_removed.title" = "-%d XP · %@";
 "reward.popup.xp_removed.detail" = "This find was not counted after sync. Your XP was updated.";
-"reward.popup.achievement_removed.title" = "Achievement removed";
+"reward.popup.achievement_removed.title" = "Milestone removed";
 "reward.popup.achievement_removed.detail" = "“%@” was not confirmed and was removed from your unlocked list.";
 
 "return_streak.a11y.hint" = "Find a plate today to keep your streak.";

@@ -290,7 +290,7 @@ private struct PopupDemo: View {
             Button("Rank Up") {
                 rewards.show(.rankUp(ProgressionCatalogProjection.rankLadder(from: .bundledDefault).ranks[6]))
             }
-            Button("Achievement") {
+            Button("Milestone") {
                 let achievements = ProgressionCatalogProjection.achievements(from: .bundledDefault)
                 if let coastToCoast = achievements.first(where: { $0.id == "coast_to_coast" }) {
                     rewards.show(.achievement(coastToCoast))

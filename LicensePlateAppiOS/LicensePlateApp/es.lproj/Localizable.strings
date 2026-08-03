@@ -635,11 +635,11 @@
 "avatar" = "avatar";
 "locked avatar" = "avatar bloqueado";
 "Lifetime" = "De por vida";
-"Achievement" = "Logro";
+"Achievement" = "Hito";
 "Lifetime entitlement" = "Derecho de por vida";
-"Achievement unlock" = "Desbloqueo por logro";
+"Achievement unlock" = "Desbloqueo por hito";
 "This avatar unlocks with an eligible Lifetime entitlement." = "Este avatar se desbloquea con un derecho de por vida válido.";
-"This avatar unlocks by completing an achievement." = "Este avatar se desbloquea al completar un logro.";
+"This avatar unlocks by completing an achievement." = "Este avatar se desbloquea al completar un hito.";
 
 // Notifications (Step 08)
 "New trip invite" = "Nueva invitación de viaje";
@@ -780,7 +780,7 @@
 "error.family_lookup_no_context" = "Los datos de familia aún no están disponibles. Inténtalo de nuevo en un momento.";
 "error.friend_lookup_no_context" = "Los datos de amigos aún no están disponibles. Inténtalo de nuevo en un momento.";
 "error.lifetime_stats_no_context" = "Las estadísticas aún no están disponibles. Inténtalo de nuevo en un momento.";
-"error.user_achievement_no_context" = "El progreso de logros aún no está disponible. Inténtalo de nuevo en un momento.";
+"error.user_achievement_no_context" = "El progreso de hitos aún no está disponible. Inténtalo de nuevo en un momento.";
 
 "xp.row.detail.pending_resolution" = "Resolución competitiva pendiente";
 "xp.row.pill.pending" = "+%d XP pendientes";
@@ -802,8 +802,8 @@
 "xp.toast.group.discovery.double" = "Descubriste %@ y %@";
 "xp.toast.group.discovery.multi" = "Descubriste %@ y %d más";
 "xp.toast.group.discovery.detail" = "Resolución pendiente";
-"xp.toast.group.achievement.single" = "%d logro desbloqueado";
-"xp.toast.group.achievement.multi" = "%d logros desbloqueados";
+"xp.toast.group.achievement.single" = "%d hito desbloqueado";
+"xp.toast.group.achievement.multi" = "%d hitos desbloqueados";
 "xp.toast.group.return_streak.single" = "Racha de %d día";
 "xp.toast.group.return_streak.multi" = "Racha de %d días";
 "xp.toast.group.competitive_win.single" = "%d victoria competitiva";
@@ -887,26 +887,26 @@
 "trip_end.remote_toast.generic" = "%@ terminó. Mostrando tu resumen.";
 "trip_summary.error.trip_not_ended" = "El resumen del viaje está disponible cuando el viaje haya terminado.";
 
-/* Profile progression (achievements + rank ladder) */
+/* Profile progression (milestones + rank ladder) */
 "profile.progression.section_title" = "Progresión";
-"profile.progression.achievements.title" = "Logros";
+"profile.progression.achievements.title" = "Hitos";
 "profile.progression.achievements.description" = "Sigue desbloqueos y progreso hacia recompensas";
 "profile.progression.ranks.title" = "Progresión de rango";
 "profile.progression.ranks.description" = "Consulta tu escalera de rangos y próximos desbloqueos";
 
-"achievement.list.title" = "Logros";
+"achievement.list.title" = "Hitos";
 "achievement.list.xp_earned" = "%@ XP ganados";
 "achievement.list.unlocked_label" = "DESBLOQUEADOS";
 "achievement.filter.all" = "Todos";
 "achievement.filter.unlocked" = "Desbloqueados";
 "achievement.filter.locked" = "Bloqueados";
-"achievement.filter.status.a11y" = "Filtro de estado de logros";
+"achievement.filter.status.a11y" = "Filtro de estado de hitos";
 "achievement.row.xp_reward" = "%@ XP";
 
 "achievement.category.exploration" = "Exploración";
 "achievement.category.collection" = "Colección";
 "achievement.category.competition" = "Competencia";
-"achievement.category.milestones" = "Hitos";
+"achievement.category.milestones" = "Trayecto";
 "achievement.category.social" = "Social";
 
 "achievement.first_win.title" = "Primera victoria";
@@ -973,7 +973,7 @@
 "rank.progression.progress.a11y" = "Progreso hacia el siguiente rango";
 
 "reward.popup.kicker.rank_up" = "SUBISTE DE RANGO";
-"reward.popup.kicker.achievement" = "LOGRO DESBLOQUEADO";
+"reward.popup.kicker.achievement" = "HITO DESBLOQUEADO";
 "reward.popup.kicker.unlock" = "NUEVO DESBLOQUEO";
 "reward.popup.kicker.xp_removed" = "XP ELIMINADO";
 "reward.popup.rank_up.detail" = "Alcanzaste el rango %d.";
@@ -982,8 +982,8 @@
 "reward.popup.continue" = "Toca para continuar";
 "reward.popup.xp_removed.title" = "-%d XP · %@";
 "reward.popup.xp_removed.detail" = "Este hallazgo no se contó tras la sincronización. Se actualizó tu XP.";
-"reward.popup.achievement_removed.title" = "Logro eliminado";
-"reward.popup.achievement_removed.detail" = "“%@” no se confirmó y se eliminó de tus logros desbloqueados.";
+"reward.popup.achievement_removed.title" = "Hito eliminado";
+"reward.popup.achievement_removed.detail" = "“%@” no se confirmó y se eliminó de tus hitos desbloqueados.";
 
 "return_streak.a11y.hint" = "Encuentra una placa hoy para mantener tu racha.";
 "return_streak.explanation.title" = "Racha de placas";

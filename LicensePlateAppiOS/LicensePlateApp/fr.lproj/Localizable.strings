@@ -635,11 +635,11 @@
 "avatar" = "avatar";
 "locked avatar" = "avatar verrouillé";
 "Lifetime" = "À vie";
-"Achievement" = "Succès";
+"Achievement" = "Jalon";
 "Lifetime entitlement" = "Droit à vie";
-"Achievement unlock" = "Déblocage par succès";
+"Achievement unlock" = "Déblocage par jalon";
 "This avatar unlocks with an eligible Lifetime entitlement." = "Cet avatar se débloque avec un droit à vie éligible.";
-"This avatar unlocks by completing an achievement." = "Cet avatar se débloque en accomplissant un succès.";
+"This avatar unlocks by completing an achievement." = "Cet avatar se débloque en accomplissant un jalon.";
 
 // Notifications (Step 08)
 "New trip invite" = "Nouvelle invitation de voyage";
@@ -780,7 +780,7 @@
 "error.family_lookup_no_context" = "Les données famille ne sont pas encore disponibles. Réessayez dans un instant.";
 "error.friend_lookup_no_context" = "Les données d’amis ne sont pas encore disponibles. Réessayez dans un moment.";
 "error.lifetime_stats_no_context" = "Les statistiques ne sont pas encore disponibles. Réessayez dans un instant.";
-"error.user_achievement_no_context" = "La progression des succès n’est pas encore disponible. Réessayez dans un instant.";
+"error.user_achievement_no_context" = "La progression des jalons n’est pas encore disponible. Réessayez dans un instant.";
 
 "xp.row.detail.pending_resolution" = "Résolution compétitive en attente";
 "xp.row.pill.pending" = "+%d XP en attente";
@@ -802,8 +802,8 @@
 "xp.toast.group.discovery.double" = "Découverte : %@ et %@";
 "xp.toast.group.discovery.multi" = "Découverte : %@ et %d autres";
 "xp.toast.group.discovery.detail" = "Résolution en attente";
-"xp.toast.group.achievement.single" = "%d succès débloqué";
-"xp.toast.group.achievement.multi" = "%d succès débloqués";
+"xp.toast.group.achievement.single" = "%d jalon débloqué";
+"xp.toast.group.achievement.multi" = "%d jalons débloqués";
 "xp.toast.group.return_streak.single" = "Série de %d jour";
 "xp.toast.group.return_streak.multi" = "Série de %d jours";
 "xp.toast.group.competitive_win.single" = "%d victoire compétitive";
@@ -887,26 +887,26 @@
 "trip_end.remote_toast.generic" = "%@ est terminé. Affichage de votre récapitulatif.";
 "trip_summary.error.trip_not_ended" = "Le récapitulatif du voyage est disponible une fois le voyage terminé.";
 
-/* Profile progression (achievements + rank ladder) */
+/* Profile progression (milestones + rank ladder) */
 "profile.progression.section_title" = "Progression";
-"profile.progression.achievements.title" = "Succès";
+"profile.progression.achievements.title" = "Jalons";
 "profile.progression.achievements.description" = "Suivez les déblocages et la progression vers les récompenses";
 "profile.progression.ranks.title" = "Progression de rang";
 "profile.progression.ranks.description" = "Consultez votre échelle de rangs et les prochains déblocages";
 
-"achievement.list.title" = "Succès";
+"achievement.list.title" = "Jalons";
 "achievement.list.xp_earned" = "%@ XP gagnés";
 "achievement.list.unlocked_label" = "DÉBLOQUÉS";
 "achievement.filter.all" = "Tous";
 "achievement.filter.unlocked" = "Débloqués";
 "achievement.filter.locked" = "Verrouillés";
-"achievement.filter.status.a11y" = "Filtre d'état des succès";
+"achievement.filter.status.a11y" = "Filtre d'état des jalons";
 "achievement.row.xp_reward" = "%@ XP";
 
 "achievement.category.exploration" = "Exploration";
 "achievement.category.collection" = "Collection";
 "achievement.category.competition" = "Compétition";
-"achievement.category.milestones" = "Jalons";
+"achievement.category.milestones" = "Parcours";
 "achievement.category.social" = "Social";
 
 "achievement.first_win.title" = "Première victoire";
@@ -973,7 +973,7 @@
 "rank.progression.progress.a11y" = "Progression vers le prochain rang";
 
 "reward.popup.kicker.rank_up" = "MONTÉE DE RANG";
-"reward.popup.kicker.achievement" = "SUCCÈS DÉBLOQUÉ";
+"reward.popup.kicker.achievement" = "JALON DÉBLOQUÉ";
 "reward.popup.kicker.unlock" = "NOUVEAU DÉBLOQUAGE";
 "reward.popup.kicker.xp_removed" = "XP RETIRÉ";
 "reward.popup.rank_up.detail" = "Vous avez atteint le rang %d.";
@@ -982,8 +982,8 @@
 "reward.popup.continue" = "Appuyez pour continuer";
 "reward.popup.xp_removed.title" = "-%d XP · %@";
 "reward.popup.xp_removed.detail" = "Cette découverte n’a pas été comptée après la synchronisation. Votre XP a été mis à jour.";
-"reward.popup.achievement_removed.title" = "Succès retiré";
-"reward.popup.achievement_removed.detail" = "« %@ » n’a pas été confirmé et a été retiré de vos succès débloqués.";
+"reward.popup.achievement_removed.title" = "Jalon retiré";
+"reward.popup.achievement_removed.detail" = "« %@ » n’a pas été confirmé et a été retiré de vos jalons débloqués.";
 
 "return_streak.a11y.hint" = "Trouvez une plaque aujourd'hui pour garder votre série.";
 "return_streak.explanation.title" = "Série de plaques";
