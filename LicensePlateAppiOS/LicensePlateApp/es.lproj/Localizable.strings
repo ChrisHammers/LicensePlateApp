@@ -510,6 +510,7 @@
 "Privacy Policy" = "Política de Privacidad";
 "Opens Privacy Policy" = "Abre la Política de Privacidad";
 "RoadTrip Royale uses the following open source libraries and SDKs:" = "RoadTrip Royale utiliza las siguientes bibliotecas y SDKs de código abierto:";
+"RoadTrip Royale uses the following libraries, SDKs, and data sources:" = "RoadTrip Royale utiliza las siguientes bibliotecas, SDKs y fuentes de datos:";
 "Backend services including Authentication, Firestore, and Storage" = "Servicios backend incluyendo Autenticación, Firestore y Almacenamiento";
 "Backend services including Authentication, Firestore, Storage, and Analytics" = "Servicios backend incluyendo Autenticación, Firestore, Almacenamiento y Analytics para uso anónimo y registro de eventos.";
 "OAuth authentication for Google accounts" = "Autenticación OAuth para cuentas de Google";
@@ -522,6 +523,17 @@
 "In-app purchases and subscription management; see RevenueCat privacy policy." = "Compras en la app y gestión de suscripciones; consulta la política de privacidad de RevenueCat.";
 "Google Maps SDK" = "Google Maps SDK";
 "Maps and location display for trip tracking and region visualization." = "Mapas y visualización de ubicación para seguimiento de viajes y regiones.";
+"Open-source licenses" = "Licencias de código abierto";
+"Google Maps SDK open-source licenses" = "Licencias de código abierto del SDK de Google Maps";
+"Expands Google Maps open-source license text" = "Expande el texto de licencias de código abierto de Google Maps";
+"Collapses Google Maps open-source license text" = "Contrae el texto de licencias de código abierto de Google Maps";
+"Simplemaps" = "Simplemaps";
+"Administrative boundary data for US states, Canadian provinces, and Mexican states." = "Datos de límites administrativos de estados de EE. UU., provincias de Canadá y estados de México.";
+"Natural Earth" = "Natural Earth";
+"Public-domain country boundary data used for map context." = "Datos de límites nacionales de dominio público usados como contexto del mapa.";
+"Google Mobile Ads (AdMob)" = "Google Mobile Ads (AdMob)";
+"Banner advertising in the app." = "Publicidad de banners en la app.";
+"Banner advertising in the app; see Google Mobile Ads privacy policy." = "Publicidad de banners en la app; consulta la política de privacidad de Google Mobile Ads.";
 "Terms of Service" = "Términos de Servicio";
 "Last Updated: %@" = "Última Actualización: %@";
 "1. Acceptance of Terms" = "1. Aceptación de Términos";

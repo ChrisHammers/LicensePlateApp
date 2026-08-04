@@ -511,6 +511,7 @@
 "Opens Privacy Policy" = "Opens Privacy Policy";
 "Acknowledgements" = "Acknowledgements";
 "RoadTrip Royale uses the following open source libraries and SDKs:" = "RoadTrip Royale uses the following open source libraries and SDKs:";
+"RoadTrip Royale uses the following libraries, SDKs, and data sources:" = "RoadTrip Royale uses the following libraries, SDKs, and data sources:";
 "Firebase" = "Firebase";
 "Backend services including Authentication, Firestore, and Storage" = "Backend services including Authentication, Firestore, and Storage";
 "Backend services including Authentication, Firestore, Storage, and Analytics" = "Backend services including Authentication, Firestore, Storage, and Analytics for anonymous usage and event logging.";
@@ -530,6 +531,17 @@
 "In-app purchases and subscription management; see RevenueCat privacy policy." = "In-app purchases and subscription management; see RevenueCat privacy policy.";
 "Google Maps SDK" = "Google Maps SDK";
 "Maps and location display for trip tracking and region visualization." = "Maps and location display for trip tracking and region visualization.";
+"Open-source licenses" = "Open-source licenses";
+"Google Maps SDK open-source licenses" = "Google Maps SDK open-source licenses";
+"Expands Google Maps open-source license text" = "Expands Google Maps open-source license text";
+"Collapses Google Maps open-source license text" = "Collapses Google Maps open-source license text";
+"Simplemaps" = "Simplemaps";
+"Administrative boundary data for US states, Canadian provinces, and Mexican states." = "Administrative boundary data for US states, Canadian provinces, and Mexican states.";
+"Natural Earth" = "Natural Earth";
+"Public-domain country boundary data used for map context." = "Public-domain country boundary data used for map context.";
+"Google Mobile Ads (AdMob)" = "Google Mobile Ads (AdMob)";
+"Banner advertising in the app." = "Banner advertising in the app.";
+"Banner advertising in the app; see Google Mobile Ads privacy policy." = "Banner advertising in the app; see Google Mobile Ads privacy policy.";
 "Terms of Service" = "Terms of Service";
 "Last Updated: %@" = "Last Updated: %@";
 "1. Acceptance of Terms" = "1. Acceptance of Terms";

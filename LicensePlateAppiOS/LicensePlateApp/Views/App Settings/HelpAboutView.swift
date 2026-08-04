@@ -5,7 +5,9 @@
 //  Created by Christopher Hammers on 11/11/25.
 //
 
+import GoogleMaps
 import SwiftUI
+import UIKit
 
 struct HelpAboutView: View {
     @Environment(\.dismiss) private var dismiss
@@ -401,70 +403,84 @@ struct AcknowledgementsView: View {
         AppBackgroundView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                Text("Acknowledgements".localized)
-                    .font(.system(.largeTitle, design: .rounded))
-                    .fontWeight(.bold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                
-                Text("RoadTrip Royale uses the following open source libraries and SDKs:".localized)
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                
-                VStack(alignment: .leading, spacing: 16) {
-                    AcknowledgementItem(
-                        name: "Firebase".localized,
-                        description: "Backend services including Authentication, Firestore, Storage, and Analytics".localized,
-                        url: "https://firebase.google.com"
-                    )
+                    Text("Acknowledgements".localized)
+                        .font(.system(.largeTitle, design: .rounded))
+                        .fontWeight(.bold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
                     
-                    AcknowledgementItem(
-                        name: "Google Sign-In".localized,
-                        description: "OAuth authentication for Google accounts".localized,
-                        url: "https://developers.google.com/identity/sign-in/ios"
-                    )
+                    Text("RoadTrip Royale uses the following libraries, SDKs, and data sources:".localized)
+                        .font(.system(.body, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
                     
-                    AcknowledgementItem(
-                        name: "RevenueCat".localized,
-                        description: "In-app purchases and subscription management; see RevenueCat privacy policy.".localized,
-                        url: "https://www.revenuecat.com/privacy"
-                    )
-                    
-                    AcknowledgementItem(
-                        name: "Apple Authentication Services".localized,
-                        description: "Sign in with Apple integration".localized,
-                        url: "https://developer.apple.com/sign-in-with-apple/"
-                    )
-                    
-                    AcknowledgementItem(
-                        name: "SwiftUI".localized,
-                        description: "Apple's declarative UI framework".localized,
-                        url: "https://developer.apple.com/xcode/swiftui/"
-                    )
-                    
-                    AcknowledgementItem(
-                        name: "SwiftData".localized,
-                        description: "Apple's data persistence framework".localized,
-                        url: "https://developer.apple.com/documentation/swiftdata"
-                    )
-                    
-                    AcknowledgementItem(
-                        name: "MapKit".localized,
-                        description: "Apple's mapping and location services".localized,
-                        url: "https://developer.apple.com/mapkit/"
-                    )
-                    
-                    // AcknowledgementItem(
-                    //     name: "Google Maps SDK".localized,
-                    //     description: "Maps and location display for trip tracking and region visualization.".localized,
-                    //     url: "https://developers.google.com/maps"
-                    // )
-                    
-                    AcknowledgementItem(
-                        name: "Speech Framework".localized,
-                        description: "Apple's speech recognition framework".localized,
-                        url: "https://developer.apple.com/documentation/speech"
-                    )
-                }
+                    VStack(alignment: .leading, spacing: 16) {
+                        GoogleMapsAcknowledgementItem()
+                        
+                        AcknowledgementItem(
+                            name: "Simplemaps".localized,
+                            description: "Administrative boundary data for US states, Canadian provinces, and Mexican states.".localized,
+                            url: "https://simplemaps.com"
+                        )
+                        
+                        AcknowledgementItem(
+                            name: "Natural Earth".localized,
+                            description: "Public-domain country boundary data used for map context.".localized,
+                            url: "https://www.naturalearthdata.com"
+                        )
+                        
+                        AcknowledgementItem(
+                            name: "Firebase".localized,
+                            description: "Backend services including Authentication, Firestore, Storage, and Analytics".localized,
+                            url: "https://firebase.google.com"
+                        )
+                        
+                        AcknowledgementItem(
+                            name: "Google Sign-In".localized,
+                            description: "OAuth authentication for Google accounts".localized,
+                            url: "https://developers.google.com/identity/sign-in/ios"
+                        )
+                        
+                        AcknowledgementItem(
+                            name: "RevenueCat".localized,
+                            description: "In-app purchases and subscription management; see RevenueCat privacy policy.".localized,
+                            url: "https://www.revenuecat.com/privacy"
+                        )
+                        
+                        AcknowledgementItem(
+                            name: "Google Mobile Ads (AdMob)".localized,
+                            description: "Banner advertising in the app; see Google Mobile Ads privacy policy.".localized,
+                            url: "https://policies.google.com/technologies/ads"
+                        )
+                        
+                        AcknowledgementItem(
+                            name: "Apple Authentication Services".localized,
+                            description: "Sign in with Apple integration".localized,
+                            url: "https://developer.apple.com/sign-in-with-apple/"
+                        )
+                        
+                        AcknowledgementItem(
+                            name: "SwiftUI".localized,
+                            description: "Apple's declarative UI framework".localized,
+                            url: "https://developer.apple.com/xcode/swiftui/"
+                        )
+                        
+                        AcknowledgementItem(
+                            name: "SwiftData".localized,
+                            description: "Apple's data persistence framework".localized,
+                            url: "https://developer.apple.com/documentation/swiftdata"
+                        )
+                        
+                        AcknowledgementItem(
+                            name: "MapKit".localized,
+                            description: "Apple's mapping and location services".localized,
+                            url: "https://developer.apple.com/mapkit/"
+                        )
+                        
+                        AcknowledgementItem(
+                            name: "Speech Framework".localized,
+                            description: "Apple's speech recognition framework".localized,
+                            url: "https://developer.apple.com/documentation/speech"
+                        )
+                    }
                 }
                 .padding()
             }
@@ -481,6 +497,110 @@ struct AcknowledgementsView: View {
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue)
             }
+        }
+    }
+}
+
+private struct GoogleMapsAcknowledgementItem: View {
+    @State private var isLicenseExpanded = false
+    @State private var licenseText: String?
+    @State private var isLoadingLicense = false
+    
+    private var openSourceLicensesLabel: String {
+        "Open-source licenses".localized
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Google Maps SDK".localized)
+                .font(.system(.headline, design: .rounded))
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.Theme.primaryBlue)
+            
+            Text("Maps and location display for trip tracking and region visualization.".localized)
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+            
+            DisclosureGroup(
+                isExpanded: $isLicenseExpanded
+            ) {
+                Group {
+                    if let licenseText {
+                        GoogleMapsLicenseTextView(text: licenseText)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 280)
+                            .accessibilityLabel("Google Maps SDK open-source licenses".localized)
+                    } else {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .accessibilityLabel("Loading".localized)
+                    }
+                }
+                .padding(.top, 4)
+            } label: {
+                Text(openSourceLicensesLabel)
+                    .font(.system(.subheadline, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .accessibilityHint(
+                        isLicenseExpanded
+                            ? "Collapses Google Maps open-source license text".localized
+                            : "Expands Google Maps open-source license text".localized
+                    )
+            }
+            .animation(nil, value: isLicenseExpanded)
+            .onChange(of: isLicenseExpanded) { _, expanded in
+                guard expanded else { return }
+                loadLicenseTextIfNeeded()
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+        )
+    }
+    
+    private func loadLicenseTextIfNeeded() {
+        guard licenseText == nil, !isLoadingLicense else { return }
+        isLoadingLicense = true
+        // Yield so the disclosure can paint a spinner before the large string/UITextView attach.
+        // GMSServices must be used on the main thread.
+        Task { @MainActor in
+            await Task.yield()
+            licenseText = GMSServices.openSourceLicenseInfo()
+            isLoadingLicense = false
+        }
+    }
+}
+
+/// UIKit text view — SwiftUI `Text` chokes on the Maps SDK license dump.
+private struct GoogleMapsLicenseTextView: UIViewRepresentable {
+    let text: String
+    
+    func makeUIView(context: Context) -> UITextView {
+        let textView = UITextView()
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.backgroundColor = .clear
+        textView.textContainerInset = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: 0)
+        textView.textContainer.lineFragmentPadding = 0
+        textView.alwaysBounceVertical = true
+        textView.font = UIFont.monospacedSystemFont(
+            ofSize: UIFont.preferredFont(forTextStyle: .caption1).pointSize,
+            weight: .regular
+        )
+        textView.adjustsFontForContentSizeCategory = true
+        textView.textColor = UIColor(Color.Theme.softBrown)
+        textView.text = text
+        return textView
+    }
+    
+    func updateUIView(_ textView: UITextView, context: Context) {
+        if textView.text != text {
+            textView.text = text
         }
     }
 }
@@ -785,5 +905,11 @@ struct PrivacyView: View {
 #Preview("Help & About") {
     NavigationStack {
         HelpAboutView()
+    }
+}
+
+#Preview("Acknowledgements") {
+    NavigationStack {
+        AcknowledgementsView()
     }
 }

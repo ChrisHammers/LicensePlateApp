@@ -510,6 +510,7 @@
 "Privacy Policy" = "Politique de Confidentialité";
 "Opens Privacy Policy" = "Ouvre la Politique de Confidentialité";
 "RoadTrip Royale uses the following open source libraries and SDKs:" = "RoadTrip Royale utilise les bibliothèques et SDK open source suivants :";
+"RoadTrip Royale uses the following libraries, SDKs, and data sources:" = "RoadTrip Royale utilise les bibliothèques, SDK et sources de données suivants :";
 "Backend services including Authentication, Firestore, and Storage" = "Services backend incluant l'authentification, Firestore et le stockage";
 "Backend services including Authentication, Firestore, Storage, and Analytics" = "Services backend incluant l'authentification, Firestore, le stockage et Analytics pour l'usage anonyme et l'enregistrement d'événements.";
 "OAuth authentication for Google accounts" = "Authentification OAuth pour les comptes Google";
@@ -522,6 +523,17 @@
 "In-app purchases and subscription management; see RevenueCat privacy policy." = "Achats in-app et gestion des abonnements ; voir la politique de confidentialité de RevenueCat.";
 "Google Maps SDK" = "Google Maps SDK";
 "Maps and location display for trip tracking and region visualization." = "Cartes et affichage de la position pour le suivi des trajets et la visualisation des régions.";
+"Open-source licenses" = "Licences open source";
+"Google Maps SDK open-source licenses" = "Licences open source du SDK Google Maps";
+"Expands Google Maps open-source license text" = "Développe le texte des licences open source de Google Maps";
+"Collapses Google Maps open-source license text" = "Réduit le texte des licences open source de Google Maps";
+"Simplemaps" = "Simplemaps";
+"Administrative boundary data for US states, Canadian provinces, and Mexican states." = "Données de frontières administratives des États américains, des provinces canadiennes et des États mexicains.";
+"Natural Earth" = "Natural Earth";
+"Public-domain country boundary data used for map context." = "Données de frontières nationales du domaine public utilisées comme contexte cartographique.";
+"Google Mobile Ads (AdMob)" = "Google Mobile Ads (AdMob)";
+"Banner advertising in the app." = "Publicité par bannières dans l'app.";
+"Banner advertising in the app; see Google Mobile Ads privacy policy." = "Publicité par bannières dans l'app ; voir la politique de confidentialité de Google Mobile Ads.";
 "Terms of Service" = "Conditions de Service";
 "Last Updated: %@" = "Dernière Mise à Jour : %@";
 "1. Acceptance of Terms" = "1. Acceptation des Conditions";
