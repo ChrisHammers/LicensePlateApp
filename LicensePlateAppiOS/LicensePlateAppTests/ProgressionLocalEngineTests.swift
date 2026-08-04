@@ -219,6 +219,8 @@ struct ProgressionLocalEngineTests {
         #expect(d.acceptedRegionFindCount == 1)
         #expect(d.totalXp == GameProgressionXPRewards.baseDiscoveryXp)
     }
+
+    @Test func differentGamesSameRegionBothCountPending() {
         let game2 = UUID(uuidString: "550e8400-e29b-41d4-a716-446655440002")!
         let g1 = TripActivityEvent(
             id: "rf1",

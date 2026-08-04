@@ -143,6 +143,58 @@ struct ProgressionRewardsConfigTests {
         #expect(ProgressionRankBands.pendingOverlayFraction(pendingXp: 100, presentation: presentation) == 0.5)
     }
 
+    @Test func projectedBandFillFitsInCurrentBand() {
+        let presentation = ProgressionPresentationRewards(visualBandSize: 100, xpPerRankLevel: 3_000)
+        let fill = ProgressionRankBands.projectedBandFill(
+            serverXp: 37,
+            pendingXp: 10,
+            presentation: presentation
+        )
+        #expect(fill.syncedFractionInCurrentBand == 0.37)
+        #expect(fill.pendingFractionInCurrentBand == 0.10)
+        #expect(fill.pendingFractionInNextBand == 0)
+        #expect(fill.pendingXpBeyondNextBand == 0)
+        #expect(!fill.showsNextBandBar)
+    }
+
+    @Test func projectedBandFillSpillsIntoNextBandOnly() {
+        let presentation = ProgressionPresentationRewards(visualBandSize: 100, xpPerRankLevel: 3_000)
+        // room at 80 = 20; pending 50 → 20 current + 30 next + 0 beyond
+        let fill = ProgressionRankBands.projectedBandFill(
+            serverXp: 80,
+            pendingXp: 50,
+            presentation: presentation
+        )
+        #expect(fill.syncedFractionInCurrentBand == 0.80)
+        #expect(fill.pendingFractionInCurrentBand == 0.20)
+        #expect(fill.pendingFractionInNextBand == 0.30)
+        #expect(fill.pendingXpBeyondNextBand == 0)
+        #expect(fill.showsNextBandBar)
+        #expect(!fill.showsBeyondNextBandCaption)
+    }
+
+    @Test func projectedBandFillGoesPastNextBand() {
+        let presentation = ProgressionPresentationRewards(visualBandSize: 100, xpPerRankLevel: 3_000)
+        // Screenshot-like: 320 → 20 in band, room 80; +390 → 80 current, 100 next, 210 beyond
+        let fill = ProgressionRankBands.projectedBandFill(
+            serverXp: 320,
+            pendingXp: 390,
+            presentation: presentation
+        )
+        #expect(fill.syncedFractionInCurrentBand == 0.20)
+        #expect(fill.pendingFractionInCurrentBand == 0.80)
+        #expect(fill.pendingFractionInNextBand == 1.0)
+        #expect(fill.pendingXpBeyondNextBand == 210)
+        #expect(fill.showsNextBandBar)
+        #expect(fill.showsBeyondNextBandCaption)
+    }
+
+    @Test func roomInCurrentBandAtBoundaryIsFullBand() {
+        let presentation = ProgressionPresentationRewards(visualBandSize: 100, xpPerRankLevel: 3_000)
+        #expect(ProgressionRankBands.roomInCurrentBand(serverXp: 300, presentation: presentation) == 100)
+        #expect(ProgressionRankBands.roomInCurrentBand(serverXp: 320, presentation: presentation) == 80)
+    }
+
     @Test func rankLadderFromCatalogAtTenThousandXp() {
         let ladder = ProgressionCatalogProjection.rankLadder(from: .bundledDefault)
         #expect(ladder.currentRank(xp: 10_000).level == 4)

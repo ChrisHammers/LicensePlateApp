@@ -72,11 +72,14 @@ struct ProfileXpProgressSection<ProgressionLinks: View>: View {
                             Text("profile.xp.pending_ledger_line".localized(viewModel.ledgerProvisionalPending))
                                 .font(.system(.caption, design: .rounded))
                                 .foregroundStyle(Color.Theme.softBrown)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .multilineTextAlignment(.leading)
                             ProjectedRankProgressView(
                                 serverXp: viewModel.serverFinalXp ?? 0,
                                 pendingLedgerXp: viewModel.ledgerProvisionalPending
                             )
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .padding(.vertical, 4)
                     .accessibilityElement(children: .combine)

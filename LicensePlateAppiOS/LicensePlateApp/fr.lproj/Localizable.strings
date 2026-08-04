@@ -822,12 +822,14 @@
 "profile.xp.server_total_loading" = "L’XP synchronisée apparaîtra lorsque vous serez en ligne.";
 "profile.xp.local_fallback_total" = "XP actuelle sur cet appareil";
 "profile.xp.local_fallback_note" = "L’XP synchronisée n’est pas encore disponible, cette valeur inclut donc la progression locale en attente.";
-"profile.xp.pending_ledger_line" = "Sur cet appareil : +%d XP encore en attente de résolution compétitive.";
-"profile.xp.pending_section.a11y" = "XP compétitive en attente sur cet appareil";
-"profile.xp.rank_band_title" = "Progression dans la bande actuelle (visuel)";
+"profile.xp.pending_ledger_line" = "Sur cet appareil : +%d XP pas encore reflétés dans votre total synchronisé.";
+"profile.xp.pending_section.a11y" = "XP en attente sur cet appareil";
+"profile.xp.rank_band_title" = "Progression dans la bande de rang actuelle";
 "profile.xp.rank_band.a11y" = "Progression visuelle dans la bande d’XP actuelle";
 "profile.xp.rank_band.a11y.value" = "%d XP synchronisés, %d en attente sur l’appareil";
-"profile.xp.pending_overlay_caption" = "La barre jaune est uniquement indicative : pas de déblocage tant que la synchro n’est pas faite.";
+"profile.xp.pending_overlay_caption" = "Le jaune est en attente sur cet appareil — pas encore dans le total synchronisé de votre compte.";
+"profile.xp.pending_next_band_caption" = "Le montant en attente se poursuit dans la bande suivante.";
+"profile.xp.pending_beyond_next_band_caption" = "Le montant en attente se poursuit dans la bande suivante et au-delà.";
 
 "tripSummary.xp_recap.title" = "XP et ajustements";
 "tripSummary.xp_recap.subtitle" = "D’après le registre XP du trajet sur cet appareil.";
