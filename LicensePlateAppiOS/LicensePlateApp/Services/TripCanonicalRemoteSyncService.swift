@@ -188,6 +188,7 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     }
 
     private func publishFullSessionBody(sessionId: UUID) async throws {
+        try await AppCheckReadiness.ensureCallablePrerequisites()
         guard let session = try tripSessionRepository.session(byId: sessionId) else {
             throw TripCanonicalRemoteSyncError.sessionNotFoundLocally
         }
@@ -212,6 +213,7 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     }
 
     func appendEventToRemote(_ event: TripActivityEvent) async throws -> GameplayEventAppendOutcome {
+        try await AppCheckReadiness.ensureCallablePrerequisites()
         let wire = TripCanonicalMapper.wireEvent(from: event)
         let eventObj = try TripCanonicalSyncJSON.jsonObject(encodable: wire)
         let fn = functions.httpsCallable("appendTripActivityEvent")
@@ -223,6 +225,7 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     }
 
     func bootstrapMemberSession(sessionId: UUID) async throws {
+        try await AppCheckReadiness.ensureCallablePrerequisites()
         let fn = functions.httpsCallable("fetchTripBootstrapForMember")
         let result = try await fn.call((["tripSessionId": sessionId.uuidString] as [String: Any]).addingClientMetadata())
         guard let data = result.data as? [String: Any] else {
@@ -350,11 +353,13 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     }
 
     func markTripCancelledRemote(sessionId: UUID) async throws {
+        try await AppCheckReadiness.ensureCallablePrerequisites()
         let fn = functions.httpsCallable("markTripCancelledRemote")
         _ = try await fn.call((["tripSessionId": sessionId.uuidString] as [String: Any]).addingClientMetadata())
     }
 
     func removeParticipantAsOwner(sessionId: UUID, removedUserId: String) async throws {
+        try await AppCheckReadiness.ensureCallablePrerequisites()
         let fn = functions.httpsCallable("removeTripParticipantAsOwner")
         _ = try await fn.call(([
             "tripSessionId": sessionId.uuidString,

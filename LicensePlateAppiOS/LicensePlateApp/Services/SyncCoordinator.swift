@@ -262,6 +262,17 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                         try? repository.markCancelled(id: item.id)
                         continue
                     }
+                    if Self.isTransientMembershipOrAppCheckGameplayFailure(error) {
+                        // Trip may never have published (App Check) or membership missing — republish and retry.
+                        Task { @MainActor in
+                            try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionUUID)
+                        }
+                        let attempts = max(item.attemptCount, 0) + 1
+                        let delaySeconds = min(pow(2.0, Double(attempts - 1)) * 30.0, 900.0)
+                        let nextRetryAt = Date().addingTimeInterval(delaySeconds)
+                        try? repository.markFailed(id: item.id, nextRetryAt: nextRetryAt)
+                        continue
+                    }
                     if Self.isPermanentGameplaySyncFailure(error) {
                         AnalyticsService.shared.log(.gameplayEventServerRejected(
                             tripSessionId: sessionUUID.uuidString,
@@ -365,6 +376,9 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     }
 
     private static func isPermanentGameplaySyncFailure(_ error: Error) -> Bool {
+        if isTransientMembershipOrAppCheckGameplayFailure(error) {
+            return false
+        }
         let ns = error as NSError
         guard ns.domain == FunctionsErrorDomain else { return false }
         guard let code = FunctionsErrorCode(rawValue: ns.code) else { return false }
@@ -382,6 +396,26 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         guard ns.domain == FunctionsErrorDomain else { return false }
         guard let code = FunctionsErrorCode(rawValue: ns.code), code == .failedPrecondition else { return false }
         return ns.localizedDescription.lowercased().contains("game not found")
+    }
+
+    /// App Check rejection or missing trip membership after a silently failed publish — keep retrying.
+    private static func isTransientMembershipOrAppCheckGameplayFailure(_ error: Error) -> Bool {
+        let ns = error as NSError
+        let message = ns.localizedDescription.lowercased()
+        if message.contains("app check") || message.contains("appcheck") {
+            return true
+        }
+        guard ns.domain == FunctionsErrorDomain else { return false }
+        guard let code = FunctionsErrorCode(rawValue: ns.code) else { return false }
+        switch code {
+        case .unauthenticated:
+            // enforceAppCheck rejects with unauthenticated when the App Check JWT is missing/invalid.
+            return true
+        case .permissionDenied:
+            return message.contains("not a member") || message.contains("not a trip")
+        default:
+            return false
+        }
     }
 
 }

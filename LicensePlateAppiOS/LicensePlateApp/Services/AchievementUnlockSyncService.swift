@@ -52,6 +52,7 @@ final class AchievementUnlockSyncService {
         ].addingClientMetadata()
 
         do {
+            try await AppCheckReadiness.ensureCallablePrerequisites()
             let fn = functions.httpsCallable("syncUserAchievementUnlocks")
             let result = try await fn.call(payload)
             let parsed = parseSyncResponse(result.data)

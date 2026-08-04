@@ -14,7 +14,11 @@ import FirebaseAppCheck
 enum AppCheckConfigurator {
     static func configure() {
         #if canImport(FirebaseAppCheck)
-        AppCheck.setAppCheckProviderFactory(makeProviderFactory().factory)
+        let selection = makeProviderFactory()
+        AppCheck.setAppCheckProviderFactory(selection.factory)
+        #if DEBUG
+        print("[App Check] Provider factory: \(selection.name)")
+        #endif
         #endif
     }
 
@@ -22,6 +26,7 @@ enum AppCheckConfigurator {
     static func logDevelopmentSetupHintIfNeeded() {
         #if DEBUG
         #if canImport(FirebaseAppCheck)
+        #if targetEnvironment(simulator)
         if let pinnedToken = ProcessInfo.processInfo.environment["AppCheckDebugToken"],
            !pinnedToken.isEmpty {
             print("[App Check] Using pinned debug token from AppCheckDebugToken environment variable.")
@@ -30,12 +35,14 @@ enum AppCheckConfigurator {
 
         print(
             """
-            [App Check] No AppCheckDebugToken env var is set. Simulators can each generate a different debug token.
+            [App Check] Simulator uses the debug provider. Register the debug token or set AppCheckDebugToken.
             1. Run once and copy the console line: App Check debug token: '…'
             2. Firebase Console → App Check → your iOS app → Manage debug tokens → Add token
             3. (Recommended) Pin that token for all simulators: Xcode → Product → Scheme → Edit Scheme → Run → Arguments → Environment Variables → AppCheckDebugToken = <token>
+            Physical Debug devices use DeviceCheck (no debug-token registration).
             """
         )
+        #endif
         #endif
         #endif
     }
@@ -47,16 +54,18 @@ enum AppCheckConfigurator {
     }
 
     private static func makeProviderFactory() -> ProviderSelection {
-        #if DEBUG
-        return ProviderSelection(
-            factory: AppCheckDebugProviderFactory(),
-            name: "debug (Debug build)"
-        )
-        #else
         #if targetEnvironment(simulator)
+        // Simulators have no DeviceCheck/App Attest; debug tokens must be registered in Console.
         return ProviderSelection(
             factory: AppCheckDebugProviderFactory(),
             name: "debug (Simulator)"
+        )
+        #elseif DEBUG
+        // Physical-device Debug builds: DeviceCheck so callables work without registering a
+        // per-install App Check debug token (missing/invalid debug JWTs → auth VALID, app INVALID).
+        return ProviderSelection(
+            factory: DeviceCheckProviderFactory(),
+            name: "DeviceCheck (Debug device)"
         )
         #else
         if isAppStoreDistributionInstall {
@@ -65,11 +74,11 @@ enum AppCheckConfigurator {
                 name: "App Attest (TestFlight/App Store)"
             )
         }
+        // Local Release device installs (Xcode) also use DeviceCheck — same footgun as Debug.
         return ProviderSelection(
-            factory: AppCheckDebugProviderFactory(),
-            name: "debug (local device install)"
+            factory: DeviceCheckProviderFactory(),
+            name: "DeviceCheck (local device install)"
         )
-        #endif
         #endif
     }
 
