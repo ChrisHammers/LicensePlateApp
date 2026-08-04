@@ -664,12 +664,12 @@ struct FAQView: View {
                 
                 FAQItem(
                     question: "How do I see my progress?".localized,
-                    answer: "On the trip screen, you'll see summary chips showing how many plates you've found and how many remain. The map at the top shows all found regions highlighted in yellow. You can tap the map to view it full-screen for a better look!".localized
+                    answer: "Each trip and each individual game has its own map and summary. On the trip or game screen, summary chips show how many plates you've found and how many remain. The map highlights found regions in yellow — tap it for a full-screen view.".localized
                 )
                 
                 FAQItem(
                     question: "Can I share my trips with others?".localized,
-                    answer: "Currently, trips are stored locally on your device. Future updates may include sharing and collaboration features. Stay tuned!".localized
+                    answer: "Yes! You can invite friends to play with you on a trip, and after the trip is complete you can share the journey. Trips are stored both on your device and online when you're signed in, so you can keep playing offline and stay in sync when you reconnect.".localized
                 )
                 
                 FAQItem(
@@ -699,23 +699,35 @@ struct FAQView: View {
 private struct FAQItem: View {
     let question: String
     let answer: String
+    @State private var isExpanded = false
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            Text(answer)
+                .font(.system(.body, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 8)
+                .multilineTextAlignment(.leading)
+        } label: {
             Text(question)
                 .font(.system(.headline, design: .rounded))
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue)
-            
-            Text(answer)
-                .font(.system(.body, design: .rounded))
-                .foregroundStyle(Color.Theme.softBrown)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .tint(Color.Theme.primaryBlue)
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.Theme.cardBackground)
+        )
+        .accessibilityHint(
+            isExpanded
+                ? "Collapses the answer".localized
+                : "Expands the answer".localized
         )
     }
 }
