@@ -270,7 +270,6 @@ struct FriendRow: View {
     var onRemoveRequested: () -> Void
     @EnvironmentObject var authService: FirebaseAuthService
     @Environment(\.modelContext) private var modelContext
-    @ObservedObject private var publicLifetimeStatsRepository = PublicLifetimeStatsRepository.shared
     @State private var user: AppUser?
     @State private var relationshipLabel: String = ""
 
@@ -289,9 +288,6 @@ struct FriendRow: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel(accessibilityLabelText)
             .task {
-                if let oid = otherUserId {
-                    publicLifetimeStatsRepository.ensureObservingFriend(userId: oid)
-                }
                 await loadUser()
                 refreshRelationshipLabel()
             }
@@ -300,9 +296,6 @@ struct FriendRow: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(accessibilityLabelText)
                 .task {
-                    if let oid = otherUserId {
-                        publicLifetimeStatsRepository.ensureObservingFriend(userId: oid)
-                    }
                     await loadUser()
                     refreshRelationshipLabel()
                 }
@@ -333,15 +326,6 @@ struct FriendRow: View {
                             .font(.system(.caption2, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown.opacity(0.9))
                             .accessibilityHidden(true)
-                    }
-
-                    if let oid = otherUserId, let stats = publicLifetimeStatsRepository.snapshot(forUserId: oid) {
-                        Text("friends.public_lifetime_stats.trips_line".localized(stats.totalCompletedTrips))
-                            .font(.system(.caption2, design: .rounded))
-                            .foregroundStyle(Color.Theme.softBrown.opacity(0.85))
-                            .accessibilityLabel(
-                                "friends.public_lifetime_stats.trips_line.a11y".localized(stats.totalCompletedTrips)
-                            )
                     }
                 } else {
                     Text(relationshipLabel.isEmpty ? "Friend".localized : relationshipLabel)
@@ -379,9 +363,6 @@ struct FriendRow: View {
     private var accessibilityLabelText: String {
         let relationship = relationshipLabel.isEmpty ? "Friend".localized : relationshipLabel
         if let user = user {
-            if let oid = otherUserId, let stats = publicLifetimeStatsRepository.snapshot(forUserId: oid) {
-                return "\(user.displayName), @\(user.userName), \(relationship), \("friends.public_lifetime_stats.trips_line".localized(stats.totalCompletedTrips))"
-            }
             return "\(user.displayName), @\(user.userName), \(relationship)"
         }
         return relationship

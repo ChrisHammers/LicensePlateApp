@@ -432,11 +432,6 @@ struct FamilyDashboard: View {
                 viewModel.onAppear()
                 DeferredProfileSetupStore.shared.markTouched(.family, source: "settings")
             }
-            .onChange(of: viewModel.members.map(\.userId).sorted().joined(separator: ",")) { _, _ in
-                PublicLifetimeStatsRepository.shared.updateFamilyPinnedUserIds(
-                    Set(viewModel.members.map(\.userId))
-                )
-            }
        // }
     }
 }
@@ -445,7 +440,6 @@ struct FamilyMemberRow: View {
     let member: FamilyMember
     let familyCreatorId: String?
     @EnvironmentObject private var authService: FirebaseAuthService
-    @ObservedObject private var publicLifetimeStatsRepository = PublicLifetimeStatsRepository.shared
 
     private var rolePresentation: FamilyMemberRolePresentation {
         FamilyMemberRolePresentation.make(
@@ -453,14 +447,6 @@ struct FamilyMemberRow: View {
             memberUserId: member.userId,
             familyCreatorId: familyCreatorId
         )
-    }
-
-    private var memberSubtitle: String {
-        let role = rolePresentation.roleText
-        if let stats = publicLifetimeStatsRepository.snapshot(forUserId: member.userId) {
-            return "\(role) · \("family.member.public_stats_line".localized(stats.totalCompletedTrips))"
-        }
-        return role
     }
 
     private var currentUserId: String? {
@@ -484,7 +470,7 @@ struct FamilyMemberRow: View {
                 HStack(spacing: 8) {
                     UserIdentityRowView(
                         user: user,
-                        subtitle: memberSubtitle,
+                        subtitle: rolePresentation.roleText,
                         avatarSize: 50,
                         isCurrentUser: isSelf
                     )
@@ -493,10 +479,7 @@ struct FamilyMemberRow: View {
                     }
                 }
             }
-            .accessibilityLabel("\(decoratedName), @\(user.userName), \(rolePresentation.accessibilityText)\(publicStatsAccessibilitySuffix)")
-            .task {
-                publicLifetimeStatsRepository.ensureObservingFriend(userId: member.userId)
-            }
+            .accessibilityLabel("\(decoratedName), @\(user.userName), \(rolePresentation.accessibilityText)")
         } else {
             HStack {
                 AvatarImageView(avatarId: nil, size: 50)
@@ -519,13 +502,6 @@ struct FamilyMemberRow: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\("Member".localized), \(rolePresentation.accessibilityText)")
         }
-    }
-
-    private var publicStatsAccessibilitySuffix: String {
-        guard let stats = publicLifetimeStatsRepository.snapshot(forUserId: member.userId) else {
-            return ""
-        }
-        return ", \("family.member.public_stats_line".localized(stats.totalCompletedTrips))"
     }
 }
 
