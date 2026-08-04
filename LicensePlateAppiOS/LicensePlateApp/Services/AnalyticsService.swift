@@ -190,6 +190,20 @@ class AnalyticsService: AnalyticsLogging {
         case progressionRewardsConfigFallback(reason: String)
         case progressionCatalogPresentationOverrideApplied(achievementsEnabled: Bool, rankProgressionEnabled: Bool)
         case progressionCatalogConfigFallback(reason: String)
+        /// Sync queue empty after online drain, but local/server XP still mismatched (searchable integrity signal).
+        case progressionXpDriftAfterSync(
+            openProvisionalXp: Int,
+            hasOpenProvisional: Bool,
+            hasPendingLocalProgression: Bool,
+            pendingLocalXpDelta: Int,
+            serverTotalXp: Int,
+            verifiedGrantSum: Int?,
+            grantLedgerMismatch: Bool,
+            hasReceivedGrantSnapshot: Bool,
+            progressionTriggerConfirmed: Bool,
+            recentlyAcceptedCount: Int,
+            settleWaitMs: Int
+        )
         case achievementUnlocked(achievementId: String, category: String, rarity: String)
         case rankUpCelebrated(level: Int, totalXp: Int)
         case achievementCelebrationDismissed(eventId: String, kind: String)
@@ -432,6 +446,7 @@ class AnalyticsService: AnalyticsLogging {
             case .progressionRewardsConfigFallback: return "progression_rewards_config_fallback"
             case .progressionCatalogPresentationOverrideApplied: return "progression_catalog_presentation_override_applied"
             case .progressionCatalogConfigFallback: return "progression_catalog_config_fallback"
+            case .progressionXpDriftAfterSync: return "progression_xp_drift_after_sync"
             case .achievementUnlocked: return "achievement_unlocked"
             case .rankUpCelebrated: return "rank_up"
             case .achievementCelebrationDismissed: return "achievement_celebration_dismissed"
@@ -703,6 +718,35 @@ class AnalyticsService: AnalyticsLogging {
                 ]
             case .progressionCatalogConfigFallback(let reason):
                 return ["reason": reason]
+            case .progressionXpDriftAfterSync(
+                let openProvisionalXp,
+                let hasOpenProvisional,
+                let hasPendingLocalProgression,
+                let pendingLocalXpDelta,
+                let serverTotalXp,
+                let verifiedGrantSum,
+                let grantLedgerMismatch,
+                let hasReceivedGrantSnapshot,
+                let progressionTriggerConfirmed,
+                let recentlyAcceptedCount,
+                let settleWaitMs
+            ):
+                var params: [String: Any] = [
+                    "open_provisional_xp": openProvisionalXp,
+                    "has_open_provisional": hasOpenProvisional,
+                    "has_pending_local_progression": hasPendingLocalProgression,
+                    "pending_local_xp_delta": pendingLocalXpDelta,
+                    "server_total_xp": serverTotalXp,
+                    "grant_ledger_mismatch": grantLedgerMismatch,
+                    "has_received_grant_snapshot": hasReceivedGrantSnapshot,
+                    "progression_trigger_confirmed": progressionTriggerConfirmed,
+                    "recently_accepted_count": recentlyAcceptedCount,
+                    "settle_wait_ms": settleWaitMs
+                ]
+                if let verifiedGrantSum {
+                    params["verified_grant_sum"] = verifiedGrantSum
+                }
+                return params
             case .achievementUnlocked(let achievementId, let category, let rarity):
                 return [
                     "achievement_id": achievementId,

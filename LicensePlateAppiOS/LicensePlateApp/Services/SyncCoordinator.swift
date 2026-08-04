@@ -165,6 +165,7 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     }
 
     private func processPendingSyncItemsBody() async {
+        var acceptedProgressionSourceEventIds = Set<String>()
         var gameplayDrainPass = 0
         while gameplayDrainPass < Self.maxGameplayBacklogDrainPasses {
             let pending = (try? repository.fetchPending()) ?? []
@@ -198,6 +199,9 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                             gameInstanceId: gameIdStr,
                             eventKind: event.kind.rawValue
                         ))
+                        if event.kind == .regionFound || event.kind == .gameEnded {
+                            acceptedProgressionSourceEventIds.insert(event.id)
+                        }
                         if event.kind == .regionFound {
                             GameplayXpSyncSupport.applyResolutionForAcceptedGameplayEvent(event, sessionId: sessionUUID)
                         }
@@ -310,6 +314,17 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         if gameplayDrainPass >= Self.maxGameplayBacklogDrainPasses,
            (try? repository.hasPendingOrRetryDueGameplayItems()) ?? false {
             pendingAnotherGameplayFlush = true
+        }
+
+        let gameplayStillPending = (try? repository.hasPendingOrRetryDueGameplayItems()) ?? true
+        if !gameplayStillPending, gameplaySyncOnlineProvider() {
+            ProgressionXpDriftAfterSyncReporter.shared.scheduleEvaluationAfterSuccessfulGameplayDrain(
+                recentlyAcceptedProgressionSourceEventIds: acceptedProgressionSourceEventIds,
+                isOnline: { [weak self] in self?.gameplaySyncOnlineProvider() ?? false },
+                hasPendingOrRetryDueGameplay: { [weak self] in
+                    (try? self?.repository.hasPendingOrRetryDueGameplayItems()) ?? true
+                }
+            )
         }
 
         guard let userSyncExecutor else { return }

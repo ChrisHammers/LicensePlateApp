@@ -95,6 +95,7 @@ final class LocalUserDataPurgeService {
 
     private func resetInMemoryServices() {
         UserProgressionService.shared.resetForSignOut()
+        ProgressionXpDriftAfterSyncReporter.shared.resetForSignOut()
         XpGrantReconcileService.shared.resetForSignOut()
         AchievementUnlockCelebrationService.shared.resetForSignOut()
         XpGainToastService.shared.resetForSignOut()

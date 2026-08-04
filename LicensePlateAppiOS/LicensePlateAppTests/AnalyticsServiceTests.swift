@@ -71,6 +71,22 @@ struct AnalyticsServiceTests {
             (.firstFindCompleted(tripSessionId: "t1", gameInstanceId: "g1", targetId: "us-ca", elapsedMs: 200, inputMethod: "list"), "first_find_completed"),
             (.userSearchPerformed(queryType: "all"), "user_search_performed"),
             (.authProfileHydrateFailed(outcome: "keep_local"), "auth_profile_hydrate_failed"),
+            (
+                .progressionXpDriftAfterSync(
+                    openProvisionalXp: 10,
+                    hasOpenProvisional: true,
+                    hasPendingLocalProgression: false,
+                    pendingLocalXpDelta: 0,
+                    serverTotalXp: 100,
+                    verifiedGrantSum: 100,
+                    grantLedgerMismatch: false,
+                    hasReceivedGrantSnapshot: true,
+                    progressionTriggerConfirmed: true,
+                    recentlyAcceptedCount: 1,
+                    settleWaitMs: 1200
+                ),
+                "progression_xp_drift_after_sync"
+            ),
         ]
         for (event, expectedName) in expectations {
             #expect(event.name == expectedName)
