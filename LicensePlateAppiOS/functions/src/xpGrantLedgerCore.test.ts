@@ -6,7 +6,8 @@ import {
   legacyUnledgeredGrantId,
   XP_GRANT_REASON,
 } from "./xpGrantLedgerCore";
-import { KIND_GAME_ENDED, KIND_REGION_FOUND } from "./progressionCore";
+import { KIND_GAME_ENDED } from "./progressionCore";
+import { KIND_REGION_FOUND } from "./gameplayEventResolver";
 
 describe("xpGrantLedgerCore", () => {
   it("builds stable activity grant ids", () => {
@@ -41,4 +42,18 @@ describe("xpGrantLedgerCore", () => {
   it("uses a stable legacy grant id", () => {
     expect(legacyUnledgeredGrantId()).toBe("legacy_unledgered_balance|v1");
   });
+
+  it("includes return streak daily grant reason", () => {
+    const doc = buildXpGrantDocument({
+      grantId: "return_streak_daily|v1|u1|2026-07-11",
+      amount: 5,
+      reason: XP_GRANT_REASON.RETURN_STREAK_DAILY,
+      sourceType: "return_streak",
+      sourceId: "2026-07-11",
+      idempotencyKey: "return_streak_daily|v1|u1|2026-07-11",
+    });
+    expect(doc.reason).toBe("return_streak_daily");
+    expect(doc.sourceType).toBe("return_streak");
+  });
 });
+

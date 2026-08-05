@@ -21,18 +21,22 @@ struct LedgerPendingXpTotals: Equatable, Sendable {
     }
 
     /// XP that should still inflate the displayed total above the server snapshot.
-    /// Includes open provisional rows and final discovery mirrors not yet listed in applied events.
+    /// Includes open provisional rows, final discovery mirrors not yet listed in applied events,
+    /// and return-streak daily finals not yet listed in applied progression scopes.
     static func openProvisionalSum(
         from events: [XpLedgerEvent],
         appliedProgressionEventIds: Set<String>,
         appliedProgressionScopeKeys: Set<String> = [],
         now: Date = .now
     ) -> Int {
-        _ = appliedProgressionScopeKeys
         _ = now
         return events.reduce(0) { partial, row in
             guard row.xpDelta != 0 else { return partial }
-            if isServerApplied(row, appliedProgressionEventIds: appliedProgressionEventIds) {
+            if isServerApplied(
+                row,
+                appliedProgressionEventIds: appliedProgressionEventIds,
+                appliedProgressionScopeKeys: appliedProgressionScopeKeys
+            ) {
                 return partial
             }
             switch row.status {
@@ -40,6 +44,10 @@ struct LedgerPendingXpTotals: Equatable, Sendable {
                 return partial + row.xpDelta
             case .final where row.grantKind == .finalDiscoveryAward:
                 // Bridge the gap between sync confirmation and Firestore progression snapshot.
+                return partial + row.xpDelta
+            case .final
+                where row.grantKind == .milestoneUnlock
+                && row.reasonCode == .returnStreakDaily:
                 return partial + row.xpDelta
             case .final, .voided:
                 return partial
@@ -66,7 +74,8 @@ struct LedgerPendingXpTotals: Equatable, Sendable {
 
     private static func isServerApplied(
         _ row: XpLedgerEvent,
-        appliedProgressionEventIds: Set<String>
+        appliedProgressionEventIds: Set<String>,
+        appliedProgressionScopeKeys: Set<String>
     ) -> Bool {
         if appliedProgressionEventIds.contains(row.sourceEventId) {
             return true
@@ -74,6 +83,12 @@ struct LedgerPendingXpTotals: Equatable, Sendable {
         if let original = row.metadata?[XpLedgerMetadataKey.originalDiscoveryEventId],
            appliedProgressionEventIds.contains(original) {
             return true
+        }
+        if row.reasonCode == .returnStreakDaily {
+            let scopeKey = ReturnStreakXpScopeKey.daily(userId: row.userId, dayKey: row.itemId)
+            if appliedProgressionScopeKeys.contains(scopeKey) {
+                return true
+            }
         }
         return false
     }

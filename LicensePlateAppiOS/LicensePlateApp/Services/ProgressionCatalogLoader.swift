@@ -53,6 +53,9 @@ enum ProgressionCatalogValidator {
             if let xpReward = group.xpReward, xpReward < 0 || xpReward > 10_000 {
                 return "xp_toast_group_xp_reward_out_of_range"
             }
+            if let minStreak = group.minStreakForXpReward, minStreak < 1 {
+                return "xp_toast_group_min_streak_for_xp_reward_out_of_range"
+            }
         }
         return nil
     }

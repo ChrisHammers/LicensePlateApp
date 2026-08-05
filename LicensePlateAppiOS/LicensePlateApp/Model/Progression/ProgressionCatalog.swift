@@ -138,6 +138,8 @@ struct ProgressionCatalogXpToastGroup: Codable, Equatable, Sendable, Identifiabl
     var detailKey: String?
     var matchers: ProgressionCatalogXpToastMatchers
     var xpReward: Int?
+    /// Minimum streak day count required before `xpReward` is granted. Nil treats as 1.
+    var minStreakForXpReward: Int? = nil
 }
 
 struct ProgressionCatalogXpToastMatchers: Codable, Equatable, Sendable {
@@ -509,7 +511,8 @@ extension ProgressionCatalog {
                     grantReasons: nil,
                     clientEventKinds: ["return_streak"]
                 ),
-                xpReward: 5
+                xpReward: 5,
+                minStreakForXpReward: 2
             ),
             ProgressionCatalogXpToastGroup(
                 id: "competitive_win",

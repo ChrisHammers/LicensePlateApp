@@ -346,7 +346,8 @@
           "ledgerReasonCodes": ["return_streak_daily"],
           "clientEventKinds": ["return_streak"]
         },
-        "xpReward": 5
+        "xpReward": 5,
+        "minStreakForXpReward": 2
       },
       {
         "id": "competitive_win",

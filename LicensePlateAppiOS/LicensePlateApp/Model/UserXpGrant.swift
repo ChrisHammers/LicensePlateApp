@@ -26,5 +26,6 @@ enum UserXpGrantReason: String, Sendable {
     case regionFoundBaseDiscovery = "region_found_base_discovery"
     case competitiveFirstPlaceFinish = "competitive_first_place_finish"
     case achievementUnlock = "achievement_unlock"
+    case returnStreakDaily = "return_streak_daily"
     case legacyUnledgeredBalance = "legacy_unledgered_balance"
 }

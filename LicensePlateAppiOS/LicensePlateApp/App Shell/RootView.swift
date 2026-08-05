@@ -114,11 +114,15 @@ struct RootView: View {
             }
             if let user = authService.currentUser {
                 let entitlement = EntitlementService.shared.entitlementState(for: user)
+                let userId = user.firebaseUID ?? user.id
                 Task {
                     await AchievementUnlockSyncService.shared.retryPendingIfNeeded(
                         user: user,
                         entitlement: entitlement
                     )
+                    if !userId.isEmpty {
+                        await ReturnStreakDailyXpClaimService.shared.retryPendingIfNeeded(userId: userId)
+                    }
                 }
             }
         }

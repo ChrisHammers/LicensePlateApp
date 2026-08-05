@@ -231,6 +231,9 @@ final class ReturnStreakService: ObservableObject {
               let xpReward = group.xpReward,
               xpReward > 0 else { return }
 
+        let minStreak = group.minStreakForXpReward ?? 1
+        guard currentStreak >= minStreak else { return }
+
         let dayKey = calendarDayKey(for: qualifyingDay)
         let uniquenessKey = XpLedgerKeyBuilder.uniquenessKey(
             userId: userId,
@@ -241,6 +244,13 @@ final class ReturnStreakService: ObservableObject {
         ).storageString
 
         if let existing = try? xpLedger.ledgerEvents(forUniquenessKey: uniquenessKey), !existing.isEmpty {
+            Task {
+                await ReturnStreakDailyXpClaimService.shared.claimIfNeeded(
+                    userId: userId,
+                    dayKey: dayKey,
+                    currentStreak: currentStreak
+                )
+            }
             return
         }
 
@@ -259,6 +269,13 @@ final class ReturnStreakService: ObservableObject {
             metadata: [XpLedgerMetadataKey.returnStreakDayCount: "\(currentStreak)"]
         )
         try? xpLedger.append(event)
+        Task {
+            await ReturnStreakDailyXpClaimService.shared.claimIfNeeded(
+                userId: userId,
+                dayKey: dayKey,
+                currentStreak: currentStreak
+            )
+        }
     }
 
     private func currentStreak(from outcome: ReturnStreakRecordOutcome) -> Int {

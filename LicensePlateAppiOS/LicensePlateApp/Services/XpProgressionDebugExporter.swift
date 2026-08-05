@@ -426,9 +426,9 @@ enum XpProgressionDebugExporter {
             ),
             Payload.ConfiguredXpSource(
                 id: "returnStreakDailyXp",
-                xpAmount: 0,
-                isWiredToGrant: false,
-                grantPath: "Return streak has celebration UI only; no XP grant."
+                xpAmount: 5,
+                isWiredToGrant: true,
+                grantPath: "ReturnStreakService local ledger (streak >= minStreakForXpReward) + claimReturnStreakDailyXp → user_progression.totalXp + xp_grants."
             ),
         ]
     }

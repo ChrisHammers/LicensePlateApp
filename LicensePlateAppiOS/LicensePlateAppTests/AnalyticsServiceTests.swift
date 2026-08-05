@@ -64,6 +64,8 @@ struct AnalyticsServiceTests {
             (.returnStreakUpdated(currentStreak: 2, reason: "consecutive_return"), "return_streak_updated"),
             (.returnStreakQualified(currentStreak: 2, reason: "continued"), "return_streak_qualified"),
             (.returnStreakDisplayed(currentStreak: 3, surface: "home"), "return_streak_displayed"),
+            (.returnStreakDailyXpClaimSucceeded(dayKey: "2026-07-11", currentStreak: 2, granted: true, alreadyClaimed: false), "return_streak_daily_xp_claim_succeeded"),
+            (.returnStreakDailyXpClaimFailed(dayKey: "2026-07-11", currentStreak: 2, errorSummary: "offline"), "return_streak_daily_xp_claim_failed"),
             (.screenView(screenName: "test", screenClass: nil), "screen_view"),
             (.combinedTripCreated(gameTypes: ["lp"]), "combined_trip_created"),
             (.onboardingStarted(flowVariant: "quick_solo", offline: false), "onboarding_started"),

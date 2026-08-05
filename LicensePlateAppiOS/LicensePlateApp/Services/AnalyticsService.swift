@@ -209,6 +209,8 @@ class AnalyticsService: AnalyticsLogging {
         case achievementCelebrationDismissed(eventId: String, kind: String)
         case achievementUnlockSyncSucceeded(recordedCount: Int, alreadySyncedCount: Int, rejectedCount: Int)
         case achievementUnlockSyncFailed(candidateCount: Int, errorSummary: String)
+        case returnStreakDailyXpClaimSucceeded(dayKey: String, currentStreak: Int, granted: Bool, alreadyClaimed: Bool)
+        case returnStreakDailyXpClaimFailed(dayKey: String, currentStreak: Int, errorSummary: String)
         case xpGrantAwarded(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
         case xpGrantSkippedAlreadyGranted(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
         case xpGainToastPresented(lineCount: Int, totalXp: Int, coalesced: Bool, sourceMix: String, groupIds: String)
@@ -452,6 +454,8 @@ class AnalyticsService: AnalyticsLogging {
             case .achievementCelebrationDismissed: return "achievement_celebration_dismissed"
             case .achievementUnlockSyncSucceeded: return "achievement_unlock_sync_succeeded"
             case .achievementUnlockSyncFailed: return "achievement_unlock_sync_failed"
+            case .returnStreakDailyXpClaimSucceeded: return "return_streak_daily_xp_claim_succeeded"
+            case .returnStreakDailyXpClaimFailed: return "return_streak_daily_xp_claim_failed"
             case .xpGrantAwarded: return "xp_grant_awarded"
             case .xpGrantSkippedAlreadyGranted: return "xp_grant_skipped_already_granted"
             case .xpGainToastPresented: return "xp_gain_toast_presented"
@@ -772,6 +776,19 @@ class AnalyticsService: AnalyticsLogging {
             case .achievementUnlockSyncFailed(let candidateCount, let errorSummary):
                 return [
                     "candidate_count": candidateCount,
+                    "error_summary": errorSummary
+                ]
+            case .returnStreakDailyXpClaimSucceeded(let dayKey, let currentStreak, let granted, let alreadyClaimed):
+                return [
+                    "day_key": dayKey,
+                    "current_streak": currentStreak,
+                    "granted": granted,
+                    "already_claimed": alreadyClaimed
+                ]
+            case .returnStreakDailyXpClaimFailed(let dayKey, let currentStreak, let errorSummary):
+                return [
+                    "day_key": dayKey,
+                    "current_streak": currentStreak,
                     "error_summary": errorSummary
                 ]
             case .xpGrantAwarded(let tripId, let gameInstanceId, let targetId, let participantId):

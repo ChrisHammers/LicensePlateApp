@@ -13,12 +13,13 @@ export const XP_GRANT_REASON = {
   REGION_FOUND: "region_found_base_discovery",
   COMPETITIVE_WIN: "competitive_first_place_finish",
   ACHIEVEMENT: "achievement_unlock",
+  RETURN_STREAK_DAILY: "return_streak_daily",
   LEGACY: "legacy_unledgered_balance",
 } as const;
 
 export type XpGrantReason = (typeof XP_GRANT_REASON)[keyof typeof XP_GRANT_REASON];
 
-export type XpGrantSourceType = "activity_event" | "achievement" | "migration";
+export type XpGrantSourceType = "activity_event" | "achievement" | "return_streak" | "migration";
 
 export type XpGrantWriteInput = {
   grantId: string;

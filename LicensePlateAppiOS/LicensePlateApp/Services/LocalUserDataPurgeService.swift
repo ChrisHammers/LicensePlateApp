@@ -98,6 +98,8 @@ final class LocalUserDataPurgeService {
         ProgressionXpDriftAfterSyncReporter.shared.resetForSignOut()
         XpGrantReconcileService.shared.resetForSignOut()
         AchievementUnlockCelebrationService.shared.resetForSignOut()
+        AchievementUnlockSyncService.shared.resetForSignOut()
+        ReturnStreakDailyXpClaimService.shared.resetForSignOut()
         XpGainToastService.shared.resetForSignOut()
 
         EntitlementService.shared.resetForAccountPurge()
