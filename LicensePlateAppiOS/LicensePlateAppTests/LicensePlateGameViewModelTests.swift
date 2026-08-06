@@ -846,6 +846,7 @@ struct LicensePlateGameViewModelTests {
 
         // Still one province short of goal 10; territory must not complete the game.
         #expect(mockGameLifecycle.markGameFullClearCallCount == 0)
+        #expect(mockGameLifecycle.endGameCallCount == 0)
 
         let result = viewModel.submitDiscovery(regionID: "ca-sk", inputMethod: .list)
         guard case .success = result else {
@@ -853,6 +854,7 @@ struct LicensePlateGameViewModelTests {
             return
         }
         #expect(mockGameLifecycle.markGameFullClearCallCount == 1)
+        #expect(mockGameLifecycle.endGameCallCount == 1)
     }
 
     // MARK: - Step 13.2 fairness watermark + backlog

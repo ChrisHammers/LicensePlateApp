@@ -34,6 +34,7 @@ final class MockGameInstanceLifecycleService: GameInstanceLifecycleServiceProtoc
     func markGameFullClear(sessionId: UUID, gameInstanceId: UUID) throws {
         if shouldThrow { throw NSError(domain: "MockGameInstanceLifecycleService", code: -1, userInfo: nil) }
         markGameFullClearCallCount += 1
+        try endGame(sessionId: sessionId, gameInstanceId: gameInstanceId)
     }
 
     func resetGame(sessionId: UUID, gameInstanceId: UUID) throws {

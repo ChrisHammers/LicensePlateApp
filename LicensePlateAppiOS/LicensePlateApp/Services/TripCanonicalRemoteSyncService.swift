@@ -305,7 +305,7 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
             guard let wire = TripCanonicalFirestoreFields.eventWire(documentId: doc.documentID, data: data),
                   let event = TripCanonicalMapper.domainEvent(from: wire),
                   event.sessionId == sessionId else { continue }
-            if event.kind == .gameStarted || event.kind == .gameEnded {
+            if event.kind == .gameStarted || event.kind == .gameEnded || event.kind == .gameCompleted {
                 lifecycleEvents.append(event)
             }
             do {
@@ -347,7 +347,7 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
 
     private func reconcileGameLifecycleFromStoredEvents(sessionId: UUID) throws {
         let events = try tripActivityEventRepository.events(sessionId: sessionId, limit: nil)
-        for event in events where event.kind == .gameStarted || event.kind == .gameEnded {
+        for event in events where event.kind == .gameStarted || event.kind == .gameEnded || event.kind == .gameCompleted {
             _ = try GameInstanceLifecycleService.shared.applyRemoteGameLifecycleEvent(event)
         }
     }

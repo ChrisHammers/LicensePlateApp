@@ -34,7 +34,7 @@ enum GameInstanceLifecycleServiceError: Error, Equatable, LocalizedError {
 protocol GameInstanceLifecycleServiceProtocol: AnyObject {
     func startGame(sessionId: UUID, gameInstanceId: UUID) throws
     func endGame(sessionId: UUID, gameInstanceId: UUID) throws
-    /// Marks completion goal met: lifecycle `.completed` + `game_completed` activity event (idempotent).
+    /// Marks completion goal met, then auto-ends the game (`game_completed` then `game_ended`). Idempotent.
     func markGameFullClear(sessionId: UUID, gameInstanceId: UUID) throws
     func resetGame(sessionId: UUID, gameInstanceId: UUID) throws
     /// Removes this game from the trip (events + SwiftData row). Requires at least one other game on the session.
@@ -153,7 +153,8 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
         schedulePublishCanonicalState(sessionId: sessionId)
     }
 
-    /// Full clear (all regions / goal met): set `.completed` and append `game_completed` for +XP. Idempotent.
+    /// Full clear (all regions / goal met): append `game_completed` for +XP, then auto-end via `endGame`
+    /// so place / game-ended XP fire immediately. Idempotent if already `.completed` or `.ended`.
     func markGameFullClear(sessionId: UUID, gameInstanceId: UUID) throws {
         guard let session = try tripSessionRepository.session(byId: sessionId) else {
             throw GameInstanceLifecycleServiceError.sessionNotFound(sessionId)
@@ -181,6 +182,7 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
         )
         try tripActivityEventRecording.recordForSync(completedEvent)
         schedulePublishCanonicalState(sessionId: sessionId)
+        try endGame(sessionId: sessionId, gameInstanceId: gameInstanceId)
     }
 
     /// Clears discovery-related events for this game and sets lifecycle to `created`. Trip dates and status unchanged.

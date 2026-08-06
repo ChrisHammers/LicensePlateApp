@@ -436,7 +436,7 @@ struct GameInstanceLifecycleServiceTests {
         #expect(completed?.commonConfig.lifecycleState == .ended)
     }
 
-    @Test func markGameFullClearSetsCompletedAndAppendsEvent() async throws {
+    @Test func markGameFullClearSetsCompletedThenAutoEnds() async throws {
         let sessionRepo = MockTripSessionRepository()
         let gameRepo = MockGameInstanceRepository()
         let eventRepo = MockTripActivityEventRepository()
@@ -467,8 +467,12 @@ struct GameInstanceLifecycleServiceTests {
         )
         try service.markGameFullClear(sessionId: sessionId, gameInstanceId: gameId)
         try service.markGameFullClear(sessionId: sessionId, gameInstanceId: gameId)
-        #expect(eventRepo.appendedEvents().filter { $0.kind == .gameCompleted }.count == 1)
-        #expect(try gameRepo.instance(byId: gameId)?.commonConfig.lifecycleState == .completed)
+        let appended = eventRepo.appendedEvents()
+        #expect(appended.filter { $0.kind == .gameCompleted }.count == 1)
+        #expect(appended.filter { $0.kind == .gameEnded }.count == 1)
+        let updated = try gameRepo.instance(byId: gameId)
+        #expect(updated?.commonConfig.lifecycleState == .ended)
+        #expect(updated?.endedAt != nil)
     }
 
     @Test func deleteGameRemovesInstanceAndEventsWhenMultipleGames() async throws {
