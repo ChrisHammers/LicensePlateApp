@@ -460,7 +460,7 @@ struct UserDriversLicenseCard<Portrait: View>: View {
             withAnimation(.linear(duration: 2.8).repeatForever(autoreverses: false)) { shinePhase = 1 }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(license.holderName), @\(license.userName), RoadTrip Royale license. Double tap to flip.")
+        .accessibilityLabel("\(license.holderName), @\(license.userName), \("RoadTrip Royale explorers license. Double tap to flip.".localized)")
     }
     
     // MARK: Accessory slot
@@ -524,7 +524,7 @@ struct UserDriversLicenseCard<Portrait: View>: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text("RoadTrip Royale")
                     .font(.system(size: 16 * s, weight: .heavy, design: .rounded))
-                Text("OFFICIAL TRAVELER LICENSE")
+                Text("OFFICIAL EXPLORERS LICENSE".localized)
                     .font(.system(size: 7.5 * s, weight: .semibold)).kerning(1.4 * s).opacity(0.9)
             }
             Spacer(minLength: 0)

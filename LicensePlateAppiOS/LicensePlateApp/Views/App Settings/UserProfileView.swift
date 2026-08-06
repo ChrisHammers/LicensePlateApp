@@ -28,12 +28,14 @@ struct UserProfileView: View {
     @State private var isCheckingUsername = false
     @State private var linkingPlatform: LinkedPlatform.PlatformType? = nil
     @State private var showAvatarPickerSheet = false
+    @State private var showLicenseWalletSheet = false
 
     @StateObject private var lifetimeStatsViewModel: LifetimeStatsProfileViewModel
     @StateObject private var xpProgressViewModel: XpProgressViewModel
     @ObservedObject private var entitlementService = EntitlementService.shared
     @ObservedObject private var userProgressionRepository = UserProgressionRepository.shared
     @ObservedObject private var userProgressionService = UserProgressionService.shared
+    @ObservedObject private var licenseCosmeticStore = LicenseCosmeticStore.shared
 
     // Helper function to get topmost view controller
     private func topViewController(controller: UIViewController? = nil) -> UIViewController? {
@@ -152,16 +154,20 @@ struct UserProfileView: View {
     var body: some View {
             AppBackgroundView {
                 List {
-                    // Explorer license hero
+                    // Explorer license hero — avatar and license skin are separate actions
                     Section {
                         ProfileDriversLicenseCardSection(
                             license: gameLicense,
                             user: user,
+                            style: licenseCosmeticStore.equippedStyle,
                             showsAvatarEdit: true,
+                            showsLicenseCustomize: true,
                             onEditAvatar: {
-                                let _ = print("I did it")
                                 showAvatarPickerSheet = true
                                 AnalyticsService.shared.log(.avatarPickerOpened(source: "profile"))
+                            },
+                            onCustomizeLicense: {
+                                showLicenseWalletSheet = true
                             }
                         )
                     }
@@ -586,6 +592,13 @@ struct UserProfileView: View {
             .onAppear {
                 lifetimeStatsViewModel.onAppear()
                 xpProgressViewModel.refresh()
+                licenseCosmeticStore.configure(
+                    userId: user.id,
+                    rankLevel: gameLicense.rankLevel
+                )
+            }
+            .onChange(of: gameLicense.rankLevel) { _, newLevel in
+                licenseCosmeticStore.configure(userId: user.id, rankLevel: newLevel)
             }
             .onChange(of: user.userName) { oldValue, newValue in
                 currentUserName = newValue
@@ -603,6 +616,14 @@ struct UserProfileView: View {
                         showAvatarPickerSheet = false
                     },
                     onDismiss: { showAvatarPickerSheet = false }
+                )
+            }
+            .sheet(isPresented: $showLicenseWalletSheet) {
+                ProfileLicenseWalletSheet(
+                    license: gameLicense,
+                    user: user,
+                    store: licenseCosmeticStore,
+                    onDismiss: { showLicenseWalletSheet = false }
                 )
             }
             .onChange(of: user.firstName) { oldValue, newValue in
@@ -833,6 +854,42 @@ private struct ProfileAvatarPickerSheet: View {
                     .onAppear {
                         paywallViewModel.setUnlockContext(paywallUnlockSource)
                     }
+            }
+        }
+    }
+}
+
+// MARK: - Profile License Wallet Sheet
+
+private struct ProfileLicenseWalletSheet: View {
+    let license: UserDriversLicense
+    let user: AppUser
+    @ObservedObject var store: LicenseCosmeticStore
+    let onDismiss: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            AppBackgroundView {
+                DriversLicenseWalletView(
+                    license: license,
+                    ownedIDs: store.ownedIDs,
+                    equippedID: store.equippedIDBinding
+                ) {
+                    ProfileDriversLicensePortraitView(user: user)
+                }
+            }
+            .navigationTitle("Customize explorers license".localized)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done".localized) {
+                        FeedbackService.shared.buttonTap()
+                        onDismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .accessibilityLabel("Done".localized)
+                }
             }
         }
     }

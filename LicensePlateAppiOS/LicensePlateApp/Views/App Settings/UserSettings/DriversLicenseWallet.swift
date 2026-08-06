@@ -27,11 +27,11 @@ enum LicenseRarity: Int, CaseIterable, Comparable {
 
     var title: String {
         switch self {
-        case .common:    return "Common"
-        case .rare:      return "Rare"
-        case .epic:      return "Epic"
-        case .legendary: return "Legendary"
-        case .mythic:    return "Mythic"
+        case .common:    return "Common".localized
+        case .rare:      return "Rare".localized
+        case .epic:      return "Epic".localized
+        case .legendary: return "Legendary".localized
+        case .mythic:    return "Mythic".localized
         }
     }
 
@@ -60,10 +60,10 @@ enum UnlockSource {
 
     var label: String {
         switch self {
-        case .starter:               return "Starter"
-        case .rankUp(let level):     return "Rank \(level)"
-        case .seasonPass(let name):  return "Season · \(name)"
-        case .prestige:              return "Prestige"
+        case .starter:               return "Starter".localized
+        case .rankUp(let level):     return "Rank %d".localized(level)
+        case .seasonPass(let name):  return "Season · %@".localized(name)
+        case .prestige:              return "Prestige".localized
         }
     }
 
@@ -189,7 +189,7 @@ struct CosmeticTile<Portrait: View>: View {
                                 .font(.caption2).foregroundStyle(.secondary)
                                 .lineLimit(1).minimumScaleFactor(0.8)
                         } else if isEquipped {
-                            Text("· EQUIPPED")
+                            Text("· \("Equipped".localized)")
                                 .font(.caption2.weight(.bold)).foregroundStyle(.secondary)
                         }
                     }
@@ -205,8 +205,11 @@ struct CosmeticTile<Portrait: View>: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(cosmetic.name), \(cosmetic.rarity.title)")
-        .accessibilityValue(isOwned ? (isEquipped ? "equipped" : "owned")
-                                     : "locked, \(cosmetic.source.label)")
+        .accessibilityValue(
+            isOwned
+                ? (isEquipped ? "Equipped".localized : "Unlocked".localized)
+                : "\("Locked".localized), \(cosmetic.source.label)"
+        )
     }
 
     private var lockOverlay: some View {
@@ -244,8 +247,16 @@ struct DriversLicenseWalletView<Portrait: View>: View {
     @ViewBuilder var portrait: () -> Portrait
 
     enum Filter: String, CaseIterable, Identifiable {
-        case all = "All", unlocked = "Unlocked", locked = "Locked"
+        case all, unlocked, locked
         var id: String { rawValue }
+
+        var localizedTitle: String {
+            switch self {
+            case .all: return "All".localized
+            case .unlocked: return "Unlocked".localized
+            case .locked: return "Locked".localized
+            }
+        }
     }
     @State private var filter: Filter = .all
 
@@ -285,8 +296,8 @@ struct DriversLicenseWalletView<Portrait: View>: View {
                     .padding(.top, 4)
 
                     header
-                    Picker("Filter", selection: $filter) {
-                        ForEach(Filter.allCases) { Text($0.rawValue).tag($0) }
+                    Picker("Filter".localized, selection: $filter) {
+                        ForEach(Filter.allCases) { Text($0.localizedTitle).tag($0) }
                     }
                     .pickerStyle(.segmented)
 
@@ -313,7 +324,7 @@ struct DriversLicenseWalletView<Portrait: View>: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 1) {
-                Text("Wallet").font(.title2.weight(.bold))
+                Text("Explorers license styles".localized).font(.title2.weight(.bold))
                 Text(equipped.name)
                     .font(.subheadline).foregroundStyle(equipped.rarity.color)
             }
@@ -321,7 +332,7 @@ struct DriversLicenseWalletView<Portrait: View>: View {
             VStack(alignment: .trailing, spacing: 1) {
                 Text("\(ownedIDs.count)/\(cosmetics.count)")
                     .font(.title3.weight(.heavy)).foregroundStyle(.primary)
-                Text("UNLOCKED")
+                Text("Unlocked".localized.uppercased())
                     .font(.caption2.weight(.bold)).kerning(0.8).foregroundStyle(.secondary)
             }
         }

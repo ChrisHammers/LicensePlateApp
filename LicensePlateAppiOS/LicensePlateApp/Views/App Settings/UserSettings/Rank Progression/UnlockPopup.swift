@@ -39,7 +39,7 @@ enum RewardEvent: Identifiable {
 
     /// Convenience bridge from the cosmetics catalog.
     static func cosmetic(_ c: LicenseCosmetic) -> RewardEvent {
-        .unlock(title: c.name, detail: "New license skin unlocked.",
+        .unlock(title: c.name, detail: "New explorers license skin unlocked.".localized,
                 icon: c.source.icon, rarity: c.rarity)
     }
 
@@ -297,7 +297,7 @@ private struct PopupDemo: View {
                 }
             }
             Button("Unlock")     { rewards.show(.unlock(title: "Gold Foil",
-                                                        detail: "New license skin unlocked.",
+                                                        detail: "New explorers license skin unlocked.".localized,
                                                         icon: "sparkles", rarity: .epic)) }
             Button("Queue all 3") {
                 let ladder = ProgressionCatalogProjection.rankLadder(from: .bundledDefault)
@@ -306,7 +306,7 @@ private struct PopupDemo: View {
                     .first(where: { $0.id == "coast_to_coast" }) {
                     rewards.show(.achievement(achievement))
                 }
-                rewards.show(.unlock(title: "Gold Foil", detail: "New license skin unlocked.",
+                rewards.show(.unlock(title: "Gold Foil", detail: "New explorers license skin unlocked.".localized,
                                      icon: "sparkles", rarity: .epic))
             }
         }
