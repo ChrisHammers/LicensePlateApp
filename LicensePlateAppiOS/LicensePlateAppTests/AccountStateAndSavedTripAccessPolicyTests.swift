@@ -110,4 +110,13 @@ struct AccountStateAndSavedTripAccessPolicyTests {
         #expect(!AccountState.shouldReportAuthSuccess(from: .signedIn, to: .firebaseAnonymous))
         #expect(!AccountState.shouldReportAuthSuccess(from: .localGuest, to: .firebaseAnonymous))
     }
+
+    @Test func guestContinuationDoesNotCreateFreshSessionWhenAlreadyGuestLike() {
+        #expect(!GuestContinuationPolicy.shouldCreateFreshAnonymousSession(accountState: .localGuest))
+        #expect(!GuestContinuationPolicy.shouldCreateFreshAnonymousSession(accountState: .firebaseAnonymous))
+    }
+
+    @Test func guestContinuationCreatesFreshSessionOnlyWhenSignedIn() {
+        #expect(GuestContinuationPolicy.shouldCreateFreshAnonymousSession(accountState: .signedIn))
+    }
 }

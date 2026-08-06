@@ -239,7 +239,10 @@ struct OnboardingAccountCreationView: View {
     
     private func continueAsGuest() {
         Task {
-            try? await authService.signOutAndCreateAnonymous()
+            let accountState = FirebaseAccountStateProvider.shared.currentAccountState(for: authService.currentUser)
+            if GuestContinuationPolicy.shouldCreateFreshAnonymousSession(accountState: accountState) {
+                try? await authService.signOutAndCreateAnonymous()
+            }
             await MainActor.run {
                 coordinator.isExistingAccount = false
                 coordinator.didLogIn = false

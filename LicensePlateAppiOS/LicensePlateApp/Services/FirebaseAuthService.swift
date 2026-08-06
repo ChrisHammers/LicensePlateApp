@@ -554,7 +554,12 @@ class FirebaseAuthService: ObservableObject {
     }
     
     /// Sign out and create a fresh anonymous account. Use when user chooses "Continue as Guest" over a restored account.
+    /// No-ops when the current session is already guest-like so trips/XP keyed by UID are not orphaned.
     func signOutAndCreateAnonymous() async throws {
+        let accountState = FirebaseAccountStateProvider.shared.currentAccountState(for: currentUser)
+        guard GuestContinuationPolicy.shouldCreateFreshAnonymousSession(accountState: accountState) else {
+            return
+        }
         try await signOut()
         try resetLocalUserToGuest()
         try await signInAnonymously()
