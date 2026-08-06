@@ -415,6 +415,7 @@ struct UserDriversLicenseCard<Portrait: View>: View {
     private let baseWidth: CGFloat = 360
 
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var flipped = false
     @State private var shinePhase: CGFloat = 0
     
@@ -432,6 +433,9 @@ struct UserDriversLicenseCard<Portrait: View>: View {
     /// Granted palette overrides the default class/Royale accent.
     private var accent: Color { style.palette?.accent ?? license.accent }
 
+    /// Sweeping band only when the style asks for it and Reduce Motion is off.
+    private var showsAnimatedShine: Bool { style.animatedShine && !reduceMotion }
+
     var body: some View {
         ZStack {
             cardBackground
@@ -442,7 +446,7 @@ struct UserDriversLicenseCard<Portrait: View>: View {
                 .rotation3DEffect(.degrees(180), axis: (x: 0, y: 1, z: 0))
                 .opacity(flipped ? 1 : 0)
             sheenOverlay                          // holo / foil sheen over content
-            if style.animatedShine { animatedShine }
+            if showsAnimatedShine { animatedShine }
         }
         .frame(width: width, height: height)
         .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
@@ -455,12 +459,26 @@ struct UserDriversLicenseCard<Portrait: View>: View {
         .onTapGesture {
             withAnimation(.spring(response: 0.55, dampingFraction: 0.82)) { flipped.toggle() }
         }
-        .onAppear {
-            guard style.animatedShine else { return }
-            withAnimation(.linear(duration: 2.8).repeatForever(autoreverses: false)) { shinePhase = 1 }
-        }
+        .onAppear { restartShineLoop() }
+        .onChange(of: style.animatedShine) { _, _ in restartShineLoop() }
+        .onChange(of: reduceMotion) { _, _ in restartShineLoop() }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(license.holderName), @\(license.userName), \("RoadTrip Royale explorers license. Double tap to flip.".localized)")
+    }
+
+    /// Reset phase and (re)start the forever sweep when shine becomes eligible.
+    /// Deferred one turn so a same-frame 0→1 write isn't coalesced away.
+    private func restartShineLoop() {
+        var reset = Transaction()
+        reset.disablesAnimations = true
+        withTransaction(reset) { shinePhase = 0 }
+        guard showsAnimatedShine else { return }
+        Task { @MainActor in
+            guard showsAnimatedShine else { return }
+            withAnimation(.linear(duration: 2.8).repeatForever(autoreverses: false)) {
+                shinePhase = 1
+            }
+        }
     }
     
     // MARK: Accessory slot
