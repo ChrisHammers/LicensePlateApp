@@ -831,10 +831,10 @@
 "xp.toast.group.competitive_place.multi" = "%d posiciones competitivas";
 "xp.toast.group.competitive_win.single" = "%d victoria competitiva";
 "xp.toast.group.competitive_win.multi" = "%d victorias competitivas";
-"xp.toast.group.game_ended.single" = "Juego completado";
-"xp.toast.group.game_ended.multi" = "%d juegos completados";
-"xp.toast.group.game_full_clear.single" = "Todas las placas encontradas";
-"xp.toast.group.game_full_clear.multi" = "%d limpiezas completas";
+"xp.toast.group.game_ended.single" = "Juego terminado";
+"xp.toast.group.game_ended.multi" = "%d juegos terminados";
+"xp.toast.group.game_full_clear.single" = "Todas las placas encontradas en este juego";
+"xp.toast.group.game_full_clear.multi" = "%d juegos completamente despejados";
 "xp.toast.group.trip_ended.single" = "Viaje completado";
 "xp.toast.group.trip_ended.multi" = "%d viajes completados";
 "xp.toast.group.trip_participation.single" = "Participación en el viaje";

@@ -833,8 +833,8 @@
 "xp.toast.group.competitive_win.multi" = "%d victoires compétitives";
 "xp.toast.group.game_ended.single" = "Partie terminée";
 "xp.toast.group.game_ended.multi" = "%d parties terminées";
-"xp.toast.group.game_full_clear.single" = "Toutes les plaques trouvées";
-"xp.toast.group.game_full_clear.multi" = "%d collections complètes";
+"xp.toast.group.game_full_clear.single" = "Toutes les plaques trouvées dans cette partie";
+"xp.toast.group.game_full_clear.multi" = "%d parties entièrement complétées";
 "xp.toast.group.trip_ended.single" = "Voyage terminé";
 "xp.toast.group.trip_ended.multi" = "%d voyages terminés";
 "xp.toast.group.trip_participation.single" = "Participation au voyage";

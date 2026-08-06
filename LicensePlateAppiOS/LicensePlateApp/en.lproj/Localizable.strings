@@ -862,10 +862,10 @@
 "xp.toast.group.competitive_place.multi" = "%d competitive placements";
 "xp.toast.group.competitive_win.single" = "%d competitive win";
 "xp.toast.group.competitive_win.multi" = "%d competitive wins";
-"xp.toast.group.game_ended.single" = "Game completed";
-"xp.toast.group.game_ended.multi" = "%d games completed";
-"xp.toast.group.game_full_clear.single" = "All plates found";
-"xp.toast.group.game_full_clear.multi" = "%d full clears";
+"xp.toast.group.game_ended.single" = "Game ended";
+"xp.toast.group.game_ended.multi" = "%d games ended";
+"xp.toast.group.game_full_clear.single" = "All plates found in this game";
+"xp.toast.group.game_full_clear.multi" = "%d games fully cleared";
 "xp.toast.group.trip_ended.single" = "Trip completed";
 "xp.toast.group.trip_ended.multi" = "%d trips completed";
 "xp.toast.group.trip_participation.single" = "Trip participation";
