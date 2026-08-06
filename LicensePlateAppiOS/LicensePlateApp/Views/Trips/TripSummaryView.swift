@@ -7,22 +7,20 @@
 
 import SwiftUI
 import MapKit
+import UIKit
 
 struct TripSummaryView: View {
     let summary: TripSummary
     let currentUserId: String?
     var shouldShowAd = false
+    var onShare: ((UIImage) -> Void)?
     var onDismiss: (() -> Void)?
 
     @State private var participantDisplayNames: [String: String] = [:]
     @State private var showAllDiscoveryHighlights = false
+    @State private var isPreparingShare = false
 
-    private let dateFormatter: DateFormatter = {
-        let f = DateFormatter()
-        f.dateStyle = .medium
-        f.timeStyle = .short
-        return f
-    }()
+    private let dateFormatter = TripSummaryDateRangeFormatter.mediumDateFormatter()
 
     /// Collapsed row count for discovery highlights (expand via control below).
     private var discoveryHighlightsCollapsedLimit: Int { 20 }
@@ -68,10 +66,36 @@ struct TripSummaryView: View {
                     .foregroundStyle(Color.Theme.primaryBlue)
                 }
             }
+            if onShare != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        shareTripSummary()
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .disabled(isPreparingShare)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .accessibilityLabel("trip_summary.share.a11y_label".localized)
+                    .accessibilityHint("trip_summary.share.a11y_hint".localized)
+                }
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Trip summary".localized)
         .task { await loadParticipantDisplayNames() }
+    }
+
+    private func shareTripSummary() {
+        guard !isPreparingShare else { return }
+        FeedbackService.shared.buttonTap()
+        isPreparingShare = true
+        defer { isPreparingShare = false }
+        guard let image = TripSummaryShareImageRenderer.render(
+            summary: summary,
+            currentUserId: currentUserId,
+            participantDisplayNames: participantDisplayNames
+        ) else { return }
+        onShare?(image)
     }
 
     /// Collects all participant IDs from the summary and fetches display names from UserRepository.
@@ -152,12 +176,39 @@ struct TripSummaryView: View {
                 .font(.system(.title2, design: .rounded))
                 .fontWeight(.semibold)
                 .foregroundStyle(Color.Theme.primaryBlue)
-            if let ended = summary.endedAt {
-                Text("Ended".localized + " " + dateFormatter.string(from: ended))
-                    .font(.system(.subheadline, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                    .accessibilityLabel("Ended".localized + " " + dateFormatter.string(from: ended))
+            VStack(alignment: .leading, spacing: 2) {
+                if let start = TripSummaryDateRangeFormatter.startDateLine(
+                    startedAt: summary.startedAt,
+                    formatter: dateFormatter
+                ) {
+                    Text(start)
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                }
+                if let end = TripSummaryDateRangeFormatter.endDateLine(
+                    endedAt: summary.endedAt,
+                    formatter: dateFormatter
+                ) {
+                    Text(end)
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(
+                TripSummaryDateRangeFormatter.accessibilityLabel(
+                    startedAt: summary.startedAt,
+                    endedAt: summary.endedAt,
+                    formatter: dateFormatter
+                ) ?? ""
+            )
+            .accessibilityHidden(
+                TripSummaryDateRangeFormatter.accessibilityLabel(
+                    startedAt: summary.startedAt,
+                    endedAt: summary.endedAt,
+                    formatter: dateFormatter
+                ) == nil
+            )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
@@ -165,6 +216,7 @@ struct TripSummaryView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.Theme.cardBackground)
         )
+        .accessibilityElement(children: .combine)
     }
 
     private var statsSection: some View {

@@ -8,6 +8,7 @@
 "NSLocationWhenInUseUsageDescription" = "Esta app usa tu ubicación para mostrar dónde estás en el mapa mientras rastreas placas.";
 "NSLocationAlwaysAndWhenInUseUsageDescription" = "Esta app usa tu ubicación para mostrar dónde estás en el mapa mientras rastreas placas, incluso cuando la app está en segundo plano durante viajes activos.";
 "NSMicrophoneUsageDescription" = "Esta app necesita acceso a tu micrófono para escuchar nombres de estados y provincias cuando uses la entrada de voz.";
+"NSPhotoLibraryAddUsageDescription" = "RoadTrip Royale necesita permiso para guardar en tu biblioteca de fotos las imágenes de viajes compartidas.";
 "NSSpeechRecognitionUsageDescription" = "Esta app usa reconocimiento de voz para ayudarte a registrar rápidamente placas diciendo el nombre del estado o provincia en voz alta.";
 
 

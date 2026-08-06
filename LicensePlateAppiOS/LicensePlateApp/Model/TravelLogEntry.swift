@@ -12,6 +12,8 @@ struct TravelLogEntry: Codable, Identifiable, Sendable {
     var id: String
     var sessionId: UUID
     var tripName: String
+    /// Optional when an archived session is missing `startedAt` (legacy / edge cases).
+    var startedAt: Date?
     var endedAt: Date
     /// Human-readable or structured summary (e.g. "12 regions found", participant names).
     var summary: String
@@ -28,6 +30,7 @@ struct TravelLogEntry: Codable, Identifiable, Sendable {
         id: String = UUID().uuidString,
         sessionId: UUID,
         tripName: String,
+        startedAt: Date? = nil,
         endedAt: Date,
         summary: String,
         locationMetadata: [String: String]? = nil,
@@ -38,6 +41,7 @@ struct TravelLogEntry: Codable, Identifiable, Sendable {
         self.id = id
         self.sessionId = sessionId
         self.tripName = tripName
+        self.startedAt = startedAt
         self.endedAt = endedAt
         self.summary = summary
         self.locationMetadata = locationMetadata

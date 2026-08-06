@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import UIKit
 
 enum TripSummaryPresentationSource: String, Equatable, Sendable {
     case travelLog
@@ -43,6 +44,9 @@ final class TravelLogViewModel: ObservableObject {
     @Published var shouldPresentSavedTripPaywall = false
     @Published private(set) var savedTripCapKind: SavedTripCapKind = .unlimited
     @Published private(set) var shouldShowTravelLogAd = false
+    /// Branded trip summary share sheet (system `UIActivityViewController`).
+    @Published var showTripSummaryShareSheet = false
+    @Published private(set) var tripSummaryShareActivityItems: [Any] = []
 
     /// Avoid duplicate section analytics if `onAppear` fires more than once for the same recap.
     private var recapSectionAnalyticsLoggedSessionId: UUID?
@@ -277,6 +281,24 @@ final class TravelLogViewModel: ObservableObject {
         recapSectionAnalyticsLoggedSessionId = nil
         summaryPresentationSource = nil
         openSummarySessionId = nil
+        clearTripSummaryShare()
+    }
+
+    /// Present the system share sheet with a named JPEG file (Photos / social-friendly).
+    func presentTripSummaryShare(sessionId: UUID, image: UIImage, tripName: String) {
+        if let source = TripSummaryShareActivityItemSource(image: image, tripName: tripName) {
+            tripSummaryShareActivityItems = [source]
+        } else {
+            // Fallback when JPEG encoding fails (should be rare for rendered cards).
+            tripSummaryShareActivityItems = [image]
+        }
+        showTripSummaryShareSheet = true
+        analytics.log(.tripSummaryShared(sessionId: sessionId.uuidString))
+    }
+
+    func clearTripSummaryShare() {
+        showTripSummaryShareSheet = false
+        tripSummaryShareActivityItems = []
     }
 
     private func refreshOpenSummaryXpRecapIfNeeded() {

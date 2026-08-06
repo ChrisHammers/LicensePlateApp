@@ -205,7 +205,15 @@ struct TravelLogView: View {
     }
 
     private func accessibilityLabel(for entry: TravelLogEntry) -> String {
-        var parts: [String] = [entry.tripName, entry.summary, dateFormatter.string(from: entry.endedAt)]
+        let dateLine = TripSummaryDateRangeFormatter.compactDashRange(
+            startedAt: entry.startedAt,
+            endedAt: entry.endedAt,
+            formatter: dateFormatter
+        )
+        var parts: [String] = [entry.tripName, entry.summary]
+        if !dateLine.isEmpty {
+            parts.append(dateLine)
+        }
         if let pc = entry.participantCount, pc > 0 {
             parts.append("\(pc) participants".localized)
         }
@@ -251,9 +259,15 @@ private struct TravelLogRowView: View {
             Text(entry.summary)
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
-            Text(dateFormatter.string(from: entry.endedAt))
-                .font(.system(.caption, design: .rounded))
-                .foregroundStyle(Color.Theme.softBrown)
+            Text(
+                TripSummaryDateRangeFormatter.compactDashRange(
+                    startedAt: entry.startedAt,
+                    endedAt: entry.endedAt,
+                    formatter: dateFormatter
+                )
+            )
+            .font(.system(.caption, design: .rounded))
+            .foregroundStyle(Color.Theme.softBrown)
         }
         .padding(.vertical, 8)
     }
@@ -306,6 +320,7 @@ extension TripSummary: Identifiable {
                 id: "preview-travel-log-3",
                 sessionId: UUID(),
                 tripName: "Weekend Drive",
+                startedAt: Date().addingTimeInterval(-172_800),
                 endedAt: Date().addingTimeInterval(-86_400),
                 summary: "8 regions found",
                 participantCount: 1,

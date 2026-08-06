@@ -44,6 +44,7 @@ struct AnalyticsServiceTests {
             (.friendsScreenOpened, "friends_screen_opened"),
             (.familyScreenOpened, "family_screen_opened"),
             (.travelLogOpened, "travel_log_opened"),
+            (.tripSummaryShared(sessionId: "sid"), "trip_summary_shared"),
             (.tripInvitesScreenOpened, "trip_invites_screen_opened"),
             (.paywallViewed(source: nil), "paywall_viewed"),
             (.paywallDismissed, "paywall_dismissed"),
@@ -205,12 +206,15 @@ struct AnalyticsServiceTests {
         let spy = AnalyticsLoggingSpy()
         spy.log(.travelLogOpened)
         spy.log(.tripSummaryViewed(sessionId: "sid-123"))
+        spy.log(.tripSummaryShared(sessionId: "sid-456"))
 
-        #expect(spy.loggedEvents.count == 2)
+        #expect(spy.loggedEvents.count == 3)
         #expect(spy.loggedEvents[0].name == "travel_log_opened")
         #expect(spy.loggedEvents[0].parameters == nil)
         #expect(spy.loggedEvents[1].name == "trip_summary_viewed")
         #expect(spy.loggedEvents[1].parameters?["session_id"] as? String == "sid-123")
+        #expect(spy.loggedEvents[2].name == "trip_summary_shared")
+        #expect(spy.loggedEvents[2].parameters?["session_id"] as? String == "sid-456")
     }
 
     @Test @MainActor func spyRecordsRawNameAndParameters() async throws {

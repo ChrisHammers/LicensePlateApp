@@ -157,12 +157,28 @@ struct TripSummarySheetContent: View {
             TripSummaryView(
                 summary: summary,
                 currentUserId: viewModel.currentUserId,
-                shouldShowAd: viewModel.shouldShowTripSummaryAd()
-            ) {
-                viewModel.clearSelection()
-            }
+                shouldShowAd: viewModel.shouldShowTripSummaryAd(),
+                onShare: { image in
+                    viewModel.presentTripSummaryShare(
+                        sessionId: summary.sessionId,
+                        image: image,
+                        tripName: summary.tripName
+                    )
+                },
+                onDismiss: {
+                    viewModel.clearSelection()
+                }
+            )
             .onAppear {
                 viewModel.onRecapSheetAppeared(summary: summary)
+            }
+            .sheet(isPresented: $viewModel.showTripSummaryShareSheet, onDismiss: {
+                viewModel.clearTripSummaryShare()
+            }) {
+                ShareSheet(
+                    activityItems: viewModel.tripSummaryShareActivityItems,
+                    excludedActivityTypes: TripSummaryShareActivityItemSource.excludedActivityTypes
+                )
             }
         }
     }

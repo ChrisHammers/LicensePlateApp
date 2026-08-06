@@ -902,6 +902,16 @@
 "Your trip %@ is waiting for more plate finds." = "Tu viaje %@ espera más placas encontradas.";
 "trip_end.remote_toast.generic" = "%@ terminó. Mostrando tu resumen.";
 "trip_summary.error.trip_not_ended" = "El resumen del viaje está disponible cuando el viaje haya terminado.";
+"trip_summary.start_date %@" = "Fecha de inicio: %@";
+"trip_summary.end_date %@" = "Fecha de fin: %@";
+"trip_summary.share.a11y_label" = "Compartir viaje";
+"trip_summary.share.a11y_hint" = "Comparte una imagen con la marca de este viaje";
+"trip_summary.share.no_games" = "No hay juegos en este viaje";
+"trip_summary.share.participant_score %@ %@" = "%@ encontrados · %@";
+"trip_summary.share.winner %@ %@" = "Ganador: %@ (%@)";
+"trip_summary.share.winners_tied %@ %@" = "Ganadores (empate): %@ (%@)";
+"trip_summary.share.my_unique_zones %d" = "Mis zonas únicas (%d)";
+"trip_summary.share.more_zones %d" = "+%d más";
 
 /* Profile progression (milestones + rank ladder) */
 "profile.progression.section_title" = "Progresión";

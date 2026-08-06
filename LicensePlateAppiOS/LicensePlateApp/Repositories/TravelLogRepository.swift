@@ -60,6 +60,7 @@ final class TravelLogRepository: ObservableObject, TravelLogRepositoryProtocol {
                 id: session.id.uuidString,
                 sessionId: session.id,
                 tripName: session.name,
+                startedAt: session.startedAt,
                 endedAt: endedAt,
                 summary: summary,
                 locationMetadata: nil,

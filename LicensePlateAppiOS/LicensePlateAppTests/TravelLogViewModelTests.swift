@@ -8,6 +8,7 @@
 import Foundation
 import SwiftData
 import Testing
+import UIKit
 @testable import LicensePlateApp
 
 @MainActor
@@ -404,6 +405,58 @@ struct TravelLogViewModelTests {
         #expect(viewModel.selectedSummary?.sessionId == sessionId)
         let autoEvents = analytics.loggedEvents.filter { $0.name == "trip_summary_auto_presented_after_end" }
         #expect(autoEvents.count == 1)
+    }
+
+    @Test func presentTripSummaryShareSetsStateAndLogsAnalyticsOnce() async throws {
+        let sessionId = UUID()
+        let analytics = AnalyticsLoggingSpy()
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: MockTravelLogRepository(),
+            tripSessionRepository: MockTripSessionRepository(),
+            gameInstanceRepository: MockGameInstanceRepository(),
+            tripActivityEventRepository: MockTripActivityEventRepository(),
+            authService: FirebaseAuthService(),
+            analytics: analytics
+        )
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+        }
+
+        viewModel.presentTripSummaryShare(sessionId: sessionId, image: image, tripName: "Coastal Escape")
+
+        #expect(viewModel.showTripSummaryShareSheet == true)
+        #expect(viewModel.tripSummaryShareActivityItems.count == 1)
+        #expect(viewModel.tripSummaryShareActivityItems.first is TripSummaryShareActivityItemSource)
+        let shareEvents = analytics.loggedEvents.filter { $0.name == "trip_summary_shared" }
+        #expect(shareEvents.count == 1)
+        #expect(shareEvents[0].parameters?["session_id"] as? String == sessionId.uuidString)
+
+        viewModel.clearTripSummaryShare()
+        #expect(viewModel.showTripSummaryShareSheet == false)
+        #expect(viewModel.tripSummaryShareActivityItems.isEmpty)
+        #expect(analytics.loggedEvents.filter { $0.name == "trip_summary_shared" }.count == 1)
+    }
+
+    @Test func clearSelectionClearsTripSummaryShare() async throws {
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: MockTravelLogRepository(),
+            tripSessionRepository: MockTripSessionRepository(),
+            gameInstanceRepository: MockGameInstanceRepository(),
+            tripActivityEventRepository: MockTripActivityEventRepository(),
+            authService: FirebaseAuthService(),
+            analytics: AnalyticsLoggingSpy()
+        )
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+        }
+        viewModel.presentTripSummaryShare(sessionId: UUID(), image: image, tripName: "Trip")
+        #expect(viewModel.showTripSummaryShareSheet == true)
+
+        viewModel.clearSelection()
+        #expect(viewModel.showTripSummaryShareSheet == false)
+        #expect(viewModel.tripSummaryShareActivityItems.isEmpty)
     }
 
     @Test func flushPendingAutoRecapPresentsQueuedSummary() async throws {

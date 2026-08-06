@@ -144,6 +144,8 @@ class AnalyticsService: AnalyticsLogging {
         // Travel Log (Step 07)
         case travelLogOpened
         case tripSummaryViewed(sessionId: String)
+        /// Branded trip summary share sheet presented from Travel Log recap.
+        case tripSummaryShared(sessionId: String)
         case tripSummaryAutoPresentedAfterEnd(sessionId: String, source: String)
         case tripEndedRemoteToastShown(sessionId: String)
 
@@ -423,6 +425,7 @@ class AnalyticsService: AnalyticsLogging {
             case .combinedTripStartedWithGameCount: return "combined_trip_started_with_game_count"
             case .travelLogOpened: return "travel_log_opened"
             case .tripSummaryViewed: return "trip_summary_viewed"
+            case .tripSummaryShared: return "trip_summary_shared"
             case .tripSummaryAutoPresentedAfterEnd: return "trip_summary_auto_presented_after_end"
             case .tripEndedRemoteToastShown: return "trip_ended_remote_toast_shown"
             case .tripSummaryViewedGameSection: return "trip_summary_viewed_game_section"
@@ -658,6 +661,8 @@ class AnalyticsService: AnalyticsLogging {
             case .combinedTripStartedWithGameCount(let tripId, let combinedGameCount, let combinedGameTypes):
                 return ["trip_session_id": tripId, "combined_game_count": combinedGameCount, "combined_game_types": combinedGameTypes.joined(separator: ",")]
             case .tripSummaryViewed(let sessionId):
+                return ["session_id": sessionId]
+            case .tripSummaryShared(let sessionId):
                 return ["session_id": sessionId]
             case .tripSummaryAutoPresentedAfterEnd(let sessionId, let source):
                 return ["session_id": sessionId, "source": source]

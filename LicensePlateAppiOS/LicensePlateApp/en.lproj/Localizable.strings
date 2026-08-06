@@ -934,6 +934,16 @@
 "Your trip %@ is waiting for more plate finds." = "Your trip %@ is waiting for more plate finds.";
 "trip_end.remote_toast.generic" = "%@ has ended. Showing your recap.";
 "trip_summary.error.trip_not_ended" = "This trip recap is available after the trip has ended.";
+"trip_summary.start_date %@" = "Start Date: %@";
+"trip_summary.end_date %@" = "End Date: %@";
+"trip_summary.share.a11y_label" = "Share trip";
+"trip_summary.share.a11y_hint" = "Shares a branded image of this trip";
+"trip_summary.share.no_games" = "No games on this trip";
+"trip_summary.share.participant_score %@ %@" = "%@ found · %@";
+"trip_summary.share.winner %@ %@" = "Winner: %@ (%@)";
+"trip_summary.share.winners_tied %@ %@" = "Winners (tied): %@ (%@)";
+"trip_summary.share.my_unique_zones %d" = "My unique zones (%d)";
+"trip_summary.share.more_zones %d" = "+%d more";
 
 /* Profile progression (milestones + rank ladder) */
 "profile.progression.section_title" = "Progression";
