@@ -56,6 +56,7 @@
 "This will stop the game. You won't be able to add states in this trip anymore." = "Esto detendrá el juego. Ya no podrás agregar estados en este viaje.";
 "Cancel" = "Cancelar";
 "Only the first finder gets credit in competitive mode." = "Solo el primero que encuentra obtiene crédito en modo competitivo.";
+"That region isn’t part of this game’s plate list." = "Esa región no forma parte de la lista de placas de este juego.";
 "Tap to dismiss" = "Toca para cerrar";
 "Region selection order resolution" = "Resolución del orden de selección de región";
 "Fairness late competitive body %@ %@ %@" = "Se determinó que encontraste %@ después de %@ en %@.";

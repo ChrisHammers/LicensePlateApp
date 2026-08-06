@@ -23,6 +23,28 @@ enum LicensePlateScopeCalculator {
         return filterTerritories(filteredByCountry, options: config.territoryOptions).map(\.id)
     }
 
+    /// Target region IDs as a set (for membership checks and UI filters).
+    static func targetRegionIdSet(for config: LicensePlateGameConfig) -> Set<String> {
+        Set(targetRegionIds(for: config))
+    }
+
+    /// Whether `regionId` is in the configured target set.
+    static func isTargetRegion(_ regionId: String, config: LicensePlateGameConfig) -> Bool {
+        targetRegionIdSet(for: config).contains(regionId)
+    }
+
+    /// Unique found region IDs that are also in scope for `config`.
+    static func scopedUniqueFoundCount(foundRegionIds: some Sequence<String>, config: LicensePlateGameConfig) -> Int {
+        let targets = targetRegionIdSet(for: config)
+        guard !targets.isEmpty else { return 0 }
+        return Set(foundRegionIds).intersection(targets).count
+    }
+
+    /// Unique discovery `targetId`s that are also in scope for `config`.
+    static func scopedUniqueFoundCount(discoveries: [GameDiscovery], config: LicensePlateGameConfig) -> Int {
+        scopedUniqueFoundCount(foundRegionIds: discoveries.map(\.targetId), config: config)
+    }
+
     /// Completion goal (number of target regions) for the given config.
     static func completionGoal(for config: LicensePlateGameConfig) -> Int {
         targetRegionIds(for: config).count

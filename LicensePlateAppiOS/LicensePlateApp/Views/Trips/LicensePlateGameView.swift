@@ -242,6 +242,7 @@ struct LicensePlateGameView: View {
                 FullScreenMapView(
                     tripSessionId: viewModel.sessionId,
                     enabledCountries: gameScopedEnabledCountries,
+                    enabledRegionIds: gameScopedTargetRegionIds,
                     foundRegionIDs: viewModel.displayFoundRegionIDsForMap,
                     foundRegions: viewModel.foundRegions,
                     finderIdentities: viewModel.finderIdentitiesByUserId,
@@ -376,8 +377,8 @@ struct LicensePlateGameView: View {
     }
 
     /// Game-scoped enabled countries (and regions) for board/progress. Uses game's license-plate config when available; else North America default.
-    private var gameScopedEnabledCountries: [PlateRegion.Country] {
-        let config = viewModel.game.licensePlateConfig() ?? LicensePlateGameConfig(
+    private var gameLicensePlateConfig: LicensePlateGameConfig {
+        viewModel.game.licensePlateConfig() ?? LicensePlateGameConfig(
             selectedCountriesRawValues: [
                 PlateRegion.Country.unitedStates.rawValue,
                 PlateRegion.Country.canada.rawValue,
@@ -385,7 +386,14 @@ struct LicensePlateGameView: View {
             ],
             territoryOptions: LicensePlateTerritoryOptions()
         )
-        let targetIds = Set(LicensePlateScopeCalculator.targetRegionIds(for: config))
+    }
+
+    private var gameScopedTargetRegionIds: Set<String> {
+        LicensePlateScopeCalculator.targetRegionIdSet(for: gameLicensePlateConfig)
+    }
+
+    private var gameScopedEnabledCountries: [PlateRegion.Country] {
+        let targetIds = gameScopedTargetRegionIds
         return Array(Set(PlateRegion.all.filter { targetIds.contains($0.id) }.map(\.country)))
     }
 
@@ -393,15 +401,14 @@ struct LicensePlateGameView: View {
         "\(viewModel.displayFoundCountForHeader)"
     }
 
-    /// Remaining count: game-scoped (game completion goal) when license-plate; else session-enabled region count.
+    /// Remaining count: game-scoped completion goal when license-plate; else target ID count.
     private var headerRemainingValue: String {
         let foundCount = viewModel.displayFoundCountForHeader
-        if let lpConfig = viewModel.game.licensePlateConfig() {
-            let goal = LicensePlateScopeCalculator.completionGoal(for: lpConfig)
+        if viewModel.game.licensePlateConfig() != nil {
+            let goal = LicensePlateScopeCalculator.completionGoal(for: gameLicensePlateConfig)
             return "\(max(0, goal - foundCount))"
         }
-        let enabledRegions = PlateRegion.all.filter { gameScopedEnabledCountries.contains($0.country) }
-        return "\(enabledRegions.count - foundCount)"
+        return "\(max(0, gameScopedTargetRegionIds.count - foundCount))"
     }
 
     private var currentUserId: String {
@@ -419,6 +426,7 @@ struct LicensePlateGameView: View {
           RegionMapView(
               tripSessionId: viewModel.sessionId,
               enabledCountries: gameScopedEnabledCountries,
+              enabledRegionIds: gameScopedTargetRegionIds,
               foundRegionIDs: viewModel.displayFoundRegionIDsForMap,
               foundRegions: viewModel.foundRegions,
               visibleCountry: visibleCountry,
@@ -1061,9 +1069,13 @@ struct LicensePlateGameView: View {
      }
   
     private var regionList: some View {
-        // Filter regions by game-scoped enabled countries
-        let enabledCountries = gameScopedEnabledCountries
-        let filteredGroups = PlateRegion.groupedByCountry().filter { enabledCountries.contains($0.country) }
+        // Filter regions by game-scoped target IDs (countries + territory / DC options).
+        let targetIds = gameScopedTargetRegionIds
+        let filteredGroups = PlateRegion.groupedByCountry().compactMap { group -> (country: PlateRegion.Country, regions: [PlateRegion])? in
+            let regions = group.regions.filter { targetIds.contains($0.id) }
+            guard !regions.isEmpty else { return nil }
+            return (group.country, regions)
+        }
         
         return List {
             ForEach(filteredGroups, id: \.country) { group in
@@ -1114,7 +1126,7 @@ struct LicensePlateGameView: View {
         }
         let result = viewModel.submitDiscovery(regionID: regionID, inputMethod: usingTab)
         switch result {
-        case .rejectedDuplicate, .rejectedInvalidParticipant:
+        case .rejectedDuplicate, .rejectedInvalidParticipant, .rejectedOutOfScope:
             FeedbackService.shared.actionError()
         case .success:
             FeedbackService.shared.actionSuccess()
@@ -1479,9 +1491,8 @@ struct LicensePlateGameView: View {
         var bestMatch: PlateRegion?
         var bestMatchScore = 0
         
-        // Only search in game-scoped enabled regions
-        let enabledCountries = gameScopedEnabledCountries
-        let enabledRegions = PlateRegion.all.filter { enabledCountries.contains($0.country) }
+        // Only search in game-scoped target regions (respect territory / DC options).
+        let enabledRegions = PlateRegion.all.filter { gameScopedTargetRegionIds.contains($0.id) }
 
         for region in enabledRegions {
             let normalizedRegionName = region.name.lowercased()

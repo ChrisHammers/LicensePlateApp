@@ -172,6 +172,60 @@ struct TripSummaryBuilderTests {
         #expect(summary.games[0].teamSummary == nil)
     }
 
+    @Test func buildCanadaTerritoriesOffExcludesTerritoryFindsFromProgress() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = TripSession(
+            id: sessionId,
+            name: "Canada provinces",
+            status: .ended,
+            createdAt: Date().addingTimeInterval(-100),
+            endedAt: Date(),
+            participants: [TripParticipant(userId: "user1", role: .owner)]
+        )
+        let lpConfig = LicensePlateGameConfig(
+            selectedCountriesRawValues: [PlateRegion.Country.canada.rawValue],
+            territoryOptions: LicensePlateTerritoryOptions(
+                includeUSTerritories: false,
+                includeCanadianTerritories: false,
+                includeDC: false
+            )
+        )
+        let payloadData = try JSONEncoder().encode(lpConfig)
+        let game = GameInstance(
+            id: gameId,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: GameType.licensePlate.rawValue),
+            commonConfig: CommonGameConfig(),
+            gameSpecificPayloadType: GameType.licensePlate.rawValue,
+            gameSpecificPayloadVersion: "1",
+            gameSpecificPayloadData: payloadData
+        )
+        let regionIds = [
+            "ca-ab", "ca-bc", "ca-mb", "ca-nb", "ca-nl", "ca-ns", "ca-on", "ca-pe", "ca-qc", "ca-sk",
+            "ca-yt", "ca-nt", "ca-nu"
+        ]
+        let discoveries = regionIds.map { id in
+            GameDiscovery(
+                gameInstanceId: gameId,
+                participantId: "user1",
+                targetId: id,
+                inputMethod: .list
+            )
+        }
+        let summary = TripSummaryBuilder.build(
+            session: session,
+            games: [game],
+            discoveries: discoveries,
+            credits: []
+        )
+        #expect(summary.games[0].completionGoal == 10)
+        #expect(summary.games[0].discoveryCount == 10)
+        #expect(summary.games[0].progressDescription == "10 / 10 Canadian regions")
+        #expect(summary.totalDiscoveryCount == 13)
+    }
+
     @Test func buildWithoutLicensePlatePayloadLeavesCompletionGoalAndProgressNil() async throws {
         let sessionId = UUID()
         let gameId = UUID()

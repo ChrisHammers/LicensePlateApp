@@ -31,6 +31,8 @@ enum DiscoverySubmitResult {
     case rejectedDuplicate(message: String)
     /// Solo trip but another participant already credited for this target — invalid attribution (client + server should enforce).
     case rejectedInvalidParticipant(message: String)
+    /// Region ID is outside the game’s configured target set (country / territory / DC options).
+    case rejectedOutOfScope(message: String)
     case failure(Error)
 }
 
@@ -805,6 +807,15 @@ final class LicensePlateGameViewModel: ObservableObject {
     }
 
     func submitDiscovery(regionID: String, inputMethod: FoundRegion.InputMethod) -> DiscoverySubmitResult {
+        if let lpConfig = game.licensePlateConfig(),
+           !LicensePlateScopeCalculator.isTargetRegion(regionID, config: lpConfig) {
+            rejectedDuplicateMessage = nil
+            rejectedInvalidParticipantMessage = nil
+            let message = "That region isn’t part of this game’s plate list.".localized
+            blockedRetapMessage = message
+            return .rejectedOutOfScope(message: message)
+        }
+
         let participantId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id ?? ""
         let discoveries = (try? tripActivityEventRepository.discoveries(sessionId: sessionId, gameInstanceId: game.id)) ?? []
         let byTarget = Dictionary(grouping: discoveries, by: \.targetId)
@@ -897,7 +908,15 @@ final class LicensePlateGameViewModel: ObservableObject {
             return .success
         }
 
-        let countBeforeUniqueFound = foundRegions.count
+        let countBeforeUniqueFound: Int = {
+            if let lpConfig = game.licensePlateConfig() {
+                return LicensePlateScopeCalculator.scopedUniqueFoundCount(
+                    foundRegionIds: foundRegions.map(\.regionID),
+                    config: lpConfig
+                )
+            }
+            return foundRegions.count
+        }()
 
         let discoveryEventId = UUID().uuidString
         var payload: [String: String] = [
@@ -924,6 +943,7 @@ final class LicensePlateGameViewModel: ObservableObject {
             refreshFoundRegions()
             rejectedDuplicateMessage = nil
             rejectedInvalidParticipantMessage = nil
+            blockedRetapMessage = nil
             AnalyticsService.shared.log(.discoveryOutcomeRecorded(
                 tripId: sessionId.uuidString,
                 gameInstanceId: game.id.uuidString,
@@ -940,7 +960,10 @@ final class LicensePlateGameViewModel: ObservableObject {
             if game.definitionId == GameType.licensePlate.rawValue,
                let lpConfig = game.licensePlateConfig() {
                 let goal = LicensePlateScopeCalculator.completionGoal(for: lpConfig)
-                let countAfter = foundRegions.count
+                let countAfter = LicensePlateScopeCalculator.scopedUniqueFoundCount(
+                    foundRegionIds: foundRegions.map(\.regionID),
+                    config: lpConfig
+                )
                 if GameCompletionAnalyticsGate.shouldLogGameInstanceCompleted(
                     countBefore: countBeforeUniqueFound,
                     countAfter: countAfter,

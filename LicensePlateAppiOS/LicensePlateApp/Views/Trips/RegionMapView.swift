@@ -12,6 +12,8 @@ import GoogleMaps
 struct RegionMapView: View {
     let tripSessionId: UUID
     let enabledCountries: [PlateRegion.Country]
+    /// When non-nil, only these region IDs are drawn (territory / DC filters). Nil keeps country-only filtering.
+    var enabledRegionIds: Set<String>? = nil
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
     let visibleCountry: PlateRegion.Country
@@ -38,6 +40,7 @@ struct RegionMapView: View {
             if mapProvider == .google {
                 RegionGoogleMapView(
                     enabledCountries: enabledCountries,
+                    enabledRegionIds: enabledRegionIds,
                     foundRegionIDs: foundRegionIDs,
                     foundRegions: foundRegions,
                     routeCoordinates: routeCoordinates,
@@ -64,6 +67,7 @@ struct RegionMapView: View {
 // Map view showing regions for enabled countries (Google Maps)
 struct RegionGoogleMapView: View {
     let enabledCountries: [PlateRegion.Country]
+    var enabledRegionIds: Set<String>? = nil
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
     let routeCoordinates: [CLLocationCoordinate2D]
@@ -75,8 +79,20 @@ struct RegionGoogleMapView: View {
     
     @AppStorage("appMapStyle") private var appMapStyleRaw: String = AppMapStyle.standard.rawValue
     
-    init(enabledCountries: [PlateRegion.Country], foundRegionIDs: [String], foundRegions: [FoundRegion], routeCoordinates: [CLLocationCoordinate2D], visibleCountry: PlateRegion.Country, cameraPosition: Binding<GMSCameraPosition>, namespace: Namespace.ID, showFullScreen: Binding<Bool>, locationManager: LocationManager) {
+    init(
+        enabledCountries: [PlateRegion.Country],
+        enabledRegionIds: Set<String>? = nil,
+        foundRegionIDs: [String],
+        foundRegions: [FoundRegion],
+        routeCoordinates: [CLLocationCoordinate2D],
+        visibleCountry: PlateRegion.Country,
+        cameraPosition: Binding<GMSCameraPosition>,
+        namespace: Namespace.ID,
+        showFullScreen: Binding<Bool>,
+        locationManager: LocationManager
+    ) {
         self.enabledCountries = enabledCountries
+        self.enabledRegionIds = enabledRegionIds
         self.foundRegionIDs = foundRegionIDs
         self.foundRegions = foundRegions
         self.routeCoordinates = routeCoordinates
@@ -88,7 +104,11 @@ struct RegionGoogleMapView: View {
     }
     
     private var regionsForCurrentCountry: [PlateRegion] {
-        PlateRegion.all.filter { enabledCountries.contains($0.country) }
+        PlateRegion.all.filter { region in
+            guard enabledCountries.contains(region.country) else { return false }
+            if let enabledRegionIds { return enabledRegionIds.contains(region.id) }
+            return true
+        }
     }
     
     private var mapType: GMSMapViewType {

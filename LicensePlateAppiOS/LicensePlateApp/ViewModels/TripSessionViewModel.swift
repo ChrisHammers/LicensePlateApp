@@ -168,15 +168,24 @@ final class TripSessionViewModel: ObservableObject {
             let games = (try? gameInstanceRepository.fetchByTripSession(sessionId: sessionId)) ?? []
             var rows: [GameRowItem] = []
             for game in games {
-                let discoveryCount = tripActivityEventRepository.flatMap { repo in
-                    (try? repo.discoveries(sessionId: sessionId, gameInstanceId: game.id))?.count ?? 0
-                } ?? 0
+                let discoveries = tripActivityEventRepository.flatMap { repo in
+                    (try? repo.discoveries(sessionId: sessionId, gameInstanceId: game.id)) ?? []
+                } ?? []
                 let goal = game.licensePlateConfig().map { LicensePlateScopeCalculator.completionGoal(for: $0) }
+                let foundCount: Int = {
+                    if let config = game.licensePlateConfig() {
+                        return LicensePlateScopeCalculator.scopedUniqueFoundCount(
+                            discoveries: discoveries,
+                            config: config
+                        )
+                    }
+                    return discoveries.count
+                }()
                 let progressSummary: String
                 if let g = goal {
-                    progressSummary = "\(discoveryCount)/\(g)"
+                    progressSummary = "\(foundCount)/\(g)"
                 } else {
-                    progressSummary = "\(discoveryCount)"
+                    progressSummary = "\(foundCount)"
                 }
                 let lifecycleState = game.commonConfig.lifecycleState
                 let gameTypeDisplay = GameType(rawValue: game.definitionId)?.displayName ?? game.definitionId

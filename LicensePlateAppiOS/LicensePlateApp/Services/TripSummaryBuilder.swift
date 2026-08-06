@@ -56,11 +56,14 @@ enum TripSummaryBuilder {
                 credits: gameCredits.isEmpty ? nil : gameCredits,
                 gameModeByInstanceId: gameModeByInstanceId
             )
-            let (completionGoal, progressDescription) = Self.progressFromGame(game, discoveryCount: gameDiscoveries.count)
+            let (scopedFoundCount, completionGoal, progressDescription) = Self.progressFromGame(
+                game,
+                discoveries: gameDiscoveries
+            )
             gameItems.append(TripSummaryGameItem(
                 gameInstanceId: game.id,
                 definitionId: game.definitionId,
-                discoveryCount: gameDiscoveries.count,
+                discoveryCount: scopedFoundCount,
                 startedAt: game.startedAt,
                 endedAt: game.endedAt,
                 firstDiscoveries: projection.targetSummaries,
@@ -115,11 +118,21 @@ enum TripSummaryBuilder {
     }
 
     /// Step 07.5 — Derive completion goal and progress description from game config (license plate only).
-    private static func progressFromGame(_ game: GameInstance, discoveryCount: Int) -> (Int?, String?) {
-        guard let lpConfig = game.licensePlateConfig() else { return (nil, nil) }
+    /// Found count is unique in-scope target IDs (territory / DC filters applied), not raw discovery rows.
+    private static func progressFromGame(
+        _ game: GameInstance,
+        discoveries: [GameDiscovery]
+    ) -> (scopedFoundCount: Int, completionGoal: Int?, progressDescription: String?) {
+        guard let lpConfig = game.licensePlateConfig() else {
+            return (discoveries.count, nil, nil)
+        }
         let goal = LicensePlateScopeCalculator.completionGoal(for: lpConfig)
+        let scopedFound = LicensePlateScopeCalculator.scopedUniqueFoundCount(
+            discoveries: discoveries,
+            config: lpConfig
+        )
         let label = progressLabel(for: lpConfig.selectedCountries)
-        return (goal, "\(discoveryCount) / \(goal) \(label)")
+        return (scopedFound, goal, "\(scopedFound) / \(goal) \(label)")
     }
 
     private static func progressLabel(for countries: [PlateRegion.Country]) -> String {

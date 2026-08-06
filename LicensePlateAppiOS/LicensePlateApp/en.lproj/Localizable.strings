@@ -56,6 +56,7 @@
 "This will stop the game. You won't be able to add states in this trip anymore." = "This will stop the game. You won't be able to add states in this trip anymore.";
 "Cancel" = "Cancel";
 "Only the first finder gets credit in competitive mode." = "Only the first finder gets credit in competitive mode.";
+"That region isn’t part of this game’s plate list." = "That region isn’t part of this game’s plate list.";
 "Tap to dismiss" = "Tap to dismiss";
 "Region selection order resolution" = "Region Selection Order Resolution";
 "Fairness late competitive body %@ %@ %@" = "It was determined you found %@ after %@ in %@.";

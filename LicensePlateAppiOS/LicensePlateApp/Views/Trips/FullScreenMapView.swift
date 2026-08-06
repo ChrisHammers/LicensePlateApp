@@ -13,6 +13,8 @@ import Combine
 struct FullScreenMapView: View {
     let tripSessionId: UUID
     let enabledCountries: [PlateRegion.Country]
+    /// When non-nil, only these region IDs are drawn (territory / DC filters). Nil keeps country-only filtering.
+    var enabledRegionIds: Set<String>? = nil
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
     let finderIdentities: [String: UserRepository.UserIdentitySnapshot]
@@ -40,6 +42,7 @@ struct FullScreenMapView: View {
                 FullScreenGoogleMapView(
                     tripSessionId: tripSessionId,
                     enabledCountries: enabledCountries,
+                    enabledRegionIds: enabledRegionIds,
                     foundRegionIDs: foundRegionIDs,
                     foundRegions: foundRegions,
                     finderIdentities: finderIdentities,
@@ -70,6 +73,7 @@ struct FullScreenMapView: View {
 struct FullScreenGoogleMapView: View {
     let tripSessionId: UUID
     let enabledCountries: [PlateRegion.Country]
+    var enabledRegionIds: Set<String>? = nil
     let foundRegionIDs: [String]
     let foundRegions: [FoundRegion]
     let finderIdentities: [String: UserRepository.UserIdentitySnapshot]
@@ -87,6 +91,7 @@ struct FullScreenGoogleMapView: View {
     init(
         tripSessionId: UUID,
         enabledCountries: [PlateRegion.Country],
+        enabledRegionIds: Set<String>? = nil,
         foundRegionIDs: [String],
         foundRegions: [FoundRegion],
         finderIdentities: [String: UserRepository.UserIdentitySnapshot],
@@ -98,6 +103,7 @@ struct FullScreenGoogleMapView: View {
     ) {
         self.tripSessionId = tripSessionId
         self.enabledCountries = enabledCountries
+        self.enabledRegionIds = enabledRegionIds
         self.foundRegionIDs = foundRegionIDs
         self.foundRegions = foundRegions
         self.finderIdentities = finderIdentities
@@ -132,7 +138,11 @@ struct FullScreenGoogleMapView: View {
     }
     
     private var regions: [PlateRegion] {
-        PlateRegion.all.filter { enabledCountries.contains($0.country) }
+        PlateRegion.all.filter { region in
+            guard enabledCountries.contains(region.country) else { return false }
+            if let enabledRegionIds { return enabledRegionIds.contains(region.id) }
+            return true
+        }
     }
     
     private var mapType: GMSMapViewType {

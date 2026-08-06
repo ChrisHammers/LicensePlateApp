@@ -114,4 +114,37 @@ struct LicensePlateScopeCalculatorTests {
         #expect(ids.contains("ca-yt") == false)
         #expect(ids.count == 32)
     }
+
+    @Test func targetRegionIdSetMatchesTargetRegionIds() async throws {
+        let config = LicensePlateGameConfig(
+            selectedCountriesRawValues: [PlateRegion.Country.canada.rawValue],
+            territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: false, includeCanadianTerritories: false, includeDC: false)
+        )
+        let ids = LicensePlateScopeCalculator.targetRegionIds(for: config)
+        let set = LicensePlateScopeCalculator.targetRegionIdSet(for: config)
+        #expect(set == Set(ids))
+        #expect(LicensePlateScopeCalculator.isTargetRegion("ca-on", config: config))
+        #expect(!LicensePlateScopeCalculator.isTargetRegion("ca-yt", config: config))
+        #expect(!LicensePlateScopeCalculator.isTargetRegion("us-ca", config: config))
+    }
+
+    @Test func scopedUniqueFoundCountIgnoresOutOfScopeTerritories() async throws {
+        let config = LicensePlateGameConfig(
+            selectedCountriesRawValues: [PlateRegion.Country.canada.rawValue],
+            territoryOptions: LicensePlateTerritoryOptions(includeUSTerritories: false, includeCanadianTerritories: false, includeDC: false)
+        )
+        let found = ["ca-on", "ca-qc", "ca-yt", "ca-nt", "ca-on"]
+        #expect(LicensePlateScopeCalculator.scopedUniqueFoundCount(foundRegionIds: found, config: config) == 2)
+
+        let gameId = UUID()
+        let discoveries = found.map { id in
+            GameDiscovery(
+                gameInstanceId: gameId,
+                participantId: "u1",
+                targetId: id,
+                inputMethod: .list
+            )
+        }
+        #expect(LicensePlateScopeCalculator.scopedUniqueFoundCount(discoveries: discoveries, config: config) == 2)
+    }
 }

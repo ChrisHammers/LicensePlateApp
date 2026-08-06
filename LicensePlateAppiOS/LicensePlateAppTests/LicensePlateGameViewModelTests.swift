@@ -727,6 +727,134 @@ struct LicensePlateGameViewModelTests {
         #expect(!GameCompletionAnalyticsGate.shouldLogGameInstanceCompleted(countBefore: 50, countAfter: 51, goal: 50))
     }
 
+    private func makeCanadaProvincesOnlyGame(sessionId: UUID, gameId: UUID) throws -> GameInstance {
+        let lpConfig = LicensePlateGameConfig(
+            selectedCountriesRawValues: [PlateRegion.Country.canada.rawValue],
+            territoryOptions: LicensePlateTerritoryOptions(
+                includeUSTerritories: false,
+                includeCanadianTerritories: false,
+                includeDC: false
+            )
+        )
+        let payloadData = try JSONEncoder().encode(lpConfig)
+        var game = GameInstance(
+            id: gameId,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: GameType.licensePlate.rawValue),
+            commonConfig: CommonGameConfig(lifecycleState: .started, configLocked: false, configLockReason: .none),
+            gameSpecificPayloadType: GameType.licensePlate.rawValue,
+            gameSpecificPayloadVersion: "1",
+            gameSpecificPayloadData: payloadData
+        )
+        return game
+    }
+
+    @Test func submitDiscoveryRejectsCanadianTerritoryWhenTerritoriesOff() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = makeSession(id: sessionId, startedAt: Date())
+        let game = try makeCanadaProvincesOnlyGame(sessionId: sessionId, gameId: gameId)
+
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        gameRepo.seed(game)
+        let eventRepo = MockTripActivityEventRepository()
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: "user1", userName: "U", firebaseUID: "user1")
+
+        let viewModel = LicensePlateGameViewModel(
+            session: session,
+            game: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: MockTripSessionLifecycleService(),
+            tripActivityEventRecording: TripActivityEventRecordingService(
+                tripActivityEventRepository: eventRepo,
+                syncCoordinator: MockSyncCoordinator()
+            ),
+            authService: auth
+        )
+
+        let result = viewModel.submitDiscovery(regionID: "ca-yt", inputMethod: .list)
+        guard case .rejectedOutOfScope = result else {
+            Issue.record("Expected rejectedOutOfScope, got \(result)")
+            return
+        }
+        #expect(eventRepo.appendedEvents().contains { $0.kind == .regionFound } == false)
+        #expect(viewModel.foundRegions.isEmpty)
+    }
+
+    @Test func fullClearIgnoresOutOfScopeTerritoriesTowardGoal() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let session = makeSession(id: sessionId, startedAt: Date())
+        let game = try makeCanadaProvincesOnlyGame(sessionId: sessionId, gameId: gameId)
+
+        let provinces = ["ca-ab", "ca-bc", "ca-mb", "ca-nb", "ca-nl", "ca-ns", "ca-on", "ca-pe", "ca-qc"]
+        let sessionRepo = MockTripSessionRepository()
+        sessionRepo.seed(session)
+        let gameRepo = MockGameInstanceRepository()
+        gameRepo.seed(game)
+        let eventRepo = MockTripActivityEventRepository()
+        for regionId in provinces {
+            try eventRepo.append(TripActivityEvent(
+                sessionId: sessionId,
+                kind: .regionFound,
+                actorId: "user1",
+                payload: [
+                    TripActivityEventPayloadKey.regionId: regionId,
+                    TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+                    TripActivityEventPayloadKey.participantId: "user1",
+                    TripActivityEventPayloadKey.inputMethod: FoundRegion.InputMethod.list.rawValue
+                ]
+            ))
+        }
+        // Unscoped would be 10 with territory, but territory is out of scope.
+        try eventRepo.append(TripActivityEvent(
+            sessionId: sessionId,
+            kind: .regionFound,
+            actorId: "user1",
+            payload: [
+                TripActivityEventPayloadKey.regionId: "ca-nt",
+                TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+                TripActivityEventPayloadKey.participantId: "user1",
+                TripActivityEventPayloadKey.inputMethod: FoundRegion.InputMethod.list.rawValue
+            ]
+        ))
+
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: "user1", userName: "U", firebaseUID: "user1")
+        let mockGameLifecycle = MockGameInstanceLifecycleService()
+        let viewModel = LicensePlateGameViewModel(
+            session: session,
+            game: game,
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            lifecycleService: MockTripSessionLifecycleService(),
+            gameInstanceLifecycleService: mockGameLifecycle,
+            tripActivityEventRecording: TripActivityEventRecordingService(
+                tripActivityEventRepository: eventRepo,
+                syncCoordinator: MockSyncCoordinator()
+            ),
+            authService: auth
+        )
+        viewModel.refreshFoundRegions()
+
+        // Still one province short of goal 10; territory must not complete the game.
+        #expect(mockGameLifecycle.markGameFullClearCallCount == 0)
+
+        let result = viewModel.submitDiscovery(regionID: "ca-sk", inputMethod: .list)
+        guard case .success = result else {
+            Issue.record("Expected success for last province, got \(result)")
+            return
+        }
+        #expect(mockGameLifecycle.markGameFullClearCallCount == 1)
+    }
+
     // MARK: - Step 13.2 fairness watermark + backlog
 
     private func makeCompetitiveStartedGame(gameId: UUID, sessionId: UUID) -> GameInstance {
