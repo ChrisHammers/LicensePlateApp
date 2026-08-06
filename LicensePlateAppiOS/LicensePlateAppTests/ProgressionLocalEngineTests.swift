@@ -105,7 +105,7 @@ struct ProgressionLocalEngineTests {
         )
         #expect(d.competitiveFirstPlaceFinishes == 0)
         #expect(d.everCompetitiveFirstPlace == false)
-        #expect(d.totalXp == GameProgressionXPRewards.baseDiscoveryXp)
+        #expect(d.totalXp == rewards.xp.baseDiscoveryXp + rewards.xp.gameEndedBonusXp)
     }
 
     @Test func competitiveTieAwardsBothFirstPlacePending() {
@@ -164,8 +164,8 @@ struct ProgressionLocalEngineTests {
         )
         #expect(d1.competitiveFirstPlaceFinishes == 1)
         #expect(d2.competitiveFirstPlaceFinishes == 1)
-        #expect(d1.totalXp == rewards.xp.baseDiscoveryXp + rewards.xp.competitiveFirstPlaceFinishBonusXp)
-        #expect(d2.totalXp == rewards.xp.baseDiscoveryXp + rewards.xp.competitiveFirstPlaceFinishBonusXp)
+        #expect(d1.totalXp == rewards.xp.baseDiscoveryXp + rewards.xp.gameEndedBonusXp + rewards.xp.competitiveFirstPlaceFinishBonusXp)
+        #expect(d2.totalXp == rewards.xp.baseDiscoveryXp + rewards.xp.gameEndedBonusXp + rewards.xp.competitiveFirstPlaceFinishBonusXp)
     }
 
     @Test func sameScopedRefindDoesNotAddPendingAgain() {

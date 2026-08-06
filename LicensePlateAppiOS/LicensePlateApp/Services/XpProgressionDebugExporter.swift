@@ -338,19 +338,73 @@ enum XpProgressionDebugExporter {
                 id: "baseDiscoveryXp",
                 xpAmount: xp.baseDiscoveryXp,
                 isWiredToGrant: true,
-                grantPath: "Server: trip activity region_found + xp_grants row. Local: XP ledger provisional/final rows."
+                grantPath: "Server: region_found / late discovery_rejected + xp_grants. Local: XP ledger provisional/final."
             ),
             Payload.ConfiguredXpSource(
                 id: "firstFinderBonusXp",
                 xpAmount: xp.firstFinderBonusXp,
                 isWiredToGrant: true,
-                grantPath: "Server: competitive accepted region_found includes base+bonus (15). Local: provisional +10, then +5 when confirmed first finder; late keeps +10."
+                grantPath: "Server: competitive accepted region_found component grant. Local: +5 when confirmed first finder."
+            ),
+            Payload.ConfiguredXpSource(
+                id: "lifetimeUniqueRegionFindBonusXp",
+                xpAmount: xp.lifetimeUniqueRegionFindBonusXp,
+                isWiredToGrant: true,
+                grantPath: "Server: lifetime_unique_region scope on first find of regionId. Local: component ledger row."
+            ),
+            Payload.ConfiguredXpSource(
+                id: "firstFindOfDayBonusXp",
+                xpAmount: xp.firstFindOfDayBonusXp,
+                isWiredToGrant: true,
+                grantPath: "Server: first_find_of_day scope per uid/dayKey. Local: component ledger row."
             ),
             Payload.ConfiguredXpSource(
                 id: "competitiveFirstPlaceFinishBonusXp",
                 xpAmount: xp.competitiveFirstPlaceFinishBonusXp,
                 isWiredToGrant: true,
-                grantPath: "Server: trip activity game_ended (competitive rank 1)."
+                grantPath: "Server: game_ended competitive rank 1."
+            ),
+            Payload.ConfiguredXpSource(
+                id: "competitiveSecondPlaceFinishBonusXp",
+                xpAmount: xp.competitiveSecondPlaceFinishBonusXp,
+                isWiredToGrant: true,
+                grantPath: "Server: game_ended competitive rank 2."
+            ),
+            Payload.ConfiguredXpSource(
+                id: "competitiveThirdPlaceFinishBonusXp",
+                xpAmount: xp.competitiveThirdPlaceFinishBonusXp,
+                isWiredToGrant: true,
+                grantPath: "Server: game_ended competitive rank 3."
+            ),
+            Payload.ConfiguredXpSource(
+                id: "gameEndedBonusXp",
+                xpAmount: xp.gameEndedBonusXp,
+                isWiredToGrant: true,
+                grantPath: "Server: game_ended for all trip members."
+            ),
+            Payload.ConfiguredXpSource(
+                id: "gameFullClearBonusXp",
+                xpAmount: xp.gameFullClearBonusXp,
+                isWiredToGrant: true,
+                grantPath: "Server: game_completed (all regions found)."
+            ),
+            Payload.ConfiguredXpSource(
+                id: "tripEndedBonusXp",
+                xpAmount: xp.tripEndedBonusXp,
+                isWiredToGrant: true,
+                grantPath: "Server: trip_ended for all members."
+            ),
+            Payload.ConfiguredXpSource(
+                id: "tripParticipationBonusXp",
+                xpAmount: xp.tripParticipationBonusXp,
+                isWiredToGrant: true,
+                grantPath: "Server: trip_ended when member has ≥1 accepted find."
+            ),
+            Payload.ConfiguredXpSource(
+                id: "tripCompetitiveFirstPlaceBonusXp",
+                xpAmount: xp.tripCompetitiveFirstPlaceBonusXp,
+                isWiredToGrant: true,
+                grantPath: "Server: trip_ended trip rank 1 when trip had ≥1 competitive game."
             ),
             Payload.ConfiguredXpSource(
                 id: "achievementXpReward",
@@ -359,74 +413,8 @@ enum XpProgressionDebugExporter {
                 grantPath: "Server: syncUserAchievementUnlocks → user_progression.totalXp increment + xp_grants row with stored xpReward."
             ),
             Payload.ConfiguredXpSource(
-                id: "firstPlateFindBonusXp",
-                xpAmount: xp.firstPlateFindBonusXp,
-                isWiredToGrant: false,
-                grantPath: nil
-            ),
-            Payload.ConfiguredXpSource(
-                id: "baseMultiplayerGameBonusXp",
-                xpAmount: xp.baseMultiplayerGameBonusXp,
-                isWiredToGrant: false,
-                grantPath: nil
-            ),
-            Payload.ConfiguredXpSource(
-                id: "competitiveSecondPlaceFinishBonusXp",
-                xpAmount: xp.competitiveSecondPlaceFinishBonusXp,
-                isWiredToGrant: false,
-                grantPath: nil
-            ),
-            Payload.ConfiguredXpSource(
-                id: "competitiveThirdPlaceFinishBonusXp",
-                xpAmount: xp.competitiveThirdPlaceFinishBonusXp,
-                isWiredToGrant: false,
-                grantPath: nil
-            ),
-            Payload.ConfiguredXpSource(
-                id: "gameContributorBonusXp",
-                xpAmount: xp.gameContributorBonusXp,
-                isWiredToGrant: false,
-                grantPath: nil
-            ),
-            Payload.ConfiguredXpSource(
-                id: "tripContributorBonusXp",
-                xpAmount: xp.tripContributorBonusXp,
-                isWiredToGrant: false,
-                grantPath: nil
-            ),
-            Payload.ConfiguredXpSource(
-                id: "firstTripCompletionBonusXp",
-                xpAmount: xp.firstTripCompletionBonusXp,
-                isWiredToGrant: false,
-                grantPath: nil
-            ),
-            Payload.ConfiguredXpSource(
-                id: "firstMultiplayerTripCompletionBonusXp",
-                xpAmount: xp.firstMultiplayerTripCompletionBonusXp,
-                isWiredToGrant: false,
-                grantPath: nil
-            ),
-            Payload.ConfiguredXpSource(
-                id: "firstGameCompletionBonusXp",
-                xpAmount: xp.firstGameCompletionBonusXp,
-                isWiredToGrant: false,
-                grantPath: nil
-            ),
-            Payload.ConfiguredXpSource(
-                id: "firstMultiplayerGameCompletionBonusXp",
-                xpAmount: xp.firstMultiplayerGameCompletionBonusXp,
-                isWiredToGrant: false,
-                grantPath: nil
-            ),
-            Payload.ConfiguredXpSource(
-                id: "baseMilestoneBonusXp",
-                xpAmount: xp.baseMilestoneBonusXp,
-                isWiredToGrant: false,
-                grantPath: nil
-            ),
-            Payload.ConfiguredXpSource(
                 id: "returnStreakDailyXp",
-                xpAmount: 5,
+                xpAmount: 15,
                 isWiredToGrant: true,
                 grantPath: "ReturnStreakService local ledger (streak >= minStreakForXpReward) + claimReturnStreakDailyXp → user_progression.totalXp + xp_grants."
             ),

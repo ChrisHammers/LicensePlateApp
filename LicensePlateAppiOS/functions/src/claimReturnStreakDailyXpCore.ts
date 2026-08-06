@@ -2,7 +2,7 @@
  * Pure helpers for claimReturnStreakDailyXp (unit-testable).
  */
 
-export const RETURN_STREAK_DAILY_XP_AMOUNT = 5;
+export const RETURN_STREAK_DAILY_XP_AMOUNT = 15;
 export const RETURN_STREAK_MIN_STREAK_FOR_XP = 2;
 
 const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;

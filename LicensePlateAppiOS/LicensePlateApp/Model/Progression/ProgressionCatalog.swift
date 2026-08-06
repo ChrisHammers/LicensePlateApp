@@ -475,12 +475,53 @@ extension ProgressionCatalog {
                     ],
                     ledgerReasonCodes: [
                         XpReasonCode.soloNewDiscovery.rawValue,
-                        XpReasonCode.competitiveFirstFinder.rawValue,
                         XpReasonCode.competitiveLateFinder.rawValue,
                         XpReasonCode.collaborativeSharedFinder.rawValue,
                         XpReasonCode.discoveryClaimPendingResolution.rawValue,
                     ],
-                    grantReasons: nil,
+                    grantReasons: [UserXpGrantReason.regionFoundBaseDiscovery.rawValue],
+                    clientEventKinds: nil
+                ),
+                xpReward: nil
+            ),
+            ProgressionCatalogXpToastGroup(
+                id: "first_finder",
+                displayOrder: 11,
+                titleKeySingle: "xp.toast.group.first_finder.single",
+                titleKeyMulti: "xp.toast.group.first_finder.multi",
+                detailKey: nil,
+                matchers: ProgressionCatalogXpToastMatchers(
+                    ledgerGrantKinds: nil,
+                    ledgerReasonCodes: [XpReasonCode.competitiveFirstFinder.rawValue],
+                    grantReasons: [UserXpGrantReason.competitiveFirstFinder.rawValue],
+                    clientEventKinds: nil
+                ),
+                xpReward: nil
+            ),
+            ProgressionCatalogXpToastGroup(
+                id: "lifetime_unique",
+                displayOrder: 12,
+                titleKeySingle: "xp.toast.group.lifetime_unique.single",
+                titleKeyMulti: "xp.toast.group.lifetime_unique.multi",
+                detailKey: nil,
+                matchers: ProgressionCatalogXpToastMatchers(
+                    ledgerGrantKinds: nil,
+                    ledgerReasonCodes: [XpReasonCode.lifetimeUniqueRegion.rawValue],
+                    grantReasons: [UserXpGrantReason.lifetimeUniqueRegion.rawValue],
+                    clientEventKinds: nil
+                ),
+                xpReward: nil
+            ),
+            ProgressionCatalogXpToastGroup(
+                id: "first_of_day",
+                displayOrder: 13,
+                titleKeySingle: "xp.toast.group.first_of_day.single",
+                titleKeyMulti: "xp.toast.group.first_of_day.multi",
+                detailKey: nil,
+                matchers: ProgressionCatalogXpToastMatchers(
+                    ledgerGrantKinds: nil,
+                    ledgerReasonCodes: [XpReasonCode.firstFindOfDay.rawValue],
+                    grantReasons: [UserXpGrantReason.firstFindOfDay.rawValue],
                     clientEventKinds: nil
                 ),
                 xpReward: nil
@@ -511,19 +552,96 @@ extension ProgressionCatalog {
                     grantReasons: nil,
                     clientEventKinds: ["return_streak"]
                 ),
-                xpReward: 5,
+                xpReward: 15,
                 minStreakForXpReward: 2
             ),
             ProgressionCatalogXpToastGroup(
-                id: "competitive_win",
+                id: "competitive_place",
                 displayOrder: 40,
-                titleKeySingle: "xp.toast.group.competitive_win.single",
-                titleKeyMulti: "xp.toast.group.competitive_win.multi",
+                titleKeySingle: "xp.toast.group.competitive_place.single",
+                titleKeyMulti: "xp.toast.group.competitive_place.multi",
                 detailKey: nil,
                 matchers: ProgressionCatalogXpToastMatchers(
                     ledgerGrantKinds: nil,
-                    ledgerReasonCodes: nil,
-                    grantReasons: [UserXpGrantReason.competitiveFirstPlaceFinish.rawValue],
+                    ledgerReasonCodes: [
+                        XpReasonCode.competitiveSecondPlace.rawValue,
+                        XpReasonCode.competitiveThirdPlace.rawValue,
+                    ],
+                    grantReasons: [
+                        UserXpGrantReason.competitiveFirstPlaceFinish.rawValue,
+                        UserXpGrantReason.competitiveSecondPlaceFinish.rawValue,
+                        UserXpGrantReason.competitiveThirdPlaceFinish.rawValue,
+                    ],
+                    clientEventKinds: nil
+                ),
+                xpReward: nil
+            ),
+            ProgressionCatalogXpToastGroup(
+                id: "game_ended",
+                displayOrder: 50,
+                titleKeySingle: "xp.toast.group.game_ended.single",
+                titleKeyMulti: "xp.toast.group.game_ended.multi",
+                detailKey: nil,
+                matchers: ProgressionCatalogXpToastMatchers(
+                    ledgerGrantKinds: nil,
+                    ledgerReasonCodes: [XpReasonCode.gameEnded.rawValue],
+                    grantReasons: [UserXpGrantReason.gameEnded.rawValue],
+                    clientEventKinds: nil
+                ),
+                xpReward: nil
+            ),
+            ProgressionCatalogXpToastGroup(
+                id: "game_full_clear",
+                displayOrder: 51,
+                titleKeySingle: "xp.toast.group.game_full_clear.single",
+                titleKeyMulti: "xp.toast.group.game_full_clear.multi",
+                detailKey: nil,
+                matchers: ProgressionCatalogXpToastMatchers(
+                    ledgerGrantKinds: nil,
+                    ledgerReasonCodes: [XpReasonCode.gameFullClear.rawValue],
+                    grantReasons: [UserXpGrantReason.gameFullClear.rawValue],
+                    clientEventKinds: nil
+                ),
+                xpReward: nil
+            ),
+            ProgressionCatalogXpToastGroup(
+                id: "trip_ended",
+                displayOrder: 60,
+                titleKeySingle: "xp.toast.group.trip_ended.single",
+                titleKeyMulti: "xp.toast.group.trip_ended.multi",
+                detailKey: nil,
+                matchers: ProgressionCatalogXpToastMatchers(
+                    ledgerGrantKinds: nil,
+                    ledgerReasonCodes: [XpReasonCode.tripEnded.rawValue],
+                    grantReasons: [UserXpGrantReason.tripEnded.rawValue],
+                    clientEventKinds: nil
+                ),
+                xpReward: nil
+            ),
+            ProgressionCatalogXpToastGroup(
+                id: "trip_participation",
+                displayOrder: 61,
+                titleKeySingle: "xp.toast.group.trip_participation.single",
+                titleKeyMulti: "xp.toast.group.trip_participation.multi",
+                detailKey: nil,
+                matchers: ProgressionCatalogXpToastMatchers(
+                    ledgerGrantKinds: nil,
+                    ledgerReasonCodes: [XpReasonCode.tripParticipation.rawValue],
+                    grantReasons: [UserXpGrantReason.tripParticipation.rawValue],
+                    clientEventKinds: nil
+                ),
+                xpReward: nil
+            ),
+            ProgressionCatalogXpToastGroup(
+                id: "trip_competitive_first",
+                displayOrder: 62,
+                titleKeySingle: "xp.toast.group.trip_competitive_first.single",
+                titleKeyMulti: "xp.toast.group.trip_competitive_first.multi",
+                detailKey: nil,
+                matchers: ProgressionCatalogXpToastMatchers(
+                    ledgerGrantKinds: nil,
+                    ledgerReasonCodes: [XpReasonCode.tripCompetitiveFirstPlace.rawValue],
+                    grantReasons: [UserXpGrantReason.tripCompetitiveFirstPlace.rawValue],
                     clientEventKinds: nil
                 ),
                 xpReward: nil

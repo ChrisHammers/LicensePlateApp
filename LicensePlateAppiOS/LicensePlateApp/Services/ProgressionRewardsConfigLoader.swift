@@ -39,18 +39,16 @@ enum ProgressionRewardsConfigValidator {
         let fields: [(String, Int)] = [
             ("baseDiscoveryXp", xp.baseDiscoveryXp),
             ("firstFinderBonusXp", xp.firstFinderBonusXp),
-            ("firstPlateFindBonusXp", xp.firstPlateFindBonusXp),
-            ("baseMultiplayerGameBonusXp", xp.baseMultiplayerGameBonusXp),
+            ("lifetimeUniqueRegionFindBonusXp", xp.lifetimeUniqueRegionFindBonusXp),
+            ("firstFindOfDayBonusXp", xp.firstFindOfDayBonusXp),
             ("competitiveFirstPlaceFinishBonusXp", xp.competitiveFirstPlaceFinishBonusXp),
             ("competitiveSecondPlaceFinishBonusXp", xp.competitiveSecondPlaceFinishBonusXp),
             ("competitiveThirdPlaceFinishBonusXp", xp.competitiveThirdPlaceFinishBonusXp),
-            ("gameContributorBonusXp", xp.gameContributorBonusXp),
-            ("tripContributorBonusXp", xp.tripContributorBonusXp),
-            ("firstTripCompletionBonusXp", xp.firstTripCompletionBonusXp),
-            ("firstMultiplayerTripCompletionBonusXp", xp.firstMultiplayerTripCompletionBonusXp),
-            ("firstGameCompletionBonusXp", xp.firstGameCompletionBonusXp),
-            ("firstMultiplayerGameCompletionBonusXp", xp.firstMultiplayerGameCompletionBonusXp),
-            ("baseMilestoneBonusXp", xp.baseMilestoneBonusXp),
+            ("gameEndedBonusXp", xp.gameEndedBonusXp),
+            ("gameFullClearBonusXp", xp.gameFullClearBonusXp),
+            ("tripEndedBonusXp", xp.tripEndedBonusXp),
+            ("tripParticipationBonusXp", xp.tripParticipationBonusXp),
+            ("tripCompetitiveFirstPlaceBonusXp", xp.tripCompetitiveFirstPlaceBonusXp),
         ]
         for (name, value) in fields where value < 0 || value > maxXpValue {
             return "xp_\(name)_out_of_range"

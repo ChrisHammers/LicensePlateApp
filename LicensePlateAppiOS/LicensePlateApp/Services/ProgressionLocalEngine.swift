@@ -2,8 +2,8 @@
 //  ProgressionLocalEngine.swift
 //  LicensePlateApp
 //
-//  Step 16 addendum — Pure local progression pending delta (parity with `progressionCore.ts` XP constants and
-//  `TripParticipantRanking` for competitive `game_ended`). Replays full session events in order; only counts
+//  Pure local progression pending delta (parity with `progressionCore.ts` XP amounts and
+//  `TripParticipantRanking` for competitive places). Replays full session events in order; only counts
 //  events whose ids are not in `serverAppliedEventIds`.
 //
 
@@ -37,6 +37,7 @@ enum ProgressionLocalEngine {
 
         var window: [TripActivityEvent] = []
         var delta = ProgressionPendingDelta.zero
+        let hasCompetitiveGame = gamesById.values.contains { $0.gameMode == .competitive }
 
         for event in orderedEvents {
             window.append(event)
@@ -47,18 +48,34 @@ enum ProgressionLocalEngine {
                 guard let pid = regionFoundParticipantId(event), pid == subjectUserId else { continue }
                 guard let key = baseDiscoveryScopedKey(for: event, participantId: pid) else { continue }
                 guard firstFindEventIdByScopedKey[key] == event.id else { continue }
-                // Pending finds contribute base discovery only; competitive first-finder +5 waits for confirmation.
+                // Pending finds contribute base discovery only; other find bonuses wait for server scopes.
                 delta.totalXp += rewards.xp.baseDiscoveryXp
                 delta.acceptedRegionFindCount += 1
+
+            case .discoveryRejected:
+                guard !serverAppliedEventIds.contains(event.id) else { continue }
+                guard let reason = event.payload?[TripActivityEventPayloadKey.rejectionReason],
+                      reason == DiscoveryRejectionReason.serverRejectedLateCompetitive.rawValue
+                else { continue }
+                guard let pid = regionFoundParticipantId(event), pid == subjectUserId else { continue }
+                guard let key = baseDiscoveryScopedKey(for: event, participantId: pid) else { continue }
+                // Prefer region_found provisional when both exist; only count late reject if no accepted find scope.
+                if firstFindEventIdByScopedKey[key] != nil { continue }
+                delta.totalXp += rewards.xp.baseDiscoveryXp
+                delta.acceptedRegionFindCount += 1
+
+            case .gameCompleted:
+                guard !serverAppliedEventIds.contains(event.id) else { continue }
+                guard rosterUserIds.contains(subjectUserId) else { continue }
+                delta.totalXp += rewards.xp.gameFullClearBonusXp
 
             case .gameEnded:
                 guard !serverAppliedEventIds.contains(event.id) else { continue }
                 guard let gameId = gameInstanceUUID(from: event) else { continue }
-                guard let game = gamesById[gameId] else {
-                    // Missing local game metadata: skip competitive award (conservative; parity with “no game doc”).
-                    continue
-                }
-                guard game.gameMode == .competitive else { continue }
+                guard rosterUserIds.contains(subjectUserId) else { continue }
+                delta.totalXp += rewards.xp.gameEndedBonusXp
+
+                guard let game = gamesById[gameId], game.gameMode == .competitive else { continue }
 
                 let discoveries = TripActivityEventDiscoveryReplay.replay(events: window, gameInstanceFilter: gameId).discoveries
                 let byTarget = Dictionary(grouping: discoveries, by: \.targetId)
@@ -71,11 +88,49 @@ enum ProgressionLocalEngine {
                 let roster = rosterUserIds.map { TripParticipant(userId: $0) }
                 let merged = TripRosterContributionMerge.merge(roster: roster, contributions: raw)
                 let ranked = TripParticipantRanking.rankContributions(merged)
-                let rankOnes = Set(ranked.filter { $0.rank == 1 }.map(\.contribution.participantId))
-                guard rankOnes.contains(subjectUserId) else { continue }
-                delta.totalXp += rewards.xp.competitiveFirstPlaceFinishBonusXp
-                delta.competitiveFirstPlaceFinishes += 1
-                delta.everCompetitiveFirstPlace = true
+                guard let subjectRank = ranked.first(where: { $0.contribution.participantId == subjectUserId })?.rank else {
+                    continue
+                }
+                switch subjectRank {
+                case 1:
+                    delta.totalXp += rewards.xp.competitiveFirstPlaceFinishBonusXp
+                    delta.competitiveFirstPlaceFinishes += 1
+                    delta.everCompetitiveFirstPlace = true
+                case 2:
+                    delta.totalXp += rewards.xp.competitiveSecondPlaceFinishBonusXp
+                case 3:
+                    delta.totalXp += rewards.xp.competitiveThirdPlaceFinishBonusXp
+                default:
+                    break
+                }
+
+            case .tripEnded:
+                guard !serverAppliedEventIds.contains(event.id) else { continue }
+                guard rosterUserIds.contains(subjectUserId) else { continue }
+                delta.totalXp += rewards.xp.tripEndedBonusXp
+
+                let allDiscoveries = TripActivityEventDiscoveryReplay.replay(events: window, gameInstanceFilter: nil).discoveries
+                if allDiscoveries.contains(where: { $0.participantId == subjectUserId }) {
+                    delta.totalXp += rewards.xp.tripParticipationBonusXp
+                }
+
+                if hasCompetitiveGame {
+                    let tripCredits = tripLevelCredits(
+                        discoveries: allDiscoveries,
+                        gamesById: gamesById
+                    )
+                    let raw = ParticipantContributionBuilder.contributionSummary(
+                        discoveries: allDiscoveries,
+                        credits: tripCredits
+                    )
+                    let roster = rosterUserIds.map { TripParticipant(userId: $0) }
+                    let merged = TripRosterContributionMerge.merge(roster: roster, contributions: raw)
+                    let ranked = TripParticipantRanking.rankContributions(merged)
+                    let rankOnes = Set(ranked.filter { $0.rank == 1 }.map(\.contribution.participantId))
+                    if rankOnes.contains(subjectUserId) {
+                        delta.totalXp += rewards.xp.tripCompetitiveFirstPlaceBonusXp
+                    }
+                }
 
             default:
                 break
@@ -106,8 +161,25 @@ enum ProgressionLocalEngine {
         return acc
     }
 
+    private static func tripLevelCredits(
+        discoveries: [GameDiscovery],
+        gamesById: [UUID: ProgressionGameSnapshot]
+    ) -> [GameCredit] {
+        var credits: [GameCredit] = []
+        let byGame = Dictionary(grouping: discoveries, by: \.gameInstanceId)
+        for (gameId, gameDisco) in byGame {
+            guard let game = gamesById[gameId] else { continue }
+            let byTarget = Dictionary(grouping: gameDisco, by: \.targetId)
+            credits.append(contentsOf: DiscoveryRulesEngine.creditsForDiscoveries(
+                mode: game.gameMode,
+                discoveriesByTarget: byTarget,
+                teams: game.teams
+            ))
+        }
+        return credits
+    }
+
     private static func regionFoundParticipantId(_ event: TripActivityEvent) -> String? {
-        guard event.kind == .regionFound else { return nil }
         if let p = event.payload?[TripActivityEventPayloadKey.participantId], !p.isEmpty {
             return p
         }

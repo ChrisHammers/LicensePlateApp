@@ -34,6 +34,8 @@ export const PK = {
   serverCommittedAt: "serverCommittedAt",
   /** `discovery_rejected`: `region_found` doc id voided by server_rejected_superseded_by_earlier_timestamp. */
   supersededRegionFoundEventId: "supersededRegionFoundEventId",
+  /** Optional client calendar day `YYYY-MM-DD` for first-find-of-day XP (local device calendar). */
+  xpDayKey: "xpDayKey",
 } as const;
 
 export const KIND_REGION_FOUND = "region_found";
@@ -46,7 +48,7 @@ export const KIND_DISCOVERY_REJECTED = "discovery_rejected";
 /** Appended only by Cloud Functions / trusted paths — not via appendTripActivityEvent from clients. */
 const CLIENT_FORBIDDEN_KINDS = new Set<string>([KIND_PARTICIPANT_INVITED, KIND_PARTICIPANT_JOINED]);
 
-const REJECTION_SERVER_LATE_COMPETITIVE = "server_rejected_late_competitive";
+export const REJECTION_SERVER_LATE_COMPETITIVE = "server_rejected_late_competitive";
 const REJECTION_INVALID_PARTICIPANT = "rejected_invalid_participant";
 export const REJECTION_SUPERSEDED_BY_EARLIER_TIMESTAMP = "server_rejected_superseded_by_earlier_timestamp";
 

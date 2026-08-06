@@ -355,7 +355,7 @@ struct XpGainToastServiceTests {
 
         #expect(service.presentation?.lines.count == 2)
         #expect(service.presentation?.lines.contains(where: { $0.id == "discovery" }) == true)
-        #expect(service.presentation?.lines.contains(where: { $0.id == "competitive_win" }) == true)
+        #expect(service.presentation?.lines.contains(where: { $0.id == "competitive_place" }) == true)
         #expect(service.presentation?.totalXp == 25)
     }
 

@@ -1,15 +1,18 @@
 import { describe, it, expect } from "vitest";
 import * as admin from "firebase-admin";
-import { KIND_REGION_FOUND, PK } from "./gameplayEventResolver";
+import { KIND_REGION_FOUND, KIND_DISCOVERY_REJECTED, PK, REJECTION_SERVER_LATE_COMPETITIVE } from "./gameplayEventResolver";
 import {
   baseRegionDiscoveryScopeKey,
   competitiveFirstPlaceParticipantIds,
   previewProgressionDeltasForActivityEvent,
   rankContributionsSwiftParity,
+  XP_AMOUNTS,
   XP_PER_ACCEPTED_REGION_FOUND,
   XP_PER_COMPETITIVE_FIRST_FINDER_BONUS,
   XP_PER_COMPETITIVE_FIRST_PLACE_FINISH,
   KIND_GAME_ENDED,
+  KIND_GAME_COMPLETED,
+  KIND_TRIP_ENDED,
 } from "./progressionCore";
 
 function mockTs(seconds: number): admin.firestore.Timestamp {
@@ -66,7 +69,7 @@ describe("progressionCore", () => {
     expect(ids.sort()).toEqual(["x", "y"]);
   });
 
-  it("region_found collaborative awards base XP and find count", () => {
+  it("region_found collaborative awards base + lifetime unique", () => {
     const d = previewProgressionDeltasForActivityEvent({
       kind: KIND_REGION_FOUND,
       actorId: "u1",
@@ -76,14 +79,14 @@ describe("progressionCore", () => {
       activityEventDocs: [],
     });
     expect(d.u1).toEqual({
-      totalXp: XP_PER_ACCEPTED_REGION_FOUND,
+      totalXp: XP_AMOUNTS.baseDiscoveryXp + XP_AMOUNTS.lifetimeUniqueRegionFindBonusXp,
       acceptedRegionFindCount: 1,
       competitiveFirstPlaceFinishes: 0,
       awardEverCompetitiveFirstPlace: false,
     });
   });
 
-  it("region_found competitive awards base plus first-finder bonus", () => {
+  it("region_found competitive awards base + first-finder + unique", () => {
     const d = previewProgressionDeltasForActivityEvent({
       kind: KIND_REGION_FOUND,
       actorId: "u1",
@@ -93,28 +96,55 @@ describe("progressionCore", () => {
       activityEventDocs: [],
     });
     expect(d.u1).toEqual({
-      totalXp: XP_PER_ACCEPTED_REGION_FOUND + XP_PER_COMPETITIVE_FIRST_FINDER_BONUS,
+      totalXp:
+        XP_PER_ACCEPTED_REGION_FOUND +
+        XP_PER_COMPETITIVE_FIRST_FINDER_BONUS +
+        XP_AMOUNTS.lifetimeUniqueRegionFindBonusXp,
       acceptedRegionFindCount: 1,
       competitiveFirstPlaceFinishes: 0,
       awardEverCompetitiveFirstPlace: false,
     });
   });
 
-  it("region_found without game doc defaults to base collaborative XP", () => {
+  it("region_found with xpDayKey adds first-of-day", () => {
     const d = previewProgressionDeltasForActivityEvent({
       kind: KIND_REGION_FOUND,
       actorId: "u1",
-      payload: { [PK.gameInstanceId]: gid, [PK.regionId]: "US-TX", [PK.participantId]: "u1", [PK.inputMethod]: "list" },
+      payload: {
+        [PK.gameInstanceId]: gid,
+        [PK.regionId]: "US-TX",
+        [PK.participantId]: "u1",
+        xpDayKey: "2026-08-06",
+      },
       memberUserIds: ["u1"],
-      gameDocs: [],
+      gameDocs: [mockGameDoc(gid, "collaborative")],
       activityEventDocs: [],
     });
-    expect(d.u1).toEqual({
-      totalXp: XP_PER_ACCEPTED_REGION_FOUND,
-      acceptedRegionFindCount: 1,
-      competitiveFirstPlaceFinishes: 0,
-      awardEverCompetitiveFirstPlace: false,
+    expect(d.u1?.totalXp).toBe(
+      XP_AMOUNTS.baseDiscoveryXp +
+        XP_AMOUNTS.lifetimeUniqueRegionFindBonusXp +
+        XP_AMOUNTS.firstFindOfDayBonusXp
+    );
+  });
+
+  it("late discovery_rejected awards base + unique without first-finder", () => {
+    const d = previewProgressionDeltasForActivityEvent({
+      kind: KIND_DISCOVERY_REJECTED,
+      actorId: "u2",
+      payload: {
+        [PK.gameInstanceId]: gid,
+        [PK.regionId]: "US-TX",
+        [PK.participantId]: "u2",
+        [PK.rejectionReason]: REJECTION_SERVER_LATE_COMPETITIVE,
+      },
+      memberUserIds: ["u1", "u2"],
+      gameDocs: [mockGameDoc(gid, "competitive")],
+      activityEventDocs: [],
     });
+    expect(d.u2?.totalXp).toBe(
+      XP_AMOUNTS.baseDiscoveryXp + XP_AMOUNTS.lifetimeUniqueRegionFindBonusXp
+    );
+    expect(d.u2?.acceptedRegionFindCount).toBe(1);
   });
 
   it("builds scoped key with user/session/game/region", () => {
@@ -129,7 +159,7 @@ describe("progressionCore", () => {
     expect(key).toBe(`xp_scope|v1|u1|trip-1|${gid}|US-TX|base_region_discovery`);
   });
 
-  it("game_ended collaborative yields no deltas", () => {
+  it("game_ended collaborative awards game-ended XP to all members", () => {
     const region = "US-CA";
     const events = [
       mockEventDoc("e1", KIND_REGION_FOUND, 1, {
@@ -147,10 +177,12 @@ describe("progressionCore", () => {
       gameDocs: [mockGameDoc(gid, "collaborative")],
       activityEventDocs: events,
     });
-    expect(Object.keys(d).length).toBe(0);
+    expect(d.u1?.totalXp).toBe(XP_AMOUNTS.gameEndedBonusXp);
+    expect(d.u2?.totalXp).toBe(XP_AMOUNTS.gameEndedBonusXp);
+    expect(d.u1?.competitiveFirstPlaceFinishes).toBe(0);
   });
 
-  it("game_ended competitive awards first-place XP to sole leader only", () => {
+  it("game_ended competitive awards game-ended + place XP", () => {
     const events = [
       mockEventDoc("e1", KIND_REGION_FOUND, 1, {
         [PK.gameInstanceId]: gid,
@@ -180,12 +212,17 @@ describe("progressionCore", () => {
       activityEventDocs: events,
     });
     expect(d.u1?.competitiveFirstPlaceFinishes).toBe(1);
-    expect(d.u1?.totalXp).toBe(XP_PER_COMPETITIVE_FIRST_PLACE_FINISH);
+    expect(d.u1?.totalXp).toBe(
+      XP_AMOUNTS.gameEndedBonusXp + XP_PER_COMPETITIVE_FIRST_PLACE_FINISH
+    );
     expect(d.u1?.awardEverCompetitiveFirstPlace).toBe(true);
-    expect(d.u2).toBeUndefined();
+    expect(d.u2?.totalXp).toBe(
+      XP_AMOUNTS.gameEndedBonusXp + XP_AMOUNTS.competitiveSecondPlaceFinishBonusXp
+    );
+    expect(d.u2?.competitiveFirstPlaceFinishes).toBe(0);
   });
 
-  it("game_ended competitive tie awards both rank-1", () => {
+  it("game_ended competitive tie awards both rank-1 place XP", () => {
     const events = [
       mockEventDoc("e1", KIND_REGION_FOUND, 1, {
         [PK.gameInstanceId]: gid,
@@ -210,7 +247,48 @@ describe("progressionCore", () => {
     });
     expect(d.u1?.competitiveFirstPlaceFinishes).toBe(1);
     expect(d.u2?.competitiveFirstPlaceFinishes).toBe(1);
-    expect(d.u1?.totalXp).toBe(XP_PER_COMPETITIVE_FIRST_PLACE_FINISH);
-    expect(d.u2?.totalXp).toBe(XP_PER_COMPETITIVE_FIRST_PLACE_FINISH);
+    const expected =
+      XP_AMOUNTS.gameEndedBonusXp + XP_PER_COMPETITIVE_FIRST_PLACE_FINISH;
+    expect(d.u1?.totalXp).toBe(expected);
+    expect(d.u2?.totalXp).toBe(expected);
+  });
+
+  it("game_completed awards full-clear XP to all members", () => {
+    const d = previewProgressionDeltasForActivityEvent({
+      kind: KIND_GAME_COMPLETED,
+      actorId: "u1",
+      payload: { [PK.gameInstanceId]: gid },
+      memberUserIds: ["u1", "u2"],
+      gameDocs: [mockGameDoc(gid, "collaborative")],
+      activityEventDocs: [],
+    });
+    expect(d.u1?.totalXp).toBe(XP_AMOUNTS.gameFullClearBonusXp);
+    expect(d.u2?.totalXp).toBe(XP_AMOUNTS.gameFullClearBonusXp);
+  });
+
+  it("trip_ended stacks completion, participation, and competitive trip first", () => {
+    const events = [
+      mockEventDoc("e1", KIND_REGION_FOUND, 1, {
+        [PK.gameInstanceId]: gid,
+        [PK.regionId]: "US-CA",
+        [PK.participantId]: "u1",
+        [PK.inputMethod]: "list",
+      }),
+    ];
+    const d = previewProgressionDeltasForActivityEvent({
+      kind: KIND_TRIP_ENDED,
+      actorId: "u1",
+      payload: {},
+      memberUserIds: ["u1", "u2"],
+      gameDocs: [mockGameDoc(gid, "competitive")],
+      activityEventDocs: events,
+      sessionId: "trip-1",
+    });
+    expect(d.u1?.totalXp).toBe(
+      XP_AMOUNTS.tripEndedBonusXp +
+        XP_AMOUNTS.tripParticipationBonusXp +
+        XP_AMOUNTS.tripCompetitiveFirstPlaceBonusXp
+    );
+    expect(d.u2?.totalXp).toBe(XP_AMOUNTS.tripEndedBonusXp);
   });
 });

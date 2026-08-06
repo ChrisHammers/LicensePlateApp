@@ -12,6 +12,7 @@ import Foundation
 final class MockGameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
     var startGameCallCount = 0
     var endGameCallCount = 0
+    var markGameFullClearCallCount = 0
     var resetGameCallCount = 0
     var deleteGameCallCount = 0
     var lastDeleteSessionId: UUID?
@@ -28,6 +29,11 @@ final class MockGameInstanceLifecycleService: GameInstanceLifecycleServiceProtoc
     func endGame(sessionId: UUID, gameInstanceId: UUID) throws {
         if shouldThrow { throw NSError(domain: "MockGameInstanceLifecycleService", code: -1, userInfo: nil) }
         endGameCallCount += 1
+    }
+
+    func markGameFullClear(sessionId: UUID, gameInstanceId: UUID) throws {
+        if shouldThrow { throw NSError(domain: "MockGameInstanceLifecycleService", code: -1, userInfo: nil) }
+        markGameFullClearCallCount += 1
     }
 
     func resetGame(sessionId: UUID, gameInstanceId: UUID) throws {

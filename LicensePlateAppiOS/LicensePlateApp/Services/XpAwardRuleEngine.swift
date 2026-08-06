@@ -50,20 +50,16 @@ enum XpAwardRuleEngine {
         case .pending:
             return (0, .discoveryClaimPendingResolution)
         case .acceptedFirst:
+            // Local ledger settles base discovery only. First-finder / unique / first-of-day
+            // are separate cloud component grants (and separate toast lines).
             if tripMode == .solo {
                 return (baseDiscovery, .soloNewDiscovery)
             }
-            var reason: XpReasonCode = switch gameMode {
-            case .competitive: .competitiveFirstFinder
-            case .collaborative: .collaborativeSharedFinder
+            switch gameMode {
+            case .competitive: return (baseDiscovery, .competitiveFirstFinder)
+            case .collaborative: return (baseDiscovery, .collaborativeSharedFinder)
             }
-            if reason == .competitiveFirstFinder {
-                return (rewards.xp.baseDiscoveryXp + rewards.xp.firstFinderBonusXp, reason)
-            }
-            
-            return (baseDiscovery, reason)
         case .acceptedLate:
-            // Late competitive find keeps base discovery XP; first-finder bonus is not awarded.
             return (baseDiscovery, .competitiveLateFinder)
         case .acceptedShared:
             return (baseDiscovery, .collaborativeSharedFinder)

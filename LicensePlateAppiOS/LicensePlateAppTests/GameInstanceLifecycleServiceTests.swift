@@ -391,7 +391,7 @@ struct GameInstanceLifecycleServiceTests {
         #expect(game?.endedAt == endedAt)
     }
 
-    @Test func endGameIsIdempotentWhenAlreadyEndedOrCompleted() async throws {
+    @Test func endGameIsIdempotentWhenAlreadyEndedButAllowsCompletedToEnded() async throws {
         let sessionRepo = MockTripSessionRepository()
         let gameRepo = MockGameInstanceRepository()
         let eventRepo = MockTripActivityEventRepository()
@@ -430,8 +430,45 @@ struct GameInstanceLifecycleServiceTests {
         )
         try service.endGame(sessionId: sessionId, gameInstanceId: endedId)
         try service.endGame(sessionId: sessionId, gameInstanceId: completedId)
-        #expect(eventRepo.appendedEvents().filter { $0.kind == .gameEnded }.isEmpty)
-        #expect(sync.enqueueCallCount == 0)
+        #expect(eventRepo.appendedEvents().filter { $0.kind == .gameEnded }.count == 1)
+        #expect(sync.enqueueCallCount == 1)
+        let completed = try gameRepo.instance(byId: completedId)
+        #expect(completed?.commonConfig.lifecycleState == .ended)
+    }
+
+    @Test func markGameFullClearSetsCompletedAndAppendsEvent() async throws {
+        let sessionRepo = MockTripSessionRepository()
+        let gameRepo = MockGameInstanceRepository()
+        let eventRepo = MockTripActivityEventRepository()
+        let sync = MockSyncCoordinator()
+        let sessionId = UUID()
+        let gameId = UUID()
+        sessionRepo.seed(TripSession(
+            id: sessionId,
+            name: "T",
+            status: .active,
+            createdAt: Date(),
+            createdBy: "u",
+            startedAt: Date(),
+            participants: []
+        ))
+        gameRepo.seed(GameInstance(
+            id: gameId,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: CommonGameConfig(lifecycleState: .started, configLocked: true, configLockReason: .gameStarted)
+        ))
+        let service = GameInstanceLifecycleService(
+            tripSessionRepository: sessionRepo,
+            gameInstanceRepository: gameRepo,
+            tripActivityEventRepository: eventRepo,
+            tripActivityEventRecording: TripActivityEventRecordingService(tripActivityEventRepository: eventRepo, syncCoordinator: sync)
+        )
+        try service.markGameFullClear(sessionId: sessionId, gameInstanceId: gameId)
+        try service.markGameFullClear(sessionId: sessionId, gameInstanceId: gameId)
+        #expect(eventRepo.appendedEvents().filter { $0.kind == .gameCompleted }.count == 1)
+        #expect(try gameRepo.instance(byId: gameId)?.commonConfig.lifecycleState == .completed)
     }
 
     @Test func deleteGameRemovesInstanceAndEventsWhenMultipleGames() async throws {

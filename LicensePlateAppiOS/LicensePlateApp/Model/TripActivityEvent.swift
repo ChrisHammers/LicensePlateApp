@@ -20,6 +20,8 @@ enum TripActivityEventKind: String, Codable, CaseIterable, Sendable {
     case participantLeft = "participant_left"
     case gameStarted = "game_started"
     case gameEnded = "game_ended"
+    /// All regions found / completion goal met (may still later transition to `gameEnded`).
+    case gameCompleted = "game_completed"
 }
 
 /// Payload keys for TripActivityEvent (e.g. region_found, region_removed).
@@ -66,13 +68,15 @@ enum TripActivityEventPayloadKey {
     static let locationVerticalAccuracy = "locationVerticalAccuracy"
     /// Unix seconds (same style as `serverCommittedAt`).
     static let locationTimestamp = "locationTimestamp"
+    /// Client calendar day `YYYY-MM-DD` for first-find-of-day XP.
+    static let xpDayKey = "xpDayKey"
 }
 
 /// A single event in the trip lifecycle. Room for analytics and audit.
 ///
 /// **Trip vs gameplay payload:** Trip-scoped kinds (e.g. `tripStarted`, `tripEnded`, `participantJoined`, `participantLeft`)
 /// do not require `TripActivityEventPayloadKey.gameInstanceId` in the payload. Gameplay kinds that affect a specific game
-/// (`regionFound`, `regionRemoved`, `discoveryRejected`, `gameStarted`, `gameEnded`) must include `gameInstanceId` in
+/// (`regionFound`, `regionRemoved`, `discoveryRejected`, `gameStarted`, `gameEnded`, `gameCompleted`) must include `gameInstanceId` in
 /// the payload when persisting or replaying discoveries for that game.
 struct TripActivityEvent: Codable, Identifiable, Sendable {
     var id: String

@@ -34,10 +34,12 @@ enum GameInstanceLifecycleServiceError: Error, Equatable, LocalizedError {
 protocol GameInstanceLifecycleServiceProtocol: AnyObject {
     func startGame(sessionId: UUID, gameInstanceId: UUID) throws
     func endGame(sessionId: UUID, gameInstanceId: UUID) throws
+    /// Marks completion goal met: lifecycle `.completed` + `game_completed` activity event (idempotent).
+    func markGameFullClear(sessionId: UUID, gameInstanceId: UUID) throws
     func resetGame(sessionId: UUID, gameInstanceId: UUID) throws
     /// Removes this game from the trip (events + SwiftData row). Requires at least one other game on the session.
     func deleteGame(sessionId: UUID, gameInstanceId: UUID) throws
-    /// Applies `game_started` / `game_ended` from canonical activity events (multiplayer peers + bootstrap).
+    /// Applies `game_started` / `game_ended` / `game_completed` from canonical activity events (multiplayer peers + bootstrap).
     @discardableResult
     func applyRemoteGameLifecycleEvent(_ event: TripActivityEvent) throws -> Bool
 }
@@ -114,7 +116,8 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
         schedulePublishCanonicalState(sessionId: sessionId)
     }
 
-    /// Marks game ended, appends `gameEnded`, sync enqueue, analytics. Idempotent if already ended or completed.
+    /// Marks game ended, appends `gameEnded`, sync enqueue, analytics.
+    /// Idempotent if already `.ended`. Allows `.completed` → `.ended` so place / game-ended XP still fire.
     func endGame(sessionId: UUID, gameInstanceId: UUID) throws {
         guard let session = try tripSessionRepository.session(byId: sessionId) else {
             throw GameInstanceLifecycleServiceError.sessionNotFound(sessionId)
@@ -128,7 +131,7 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
         guard game.sessionId == sessionId else {
             throw GameInstanceLifecycleServiceError.gameNotInSession(gameInstanceId: gameInstanceId, sessionId: sessionId)
         }
-        if game.commonConfig.lifecycleState == .ended || game.commonConfig.lifecycleState == .completed {
+        if game.commonConfig.lifecycleState == .ended {
             return
         }
         game.commonConfig.lifecycleState = .ended
@@ -147,6 +150,36 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
             gameType: game.definitionId,
             tripSessionId: sessionId.uuidString
         ))
+        schedulePublishCanonicalState(sessionId: sessionId)
+    }
+
+    /// Full clear (all regions / goal met): set `.completed` and append `game_completed` for +XP. Idempotent.
+    func markGameFullClear(sessionId: UUID, gameInstanceId: UUID) throws {
+        guard let session = try tripSessionRepository.session(byId: sessionId) else {
+            throw GameInstanceLifecycleServiceError.sessionNotFound(sessionId)
+        }
+        if session.status == .cancelled {
+            throw GameInstanceLifecycleServiceError.sessionCancelled
+        }
+        guard var game = try gameInstanceRepository.instance(byId: gameInstanceId) else {
+            throw GameInstanceLifecycleServiceError.gameNotFound(gameInstanceId)
+        }
+        guard game.sessionId == sessionId else {
+            throw GameInstanceLifecycleServiceError.gameNotInSession(gameInstanceId: gameInstanceId, sessionId: sessionId)
+        }
+        if game.commonConfig.lifecycleState == .ended || game.commonConfig.lifecycleState == .completed {
+            return
+        }
+        game.commonConfig.lifecycleState = .completed
+        try gameInstanceRepository.update(instance: game)
+
+        let completedEvent = TripActivityEvent(
+            sessionId: sessionId,
+            kind: .gameCompleted,
+            actorId: nil,
+            payload: [TripActivityEventPayloadKey.gameInstanceId: gameInstanceId.uuidString]
+        )
+        try tripActivityEventRecording.recordForSync(completedEvent)
         schedulePublishCanonicalState(sessionId: sessionId)
     }
 
@@ -196,7 +229,9 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
 
     @discardableResult
     func applyRemoteGameLifecycleEvent(_ event: TripActivityEvent) throws -> Bool {
-        guard event.kind == .gameStarted || event.kind == .gameEnded else { return false }
+        guard event.kind == .gameStarted || event.kind == .gameEnded || event.kind == .gameCompleted else {
+            return false
+        }
         guard let gameIdStr = event.payload?[TripActivityEventPayloadKey.gameInstanceId],
               let gameId = UUID(uuidString: gameIdStr),
               var game = try gameInstanceRepository.instance(byId: gameId) else {
@@ -215,8 +250,15 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
             }
             try gameInstanceRepository.update(instance: game)
             return true
-        case .gameEnded:
+        case .gameCompleted:
             if game.commonConfig.lifecycleState == .ended || game.commonConfig.lifecycleState == .completed {
+                return false
+            }
+            game.commonConfig.lifecycleState = .completed
+            try gameInstanceRepository.update(instance: game)
+            return true
+        case .gameEnded:
+            if game.commonConfig.lifecycleState == .ended {
                 return false
             }
             game.commonConfig.lifecycleState = .ended

@@ -1,26 +1,25 @@
 import { describe, it, expect } from "vitest";
 import {
-  activityEventGrantReason,
   activityEventXpGrantId,
+  activityEventComponentXpGrantId,
   buildXpGrantDocument,
   legacyUnledgeredGrantId,
   XP_GRANT_REASON,
 } from "./xpGrantLedgerCore";
-import { KIND_GAME_ENDED } from "./progressionCore";
-import { KIND_REGION_FOUND } from "./gameplayEventResolver";
 
 describe("xpGrantLedgerCore", () => {
   it("builds stable activity grant ids", () => {
     expect(activityEventXpGrantId("u1", "evt-1")).toBe("activity|evt-1|u1");
   });
 
-  it("maps activity kinds to grant reasons", () => {
-    expect(activityEventGrantReason(KIND_REGION_FOUND)).toBe(
-      XP_GRANT_REASON.REGION_FOUND
+  it("builds component grant ids from scope", () => {
+    const id = activityEventComponentXpGrantId(
+      "u1",
+      "evt-1",
+      "xp_scope|v1|u1|s|g|US-TX|base_region_discovery"
     );
-    expect(activityEventGrantReason(KIND_GAME_ENDED)).toBe(
-      XP_GRANT_REASON.COMPETITIVE_WIN
-    );
+    expect(id).toContain("activity|evt-1|u1|");
+    expect(id).toContain("base_region_discovery");
   });
 
   it("builds grant documents with required fields", () => {
@@ -46,7 +45,7 @@ describe("xpGrantLedgerCore", () => {
   it("includes return streak daily grant reason", () => {
     const doc = buildXpGrantDocument({
       grantId: "return_streak_daily|v1|u1|2026-07-11",
-      amount: 5,
+      amount: 15,
       reason: XP_GRANT_REASON.RETURN_STREAK_DAILY,
       sourceType: "return_streak",
       sourceId: "2026-07-11",
@@ -56,4 +55,3 @@ describe("xpGrantLedgerCore", () => {
     expect(doc.sourceType).toBe("return_streak");
   });
 });
-

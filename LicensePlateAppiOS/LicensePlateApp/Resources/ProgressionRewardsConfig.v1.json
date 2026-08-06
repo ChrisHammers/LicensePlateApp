@@ -3,18 +3,16 @@
   "xp": {
     "baseDiscoveryXp": 10,
     "firstFinderBonusXp": 5,
-    "firstPlateFindBonusXp": 15,
-    "baseMultiplayerGameBonusXp": 15,
-    "competitiveFirstPlaceFinishBonusXp": 15,
+    "lifetimeUniqueRegionFindBonusXp": 20,
+    "firstFindOfDayBonusXp": 10,
+    "competitiveFirstPlaceFinishBonusXp": 25,
     "competitiveSecondPlaceFinishBonusXp": 10,
     "competitiveThirdPlaceFinishBonusXp": 5,
-    "gameContributorBonusXp": 5,
-    "tripContributorBonusXp": 10,
-    "firstTripCompletionBonusXp": 15,
-    "firstMultiplayerTripCompletionBonusXp": 15,
-    "firstGameCompletionBonusXp": 15,
-    "firstMultiplayerGameCompletionBonusXp": 15,
-    "baseMilestoneBonusXp": 25
+    "gameEndedBonusXp": 50,
+    "gameFullClearBonusXp": 200,
+    "tripEndedBonusXp": 100,
+    "tripParticipationBonusXp": 50,
+    "tripCompetitiveFirstPlaceBonusXp": 25
   },
   "policy": {
     "minimumLocalReconciliationDelta": 0

@@ -4,17 +4,27 @@
  */
 
 import * as admin from "firebase-admin";
-import { KIND_REGION_FOUND } from "./gameplayEventResolver";
-import { KIND_GAME_ENDED } from "./progressionCore";
 
 export const XP_GRANT_SCHEMA_VERSION = 1;
 
 export const XP_GRANT_REASON = {
   REGION_FOUND: "region_found_base_discovery",
-  COMPETITIVE_WIN: "competitive_first_place_finish",
+  COMPETITIVE_FIRST_FINDER: "competitive_first_finder",
+  LIFETIME_UNIQUE_REGION: "lifetime_unique_region",
+  FIRST_FIND_OF_DAY: "first_find_of_day",
+  COMPETITIVE_FIRST_PLACE: "competitive_first_place_finish",
+  COMPETITIVE_SECOND_PLACE: "competitive_second_place_finish",
+  COMPETITIVE_THIRD_PLACE: "competitive_third_place_finish",
+  GAME_ENDED: "game_ended",
+  GAME_FULL_CLEAR: "game_full_clear",
+  TRIP_ENDED: "trip_ended",
+  TRIP_PARTICIPATION: "trip_participation",
+  TRIP_COMPETITIVE_FIRST: "trip_competitive_first_place",
   ACHIEVEMENT: "achievement_unlock",
   RETURN_STREAK_DAILY: "return_streak_daily",
   LEGACY: "legacy_unledgered_balance",
+  /** @deprecated alias — prefer COMPETITIVE_FIRST_PLACE */
+  COMPETITIVE_WIN: "competitive_first_place_finish",
 } as const;
 
 export type XpGrantReason = (typeof XP_GRANT_REASON)[keyof typeof XP_GRANT_REASON];
@@ -37,18 +47,21 @@ export function activityEventXpGrantId(userId: string, eventId: string): string 
   return `activity|${eventId}|${userId}`;
 }
 
-export function legacyUnledgeredGrantId(): string {
-  return "legacy_unledgered_balance|v1";
+export function activityEventComponentXpGrantId(
+  userId: string,
+  eventId: string,
+  scopeKey: string
+): string {
+  // Scope keys are unique per component; hash-safe by embedding (Firestore doc id max 1500).
+  const safe = scopeKey.replace(/[/\\]/g, "_");
+  const id = `activity|${eventId}|${userId}|${safe}`;
+  if (id.length <= 700) return id;
+  // Fallback: stable truncation with length suffix
+  return `activity|${eventId}|${userId}|${safe.slice(0, 200)}|${safe.length}`;
 }
 
-export function activityEventGrantReason(kind: string): XpGrantReason {
-  if (kind === KIND_REGION_FOUND) {
-    return XP_GRANT_REASON.REGION_FOUND;
-  }
-  if (kind === KIND_GAME_ENDED) {
-    return XP_GRANT_REASON.COMPETITIVE_WIN;
-  }
-  throw new Error(`unsupported activity kind for xp grant: ${kind}`);
+export function legacyUnledgeredGrantId(): string {
+  return "legacy_unledgered_balance|v1";
 }
 
 export function xpGrantCollectionRef(db: admin.firestore.Firestore, userId: string) {
@@ -84,6 +97,8 @@ export function buildXpGrantDocument(input: XpGrantWriteInput): Record<string, u
 
 /**
  * Writes a grant document when absent. Returns true when a new grant row was staged.
+ * Must be the only read/write pair if used alone — for multiple grants in one transaction,
+ * use `stageXpGrantsIfAbsent` so all reads happen before any writes.
  */
 export async function writeXpGrantIfAbsent(
   tx: admin.firestore.Transaction,
@@ -91,16 +106,37 @@ export async function writeXpGrantIfAbsent(
   userId: string,
   input: XpGrantWriteInput
 ): Promise<boolean> {
-  if (!Number.isFinite(input.amount) || input.amount <= 0) {
-    return false;
+  const staged = await stageXpGrantsIfAbsent(tx, db, userId, [input]);
+  return staged === 1;
+}
+
+/**
+ * Stages zero or more grant docs after reading all grant refs first (Firestore txn rule).
+ * Returns how many new grant rows were staged.
+ */
+export async function stageXpGrantsIfAbsent(
+  tx: admin.firestore.Transaction,
+  db: admin.firestore.Firestore,
+  userId: string,
+  inputs: XpGrantWriteInput[]
+): Promise<number> {
+  const valid = inputs.filter((input) => Number.isFinite(input.amount) && input.amount > 0);
+  if (valid.length === 0) {
+    return 0;
   }
-  const ref = xpGrantDocRef(db, userId, input.grantId);
-  const snap = await tx.get(ref);
-  if (snap.exists) {
-    return false;
+
+  const refs = valid.map((input) => xpGrantDocRef(db, userId, input.grantId));
+  const snaps = await Promise.all(refs.map((ref) => tx.get(ref)));
+
+  let staged = 0;
+  for (let i = 0; i < valid.length; i++) {
+    if (snaps[i].exists) {
+      continue;
+    }
+    tx.set(refs[i], buildXpGrantDocument(valid[i]));
+    staged += 1;
   }
-  tx.set(ref, buildXpGrantDocument(input));
-  return true;
+  return staged;
 }
 
 export function sumXpGrantAmounts(

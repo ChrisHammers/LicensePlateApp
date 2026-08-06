@@ -13,18 +13,16 @@ struct ProgressionRewardsConfigTests {
         let xp = ProgressionRewardsConfig.bundledDefault.xp
         #expect(xp.baseDiscoveryXp == GameProgressionXPRewards.baseDiscoveryXp)
         #expect(xp.firstFinderBonusXp == GameProgressionXPRewards.firstFinderBonusXp)
-        #expect(xp.firstPlateFindBonusXp == GameProgressionXPRewards.firstPlateFindBonusXp)
-        #expect(xp.baseMultiplayerGameBonusXp == GameProgressionXPRewards.baseMultiplayerGameBonusXp)
+        #expect(xp.lifetimeUniqueRegionFindBonusXp == GameProgressionXPRewards.lifetimeUniqueRegionFindBonusXp)
+        #expect(xp.firstFindOfDayBonusXp == GameProgressionXPRewards.firstFindOfDayBonusXp)
         #expect(xp.competitiveFirstPlaceFinishBonusXp == GameProgressionXPRewards.competitiveFirstPlaceFinishBonusXp)
         #expect(xp.competitiveSecondPlaceFinishBonusXp == GameProgressionXPRewards.competitiveSecondPlaceFinishBonusXp)
         #expect(xp.competitiveThirdPlaceFinishBonusXp == GameProgressionXPRewards.competitiveThirdPlaceFinishBonusXp)
-        #expect(xp.gameContributorBonusXp == GameProgressionXPRewards.gameContributorBonusXp)
-        #expect(xp.tripContributorBonusXp == GameProgressionXPRewards.tripContributorBonusXp)
-        #expect(xp.firstTripCompletionBonusXp == GameProgressionXPRewards.firstTripCompletionBonusXp)
-        #expect(xp.firstMultiplayerTripCompletionBonusXp == GameProgressionXPRewards.firstMuliplayerTripCompletionBonusXp)
-        #expect(xp.firstGameCompletionBonusXp == GameProgressionXPRewards.firstGameCompletionBonusXp)
-        #expect(xp.firstMultiplayerGameCompletionBonusXp == GameProgressionXPRewards.firstMulitplayerGameCompletionBonusXp)
-        #expect(xp.baseMilestoneBonusXp == GameProgressionXPRewards.baseMilestoneBonusXp)
+        #expect(xp.gameEndedBonusXp == GameProgressionXPRewards.gameEndedBonusXp)
+        #expect(xp.gameFullClearBonusXp == GameProgressionXPRewards.gameFullClearBonusXp)
+        #expect(xp.tripEndedBonusXp == GameProgressionXPRewards.tripEndedBonusXp)
+        #expect(xp.tripParticipationBonusXp == GameProgressionXPRewards.tripParticipationBonusXp)
+        #expect(xp.tripCompetitiveFirstPlaceBonusXp == GameProgressionXPRewards.tripCompetitiveFirstPlaceBonusXp)
         #expect(ProgressionRewardsConfig.bundledDefault.policy.minimumLocalReconciliationDelta
             == GameProgressionXPRewards.minimumLocalReconciliationDelta)
     }
@@ -198,5 +196,21 @@ struct ProgressionRewardsConfigTests {
     @Test func rankLadderFromCatalogAtTenThousandXp() {
         let ladder = ProgressionCatalogProjection.rankLadder(from: .bundledDefault)
         #expect(ladder.currentRank(xp: 10_000).level == 4)
+    }
+
+    @Test func bundledAmountsMatchProductTable() {
+        let xp = ProgressionRewardsConfig.bundledDefault.xp
+        #expect(xp.baseDiscoveryXp == 10)
+        #expect(xp.firstFinderBonusXp == 5)
+        #expect(xp.lifetimeUniqueRegionFindBonusXp == 20)
+        #expect(xp.firstFindOfDayBonusXp == 10)
+        #expect(xp.competitiveFirstPlaceFinishBonusXp == 25)
+        #expect(xp.competitiveSecondPlaceFinishBonusXp == 10)
+        #expect(xp.competitiveThirdPlaceFinishBonusXp == 5)
+        #expect(xp.gameEndedBonusXp == 50)
+        #expect(xp.gameFullClearBonusXp == 200)
+        #expect(xp.tripEndedBonusXp == 100)
+        #expect(xp.tripParticipationBonusXp == 50)
+        #expect(xp.tripCompetitiveFirstPlaceBonusXp == 25)
     }
 }

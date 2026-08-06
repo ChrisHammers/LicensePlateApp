@@ -101,7 +101,7 @@ struct XpReconciliationServiceTests {
             finalOutcome: .acceptedFirst,
             tripScoringOutcome: .acceptedFirst,
             personalHistoryOutcome: .acceptedFirst,
-            finalXpAward: 15,
+            finalXpAward: 10,
             xpReason: .competitiveFirstFinder
         )
         let events = MockTripActivityEventRepository()
@@ -122,8 +122,8 @@ struct XpReconciliationServiceTests {
         let rows = try XpLedgerRepository.shared.ledgerEvents(forUniquenessKey: key)
         let active = rows.filter { $0.status != .voided }
         #expect(rows.contains { $0.status == .voided && $0.grantKind == .provisionalDiscoveryXp })
-        #expect(active.contains { $0.grantKind == .finalDiscoveryAward && $0.xpDelta == 15 })
-        #expect(active.reduce(0) { $0 + $1.xpDelta } == 15)
+        #expect(active.contains { $0.grantKind == .finalDiscoveryAward && $0.xpDelta == 10 })
+        #expect(active.reduce(0) { $0 + $1.xpDelta } == 10)
     }
 
     @Test func consumeAcceptedLateKeepsBase10WithNoClawback() throws {

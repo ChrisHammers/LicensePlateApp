@@ -318,11 +318,41 @@
           ],
           "ledgerReasonCodes": [
             "solo_new_discovery",
-            "competitive_first_finder",
             "competitive_late_finder",
             "collaborative_shared_finder",
             "discovery_claim_pending_resolution"
-          ]
+          ],
+          "grantReasons": ["region_found_base_discovery"]
+        }
+      },
+      {
+        "id": "first_finder",
+        "displayOrder": 11,
+        "titleKeySingle": "xp.toast.group.first_finder.single",
+        "titleKeyMulti": "xp.toast.group.first_finder.multi",
+        "matchers": {
+          "ledgerReasonCodes": ["competitive_first_finder"],
+          "grantReasons": ["competitive_first_finder"]
+        }
+      },
+      {
+        "id": "lifetime_unique",
+        "displayOrder": 12,
+        "titleKeySingle": "xp.toast.group.lifetime_unique.single",
+        "titleKeyMulti": "xp.toast.group.lifetime_unique.multi",
+        "matchers": {
+          "ledgerReasonCodes": ["lifetime_unique_region"],
+          "grantReasons": ["lifetime_unique_region"]
+        }
+      },
+      {
+        "id": "first_of_day",
+        "displayOrder": 13,
+        "titleKeySingle": "xp.toast.group.first_of_day.single",
+        "titleKeyMulti": "xp.toast.group.first_of_day.multi",
+        "matchers": {
+          "ledgerReasonCodes": ["first_find_of_day"],
+          "grantReasons": ["first_find_of_day"]
         }
       },
       {
@@ -346,16 +376,74 @@
           "ledgerReasonCodes": ["return_streak_daily"],
           "clientEventKinds": ["return_streak"]
         },
-        "xpReward": 5,
+        "xpReward": 15,
         "minStreakForXpReward": 2
       },
       {
-        "id": "competitive_win",
+        "id": "competitive_place",
         "displayOrder": 40,
-        "titleKeySingle": "xp.toast.group.competitive_win.single",
-        "titleKeyMulti": "xp.toast.group.competitive_win.multi",
+        "titleKeySingle": "xp.toast.group.competitive_place.single",
+        "titleKeyMulti": "xp.toast.group.competitive_place.multi",
         "matchers": {
-          "grantReasons": ["competitive_first_place_finish"]
+          "ledgerReasonCodes": [
+            "competitive_second_place_finish",
+            "competitive_third_place_finish"
+          ],
+          "grantReasons": [
+            "competitive_first_place_finish",
+            "competitive_second_place_finish",
+            "competitive_third_place_finish"
+          ]
+        }
+      },
+      {
+        "id": "game_ended",
+        "displayOrder": 50,
+        "titleKeySingle": "xp.toast.group.game_ended.single",
+        "titleKeyMulti": "xp.toast.group.game_ended.multi",
+        "matchers": {
+          "ledgerReasonCodes": ["game_ended"],
+          "grantReasons": ["game_ended"]
+        }
+      },
+      {
+        "id": "game_full_clear",
+        "displayOrder": 51,
+        "titleKeySingle": "xp.toast.group.game_full_clear.single",
+        "titleKeyMulti": "xp.toast.group.game_full_clear.multi",
+        "matchers": {
+          "ledgerReasonCodes": ["game_full_clear"],
+          "grantReasons": ["game_full_clear"]
+        }
+      },
+      {
+        "id": "trip_ended",
+        "displayOrder": 60,
+        "titleKeySingle": "xp.toast.group.trip_ended.single",
+        "titleKeyMulti": "xp.toast.group.trip_ended.multi",
+        "matchers": {
+          "ledgerReasonCodes": ["trip_ended"],
+          "grantReasons": ["trip_ended"]
+        }
+      },
+      {
+        "id": "trip_participation",
+        "displayOrder": 61,
+        "titleKeySingle": "xp.toast.group.trip_participation.single",
+        "titleKeyMulti": "xp.toast.group.trip_participation.multi",
+        "matchers": {
+          "ledgerReasonCodes": ["trip_participation"],
+          "grantReasons": ["trip_participation"]
+        }
+      },
+      {
+        "id": "trip_competitive_first",
+        "displayOrder": 62,
+        "titleKeySingle": "xp.toast.group.trip_competitive_first.single",
+        "titleKeyMulti": "xp.toast.group.trip_competitive_first.multi",
+        "matchers": {
+          "ledgerReasonCodes": ["trip_competitive_first_place"],
+          "grantReasons": ["trip_competitive_first_place"]
         }
       },
       {

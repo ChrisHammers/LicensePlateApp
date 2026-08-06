@@ -180,9 +180,9 @@ final class TripActivityEventRepository: ObservableObject, TripActivityEventRepo
             guard let sid = UUID(uuidString: entity.sessionId) else { continue }
             let event = entityToEvent(entity)
             switch event.kind {
-            case .gameEnded:
+            case .gameEnded, .gameCompleted, .tripEnded:
                 sessions.insert(sid)
-            case .regionFound:
+            case .regionFound, .discoveryRejected:
                 let payloadPid = event.payload?[TripActivityEventPayloadKey.participantId] ?? ""
                 if !payloadPid.isEmpty, payloadPid == userId {
                     sessions.insert(sid)

@@ -83,9 +83,9 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
         var ids = Set<UUID>()
         for event in events {
             switch event.kind {
-            case .gameEnded:
+            case .gameEnded, .gameCompleted, .tripEnded:
                 ids.insert(event.sessionId)
-            case .regionFound:
+            case .regionFound, .discoveryRejected:
                 let payloadPid = event.payload?[TripActivityEventPayloadKey.participantId] ?? ""
                 if !payloadPid.isEmpty, payloadPid == userId {
                     ids.insert(event.sessionId)

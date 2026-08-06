@@ -905,7 +905,8 @@ final class LicensePlateGameViewModel: ObservableObject {
             TripActivityEventPayloadKey.gameInstanceId: game.id.uuidString,
             TripActivityEventPayloadKey.participantId: participantId,
             TripActivityEventPayloadKey.inputMethod: inputMethod.rawValue,
-            TripActivityEventPayloadKey.discoveryEventId: discoveryEventId
+            TripActivityEventPayloadKey.discoveryEventId: discoveryEventId,
+            TripActivityEventPayloadKey.xpDayKey: Self.calendarDayKey(for: Date())
         ]
         if let locationFields = locationPayloadFieldsForDiscovery() {
             payload.merge(locationFields) { _, new in new }
@@ -950,6 +951,20 @@ final class LicensePlateGameViewModel: ObservableObject {
                         gameType: game.definitionId,
                         tripSessionId: sessionId.uuidString
                     ))
+                    do {
+                        try gameInstanceLifecycleService.markGameFullClear(
+                            sessionId: sessionId,
+                            gameInstanceId: game.id
+                        )
+                        if let refreshed = try? gameInstanceRepository.instance(byId: game.id) {
+                            game = refreshed
+                        }
+                    } catch {
+                        AnalyticsService.shared.log(.persistenceSaveFailed(
+                            context: "game_full_clear",
+                            error: error.localizedDescription
+                        ))
+                    }
                 }
             }
             return .success
@@ -957,6 +972,14 @@ final class LicensePlateGameViewModel: ObservableObject {
             AnalyticsService.shared.log(.persistenceSaveFailed(context: "trip_tracker_discovery", error: error.localizedDescription))
             return .failure(error)
         }
+    }
+
+    private static func calendarDayKey(for date: Date, calendar: Calendar = .current) -> String {
+        let c = calendar.dateComponents([.year, .month, .day], from: date)
+        let y = c.year ?? 0
+        let m = c.month ?? 0
+        let d = c.day ?? 0
+        return String(format: "%04d-%02d-%02d", y, m, d)
     }
 
     /// One-shot cache warm so find-time capture has a fresh fix even without a map or

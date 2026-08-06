@@ -3,7 +3,7 @@
 //  LicensePlateApp
 //
 //  Typed, versioned progression rewards table (Phase 1 lite).
-//  Authoritative XP values must stay aligned with functions/src/progressionCore.ts.
+//  Authoritative XP values must stay aligned with functions/src/progressionXpAmounts.ts.
 //
 
 import Foundation
@@ -24,18 +24,16 @@ struct ProgressionRewardsConfig: Codable, Equatable, Sendable {
 struct ProgressionXpRewards: Codable, Equatable, Sendable {
     var baseDiscoveryXp: Int
     var firstFinderBonusXp: Int
-    var firstPlateFindBonusXp: Int
-    var baseMultiplayerGameBonusXp: Int
+    var lifetimeUniqueRegionFindBonusXp: Int
+    var firstFindOfDayBonusXp: Int
     var competitiveFirstPlaceFinishBonusXp: Int
     var competitiveSecondPlaceFinishBonusXp: Int
     var competitiveThirdPlaceFinishBonusXp: Int
-    var gameContributorBonusXp: Int
-    var tripContributorBonusXp: Int
-    var firstTripCompletionBonusXp: Int
-    var firstMultiplayerTripCompletionBonusXp: Int
-    var firstGameCompletionBonusXp: Int
-    var firstMultiplayerGameCompletionBonusXp: Int
-    var baseMilestoneBonusXp: Int
+    var gameEndedBonusXp: Int
+    var gameFullClearBonusXp: Int
+    var tripEndedBonusXp: Int
+    var tripParticipationBonusXp: Int
+    var tripCompetitiveFirstPlaceBonusXp: Int
 }
 
 // MARK: - Policy
@@ -61,18 +59,16 @@ extension ProgressionRewardsConfig {
         xp: ProgressionXpRewards(
             baseDiscoveryXp: 10,
             firstFinderBonusXp: 5,
-            firstPlateFindBonusXp: 15,
-            baseMultiplayerGameBonusXp: 15,
-            competitiveFirstPlaceFinishBonusXp: 15,
+            lifetimeUniqueRegionFindBonusXp: 20,
+            firstFindOfDayBonusXp: 10,
+            competitiveFirstPlaceFinishBonusXp: 25,
             competitiveSecondPlaceFinishBonusXp: 10,
             competitiveThirdPlaceFinishBonusXp: 5,
-            gameContributorBonusXp: 5,
-            tripContributorBonusXp: 10,
-            firstTripCompletionBonusXp: 15,
-            firstMultiplayerTripCompletionBonusXp: 15,
-            firstGameCompletionBonusXp: 15,
-            firstMultiplayerGameCompletionBonusXp: 15,
-            baseMilestoneBonusXp: 25
+            gameEndedBonusXp: 50,
+            gameFullClearBonusXp: 200,
+            tripEndedBonusXp: 100,
+            tripParticipationBonusXp: 50,
+            tripCompetitiveFirstPlaceBonusXp: 25
         ),
         policy: ProgressionPolicyRewards(minimumLocalReconciliationDelta: 0),
         presentation: ProgressionPresentationRewards(visualBandSize: 100, xpPerRankLevel: 3_000)
