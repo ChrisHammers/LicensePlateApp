@@ -747,6 +747,7 @@ class UserRepository: ObservableObject {
         
         user.avatarId = data["avatarId"] as? String
         user.equippedBadgeId = data["equippedBadgeId"] as? String
+        user.equippedLicenseCosmeticId = data["equippedLicenseCosmeticId"] as? String
         user.wasEverInFamily = data["wasEverInFamily"] as? Bool ?? false
         
         return user
@@ -790,6 +791,7 @@ class UserRepository: ObservableObject {
                 existing.friendCount = user.friendCount
                 existing.avatarId = user.avatarId
                 existing.equippedBadgeId = user.equippedBadgeId
+                existing.equippedLicenseCosmeticId = user.equippedLicenseCosmeticId
                 existing.wasEverInFamily = user.wasEverInFamily
                 if existing.firebaseUID == nil, let f = user.firebaseUID {
                     existing.firebaseUID = f

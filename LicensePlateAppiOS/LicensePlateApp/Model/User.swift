@@ -48,6 +48,7 @@ final class AppUser {
     // Avatar & Badge (MVP Identity)
     var avatarId: String? // Catalog avatar ID (source of truth for display)
     var equippedBadgeId: String? // MVP: one equipped badge slot
+    var equippedLicenseCosmeticId: String? // Catalog Explorers license skin id (public profile)
     var wasEverInFamily: Bool = false // Keeps family unlocks after leaving
     
     // Friends & Family fields
@@ -84,6 +85,7 @@ final class AppUser {
         isPhonePublic: Bool = false,
         avatarId: String? = nil,
         equippedBadgeId: String? = nil,
+        equippedLicenseCosmeticId: String? = nil,
         wasEverInFamily: Bool = false,
         isRetiredGeneral: Bool = false,
         activeFamilyId: String? = nil,
@@ -111,6 +113,7 @@ final class AppUser {
         self.isPhonePublic = isPhonePublic
         self.avatarId = avatarId
         self.equippedBadgeId = equippedBadgeId
+        self.equippedLicenseCosmeticId = equippedLicenseCosmeticId
         self.wasEverInFamily = wasEverInFamily
         self.isRetiredGeneral = isRetiredGeneral
         self.activeFamilyId = activeFamilyId

@@ -38,7 +38,10 @@ struct StandardProfileView: View {
                 Section {
                     ProfileDriversLicenseCardSection(
                         license: viewModel.makeLicense(isRoyale: isRoyale),
-                        user: viewModel.user
+                        user: viewModel.user,
+                        style: LicenseCosmetic.first(
+                            viewModel.user.equippedLicenseCosmeticId ?? "standard"
+                        ).style
                     )
                 }
                 .listRowBackground(Color.clear)

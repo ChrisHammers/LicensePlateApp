@@ -93,6 +93,7 @@ class AnalyticsService: AnalyticsLogging {
         case badgeProgress(badgeId: String, progress: Int)
         case badgeUnlocked(badgeId: String)
         case badgeEquipped(badgeId: String)
+        case licenseCosmeticEquipped(cosmeticId: String, source: String)
         case founderEntitlementGranted
         case founderEntitlementGrantSkipped(reason: String)
 
@@ -395,6 +396,7 @@ class AnalyticsService: AnalyticsLogging {
             case .badgeProgress: return "badge_progress"
             case .badgeUnlocked: return "badge_unlocked"
             case .badgeEquipped: return "badge_equipped"
+            case .licenseCosmeticEquipped: return "license_cosmetic_equipped"
             case .founderEntitlementGranted: return "founder_entitlement_granted"
             case .founderEntitlementGrantSkipped: return "founder_entitlement_grant_skipped"
             case .tripInvitesScreenOpened: return "trip_invites_screen_opened"
@@ -588,6 +590,8 @@ class AnalyticsService: AnalyticsLogging {
                 return ["badge_id": badgeId, "progress": progress]
             case .badgeUnlocked(let badgeId), .badgeEquipped(let badgeId):
                 return ["badge_id": badgeId]
+            case .licenseCosmeticEquipped(let cosmeticId, let source):
+                return ["cosmetic_id": cosmeticId, "source": source]
             case .founderEntitlementGranted:
                 return nil
             case .founderEntitlementGrantSkipped(let reason):

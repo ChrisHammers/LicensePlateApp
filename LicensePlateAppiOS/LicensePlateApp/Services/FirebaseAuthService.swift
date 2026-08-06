@@ -1592,6 +1592,7 @@ class FirebaseAuthService: ObservableObject {
             existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
             existingUser.avatarId = firestoreUser.avatarId
             existingUser.equippedBadgeId = firestoreUser.equippedBadgeId
+            existingUser.equippedLicenseCosmeticId = firestoreUser.equippedLicenseCosmeticId
             existingUser.wasEverInFamily = firestoreUser.wasEverInFamily
             // Friends & Family fields
             existingUser.activeFamilyId = firestoreUser.activeFamilyId
@@ -1653,6 +1654,9 @@ class FirebaseAuthService: ObservableObject {
         if let equippedBadgeId = user.equippedBadgeId {
             data["equippedBadgeId"] = equippedBadgeId
         }
+        if let equippedLicenseCosmeticId = user.equippedLicenseCosmeticId {
+            data["equippedLicenseCosmeticId"] = equippedLicenseCosmeticId
+        }
         // wasEverInFamily is server-owned (set on family join/leave); never overwrite from client.
         data["deviceIdentifier"] = FieldValue.delete()
         // Soft-retire legacy avatar identity (catalog avatarId is source of truth).
@@ -1706,6 +1710,7 @@ class FirebaseAuthService: ObservableObject {
         let userImageURL = data["userImageURL"] as? String
         let avatarId = data["avatarId"] as? String
         let equippedBadgeId = data["equippedBadgeId"] as? String
+        let equippedLicenseCosmeticId = data["equippedLicenseCosmeticId"] as? String
         let wasEverInFamily = data["wasEverInFamily"] as? Bool ?? false
         let deviceIdentifier = data["deviceIdentifier"] as? String
         let isUsernameManuallyChanged = data["isUsernameManuallyChanged"] as? Bool ?? false
@@ -1811,6 +1816,7 @@ class FirebaseAuthService: ObservableObject {
             isPhonePublic: isPhonePublic,
             avatarId: avatarId,
             equippedBadgeId: equippedBadgeId,
+            equippedLicenseCosmeticId: equippedLicenseCosmeticId,
             wasEverInFamily: wasEverInFamily,
             isRetiredGeneral: isRetiredGeneral,
             activeFamilyId: activeFamilyId,

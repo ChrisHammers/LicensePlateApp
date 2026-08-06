@@ -2,9 +2,8 @@
 //  LicenseCosmeticStore.swift
 //  LicensePlateApp
 //
-//  Local equip + ownership for Explorer license skins.
-//  Persistence is UserDefaults (no SwiftData schema change) so the wallet can be tried
-//  without cloud sync. Replace with entitlement/progression grants when shipping.
+//  UI cache + ownership for Explorer license skins.
+//  Source of truth is AppUser.equippedLicenseCosmeticId (synced to Firestore like avatarId).
 //
 
 import Foundation
@@ -19,18 +18,22 @@ final class LicenseCosmeticStore: ObservableObject {
     @Published private(set) var ownedIDs: Set<String> = [LicenseCosmetic.catalog[0].id]
 
     private var userId: String?
+    private weak var boundUser: AppUser?
     private let defaults = UserDefaults.standard
 
     private init() {}
 
-    /// Bind store to the signed-in user and recompute ownership from rank.
-    func configure(userId: String, rankLevel: Int) {
+    /// Bind store to the signed-in user, hydrate equipped id from AppUser, and recompute ownership.
+    func configure(user: AppUser, rankLevel: Int) {
         let normalizedRank = max(1, rankLevel)
-        let userChanged = self.userId != userId
-        self.userId = userId
+        let userChanged = self.userId != user.id
+        self.userId = user.id
+        self.boundUser = user
         ownedIDs = Self.computeOwnedIDs(rankLevel: normalizedRank)
         if userChanged {
-            equippedID = loadEquippedID(for: userId)
+            equippedID = resolveEquippedID(for: user)
+        } else if let current = user.equippedLicenseCosmeticId, ownedIDs.contains(current) {
+            equippedID = current
         }
         // Keep equipped valid against current ownership.
         if !ownedIDs.contains(equippedID) {
@@ -51,12 +54,27 @@ final class LicenseCosmeticStore: ObservableObject {
 
     func equip(_ id: String) {
         guard ownedIDs.contains(id) else { return }
-        guard equippedID != id else { return }
-        equippedID = id
-        if let userId {
-            defaults.set(id, forKey: Self.equippedKey(userId: userId))
+        guard equippedID != id else {
+            // Still mirror onto AppUser if store and model drifted.
+            if boundUser?.equippedLicenseCosmeticId != id {
+                boundUser?.equippedLicenseCosmeticId = id
+                boundUser?.lastUpdated = .now
+            }
+            return
         }
+        equippedID = id
+        boundUser?.equippedLicenseCosmeticId = id
+        boundUser?.lastUpdated = .now
         FeedbackService.shared.selectionChange()
+    }
+
+    /// Ensures the bound user row matches the in-memory equipped id (e.g. before profile sync).
+    func applyEquippedIDToBoundUser() {
+        guard let boundUser else { return }
+        if boundUser.equippedLicenseCosmeticId != equippedID {
+            boundUser.equippedLicenseCosmeticId = equippedID
+            boundUser.lastUpdated = .now
+        }
     }
 
     // MARK: - Ownership
@@ -76,12 +94,32 @@ final class LicenseCosmeticStore: ObservableObject {
 
     // MARK: - Persistence
 
-    private func loadEquippedID(for userId: String) -> String {
-        let stored = defaults.string(forKey: Self.equippedKey(userId: userId))
-        if let stored, ownedIDs.contains(stored) {
-            return stored
+    /// Prefer AppUser; one-time promote legacy UserDefaults into AppUser, then clear defaults.
+    private func resolveEquippedID(for user: AppUser) -> String {
+        if let fromUser = user.equippedLicenseCosmeticId, ownedIDs.contains(fromUser) {
+            clearLegacyDefaults(for: user.id)
+            return fromUser
         }
-        return LicenseCosmetic.catalog[0].id
+
+        let key = Self.equippedKey(userId: user.id)
+        if let fromDefaults = defaults.string(forKey: key), ownedIDs.contains(fromDefaults) {
+            user.equippedLicenseCosmeticId = fromDefaults
+            user.lastUpdated = .now
+            defaults.removeObject(forKey: key)
+            return fromDefaults
+        }
+
+        let fallback = LicenseCosmetic.catalog[0].id
+        if user.equippedLicenseCosmeticId == nil {
+            user.equippedLicenseCosmeticId = fallback
+            user.lastUpdated = .now
+        }
+        clearLegacyDefaults(for: user.id)
+        return user.equippedLicenseCosmeticId.flatMap { ownedIDs.contains($0) ? $0 : nil } ?? fallback
+    }
+
+    private func clearLegacyDefaults(for userId: String) {
+        defaults.removeObject(forKey: Self.equippedKey(userId: userId))
     }
 
     private static func equippedKey(userId: String) -> String {

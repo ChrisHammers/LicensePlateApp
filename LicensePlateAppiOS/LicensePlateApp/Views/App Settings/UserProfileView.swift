@@ -593,12 +593,12 @@ struct UserProfileView: View {
                 lifetimeStatsViewModel.onAppear()
                 xpProgressViewModel.refresh()
                 licenseCosmeticStore.configure(
-                    userId: user.id,
+                    user: user,
                     rankLevel: gameLicense.rankLevel
                 )
             }
             .onChange(of: gameLicense.rankLevel) { _, newLevel in
-                licenseCosmeticStore.configure(userId: user.id, rankLevel: newLevel)
+                licenseCosmeticStore.configure(user: user, rankLevel: newLevel)
             }
             .onChange(of: user.userName) { oldValue, newValue in
                 currentUserName = newValue
@@ -623,7 +623,18 @@ struct UserProfileView: View {
                     license: gameLicense,
                     user: user,
                     store: licenseCosmeticStore,
-                    onDismiss: { showLicenseWalletSheet = false }
+                    onSave: {
+                        licenseCosmeticStore.applyEquippedIDToBoundUser()
+                        try? modelContext.save()
+                        syncProfileToFirestoreIfNeeded()
+                        AnalyticsService.shared.log(
+                            .licenseCosmeticEquipped(
+                                cosmeticId: user.equippedLicenseCosmeticId ?? licenseCosmeticStore.equippedID,
+                                source: "profile"
+                            )
+                        )
+                        showLicenseWalletSheet = false
+                    }
                 )
             }
             .onChange(of: user.firstName) { oldValue, newValue in
@@ -865,7 +876,7 @@ private struct ProfileLicenseWalletSheet: View {
     let license: UserDriversLicense
     let user: AppUser
     @ObservedObject var store: LicenseCosmeticStore
-    let onDismiss: () -> Void
+    let onSave: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -884,7 +895,7 @@ private struct ProfileLicenseWalletSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done".localized) {
                         FeedbackService.shared.buttonTap()
-                        onDismiss()
+                        onSave()
                     }
                     .fontWeight(.semibold)
                     .foregroundStyle(Color.Theme.primaryBlue)

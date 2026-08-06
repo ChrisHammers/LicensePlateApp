@@ -84,6 +84,7 @@ struct AuthProfileSyncPolicyTests {
             firebaseUID: "uid-1"
         )
         cloud.avatarId = "cat"
+        cloud.equippedLicenseCosmeticId = "gold"
         cloud.isEmailPublic = true
         cloud.isPhonePublic = false
 
@@ -97,10 +98,20 @@ struct AuthProfileSyncPolicyTests {
         #expect(local.phoneNumber == "2035551111")
         #expect(local.isUsernameManuallyChanged == true)
         #expect(local.avatarId == "cat")
+        #expect(local.equippedLicenseCosmeticId == "gold")
         #expect(local.isEmailPublic == true)
         #expect(local.isPhonePublic == false)
         #expect(local.needsSync == false)
         #expect(local.lastSyncedToFirebase == syncedAt)
+    }
+
+    @Test func applyCloudProfileCopiesEquippedLicenseCosmeticId() {
+        let local = AppUser(id: "uid-2", userName: "Local", equippedLicenseCosmeticId: "standard")
+        let cloud = AppUser(id: "uid-2", userName: "Cloud", equippedLicenseCosmeticId: "neon")
+
+        AuthProfileSyncPolicy.applyCloudProfile(cloud, to: local, isAnonymous: false)
+
+        #expect(local.equippedLicenseCosmeticId == "neon")
     }
 
     @Test func applyCloudProfileSkipsEmailForAnonymous() {

@@ -81,6 +81,7 @@ enum AuthProfileSyncPolicy {
         local.linkedPlatforms = cloud.linkedPlatforms
         local.avatarId = cloud.avatarId
         local.equippedBadgeId = cloud.equippedBadgeId
+        local.equippedLicenseCosmeticId = cloud.equippedLicenseCosmeticId
         local.wasEverInFamily = cloud.wasEverInFamily
         local.activeFamilyId = cloud.activeFamilyId
         local.friendCount = cloud.friendCount
