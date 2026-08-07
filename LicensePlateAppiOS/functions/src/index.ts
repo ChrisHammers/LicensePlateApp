@@ -51,4 +51,5 @@ export {
   onUserProfileSearchIndexSync,
   onUserContactSearchIndexSync,
 } from "./userSearch";
+export { onUserProfileSendWelcomeEmail } from "./welcomeEmail";
 
