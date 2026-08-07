@@ -943,7 +943,11 @@ extension UserDriversLicenseCard where Portrait == LicensePortraitPlaceholder {
 struct LicenseCornerButton: View {
     let systemImage: String
     var size: CGFloat = 30
+    /// Invisible padding so the control meets the 44pt minimum touch target.
+    var minimumTouchTarget: CGFloat = 44
     let action: () -> Void
+
+    private var touchSide: CGFloat { max(size, minimumTouchTarget) }
 
     var body: some View {
         Button(action: action) {
@@ -953,6 +957,8 @@ struct LicenseCornerButton: View {
                 .frame(width: size, height: size)
                 .background(.black.opacity(0.4), in: Circle())
                 .overlay(Circle().strokeBorder(.white.opacity(0.55), lineWidth: 1))
+                .frame(width: touchSide, height: touchSide)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

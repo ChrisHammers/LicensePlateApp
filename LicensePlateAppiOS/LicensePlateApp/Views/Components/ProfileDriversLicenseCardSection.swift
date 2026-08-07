@@ -29,6 +29,7 @@ struct ProfileDriversLicenseCardSection: View {
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
 
+            /*
             if showsLicenseCustomize, onCustomizeLicense != nil {
                 Button {
                     FeedbackService.shared.buttonTap()
@@ -41,6 +42,7 @@ struct ProfileDriversLicenseCardSection: View {
                 .buttonStyle(.plain)
                 .accessibilityHint("Choose an explorers license skin".localized)
             }
+            */
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 8)
@@ -49,32 +51,37 @@ struct ProfileDriversLicenseCardSection: View {
     @ViewBuilder
     private var card: some View {
         let base = UserDriversLicenseCard(license: license, width: cardWidth, style: style) {
-            ProfileDriversLicensePortraitView(user: user)
+            avatarPortrait
         }
 
-        if showsAvatarEdit || showsLicenseCustomize {
+        if showsLicenseCustomize, let onCustomizeLicense {
             base.accessory(alignment: .bottomTrailing) {
-                HStack(spacing: 8) {
-                    if showsLicenseCustomize, let onCustomizeLicense {
-                        LicenseCornerButton(systemImage: "paintpalette.fill") {
-                            FeedbackService.shared.buttonTap()
-                            onCustomizeLicense()
-                        }
-                        .accessibilityLabel("Customize explorers license".localized)
-                        .accessibilityHint("Choose an explorers license skin".localized)
-                    }
-                    if showsAvatarEdit, let onEditAvatar {
-                        LicenseCornerButton(systemImage: "pencil") {
-                            FeedbackService.shared.buttonTap()
-                            onEditAvatar()
-                        }
-                        .accessibilityLabel("Change avatar".localized)
-                    }
+                LicenseCornerButton(systemImage: "paintpalette.fill") {
+                    FeedbackService.shared.buttonTap()
+                    onCustomizeLicense()
                 }
+                .accessibilityLabel("Customize explorers license".localized)
+                .accessibilityHint("Choose an explorers license skin".localized)
             }
         } else {
             base
         }
+    }
+
+    @ViewBuilder
+    private var avatarPortrait: some View {
+        ProfileDriversLicensePortraitView(user: user)
+            .overlay(alignment: .topTrailing) {
+                if showsAvatarEdit, let onEditAvatar {
+                    LicenseCornerButton(systemImage: "pencil", size: 22) {
+                        FeedbackService.shared.buttonTap()
+                        onEditAvatar()
+                    }
+                    .padding(.trailing, -8)
+                    .padding(.top, -8)
+                    .accessibilityLabel("Change avatar".localized)
+                }
+            }
     }
 }
 
