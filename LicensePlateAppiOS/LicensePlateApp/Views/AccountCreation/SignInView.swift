@@ -109,11 +109,11 @@ struct SignInView: View {
                                         .foregroundStyle(Color.Theme.primaryBlue)
                                     
                                     TextField("Choose a username", text: $userName)
+                                        .textContentType(.username)
+                                        .autocorrectionDisabled()
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(.body, design: .rounded))
                                         .autocapitalization(.none)
-                                        .autocorrectionDisabled()
-                                        .textContentType(.username)
                                 }
                                 
                                 // First Name field
@@ -124,10 +124,10 @@ struct SignInView: View {
                                         .foregroundStyle(Color.Theme.primaryBlue)
                                     
                                     TextField("Enter your first name", text: $firstName)
+                                        .textContentType(.givenName)
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(.body, design: .rounded))
                                         .autocapitalization(.words)
-                                        .textContentType(.givenName)
                                 }
                                 
                                 // Last Name field
@@ -138,10 +138,10 @@ struct SignInView: View {
                                         .foregroundStyle(Color.Theme.primaryBlue)
                                     
                                     TextField("Enter your last name", text: $lastName)
+                                        .textContentType(.familyName)
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(.body, design: .rounded))
                                         .autocapitalization(.words)
-                                        .textContentType(.familyName)
                                 }
                             }
                             
@@ -153,12 +153,12 @@ struct SignInView: View {
                                     .foregroundStyle(Color.Theme.primaryBlue)
                                 
                                 TextField("Enter your email", text: $email)
+                                    .textContentType(.emailAddress)
+                                    .keyboardType(.emailAddress)
+                                    .autocorrectionDisabled()
                                     .textFieldStyle(.roundedBorder)
                                     .font(.system(.body, design: .rounded))
-                                    .keyboardType(.emailAddress)
                                     .autocapitalization(.none)
-                                    .autocorrectionDisabled()
-                                    .textContentType(isSignInMode ? .emailAddress : .emailAddress)
                             }
                             
                             // Password field
@@ -169,10 +169,10 @@ struct SignInView: View {
                                     .foregroundStyle(Color.Theme.primaryBlue)
                                 
                                 SecureField("Enter your password", text: $password)
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(.body, design: .rounded))
                                     .textContentType(isSignInMode ? .password : .newPassword)
                                     .autocorrectionDisabled()
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(.system(.body, design: .rounded))
                                 
                                 // Password strength indicator (only for create account)
                                 if !isSignInMode && !password.isEmpty {
@@ -209,10 +209,10 @@ struct SignInView: View {
                                         .foregroundStyle(Color.Theme.primaryBlue)
                                     
                                     SecureField("Confirm your password", text: $confirmPassword)
-                                        .textFieldStyle(.roundedBorder)
-                                        .font(.system(.body, design: .rounded))
                                         .textContentType(.newPassword)
                                         .autocorrectionDisabled()
+                                        .textFieldStyle(.roundedBorder)
+                                        .font(.system(.body, design: .rounded))
                                     
                                     // Password match error with debounce
                                     if let matchError = passwordMatchError {
