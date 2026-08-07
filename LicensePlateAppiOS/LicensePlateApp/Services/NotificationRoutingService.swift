@@ -25,6 +25,9 @@ final class NotificationRoutingService {
     private let analytics: AnalyticsLogging
     private var cancellables = Set<AnyCancellable>()
 
+    /// User id currently captured by invite sinks; nil when not observing.
+    private(set) var observingUserId: String?
+
     private var lastKnownIncomingTripCount: Int?
     private var hasSeededIncomingTripCount = false
 
@@ -39,11 +42,18 @@ final class NotificationRoutingService {
         self.analytics = analytics
     }
 
-    /// Call when main app is active (e.g. ContentView.onAppear) to start observing invite events.
-    /// Listeners are set up only once; pass current userId so we only notify for that user.
-    func startObservingIfNeeded(userId: String?) {
-        guard let userId = userId else { return }
-        guard cancellables.isEmpty else { return }
+    /// Bind invite publishers to `userId`. Rebinds when the user changes; no-ops if already observing that user.
+    func ensureObserving(userId: String?) {
+        guard let userId, !userId.isEmpty else {
+            stopObserving()
+            return
+        }
+        if observingUserId == userId, !cancellables.isEmpty {
+            return
+        }
+
+        stopObserving()
+        observingUserId = userId
 
         TripInviteRepository.shared.$tripInvites
             .receive(on: DispatchQueue.main)
@@ -62,6 +72,7 @@ final class NotificationRoutingService {
 
     func stopObserving() {
         cancellables.removeAll()
+        observingUserId = nil
         lastKnownIncomingTripCount = nil
         hasSeededIncomingTripCount = false
         lastKnownIncomingFriendCount = nil

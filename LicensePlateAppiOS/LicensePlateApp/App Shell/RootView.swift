@@ -85,6 +85,9 @@ struct RootView: View {
                 UserProgressionRepository.shared.startListening(userId: newUserId)
                 XpGrantRemoteRepository.shared.startListening(userId: newUserId)
                 TripActivityEventRecordingService.shared.setProgressionAppendObserver(ProgressionAppendObserverChain.shared)
+                Task {
+                    await FirebaseMessagingService.shared.refreshAndPersistTokenIfPossible()
+                }
                 if authService.isOnline {
                     Task {
                         _ = await XpGrantReconcileService.shared.reconcileIfNeeded(

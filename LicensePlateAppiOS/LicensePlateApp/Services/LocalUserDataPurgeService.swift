@@ -50,6 +50,7 @@ final class LocalUserDataPurgeService {
         TripCanonicalRemoteSyncService.shared.removeAllIncrementalListeners()
         PublicLifetimeStatsRepository.shared.stopAllListeners()
         SocialInboxBadgeService.shared.stopObserving()
+        NotificationRoutingService.shared.stopObserving()
 
         TripRouteTrackingService.shared.stopForAccountPurge()
         ReminderNotificationService.shared.cancelAllReminders(reason: "account_purge")

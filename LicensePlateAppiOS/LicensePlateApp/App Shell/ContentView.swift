@@ -414,6 +414,12 @@ struct ContentView: View {
             activeFamilyId: authService.currentUser?.activeFamilyId
         )
         activeTripsListViewModel.load(userId: newUserId)
+        if let newUserId, !newUserId.isEmpty {
+            pendingTripsViewModel.loadIfNeeded()
+        } else {
+            TripInviteRepository.shared.stopListening()
+        }
+        NotificationRoutingService.shared.ensureObserving(userId: newUserId)
     }
 
     private func handleHardSignOutWillBegin() {
@@ -425,9 +431,8 @@ struct ContentView: View {
 
     private func handleHardSignOutUIReset() {
         activeTripsListViewModel.load(userId: currentUserId)
-        if let userId = currentUserId {
-            pendingTripsViewModel.loadInvites(userId: userId)
-        }
+        pendingTripsViewModel.loadIfNeeded()
+        NotificationRoutingService.shared.ensureObserving(userId: currentUserId)
     }
 
     private func handleActiveFamilyIdChange(_ newFamilyId: String?) {
@@ -447,7 +452,7 @@ struct ContentView: View {
             userId: currentUserId,
             activeFamilyId: authService.currentUser?.activeFamilyId
         )
-        NotificationRoutingService.shared.startObservingIfNeeded(userId: currentUserId)
+        NotificationRoutingService.shared.ensureObserving(userId: currentUserId)
         let userId = currentUserId
         Task {
             if let userId, !userId.isEmpty {
