@@ -37,7 +37,7 @@ struct HelpAboutView: View {
                         VStack(spacing: 12) {
                             SettingNavigationRow(
                                 title: "About".localized,
-                                description: "Learn about RoadTrip Royale and HammersTechLLC".localized,
+                                description: "Learn about RoadTrip Royale and Hammers Tech LLC".localized,
                                 icon: "info.circle.fill"
                             ) {
                                 showAbout = true
@@ -357,13 +357,13 @@ struct AboutView: View {
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                     
-                    Text("About HammersTechLLC".localized)
+                    Text("About Hammers Tech LLC".localized)
                         .font(.system(.title2, design: .rounded))
                         .fontWeight(.semibold)
                         .foregroundStyle(Color.Theme.primaryBlue)
                         .padding(.top)
                     
-                    Text("RoadTrip Royale is developed by HammersTechLLC, a software development company dedicated to creating innovative and user-friendly mobile applications. We're passionate about building apps that make everyday activities more enjoyable and engaging.".localized)
+                    Text("RoadTrip Royale is developed by Hammers Tech LLC, a software development company dedicated to creating innovative and user-friendly mobile applications. We're passionate about building apps that make everyday activities more enjoyable and engaging.".localized)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                     
@@ -745,7 +745,7 @@ struct TermsView: View {
         [
             TermsSection(
                 title: "1. Acceptance of These Terms".localized,
-                body: "These Terms of Service (“Terms”) are a binding agreement between you and HammersTech LLC (“HammersTech”, “we”, “us”) governing your use of the RoadTrip Royale app and related services (the “Service”). By downloading, accessing, or using the Service, you agree to these Terms and acknowledge our Privacy Policy. If you do not agree, do not use the Service.".localized
+                body: "These Terms of Service (“Terms”) are a binding agreement between you and Hammers Tech LLC (“HammersTech”, “we”, “us”) governing your use of the RoadTrip Royale app and related services (the “Service”). By downloading, accessing, or using the Service, you agree to these Terms and acknowledge our Privacy Policy. If you do not agree, do not use the Service.".localized
             ),
             TermsSection(
                 title: "2. Eligibility and Age Requirements".localized,
@@ -773,7 +773,7 @@ struct TermsView: View {
             ),
             TermsSection(
                 title: "8. Your Content".localized,
-                body: "You keep ownership of the content you submit to the Service, such as profile names, trip names, and shared trip summaries. You grant HammersTech a non-exclusive, worldwide, royalty-free license to host, store, reproduce, display, and distribute that content solely to operate and improve the Service. We will not sell your content on a standalone basis. You confirm you have the rights to what you submit. We may remove or refuse content or names that are unlawful, offensive, infringing, or otherwise inappropriate. To report content or conduct, email support@roadtriproyale.com.".localized
+                body: "You keep ownership of the content you submit to the Service, such as profile names, trip names, and shared trip summaries. You grant HammersTech a non-exclusive, worldwide, royalty-free license to host, store, reproduce, display, and distribute that content solely to operate and improve the Service. We will not sell your content on a standalone basis. You confirm you have the rights to what you submit. We may remove or refuse content or names that are unlawful, offensive, infringing, or otherwise inappropriate. If you send us feedback or suggestions, we may use them to improve the Service without restriction or obligation to you. To report content or conduct, or to submit a claim of copyright infringement (including under the U.S. Digital Millennium Copyright Act), email support@roadtriproyale.com.".localized
             ),
             TermsSection(
                 title: "9. Multiplayer, Family, and Conduct".localized,
@@ -789,7 +789,7 @@ struct TermsView: View {
             ),
             TermsSection(
                 title: "12. Third-Party Services".localized,
-                body: "The Service relies on third-party services with their own terms and privacy policies, including Firebase and Google Analytics for Firebase (Google), RevenueCat (purchases), and Google AdMob (advertising). Your mobile carrier’s rates and terms apply when you use the Service over a cellular connection, including any roaming charges.".localized
+                body: "The Service relies on third-party services with their own terms and privacy policies, including Firebase services provided by Google (authentication, database, cloud functions, analytics, crash reporting, and push notifications), Google Maps, Apple Maps, Google Sign-In, Sign in with Apple, Apple’s speech recognition for voice input, RevenueCat (purchases), Google AdMob (advertising), and Resend (service emails). We do not control third-party services and are not responsible for them. Your mobile carrier’s rates and terms apply when you use the Service over a cellular connection, including any roaming charges.".localized
             ),
             TermsSection(
                 title: "13. Offline Play and Sync".localized,
@@ -801,7 +801,7 @@ struct TermsView: View {
             ),
             TermsSection(
                 title: "15. Suspension and Termination".localized,
-                body: "We may suspend or terminate your access if you materially breach these Terms — including cheating, abuse of other players, or unlawful activity — or where necessary to protect the Service, our players, or our legal obligations. For serious violations we may act immediately; otherwise we will give notice and a reasonable opportunity to fix the problem where practical. You may stop using the Service and delete your account at any time. On termination, your license ends and access to virtual items and progression is lost, without refund except where required by law or by the applicable app store’s policies.".localized
+                body: "We may suspend or terminate your access if you materially breach these Terms — including cheating, abuse of other players, or unlawful activity — or where necessary to protect the Service, our players, or our legal obligations. For serious violations we may act immediately; otherwise we will give notice and a reasonable opportunity to fix the problem where practical. You may stop using the Service at any time, and you may delete your account and associated data as described in our Privacy Policy. On termination, your license ends and access to virtual items and progression is lost, without refund except where required by law or by the applicable app store’s policies.".localized
             ),
             TermsSection(
                 title: "16. Disclaimers".localized,
@@ -821,11 +821,11 @@ struct TermsView: View {
             ),
             TermsSection(
                 title: "20. Governing Law and Disputes".localized,
-                body: "These Terms are governed by the laws of the State of Connecticut, United States, excluding its conflict-of-law rules. Disputes will be resolved in the state or federal courts located in Connecticut, and you and HammersTech consent to their jurisdiction. If you live in a jurisdiction — including Canada or Mexico — whose mandatory consumer protection laws give you additional rights, or the right to bring proceedings in your local courts, nothing in this section takes those rights away.".localized
+                body: "These Terms are governed by the laws of the State of Connecticut, United States, excluding its conflict-of-law rules. Before filing a claim, you agree to contact us at support@roadtriproyale.com and work with us in good faith to resolve the dispute informally within 60 days. Either of us may bring an individual claim in small claims court where permitted. To the fullest extent permitted by law, disputes must be brought on an individual basis only — not as a plaintiff or class member in any class, consolidated, or representative proceeding — and any claim must be filed within one year after it arises. Other disputes will be resolved in the state or federal courts located in Connecticut, and you and HammersTech consent to their jurisdiction. If you live in a jurisdiction — including Canada or Mexico — whose mandatory consumer protection laws give you additional rights, or the right to bring proceedings in your local courts, nothing in this section takes those rights away.".localized
             ),
             TermsSection(
                 title: "21. General Terms".localized,
-                body: "If any provision of these Terms is found unenforceable, it will be modified to the minimum extent necessary and the rest will remain in effect. Our failure to enforce a provision is not a waiver. You may not assign these Terms; we may assign them as part of a merger, acquisition, or sale of assets. These Terms, together with the Privacy Policy, are the entire agreement between you and HammersTech about the Service.".localized
+                body: "If any provision of these Terms is found unenforceable, it will be modified to the minimum extent necessary and the rest will remain in effect. Our failure to enforce a provision is not a waiver. You may not assign these Terms; we may assign them as part of a merger, acquisition, or sale of assets. We are not responsible for delays or failures caused by events beyond our reasonable control. Provisions that by their nature should survive termination — including intellectual property, disclaimers, limitations of liability, indemnification, and dispute terms — survive. These Terms, together with the Privacy Policy, are the entire agreement between you and HammersTech about the Service.".localized
             ),
             TermsSection(
                 title: "22. Changes to These Terms".localized,
@@ -833,7 +833,7 @@ struct TermsView: View {
             ),
             TermsSection(
                 title: "23. Contact Us".localized,
-                body: "Questions about these Terms? Contact HammersTech LLC at support@roadtriproyale.com.".localized
+                body: "Questions about these Terms? Contact Hammers Tech LLC at support@roadtriproyale.com.".localized
             ),
         ]
     }
@@ -886,79 +886,108 @@ struct TermsView: View {
 
 struct PrivacyView: View {
     @Environment(\.dismiss) private var dismiss
-    
+
+    private struct PolicySection: Identifiable {
+        var id: String { title }
+        let title: String
+        let body: String
+    }
+
+    private var sections: [PolicySection] {
+        [
+            PolicySection(
+                title: "1. Who We Are".localized,
+                body: "This Privacy Policy explains how Hammers Tech LLC (“HammersTech”, “we”, “us”) collects, uses, and shares information when you use the RoadTrip Royale app and related services (the “Service”). It applies wherever the Service is offered. If you have any questions or requests about your data, contact us at support@roadtriproyale.com.".localized
+            ),
+            PolicySection(
+                title: "2. Information We Collect".localized,
+                body: "Account information: a username and avatar, and — if you register — your email address, optional first and last name, and optional phone number. If you sign in with Google or Apple, we receive basic profile details from that provider. Gameplay data: your trips, games, license plate discoveries, XP, achievements, ranks, cosmetics, and settings. Social data: the friends and family connections you create and the invitations you send or accept. Device and usage data: device model, operating system, app version, IP address, app identifiers, push notification tokens, analytics events, and crash reports. Purchase data: your subscription and purchase status from the app store and our purchase processor — we never receive your full payment card details.".localized
+            ),
+            PolicySection(
+                title: "3. Location Data".localized,
+                body: "With your permission, we collect your device’s location to show your position on the map, attribute discoveries during games, and record routes during active trips — including in the background if you enable background location. Location is optional: you control it in your device settings, and core gameplay works without it. We do not use your precise location for advertising.".localized
+            ),
+            PolicySection(
+                title: "4. Voice Input".localized,
+                body: "If you use voice input to log plates, your microphone audio is processed with Apple’s speech recognition to convert what you say into text, and Apple may process that audio on its servers under its own terms. We keep the recognized result (for example, the region you named), not recordings of your voice. Voice input is optional and works only while you actively use it.".localized
+            ),
+            PolicySection(
+                title: "5. Camera and Photos".localized,
+                body: "The camera is used only to scan QR codes for Friends & Family invitations, and scans are processed on your device. With your permission, we can save shared trip images to your photo library. We do not read or collect your existing photos.".localized
+            ),
+            PolicySection(
+                title: "6. How We Use Information".localized,
+                body: "We use information to operate the Service and sync your progress across devices; to run multiplayer trips and Friends & Family features; to send push notifications you enable and service emails such as a welcome message; to understand usage and fix crashes so we can improve the app; to keep the game fair and secure, including preventing cheating and fraud; to show advertising in the free version; and to comply with legal obligations.".localized
+            ),
+            PolicySection(
+                title: "7. How We Share Information".localized,
+                body: "Service providers process data on our behalf: Google (Firebase authentication, database, cloud functions, analytics, crash reporting, and push notifications, plus Google Maps and AdMob advertising), Apple (sign-in, speech recognition, and maps), RevenueCat (purchases), and Resend (service emails). Other players can see your username, avatar, and gameplay activity in trips you share with them, and in your friends and family groups. Your email address and phone number can be used by other users to find you only if you turn those options on — they are off by default. We may disclose information when required by law, to protect our players or the Service, or as part of a merger, acquisition, or sale of assets. We do not sell your personal information.".localized
+            ),
+            PolicySection(
+                title: "8. Advertising".localized,
+                body: "The free version shows banner ads served by Google AdMob. Where the law requires it, we will ask for your consent before showing personalized ads, and you can limit ad personalization through your device settings. Purchasing a subscription removes ads.".localized
+            ),
+            PolicySection(
+                title: "9. Data Retention and Deletion".localized,
+                body: "We keep account and gameplay data while your account is active so your progress, multiplayer history, and shared trips keep working. Data stored only on your device is removed when you delete the app. When you delete your account, we delete or de-identify your personal information within a reasonable time, except where we need to keep limited records for legal, security, or fraud-prevention purposes. Aggregated data that no longer identifies you may be kept.".localized
+            ),
+            PolicySection(
+                title: "10. Your Rights and Choices".localized,
+                body: "You can update your profile in the app, control location, microphone, camera, photo, and notification permissions in your device settings, and control whether others can find you by email or phone number in your privacy settings. Depending on where you live — including California, the EEA, the United Kingdom, and Canada — you may also have the right to access, correct, delete, or receive a copy of your personal data, to object to or restrict certain processing, to withdraw consent, and not to be discriminated against for exercising your rights. To exercise any of these rights, use the in-app controls or contact us at support@roadtriproyale.com. You may also lodge a complaint with your local data protection authority.".localized
+            ),
+            PolicySection(
+                title: "11. Account Deletion".localized,
+                body: "You can delete your account and associated data from within the app in Settings, or by emailing support@roadtriproyale.com from the email address on your account. Deleting the app from your device does not by itself delete data already synced to your account.".localized
+            ),
+            PolicySection(
+                title: "12. Children".localized,
+                body: "RoadTrip Royale is made for families. Children under 13 — or the applicable age of digital consent where you live — may play only through a family group created and managed by a parent or legal guardian, who consents to the collection of the child’s information as described in this policy. We do not knowingly collect personal information directly from children outside parent-managed play, and we do not knowingly serve personalized advertising to children. Parents and guardians can review or delete their child’s information, or withdraw consent, by contacting support@roadtriproyale.com.".localized
+            ),
+            PolicySection(
+                title: "13. Security".localized,
+                body: "We protect your information with technical and organizational safeguards, including encryption in transit, authenticated access, and server-side security rules. No system is perfectly secure. If a breach affects your personal data, we will notify you as required by applicable law.".localized
+            ),
+            PolicySection(
+                title: "14. International Transfers".localized,
+                body: "We are based in the United States, and your information is processed in the United States and in the locations of our service providers. Where your country’s law requires safeguards for transferring data abroad — such as the European Commission’s Standard Contractual Clauses — we or our providers rely on appropriate transfer mechanisms.".localized
+            ),
+            PolicySection(
+                title: "15. Changes to This Policy".localized,
+                body: "We may update this Privacy Policy from time to time. If we make material changes, we will notify you through the app or by other reasonable means before they take effect, and we will update the date at the top of this page. Previous versions are available on request.".localized
+            ),
+            PolicySection(
+                title: "16. Contact Us".localized,
+                body: "Questions or requests about privacy? Contact Hammers Tech LLC at support@roadtriproyale.com.".localized
+            ),
+        ]
+    }
+
     var body: some View {
         AppBackgroundView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                Text("Privacy Policy".localized)
-                    .font(.system(.largeTitle, design: .rounded))
-                    .fontWeight(.bold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                
-                Text("Last Updated: %@".localized(Date().formatted(date: .abbreviated, time: .omitted)))
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                
-                Text("1. Information We Collect".localized)
-                    .font(.system(.headline, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                    .padding(.top)
-                
-                Text("RoadTrip Royale collects the following information:\n\n• Account information (username, email) if you create an account\n• Trip data and license plate tracking information\n• Location data (optional, with your permission)\n• Device information for app functionality".localized)
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                
-                Text("2. How We Use Your Information".localized)
-                    .font(.system(.headline, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                    .padding(.top)
-                
-                Text("We use your information to:\n\n• Provide and improve the app's functionality\n• Sync your data across devices (if you sign in)\n• Respond to support requests\n• Ensure app security and prevent fraud".localized)
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                
-                Text("3. Data Storage".localized)
-                    .font(.system(.headline, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                    .padding(.top)
-                
-                Text("Your data is stored locally on your device. If you sign in with an account, your data is also stored securely in Firebase (Google Cloud Platform) to enable syncing across devices.".localized)
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                
-                Text("4. Third-Party Services".localized)
-                    .font(.system(.headline, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                    .padding(.top)
-                
-                Text("Firebase and RevenueCat privacy disclosure".localized)
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                
-                Text("5. Your Rights".localized)
-                    .font(.system(.headline, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                    .padding(.top)
-                
-                Text("You have the right to:\n\n• Access your personal data\n• Delete your account and data\n• Opt out of data collection (though this may limit app functionality)\n• Contact us with privacy concerns".localized)
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-                
-                Text("6. Contact Us".localized)
-                    .font(.system(.headline, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                    .padding(.top)
-                
-                Text("For privacy-related questions, contact us at:\n\nEmail: support@roadtriproyale.com".localized)
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
+                    Text("Privacy Policy".localized)
+                        .font(.system(.largeTitle, design: .rounded))
+                        .fontWeight(.bold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                        .accessibilityAddTraits(.isHeader)
+
+                    Text("Last updated: August 8, 2026".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+
+                    ForEach(sections) { section in
+                        Text(section.title)
+                            .font(.system(.headline, design: .rounded))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                            .padding(.top)
+                            .accessibilityAddTraits(.isHeader)
+
+                        Text(section.body)
+                            .font(.system(.body, design: .rounded))
+                            .foregroundStyle(Color.Theme.softBrown)
+                    }
                 }
                 .padding()
             }
@@ -996,5 +1025,11 @@ struct PrivacyView: View {
 #Preview("Terms of Service") {
     NavigationStack {
         TermsView()
+    }
+}
+
+#Preview("Privacy Policy") {
+    NavigationStack {
+        PrivacyView()
     }
 }
