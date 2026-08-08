@@ -10,7 +10,7 @@ import Foundation
 import SwiftData
 
 extension Notification.Name {
-    /// Posted just before a hard local wipe so UI can dismiss profile/settings sheets.
+    /// Posted just before a hard local wipe so UI can unbind from the outgoing user.
     static let accountWillHardSignOut = Notification.Name("LocalUserDataPurgeService.accountWillHardSignOut")
     /// Posted after a hard local wipe so UI coordinators can clear navigation / reload lists.
     static let accountDidHardSignOut = Notification.Name("LocalUserDataPurgeService.accountDidHardSignOut")

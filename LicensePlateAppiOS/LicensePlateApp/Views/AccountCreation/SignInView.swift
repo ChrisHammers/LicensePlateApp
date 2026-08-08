@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 // MARK: - Sign In Initial Mode
 
@@ -51,6 +52,8 @@ struct SignInView: View {
     @State private var passwordMatchTask: Task<Void, Never>? = nil
     @State private var accountStateAtAppear: AccountState = .localGuest
     @State private var didReportAuthSuccess = false
+    @State private var showPassword = false
+    @State private var showConfirmPassword = false
     
     var onAuthSuccess: (() -> Void)?
     var deferredSetupTouchSource: String = "profile"
@@ -75,6 +78,8 @@ struct SignInView: View {
         self._isLoading = State(initialValue: false)
         self._passwordMatchError = State(initialValue: nil)
         self._passwordMatchTask = State(initialValue: nil)
+        self._showPassword = State(initialValue: false)
+        self._showConfirmPassword = State(initialValue: false)
         self.onAuthSuccess = onAuthSuccess
     }
     
@@ -109,7 +114,8 @@ struct SignInView: View {
                                         .foregroundStyle(Color.Theme.primaryBlue)
                                     
                                     TextField("Choose a username", text: $userName)
-                                        .textContentType(.username)
+                                        // Display name — keep .username for the email field so Strong Password pairs correctly.
+                                        .textContentType(.nickname)
                                         .autocorrectionDisabled()
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(.body, design: .rounded))
@@ -153,7 +159,9 @@ struct SignInView: View {
                                     .foregroundStyle(Color.Theme.primaryBlue)
                                 
                                 TextField("Enter your email", text: $email)
-                                    .textContentType(.emailAddress)
+                                    // Create: .username pairs with .newPassword for Strong Password.
+                                    // Sign In: keep .emailAddress to avoid unrelated AutoFill churn.
+                                    .textContentType(isSignInMode ? .emailAddress : .username)
                                     .keyboardType(.emailAddress)
                                     .autocorrectionDisabled()
                                     .textFieldStyle(.roundedBorder)
@@ -168,11 +176,26 @@ struct SignInView: View {
                                     .fontWeight(.semibold)
                                     .foregroundStyle(Color.Theme.primaryBlue)
                                 
-                                SecureField("Enter your password", text: $password)
-                                    .textContentType(isSignInMode ? .password : .newPassword)
-                                    .autocorrectionDisabled()
-                                    .textFieldStyle(.roundedBorder)
-                                    .font(.system(.body, design: .rounded))
+                                ZStack(alignment: .trailing) {
+                                    if isSignInMode {
+                                        SignInPasswordField(
+                                            text: $password,
+                                            isVisible: showPassword,
+                                            placeholder: "Enter your password"
+                                        )
+                                    } else {
+                                        NewPasswordAutoFillField(
+                                            text: $password,
+                                            isVisible: showPassword,
+                                            placeholder: "Enter your password",
+                                            trailingContentInset: 44
+                                        )
+                                        .frame(maxWidth: .infinity, minHeight: 36)
+                                    }
+                                    
+                                    PasswordVisibilityToggle(isVisible: $showPassword)
+                                        .padding(.trailing, 2)
+                                }
                                 
                                 // Password strength indicator (only for create account)
                                 if !isSignInMode && !password.isEmpty {
@@ -208,11 +231,18 @@ struct SignInView: View {
                                         .fontWeight(.semibold)
                                         .foregroundStyle(Color.Theme.primaryBlue)
                                     
-                                    SecureField("Confirm your password", text: $confirmPassword)
-                                        .textContentType(.newPassword)
-                                        .autocorrectionDisabled()
-                                        .textFieldStyle(.roundedBorder)
-                                        .font(.system(.body, design: .rounded))
+                                    ZStack(alignment: .trailing) {
+                                        NewPasswordAutoFillField(
+                                            text: $confirmPassword,
+                                            isVisible: showConfirmPassword,
+                                            placeholder: "Confirm your password",
+                                            trailingContentInset: 44
+                                        )
+                                        .frame(maxWidth: .infinity, minHeight: 36)
+                                        
+                                        PasswordVisibilityToggle(isVisible: $showConfirmPassword)
+                                            .padding(.trailing, 2)
+                                    }
                                     
                                     // Password match error with debounce
                                     if let matchError = passwordMatchError {
@@ -281,6 +311,8 @@ struct SignInView: View {
                                         firstName = ""
                                         lastName = ""
                                     }
+                                    showPassword = false
+                                    showConfirmPassword = false
                                     isSignInMode.toggle()
                                 }
                             } label: {
@@ -402,6 +434,8 @@ struct SignInView: View {
         firstName = ""
         lastName = ""
         errorMessage = ""
+        showPassword = false
+        showConfirmPassword = false
     }
 
     private func currentAccountState() -> AccountState {
@@ -664,6 +698,213 @@ struct SignInView: View {
         }
         
         return (true, nil, strength)
+    }
+}
+
+// MARK: - Password Visibility Toggle
+
+private struct PasswordVisibilityToggle: View {
+    @Binding var isVisible: Bool
+    
+    var body: some View {
+        Button {
+            isVisible.toggle()
+        } label: {
+            Image(systemName: isVisible ? "eye.slash" : "eye")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(Color.Theme.primaryBlue)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel((isVisible ? "Hide password" : "Show password").localized)
+    }
+}
+
+// MARK: - Sign In Password Field (SwiftUI)
+
+/// Sign-in only — SwiftUI SecureField/TextField. Eye toggle overlays trailing (Z-order).
+private struct SignInPasswordField: View {
+    @Binding var text: String
+    var isVisible: Bool
+    var placeholder: String
+    
+    var body: some View {
+        Group {
+            if isVisible {
+                TextField(placeholder, text: $text)
+            } else {
+                SecureField(placeholder, text: $text)
+            }
+        }
+        .textContentType(.password)
+        .autocorrectionDisabled()
+        .textFieldStyle(.roundedBorder)
+        .font(.system(.body, design: .rounded))
+        .autocapitalization(.none)
+    }
+}
+
+// MARK: - New Password AutoFill Field (UIKit)
+
+/// Create-account password fields. UITextField so Strong Password AutoFill can write the value;
+/// after bulk insert, secure entry is toggled so bullet glyphs match string length.
+private struct NewPasswordAutoFillField: UIViewRepresentable {
+    @Binding var text: String
+    var isVisible: Bool
+    var placeholder: String
+    /// Extra trailing inset so typed text clears the overlaid eye button.
+    var trailingContentInset: CGFloat = 0
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+    
+    func makeUIView(context: Context) -> UITextField {
+        let textField = UITextField(frame: .zero)
+        textField.borderStyle = .roundedRect
+        textField.placeholder = placeholder
+        textField.font = Self.roundedBodyFont()
+        textField.textColor = .label
+        textField.autocapitalizationType = .none
+        textField.autocorrectionType = .no
+        textField.spellCheckingType = .no
+        textField.textContentType = .newPassword
+        textField.isSecureTextEntry = !isVisible
+        textField.delegate = context.coordinator
+        textField.addTarget(context.coordinator, action: #selector(Coordinator.editingChanged(_:)), for: .editingChanged)
+        textField.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        textField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        Self.applyTrailingInset(trailingContentInset, to: textField)
+        context.coordinator.observeTextChanges(on: textField)
+        context.coordinator.applyText(text, to: textField, isVisible: isVisible)
+        return textField
+    }
+    
+    func updateUIView(_ uiView: UITextField, context: Context) {
+        context.coordinator.text = $text
+        context.coordinator.applyText(text, to: uiView, isVisible: isVisible)
+        Self.applyTrailingInset(trailingContentInset, to: uiView)
+        
+        if uiView.placeholder != placeholder {
+            uiView.placeholder = placeholder
+        }
+        
+        uiView.textColor = .label
+    }
+    
+    static func dismantleUIView(_ uiView: UITextField, coordinator: Coordinator) {
+        coordinator.stopObserving()
+    }
+    
+    private static func applyTrailingInset(_ inset: CGFloat, to textField: UITextField) {
+        guard inset > 0 else {
+            textField.rightView = nil
+            textField.rightViewMode = .never
+            return
+        }
+        let spacer = UIView(frame: CGRect(x: 0, y: 0, width: inset, height: 1))
+        textField.rightView = spacer
+        textField.rightViewMode = .always
+    }
+    
+    private static func roundedBodyFont() -> UIFont {
+        let base = UIFont.preferredFont(forTextStyle: .body)
+        guard let descriptor = base.fontDescriptor.withDesign(.rounded) else {
+            return base
+        }
+        return UIFont(descriptor: descriptor, size: base.pointSize)
+    }
+    
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var text: Binding<String>
+        private var isRefreshingSecureDisplay = false
+        private var textChangeObserver: NSObjectProtocol?
+        
+        init(text: Binding<String>) {
+            self.text = text
+        }
+        
+        func observeTextChanges(on textField: UITextField) {
+            stopObserving()
+            textChangeObserver = NotificationCenter.default.addObserver(
+                forName: UITextField.textDidChangeNotification,
+                object: textField,
+                queue: .main
+            ) { [weak self, weak textField] _ in
+                guard let self, let textField else { return }
+                self.handleTextChange(on: textField)
+            }
+        }
+        
+        func stopObserving() {
+            if let textChangeObserver {
+                NotificationCenter.default.removeObserver(textChangeObserver)
+                self.textChangeObserver = nil
+            }
+        }
+        
+        @objc func editingChanged(_ textField: UITextField) {
+            handleTextChange(on: textField)
+        }
+        
+        func textFieldDidChangeSelection(_ textField: UITextField) {
+            handleTextChange(on: textField)
+        }
+        
+        private func handleTextChange(on textField: UITextField) {
+            guard !isRefreshingSecureDisplay else { return }
+            let newValue = textField.text ?? ""
+            if text.wrappedValue != newValue {
+                text.wrappedValue = newValue
+            }
+            // Defer past AutoFill's own layout pass; secure fields often show one bullet until toggled.
+            DispatchQueue.main.async { [weak self, weak textField] in
+                guard let self, let textField else { return }
+                self.refreshSecureBulletDisplay(textField)
+            }
+        }
+        
+        /// Assign text without the secure-field single-bullet glitch after programmatic / AutoFill writes.
+        func applyText(_ value: String, to textField: UITextField, isVisible: Bool) {
+            let shouldSecure = !isVisible
+            let textNeedsUpdate = textField.text != value
+            let secureNeedsUpdate = textField.isSecureTextEntry != shouldSecure
+            guard textNeedsUpdate || secureNeedsUpdate else {
+                textField.textColor = .label
+                return
+            }
+            
+            isRefreshingSecureDisplay = true
+            defer { isRefreshingSecureDisplay = false }
+            
+            // Toggle secure entry around text assignment so glyph count matches string length.
+            textField.isSecureTextEntry = false
+            textField.text = value
+            textField.isSecureTextEntry = shouldSecure
+            if shouldSecure {
+                // Re-assert text after enabling secure entry (UIKit sometimes truncates glyphs otherwise).
+                textField.text = value
+            }
+            textField.textColor = .label
+        }
+        
+        /// AutoFill can leave the model correct but only one secure glyph drawn — force a redraw.
+        private func refreshSecureBulletDisplay(_ textField: UITextField) {
+            guard !isRefreshingSecureDisplay else { return }
+            guard textField.isSecureTextEntry else { return }
+            let value = textField.text ?? ""
+            guard value.count > 1 else { return }
+            
+            isRefreshingSecureDisplay = true
+            defer { isRefreshingSecureDisplay = false }
+            
+            textField.isSecureTextEntry = false
+            textField.text = value
+            textField.isSecureTextEntry = true
+            textField.text = value
+            textField.textColor = .label
+        }
     }
 }
 

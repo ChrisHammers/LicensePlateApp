@@ -495,8 +495,10 @@ class FirebaseAuthService: ObservableObject {
         }
 
         let oldUserId = user.firebaseUID ?? user.id
-        // Let settings/profile dismiss before SwiftData rows are deleted.
+        // Release profile bindings before SwiftData rows are deleted; keep settings sheet open.
         NotificationCenter.default.post(name: .accountWillHardSignOut, object: nil)
+        currentUser = nil
+        isAuthenticated = false
         try await Task.yield()
 
         // Clear push routing while Auth still matches the signed-out account.
@@ -506,8 +508,6 @@ class FirebaseAuthService: ObservableObject {
 
         try LocalUserDataPurgeService.shared.purgeAllLocalUserData(oldUserId: oldUserId)
 
-        currentUser = nil
-        isAuthenticated = false
         founderEntitlementAttemptedUserIds.removeAll()
 
         if isOnline {

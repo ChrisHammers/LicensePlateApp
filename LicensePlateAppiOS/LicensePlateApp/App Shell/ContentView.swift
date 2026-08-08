@@ -424,7 +424,7 @@ struct ContentView: View {
 
     private func handleHardSignOutWillBegin() {
         mainCoordinator.resetPendingState()
-        isShowingSettings = false
+        // Keep the settings sheet open so Sign In is one tap away after becoming a guest.
         isShowingTravelLog = false
         isShowingCreateSheet = false
     }
@@ -1183,10 +1183,12 @@ struct DefaultSettingsView: View {
                     case .profile:
                         if let user = authService.currentUser {
                             UserProfileView(user: user, authService: authService)
+                                // Remount when hard sign-out replaces the AppUser row.
+                                .id(user.id)
                         } else {
-                            // Fallback view if no user (shouldn't happen since button is hidden)
-                            Text("No user available")
-                                .foregroundStyle(Color.Theme.softBrown)
+                            // Brief gap during hard sign-out before guest rebirth.
+                            ProgressView()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
                         }
                     case .privacyPermissions:
                         PrivacyPermissionsView()
