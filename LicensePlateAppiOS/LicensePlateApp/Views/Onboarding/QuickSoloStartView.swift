@@ -179,35 +179,10 @@ struct QuickSoloStartView: View {
 
     private var safetyCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Important Safety Notice".localized)
-                .font(.system(.title3, design: .rounded))
-                .fontWeight(.bold)
-                .foregroundStyle(Color.Theme.primaryBlue)
-
-            Text("Do not use this app while driving.".localized)
-                .font(.system(.body, design: .rounded))
-                .fontWeight(.semibold)
-                .foregroundStyle(Color.Theme.primaryBlue)
-
-            Text("Only use RoadTrip Royale when you are a passenger or when the vehicle is safely parked. Your safety and the safety of others is our top priority.".localized)
-                .font(.system(.body, design: .rounded))
-                .foregroundStyle(Color.Theme.softBrown)
-
-            HStack(spacing: 0) {
-                Text("By continuing, you agree to our ".localized)
-                Button("Terms of Service".localized) { showTerms = true }
-                    .buttonStyle(.plain)
-                    .underline()
-                    .accessibleButton(label: "Terms of Service".localized, hint: "Opens Terms of Service".localized)
-                Text(" and ".localized)
-                Button("Privacy Policy".localized) { showPrivacy = true }
-                    .buttonStyle(.plain)
-                    .underline()
-                    .accessibleButton(label: "Privacy Policy".localized, hint: "Opens Privacy Policy".localized)
-                Text(".")
-            }
-            .font(.system(.caption, design: .rounded))
-            .foregroundStyle(Color.Theme.softBrown)
+            SafeDrivingPolicyBody(
+                onShowTerms: { showTerms = true },
+                onShowPrivacy: { showPrivacy = true }
+            )
 
             Button {
                 hasAgreedToSafeDriving.toggle()
