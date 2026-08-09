@@ -9,13 +9,18 @@
  *   firebase functions:secrets:set RESEND_API_KEY
  *   firebase functions:secrets:set WELCOME_EMAIL_FROM
  *
+ * Optional subject label (non-secret project param via dotenv):
+ *   functions/.env.<projectId>  →  WELCOME_EMAIL_ENV_LABEL=DEV
+ *   Leave unset/empty for production (no subject prefix).
+ *   Example: .env.roadtrip-royale-dev-d2652
+ *
  * WELCOME_EMAIL_FROM example:
  *   RoadTrip Royale <support@roadtriproyale.com>
  */
 
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import { defineSecret } from "firebase-functions/params";
+import { defineSecret, defineString } from "firebase-functions/params";
 import { writeAuditLog } from "./audit";
 import { sendTransactionalEmail } from "./utils/email";
 import {
@@ -27,6 +32,9 @@ import {
 const db = admin.firestore();
 const resendApiKey = defineSecret("RESEND_API_KEY");
 const welcomeEmailFrom = defineSecret("WELCOME_EMAIL_FROM");
+const welcomeEmailEnvLabel = defineString("WELCOME_EMAIL_ENV_LABEL", {
+  default: "",
+});
 
 const WELCOME_EMAIL_DOC_ID = "welcomeEmail";
 
@@ -108,8 +116,13 @@ export const onUserProfileSendWelcomeEmail = functions
 
     const userSnap = await db.collection("users").doc(userId).get();
     const profile = userSnap.data() ?? {};
-    const emailContent = buildWelcomeEmailContent(profile);
-    console.log(`welcome email sending for ${userId} to ${recipient} from ${fromAddress}`);
+    const emailContent = buildWelcomeEmailContent(
+      profile,
+      welcomeEmailEnvLabel.value()
+    );
+    console.log(
+      `welcome email sending for ${userId} to ${recipient} from ${fromAddress} subject="${emailContent.subject}"`
+    );
 
     try {
       const result = await sendTransactionalEmail({

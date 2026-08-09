@@ -36,8 +36,24 @@ export function profileEmailChanged(
   return previousEmail !== nextEmail;
 }
 
+/**
+ * Prefixes the subject with `[LABEL]` when `envLabel` is non-empty after trim.
+ * Empty / whitespace-only labels leave the subject unchanged.
+ */
+export function applyWelcomeEmailSubjectLabel(
+  subject: string,
+  envLabel?: string | null
+): string {
+  const label = typeof envLabel === "string" ? envLabel.trim() : "";
+  if (!label) {
+    return subject;
+  }
+  return `[${label}] ${subject}`;
+}
+
 export function buildWelcomeEmailContent(
-  profile: UserProfileSnapshot
+  profile: UserProfileSnapshot,
+  envLabel?: string | null
 ): WelcomeEmailContent {
   const firstName =
     typeof profile.firstName === "string" ? profile.firstName.trim() : "";
@@ -45,7 +61,10 @@ export function buildWelcomeEmailContent(
     typeof profile.userName === "string" ? profile.userName.trim() : "";
   const greetingName = firstName || userName || "there";
 
-  const subject = `Welcome to ${APP_NAME}!`;
+  const subject = applyWelcomeEmailSubjectLabel(
+    `Welcome to ${APP_NAME}!`,
+    envLabel
+  );
   const text = [
     `Hi ${greetingName},`,
     "",
