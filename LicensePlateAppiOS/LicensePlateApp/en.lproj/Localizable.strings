@@ -163,8 +163,6 @@
 "Created" = "Created";
 "Started" = "Started";
 "Ended" = "Ended";
-"Start Trip" = "Start Trip";
-"End Trip" = "End Trip";
 "Reset Trip" = "Reset Trip";
 "Reset Game" = "Reset Game";
 "Trip already ended" = "Trip already ended";
@@ -187,7 +185,6 @@
 "Display your active trip on the small map" = "Display your active trip on the small map";
 "Skip Voice Confirmation" = "Skip Voice Confirmation";
 "Automatically add license plates without confirmation when using Voice" = "Automatically add license plates without confirmation when using Voice";
-"Hold to Talk" = "Hold to Talk";
 "Press and hold the microphone button to record. If disabled the system will listen until you hit stop." = "Press and hold the microphone button to record. If disabled the system will listen until you hit stop.";
 "Reset" = "Reset";
 "Remove" = "Remove";
@@ -195,6 +192,7 @@
 "This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset." = "This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset.";
 "This will delete the trip and all scores will be removed." = "This will delete the trip and all scores will be removed.";
 "Done" = "Done";
+"Save" = "Save";
 
 // Settings - New Trip/Game Defaults View
 "New Trip/Game Defaults" = "New Trip/Game Defaults";
@@ -222,7 +220,6 @@
 // Settings - Privacy & Permissions View
 "Privacy & Permissions" = "Privacy & Permissions";
 "Location" = "Location";
-"Voice" = "Voice";
 "Notifications" = "Notifications";
 "Microphone" = "Microphone";
 "Speech Recognizer" = "Speech Recognizer";
@@ -426,7 +423,6 @@
 "Press and hold to record license plate" = "Press and hold to record license plate";
 "Trip must be started to use this tab" = "Trip must be started to use this tab";
 "Double tap to switch to %@ tab" = "Double tap to switch to %@ tab";
-"Found" = "Found";
 "Not found" = "Not found";
 "Trip must be started to mark regions" = "Trip must be started to mark regions";
 "Double tap to %@ this region as found" = "Double tap to %@ this region as found";
@@ -520,8 +516,6 @@
 "Opens Terms of Use" = "Opens Terms of Use";
 "Privacy" = "Privacy";
 "Privacy Policy" = "Privacy Policy";
-"Opens Privacy Policy" = "Opens Privacy Policy";
-"Acknowledgements" = "Acknowledgements";
 "RoadTrip Royale uses the following open source libraries and SDKs:" = "RoadTrip Royale uses the following open source libraries and SDKs:";
 "RoadTrip Royale uses the following libraries, SDKs, and data sources:" = "RoadTrip Royale uses the following libraries, SDKs, and data sources:";
 "Firebase" = "Firebase";
@@ -597,15 +591,6 @@
 "%@ linking is not yet available" = "%@ linking is not yet available";
 "Email: %@" = "Email: %@";
 "Name: %@" = "Name: %@";
-"Profile" = "Profile";
-"Signed In" = "Signed In";
-"Your account is synced to the cloud" = "Your account is synced to the cloud";
-"Signed Out" = "Signed Out";
-"You are signed out. Sign in to sync your account and access all features" = "You are signed out. Sign in to sync your account and access all features";
-"Anonymous Account" = "Anonymous Account";
-"Sign up to sync your account and access more features" = "Sign up to sync your account and access more features";
-"Local Account" = "Local Account";
-"Your account is stored locally only. Sign in to sync to the cloud" = "Your account is stored locally only. Sign in to sync to the cloud";
 
 // Avatar unlock sheet & lock badge
 "Available to everyone" = "Available to everyone";
@@ -634,7 +619,6 @@
 "Founder" = "Founder";
 "Seasonal" = "Seasonal";
 "Promo" = "Promo";
-"Double tap to select" = "Double tap to select";
 "Double tap for unlock options" = "Double tap for unlock options";
 "locked" = "locked";
 "selected" = "selected";
@@ -687,7 +671,6 @@
 "Purchase failed" = "Purchase failed";
 "Purchase failed. Please try again." = "Purchase failed. Please try again.";
 "No purchases to restore." = "No purchases to restore.";
-"Get more from RoadTrip Royale with premium features." = "Get more from RoadTrip Royale with premium features.";
 "Active trip limit reached" = "Active trip limit reached";
 "Upgrade to keep more road trips active at once." = "Upgrade to keep more road trips active at once.";
 "You have reached your active trip limit." = "You have reached your active trip limit.";
@@ -1114,7 +1097,6 @@
 "Loading" = "Loading";
 "No pending invites" = "No pending invites";
 "You don't have any pending family invitations" = "You don't have any pending family invitations";
-"Family" = "Family";
 
 /* Friends & Family UI (quality-bar Step 1) */
 "Add Friend" = "Add Friend";

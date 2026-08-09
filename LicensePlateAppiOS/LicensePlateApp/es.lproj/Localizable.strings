@@ -163,8 +163,6 @@
 "Created" = "Creado";
 "Started" = "Iniciado";
 "Ended" = "Terminado";
-"Start Trip" = "Iniciar Viaje";
-"End Trip" = "Terminar Viaje";
 "Reset Trip" = "Restablecer Viaje";
 "Reset Game" = "Restablecer Juego";
 "Trip already ended" = "El viaje ya terminó";
@@ -187,7 +185,6 @@
 "Display your active trip on the small map" = "Mostrar tu viaje activo en el mapa pequeño";
 "Skip Voice Confirmation" = "Omitir Confirmación de Voz";
 "Automatically add license plates without confirmation when using Voice" = "Agregar automáticamente placas sin confirmación al usar Voz";
-"Hold to Talk" = "Mantén Presionado para Hablar";
 "Press and hold the microphone button to record. If disabled the system will listen until you hit stop." = "Presiona y mantén presionado el botón del micrófono para grabar. Si está deshabilitado, el sistema escuchará hasta que presiones detener.";
 "Reset" = "Restablecer";
 "Remove" = "Quitar";
@@ -195,6 +192,7 @@
 "This will reset all trip settings but the trip name. Everything will be reset, including Start Date, which will not auto start. Any logs will be erased, other than a log stating it was reset." = "Esto restablecerá toda la configuración del viaje excepto el nombre del viaje. Todo se restablecerá, incluida la Fecha de Inicio, que no se iniciará automáticamente. Cualquier registro se borrará, excepto un registro que indique que fue restablecido.";
 "This will delete the trip and all scores will be removed." = "Esto eliminará el viaje y se eliminarán todas las puntuaciones.";
 "Done" = "Hecho";
+"Save" = "Guardar";
 
 // Settings - New Trip/Game Defaults View
 "New Trip/Game Defaults" = "Valores Predeterminados de Nuevo Viaje/Juego";
@@ -222,7 +220,6 @@
 // Settings - Privacy & Permissions View
 "Privacy & Permissions" = "Privacidad y Permisos";
 "Location" = "Ubicación";
-"Voice" = "Voz";
 "Notifications" = "Notificaciones";
 "Microphone" = "Micrófono";
 "Speech Recognizer" = "Reconocedor de Voz";
@@ -426,7 +423,6 @@
 "Press and hold to record license plate" = "Presiona y mantén presionado para grabar placa";
 "Trip must be started to use this tab" = "El viaje debe iniciarse para usar esta pestaña";
 "Double tap to switch to %@ tab" = "Toca dos veces para cambiar a la pestaña %@";
-"Found" = "Encontrado";
 "Not found" = "No encontrado";
 "Trip must be started to mark regions" = "El viaje debe iniciarse para marcar regiones";
 "Double tap to %@ this region as found" = "Toca dos veces para %@ esta región como encontrada";
@@ -520,7 +516,6 @@
 "Opens Terms of Use" = "Abre los Términos de Uso";
 "Privacy" = "Privacidad";
 "Privacy Policy" = "Política de Privacidad";
-"Opens Privacy Policy" = "Abre la Política de Privacidad";
 "RoadTrip Royale uses the following open source libraries and SDKs:" = "RoadTrip Royale utiliza las siguientes bibliotecas y SDKs de código abierto:";
 "RoadTrip Royale uses the following libraries, SDKs, and data sources:" = "RoadTrip Royale utiliza las siguientes bibliotecas, SDKs y fuentes de datos:";
 "Backend services including Authentication, Firestore, and Storage" = "Servicios backend incluyendo Autenticación, Firestore y Almacenamiento";
@@ -589,15 +584,6 @@
 "%@ linking is not yet available" = "La vinculación de %@ aún no está disponible";
 "Email: %@" = "Correo: %@";
 "Name: %@" = "Nombre: %@";
-"Profile" = "Perfil";
-"Signed In" = "Sesión Iniciada";
-"Your account is synced to the cloud" = "Tu cuenta está sincronizada con la nube";
-"Signed Out" = "Sesión Cerrada";
-"You are signed out. Sign in to sync your account and access all features" = "Has cerrado sesión. Inicia sesión para sincronizar tu cuenta y acceder a todas las funciones";
-"Anonymous Account" = "Cuenta Anónima";
-"Sign up to sync your account and access more features" = "Regístrate para sincronizar tu cuenta y acceder a más funciones";
-"Local Account" = "Cuenta Local";
-"Your account is stored locally only. Sign in to sync to the cloud" = "Tu cuenta se almacena solo localmente. Inicia sesión para sincronizar con la nube";
 
 // Avatar unlock sheet & lock badge
 "Available to everyone" = "Disponible para todos";
@@ -626,7 +612,6 @@
 "Founder" = "Fundador";
 "Seasonal" = "Temporal";
 "Promo" = "Promo";
-"Double tap to select" = "Toca dos veces para seleccionar";
 "Double tap for unlock options" = "Toca dos veces para opciones de desbloqueo";
 "locked" = "bloqueado";
 "selected" = "seleccionado";
@@ -679,7 +664,6 @@
 "Purchase failed" = "Compra fallida";
 "Purchase failed. Please try again." = "Compra fallida. Por favor, inténtalo de nuevo.";
 "No purchases to restore." = "No hay compras que restaurar.";
-"Get more from RoadTrip Royale with premium features." = "Aprovecha más RoadTrip Royale con funciones premium.";
 "Active trip limit reached" = "Límite de viajes activos alcanzado";
 "Upgrade to keep more road trips active at once." = "Mejora tu plan para mantener más viajes activos a la vez.";
 "You have reached your active trip limit." = "Has alcanzado tu límite de viajes activos.";
@@ -1082,7 +1066,6 @@
 "Loading" = "Cargando";
 "No pending invites" = "No hay invitaciones pendientes";
 "You don't have any pending family invitations" = "No tienes invitaciones familiares pendientes";
-"Family" = "Familia";
 
 /* Friends & Family UI (quality-bar Step 1) */
 "Add Friend" = "Agregar amigo";

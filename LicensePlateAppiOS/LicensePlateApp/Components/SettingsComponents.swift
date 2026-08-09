@@ -165,7 +165,7 @@ struct SettingEditableTextRow: View {
                         .accessibilityHint("Enter \(title.lowercased())")
                         .accessibilityValue(editingValue)
                     
-                    Button("Save") {
+                    Button("Save".localized) {
                         value = editingValue
                         isEditing = false
                         onSave()
@@ -329,7 +329,7 @@ struct SettingShareDataToggleRow: View {
                             .frame(maxWidth: 150)
                             .disabled(isDisabled)
                         
-                        Button("Save") {
+                        Button("Save".localized) {
                             value = editingValue.isEmpty ? nil : editingValue
                             isEditing = false
                             onSave()
@@ -484,7 +484,7 @@ struct SettingShareDataToggleRow2: View {
                                 .frame(maxWidth: 150)
                                 .disabled(isDisabled)
                             
-                            Button("Save") {
+                            Button("Save".localized) {
                                 value = editingValue.isEmpty ? nil : editingValue
                                 isEditing = false
                                 onSave()
@@ -653,7 +653,7 @@ struct SettingShareDataToggleRow3: View {
                                 .frame(maxWidth: 150)
                                 .disabled(isDisabled)
                             
-                            Button("Save") {
+                            Button("Save".localized) {
                                 value = editingValue.isEmpty ? nil : editingValue
                                 isEditing = false
                                 onSave()
