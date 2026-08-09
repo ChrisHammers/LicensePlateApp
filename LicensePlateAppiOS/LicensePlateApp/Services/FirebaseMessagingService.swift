@@ -72,6 +72,19 @@ final class FirebaseMessagingService: NSObject {
         #endif
     }
 
+    /// Account deletion: the server already removed users/{uid} (incl. `fcmToken`), so
+    /// only the device Messaging token is dropped — never a Firestore write that could
+    /// resurrect the deleted user doc.
+    func deleteDeviceTokenAfterAccountDeletion() async {
+        #if canImport(FirebaseMessaging)
+        do {
+            try await Messaging.messaging().deleteToken()
+        } catch {
+            CrashReportingService.shared.record(error: error, context: "fcm_token_delete_account_deletion")
+        }
+        #endif
+    }
+
     /// After guest rebirth / anonymous Auth, attach a fresh token to the new uid.
     func refreshAndPersistTokenIfPossible() async {
         #if canImport(FirebaseMessaging)

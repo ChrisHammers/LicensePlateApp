@@ -1354,3 +1354,31 @@
 "We may update this Privacy Policy from time to time. If we make material changes, we will notify you through the app or by other reasonable means before they take effect, and we will update the date at the top of this page. Previous versions are available on request." = "Podemos actualizar esta Política de Privacidad de vez en cuando. Si hacemos cambios sustanciales, te lo notificaremos a través de la app o por otros medios razonables antes de que entren en vigor, y actualizaremos la fecha en la parte superior de esta página. Las versiones anteriores están disponibles previa solicitud.";
 "16. Contact Us" = "16. Contáctanos";
 "Questions or requests about privacy? Contact Hammers Tech LLC at support@roadtriproyale.com." = "¿Preguntas o solicitudes sobre privacidad? Contacta a Hammers Tech LLC en support@roadtriproyale.com.";
+
+// Account Deletion (Guideline 5.1.1(v); ToS §15, Privacy Policy §11)
+"Delete Account" = "Eliminar Cuenta";
+"Permanently deletes your account and synced data after confirmation" = "Elimina permanentemente tu cuenta y los datos sincronizados después de la confirmación";
+"This permanently deletes your account and all synced data." = "Esto elimina permanentemente tu cuenta y todos los datos sincronizados.";
+"Your profile, trips, discoveries, XP, ranks, and achievements will be permanently deleted." = "Tu perfil, viajes, descubrimientos, XP, rangos y logros se eliminarán permanentemente.";
+"Virtual items and unlocks will be lost." = "Los objetos virtuales y los desbloqueos se perderán.";
+"Purchases and subscriptions do not transfer, and active subscriptions must be canceled separately in your App Store settings." = "Las compras y suscripciones no se transfieren, y las suscripciones activas deben cancelarse por separado en la configuración de tu App Store.";
+"You will be removed from your friends lists and your family group." = "Se te eliminará de las listas de amigos y de tu grupo familiar.";
+"Some records may be kept where required for legal, security, or fraud prevention, as described in our Privacy Policy." = "Algunos registros pueden conservarse cuando sea necesario por motivos legales, de seguridad o de prevención de fraude, como se describe en nuestra Política de Privacidad.";
+"I understand my account and data will be permanently deleted" = "Entiendo que mi cuenta y mis datos se eliminarán permanentemente";
+"Required before the delete button becomes available" = "Requerido antes de que el botón de eliminar esté disponible";
+"Delete My Account" = "Eliminar Mi Cuenta";
+"Deletes your account and all synced data after a final confirmation" = "Elimina tu cuenta y todos los datos sincronizados después de una confirmación final";
+"Delete your account?" = "¿Eliminar tu cuenta?";
+"This cannot be undone." = "Esto no se puede deshacer.";
+"Deleting account…" = "Eliminando cuenta…";
+"Your account has been deleted." = "Tu cuenta ha sido eliminada.";
+"Closes the account deletion screen without deleting" = "Cierra la pantalla de eliminación de cuenta sin eliminar nada";
+"For your security, please verify it's you before deleting your account." = "Por tu seguridad, verifica que eres tú antes de eliminar tu cuenta.";
+"Verify with Apple" = "Verificar con Apple";
+"Verify with Google" = "Verificar con Google";
+"Verify and Delete Account" = "Verificar y Eliminar Cuenta";
+"Verifies your password, then deletes your account" = "Verifica tu contraseña y luego elimina tu cuenta";
+"Verifies your identity, then deletes your account" = "Verifica tu identidad y luego elimina tu cuenta";
+"Password" = "Contraseña";
+"You are currently offline. Please check your connection and try again." = "Actualmente estás sin conexión. Verifica tu conexión e inténtalo de nuevo.";
+"Please verify with the same account you are signed in with." = "Verifica con la misma cuenta con la que iniciaste sesión.";

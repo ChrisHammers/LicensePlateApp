@@ -29,6 +29,7 @@ struct UserProfileView: View {
     @State private var linkingPlatform: LinkedPlatform.PlatformType? = nil
     @State private var showAvatarPickerSheet = false
     @State private var showLicenseWalletSheet = false
+    @State private var showDeleteAccountSheet = false
 
     @StateObject private var lifetimeStatsViewModel: LifetimeStatsProfileViewModel
     @StateObject private var xpProgressViewModel: XpProgressViewModel
@@ -393,8 +394,38 @@ struct UserProfileView: View {
                                           .stroke(Color.red, lineWidth: 2)
                                   )
                               }
+                              // Plain style: in a List row, default-style buttons all fire on a
+                              // single row tap — sign-out must not trigger from the delete button.
+                              .buttonStyle(.plain)
+
+                              // Delete account (Guideline 5.1.1(v); ToS §15, Privacy Policy §11)
+                              Button {
+                                  showDeleteAccountSheet = true
+                              } label: {
+                                  HStack {
+                                      Text("Delete Account".localized)
+                                          .font(.system(.body, design: .rounded))
+                                          .fontWeight(.semibold)
+
+                                      Spacer()
+
+                                      Image(systemName: "trash")
+                                          .font(.system(size: 14, weight: .semibold))
+                                          .accessibilityHidden(true)
+                                  }
+                                  .foregroundStyle(Color.red)
+                                  .padding(.vertical, 12)
+                                  .padding(.horizontal, 16)
+                                  .background(
+                                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                        .fill(Color.Theme.cardBackground)
+                                )
+                              }
+                              .buttonStyle(.plain)
+                              .accessibilityLabel("Delete Account".localized)
+                              .accessibilityHint("Permanently deletes your account and synced data after confirmation".localized)
                           }
-                          
+
                           // Sync status
                           if user.needsSync && !authService.isOnline {
                               HStack(spacing: 8) {
@@ -605,6 +636,9 @@ struct UserProfileView: View {
             }
             .sheet(isPresented: $authService.showSignInSheet) {
                 SignInView(authService: authService, deferredSetupTouchSource: "profile")
+            }
+            .sheet(isPresented: $showDeleteAccountSheet) {
+                DeleteAccountView(authService: authService)
             }
             .sheet(isPresented: $showAvatarPickerSheet) {
                 ProfileAvatarPickerSheet(

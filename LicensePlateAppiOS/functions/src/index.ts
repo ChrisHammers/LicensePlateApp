@@ -35,6 +35,7 @@ export {
 } from "./family";
 export { expireInvitesAndCodes } from "./expiration";
 export { onAuthUserDeleted } from "./auth";
+export { deleteAccount } from "./accountDeletion";
 export { writeAuditLog } from "./audit";
 export { onTripEndedUpdatePublicLifetimeStats } from "./publicLifetimeStatsOnTripEnded";
 export { onTripEndedNotifyMembers } from "./tripEndedNotifyMembers";

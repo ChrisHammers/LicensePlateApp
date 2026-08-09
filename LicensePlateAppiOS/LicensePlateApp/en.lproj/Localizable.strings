@@ -1386,3 +1386,31 @@
 "We may update this Privacy Policy from time to time. If we make material changes, we will notify you through the app or by other reasonable means before they take effect, and we will update the date at the top of this page. Previous versions are available on request." = "We may update this Privacy Policy from time to time. If we make material changes, we will notify you through the app or by other reasonable means before they take effect, and we will update the date at the top of this page. Previous versions are available on request.";
 "16. Contact Us" = "16. Contact Us";
 "Questions or requests about privacy? Contact Hammers Tech LLC at support@roadtriproyale.com." = "Questions or requests about privacy? Contact Hammers Tech LLC at support@roadtriproyale.com.";
+
+// Account Deletion (Guideline 5.1.1(v); ToS §15, Privacy Policy §11)
+"Delete Account" = "Delete Account";
+"Permanently deletes your account and synced data after confirmation" = "Permanently deletes your account and synced data after confirmation";
+"This permanently deletes your account and all synced data." = "This permanently deletes your account and all synced data.";
+"Your profile, trips, discoveries, XP, ranks, and achievements will be permanently deleted." = "Your profile, trips, discoveries, XP, ranks, and achievements will be permanently deleted.";
+"Virtual items and unlocks will be lost." = "Virtual items and unlocks will be lost.";
+"Purchases and subscriptions do not transfer, and active subscriptions must be canceled separately in your App Store settings." = "Purchases and subscriptions do not transfer, and active subscriptions must be canceled separately in your App Store settings.";
+"You will be removed from your friends lists and your family group." = "You will be removed from your friends lists and your family group.";
+"Some records may be kept where required for legal, security, or fraud prevention, as described in our Privacy Policy." = "Some records may be kept where required for legal, security, or fraud prevention, as described in our Privacy Policy.";
+"I understand my account and data will be permanently deleted" = "I understand my account and data will be permanently deleted";
+"Required before the delete button becomes available" = "Required before the delete button becomes available";
+"Delete My Account" = "Delete My Account";
+"Deletes your account and all synced data after a final confirmation" = "Deletes your account and all synced data after a final confirmation";
+"Delete your account?" = "Delete your account?";
+"This cannot be undone." = "This cannot be undone.";
+"Deleting account…" = "Deleting account…";
+"Your account has been deleted." = "Your account has been deleted.";
+"Closes the account deletion screen without deleting" = "Closes the account deletion screen without deleting";
+"For your security, please verify it's you before deleting your account." = "For your security, please verify it's you before deleting your account.";
+"Verify with Apple" = "Verify with Apple";
+"Verify with Google" = "Verify with Google";
+"Verify and Delete Account" = "Verify and Delete Account";
+"Verifies your password, then deletes your account" = "Verifies your password, then deletes your account";
+"Verifies your identity, then deletes your account" = "Verifies your identity, then deletes your account";
+"Password" = "Password";
+"You are currently offline. Please check your connection and try again." = "You are currently offline. Please check your connection and try again.";
+"Please verify with the same account you are signed in with." = "Please verify with the same account you are signed in with.";

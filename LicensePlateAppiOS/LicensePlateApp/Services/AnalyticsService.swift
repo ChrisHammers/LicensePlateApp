@@ -314,6 +314,12 @@ class AnalyticsService: AnalyticsLogging {
         case returnStreakReminderOpened(currentStreak: Int)
         case fcmTokenRegistered
 
+        // In-app account deletion (Guideline 5.1.1(v)) — no PII, coarse error labels only
+        case accountDeletionRequested
+        case accountDeletionReauthRequired
+        case accountDeletionCompleted
+        case accountDeletionFailed(error: String)
+
         // First-session quick solo onboarding funnel
         case onboardingStarted(flowVariant: String, offline: Bool)
         case onboardingStepViewed(stepId: String, stepIndex: Int, flowVariant: String)
@@ -522,6 +528,10 @@ class AnalyticsService: AnalyticsLogging {
             case .returnStreakReminderScheduled: return "return_streak_reminder_scheduled"
             case .returnStreakReminderOpened: return "return_streak_reminder_opened"
             case .fcmTokenRegistered: return "fcm_token_registered"
+            case .accountDeletionRequested: return "account_deletion_requested"
+            case .accountDeletionReauthRequired: return "account_deletion_reauth_required"
+            case .accountDeletionCompleted: return "account_deletion_completed"
+            case .accountDeletionFailed: return "account_deletion_failed"
             case .onboardingStarted: return "onboarding_started"
             case .onboardingStepViewed: return "onboarding_step_viewed"
             case .onboardingAbandoned: return "onboarding_abandoned"
@@ -1015,6 +1025,8 @@ class AnalyticsService: AnalyticsLogging {
                 return ["current_streak": currentStreak]
             case .fcmTokenRegistered:
                 return nil
+            case .accountDeletionFailed(let error):
+                return ["error": error]
             case .onboardingStarted(let flowVariant, let offline):
                 return ["flow_variant": flowVariant, "offline": offline]
             case .onboardingStepViewed(let stepId, let stepIndex, let flowVariant):

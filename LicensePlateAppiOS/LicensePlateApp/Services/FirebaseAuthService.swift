@@ -338,7 +338,14 @@ class FirebaseAuthService: ObservableObject {
         guard let user = currentUser else { return false }
         return user.firebaseUID != nil && !isAuthenticated && !isAnonymousUser
     }
-    
+
+    /// Firebase Auth provider IDs linked to the signed-in account
+    /// (e.g. "password", "apple.com", "google.com"). Empty when signed out.
+    var linkedAuthProviderIDs: [String] {
+        guard let firebaseUser = auth.currentUser else { return [] }
+        return firebaseUser.providerData.map { $0.providerID }
+    }
+
     // MARK: - Sign In / Create Account
     
     /// Sign in with email and password
@@ -529,6 +536,49 @@ class FirebaseAuthService: ObservableObject {
         NotificationCenter.default.post(name: .accountDidHardSignOut, object: nil)
     }
 
+    /// Account deletion: local teardown after `deleteAccount` removed the Auth user and
+    /// cloud data. Mirrors `hardSignOutAndResetToGuest()` but never writes to Firestore
+    /// as the deleted user (a merge write would resurrect the deleted users/{uid} doc).
+    func finalizeDeletedAccountLocally() async throws {
+        guard modelContext != nil else {
+            throw AuthError.noModelContext
+        }
+        guard let user = currentUser else {
+            throw AuthError.noUser
+        }
+
+        let oldUserId = user.firebaseUID ?? user.id
+        // Release profile bindings before SwiftData rows are deleted; keep settings sheet open.
+        NotificationCenter.default.post(name: .accountWillHardSignOut, object: nil)
+        currentUser = nil
+        isAuthenticated = false
+        try await Task.yield()
+
+        // Server already deleted users/{uid} (incl. fcmToken); drop only the device token.
+        await FirebaseMessagingService.shared.deleteDeviceTokenAfterAccountDeletion()
+
+        try LocalUserDataPurgeService.shared.purgeAllLocalUserData(oldUserId: oldUserId)
+
+        founderEntitlementAttemptedUserIds.removeAll()
+
+        // The Auth session is invalid server-side; always clear the local Keychain session.
+        do {
+            try auth.signOut()
+        } catch {
+            print("⚠️ Firebase sign out failed after account deletion: \(error)")
+        }
+        GIDSignIn.sharedInstance.signOut()
+        await RevenueCatEntitlementBridge.shared.identify(userId: nil)
+
+        try createFreshLocalGuestUser()
+        if isOnline {
+            try await signInAnonymously()
+            await FirebaseMessagingService.shared.refreshAndPersistTokenIfPossible()
+        }
+        SyncCoordinator.shared.resumeProcessingAfterPurge()
+        NotificationCenter.default.post(name: .accountDidHardSignOut, object: nil)
+    }
+
     /// Resets the current local user to default guest values. Call when switching to a fresh guest experience.
     /// Single place to clear local user profile data for reuse elsewhere (e.g., sign out and switch account).
     func resetLocalUserToGuest() throws {
@@ -688,8 +738,119 @@ class FirebaseAuthService: ObservableObject {
         }
     }
     
+    // MARK: - Re-authentication (account deletion)
+
+    // Firebase requires a recent sign-in for destructive account operations. These
+    // refresh the token's auth_time by re-authenticating the signed-in user with a
+    // credential from one of their linked providers, then the caller retries.
+
+    /// Re-authenticate with the account's email and password.
+    func reauthenticate(email: String, password: String) async throws {
+        guard isOnline else {
+            throw AuthError.offline
+        }
+        guard let firebaseUser = auth.currentUser, isTrulyAuthenticated else {
+            throw AuthError.noUser
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        let credential = EmailAuthProvider.credential(withEmail: email, password: password)
+        do {
+            _ = try await firebaseUser.reauthenticate(with: credential)
+        } catch {
+            throw Self.mapReauthenticationError(error)
+        }
+    }
+
+    /// Re-authenticate with Sign in with Apple.
+    func reauthenticateWithApple() async throws {
+        guard isOnline else {
+            throw AuthError.offline
+        }
+        guard let firebaseUser = auth.currentUser, isTrulyAuthenticated else {
+            throw AuthError.noUser
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        let appleIDProvider = ASAuthorizationAppleIDProvider()
+        let request = appleIDProvider.createRequest()
+        request.requestedScopes = [.fullName, .email]
+        let nonce = Self.randomNonceString()
+        request.nonce = Self.sha256(nonce)
+
+        let authorizationController = ASAuthorizationController(authorizationRequests: [request])
+
+        let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ASAuthorization, Error>) in
+            authorizationController.delegate = AppleSignInDelegate(continuation: continuation)
+            authorizationController.presentationContextProvider = AppleSignInPresentationContextProvider()
+            authorizationController.performRequests()
+        }
+
+        guard let appleIDCredential = result.credential as? ASAuthorizationAppleIDCredential,
+              let identityToken = appleIDCredential.identityToken,
+              let idTokenString = String(data: identityToken, encoding: .utf8) else {
+            throw AuthError.networkError
+        }
+
+        let credential = OAuthProvider.appleCredential(withIDToken: idTokenString, rawNonce: nonce, fullName: appleIDCredential.fullName)
+        do {
+            _ = try await firebaseUser.reauthenticate(with: credential)
+        } catch {
+            throw Self.mapReauthenticationError(error)
+        }
+    }
+
+    /// Re-authenticate with Google.
+    func reauthenticateWithGoogle(presentingViewController: UIViewController) async throws {
+        guard isOnline else {
+            throw AuthError.offline
+        }
+        guard let firebaseUser = auth.currentUser, isTrulyAuthenticated else {
+            throw AuthError.noUser
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        guard let clientID = FirebaseApp.app()?.options.clientID else {
+            throw AuthError.notImplemented
+        }
+
+        let config = GIDConfiguration(clientID: clientID)
+        GIDSignIn.sharedInstance.configuration = config
+
+        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presentingViewController)
+        let googleUser = result.user
+        guard let idToken = googleUser.idToken?.tokenString else {
+            throw AuthError.networkError
+        }
+
+        let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: googleUser.accessToken.tokenString)
+        do {
+            _ = try await firebaseUser.reauthenticate(with: credential)
+        } catch {
+            throw Self.mapReauthenticationError(error)
+        }
+    }
+
+    private static func mapReauthenticationError(_ error: Error) -> Error {
+        let nsError = error as NSError
+        switch nsError.code {
+        case 17004, 17008, 17009: // invalidCredential, invalidEmail, wrongPassword
+            return AuthError.invalidCredentials
+        case 17024: // userMismatch — re-authenticated with a different account
+            return AuthError.reauthAccountMismatch
+        default:
+            return AuthError.networkError
+        }
+    }
+
     // MARK: - Platform Linking (for existing authenticated users)
-    
+
     func linkGoogleAccount(presentingViewController: UIViewController) async throws {
         guard !isLinking else {
             throw AuthError.networkError // Already linking
@@ -1971,7 +2132,8 @@ enum AuthError: LocalizedError {
     case emailAlreadyInUse
     case offline
     case cannotUnlinkLastProvider
-    
+    case reauthAccountMismatch
+
     var errorDescription: String? {
         switch self {
         case .notImplemented:
@@ -1999,6 +2161,8 @@ enum AuthError: LocalizedError {
         case .cannotUnlinkLastProvider:
             return "You cannot unlink your last sign-in method. Please link another account first."
             return "You are offline. Please connect to the internet to perform this action."
+        case .reauthAccountMismatch:
+            return "Please verify with the same account you are signed in with.".localized
         }
     }
 }
