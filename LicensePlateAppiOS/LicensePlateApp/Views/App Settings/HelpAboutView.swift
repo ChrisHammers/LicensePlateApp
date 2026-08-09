@@ -753,7 +753,7 @@ struct TermsView: View {
             ),
             TermsSection(
                 title: "3. Safe Driving Comes First".localized,
-                body: "RoadTrip Royale is designed for passengers — never for drivers. You agree to never interact with the app while operating a vehicle, to always follow traffic laws, and to use the app only when it is safe to do so. You are solely responsible for your conduct on the road, and HammersTech is not responsible for accidents, violations, or injuries arising from unsafe or unlawful use of the Service.".localized
+                body: "RoadTrip Royale is designed for passengers — never for drivers. If you are driving, let a passenger handle the app. You agree to never interact with the app while operating a vehicle, to always follow traffic laws, and to use the app only when it is safe to do so. You are solely responsible for your conduct on the road, and HammersTech is not responsible for accidents, violations, or injuries arising from unsafe or unlawful use of the Service.".localized
             ),
             TermsSection(
                 title: "4. Your Account".localized,
