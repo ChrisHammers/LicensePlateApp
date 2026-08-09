@@ -749,7 +749,7 @@ struct TermsView: View {
             ),
             TermsSection(
                 title: "2. Eligibility and Age Requirements".localized,
-                body: "You must be at least 13 years old, or the minimum age of digital consent in your jurisdiction if higher, to accept these Terms yourself. If you are under that age, a parent or legal guardian must accept these Terms on your behalf and supervise your use of the Service. Parents and guardians are responsible for the activity of children playing through their family group or devices.".localized
+                body: "You must be at least 13 years old, or the minimum age of digital consent in your jurisdiction if higher, to accept these Terms and create an account yourself. Children under that age may play only through a family group created and managed by a parent or legal guardian, who accepts these Terms on the child’s behalf and supervises the child’s use of the Service. Parents and guardians are responsible for the activity of children playing through their family group or devices.".localized
             ),
             TermsSection(
                 title: "3. Safe Driving Comes First".localized,
