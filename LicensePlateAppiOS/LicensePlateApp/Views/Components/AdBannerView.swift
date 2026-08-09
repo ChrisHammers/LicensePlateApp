@@ -59,7 +59,7 @@ private struct AdMobBannerRepresentable: UIViewRepresentable {
             .first { $0.isKeyWindow }?
             .rootViewController
         banner.delegate = context.coordinator
-        banner.load(Request())
+        banner.load(AdMobService.shared.makeRequest())
         return banner
     }
 

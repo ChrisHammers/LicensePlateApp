@@ -23,9 +23,26 @@ final class AdMobService {
         guard !hasStarted else { return }
         hasStarted = true
         #if canImport(GoogleMobileAds)
+        // G-rated creatives only, per AdRequestPolicy (Privacy Policy §8/§12).
+        // Mixed-audience app: per-user child flags (tagForChildDirectedTreatment /
+        // tagForUnderAgeOfConsent) stay unset until a child-account signal exists.
+        MobileAds.shared.requestConfiguration.maxAdContentRating = .general
         MobileAds.shared.start()
         #endif
     }
+
+    #if canImport(GoogleMobileAds)
+    /// The only way ad surfaces may build a request. Carries the
+    /// non-personalized-ads signal from `AdRequestPolicy` so no view
+    /// constructs ad policy itself.
+    func makeRequest() -> Request {
+        let request = Request()
+        let extras = Extras()
+        extras.additionalParameters = AdRequestPolicy.current.additionalParameters
+        request.register(extras)
+        return request
+    }
+    #endif
 
     func adUnitId(for surface: AdSurface) -> String {
         let key: String
