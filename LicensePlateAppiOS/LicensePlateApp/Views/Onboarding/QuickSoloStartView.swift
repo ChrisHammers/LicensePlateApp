@@ -192,7 +192,7 @@ struct QuickSoloStartView: View {
                         .font(.system(size: 24))
                         .foregroundStyle(hasAgreedToSafeDriving ? Color.Theme.primaryBlue : Color.Theme.softBrown)
                         .accessibleDecorative()
-                    Text("I agree to the safe driving mandate, Terms of Service and Privacy Policy".localized)
+                    Text("I understand the Terms of Service, Privacy Policy, and safe driving mandate. I agree to use RoadTrip Royale responsibly.".localized)
                         .font(.system(.body, design: .rounded))
                         .foregroundStyle(Color.Theme.primaryBlue)
                         .multilineTextAlignment(.leading)
@@ -201,7 +201,7 @@ struct QuickSoloStartView: View {
             }
             .buttonStyle(.plain)
             .accessibleButton(
-                label: "I agree to the safe driving mandate, Terms of Service and Privacy Policy".localized,
+                label: "I understand the Terms of Service, Privacy Policy, and safe driving mandate. I agree to use RoadTrip Royale responsibly.".localized,
                 hint: "Double tap to toggle".localized
             )
             .accessibilityValue(hasAgreedToSafeDriving ? "Selected".localized : "")

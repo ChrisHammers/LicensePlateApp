@@ -256,7 +256,7 @@
 "Voice input for logging plates" = "Saisie vocale pour enregistrer les plaques";
 "Understand spoken state names" = "Comprendre les noms d'états prononcés";
 "Scan QR codes for Family and Friends" = "Scanner les codes QR pour Famille et Amis";
-"I agree to the safe driving mandate, Terms of Service and Privacy Policy" = "J'accepte le mandat de conduite sécuritaire, les Conditions d'utilisation et la Politique de confidentialité";
+"I understand the Terms of Service, Privacy Policy, and safe driving mandate. I agree to use RoadTrip Royale responsibly." = "Je comprends les Conditions d'utilisation, la Politique de confidentialité et le mandat de conduite sécuritaire. J'accepte d'utiliser RoadTrip Royale de façon responsable.";
 "Closes this view" = "Ferme cette vue";
 
 // Onboarding

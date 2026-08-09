@@ -14,7 +14,7 @@ struct OnboardingDisclaimerView: View {
     @State private var hasAgreedToSafeDriving = false
 
     private let agreementLabel =
-        "I agree to the safe driving mandate, Terms of Service and Privacy Policy"
+        "I understand the Terms of Service, Privacy Policy, and safe driving mandate. I agree to use RoadTrip Royale responsibly."
 
     var body: some View {
         VStack(spacing: 0) {
