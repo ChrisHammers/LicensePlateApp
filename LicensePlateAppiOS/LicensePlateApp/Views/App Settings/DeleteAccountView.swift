@@ -279,6 +279,7 @@ struct DeleteAccountReauthCard: View {
     let methods: [AccountDeletionPolicy.ReauthMethod]
     @Binding var email: String
     @Binding var password: String
+    @State private var isPasswordVisible = false
     let isBusy: Bool
     let onApple: () -> Void
     let onGoogle: () -> Void
@@ -336,10 +337,23 @@ struct DeleteAccountReauthCard: View {
                 .textFieldStyle(.roundedBorder)
                 .disabled(isBusy)
 
-            SecureField("Password".localized, text: $password)
+            ZStack(alignment: .trailing) {
+                Group {
+                    if isPasswordVisible {
+                        TextField("Password".localized, text: $password)
+                    } else {
+                        SecureField("Password".localized, text: $password)
+                    }
+                }
                 .textContentType(.password)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
                 .textFieldStyle(.roundedBorder)
                 .disabled(isBusy)
+
+                PasswordVisibilityToggle(isVisible: $isPasswordVisible)
+                    .padding(.trailing, 2)
+            }
 
             Button {
                 onEmailPassword()

@@ -703,7 +703,8 @@ struct SignInView: View {
 
 // MARK: - Password Visibility Toggle
 
-private struct PasswordVisibilityToggle: View {
+/// Shared by SignInView and DeleteAccountView (re-auth) — keep behavior identical.
+struct PasswordVisibilityToggle: View {
     @Binding var isVisible: Bool
     
     var body: some View {
