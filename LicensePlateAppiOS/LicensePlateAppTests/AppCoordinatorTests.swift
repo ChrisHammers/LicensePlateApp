@@ -3,11 +3,18 @@
 //  LicensePlateAppTests
 //
 
+import Foundation
 import Testing
 @testable import LicensePlateApp
 
 @MainActor
 struct AppCoordinatorTests {
+
+    @Test func showForceUpdateSetsRoot() {
+        let coordinator = AppCoordinator()
+        coordinator.showForceUpdate()
+        #expect(coordinator.rootView == .forceUpdate)
+    }
 
     @Test func transitionFromSplashShowsMainWhenOnboardingComplete() {
         let coordinator = AppCoordinator()

@@ -13,7 +13,7 @@ struct ProgressionCatalogIntegrationTests {
 
     private let ladder = ProgressionCatalogProjection.rankLadder(from: .bundledDefault)
 
-    @Test func coastToCoastGoalIsSixtyThreeRegions() {
+    @Test func coastToCoastGoalIsSixtyThreeRegions() throws {
         let entry = try #require(ProgressionCatalog.bundledDefault.achievements.first { $0.id == "coast_to_coast" })
         #expect(entry.goal == ProgressionCatalogLegacyParity.coastToCoastGoal)
     }
@@ -45,6 +45,7 @@ struct ProgressionCatalogIntegrationTests {
             catalogProvider: FixedProgressionCatalogProvider()
         )
         #expect(license.rankLevel == ladder.currentRank(xp: 86_400).level)
+        #expect(license.userName == "Tester")
     }
 
     @Test func licenseCardAndLadderAgreeAt90000Xp() {
@@ -68,5 +69,5 @@ struct ProgressionCatalogIntegrationTests {
 /// Test-only catalog provider pinned to bundled defaults.
 private final class FixedProgressionCatalogProvider: ProgressionCatalogProviding, @unchecked Sendable {
     var current: ProgressionCatalog { .bundledDefault }
-    func refresh(presentationOverrideJSON: String?) {}
+    func refresh(presentationOverrideJSON: String?, xpToastOverrideJSON: String?) {}
 }

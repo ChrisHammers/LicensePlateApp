@@ -27,7 +27,7 @@ struct ProgressionCatalogTests {
         #expect(loaded == ProgressionCatalog.bundledDefault)
     }
 
-    @Test func bundledCatalogMatchesShippedParityFixtures() {
+    @Test func bundledCatalogMatchesShippedParityFixtures() throws {
         let catalog = ProgressionCatalog.bundledDefault
         #expect(catalog.achievements.count == ProgressionCatalogLegacyParity.achievementCount)
         #expect(catalog.visibleAchievements.count == ProgressionCatalogLegacyParity.visibleAchievementCount)
@@ -46,7 +46,7 @@ struct ProgressionCatalogTests {
         #expect(catalog.rankLadder.ranks.count == ProgressionCatalogLegacyParity.rankCount)
     }
 
-    @Test func deferredAchievementsAreHidden() {
+    @Test func deferredAchievementsAreHidden() throws {
         let catalog = ProgressionCatalog.bundledDefault
         let streak = try #require(catalog.achievements.first { $0.id == "streak_5" })
         let flawless = try #require(catalog.achievements.first { $0.id == "flawless" })
@@ -54,6 +54,23 @@ struct ProgressionCatalogTests {
         #expect(streak.evaluator == .winStreak)
         #expect(flawless.hidden)
         #expect(flawless.evaluator == .flawless)
+    }
+
+    @Test func returnStreakToastGroupRequiresMinStreakTwo() throws {
+        let group = try #require(ProgressionCatalog.bundledDefault.xpToastGroup(id: "return_streak"))
+        #expect(group.xpReward == 15)
+        #expect(group.minStreakForXpReward == 2)
+    }
+
+    @Test func validatorRejectsInvalidMinStreakForXpReward() {
+        var catalog = ProgressionCatalog.bundledDefault
+        if let index = catalog.xpToast.groups.firstIndex(where: { $0.id == "return_streak" }) {
+            catalog.xpToast.groups[index].minStreakForXpReward = 0
+        }
+        #expect(
+            ProgressionCatalogValidator.validate(catalog)
+                == .invalid(reason: "xp_toast_group_min_streak_for_xp_reward_out_of_range")
+        )
     }
 
     @Test func visibleAchievementsExcludesHidden() {
@@ -170,5 +187,34 @@ struct ProgressionCatalogTests {
         let provider = ProgressionCatalogProvider()
         provider.refresh(presentationOverrideJSON: "{ not json }")
         #expect(provider.current.presentation == ProgressionCatalog.bundledDefault.presentation)
+    }
+
+    @Test func mergeUpdatesXpToastOnly() {
+        let overrideJSON = """
+        {"burstDurationSeconds":6,"groups":[{"id":"discovery","displayOrder":10,"titleKeySingle":"custom.single","titleKeyMulti":"custom.multi","matchers":{"ledgerGrantKinds":["final_discovery_award"]}}]}
+        """
+        let merged = ProgressionCatalogLoader.merge(
+            bundled: .bundledDefault,
+            presentationOverrideJSON: nil,
+            xpToastOverrideJSON: overrideJSON
+        )
+        #expect(merged.xpToast.burstDurationSeconds == 6)
+        #expect(merged.xpToast.groups.count == 1)
+        #expect(merged.achievements == ProgressionCatalog.bundledDefault.achievements)
+    }
+
+    @Test func mergeIgnoresInvalidXpToastOverride() {
+        let merged = ProgressionCatalogLoader.merge(
+            bundled: .bundledDefault,
+            presentationOverrideJSON: nil,
+            xpToastOverrideJSON: "{ not json }"
+        )
+        #expect(merged.xpToast == ProgressionCatalog.bundledDefault.xpToast)
+    }
+
+    @Test func validatorRejectsInvalidXpToastBurstDuration() {
+        var xpToast = ProgressionCatalog.bundledDefault.xpToast
+        xpToast.burstDurationSeconds = 0
+        #expect(ProgressionCatalogValidator.validateXpToastOverride(xpToast) == .invalid(reason: "xp_toast_burst_duration_out_of_range"))
     }
 }

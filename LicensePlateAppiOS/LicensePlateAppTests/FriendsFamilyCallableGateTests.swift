@@ -7,6 +7,7 @@ import Foundation
 import Testing
 @testable import LicensePlateApp
 
+@MainActor
 struct FriendsFamilyCallableGateTests {
 
     @Test func blocksAnonymousAccountStateFromCallableAccess() {

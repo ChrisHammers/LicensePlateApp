@@ -36,7 +36,7 @@ struct AchievementUnlockTransitionDetectorTests {
     }
 
     @Test func newlyUnlockedIds_sortedAndDedupedByMap() {
-        let previous = ["b": .locked, "a": .locked]
+        let previous: [String: AchievementStatus] = ["b": .locked, "a": .locked]
         let next = [
             "b": AchievementStatus(isUnlocked: true, progress: 1),
             "a": AchievementStatus(isUnlocked: true, progress: 1)

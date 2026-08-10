@@ -15,7 +15,7 @@ struct UserAchievementRepositoryTests {
         let schema = Schema(versionedSchema: CurrentSchema.self)
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, migrationPlan: AppMigrationPlan.self, configurations: [config])
-        let repo = UserAchievementRepository()
+        let repo = UserAchievementRepository.shared
         repo.setModelContext(ModelContext(container))
         return repo
     }

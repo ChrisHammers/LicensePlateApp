@@ -52,7 +52,7 @@ struct DeferredProfileSetupStoreTests {
         accountProvider.state = .signedIn
         let store = DeferredProfileSetupStore(state: state, accountStateProvider: accountProvider)
 
-        let user = AppUser(id: "u1", userName: "User", firebaseUID: "u1", activeFamilyId: "fam1")
+        let user = AppUser(id: "u1", userName: "User", activeFamilyId: "fam1", firebaseUID: "u1")
         let pending = store.pendingSteps(for: user)
         #expect(!pending.contains(.family))
     }
