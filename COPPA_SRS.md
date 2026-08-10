@@ -350,6 +350,8 @@ New strings (en + es-419 + fr-CA): neutral age-screen copy; child toggle ("This 
 
 ## §18 Follow-ups (tracked, out of scope)
 
+**Tournaments/Events/Challenges settings-gated join (owner intent, 2026-08-10):** the deleted `ChallengeSettingsOverrides` (FR-45c) existed to let future tournaments require settings (e.g., location) to join. When that feature is built, implement it as an explicit **join-time consent gate** ("This event requires location sharing — enable to join") that routes through the normal settings/consent path — never as a silent override ahead of the user's privacy toggles. Child accounts: excluded from location-requiring events, or gated on the parental location toggle (D-11 fast-follow), consistent with FR-33/FR-38.
+
 Orphaned Captain/Scout string cleanup lands in F-6; remaining: **TFCD-tagged ads for consented children** (OQ-5 — owner-approved, blocked on OQ-2 counsel sign-off); **parent-controlled per-child location toggle** (D-11 — owner-approved, blocked on OQ-2 counsel sign-off); RevenueCat/Firebase-Analytics third-party deletion propagation (audit G4, Medium); IDFV-fragment default usernames (audit C4, Medium); share-sheet parental gating (audit F5, Low); RemoteConfig `storeUrl` allow-listing (audit H3, Low); review-prompt gating (audit H4, Low); PrivacyInfo.xcprivacy completeness (audit H1 — being handled separately); legacy contact-field indexing (`userSearch.ts:246-266`).
 
 ## §19 Resolved critique register
