@@ -1213,6 +1213,8 @@ class FirebaseAuthService: ObservableObject {
                  }
              }
              
+             // Contact stays local + private/contact; only platform/platformUserId are
+             // serialized to the peer-readable users/{uid} doc (LinkedPlatformFirestore).
              let platformInfo = LinkedPlatform(
                  platform: platform,
                  platformUserId: linkedUser.uid,
@@ -1561,6 +1563,11 @@ class FirebaseAuthService: ObservableObject {
                 if let phone = contact["phoneNumber"] as? String, !phone.isEmpty {
                     user.phoneNumber = phone
                 }
+                // Linked-platform contact is owner-only too (public doc keeps identity only).
+                user.linkedPlatforms = LinkedPlatformFirestore.merging(
+                    user.linkedPlatforms,
+                    privateEntries: contact["linkedPlatforms"] as? [[String: Any]]
+                )
             }
         }
 
@@ -1598,16 +1605,20 @@ class FirebaseAuthService: ObservableObject {
         try? modelContext?.save()
     }
 
-    /// Writes normalized contact under users/{uid}/private/contact for search indexes.
+    /// Writes normalized contact under users/{uid}/private/contact for search indexes,
+    /// plus the owner-only linked-platform contact rows (FR-43).
     /// Non-destructive: missing local email/phone are omitted (never cleared with null).
     private func savePrivateContact(for user: AppUser, userId: String) async throws {
-        guard let mergeFields = ContactSearchNormalization.privateContactMergeFields(
+        var contact: [String: Any] = ContactSearchNormalization.privateContactMergeFields(
             email: user.email,
             phoneNumber: user.phoneNumber
-        ) else {
-            return
+        ) ?? [:]
+
+        if let platformContacts = LinkedPlatformFirestore.privateContactEntries(from: user.linkedPlatforms) {
+            contact["linkedPlatforms"] = platformContacts
         }
-        var contact: [String: Any] = mergeFields
+
+        guard !contact.isEmpty else { return }
         contact["updatedAt"] = FieldValue.serverTimestamp()
         try await db.collection("users").document(userId)
             .collection("private").document("contact")
@@ -1757,7 +1768,10 @@ class FirebaseAuthService: ObservableObject {
             data["lastDateLoggedIn"] = Timestamp(date: lastDateLoggedIn)
         }
         data["lastLoginLocation"] = FieldValue.delete()
-        
+        // Push routing lives at users/{uid}/private/fcm; strip any legacy peer-readable copy.
+        data["fcmToken"] = FieldValue.delete()
+        data["fcmTokenUpdatedAt"] = FieldValue.delete()
+
         // Friends & Family fields
         if let activeFamilyId = user.activeFamilyId {
             data["activeFamilyId"] = activeFamilyId
@@ -1766,26 +1780,12 @@ class FirebaseAuthService: ObservableObject {
         data["isRetiredGeneral"] = user.isRetiredGeneral
         data["isRegistered"] = !(Auth.auth().currentUser?.isAnonymous ?? true)
         
+        // Platform identity only; provider email/phone/displayName go to private/contact.
+        // Overwriting the array also migrates legacy docs that still carry those subfields.
         if !user.linkedPlatforms.isEmpty {
-            data["linkedPlatforms"] = user.linkedPlatforms.map { platform in
-                var platformData: [String: Any] = [
-                    "platform": platform.platform.rawValue,
-                    "platformUserId": platform.platformUserId,
-                    "linkedAt": Timestamp(date: platform.linkedAt)
-                ]
-                if let email = platform.email {
-                    platformData["email"] = email
-                }
-                if let phone = platform.phoneNumber {
-                    platformData["phoneNumber"] = phone
-                }
-                if let displayName = platform.displayName {
-                    platformData["displayName"] = displayName
-                }
-                return platformData
-            }
+            data["linkedPlatforms"] = LinkedPlatformFirestore.publicEntries(from: user.linkedPlatforms)
         }
-        
+
         return data
     }
     
@@ -1848,10 +1848,12 @@ class FirebaseAuthService: ObservableObject {
                     linkedAt = .now
                 }
                 
+                // Legacy pre-FR-43 docs may still carry contact subfields here; reading them
+                // keeps the data until the next profile sync moves it to private/contact.
                 let platformEmail = platformData["email"] as? String
                 let platformPhone = platformData["phoneNumber"] as? String
                 let platformDisplayName = platformData["displayName"] as? String
-                
+
                 linkedPlatforms.append(LinkedPlatform(
                     platform: platformType,
                     platformUserId: platformUserId,

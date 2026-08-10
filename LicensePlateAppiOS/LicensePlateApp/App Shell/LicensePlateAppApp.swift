@@ -156,6 +156,14 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             FirebaseMessagingService.shared.didRegisterForRemoteNotifications(deviceToken: deviceToken)
         }
     }
+
+    func application(_ application: UIApplication,
+                     didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        CrashReportingService.shared.record(error: error, context: "apns_register_failed")
+        #if DEBUG
+        print("[Push] APNs registration failed: \(error.localizedDescription)")
+        #endif
+    }
 }
 
 extension AppDelegate: UNUserNotificationCenterDelegate {

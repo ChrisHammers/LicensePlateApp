@@ -727,7 +727,10 @@ class UserRepository: ObservableObject {
         }
         
         let privacyFlags = UserPrivacyFirestore.decode(from: data)
-        
+
+        // Peer-readable docs no longer carry contact identifiers (FR-43); these stay only to
+        // read legacy docs that have not been migrated by a profile sync yet. `cacheUsers`
+        // therefore never clears a locally known email/phone from a nil remote value.
         let user = AppUser(
             id: id,
             userName: userName,
@@ -782,8 +785,14 @@ class UserRepository: ObservableObject {
                 existing.userName = user.userName
                 existing.firstName = user.firstName
                 existing.lastName = user.lastName
-                existing.email = user.email
-                existing.phoneNumber = user.phoneNumber
+                // Contact is owner-only (private/contact); a peer doc never supplies it, so
+                // only overwrite when the remote actually carried a value (FR-43).
+                if let email = user.email, !email.isEmpty {
+                    existing.email = email
+                }
+                if let phoneNumber = user.phoneNumber, !phoneNumber.isEmpty {
+                    existing.phoneNumber = phoneNumber
+                }
                 existing.isEmailPublic = user.isEmailPublic
                 existing.isPhonePublic = user.isPhonePublic
                 existing.isRetiredGeneral = user.isRetiredGeneral
@@ -840,16 +849,33 @@ class UserRepository: ObservableObject {
         ])
     }
 
+    // MARK: - Push routing token (owner-only)
+
+    /// Push token doc. `users/{uid}` is peer-readable and Firestore reads are document-level,
+    /// so the token must live off it entirely (FR-43 / audit E1). Cloud Functions read it
+    /// with the Admin SDK; the account-deletion sweep of `users/{uid}/private/*` covers it.
+    private func privateFCMTokenRef(userId: String) -> DocumentReference {
+        db.collection("users").document(userId).collection("private").document("fcm")
+    }
+
     func updateFCMToken(userId: String, token: String) async throws {
-        try await db.collection("users").document(userId).setData([
-            "fcmToken": token,
-            "fcmTokenUpdatedAt": FieldValue.serverTimestamp()
+        try await privateFCMTokenRef(userId: userId).setData([
+            "token": token,
+            "updatedAt": FieldValue.serverTimestamp()
         ], merge: true)
+        await purgeLegacyPublicFCMToken(userId: userId)
     }
 
     /// Removes push routing for this user (hard sign-out). Call while Auth still matches `userId`.
     func clearFCMToken(userId: String) async throws {
-        try await db.collection("users").document(userId).updateData([
+        try await privateFCMTokenRef(userId: userId).delete()
+        await purgeLegacyPublicFCMToken(userId: userId)
+    }
+
+    /// Migration: drops the pre-FR-43 top-level `fcmToken` from the peer-readable profile doc.
+    /// Best effort — a missing doc or a rules rejection must not fail token registration/sign-out.
+    private func purgeLegacyPublicFCMToken(userId: String) async {
+        try? await db.collection("users").document(userId).updateData([
             "fcmToken": FieldValue.delete(),
             "fcmTokenUpdatedAt": FieldValue.delete()
         ])

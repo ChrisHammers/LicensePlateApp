@@ -34,10 +34,45 @@ service cloud.firestore {
       return userDoc(userId).data.isRetiredGeneral == true;
     }
 
+    // Rules cannot iterate lists, so bound the array and check every index explicitly.
+    // `platform` is a 7-case enum and the client dedupes by platform, so 7 is the true cap.
+    function linkedPlatformEntryIsPublicSafe(entries, i) {
+      return entries.size() <= i
+        || entries[i].keys().hasOnly(["platform", "platformUserId", "linkedAt"]);
+    }
+
+    // FR-43: peer-readable linkedPlatforms carry identity only. Provider email / phoneNumber /
+    // displayName belong to users/{uid}/private/contact.
+    function userDocLinkedPlatformsAreSanitized() {
+      return !request.resource.data.keys().hasAny(["linkedPlatforms"])
+        || (request.resource.data.linkedPlatforms is list
+            && request.resource.data.linkedPlatforms.size() <= 7
+            && linkedPlatformEntryIsPublicSafe(request.resource.data.linkedPlatforms, 0)
+            && linkedPlatformEntryIsPublicSafe(request.resource.data.linkedPlatforms, 1)
+            && linkedPlatformEntryIsPublicSafe(request.resource.data.linkedPlatforms, 2)
+            && linkedPlatformEntryIsPublicSafe(request.resource.data.linkedPlatforms, 3)
+            && linkedPlatformEntryIsPublicSafe(request.resource.data.linkedPlatforms, 4)
+            && linkedPlatformEntryIsPublicSafe(request.resource.data.linkedPlatforms, 5)
+            && linkedPlatformEntryIsPublicSafe(request.resource.data.linkedPlatforms, 6));
+    }
+
+    // Reads are document-level, so anything a peer must not see cannot live on users/{uid}:
+    // contact goes to private/contact, the push token to private/fcm (FR-43 / audit E1).
+    // Deleting a field with FieldValue.delete() keeps it out of request.resource.data, so
+    // migration writes that strip these keys still pass.
     // entitlementTags may remain on merge results; clients must not *change* them
     // (see userDocPreservesEntitlementTags). Do not list them here or updates fail for tagged users.
     function userDocHasNoPrivateFields() {
-      return !request.resource.data.keys().hasAny(["deviceIdentifier", "lastLoginLocationData", "lastLoginLocations", "lastLoginLocation"]);
+      return !request.resource.data.keys().hasAny([
+        "deviceIdentifier",
+        "lastLoginLocationData",
+        "lastLoginLocations",
+        "lastLoginLocation",
+        "email",
+        "phoneNumber",
+        "fcmToken",
+        "fcmTokenUpdatedAt"
+      ]) && userDocLinkedPlatformsAreSanitized();
     }
 
     function userDocPreservesEntitlementTags() {
@@ -68,10 +103,13 @@ service cloud.firestore {
       allow delete: if false; // handle via backend flows if needed
     }
 
+    // Owner-only side docs. `fcm` holds the push routing token (read by Cloud Functions
+    // via the Admin SDK); `contact` holds email/phone + linked-platform contact.
     // `lastLoginLocationData` is intentionally NOT allowed: the silent login-location
-    // flow was removed. Leftover dev docs are deleted by scripts/deleteLoginLocationData.ts.
+    // flow was removed (F-1). Leftover dev docs are deleted by scripts/deleteLoginLocationData.ts.
     match /users/{userId}/private/{docId} {
-      allow read, write: if isSignedIn() && uid() == userId && docId == "contact";
+      allow read, write: if isSignedIn() && uid() == userId &&
+        (docId == "contact" || docId == "fcm");
     }
 
     // Email/phone lookup indexes — Admin SDK / Cloud Functions only

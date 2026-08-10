@@ -45,10 +45,13 @@ final class FirebaseMessagingService: NSObject {
     func didRegisterForRemoteNotifications(deviceToken: Data) {
         #if canImport(FirebaseMessaging)
         Messaging.messaging().apnsToken = deviceToken
+        #if DEBUG
+        print("[Push] APNs device token set (\(deviceToken.count) bytes)")
+        #endif
         #endif
     }
 
-    /// Clears Firestore `fcmToken` for `userId` and deletes the device Messaging token.
+    /// Clears the Firestore push token (`users/{uid}/private/fcm`) and the device Messaging token.
     /// Call while Auth still represents that user, before `auth.signOut()`.
     func clearTokenForSignOut(userId: String) async {
         guard !userId.isEmpty else { return }
@@ -72,7 +75,8 @@ final class FirebaseMessagingService: NSObject {
         #endif
     }
 
-    /// Account deletion: the server already removed users/{uid} (incl. `fcmToken`), so
+    /// Account deletion: the server already removed users/{uid} and its `private/*` docs
+    /// (incl. the `fcm` push-token doc), so
     /// only the device Messaging token is dropped — never a Firestore write that could
     /// resurrect the deleted user doc.
     func deleteDeviceTokenAfterAccountDeletion() async {
@@ -93,6 +97,9 @@ final class FirebaseMessagingService: NSObject {
             await persistTokenIfPossible(token)
         } catch {
             CrashReportingService.shared.record(error: error, context: "fcm_token_refresh")
+            #if DEBUG
+            print("[Push] FCM token refresh FAILED: \(error.localizedDescription)")
+            #endif
         }
         #endif
     }
@@ -104,8 +111,14 @@ final class FirebaseMessagingService: NSObject {
         do {
             try await UserRepository.shared.updateFCMToken(userId: userId, token: token)
             AnalyticsService.shared.log(.fcmTokenRegistered)
+            #if DEBUG
+            print("[Push] FCM token persisted to private/fcm")
+            #endif
         } catch {
             CrashReportingService.shared.record(error: error, context: "fcm_token_register")
+            #if DEBUG
+            print("[Push] FCM token persist FAILED: \(error.localizedDescription)")
+            #endif
         }
         #endif
     }

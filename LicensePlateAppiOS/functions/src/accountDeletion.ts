@@ -37,8 +37,9 @@ async function deleteSubcollectionDocs(
 /**
  * In-app account deletion (App Review Guideline 5.1.1(v); Privacy Policy §11, ToS §15).
  * Deletes the caller's Firebase Auth user and their personal cloud data:
- * users/{uid} (incl. fcmToken fields), users/{uid}/private/* (incl. the contact doc
- * holding email/phoneNumber), search lookup indexes, friend edges (+friendCount on the
+ * users/{uid} (incl. any legacy fcmToken fields), users/{uid}/private/* (incl. the contact
+ * doc holding email/phoneNumber and the fcm doc holding the push token, both swept by
+ * listDocuments()), search lookup indexes, friend edges (+friendCount on the
  * surviving side), family membership, user_progression, user_achievements, and
  * public_lifetime_stats. Shared trip/gameplay events are retained de-identified so other
  * participants' trips keep working (Privacy Policy §9).
@@ -191,7 +192,7 @@ export const deleteAccount = enforcedCallable(async (data, context) => {
           : null,
   });
 
-  // ---- users/{uid}/private/* (contact email/phoneNumber, login locations, ...)
+  // ---- users/{uid}/private/* (contact email/phoneNumber, fcm push token, login locations, ...)
   await deleteSubcollectionDocs(userRef, "private");
 
   // ---- Progression / achievements / public stats keyed by uid
@@ -205,7 +206,7 @@ export const deleteAccount = enforcedCallable(async (data, context) => {
 
   await db.collection("public_lifetime_stats").doc(userId).delete();
 
-  // ---- users/{uid} itself (includes fcmToken / fcmTokenUpdatedAt fields)
+  // ---- users/{uid} itself (includes any legacy fcmToken / fcmTokenUpdatedAt fields)
   await userRef.delete();
 
   await writeAuditLog({
