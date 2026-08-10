@@ -18,9 +18,6 @@ final class CrashReportingService {
     private init() {}
 
     func configure() {
-        #if canImport(FirebaseCrashlytics)
-        Crashlytics.crashlytics().setCrashlyticsCollectionEnabled(true)
-        #endif
         AnalyticsService.shared.log(.crashReportingConfigured)
     }
 

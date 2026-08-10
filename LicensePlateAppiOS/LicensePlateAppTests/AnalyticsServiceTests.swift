@@ -371,4 +371,39 @@ struct AnalyticsServiceTests {
         #expect(buildFailed.name == "analytics_property_build_failed")
         #expect(buildFailed.parameters?["error"] as? String == "decode failed")
     }
+
+    // MARK: - FR-44 / F-3: deepLinkOpened parameter allow-list
+
+    @Test @MainActor func deepLinkOpenedKeepsOnlyAllowedParams() async throws {
+        let event = AnalyticsService.Event.deepLinkOpened(
+            type: "family",
+            params: ["inviteId": "inv-1", "familyId": "fam-1"]
+        )
+        #expect(event.name == "deep_link_opened")
+        #expect(event.parameters?["type"] as? String == "family")
+        #expect(event.parameters?["inviteId"] as? String == "inv-1")
+        #expect(event.parameters?["familyId"] as? String == "fam-1")
+        #expect(event.parameters?["dropped_param_count"] == nil)
+    }
+
+    @Test @MainActor func deepLinkOpenedDropsUnknownParams() async throws {
+        let event = AnalyticsService.Event.deepLinkOpened(
+            type: "friend",
+            params: [
+                "inviteId": "inv-2",
+                "referrer": "attacker-controlled",
+                "utm_source": "malicious",
+            ]
+        )
+        // Event name must not change (analytics changes must not alter event names).
+        #expect(event.name == "deep_link_opened")
+
+        // Only the recognized key survives.
+        #expect(event.parameters?["inviteId"] as? String == "inv-2")
+        #expect(event.parameters?["referrer"] == nil)
+        #expect(event.parameters?["utm_source"] == nil)
+
+        // Unknown params are counted, not silently discarded without a trace.
+        #expect(event.parameters?["dropped_param_count"] as? Int == 2)
+    }
 }

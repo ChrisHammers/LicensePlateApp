@@ -569,13 +569,27 @@ class AnalyticsService: AnalyticsLogging {
             case .persistenceRetryTapped: return "persistence_retry_tapped"
             }
         }
-        
+
+        /// Query-param keys `DeepLinkHandler` recognizes for app-generated invite links
+        /// (see `DeepLinkHandler.swift` and the `deepLink` builders in Cloud Functions).
+        /// Anything else in the incoming URL is unknown/unexpected and must not be
+        /// forwarded into the analytics payload verbatim.
+        private static let deepLinkAllowedParamKeys: Set<String> = ["inviteId", "familyId"]
+
         var parameters: [String: Any]? {
             switch self {
             case .deepLinkOpened(let type, let params):
                 var paramsDict: [String: Any] = ["type": type]
+                var droppedParamCount = 0
                 for (key, value) in params {
-                    paramsDict[key] = value
+                    if Event.deepLinkAllowedParamKeys.contains(key) {
+                        paramsDict[key] = value
+                    } else {
+                        droppedParamCount += 1
+                    }
+                }
+                if droppedParamCount > 0 {
+                    paramsDict["dropped_param_count"] = droppedParamCount
                 }
                 return paramsDict
             case .userSearchPerformed(let queryType):
