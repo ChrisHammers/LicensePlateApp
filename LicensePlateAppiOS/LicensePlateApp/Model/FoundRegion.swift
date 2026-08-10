@@ -46,20 +46,36 @@ struct LocationData: Codable {
 /// `TripActivityEventPayloadKey.location*`.
 extension LocationData {
 
+    /// Decimal places kept for shared coordinates. 3 dp ≈ 110 m — enough to drop a
+    /// "found here" pin in the right neighbourhood, not enough to pinpoint a home.
+    static let payloadCoordinateDecimalPlaces = 3
+
+    /// Round a coordinate to `payloadCoordinateDecimalPlaces` before it leaves the device.
+    static func coarsenedCoordinate(_ degrees: Double) -> Double {
+        guard degrees.isFinite else { return degrees }
+        let scale = pow(10.0, Double(payloadCoordinateDecimalPlaces))
+        return (degrees * scale).rounded() / scale
+    }
+
     /// String fields to merge into a `region_found` payload.
+    ///
+    /// Deliberately coarse (COPPA remediation F-4 / FR-45): this payload syncs to the shared
+    /// trip document and is visible to every trip member, so it carries only a ~110 m rounded
+    /// latitude/longitude plus the capture timestamp. Altitude and horizontal/vertical accuracy
+    /// are **not** written — no consumer reads them, and together they sharpen a fix well past
+    /// what a map pin needs. `init(payload:)` defaults them when absent.
     func payloadFields() -> [String: String] {
         [
-            TripActivityEventPayloadKey.locationLatitude: String(latitude),
-            TripActivityEventPayloadKey.locationLongitude: String(longitude),
-            TripActivityEventPayloadKey.locationAltitude: String(altitude),
-            TripActivityEventPayloadKey.locationHorizontalAccuracy: String(horizontalAccuracy),
-            TripActivityEventPayloadKey.locationVerticalAccuracy: String(verticalAccuracy),
+            TripActivityEventPayloadKey.locationLatitude: String(Self.coarsenedCoordinate(latitude)),
+            TripActivityEventPayloadKey.locationLongitude: String(Self.coarsenedCoordinate(longitude)),
             TripActivityEventPayloadKey.locationTimestamp: String(timestamp.timeIntervalSince1970)
         ]
     }
 
     /// nil unless latitude and longitude both parse; remaining fields default defensively
-    /// (missing accuracy → -1, CoreLocation's invalid marker).
+    /// (missing accuracy → -1, CoreLocation's invalid marker). Altitude and accuracy are no
+    /// longer written by `payloadFields()`, so they normally take those defaults; the reads
+    /// remain for events recorded before the precision change.
     init?(payload: [String: String]?) {
         guard let payload,
               let latitude = payload[TripActivityEventPayloadKey.locationLatitude].flatMap(Double.init),

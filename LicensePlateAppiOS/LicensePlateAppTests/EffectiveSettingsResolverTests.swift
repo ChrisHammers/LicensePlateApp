@@ -77,7 +77,9 @@ struct EffectiveSettingsResolverTests {
         #expect(effective.skipVoiceConfirmation == true)
     }
 
-    @Test func challengeRequiresLocationForcesSaveWithoutMutatingStoredPrefs() {
+    /// COPPA F-4 / FR-45: the resolver has no override channel. A participant who turned
+    /// location off stays off no matter what else is on, and resolving never mutates prefs.
+    @Test func participantOptOutIsNotOverridableAndResolveDoesNotMutatePrefs() {
         let sessionId = UUID()
         let prefsStore = makePrefsStore()
         let stored = TripParticipantPrefs(
@@ -89,16 +91,14 @@ struct EffectiveSettingsResolverTests {
         )
         prefsStore.apply(sessionId: sessionId, userId: "a", prefs: stored)
         let resolver = EffectiveSettingsResolver(
-            privacyDefaults: makePrivacyDefaults(),
+            privacyDefaults: makePrivacyDefaults(save: true, show: true, track: true),
             prefsStore: prefsStore
         )
-        let effective = resolver.resolve(
-            sessionId: sessionId,
-            userId: "a",
-            challenge: ChallengeSettingsOverrides(requiresLocation: true, requiresTracking: true)
-        )
-        #expect(effective.saveLocationWhenMarkingPlates == true)
-        #expect(effective.trackMyLocationDuringTrips == true)
+        let effective = resolver.resolve(sessionId: sessionId, userId: "a")
+        #expect(effective.saveLocationWhenMarkingPlates == false)
+        #expect(effective.trackMyLocationDuringTrips == false)
+        // The one flag the participant left on still resolves on — off-wins is not off-always.
+        #expect(effective.showMyLocationOnLargeMap == true)
         #expect(prefsStore.prefs(sessionId: sessionId, userId: "a") == stored)
     }
 

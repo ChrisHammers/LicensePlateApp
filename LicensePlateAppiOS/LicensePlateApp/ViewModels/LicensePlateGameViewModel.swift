@@ -152,10 +152,16 @@ final class LicensePlateGameViewModel: ObservableObject {
 
     /// Location payload gating (GPS Step 4): cached fixes older than this are not attached to finds.
     private static let maxLocationFixAgeForDiscovery: TimeInterval = 60
-    /// One-shot warm threshold and periodic-warm cadence. Must stay comfortably below
-    /// `maxLocationFixAgeForDiscovery` (minus one-shot latency) so the periodic warm keeps
-    /// the cache inside the capture window at all times.
+    /// Periodic-warm cadence. Must stay comfortably below `maxLocationFixAgeForDiscovery`
+    /// (minus one-shot latency) so the periodic warm keeps the cache inside the capture
+    /// window at all times.
     static let locationWarmInterval: TimeInterval = 45
+    /// Staleness threshold for the one-shot warm request. Must satisfy
+    /// `locationWarmRefreshThreshold + locationWarmInterval + one-shot latency < maxLocationFixAgeForDiscovery`,
+    /// so that every periodic tick refreshes a fix that could age out before the next tick.
+    /// (Using `locationWarmInterval` here skipped every other tick, leaving a recurring
+    /// ~30 s window past the capture cutoff where finds silently dropped location.)
+    static let locationWarmRefreshThreshold: TimeInterval = 10
     private let locationSettings: LocationSettingsProviding
     /// Cached-fix source; never triggers GPS acquisition. Injectable for tests.
     private let currentLocationFix: @MainActor () -> CLLocation?
@@ -179,7 +185,7 @@ final class LicensePlateGameViewModel: ObservableObject {
         locationSettings: LocationSettingsProviding? = nil,
         currentLocationFix: @escaping @MainActor () -> CLLocation? = { LocationManager.shared.location },
         warmLocationFix: @escaping @MainActor () -> Void = {
-            LocationManager.shared.requestOneShotLocationIfStale(maxAge: LicensePlateGameViewModel.locationWarmInterval)
+            LocationManager.shared.requestOneShotLocationIfStale(maxAge: LicensePlateGameViewModel.locationWarmRefreshThreshold)
         }
     ) {
         self.currentSession = session
@@ -1016,6 +1022,10 @@ final class LicensePlateGameViewModel: ObservableObject {
     /// Location fields for a `region_found` payload, or nil when the setting is off,
     /// no fix is cached, the fix is invalid, or it is older than `maxLocationFixAgeForDiscovery`.
     /// Reads the cached fix synchronously — never delays the find or triggers GPS.
+    ///
+    /// `horizontalAccuracy` is a capture-side validity check only (negative means CoreLocation
+    /// has no usable fix); it is not published. `payloadFields()` coarsens the coordinates to
+    /// ~110 m and drops altitude/accuracy before the event syncs (COPPA F-4 / FR-45).
     private func locationPayloadFieldsForDiscovery() -> [String: String]? {
         guard locationSettings.saveLocationWhenMarkingPlates,
               let fix = currentLocationFix(),

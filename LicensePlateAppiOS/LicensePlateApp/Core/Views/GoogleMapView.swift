@@ -825,6 +825,10 @@ struct GoogleMapView: UIViewRepresentable {
         /// Render pins at the capture location for found regions that carry location data (WHERE they were found).
         /// Distinct from `renderMarkers` (region-center status circles): pin-shaped icon, own storage.
         /// Marker title/snippet feed the default map accessibility (title → label, snippet → hint).
+        ///
+        /// Coordinates are approximate by design — synced fixes are rounded to ~110 m
+        /// (see `LocationData.payloadFields()`), so a pin marks the neighbourhood, not the spot.
+        /// Only latitude/longitude are read; altitude and accuracy are absent from payloads.
         func renderFoundLocationMarkers(
             on mapView: GMSMapView,
             foundRegions: [FoundRegion],

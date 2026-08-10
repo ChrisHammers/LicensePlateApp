@@ -58,13 +58,22 @@ enum TripActivityEventPayloadKey {
     static let inviteId = "inviteId"
     static let inviteMethod = "inviteMethod"
     /// `region_found` only, present when the finder's "Save location when marking plates"
-    /// setting was on and a fresh fix was cached. Mirror `LocationData` fields; all-or-nothing
-    /// via `LocationData.payloadFields()` / `LocationData(payload:)`. Syncs to the shared
-    /// trip document — visible to trip members in multiplayer. Never log these values.
+    /// setting was on and a fresh fix was cached. Written by `LocationData.payloadFields()`,
+    /// read by `LocationData(payload:)`. Syncs to the shared trip document — visible to trip
+    /// members in multiplayer. Never log these values.
+    ///
+    /// **Written set is latitude + longitude + timestamp only**, and the coordinates are
+    /// rounded to 3 decimal places (~110 m) before they leave the device (COPPA remediation
+    /// F-4 / FR-45). Consumers must tolerate the altitude/accuracy keys being absent.
     static let locationLatitude = "locationLatitude"
     static let locationLongitude = "locationLongitude"
+    /// Legacy, read-only: no longer written. Only events recorded before the precision change
+    /// carry it; `LocationData(payload:)` defaults it to 0 when absent.
     static let locationAltitude = "locationAltitude"
+    /// Legacy, read-only: no longer written. Capture-side accuracy still gates whether a fix is
+    /// used at all, but the value is never published. Defaults to -1 when absent.
     static let locationHorizontalAccuracy = "locationHorizontalAccuracy"
+    /// Legacy, read-only: no longer written. Defaults to -1 when absent.
     static let locationVerticalAccuracy = "locationVerticalAccuracy"
     /// Unix seconds (same style as `serverCommittedAt`).
     static let locationTimestamp = "locationTimestamp"

@@ -5,6 +5,10 @@
 //  GPS Step 4 — location at plate find: LocationData payload round-trip, replay
 //  population of foundAtLocation, and the ViewModel gate (setting + staleness).
 //
+//  COPPA remediation F-4 / FR-45 — also pins the shared-payload precision contract:
+//  latitude/longitude rounded to 3 decimals (~110 m), altitude and horizontal/vertical
+//  accuracy never written, timestamp kept.
+//
 
 import Foundation
 import CoreLocation
@@ -15,22 +19,68 @@ import Testing
 
 struct LocationDataPayloadTests {
 
+    private static let sampleFix = LocationData(from: CLLocation(
+        coordinate: CLLocationCoordinate2D(latitude: 37.334899, longitude: -122.009056),
+        altitude: 12.5,
+        horizontalAccuracy: 8,
+        verticalAccuracy: 4,
+        timestamp: Date(timeIntervalSince1970: 1_750_000_000)
+    ))
+
+    /// COPPA F-4 / FR-45: shared coordinates are rounded to 3 dp (~110 m).
+    @Test func payloadRoundsCoordinatesToThreeDecimals() {
+        let fields = Self.sampleFix.payloadFields()
+        #expect(fields[TripActivityEventPayloadKey.locationLatitude] == "37.335")
+        #expect(fields[TripActivityEventPayloadKey.locationLongitude] == "-122.009")
+    }
+
+    /// Rounding is nearest, not truncation, and survives the negative hemisphere.
+    @Test func coarsenedCoordinateRoundsToNearest() {
+        #expect(LocationData.payloadCoordinateDecimalPlaces == 3)
+        #expect(LocationData.coarsenedCoordinate(40.0) == 40.0)
+        #expect(LocationData.coarsenedCoordinate(40.1234) == 40.123)
+        #expect(LocationData.coarsenedCoordinate(40.1236) == 40.124)
+        #expect(LocationData.coarsenedCoordinate(-105.98765) == -105.988)
+    }
+
+    /// Altitude and both accuracy figures are dropped at write time — they are never uploaded.
+    @Test func payloadOmitsAltitudeAndAccuracyKeys() {
+        let fields = Self.sampleFix.payloadFields()
+        #expect(fields[TripActivityEventPayloadKey.locationAltitude] == nil)
+        #expect(fields[TripActivityEventPayloadKey.locationHorizontalAccuracy] == nil)
+        #expect(fields[TripActivityEventPayloadKey.locationVerticalAccuracy] == nil)
+        #expect(Set(fields.keys) == [
+            TripActivityEventPayloadKey.locationLatitude,
+            TripActivityEventPayloadKey.locationLongitude,
+            TripActivityEventPayloadKey.locationTimestamp
+        ])
+    }
+
+    /// Decode still works with the dropped keys absent; they take the defensive defaults.
     @Test func payloadFieldsRoundTripThroughInit() {
-        let original = LocationData(from: CLLocation(
-            coordinate: CLLocationCoordinate2D(latitude: 37.3349, longitude: -122.0090),
-            altitude: 12.5,
-            horizontalAccuracy: 8,
-            verticalAccuracy: 4,
-            timestamp: Date(timeIntervalSince1970: 1_750_000_000)
-        ))
+        let original = Self.sampleFix
         let decoded = LocationData(payload: original.payloadFields())
         #expect(decoded != nil)
-        #expect(decoded?.latitude == original.latitude)
-        #expect(decoded?.longitude == original.longitude)
-        #expect(decoded?.altitude == original.altitude)
-        #expect(decoded?.horizontalAccuracy == original.horizontalAccuracy)
-        #expect(decoded?.verticalAccuracy == original.verticalAccuracy)
+        #expect(decoded?.latitude == LocationData.coarsenedCoordinate(original.latitude))
+        #expect(decoded?.longitude == LocationData.coarsenedCoordinate(original.longitude))
+        #expect(decoded?.altitude == 0)
+        #expect(decoded?.horizontalAccuracy == -1)
+        #expect(decoded?.verticalAccuracy == -1)
         #expect(decoded?.timestamp == original.timestamp)
+    }
+
+    /// Events written before the precision change still decode their legacy keys.
+    @Test func initStillReadsLegacyAltitudeAndAccuracyKeys() {
+        let decoded = LocationData(payload: [
+            TripActivityEventPayloadKey.locationLatitude: "37.335",
+            TripActivityEventPayloadKey.locationLongitude: "-122.009",
+            TripActivityEventPayloadKey.locationAltitude: "12.5",
+            TripActivityEventPayloadKey.locationHorizontalAccuracy: "8.0",
+            TripActivityEventPayloadKey.locationVerticalAccuracy: "4.0"
+        ])
+        #expect(decoded?.altitude == 12.5)
+        #expect(decoded?.horizontalAccuracy == 8.0)
+        #expect(decoded?.verticalAccuracy == 4.0)
     }
 
     @Test func initNilWhenCoordinatesMissingOrMalformed() {
@@ -74,7 +124,7 @@ struct DiscoveryReplayLocationTests {
         let sessionId = UUID()
         let gameId = UUID()
         let fix = LocationData(from: CLLocation(
-            coordinate: CLLocationCoordinate2D(latitude: 44.97, longitude: -93.26),
+            coordinate: CLLocationCoordinate2D(latitude: 44.9724567, longitude: -93.2634567),
             altitude: 250,
             horizontalAccuracy: 10,
             verticalAccuracy: 6,
@@ -84,8 +134,14 @@ struct DiscoveryReplayLocationTests {
 
         let result = TripActivityEventDiscoveryReplay.replay(events: [event], gameInstanceFilter: gameId)
 
-        #expect(locationDataEqual(result.discoveries.first?.location, fix))
-        #expect(locationDataEqual(result.foundRegions.first?.foundAtLocation, fix))
+        // What replay can recover is the coarse fix, not the original one.
+        let expected = LocationData(payload: fix.payloadFields())
+        #expect(locationDataEqual(result.discoveries.first?.location, expected))
+        #expect(locationDataEqual(result.foundRegions.first?.foundAtLocation, expected))
+        #expect(result.discoveries.first?.location?.latitude == 44.972)
+        #expect(result.discoveries.first?.location?.longitude == -93.263)
+        #expect(result.discoveries.first?.location?.timestamp == fix.timestamp)
+        #expect(result.discoveries.first?.location?.horizontalAccuracy == -1)
     }
 
     @Test func replayLeavesLocationNilWhenKeysAbsent() {
@@ -187,9 +243,12 @@ struct DiscoveryLocationGateTests {
         )
     }
 
-    private func freshFix() -> CLLocation {
+    private func freshFix(
+        latitude: CLLocationDegrees = 40.0,
+        longitude: CLLocationDegrees = -105.0
+    ) -> CLLocation {
         CLLocation(
-            coordinate: CLLocationCoordinate2D(latitude: 40.0, longitude: -105.0),
+            coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
             altitude: 1600,
             horizontalAccuracy: 5,
             verticalAccuracy: 3,
@@ -215,6 +274,27 @@ struct DiscoveryLocationGateTests {
         #expect(payload?[TripActivityEventPayloadKey.locationLatitude] == "40.0")
         #expect(payload?[TripActivityEventPayloadKey.locationLongitude] == "-105.0")
         #expect(LocationData(payload: payload) != nil)
+    }
+
+    /// The recorded event carries a coarse fix and no altitude/accuracy, even though the
+    /// capture-side check reads `horizontalAccuracy` to decide the fix is usable at all.
+    @Test func recordedPayloadIsCoarseAndOmitsAltitudeAndAccuracy() {
+        let eventRepo = MockTripActivityEventRepository()
+        let viewModel = makeViewModel(
+            saveLocationSetting: true,
+            fix: freshFix(latitude: 40.0189234, longitude: -105.2705678),
+            eventRepo: eventRepo
+        )
+
+        _ = viewModel.submitDiscovery(regionID: "us-co", inputMethod: .list)
+
+        let payload = recordedRegionFoundPayload(eventRepo)
+        #expect(payload?[TripActivityEventPayloadKey.locationLatitude] == "40.019")
+        #expect(payload?[TripActivityEventPayloadKey.locationLongitude] == "-105.271")
+        #expect(payload?[TripActivityEventPayloadKey.locationAltitude] == nil)
+        #expect(payload?[TripActivityEventPayloadKey.locationHorizontalAccuracy] == nil)
+        #expect(payload?[TripActivityEventPayloadKey.locationVerticalAccuracy] == nil)
+        #expect(payload?[TripActivityEventPayloadKey.locationTimestamp] != nil)
     }
 
     @Test func settingOffOmitsLocationKeysAndFindSucceeds() {
@@ -263,5 +343,21 @@ struct DiscoveryLocationGateTests {
             return
         }
         #expect(recordedRegionFoundPayload(eventRepo)?[TripActivityEventPayloadKey.locationLatitude] == nil)
+    }
+
+    /// Warm-cadence invariant: a fix refreshed at one periodic tick must still be inside the
+    /// 60 s capture window at the NEXT tick, including the refresh-threshold age it may already
+    /// carry and one-shot GPS latency (budgeted 5 s). With threshold == interval (the old bug),
+    /// every other tick skipped its refresh, leaving a recurring ~30 s window where finds on
+    /// non-map tabs (voice, list) silently dropped location.
+    @Test func locationWarmCadenceKeepsFixInsideCaptureWindow() {
+        let oneShotLatencyBudget: TimeInterval = 5
+        let maxCaptureAge: TimeInterval = 60 // LicensePlateGameViewModel.maxLocationFixAgeForDiscovery (private)
+        #expect(
+            LicensePlateGameViewModel.locationWarmRefreshThreshold
+                + LicensePlateGameViewModel.locationWarmInterval
+                + oneShotLatencyBudget <= maxCaptureAge
+        )
+        #expect(LicensePlateGameViewModel.locationWarmRefreshThreshold < LicensePlateGameViewModel.locationWarmInterval)
     }
 }

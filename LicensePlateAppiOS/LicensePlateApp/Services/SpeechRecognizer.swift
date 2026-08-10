@@ -65,11 +65,25 @@ class SpeechRecognizer: ObservableObject {
             return
         }
         
-        guard let speechRecognizer = speechRecognizer, speechRecognizer.isAvailable else {
+        guard let speechRecognizer = speechRecognizer else {
             errorMessage = "Speech recognizer not available"
             return
         }
-        
+
+        switch Self.startDecision(
+            isAvailable: speechRecognizer.isAvailable,
+            supportsOnDeviceRecognition: speechRecognizer.supportsOnDeviceRecognition
+        ) {
+        case .recognizerUnavailable:
+            errorMessage = "Speech recognizer not available"
+            return
+        case .onDeviceUnavailable:
+            errorMessage = Self.onDeviceUnavailableMessage
+            return
+        case .start:
+            break
+        }
+
         // Stop any existing recognition
         stopListening()
         isStarting = true
@@ -88,7 +102,7 @@ class SpeechRecognizer: ObservableObject {
             return
         }
         
-        recognitionRequest.shouldReportPartialResults = true
+        Self.configureRequest(recognitionRequest)
         // Continue setup immediately; sound plays only when Listening (via onListeningStarted)
         continueStartListening(recognitionRequest: recognitionRequest, generation: generation)
     }
@@ -245,6 +259,41 @@ class SpeechRecognizer: ObservableObject {
         if hasInstalledTap {
             audioEngine.inputNode.removeTap(onBus: 0)
         }
+    }
+}
+
+// MARK: - On-device only (COPPA remediation F-4 / FR-45)
+
+/// Voice audio must never leave the device. `SFSpeechRecognizer` defaults to server-backed
+/// recognition, which would upload the microphone stream — including a child's voice — to
+/// Apple. These two pure helpers are the whole policy: decide before starting, and configure
+/// every request the same way. They are static so the rule is unit-testable without a mic.
+extension SpeechRecognizer {
+
+    /// Outcome of the pre-flight check in `startListening()`.
+    enum StartDecision: Equatable {
+        case start
+        case recognizerUnavailable
+        /// The on-device model is missing for this locale. We surface the error rather than
+        /// silently falling back to server recognition.
+        case onDeviceUnavailable
+    }
+
+    static func startDecision(isAvailable: Bool, supportsOnDeviceRecognition: Bool) -> StartDecision {
+        guard isAvailable else { return .recognizerUnavailable }
+        guard supportsOnDeviceRecognition else { return .onDeviceUnavailable }
+        return .start
+    }
+
+    static var onDeviceUnavailableMessage: String {
+        "Voice needs on-device speech recognition, which isn't ready on this device. Use the List tab to add plates.".localized
+    }
+
+    /// Single place that configures a recognition request. `requiresOnDeviceRecognition` is
+    /// mandatory, never conditional — `startDecision` has already refused the unsupported case.
+    static func configureRequest(_ request: SFSpeechAudioBufferRecognitionRequest) {
+        request.shouldReportPartialResults = true
+        request.requiresOnDeviceRecognition = true
     }
 }
 

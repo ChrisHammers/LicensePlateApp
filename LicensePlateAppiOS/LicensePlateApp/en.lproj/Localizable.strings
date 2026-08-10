@@ -1396,3 +1396,6 @@
 "Password" = "Password";
 "You are currently offline. Please check your connection and try again." = "You are currently offline. Please check your connection and try again.";
 "Please verify with the same account you are signed in with." = "Please verify with the same account you are signed in with.";
+
+// Voice Recognition - on-device requirement
+"Voice needs on-device speech recognition, which isn't ready on this device. Use the List tab to add plates." = "Voice needs on-device speech recognition, which isn't ready on this device. Use the List tab to add plates.";
