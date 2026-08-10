@@ -32,7 +32,8 @@ enum AuthProfileSyncPolicy {
         case abortWithoutCreate
     }
 
-    /// Fields allowed on the login-tracking Firestore write (B). Identity/contact must never appear here.
+    /// Fields allowed on the login-tracking Firestore write (B).
+    /// Identity, contact, and location must never appear here — login captures no coordinates.
     static let loginTimestampFieldKeys: Set<String> = [
         "lastDateLoggedIn",
         "lastUpdated",

@@ -68,9 +68,10 @@ service cloud.firestore {
       allow delete: if false; // handle via backend flows if needed
     }
 
+    // `lastLoginLocationData` is intentionally NOT allowed: the silent login-location
+    // flow was removed. Leftover dev docs are deleted by scripts/deleteLoginLocationData.ts.
     match /users/{userId}/private/{docId} {
-      allow read, write: if isSignedIn() && uid() == userId &&
-        (docId == "lastLoginLocationData" || docId == "contact");
+      allow read, write: if isSignedIn() && uid() == userId && docId == "contact";
     }
 
     // Email/phone lookup indexes — Admin SDK / Cloud Functions only

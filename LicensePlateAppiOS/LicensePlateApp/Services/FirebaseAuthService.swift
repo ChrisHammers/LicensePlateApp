@@ -17,7 +17,6 @@ import AuthenticationServices
 import GoogleSignIn
 import Network
 import CryptoKit
-import CoreLocation
 
 /// Network monitoring for offline detection
 @MainActor
@@ -75,9 +74,6 @@ class FirebaseAuthService: ObservableObject {
     /// Published mirror of reachability so SwiftUI can react when connectivity returns.
     @Published private(set) var isNetworkReachable: Bool
 
-    // Store location delegates to prevent deallocation
-    var activeLocationDelegates: [OneTimeLocationDelegate] = []
-    
     // Track last login tracking time to prevent duplicates
     private var lastLoginTrackingTime: Date?
     
@@ -1315,7 +1311,7 @@ class FirebaseAuthService: ObservableObject {
          usernameConflictResolver?(newUsername)
      }
     
-    /// Update login tracking (date and location if available)
+    /// Update login tracking (login timestamps only — never location).
     private func updateLoginTracking() async {
         guard let user = currentUser,
               let modelContext = modelContext else {
@@ -1337,40 +1333,13 @@ class FirebaseAuthService: ObservableObject {
         user.lastDateLoggedIn = loginDate
         user.lastUpdated = loginDate
         
-        // Check location permission and update location if available
-        let locationManager = CLLocationManager()
-        let authStatus = locationManager.authorizationStatus
-        
-        if authStatus == .authorizedWhenInUse || authStatus == .authorizedAlways {
-            // Location is authorized, try to get current location
-            if let location = await getCurrentLocation() {
-                let loginLocation = LoginLocation(
-                    latitude: location.coordinate.latitude,
-                    longitude: location.coordinate.longitude,
-                    timestamp: loginDate
-                )
-                
-                // Add new location and keep only last 5
-                user.lastLoginLocation.append(loginLocation)
-                if user.lastLoginLocation.count > 5 {
-                    user.lastLoginLocation.removeFirst()
-                }
-
-                if isOnline, let firebaseUID = user.firebaseUID {
-                    Task {
-                        do {
-                            try await appendPrivateLoginLocation(location, timestamp: loginDate, userId: firebaseUID)
-                        } catch {
-                            #if DEBUG
-                            print("⚠️ Failed to append private login location: \(error)")
-                            #endif
-                        }
-                    }
-                }
-            }
+        // Login never captures location (COPPA: silent login-location flow removed).
+        // The stored property survives only because the SwiftData schema is frozen; scrub
+        // any coordinates a pre-removal build persisted locally.
+        if !user.lastLoginLocation.isEmpty {
+            user.lastLoginLocation = []
         }
-        // If location not authorized, silently skip (don't ask user)
-        
+
         try? modelContext.save()
 
         // Login tracking must not full-profile sync (avoids overwriting username/contact
@@ -1399,30 +1368,6 @@ class FirebaseAuthService: ObservableObject {
             "Login tracking must only write AuthProfileSyncPolicy.loginTimestampFieldKeys"
         )
         try await db.collection("users").document(userId).setData(data, merge: true)
-    }
-    
-    /// Get current location (one-time request)
-    private func getCurrentLocation() async -> CLLocation? {
-        return await withCheckedContinuation { continuation in
-            let locationManager = CLLocationManager()
-            let authStatus = locationManager.authorizationStatus
-            
-            guard authStatus == .authorizedWhenInUse || authStatus == .authorizedAlways else {
-                continuation.resume(returning: nil)
-                return
-            }
-            
-            // Create delegate with reference to self for cleanup
-            let delegate = OneTimeLocationDelegate(service: self) { location in
-                continuation.resume(returning: location)
-            }
-            
-            // Store delegate to keep it alive
-            activeLocationDelegates.append(delegate)
-            
-            locationManager.delegate = delegate
-            locationManager.requestLocation()
-        }
     }
     
     // MARK: - Helper Methods
@@ -1669,24 +1614,6 @@ class FirebaseAuthService: ObservableObject {
             .setData(contact, merge: true)
     }
 
-    private func privateLoginLocationDataRef(userId: String) -> DocumentReference {
-        db.collection("users").document(userId).collection("private").document("lastLoginLocationData")
-    }
-
-    private func appendPrivateLoginLocation(_ location: CLLocation, timestamp: Date, userId: String) async throws {
-        let locationData: [String: Any] = [
-            "latitude": location.coordinate.latitude,
-            "longitude": location.coordinate.longitude,
-            "timestamp": Timestamp(date: timestamp),
-            "clientMetadata": ClientMetadata.current.firestoreValue
-        ]
-
-        try await privateLoginLocationDataRef(userId: userId).setData([
-            "lastLoginLocations": FieldValue.arrayUnion([locationData]),
-            "updatedAt": FieldValue.serverTimestamp()
-        ], merge: true)
-    }
-
     private func ensureFounderEntitlementIfPossible(userId: String?) async {
         guard isOnline,
               let userId,
@@ -1900,29 +1827,9 @@ class FirebaseAuthService: ObservableObject {
             lastDateLoggedIn = nil
         }
         
-        var lastLoginLocation: [LoginLocation] = []
-        if let locationsArray = data["lastLoginLocation"] as? [[String: Any]] {
-            for locationData in locationsArray {
-                guard let latitude = locationData["latitude"] as? Double,
-                      let longitude = locationData["longitude"] as? Double else {
-                    continue
-                }
-                
-                let timestamp: Date
-                if let ts = locationData["timestamp"] as? Timestamp {
-                    timestamp = ts.dateValue()
-                } else {
-                    timestamp = .now
-                }
-                
-                lastLoginLocation.append(LoginLocation(
-                    latitude: latitude,
-                    longitude: longitude,
-                    timestamp: timestamp
-                ))
-            }
-        }
-        
+        // Legacy top-level `lastLoginLocation` is never parsed — login coordinates are no
+        // longer collected, and the profile write scrubs the field (FieldValue.delete()).
+
         // Legacy avatarType/avatarColor Ignored — catalog avatarId is source of truth (V22+).
         
         var linkedPlatforms: [LinkedPlatform] = []
@@ -1986,8 +1893,7 @@ class FirebaseAuthService: ObservableObject {
             firebaseUID: id,
             lastSyncedToFirebase: .now,
             needsSync: false,
-            lastDateLoggedIn: lastDateLoggedIn,
-            lastLoginLocation: lastLoginLocation
+            lastDateLoggedIn: lastDateLoggedIn
         )
     }
     
@@ -2022,31 +1928,6 @@ class FirebaseAuthService: ObservableObject {
         }
         
         return result
-    }
-}
-
-// MARK: - One-Time Location Helper
- class OneTimeLocationDelegate: NSObject, CLLocationManagerDelegate {
-    private weak var service: FirebaseAuthService?
-    private let completion: (CLLocation?) -> Void
-    
-    init(service: FirebaseAuthService, completion: @escaping (CLLocation?) -> Void) {
-        self.service = service
-        self.completion = completion
-    }
-    
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        manager.stopUpdatingLocation()
-        completion(locations.first)
-        // Remove self from service's delegate array
-        service?.activeLocationDelegates.removeAll { $0 === self }
-    }
-    
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        manager.stopUpdatingLocation()
-        completion(nil)
-        // Remove self from service's delegate array
-        service?.activeLocationDelegates.removeAll { $0 === self }
     }
 }
 

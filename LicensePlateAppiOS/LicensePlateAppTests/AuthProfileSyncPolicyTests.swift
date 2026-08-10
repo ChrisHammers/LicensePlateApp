@@ -59,6 +59,27 @@ struct AuthProfileSyncPolicyTests {
         #expect(!AuthProfileSyncPolicy.loginTimestampFieldKeys.contains("firstName"))
     }
 
+    // MARK: - FR-42 login-location removal
+
+    @Test func loginTrackingFieldKeysCarryNoLocation() {
+        for key in ["lastLoginLocation", "lastLoginLocations", "lastLoginLocationData", "latitude", "longitude"] {
+            #expect(!AuthProfileSyncPolicy.loginTimestampFieldKeys.contains(key))
+        }
+    }
+
+    @Test func applyCloudProfileNeverHydratesLoginLocation() {
+        let local = AppUser(id: "uid-loc", userName: "Local", firebaseUID: "uid-loc")
+        let cloud = AppUser(id: "uid-loc", userName: "Cloud", firebaseUID: "uid-loc")
+        cloud.lastLoginLocation = [
+            LoginLocation(latitude: 41.76, longitude: -72.68, timestamp: Date(timeIntervalSince1970: 1_700_000_000))
+        ]
+
+        AuthProfileSyncPolicy.applyCloudProfile(cloud, to: local, isAnonymous: false)
+
+        #expect(local.userName == "Cloud")
+        #expect(local.lastLoginLocation.isEmpty)
+    }
+
     // MARK: - A hydrate merge
 
     @Test func applyCloudProfileOverwritesGuestUsernameAndHydratesContact() {

@@ -5,6 +5,7 @@
     "build": "tsc && cp src/progressionCatalog.v1.json lib/",
     "check:catalog-parity": "vitest run src/progressionCatalogParity.test.ts",
     "backfill:user-search": "npx tsx scripts/backfillUserSearchIndexes.ts",
+    "cleanup:login-location": "npx tsx scripts/deleteLoginLocationData.ts",
     "serve": "npm run build && firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
