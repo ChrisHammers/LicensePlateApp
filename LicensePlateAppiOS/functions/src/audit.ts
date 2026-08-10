@@ -16,6 +16,11 @@ export interface AuditLogData {
 
 /**
  * Write immutable audit log entry
+ *
+ * Rows are retained for AUDIT_LOG_RETENTION_MONTHS and then deleted by the daily job in
+ * `retention.ts`, EXCEPT the consent / lifecycle event types listed in
+ * AUDIT_RETENTION_EXEMPT_EVENT_TYPES (`retentionCore.ts`), which are kept forever as
+ * parental-consent evidence. Add any new durable-evidence event type to that list.
  */
 export async function writeAuditLog(data: AuditLogData): Promise<void> {
   const auditData: Record<string, unknown> = {

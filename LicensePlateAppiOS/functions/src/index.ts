@@ -34,6 +34,10 @@ export {
   inactivateFamily,
 } from "./family";
 export { expireInvitesAndCodes } from "./expiration";
+export {
+  purgeExpiredInvitesAndCodes,
+  purgeExpiredAuditLogs,
+} from "./retention";
 export { onAuthUserDeleted } from "./auth";
 export { deleteAccount } from "./accountDeletion";
 export { writeAuditLog } from "./audit";

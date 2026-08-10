@@ -6,17 +6,22 @@ const db = admin.firestore();
 /**
  * Scheduled function to expire invites and share codes
  * Runs every 5 minutes
+ *
+ * This pass only flips status fields — the UI relies on seeing "expired" invites and
+ * revoked share codes. Hard deletion happens later, in the daily retention jobs in
+ * `retention.ts` (FR-49), once the grace period has elapsed.
  */
 export const expireInvitesAndCodes = functions.pubsub
   .schedule("every 5 minutes")
   .onRun(async (context) => {
     const now = admin.firestore.Timestamp.now();
 
-    // Expire invites (only family invites - friend invites don't expire)
+    // Expire pending invites past expiresAt. Every invite type now carries a finite
+    // expiry — friend invites included, see FRIEND_INVITE_EXPIRY_DAYS in retentionCore.ts
+    // (FR-49b) — so this no longer filters by type.
     const invitesSnapshot = await db
       .collection("invites")
       .where("status", "==", "pending")
-      .where("type", "==", "family") // Only expire family invites
       .where("expiresAt", "<", now)
       .get();
 
@@ -62,7 +67,7 @@ export const expireInvitesAndCodes = functions.pubsub
     await codeBatch.commit();
 
     console.log(
-      `Expired ${invitesSnapshot.size} family invites, ${tripInvitesSnapshot.size} trip invites, and ${codesSnapshot.size} codes`
+      `Expired ${invitesSnapshot.size} invites, ${tripInvitesSnapshot.size} trip invites, and ${codesSnapshot.size} codes`
     );
 
     return null;

@@ -11,6 +11,7 @@ import { getFCMTokenForSocialPush, sendPushNotification } from "./utils/notifica
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
 import { assertRegisteredAccount } from "./callableAuth";
+import { friendInviteExpiresAtMillis } from "./retentionCore";
 
 const db = admin.firestore();
 
@@ -114,10 +115,12 @@ export const sendFriendInvite = enforcedCallable(
       );
     }
 
-    // Create invite
-    // Friend invites don't expire - set to far future date (100 years from now)
-    const expiresAt = new Date();
-    expiresAt.setFullYear(expiresAt.getFullYear() + 100);
+    // Create invite.
+    // Friend invites carry a finite expiry (FR-49b): the every-5-minutes pass in
+    // `expiration.ts` flips a lapsed invite to "expired", and the daily retention job
+    // deletes it once the grace period has passed. Previously this was a 100-year
+    // sentinel, which kept the invite (and its two user ids) alive indefinitely.
+    const expiresAtMillis = friendInviteExpiresAtMillis(Date.now());
 
     const inviteData = {
       type: "friend",
@@ -125,7 +128,7 @@ export const sendFriendInvite = enforcedCallable(
       toUserId,
       status: "pending",
       method: method || "search",
-      expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+      expiresAt: admin.firestore.Timestamp.fromMillis(expiresAtMillis),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
