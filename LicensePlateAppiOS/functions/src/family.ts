@@ -2,6 +2,7 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { canAddMemberToFamily, assertUserIsRegistered, recipientNotRegisteredMessage, isUserSearchable } from "./utils/validation";
 import { writeAuditLog } from "./audit";
+import { auditValueHash } from "./auditRedaction";
 import { getFCMTokenForSocialPush, sendPushNotification } from "./utils/notifications";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
@@ -866,7 +867,7 @@ export const inactivateFamily = enforcedCallable(
       subjectId: familyId,
       metadata: {
         reason: "creator_inactivated",
-        familyName: familyData.name,
+        familyNameHash: auditValueHash(familyData.name),
       },
       clientMetadata,
     });

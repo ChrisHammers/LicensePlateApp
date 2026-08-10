@@ -1,4 +1,5 @@
 import { parsePhoneNumberFromString } from "libphonenumber-js";
+import { auditValueHash } from "./auditRedaction";
 
 export type SearchMatchField = "username" | "email" | "phone";
 export type SearchQueryKind = "email" | "phone" | "username";
@@ -115,21 +116,14 @@ export function toPublicSearchHit(
   };
 }
 
-/** Truncate / redact query for audit logs (never store full email/phone). */
+/**
+ * Audit-safe stand-in for a search query: the modality plus a truncated SHA-256, never any
+ * plaintext. Every modality is hashed — a username query is somebody's username, an email
+ * domain identifies an employer or school, and last-4 digits narrow a phone number.
+ */
 export function auditQueryFingerprint(
   kind: SearchQueryKind,
   query: string
 ): string {
-  const trimmed = query.trim();
-  if (kind === "email") {
-    const at = trimmed.indexOf("@");
-    if (at <= 0) return "email:*";
-    return `email:${trimmed[0]}***@${trimmed.slice(at + 1).slice(0, 32)}`;
-  }
-  if (kind === "phone") {
-    const digits = trimmed.replace(/\D/g, "");
-    const last4 = digits.slice(-4);
-    return `phone:***${last4}`;
-  }
-  return `username:${trimmed.slice(0, 24).toLowerCase()}`;
+  return `${kind}:${auditValueHash(query) ?? "empty"}`;
 }

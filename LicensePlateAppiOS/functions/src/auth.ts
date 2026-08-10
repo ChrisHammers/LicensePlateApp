@@ -1,6 +1,7 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
+import { auditValueHash } from "./auditRedaction";
 import { familyMembershipLeaveUserUpdate } from "./wasEverInFamilyUserUpdates";
 
 const db = admin.firestore();
@@ -64,7 +65,7 @@ export const onAuthUserDeleted = functions.auth
         subjectId: familyId,
         metadata: {
           reason: "creator_deleted",
-          familyName: familyData.name,
+          familyNameHash: auditValueHash(familyData.name),
         },
       });
     }

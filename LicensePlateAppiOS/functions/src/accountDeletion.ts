@@ -1,6 +1,8 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
+import { auditValueHash } from "./auditRedaction";
+import { deidentifyUserResidue } from "./accountDeletionDeidentify";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
 import { assertRegisteredAccount } from "./callableAuth";
@@ -41,8 +43,17 @@ async function deleteSubcollectionDocs(
  * doc holding email/phoneNumber and the fcm doc holding the push token, both swept by
  * listDocuments()), search lookup indexes, friend edges (+friendCount on the
  * surviving side), family membership, user_progression, user_achievements, and
- * public_lifetime_stats. Shared trip/gameplay events are retained de-identified so other
- * participants' trips keep working (Privacy Policy §9).
+ * public_lifetime_stats.
+ *
+ * Shared trip data belongs to every participant, so it is de-identified rather than deleted
+ * (Privacy Policy §9) — see `deidentifyUserResidue`. Concretely: `activity_events` keep their
+ * gameplay meaning but their `actorId` and uid-valued payload fields become the
+ * `deleted-user` tombstone and their precise `location*` payload keys are stripped; the
+ * user's `members/{uid}`, `participant_prefs/{uid}`, `fairness_ack_watermarks/{uid}` and
+ * per-doc `private/client_metadata` sidecars are deleted; the session's `createdBy`,
+ * `canonicalEndedBy` and `canonicalParticipants` stop naming them; their invites and push
+ * buffers are deleted and their share codes are tombstoned + revoked. Nothing left in a
+ * shared doc identifies the deleted account.
  *
  * Requires a recent sign-in (auth_time within RECENT_LOGIN_MAX_AGE_SECONDS); otherwise
  * throws failed-precondition with details.reason = "recent-login-required" so the client
@@ -151,7 +162,7 @@ export const deleteAccount = enforcedCallable(async (data, context) => {
         subjectId: activeFamilyId,
         metadata: {
           reason: "creator_account_deleted",
-          familyName: familyData?.name,
+          familyNameHash: auditValueHash(familyData?.name),
         },
         clientMetadata,
       });
@@ -206,6 +217,10 @@ export const deleteAccount = enforcedCallable(async (data, context) => {
 
   await db.collection("public_lifetime_stats").doc(userId).delete();
 
+  // ---- Shared gameplay residue: de-identified in place, never left uid-keyed.
+  // Idempotent and re-runnable; keyed only on uid so requestChildDataDeletion reuses it.
+  const deidentified = await deidentifyUserResidue(db, userId);
+
   // ---- users/{uid} itself (includes any legacy fcmToken / fcmTokenUpdatedAt fields)
   await userRef.delete();
 
@@ -217,6 +232,7 @@ export const deleteAccount = enforcedCallable(async (data, context) => {
     metadata: {
       removedFriendEdgeCount,
       familyAction,
+      ...deidentified,
     },
     clientMetadata,
   });

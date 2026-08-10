@@ -128,12 +128,15 @@ describe("userSearchCore", () => {
   });
 
   describe("auditQueryFingerprint", () => {
-    it("redacts email and phone", () => {
-      expect(auditQueryFingerprint("email", "john@gmail.com")).toContain(
-        "***@"
+    it("fully hashes every modality (see auditRedaction.test.ts for the leak checks)", () => {
+      expect(auditQueryFingerprint("email", "john@gmail.com")).toMatch(
+        /^email:[0-9a-f]{16}$/
       );
       expect(auditQueryFingerprint("phone", "(203) 555-1111")).toMatch(
-        /phone:\*\*\*/
+        /^phone:[0-9a-f]{16}$/
+      );
+      expect(auditQueryFingerprint("username", "roadtrip")).toMatch(
+        /^username:[0-9a-f]{16}$/
       );
     });
   });
