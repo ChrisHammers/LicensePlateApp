@@ -1,6 +1,8 @@
 # RoadTrip Royale
 
 iOS SwiftUI app + Firebase backend. Not yet shipped.
+
+**Pre-release rule (owner, 2026-08-10):** the app has never been released and has no real users. Supporting the current structure is NOT required — features, fields, and data may be removed outright with no migration paths, no backwards compatibility, no grandfathering of existing installs (dev testers reinstall). Prefer deleting over deprecating.
 Stack: SwiftUI · SwiftData · Firebase (Auth / Firestore / Cloud Functions) · RevenueCat · Firebase Analytics · AdMob.
 
 This file is the standing contract. It is always true. Step-specific work runs through `/rtr-step`.
