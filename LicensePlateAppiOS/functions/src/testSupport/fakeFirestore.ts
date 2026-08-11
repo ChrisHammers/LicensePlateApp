@@ -6,6 +6,10 @@
  * `orderBy(documentId)` + `startAfter` + `limit`, `listDocuments`, `collectionGroup`, and
  * `WriteBatch` with a 500-op cap. Paths are the real slash-separated Firestore paths, so a
  * "does any doc anywhere still name this uid" scan over `store` is a faithful residue check.
+ *
+ * `where` also supports the range operators (`>=`, `<`, `>`, `<=`) so the username *prefix*
+ * scan in `userSearch.ts` — the search path that reads user docs directly and therefore
+ * cannot be protected by index removal alone (COPPA FR-9) — can be exercised end to end.
  */
 
 const MAX_BATCH_OPS = 500;
@@ -36,6 +40,20 @@ function readPath(data: Data, path: string): unknown {
     (acc, segment) => (isPlainObject(acc) ? acc[segment] : undefined),
     data
   );
+}
+
+export type FakeFilterOp = "==" | ">=" | ">" | "<=" | "<";
+
+/** Range operators never match a missing field, matching Firestore's index semantics. */
+function matchesFilter(actual: unknown, op: FakeFilterOp, value: unknown): boolean {
+  if (op === "==") return actual === value;
+  if (actual === undefined || actual === null) return false;
+  const left = actual as never;
+  const right = value as never;
+  if (op === ">=") return left >= right;
+  if (op === ">") return left > right;
+  if (op === "<=") return left <= right;
+  return left < right;
 }
 
 export class FakeFirestore {
@@ -173,7 +191,7 @@ export class FakeCollectionRef {
     return ref;
   }
 
-  where(field: string, op: "==", value: unknown): FakeQuery {
+  where(field: string, op: FakeFilterOp, value: unknown): FakeQuery {
     return new FakeQuery(this.db, { collectionPath: this.path }).where(field, op, value);
   }
 
@@ -208,7 +226,7 @@ interface QuerySource {
 }
 
 export class FakeQuery {
-  private filters: { field: string; value: unknown }[] = [];
+  private filters: { field: string; op: FakeFilterOp; value: unknown }[] = [];
   private limitCount: number | null = null;
   private startAfterId: string | null = null;
 
@@ -225,9 +243,9 @@ export class FakeQuery {
     return next;
   }
 
-  where(field: string, _op: "==", value: unknown): FakeQuery {
+  where(field: string, op: FakeFilterOp, value: unknown): FakeQuery {
     const next = this.clone();
-    next.filters.push({ field, value });
+    next.filters.push({ field, op, value });
     return next;
   }
 
@@ -263,7 +281,9 @@ export class FakeQuery {
 
     paths = paths.filter((path) => {
       const data = this.db.store.get(path)!;
-      return this.filters.every((f) => readPath(data, f.field) === f.value);
+      return this.filters.every((f) =>
+        matchesFilter(readPath(data, f.field), f.op, f.value)
+      );
     });
 
     if (this.startAfterId !== null) {
@@ -293,6 +313,10 @@ export class FakeQuerySnapshot {
 
   get size(): number {
     return this.docs.length;
+  }
+
+  forEach(callback: (doc: FakeDocumentSnapshot) => void): void {
+    this.docs.forEach((doc) => callback(doc));
   }
 }
 

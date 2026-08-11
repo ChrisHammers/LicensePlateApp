@@ -14,24 +14,26 @@ import { KIND_PARTICIPANT_INVITED, KIND_PARTICIPANT_JOINED, PK } from "./gamepla
 import { syncCanonicalParticipantsFromMembers } from "./tripSessionCanonical";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
+import { assertRegisteredAccount } from "./callableAuth";
 import {
   loadParticipationDefaultsForUser,
   seedParticipantPrefsIfNeeded,
 } from "./tripParticipantPrefs";
+import { evaluateTripChildParticipation } from "./tripChildParticipation";
+import {
+  CHILD_FAMILY_ONLY_TRIP_MESSAGE,
+  CHILD_TARGET_NOT_SEARCHABLE_MESSAGE,
+} from "./childAccountCore";
 
 const db = admin.firestore();
 
 const DEFAULT_INVITE_DAYS = 7;
 
 export const sendTripInvite = enforcedCallable(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "User must be authenticated"
-    );
-  }
+  // FR-13 (COPPA F-5b): trip invites were the last invite callable accepting a bare
+  // anonymous session. Anonymous accounts can no longer initiate contact.
+  const fromUserId = assertRegisteredAccount(context);
 
-  const fromUserId = context.auth.uid;
   const { toUserId, tripSessionId, tripName, method, expiresAtMs } = data;
   const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
@@ -71,6 +73,30 @@ export const sendTripInvite = enforcedCallable(async (data, context) => {
     throw new functions.https.HttpsError(
       "failed-precondition",
       "User is already a participant in this trip"
+    );
+  }
+
+  // FR-13 / FR-24 / FR-38: a child plays only in trips whose every participant is in the
+  // child's family — enforced in both directions and for a child sender.
+  const childRejection = await evaluateTripChildParticipation(db, {
+    tripSessionId,
+    joiningUserId: toUserId,
+    additionalParticipantIds: [fromUserId],
+  });
+  if (childRejection) {
+    if (childRejection.kind === "child_joiner") {
+      // The target is the child: reuse the privacy-opt-out wording so the sender cannot
+      // tell "is a child" from "turned contact search off" (FR-24).
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        CHILD_TARGET_NOT_SEARCHABLE_MESSAGE
+      );
+    }
+    // The child is already on this roster, so the sender is either that child or one of
+    // their family members — the explicit reason discloses nothing new.
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      CHILD_FAMILY_ONLY_TRIP_MESSAGE
     );
   }
 
@@ -236,6 +262,24 @@ export const respondToTripInvite = enforcedCallable(
         "failed-precondition",
         "Invite has expired"
       );
+    }
+
+    // FR-38 re-verification: the roster can change between send and accept (participants
+    // join, a family membership ends, a parent flags someone as a child), so acceptance is
+    // re-checked against the roster as it stands now — a stale invite cannot launder a
+    // mixed trip. Declining is always allowed. The actor here IS the joiner, so the
+    // explicit family-only reason is the right one in both child cases.
+    if (response === "accept") {
+      const childRejection = await evaluateTripChildParticipation(db, {
+        tripSessionId: inviteData.tripSessionId as string,
+        joiningUserId: userId,
+      });
+      if (childRejection) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          CHILD_FAMILY_ONLY_TRIP_MESSAGE
+        );
+      }
     }
 
     const batch = db.batch();

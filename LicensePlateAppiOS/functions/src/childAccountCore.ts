@@ -120,6 +120,50 @@ export function isUnconsentedChildUserData(
   return isChildAccountUserData(data) && !hasActiveFamily(data);
 }
 
+/**
+ * FR-15: a child who is already in a parent-managed family. A *new* family may not invite
+ * them (their consenting manager would silently change); an UNCONSENTED child stays
+ * invitable because family admission is exactly the path back to consented play.
+ */
+export function isChildWithActiveFamilyUserData(
+  data: Record<string, unknown> | undefined | null
+): boolean {
+  return isChildAccountUserData(data) && hasActiveFamily(data);
+}
+
+// ---------------------------------------------------------------------------
+// Rejection messages (FR-13/14/15/24/38)
+// ---------------------------------------------------------------------------
+
+/**
+ * FR-24: child-target rejections reuse the EXACT wording of the existing privacy opt-out
+ * rejection (`friends.ts` / `family.ts`), so a sender can never distinguish "this person is
+ * a child" from "this person turned contact search off", and the sender-side analytics
+ * mapping (`FriendsFamilyInviteAnalytics.swift` — `lower.contains("not searchable")`)
+ * already classifies it without any new event.
+ */
+export const CHILD_TARGET_NOT_SEARCHABLE_MESSAGE =
+  "User is not searchable by this method";
+
+/**
+ * FR-24 actor side. Same "not searchable" family of wording (so it lands on the same
+ * client mapping and no analytics event exists that fires only for child sessions —
+ * adults hitting a privacy opt-out emit the same one), with `details.reason` for the
+ * client to key its non-punitive copy off, mirroring `unconsented_child`.
+ */
+export const CHILD_CALLER_NOT_SEARCHABLE_MESSAGE =
+  "This account is not searchable and cannot start new connections";
+
+export const CHILD_CALLER_REJECTION_REASON = "child_account";
+
+/**
+ * FR-38: family-only trips. Used only where the actor is either the child themselves or an
+ * existing participant of a child-containing trip (who is therefore already in that
+ * child's family), so the wording may be explicit without disclosing anything new.
+ */
+export const CHILD_FAMILY_ONLY_TRIP_MESSAGE =
+  "Trips that include a child are limited to that child's family";
+
 // ---------------------------------------------------------------------------
 // Payload validation
 // ---------------------------------------------------------------------------

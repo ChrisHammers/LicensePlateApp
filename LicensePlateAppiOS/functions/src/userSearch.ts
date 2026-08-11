@@ -8,6 +8,7 @@ import { writeAuditLog } from "./audit";
 import {
   auditQueryFingerprint,
   classifySearchQuery,
+  isSearchIndexEligible,
   normalizeEmail,
   normalizePhoneE164,
   normalizeUsernameLower,
@@ -21,12 +22,13 @@ import {
   COLLECTION_LOOKUP_PHONE,
   COLLECTION_USERNAMES,
   buildContactFields,
-  isRegisteredForSearch,
   syncContactLookupIndexes,
   syncUsernameSearchIndex,
   PRIVATE_CONTACT_DOC,
 } from "./userSearchIndex";
 import { isUserSearchable } from "./utils/validation";
+import { isChildAccountUserData } from "./childAccountCore";
+import { searchIndexHintsForUser } from "./userResidueCleanup";
 
 const db = admin.firestore();
 
@@ -155,7 +157,16 @@ export const searchUsers = enforcedCallable(async (data, context) => {
   const kind = classifySearchQuery(query);
   let results: PublicSearchHit[] = [];
 
-  if (kind === "email") {
+  // FR-24 (COPPA F-5b): a child caller — consented or not — gets zero hits. Returned as a
+  // normal empty result set rather than an error so the child's own app instance behaves
+  // exactly like an adult's fruitless search (FR-21: no child-only signal on that device);
+  // the client hides the entry point entirely (F-6/F-8).
+  const callerDoc = await db.collection("users").doc(callerId).get();
+  const callerIsChild = isChildAccountUserData(callerDoc.data());
+
+  if (callerIsChild) {
+    results = [];
+  } else if (kind === "email") {
     results = await searchByEmail(query, callerId);
   } else if (kind === "phone") {
     results = await searchByPhone(query, callerId);
@@ -184,7 +195,9 @@ export const searchUsers = enforcedCallable(async (data, context) => {
 });
 
 /**
- * Keep userNameLower + usernames index in sync; strip lookup indexes when anonymous.
+ * Keep userNameLower + usernames index in sync; strip lookup indexes when anonymous
+ * — or when the account is a child (FR-11: children are indexed exactly like
+ * non-registered accounts, i.e. never, and any existing entry is removed).
  */
 export const onUserProfileSearchIndexSync = functions.firestore
   .document("users/{userId}")
@@ -223,7 +236,10 @@ export const onUserProfileSearchIndexSync = functions.firestore
       return;
     }
 
-    const isRegistered = isRegisteredForSearch(after);
+    // FR-11: index eligibility now excludes children as well as anonymous accounts. This
+    // trigger is the ONE place every `users/{uid}` write funnels through, which is what
+    // makes it the backstop behind the FR-4 flag-set purge (child branch below).
+    const isIndexEligible = isSearchIndexEligible(after);
     const userName =
       typeof after.userName === "string"
         ? after.userName
@@ -236,11 +252,37 @@ export const onUserProfileSearchIndexSync = functions.firestore
         ? normalizeUsernameLower(before.userName)
         : null);
 
+    if (isChildAccountUserData(after)) {
+      // FR-11 backstop, child branch. Contact identifiers live in `users/{uid}/private/contact`
+      // (FR-43), so the generic path below — which only ever sees top-level email/phone —
+      // has no key with which to delete a stale `user_lookup_*` row. Resolve the same hints
+      // the FR-4 purge uses and delete against those, so a purge that failed (or a child
+      // flagged while the purge was mid-flight) is repaired on the very next profile write.
+      const hints = await searchIndexHintsForUser(db, userId, after);
+      await syncUsernameSearchIndex({
+        userId,
+        userName,
+        previousUserNameLower,
+        isRegistered: false,
+      });
+      await syncContactLookupIndexes({
+        userId,
+        isRegistered: false,
+        contact: buildContactFields(
+          typeof after.email === "string" ? after.email : null,
+          typeof after.phoneNumber === "string" ? after.phoneNumber : null
+        ),
+        previousEmailLower: hints.emailLower,
+        previousPhoneE164: hints.phoneE164,
+      });
+      return;
+    }
+
     await syncUsernameSearchIndex({
       userId,
       userName,
       previousUserNameLower,
-      isRegistered,
+      isRegistered: isIndexEligible,
     });
 
     // Dual-write era: public email/phone still on users doc — index from them
@@ -259,12 +301,12 @@ export const onUserProfileSearchIndexSync = functions.firestore
     if (contact.emailLower || contact.phoneE164 || previousContact) {
       await syncContactLookupIndexes({
         userId,
-        isRegistered,
+        isRegistered: isIndexEligible,
         contact,
         previousEmailLower: previousContact?.emailLower,
         previousPhoneE164: previousContact?.phoneE164,
       });
-    } else if (!isRegistered) {
+    } else if (!isIndexEligible) {
       await syncContactLookupIndexes({
         userId,
         isRegistered: false,
@@ -275,6 +317,8 @@ export const onUserProfileSearchIndexSync = functions.firestore
 
 /**
  * Maintain email/phone lookup indexes from private/contact.
+ * FR-11: children are ineligible here too — otherwise a contact write would re-create the
+ * very `user_lookup_*` rows the profile syncer just removed.
  */
 export const onUserContactSearchIndexSync = functions.firestore
   .document(`users/{userId}/private/${PRIVATE_CONTACT_DOC}`)
@@ -282,7 +326,7 @@ export const onUserContactSearchIndexSync = functions.firestore
     const userId = context.params.userId as string;
     const userSnap = await db.collection("users").doc(userId).get();
     const userData = userSnap.data() || {};
-    const isRegistered = isRegisteredForSearch(userData);
+    const isRegistered = isSearchIndexEligible(userData);
 
     const before = change.before.exists ? change.before.data() || {} : null;
     const after = change.after.exists ? change.after.data() || {} : null;

@@ -18,8 +18,10 @@ import {
 } from "./wasEverInFamilyUserUpdates";
 import { canRemoveFamilyMember } from "./familyMemberRemovalPolicy";
 import {
+  CHILD_TARGET_NOT_SEARCHABLE_MESSAGE,
   CORRECTION_REASON_NEW_GUARDIAN_CLEARED,
   evaluateApprovalChildDeclaration,
+  isChildWithActiveFamilyUserData,
   sanitizedChildLinkedPlatforms,
 } from "./childAccountCore";
 import {
@@ -28,6 +30,7 @@ import {
   writeChildMembershipRevocation,
 } from "./childConsent";
 import { applyChildProtectionsAfterFlagSet } from "./familyChildStatusFlows";
+import { assertCallerIsNotChild } from "./childAccessGuards";
 
 const db = admin.firestore();
 
@@ -47,6 +50,11 @@ export const createFamily = enforcedCallable(
         "Family name is required"
       );
     }
+
+    // FR-24 (COPPA F-5b): a child cannot found a family — that would make them their own
+    // consenting manager (§4: parent/manager = creator|captain) and hand them the
+    // authority to admit strangers.
+    await assertCallerIsNotChild(db, userId);
 
     // Check if user already has an active family (unless retired general)
     const userDoc = await db.collection("users").doc(userId).get();
@@ -134,6 +142,11 @@ export const sendFamilyInvite = enforcedCallable(
       );
     }
 
+    // FR-24 (COPPA F-5b): a child never sends family invites. Managers are creators or
+    // captains and no MVP path makes a child either, but the guard is the server-side
+    // backstop behind the client hiding the control.
+    await assertCallerIsNotChild(db, fromUserId);
+
     // Verify sender is creator or captain
     const memberDoc = await db
       .collection(`families/${familyId}/members`)
@@ -162,6 +175,28 @@ export const sendFamilyInvite = enforcedCallable(
     }
 
     const targetUserData = targetUserDoc.data()!;
+
+    // FR-15 (COPPA F-5b): a child who already belongs to a parent-managed family may not be
+    // invited into another one — that would swap their consenting manager without any
+    // consent capture. Checked on EVERY method (including `search`, which skips the
+    // email/phone privacy gate below) and worded exactly like the privacy opt-out so the
+    // sender cannot infer the target is a child. Inviting an UNCONSENTED child (flag true,
+    // no active family) stays allowed: that is the path back to consented play.
+    if (isChildWithActiveFamilyUserData(targetUserData)) {
+      await writeAuditLog({
+        eventType: "invite_auto_rejected_not_searchable",
+        actorId: fromUserId,
+        subjectType: "user",
+        subjectId: toUserId,
+        metadata: { familyId, method: method || "search" },
+        clientMetadata,
+      });
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        CHILD_TARGET_NOT_SEARCHABLE_MESSAGE
+      );
+    }
+
     const newRole = targetUserData.isRetiredGeneral
       ? "retired_general"
       : "scout"; // Default to scout for new members

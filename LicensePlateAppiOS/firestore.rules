@@ -16,10 +16,25 @@ service cloud.firestore {
     }
 
     // Own profile always readable. Peers: registered callers only, and target must not be anonymous.
+    //
+    // FR-12 (COPPA F-5b): a peer may not read a child's user doc unless they are in the
+    // child's active family. Clause order is load-bearing:
+    //   1. the child check comes FIRST, so an adult target (the overwhelming majority)
+    //      short-circuits and pays no extra document access at all;
+    //   2. the `'activeFamilyId' in resource.data` key-presence guard comes BEFORE the path
+    //      is constructed, so an orphaned child — flag sticky, family cleared on exit —
+    //      denies cleanly instead of erroring on a malformed path. An ex-family member is
+    //      therefore denied along with every other stranger.
+    // The carve-out exists because family screens hydrate rosters by reading each member's
+    // user doc directly (`UserProfileListenCoordinator` / `UserRepository.getUser`);
+    // without it, flagging a child would silently break their own family's roster.
     function isDiscoverableUserProfile(userId) {
       return uid() == userId
         || (isRegisteredAccount()
-            && resource.data.get('isRegistered', true) != false);
+            && resource.data.get('isRegistered', true) != false
+            && ( resource.data.get('isChildAccount', false) != true
+                 || ( 'activeFamilyId' in resource.data
+                      && exists(/databases/$(database)/documents/families/$(resource.data.activeFamilyId)/members/$(request.auth.uid)) ) ));
     }
 
     function isAdmin() {
@@ -102,6 +117,19 @@ service cloud.firestore {
         && !('activeFamilyId' in userDoc(uid()).data);
     }
 
+    // FR-37 (COPPA F-5b): the FR-12 carve-out for a document that is NOT the user doc, so
+    // the flag has to be fetched. Same ordering discipline as FR-12 (child check first,
+    // key-presence guard before path construction), with a leading `exists()` because
+    // `get()` on a missing user doc would error-deny — a residual stats row for a deleted
+    // account must stay readable exactly as it is today. Callers reading their OWN stats
+    // short-circuit at the call site and pay nothing.
+    function targetIsNotHiddenChild(userId) {
+      return !exists(/databases/$(database)/documents/users/$(userId))
+        || userDoc(userId).data.get('isChildAccount', false) != true
+        || ( 'activeFamilyId' in userDoc(userId).data
+             && exists(/databases/$(database)/documents/families/$(userDoc(userId).data.activeFamilyId)/members/$(uid())) );
+    }
+
     function isFamilyMember(familyId) {
       return exists(/databases/$(database)/documents/families/$(familyId)/members/$(uid()));
     }
@@ -147,8 +175,10 @@ service cloud.firestore {
     }
 
     // Public lifetime stats (read-only aggregate mirror; writes via Admin SDK / Cloud Functions only)
+    // FR-37: strangers must not be able to confirm a child uid exists, or monitor their
+    // play, through the stats mirror. Same child exclusion + family carve-out as FR-12.
     match /public_lifetime_stats/{userId} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn() && (uid() == userId || targetIsNotHiddenChild(userId));
       allow write: if false;
     }
 
@@ -176,24 +206,21 @@ service cloud.firestore {
     }
 
     // FRIENDSHIPS
-    // FR-28: friend edges are the one social-graph surface clients may still write, so an
-    // unconsented child caller is denied here (family admission is their only path back).
-    // Callable-side child enforcement (all child callers/targets, FR-14/24/36) is F-5b.
+    // FR-14 follow-up (COPPA F-5b, owner-approved): friend edges are now server-written
+    // only. The F-5a rules allowed client creates/updates with an unconsented-child gate,
+    // but a client-side rules check cannot express FR-14 — "neither party is a child" would
+    // need a get() on the *other* user's doc on every write, and it still could not enforce
+    // the friend caps, the duplicate-invite rules, or the friendCount bookkeeping.
+    // Verified zero-regression: the shipped client never writes this collection (no
+    // setData/updateData/addDocument against `friends` anywhere in the iOS sources;
+    // `FriendshipRepository` reads only, and every mutation goes through
+    // respondToFriendInvite / removeFriend / the account-deletion + FR-36 cleanup, all
+    // Admin SDK). Reads are unchanged: the two parties still see their own edge.
     match /friends/{friendshipId} {
       allow read: if isSignedIn() &&
         (uid() == resource.data.userA || uid() == resource.data.userB);
 
-      allow create: if isRegisteredAccount() &&
-        !callerIsUnconsentedChild() &&
-        request.resource.data.status == "pending" &&
-        (uid() == request.resource.data.userA || uid() == request.resource.data.userB);
-
-      allow update: if isRegisteredAccount() &&
-        !callerIsUnconsentedChild() &&
-        (uid() == resource.data.userA || uid() == resource.data.userB);
-
-      // Removals go through removeFriend Cloud Function (Admin SDK) for friendCount consistency
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
 
     function isTripSessionMember(sessionId, userId) {
@@ -211,9 +238,12 @@ service cloud.firestore {
     // writes — trip_sessions, games, activity_events, participant_prefs,
     // fairness_ack_watermarks, user_progression, user_achievements and
     // public_lifetime_stats are all client write:false, so the unconsented-child gate
-    // for gameplay lives entirely in the callables (assertNotUnconsentedChild). The
-    // remaining client-writable surfaces that create shared social state — friends and
-    // share_codes — carry the callerIsUnconsentedChild() check above/below.
+    // for gameplay lives entirely in the callables (assertNotUnconsentedChild). Of the
+    // social surfaces, F-5b closed `friends` to clients entirely and `invites` to client
+    // CREATES (FR-14 follow-up / FR-16a), so the only remaining client-writable path that
+    // creates shared social state is `share_codes` — it carries the
+    // callerIsUnconsentedChild() check below. (`invites` updates remain party-only and
+    // cannot create a new relationship, only respond to one the server already made.)
 
     // TRIP SESSIONS — minimal metadata + authoritative roster in members (writes server-only)
     match /trip_sessions/{sessionId} {
@@ -275,7 +305,12 @@ service cloud.firestore {
               && resource.data.familyId is string
               && isFamilyMember(resource.data.familyId)));
 
-      allow create: if isRegisteredAccount();
+      // FR-16(a) (COPPA F-5b): invite creation is server-side only. Every live creator is
+      // a Cloud Function (sendFriendInvite / sendFamilyInvite / redeemShareCode, all Admin
+      // SDK); the iOS client only ever reads `invites` and calls those callables, so this
+      // is zero-regression. It closes forged invites for adults too — a client could
+      // previously mint an invite naming any fromUserId/toUserId pair.
+      allow create: if false;
       allow update: if isRegisteredAccount() &&
         (uid() == resource.data.fromUserId || uid() == resource.data.toUserId);
 

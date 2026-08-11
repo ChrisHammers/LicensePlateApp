@@ -4,6 +4,7 @@ import { writeAuditLog } from "./audit";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
 import { assertRegisteredAccount } from "./callableAuth";
+import { assertCallerIsNotChild } from "./childAccessGuards";
 import { loadFamilyName } from "./familyInviteDisplay";
 
 const db = admin.firestore();
@@ -44,6 +45,11 @@ export const createShareCode = enforcedCallable(
         "familyId required for family codes"
       );
     }
+
+    // FR-24 (COPPA F-5b): a share code is an open invitation to strangers, so no child may
+    // mint one. `redeemShareCode` deliberately keeps no such guard — redeeming is a child's
+    // route back into a parent-managed family.
+    await assertCallerIsNotChild(db, userId);
 
     // Generate random code
     const code = generateRandomCode();

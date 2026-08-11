@@ -1,7 +1,14 @@
 /**
- * Firestore security-rules matrix — COPPA F-5a (§14 rules section, F-5a subset).
+ * Firestore security-rules matrix — COPPA F-5a + F-5b (§14 rules section).
  *
- * Covers the rules changes this feature lands:
+ * F-5b adds, below the F-5a blocks:
+ *  - FR-12 `users/{uid}` child exclusion + ordered family carve-out (four-case matrix plus
+ *          the family-roster hydration regression the carve-out exists to protect);
+ *  - FR-14 follow-up: `friends` is client write:false;
+ *  - FR-16(a) `invites` client-create denial;
+ *  - FR-37 `public_lifetime_stats` child exclusion + carve-out.
+ *
+ * F-5a covers:
  *  - FR-7  user-doc diff-guard: no client write may change `isChildAccount` or
  *          `entitlementTags` (update diff-guard + create key-guard);
  *  - FR-8  family member docs are client write:false (the `isChild` projection can
@@ -301,14 +308,9 @@ describe("FR-28: unconsented children cannot write friends or share_codes", () =
     );
   });
 
-  it("adults keep both surfaces (regression), even with no users doc at all", async () => {
-    await assertSucceeds(
-      setDoc(doc(registered("adult"), "friends/adultEdge"), {
-        userA: "adult",
-        userB: "lonekid",
-        status: "pending",
-      })
-    );
+  it("adults keep share_codes (regression), even with no users doc at all", async () => {
+    // NB: `friends` is no longer part of this regression — F-5b closed it to clients
+    // entirely (FR-14 follow-up, matrix below).
     await assertSucceeds(
       setDoc(doc(registered("adult"), "share_codes/adultCode"), {
         type: "friend",
@@ -389,6 +391,266 @@ describe("FR-28 pin: gameplay collections reject client writes for everyone", ()
       });
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// FR-12 (F-5b) — users/{uid} child exclusion + ordered family carve-out
+// ---------------------------------------------------------------------------
+
+/**
+ * fam1 = parent + famkid (a consented child). `orphankid` is the sticky post-exit case:
+ * flag still true, `activeFamilyId` deleted by the membership-leave update — which is what
+ * the key-presence guard in the FR-12 expression has to catch before it builds a path.
+ */
+async function seedChildVisibilityFixtures(): Promise<void> {
+  await seed({
+    "users/parent": { userName: "Parent", activeFamilyId: "fam1" },
+    "users/famkid": {
+      userName: "FamKid",
+      isChildAccount: true,
+      activeFamilyId: "fam1",
+    },
+    "users/orphankid": { userName: "OrphanKid", isChildAccount: true },
+    "users/ghostfamilykid": {
+      userName: "GhostKid",
+      isChildAccount: true,
+      activeFamilyId: "deleted-family",
+    },
+    "users/adultNoFamily": { userName: "Solo" },
+    "users/adultInFamily": { userName: "Grown", activeFamilyId: "fam1" },
+    "users/stranger": { userName: "Stranger" },
+    "families/fam1": { name: "Fam", creatorId: "parent", status: "active" },
+    "families/fam1/members/parent": { role: "creator" },
+    "families/fam1/members/famkid": { role: "scout", isChild: true },
+    "families/fam1/members/adultInFamily": { role: "scout" },
+  });
+}
+
+describe("FR-12: a child's user doc is family-only", () => {
+  beforeEach(seedChildVisibilityFixtures);
+
+  it("denies a stranger reading a consented child", async () => {
+    await assertFails(getDoc(doc(registered("stranger"), "users/famkid")));
+  });
+
+  it("allows a member of the child's active family (the carve-out)", async () => {
+    await assertSucceeds(getDoc(doc(registered("parent"), "users/famkid")));
+    await assertSucceeds(getDoc(doc(registered("adultInFamily"), "users/famkid")));
+  });
+
+  it("denies an ORPHANED child to everyone, including their ex-family", async () => {
+    await assertFails(getDoc(doc(registered("parent"), "users/orphankid")));
+    await assertFails(getDoc(doc(registered("stranger"), "users/orphankid")));
+  });
+
+  it("denies a child whose activeFamilyId points at a family that no longer exists", async () => {
+    await assertFails(getDoc(doc(registered("parent"), "users/ghostfamilykid")));
+  });
+
+  it("lets a child always read their own doc, orphaned or not", async () => {
+    await assertSucceeds(getDoc(doc(registered("famkid"), "users/famkid")));
+    await assertSucceeds(getDoc(doc(registered("orphankid"), "users/orphankid")));
+  });
+
+  it("denies anonymous callers a child doc, but not their own", async () => {
+    await assertFails(getDoc(doc(anonymous("anon1"), "users/famkid")));
+    await seed({ "users/anon1": { userName: "Anon", isRegistered: false } });
+    await assertSucceeds(getDoc(doc(anonymous("anon1"), "users/anon1")));
+  });
+
+  it("REGRESSION: an adult with no activeFamilyId is still readable", async () => {
+    // The key-presence guard must never fire for adults — it sits behind the child check.
+    await assertSucceeds(getDoc(doc(registered("stranger"), "users/adultNoFamily")));
+    await assertSucceeds(getDoc(doc(registered("stranger"), "users/adultInFamily")));
+  });
+
+  it("REGRESSION: family-roster hydration still reads every member, child included", async () => {
+    // This is the whole reason the carve-out exists: family screens fetch each member's
+    // users/{uid} doc by uid. Flagging a child must not blank out their own family's roster.
+    const parent = registered("parent");
+    for (const memberId of ["parent", "famkid", "adultInFamily"]) {
+      await assertSucceeds(getDoc(doc(parent, `users/${memberId}`)));
+    }
+    const kid = registered("famkid");
+    for (const memberId of ["parent", "famkid", "adultInFamily"]) {
+      await assertSucceeds(getDoc(doc(kid, `users/${memberId}`)));
+    }
+  });
+
+  it("REGRESSION: the anonymous-target exclusion still applies", async () => {
+    await seed({ "users/anonTarget": { userName: "A", isRegistered: false } });
+    await assertFails(getDoc(doc(registered("stranger"), "users/anonTarget")));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FR-37 (F-5b) — public_lifetime_stats mirrors the FR-12 carve-out
+// ---------------------------------------------------------------------------
+
+describe("FR-37: public_lifetime_stats hides children from strangers", () => {
+  beforeEach(async () => {
+    await seedChildVisibilityFixtures();
+    await seed({
+      "public_lifetime_stats/famkid": { platesFound: 12 },
+      "public_lifetime_stats/orphankid": { platesFound: 3 },
+      "public_lifetime_stats/adultNoFamily": { platesFound: 40 },
+      "public_lifetime_stats/ghostuser": { platesFound: 1 }, // no users/{uid} doc
+    });
+  });
+
+  it("denies a stranger the stats of a consented child", async () => {
+    await assertFails(
+      getDoc(doc(registered("stranger"), "public_lifetime_stats/famkid"))
+    );
+  });
+
+  it("denies a stranger AND the ex-family the stats of an orphaned child", async () => {
+    await assertFails(
+      getDoc(doc(registered("stranger"), "public_lifetime_stats/orphankid"))
+    );
+    await assertFails(
+      getDoc(doc(registered("parent"), "public_lifetime_stats/orphankid"))
+    );
+  });
+
+  it("allows the child's family, and the child themselves", async () => {
+    await assertSucceeds(
+      getDoc(doc(registered("parent"), "public_lifetime_stats/famkid"))
+    );
+    await assertSucceeds(
+      getDoc(doc(registered("famkid"), "public_lifetime_stats/famkid"))
+    );
+    await assertSucceeds(
+      getDoc(doc(registered("orphankid"), "public_lifetime_stats/orphankid"))
+    );
+  });
+
+  it("REGRESSION: adult stats stay readable, including for anonymous callers", async () => {
+    await assertSucceeds(
+      getDoc(doc(registered("stranger"), "public_lifetime_stats/adultNoFamily"))
+    );
+    await assertSucceeds(
+      getDoc(doc(anonymous("anon1"), "public_lifetime_stats/adultNoFamily"))
+    );
+  });
+
+  it("REGRESSION: a residual stats row with no user doc does not error-deny", async () => {
+    await assertSucceeds(
+      getDoc(doc(registered("stranger"), "public_lifetime_stats/ghostuser"))
+    );
+  });
+
+  it("writes remain server-only", async () => {
+    await assertFails(
+      setDoc(doc(registered("famkid"), "public_lifetime_stats/famkid"), {
+        platesFound: 9999,
+      })
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FR-14 follow-up (F-5b) — friends is client write:false
+// ---------------------------------------------------------------------------
+
+describe("FR-14 follow-up: friend edges are server-written only", () => {
+  beforeEach(async () => {
+    await seed({
+      "users/adult": { userName: "Grown" },
+      "users/other": { userName: "Other" },
+      "friends/adult_other": {
+        userA: "adult",
+        userB: "other",
+        status: "accepted",
+      },
+    });
+  });
+
+  it("denies creates even from an adult naming themselves", async () => {
+    await assertFails(
+      setDoc(doc(registered("adult"), "friends/adult_third"), {
+        userA: "adult",
+        userB: "third",
+        status: "pending",
+      })
+    );
+  });
+
+  it("denies updates and deletes from a party to the edge", async () => {
+    await assertFails(
+      updateDoc(doc(registered("adult"), "friends/adult_other"), {
+        status: "pending",
+      })
+    );
+    await assertFails(deleteDoc(doc(registered("adult"), "friends/adult_other")));
+  });
+
+  it("REGRESSION: both parties can still READ their edge; outsiders cannot", async () => {
+    await assertSucceeds(getDoc(doc(registered("adult"), "friends/adult_other")));
+    await assertSucceeds(getDoc(doc(registered("other"), "friends/adult_other")));
+    await assertFails(getDoc(doc(registered("stranger"), "friends/adult_other")));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FR-16(a) (F-5b) — invites are created server-side only
+// ---------------------------------------------------------------------------
+
+describe("FR-16(a): clients cannot create invites", () => {
+  beforeEach(async () => {
+    await seed({
+      "families/fam1": { name: "Fam", creatorId: "creator", status: "active" },
+      "families/fam1/members/creator": { role: "creator" },
+      "invites/inv1": {
+        type: "family",
+        fromUserId: "creator",
+        toUserId: "invitee",
+        familyId: "fam1",
+        status: "pending",
+      },
+    });
+  });
+
+  it("denies an honest self-named create", async () => {
+    await assertFails(
+      setDoc(doc(collection(registered("creator"), "invites")), {
+        type: "family",
+        fromUserId: "creator",
+        toUserId: "invitee",
+        familyId: "fam1",
+        status: "pending",
+      })
+    );
+  });
+
+  it("denies a forged create naming someone else as sender", async () => {
+    await assertFails(
+      setDoc(doc(collection(registered("stranger"), "invites")), {
+        type: "friend",
+        fromUserId: "victim",
+        toUserId: "stranger",
+        status: "pending",
+      })
+    );
+  });
+
+  it("REGRESSION: parties can still read and respond to an existing invite", async () => {
+    await assertSucceeds(getDoc(doc(registered("invitee"), "invites/inv1")));
+    await assertSucceeds(
+      updateDoc(doc(registered("invitee"), "invites/inv1"), { status: "accepted" })
+    );
+    await assertFails(
+      updateDoc(doc(registered("stranger"), "invites/inv1"), { status: "accepted" })
+    );
+  });
+
+  it("REGRESSION: a family member can still read their family's invites", async () => {
+    await assertSucceeds(getDoc(doc(registered("creator"), "invites/inv1")));
+  });
+
+  it("deletes remain closed", async () => {
+    await assertFails(deleteDoc(doc(registered("creator"), "invites/inv1")));
+  });
 });
 
 // ---------------------------------------------------------------------------

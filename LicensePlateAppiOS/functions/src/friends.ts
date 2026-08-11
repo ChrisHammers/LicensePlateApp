@@ -11,6 +11,10 @@ import { getFCMTokenForSocialPush, sendPushNotification } from "./utils/notifica
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
 import { assertRegisteredAccount } from "./callableAuth";
+import {
+  assertCallerIsNotChild,
+  assertTargetIsNotChild,
+} from "./childAccessGuards";
 import { friendInviteExpiresAtMillis } from "./retentionCore";
 
 const db = admin.firestore();
@@ -43,6 +47,13 @@ export const sendFriendInvite = enforcedCallable(
         recipientNotRegisteredMessage
       );
     }
+
+    // FR-24 (COPPA F-5b): no child may initiate friendship — consented or not. Friendship
+    // is stranger contact, which sits outside `consentScope` (§11.1).
+    await assertCallerIsNotChild(db, fromUserId);
+    // FR-14: no child may be the target either. Unlike family invites there is no
+    // carve-out: a friend edge is not a parent-managed relationship.
+    await assertTargetIsNotChild(db, toUserId);
 
     // Check friend cap for sender
     const senderCap = await checkFriendCap(fromUserId);
@@ -209,6 +220,22 @@ export const respondToFriendInvite = enforcedCallable(
         "failed-precondition",
         "Invite already responded to"
       );
+    }
+
+    // FR-14 completion: the guard on `sendFriendInvite` is not sufficient on its own,
+    // because `redeemShareCode` also mints `invites` rows (fromUserId = code creator,
+    // toUserId = redeemer) and children must keep redeeming codes — their route back into a
+    // family. Without this check a friend-type share code redeemed by a child would produce
+    // exactly the stranger friend edge FR-14 exists to prevent; an in-family friend invite
+    // that predates the flag (FR-36 deliberately spares those) would do the same.
+    // Accepting is what creates the edge, so that is where the check belongs — DECLINING
+    // stays open, since refusing contact is always protective.
+    if (response === "accept") {
+      for (const partyId of [inviteData.fromUserId, inviteData.toUserId]) {
+        if (typeof partyId === "string") {
+          await assertTargetIsNotChild(db, partyId);
+        }
+      }
     }
 
     const batch = db.batch();

@@ -1,5 +1,6 @@
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { auditValueHash } from "./auditRedaction";
+import { isChildAccountUserData } from "./childAccountCore";
 
 export type SearchMatchField = "username" | "email" | "phone";
 export type SearchQueryKind = "email" | "phone" | "username";
@@ -18,6 +19,19 @@ export function isRegisteredForSearch(
 ): boolean {
   if (!data) return false;
   return data.isRegistered !== false;
+}
+
+/**
+ * FR-11 (COPPA F-5b): may this user own `usernames` / `user_lookup_email` /
+ * `user_lookup_phone` entries? A child is treated exactly like a non-registered account —
+ * the syncers create nothing and remove whatever is there. This is the backstop behind the
+ * FR-4 flag-set purge: if the purge fails or is skipped, the next `users/{uid}` write
+ * still strips the entries. Provisional children (FR-27) never get any to begin with.
+ */
+export function isSearchIndexEligible(
+  data: Record<string, unknown> | undefined | null
+): boolean {
+  return isRegisteredForSearch(data) && !isChildAccountUserData(data);
 }
 
 export function normalizeEmail(raw: string): string {
@@ -92,6 +106,12 @@ export function toPublicSearchHit(
   matchedField: SearchMatchField
 ): PublicSearchHit | null {
   if (!isRegisteredForSearch(data)) return null;
+  // FR-9 (COPPA F-5b): a child never appears in any search result, on any modality.
+  // This is the single choke point every `searchUsers` path funnels through — including
+  // the raw `userNameLower` prefix scan, which reads user docs directly and so cannot be
+  // protected by index removal alone (`syncUsernameSearchIndex` stamps `userNameLower`
+  // even for accounts that own no index entries).
+  if (isChildAccountUserData(data)) return null;
   const userName =
     (typeof data.userName === "string" && data.userName) ||
     (typeof data.username === "string" && data.username) ||

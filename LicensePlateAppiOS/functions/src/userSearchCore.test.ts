@@ -4,6 +4,7 @@ import {
   buildDisplayName,
   classifySearchQuery,
   isRegisteredForSearch,
+  isSearchIndexEligible,
   normalizeEmail,
   normalizePhoneE164,
   normalizeUsernameLower,
@@ -124,6 +125,83 @@ describe("userSearchCore", () => {
         "username"
       );
       expect(hit?.userId).toBe("legacy");
+    });
+
+    // FR-9 (COPPA F-5b) — the single choke point every searchUsers modality funnels
+    // through, including the raw userNameLower prefix scan.
+    describe("FR-9: children never surface in a search result", () => {
+      const child = {
+        userName: "KidRacer",
+        firstName: "Kid",
+        lastName: "Racer",
+        avatarId: "avatar_2",
+        isRegistered: true,
+        isChildAccount: true,
+      };
+
+      it("returns null for a child on every modality", () => {
+        for (const field of ["username", "email", "phone"] as const) {
+          expect(toPublicSearchHit("kid", child, field)).toBeNull();
+        }
+      });
+
+      it("returns null for a consented child in a family too (no carve-out here)", () => {
+        expect(
+          toPublicSearchHit(
+            "kid",
+            { ...child, activeFamilyId: "fam1" },
+            "username"
+          )
+        ).toBeNull();
+      });
+
+      it("pins missing flag ⇒ adult, and explicit false ⇒ adult", () => {
+        expect(
+          toPublicSearchHit("adult", { userName: "Grown" }, "username")?.userId
+        ).toBe("adult");
+        expect(
+          toPublicSearchHit(
+            "adult",
+            { userName: "Grown", isChildAccount: false },
+            "username"
+          )?.userId
+        ).toBe("adult");
+      });
+
+      it("ignores non-boolean truthy values (only literal true is a child)", () => {
+        expect(
+          toPublicSearchHit(
+            "odd",
+            { userName: "Odd", isChildAccount: "true" },
+            "username"
+          )?.userId
+        ).toBe("odd");
+      });
+    });
+  });
+
+  // FR-11 (COPPA F-5b): the syncers' eligibility predicate.
+  describe("isSearchIndexEligible", () => {
+    it("treats a child exactly like a non-registered account", () => {
+      expect(isSearchIndexEligible({ isChildAccount: true })).toBe(false);
+      expect(
+        isSearchIndexEligible({ isRegistered: true, isChildAccount: true })
+      ).toBe(false);
+      expect(
+        isSearchIndexEligible({
+          isRegistered: true,
+          isChildAccount: true,
+          activeFamilyId: "fam1",
+        })
+      ).toBe(false);
+      expect(isSearchIndexEligible({ isRegistered: false })).toBe(false);
+      expect(isSearchIndexEligible(null)).toBe(false);
+    });
+
+    it("keeps adults eligible, including legacy docs with no flags at all", () => {
+      expect(isSearchIndexEligible({})).toBe(true);
+      expect(isSearchIndexEligible({ isRegistered: true })).toBe(true);
+      expect(isSearchIndexEligible({ isChildAccount: false })).toBe(true);
     });
   });
 

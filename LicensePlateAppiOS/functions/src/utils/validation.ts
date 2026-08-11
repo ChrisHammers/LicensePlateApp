@@ -1,4 +1,5 @@
 import * as admin from "firebase-admin";
+import { isChildAccountUserData } from "../childAccountCore";
 
 const db = admin.firestore();
 
@@ -96,11 +97,18 @@ export async function checkFriendCap(
  * Sync privacy check for email/phone discovery.
  * Prefers privacy.emailSearchable / phoneSearchable when present; falls back to
  * legacy top-level isEmailPublic / isPhonePublic for older docs.
+ *
+ * FR-10 (COPPA F-5b): a child is never contact-searchable, whatever the privacy flags
+ * say. This gate is shared by the `searchUsers` email/phone modalities and by
+ * `sendFamilyInvite` / `sendFriendInvite`, so the child exclusion lands on all of them.
  */
 export function isContactSearchableFromUserData(
   data: Record<string, unknown> | undefined | null,
   searchType: "email" | "phone"
 ): boolean {
+  if (isChildAccountUserData(data)) {
+    return false;
+  }
   const doc = data || {};
   const privacy =
     doc.privacy && typeof doc.privacy === "object" && !Array.isArray(doc.privacy)

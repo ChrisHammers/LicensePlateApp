@@ -75,6 +75,42 @@ describe("isContactSearchableFromUserData", () => {
     ).toBe(true);
   });
 
+  // FR-10 (COPPA F-5b). This one predicate backs the searchUsers email/phone modalities
+  // AND the sendFamilyInvite / sendFriendInvite privacy gates, so the child exclusion
+  // lands on all of them at once.
+  describe("FR-10: a child is never contact-searchable", () => {
+    it("returns false despite every privacy flag being opted in", () => {
+      const child = {
+        userName: "Kid",
+        isRegistered: true,
+        isChildAccount: true,
+        privacy: { emailSearchable: true, phoneSearchable: true },
+        isEmailPublic: true,
+        isPhonePublic: true,
+      };
+      expect(isContactSearchableFromUserData(child, "email")).toBe(false);
+      expect(isContactSearchableFromUserData(child, "phone")).toBe(false);
+    });
+
+    it("applies to a consented child in a family as well", () => {
+      const consentedChild = {
+        isChildAccount: true,
+        activeFamilyId: "fam1",
+        privacy: { emailSearchable: true, phoneSearchable: true },
+      };
+      expect(isContactSearchableFromUserData(consentedChild, "email")).toBe(false);
+      expect(isContactSearchableFromUserData(consentedChild, "phone")).toBe(false);
+    });
+
+    it("leaves adults untouched — missing / false flag ⇒ not a child", () => {
+      const adult = { privacy: { emailSearchable: true, phoneSearchable: true } };
+      expect(isContactSearchableFromUserData(adult, "email")).toBe(true);
+      expect(
+        isContactSearchableFromUserData({ ...adult, isChildAccount: false }, "email")
+      ).toBe(true);
+    });
+  });
+
   it("gates email search opt-out used by searchUsers contact modality", () => {
     const optedOut = {
       userName: "Alpha",
@@ -165,5 +201,18 @@ describe("isUserSearchable", () => {
     });
 
     await expect(isUserSearchable("user-1", "phone")).resolves.toBe(true);
+  });
+
+  it("FR-10: returns false for a child even with both flags opted in", async () => {
+    getMock.mockResolvedValue({
+      exists: true,
+      data: () => ({
+        isChildAccount: true,
+        privacy: { emailSearchable: true, phoneSearchable: true },
+      }),
+    });
+
+    await expect(isUserSearchable("kid", "email")).resolves.toBe(false);
+    await expect(isUserSearchable("kid", "phone")).resolves.toBe(false);
   });
 });

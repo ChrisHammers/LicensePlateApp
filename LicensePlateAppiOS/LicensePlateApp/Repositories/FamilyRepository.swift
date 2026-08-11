@@ -627,10 +627,9 @@ class FamilyRepository: ObservableObject {
     
     /// Send a family invite to a user
     func sendFamilyInvite(toUserId: String, familyId: String, method: String = "search") async throws -> String {
-        guard let userId = Auth.auth().currentUser?.uid else {
-            throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
-        }
-        
+        // COPPA FR-41: same guest gate its sibling callables use; the server remains the backstop.
+        try requireRegisteredAccount()
+
         let functions = Functions.functions()
         let sendInviteFunction = functions.httpsCallable("sendFamilyInvite")
         
