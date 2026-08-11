@@ -88,7 +88,7 @@ struct ProfileDriversLicenseCardSection: View {
 #Preview {
     ProfileDriversLicenseCardSection(
         license: .sample,
-        user: AppUser(userName: "scout", firstName: "Scout", lastName: "Otter", avatarId: "scout_otter"),
+        user: AppUser(userName: "scout", avatarId: "scout_otter"),
         showsAvatarEdit: true,
         showsLicenseCustomize: true,
         onEditAvatar: {},

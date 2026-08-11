@@ -73,6 +73,7 @@ service cloud.firestore {
 
     // Reads are document-level, so anything a peer must not see cannot live on users/{uid}:
     // contact goes to private/contact, the push token to private/fcm (FR-43 / audit E1).
+    // firstName/lastName: real names are never collected (owner decision, F-6 rework).
     // Deleting a field with FieldValue.delete() keeps it out of request.resource.data, so
     // migration writes that strip these keys still pass.
     // entitlementTags may remain on merge results; clients must not *change* them
@@ -85,6 +86,8 @@ service cloud.firestore {
         "lastLoginLocation",
         "email",
         "phoneNumber",
+        "firstName",
+        "lastName",
         "fcmToken",
         "fcmTokenUpdatedAt"
       ]) && userDocLinkedPlatformsAreSanitized();
@@ -115,6 +118,14 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/users/$(uid()))
         && userDoc(uid()).data.get('isChildAccount', false) == true
         && !('activeFamilyId' in userDoc(uid()).data);
+    }
+
+    // FR-24 (COPPA F-6 rework): a child — consented or not — can never create a family.
+    // Guards the direct client `families` create that would otherwise bypass the
+    // createFamily callable's child gate. Doc-less callers pass (missing flag ⇒ adult).
+    function callerIsNotChildAccount() {
+      return !exists(/databases/$(database)/documents/users/$(uid()))
+        || userDoc(uid()).data.get('isChildAccount', false) != true;
     }
 
     // FR-37 (COPPA F-5b): the FR-12 carve-out for a document that is NOT the user doc, so
@@ -334,8 +345,9 @@ service cloud.firestore {
     match /families/{familyId} {
       allow read: if isSignedIn() && isFamilyMember(familyId);
 
-      // create family allowed for registered accounts; membership enforced via backend
-      allow create: if isRegisteredAccount();
+      // create family allowed for registered non-child accounts; membership enforced
+      // via backend. Child check closes the callable-bypass hole (FR-24, F-6 rework).
+      allow create: if isRegisteredAccount() && callerIsNotChildAccount();
       // Captains/creators may rename only (name + updatedAt). Other fields are server-managed.
       allow update: if isRegisteredAccount()
         && (isCreator(familyId) || isCaptain(familyId))

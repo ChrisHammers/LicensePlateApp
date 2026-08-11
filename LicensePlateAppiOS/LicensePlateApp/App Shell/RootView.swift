@@ -160,6 +160,15 @@ struct RootView: View {
             let syncCoordinator = SyncCoordinator.shared
             syncCoordinator.setUserSyncExecutor(UserSyncExecutor(authService: authService, userRepository: UserRepository.shared))
             syncCoordinator.setGameplaySyncOnlineProvider { authService.isOnline }
+            // F-6 (FR-28): unconsented-child restriction — gameplay uploads hold until
+            // family admission; the restriction is keyed to the declared identity.
+            ChildRestrictedModeService.shared.configure(
+                currentUserIdProvider: { authService.currentUser?.firebaseUID ?? authService.currentUser?.id },
+                activeFamilyIdProvider: { authService.currentUser?.activeFamilyId }
+            )
+            syncCoordinator.setGameplayCloudSyncHoldProvider {
+                ChildRestrictedModeService.shared.isGameplayCloudSyncPaused
+            }
             authService.setSyncCoordinator(syncCoordinator)
             let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
             let activeFamilyId = authService.currentUser?.activeFamilyId

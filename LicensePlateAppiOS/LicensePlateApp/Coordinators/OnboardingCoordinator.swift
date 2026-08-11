@@ -14,6 +14,7 @@ final class OnboardingCoordinator: ObservableObject {
     enum Step: Int, CaseIterable {
         case welcome
         case disclaimer
+        case ageVerification
         case accountCreation
         case avatarPicker
         case joinFamily
@@ -21,6 +22,24 @@ final class OnboardingCoordinator: ObservableObject {
         case premiumUpsell
         case permissions
         case getStarted
+    }
+
+    /// F-6 (FR-27): age-gate reads, injected for tests. Owner placement: the age
+    /// question sits AFTER the welcome/disclaimer intro and immediately BEFORE account
+    /// creation — the user first sees what the game is, then is asked.
+    var isAgeGateResolved: () -> Bool = { AgeGateStore.shared.isResolved }
+    var ageGateCategory: () -> AgeGateCategory? = { AgeGateStore.shared.category }
+
+    /// FR-27: the age step precedes account creation whenever this identity epoch has
+    /// no answer (pure routing decision — unit tested).
+    static func stepAfterDisclaimer(isAgeGateResolved: Bool) -> Step {
+        isAgeGateResolved ? .accountCreation : .ageVerification
+    }
+
+    /// FR-27: under-13 routes join-family-only — a child never sees createFamily
+    /// (server rejects child `createFamily` callers regardless, FR-24).
+    static func familySetupStep(ageCategory: AgeGateCategory?) -> Step {
+        ageCategory == .under13 ? .joinFamily : .createFamily
     }
     
     /// Navigation stack - acts like NavigationStack; back pops, forward pushes
@@ -68,6 +87,8 @@ final class OnboardingCoordinator: ObservableObject {
         case .welcome:
             stepStack.append(.disclaimer)
         case .disclaimer:
+            stepStack.append(Self.stepAfterDisclaimer(isAgeGateResolved: isAgeGateResolved()))
+        case .ageVerification:
             stepStack.append(.accountCreation)
         case .accountCreation:
             stepStack.append(.avatarPicker)
@@ -108,7 +129,7 @@ final class OnboardingCoordinator: ObservableObject {
         }
         let hasFamily = (authService?.currentUser?.activeFamilyId != nil)
         if !hasFamily {
-            stepStack.append(.createFamily)//(userType == .scout ? .joinFamily : .createFamily)
+            stepStack.append(Self.familySetupStep(ageCategory: ageGateCategory()))
         } else if shouldShowPremiumUpsell {
             stepStack.append(.premiumUpsell)
         } else {

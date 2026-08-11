@@ -954,6 +954,16 @@ class FamilyRepository: ObservableObject {
             return error
         }
 
+        // F-6 (FR-28): child-restriction rejections get the non-punitive family copy,
+        // never the guest/registration framing.
+        if ChildRestrictedModeService.isChildRestrictionRejection(error) {
+            return NSError(
+                domain: nsError.domain,
+                code: nsError.code,
+                userInfo: [NSLocalizedDescriptionKey: FriendsFamilyCallableErrors.childRestrictionMessage]
+            )
+        }
+
         let message: String
         switch code {
         case .unauthenticated:

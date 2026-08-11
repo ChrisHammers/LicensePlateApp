@@ -26,7 +26,9 @@ struct SocialIdentityHydrationTests {
         )
     }
 
-    @Test func cachedIdentityMapUsesAppUserDisplayNameNotUsername() throws {
+    // F-6 rework: real names are never collected — displayName is always the username,
+    // even when a legacy row still carries stored name values (frozen schema).
+    @Test func cachedIdentityMapUsesUsernameAsDisplayName() throws {
         let container = try makeContainer()
         let context = ModelContext(container)
         let user = AppUser(
@@ -44,9 +46,9 @@ struct SocialIdentityHydrationTests {
         repository.setModelContext(context)
 
         let map = repository.cachedIdentityMap(forUserIds: ["uid-1"])
-        #expect(map["uid-1"]?.displayName == "Alex Scout")
+        #expect(map["uid-1"]?.displayName == "scoutotter")
         #expect(map["uid-1"]?.avatarId == "scout_otter")
-        #expect(map["uid-1"]?.displayName != "scoutotter")
+        #expect(map["uid-1"]?.displayName != "Alex Scout")
     }
 
     @Test func getMembersAndPendingExposeLinkedUsers() throws {
@@ -97,12 +99,12 @@ struct SocialIdentityHydrationTests {
 
         let members = familyRepository.getMembers(familyId: familyId)
         #expect(members.count == 1)
-        #expect(members.first?.user?.displayName == "Jane Captain")
+        #expect(members.first?.user?.displayName == "captain_jane")
         #expect(members.first?.user?.avatarId == "navigator_raccoon")
 
         let pendingRequests = familyRepository.getPendingRequests(familyId: familyId)
         #expect(pendingRequests.count == 1)
-        #expect(pendingRequests.first?.user?.displayName == "Pat Pending")
+        #expect(pendingRequests.first?.user?.displayName == "pending_pat")
         #expect(pendingRequests.first?.user?.avatarId == "scout_otter")
     }
 
@@ -142,12 +144,12 @@ struct SocialIdentityHydrationTests {
 
         // Simulate post-getUser link (cache hit path used by fetchAndCacheUsers).
         let fetched = try await UserRepository.shared.getUser(userId: pendingUserId)
-        #expect(fetched?.displayName == "Link Pat")
+        #expect(fetched?.displayName == "link_pat")
         familyRepository.linkUserToMembers(userId: pendingUserId, familyId: familyId)
 
         let linked = familyRepository.getPendingRequests(familyId: familyId)
         #expect(linked.count == 1)
-        #expect(linked.first?.user?.displayName == "Link Pat")
+        #expect(linked.first?.user?.displayName == "link_pat")
         #expect(linked.first?.user?.avatarId == "scout_otter")
     }
 }

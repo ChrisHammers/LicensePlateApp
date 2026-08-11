@@ -72,8 +72,7 @@ enum AuthProfileSyncPolicy {
         syncedAt: Date = .now
     ) {
         local.userName = cloud.userName
-        local.firstName = cloud.firstName
-        local.lastName = cloud.lastName
+        // firstName/lastName are never hydrated: real names are not collected (F-6 rework).
         if !isAnonymous {
             local.email = cloud.email
         }

@@ -52,12 +52,16 @@ export const CHILD_CONSENT_SCOPE: readonly string[] = [
  * constant in the same commit. Policy versions pin the git commit that last
  * touched the legal text in HelpAboutView.swift (owner-maintained; no external
  * counsel pre-launch per owner decision 2026-08-10 — see SRS OQ-2).
+ * A date+slug version ("YYYY-MM-DD.slug") is acceptable when the wording change
+ * lands in the same change as the bump — the change itself is the pin.
  */
 export const CONSENT_TEXT_VERSION = "1.0.0-2026-08-10";
 export const AFFIRMATION_VERSION = "1.0.0-2026-08-10";
 export const CONSENT_POLICY_VERSIONS: Readonly<Record<string, string>> = {
   termsOfService: "2026-08-09.c54758ed",
-  privacyPolicy: "2026-08-09.c54758ed",
+  // 2026-08-11: data-collection paragraph rewritten — real names are no longer
+  // collected anywhere in the app (F-6 rework, owner decision).
+  privacyPolicy: "2026-08-11.no-real-names",
 };
 
 /** FR-2: the only reasons a manager may CLEAR the flag (corrections, not withdrawals). */

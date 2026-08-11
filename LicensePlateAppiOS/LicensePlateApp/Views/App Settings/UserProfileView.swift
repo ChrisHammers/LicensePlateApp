@@ -20,8 +20,6 @@ struct UserProfileView: View {
     
     // Keep local copies for editing
     @State private var currentUserName: String
-    @State private var currentFirstName: String
-    @State private var currentLastName: String
     
     @State private var showError = false
     @State private var errorMessage = ""
@@ -130,8 +128,6 @@ struct UserProfileView: View {
         self.user = user
         self.authService = authService
         _currentUserName = State(initialValue: user.userName)
-        _currentFirstName = State(initialValue: user.firstName ?? "")
-        _currentLastName = State(initialValue: user.lastName ?? "")
         let lifetimeStatsVM = LifetimeStatsProfileViewModel(userId: user.id)
         let xpProgressVM = XpProgressViewModel(userId: user.id)
         _lifetimeStatsViewModel = StateObject(wrappedValue: lifetimeStatsVM)
@@ -177,36 +173,7 @@ struct UserProfileView: View {
                     
                     Section {
                         VStack(spacing: 12) {
-                            // First Name - Editable
-                            SettingEditableTextRow(
-                                title: "First Name".localized,
-                                value: $currentFirstName,
-                                placeholder: "Enter first name".localized,
-                                detail: nil,
-                                isDisabled: false,
-                                onSave: {
-                                    saveFirstName()
-                                },
-                                onCancel: {
-                                    cancelFirstNameEditing()
-                                }
-                            )
-                            
-                            // Last Name - Editable
-                            SettingEditableTextRow(
-                                title: "Last Name".localized,
-                                value: $currentLastName,
-                                placeholder: "Enter last name".localized,
-                                detail: nil,
-                                isDisabled: false,
-                                onSave: {
-                                    saveLastName()
-                                },
-                                onCancel: {
-                                    cancelLastNameEditing()
-                                }
-                            )
-                            
+                            // No name rows: real names are never collected (F-6 rework).
                             // Username - Editable
                             SettingEditableTextRow(
                                 title: "Username".localized,
@@ -671,12 +638,6 @@ struct UserProfileView: View {
                     }
                 )
             }
-            .onChange(of: user.firstName) { oldValue, newValue in
-                currentFirstName = newValue ?? ""
-            }
-            .onChange(of: user.lastName) { oldValue, newValue in
-                currentLastName = newValue ?? ""
-            }
     }
     
     private func profileProgressionRow(title: String, description: String, icon: String) -> some View {
@@ -763,30 +724,6 @@ struct UserProfileView: View {
         currentUserName = user.userName // Reset to original
     }
     
-    private func saveFirstName() {
-        let trimmed = currentFirstName.trimmingCharacters(in: .whitespacesAndNewlines)
-        user.firstName = trimmed.isEmpty ? nil : trimmed
-        user.lastUpdated = .now
-        try? modelContext.save()
-        syncProfileToFirestoreIfNeeded()
-    }
-    
-    private func cancelFirstNameEditing() {
-        currentFirstName = user.firstName ?? ""
-    }
-    
-    private func saveLastName() {
-        let trimmed = currentLastName.trimmingCharacters(in: .whitespacesAndNewlines)
-        user.lastName = trimmed.isEmpty ? nil : trimmed
-        user.lastUpdated = .now
-        try? modelContext.save()
-        syncProfileToFirestoreIfNeeded()
-    }
-    
-    private func cancelLastNameEditing() {
-        currentLastName = user.lastName ?? ""
-    }
-
     /// Persists profile to Firestore; surfaces failures via the existing error alert.
     private func syncProfileToFirestoreIfNeeded() {
         guard authService.isTrulyAuthenticated else { return }

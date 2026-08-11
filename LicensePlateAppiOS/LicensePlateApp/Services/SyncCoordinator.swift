@@ -55,6 +55,10 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
 
     /// Defaults to `false` until `RootView` wires `authService.isOnline`, so tests and early launch do not upload while “offline.”
     private var gameplaySyncOnlineProvider: () -> Bool = { false }
+    /// F-6 (FR-28): while true (unconsented child), gameplay uploads hold — queued
+    /// events stay pending and resume automatically when consent lifts the hold.
+    /// User-profile sync is NOT held (the declared account may sync, FR-27).
+    private var gameplayCloudSyncHoldProvider: () -> Bool = { false }
     private var gameplayDebouncedFlushTask: Task<Void, Never>?
     private var gameplayFlushInProgress = false
     private var pendingAnotherGameplayFlush = false
@@ -71,6 +75,10 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
 
     func setGameplaySyncOnlineProvider(_ provider: @escaping () -> Bool) {
         gameplaySyncOnlineProvider = provider
+    }
+
+    func setGameplayCloudSyncHoldProvider(_ provider: @escaping () -> Bool) {
+        gameplayCloudSyncHoldProvider = provider
     }
 
     func scheduleDebouncedGameplaySyncFlushIfOnline() {
@@ -166,8 +174,11 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
 
     private func processPendingSyncItemsBody() async {
         var acceptedProgressionSourceEventIds = Set<String>()
+        // FR-28: while the unconsented-child hold is on, skip the gameplay drain
+        // entirely (queued events simply hold) but still run user-profile sync below.
+        let gameplayHeld = gameplayCloudSyncHoldProvider()
         var gameplayDrainPass = 0
-        while gameplayDrainPass < Self.maxGameplayBacklogDrainPasses {
+        while !gameplayHeld, gameplayDrainPass < Self.maxGameplayBacklogDrainPasses {
             let pending = (try? repository.fetchPending()) ?? []
             let retryDue = (try? repository.fetchFailedRetryDue()) ?? []
             let candidates = Dictionary(uniqueKeysWithValues: (pending + retryDue).map { ($0.id, $0) }).values.sorted { $0.createdAt < $1.createdAt }
@@ -247,6 +258,13 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                     let resolvedEvent = try? TripActivityEventRepository.shared.event(byId: eventId)
                     let eventKind = resolvedEvent?.kind.rawValue ?? ""
                     let gameIdStr = resolvedEvent?.payload?[TripActivityEventPayloadKey.gameInstanceId] ?? ""
+                    if ChildRestrictedModeService.isChildRestrictionRejection(error) {
+                        // FR-28: unconsented-child rejection is a hold, never a permanent
+                        // failure — the event stays queued and resumes on consent. No
+                        // analytics here (no child-only events on the child's instance).
+                        try? repository.markFailed(id: item.id, nextRetryAt: Date().addingTimeInterval(3600))
+                        continue
+                    }
                     if Self.isTransientGameNotFoundGameplayFailure(error) {
                         if item.attemptCount < Self.gameplayGameNotFoundMaxAttempts {
                             Task { @MainActor in

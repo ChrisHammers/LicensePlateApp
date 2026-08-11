@@ -45,6 +45,13 @@ struct OnboardingContainerView: View {
                         OnboardingWelcomeView(onNext: { coordinator.nextStep() })
                     case .disclaimer:
                         OnboardingDisclaimerView(onAgree: { coordinator.nextStep() })
+                    case .ageVerification:
+                        // F-6 (FR-27, owner placement): after the intro, before account
+                        // creation. The deferred guest provisions once answered.
+                        AgeGateView(source: .onboarding) {
+                            coordinator.nextStep()
+                            Task { await authService.completeDeferredGuestProvisioningIfNeeded() }
+                        }
                     case .accountCreation:
                         OnboardingAccountCreationView(
                             coordinator: coordinator,

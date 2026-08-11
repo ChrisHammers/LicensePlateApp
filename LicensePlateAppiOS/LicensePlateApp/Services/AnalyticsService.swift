@@ -336,6 +336,11 @@ class AnalyticsService: AnalyticsLogging {
         /// `outcome`: `keep_local` (had SwiftData row) or `abort_no_create` (did not invent guest profile).
         case authProfileHydrateFailed(outcome: String)
 
+        // COPPA F-6 (FR-27, SRS §12): neutral age screen funnel — shown/completed
+        // ONLY. The answer (age, category) is NEVER logged or attached to any event.
+        case ageGateShown(source: String)
+        case ageGateCompleted(source: String)
+
         // Screen view (Step 10)
         case screenView(screenName: String, screenClass: String?)
 
@@ -543,6 +548,8 @@ class AnalyticsService: AnalyticsLogging {
             case .deferredSetupStepCompleted: return "deferred_setup_step_completed"
             case .deferredSetupStepTouched: return "deferred_setup_step_touched"
             case .authProfileHydrateFailed: return "auth_profile_hydrate_failed"
+            case .ageGateShown: return "age_gate_shown"
+            case .ageGateCompleted: return "age_gate_completed"
             case .screenView: return "screen_view"
             case .paywallViewed: return "paywall_viewed"
             case .paywallDismissed: return "paywall_dismissed"
@@ -1074,6 +1081,10 @@ class AnalyticsService: AnalyticsLogging {
                 return ["step_id": stepId, "source": source]
             case .authProfileHydrateFailed(let outcome):
                 return ["outcome": outcome]
+            case .ageGateShown(let source):
+                return ["source": source]
+            case .ageGateCompleted(let source):
+                return ["source": source]
             case .screenView(let screenName, let screenClass):
                 var p: [String: Any] = ["screen_name": screenName]
                 if let screenClass = screenClass { p["screen_class"] = screenClass }

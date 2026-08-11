@@ -285,15 +285,10 @@
 "By continuing, you acknowledge that you are responsible for using the app safely." = "Al continuar, reconoces que eres responsable de usar la app de forma segura.";
 "You also agree to our " = "También aceptas nuestros ";
 " and " = " y ";
-"Are you a Captain or Scout?" = "¿Eres Capitán o Explorador?";
 "Captain" = "Capitán";
-"Parent – create families, manage settings" = "Padre – crear familias, gestionar ajustes";
 "Scout" = "Explorador";
-"Child – join an existing family" = "Hijo – unirse a una familia existente";
 "Join Family" = "Unirse a Familia";
 "Join a Family" = "Unirse a una familia";
-"Scouts need to join a family. Enter the share code from your Captain." = "Los exploradores deben unirse a una familia. Ingresa el código de compartir de tu Capitán.";
-"Captains can join an existing family. Enter the share code from your family's Captain." = "Los Capitanes pueden unirse a una familia existente. Ingresa el código de compartir del Capitán de tu familia.";
 "Share Code" = "Código de Compartir";
 "Enter share code" = "Ingresa el código de compartir";
 "Create a Family" = "Crear una Familia";
@@ -545,10 +540,6 @@
 "Email: support@roadtriproyale.com" = "Correo: support@roadtriproyale.com";
 
 // User Profile
-"First Name" = "Nombre";
-"Enter first name" = "Ingresa el nombre";
-"Last Name" = "Apellido";
-"Enter last name" = "Ingresa el apellido";
 "Username" = "Nombre de Usuario";
 "Enter username" = "Ingresa el nombre de usuario";
 "Email" = "Correo";
@@ -1308,7 +1299,7 @@
 "1. Who We Are" = "1. Quiénes somos";
 "This Privacy Policy explains how Hammers Tech LLC (“HammersTech”, “we”, “us”) collects, uses, and shares information when you use the RoadTrip Royale app and related services (the “Service”). It applies wherever the Service is offered. If you have any questions or requests about your data, contact us at support@roadtriproyale.com." = "Esta Política de Privacidad explica cómo Hammers Tech LLC (“HammersTech”, “nosotros”) recopila, usa y comparte información cuando usas la app RoadTrip Royale y los servicios relacionados (el “Servicio”). Se aplica dondequiera que se ofrezca el Servicio. Si tienes preguntas o solicitudes sobre tus datos, contáctanos en support@roadtriproyale.com.";
 "2. Information We Collect" = "2. Información que recopilamos";
-"Account information: a username and avatar, and — if you register — your email address, optional first and last name, and optional phone number. If you sign in with Google or Apple, we receive basic profile details from that provider. Gameplay data: your trips, games, license plate discoveries, XP, achievements, ranks, cosmetics, and settings. Social data: the friends and family connections you create and the invitations you send or accept. Device and usage data: device model, operating system, app version, IP address, app identifiers, push notification tokens, analytics events, and crash reports. Purchase data: your subscription and purchase status from the app store and our purchase processor — we never receive your full payment card details." = "Información de cuenta: un nombre de usuario y un avatar y, si te registras, tu correo electrónico, tu nombre y apellido opcionales y tu número de teléfono opcional. Si inicias sesión con Google o Apple, recibimos datos básicos de perfil de ese proveedor. Datos de juego: tus viajes, partidas, descubrimientos de placas, XP, logros, rangos, cosméticos y configuraciones. Datos sociales: las conexiones de amigos y familia que creas y las invitaciones que envías o aceptas. Datos del dispositivo y de uso: modelo del dispositivo, sistema operativo, versión de la app, dirección IP, identificadores de la app, tokens de notificaciones push, eventos de analítica e informes de fallos. Datos de compras: el estado de tus suscripciones y compras según la tienda de aplicaciones y nuestro procesador de compras — nunca recibimos los datos completos de tu tarjeta de pago.";
+"Account information: a username and avatar, and — if you register — your email address. If you sign in with Google or Apple, we receive basic profile details from that provider, such as your email address, which we store privately. Gameplay data: your trips, games, license plate discoveries, XP, achievements, ranks, cosmetics, and settings. Social data: the friends and family connections you create and the invitations you send or accept. Device and usage data: device model, operating system, app version, IP address, app identifiers, push notification tokens, analytics events, and crash reports. Purchase data: your subscription and purchase status from the app store and our purchase processor — we never receive your full payment card details." = "Información de cuenta: un nombre de usuario y un avatar y, si te registras, tu correo electrónico. Si inicias sesión con Google o Apple, recibimos datos básicos de perfil de ese proveedor, como tu correo electrónico, que guardamos de forma privada. Datos de juego: tus viajes, partidas, descubrimientos de placas, XP, logros, rangos, cosméticos y configuraciones. Datos sociales: las conexiones de amigos y familia que creas y las invitaciones que envías o aceptas. Datos del dispositivo y de uso: modelo del dispositivo, sistema operativo, versión de la app, dirección IP, identificadores de la app, tokens de notificaciones push, eventos de analítica e informes de fallos. Datos de compras: el estado de tus suscripciones y compras según la tienda de aplicaciones y nuestro procesador de compras — nunca recibimos los datos completos de tu tarjeta de pago.";
 "3. Location Data" = "3. Datos de ubicación";
 "With your permission, we collect your device’s location to show your position on the map, attribute discoveries during games, and record routes during active trips — including in the background if you enable background location. Location is optional: you control it in your device settings, and core gameplay works without it. We do not use your precise location for advertising." = "Con tu permiso, recopilamos la ubicación de tu dispositivo para mostrar tu posición en el mapa, atribuir descubrimientos durante las partidas y registrar rutas durante viajes activos — incluso en segundo plano si activas la ubicación en segundo plano. La ubicación es opcional: la controlas en la configuración de tu dispositivo, y el juego principal funciona sin ella. No usamos tu ubicación precisa para publicidad.";
 "4. Voice Input" = "4. Entrada por voz";
@@ -1368,3 +1359,21 @@
 
 // Voice Recognition - on-device requirement
 "Voice needs on-device speech recognition, which isn't ready on this device. Use the List tab to add plates." = "La voz necesita reconocimiento de voz en el dispositivo, que aún no está listo en este dispositivo. Usa la pestaña Lista para agregar placas.";
+
+// COPPA F-6 — Neutral age screen (FR-27) & child restricted state (FR-28/FR-52)
+"age_gate.title" = "Antes de salir a la carretera";
+"age_gate.subtitle" = "Selecciona el año en que naciste.";
+"age_gate.year_label" = "Año de nacimiento";
+"age_gate.year_placeholder" = "Selecciona el año";
+"age_gate.privacy_note" = "Se usa solo para configurar tu experiencia. Tu año de nacimiento no se guarda.";
+"age_gate.picker_hint" = "Abre una lista de años para elegir";
+"age_gate.continue_hint" = "Continúa con el año seleccionado";
+"child_gate.family_prompt.title" = "Pídele a tu papá o mamá que te agregue a su familia";
+"child_gate.family_prompt.subtitle" = "¡Sigue jugando! Tus viajes se quedan en este dispositivo hasta que te unas a una familia.";
+"child_gate.callable_blocked" = "Pídele a tu papá o mamá que te agregue a su familia para usar esto.";
+"child_gate.registration_note" = "Elige un nombre de usuario para jugar. Un padre o madre puede agregarte a su familia con un código de compartir.";
+"child_gate.screen.join_title" = "Únete a tu familia para jugar juntos";
+"child_gate.screen.join_body" = "Pídele a tu papá o mamá que te agregue a su familia con un código de compartir. Las funciones familiares se desbloquean cuando te unes.";
+"child_gate.screen.join_button_hint" = "Abre el ingreso del código de compartir de la familia";
+"child_gate.screen.friends_title" = "Los amigos no son parte de las cuentas infantiles";
+"child_gate.screen.friends_body" = "Juega viajes con tu familia — todos en tu familia ya están conectados.";

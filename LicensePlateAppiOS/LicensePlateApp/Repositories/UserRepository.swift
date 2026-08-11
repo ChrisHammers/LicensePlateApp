@@ -193,8 +193,20 @@ class UserRepository: ObservableObject {
         )
     }
 
+    // MARK: - Child registration declaration (COPPA F-6, FR-27)
+
+    /// Declares the current auth account as an under-13 registration BEFORE its first
+    /// `users/{uid}` profile write. The server sets `isChildAccount = true` (never
+    /// false) and records the uid-only DECLARED lifecycle row. Callable from an
+    /// anonymous uid; idempotent, protective direction only.
+    func declareChildRegistration() async throws {
+        try await AppCheckReadiness.ensureCallablePrerequisites()
+        let fn = Functions.functions().httpsCallable("declareChildRegistration")
+        _ = try await fn.call(([:] as [String: Any]).addingClientMetadata())
+    }
+
     // MARK: - User Search
-    
+
     /// Search users by username (always searchable)
     /// Supports exact match, prefix matching, and contains matching
     /// - Note: Unused by live `searchUsers` (Cloud Function). Kept for emergency rollback only.
@@ -593,10 +605,6 @@ class UserRepository: ObservableObject {
             let user = AppUser(
                 id: hit.userId,
                 userName: hit.userName,
-                firstName: hit.firstNameComponent,
-                lastName: hit.lastNameComponent,
-                email: nil,
-                phoneNumber: nil,
                 avatarId: hit.avatarId,
                 firebaseUID: hit.userId
             )
@@ -703,18 +711,6 @@ class UserRepository: ObservableObject {
             }
         }
 
-        /// Best-effort split of displayName for AppUser first/last when caching identity.
-        var firstNameComponent: String? {
-            let parts = displayName.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
-            guard parts.count == 2 else { return displayName == userName ? nil : displayName }
-            return String(parts[0])
-        }
-
-        var lastNameComponent: String? {
-            let parts = displayName.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
-            guard parts.count == 2 else { return nil }
-            return String(parts[1])
-        }
     }
     
     // MARK: - User Data Conversion
@@ -734,8 +730,6 @@ class UserRepository: ObservableObject {
         let user = AppUser(
             id: id,
             userName: userName,
-            firstName: data["firstName"] as? String,
-            lastName: data["lastName"] as? String,
             email: data["email"] as? String,
             phoneNumber: data["phoneNumber"] as? String,
             createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? .now,
@@ -781,10 +775,8 @@ class UserRepository: ObservableObject {
             }()
 
             if let existing = existingById ?? existingByFirebase {
-                // Update existing
+                // Update existing (names are never stored — F-6 rework)
                 existing.userName = user.userName
-                existing.firstName = user.firstName
-                existing.lastName = user.lastName
                 // Contact is owner-only (private/contact); a peer doc never supplies it, so
                 // only overwrite when the remote actually carried a value (FR-43).
                 if let email = user.email, !email.isEmpty {

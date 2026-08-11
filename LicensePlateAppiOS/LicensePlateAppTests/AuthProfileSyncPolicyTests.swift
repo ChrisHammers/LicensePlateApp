@@ -113,8 +113,9 @@ struct AuthProfileSyncPolicyTests {
         AuthProfileSyncPolicy.applyCloudProfile(cloud, to: local, isAnonymous: false, syncedAt: syncedAt)
 
         #expect(local.userName == "JohnEFeelGood")
-        #expect(local.firstName == "John")
-        #expect(local.lastName == "Good")
+        // F-6 rework: real names are never hydrated, even when a legacy cloud doc carries them.
+        #expect(local.firstName == nil)
+        #expect(local.lastName == nil)
         #expect(local.email == "johnefeelgood@gmail.com")
         #expect(local.phoneNumber == "2035551111")
         #expect(local.isUsernameManuallyChanged == true)

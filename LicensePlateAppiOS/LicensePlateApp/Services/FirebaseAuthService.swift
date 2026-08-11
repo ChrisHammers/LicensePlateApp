@@ -76,6 +76,21 @@ class FirebaseAuthService: ObservableObject {
 
     // Track last login tracking time to prevent duplicates
     private var lastLoginTrackingTime: Date?
+
+    /// F-6 (FR-27, identity-epoch rule): true when the CURRENT identity is an
+    /// unprovisioned guest with no age answer for this identity epoch. Sign-out and
+    /// account deletion clear the epoch — no NEW anonymous uid is ever provisioned
+    /// unanswered, and a stored answer never carries across identities. The age
+    /// question is ASKED at exactly two moments (genuine first launch; sign-up with an
+    /// unanswered epoch); a post-sign-out reborn guest is never prompted — it stays a
+    /// restricted local guest (option B). Signed-in sessions (uid exists) never gate.
+    var requiresAgeGateForGuestProvisioning: Bool {
+        guard let user = currentUser else { return false }
+        return GuestProvisioningPolicy.requiresAgeGate(
+            hasFirebaseUid: user.firebaseUID != nil,
+            isResolved: AgeGateStore.shared.isResolved
+        )
+    }
     
     init() {
         isNetworkReachable = networkMonitor.isConnected
@@ -158,7 +173,8 @@ class FirebaseAuthService: ObservableObject {
                         try? await loadUserDataFromFirestore(userId: firebaseUID)
                     }
                 } else if isOnline, existingUser.firebaseUID == nil {
-                    // User exists locally but no Firebase account - sign in anonymously
+                    // User exists locally but no Firebase account - sign in anonymously.
+                    // (Existing local guest ⇒ not a genuine first launch; never gated.)
                     Task {
                         try? await signInAnonymously()
                     }
@@ -176,11 +192,51 @@ class FirebaseAuthService: ObservableObject {
     private func createDefaultUser() async throws {
         try createFreshLocalGuestUser()
 
-        // If online, immediately sign in anonymously
-        if isOnline {
+        // F-6 (FR-27): anonymous provisioning (auth account + first users/{uid} write)
+        // waits for this identity epoch's age answer. If it already exists (QA
+        // `--skipOnboarding` seeding), provision immediately.
+        if isOnline, AgeGateStore.shared.isResolved {
             Task {
                 try? await signInAnonymously()
             }
+        }
+    }
+
+    /// F-6 (FR-27): called when a guest age step completes (first launch or rebirth).
+    /// Performs the deferred anonymous sign-in; an under-13 answer is declared inside
+    /// `signInAnonymously` for exactly the uid it creates, before its first profile write.
+    func completeDeferredGuestProvisioningIfNeeded() async {
+        guard AgeGateStore.shared.isResolved,
+              let user = currentUser,
+              user.firebaseUID == nil,
+              isOnline else {
+            return
+        }
+        try? await signInAnonymously()
+    }
+
+    /// F-6 (FR-27): binds the current flow's outstanding under-13 answer to `flowUid` —
+    /// the uid this registration flow just created or upgraded — and delivers
+    /// `declareChildRegistration`. Declarations can never target any other uid; a stored
+    /// answer cannot declare a pre-existing account (incident-1 regression).
+    /// - Returns: false while a declaration for `flowUid` is still outstanding (the
+    ///   caller must hold that uid's first profile write).
+    private func ensureFlowChildDeclaration(flowUid: String) async -> Bool {
+        let store = AgeGateStore.shared
+        if store.hasPendingChildDeclaration, store.pendingDeclarationUserId == nil {
+            store.bindPendingDeclaration(toUserId: flowUid)
+        }
+        guard store.pendingDeclarationUserId == flowUid else { return true }
+        guard isOnline, auth.currentUser?.uid == flowUid else { return false }
+        do {
+            try await UserRepository.shared.declareChildRegistration()
+            store.markChildDeclarationSent(userId: flowUid)
+            return true
+        } catch {
+            #if DEBUG
+            print("⚠️ declareChildRegistration failed; profile write stays held: \(error)")
+            #endif
+            return false
         }
     }
 
@@ -224,10 +280,21 @@ class FirebaseAuthService: ObservableObject {
         if localUser.firebaseUID != nil {
             return
         }
-        
+
+        // F-6 (FR-27, identity-epoch rule): a NEW anonymous uid is never created
+        // without an age answer for the current epoch — first launch and post-sign-out
+        // guest rebirth alike. The gate UI re-invokes provisioning after the answer.
+        guard GuestProvisioningPolicy.mayCreateAnonymousIdentity(
+            isResolved: AgeGateStore.shared.isResolved
+        ) else {
+            localUser.needsSync = true
+            try? modelContext.save()
+            return
+        }
+
         isLoading = true
         defer { isLoading = false }
-        
+
         guard isOnline else {
             // Offline - mark for sync later
             localUser.needsSync = true
@@ -238,17 +305,29 @@ class FirebaseAuthService: ObservableObject {
         do {
             let result = try await auth.signInAnonymously()
             let firebaseUID = result.user.uid
-            
+
             // Link local user to Firebase anonymous account
             localUser.firebaseUID = firebaseUID
             localUser.id = firebaseUID // Update ID to Firebase UID
             localUser.needsSync = false
-            
+
             try modelContext.save()
-            
+
+            // F-6 (FR-27): an under-13 answer from this flow binds to the uid the flow
+            // just created and is declared BEFORE the first users/{uid} write. On
+            // failure the profile write stays held (queued; choke point retries).
+            guard await ensureFlowChildDeclaration(flowUid: firebaseUID) else {
+                localUser.needsSync = true
+                try? syncCoordinator?.enqueueUserProfileSync(userId: firebaseUID)
+                try? modelContext.save()
+                currentUser = localUser
+                isAuthenticated = true
+                return
+            }
+
             // Save to Firestore
             try await saveUserDataToFirestore(localUser)
-            
+
             currentUser = localUser
             isAuthenticated = true
         } catch {
@@ -370,14 +449,13 @@ class FirebaseAuthService: ObservableObject {
         }
     }
     
-    /// Create account with email and password (upgrades anonymous if exists)
+    /// Create account with email and password (upgrades anonymous if exists).
+    /// Real names are never collected (owner decision, F-6 rework): registration takes
+    /// username + email + password only.
     func createAccount(
         email: String,
         password: String,
-        userName: String,
-        firstName: String? = nil,
-        lastName: String? = nil,
-        phoneNumber: String? = nil
+        userName: String
     ) async throws {
         isLoading = true
         defer { isLoading = false }
@@ -413,32 +491,36 @@ class FirebaseAuthService: ObservableObject {
                     // Update user info
                     currentUser.email = email
                     currentUser.userName = trimmedUserName
-                    currentUser.firstName = firstName
-                    currentUser.lastName = lastName
-                    currentUser.phoneNumber = phoneNumber
                     currentUser.isUsernameManuallyChanged = true
-                    
+
                     try modelContext.save()
+
+                    // F-6 (FR-27): an under-13 answer from THIS flow is declared for the
+                    // uid the flow upgraded, before its first profile write (the choke
+                    // point holds the write if the declaration is still outstanding).
+                    _ = await ensureFlowChildDeclaration(flowUid: result.user.uid)
                     try await saveUserDataToFirestore(currentUser)
-                    
+
                     isAuthenticated = true
-                    
+
                     // Update login tracking
                     await updateLoginTracking()
                 } catch {
                     // If linking fails (email already in use), create new account
                     try auth.signOut()
                     let result = try await auth.createUser(withEmail: email, password: password)
-                    await createNewUserFromFirebase(result.user, email: email, userName: trimmedUserName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber)
-                    
+                    _ = await ensureFlowChildDeclaration(flowUid: result.user.uid)
+                    await createNewUserFromFirebase(result.user, email: email, userName: trimmedUserName)
+
                     // Update login tracking
                     await updateLoginTracking()
                 }
             } else {
                 // Not anonymous, create new account
                 let result = try await auth.createUser(withEmail: email, password: password)
-                await createNewUserFromFirebase(result.user, email: email, userName: trimmedUserName, firstName: firstName, lastName: lastName, phoneNumber: phoneNumber)
-                
+                _ = await ensureFlowChildDeclaration(flowUid: result.user.uid)
+                await createNewUserFromFirebase(result.user, email: email, userName: trimmedUserName)
+
                 // Update login tracking
                 await updateLoginTracking()
             }
@@ -475,7 +557,13 @@ class FirebaseAuthService: ObservableObject {
             UserRepository.shared.clearEntitlementTags(for: userId)
         }
         founderEntitlementAttemptedUserIds.removeAll()
-        
+
+        // F-6 (identity-epoch rule): the answer belongs to the identity that gave it.
+        // Clearing on sign-out ends the epoch — the next registration flow asks fresh
+        // (incident-2 regression), and any future guest rebirth must pass the age
+        // screen before its new uid is provisioned.
+        AgeGateStore.shared.clearAnswer()
+
         // Keep user data, just mark as signed out
         if let user = currentUser {
             user.linkedPlatforms.removeAll()
@@ -512,6 +600,12 @@ class FirebaseAuthService: ObservableObject {
         try LocalUserDataPurgeService.shared.purgeAllLocalUserData(oldUserId: oldUserId)
 
         founderEntitlementAttemptedUserIds.removeAll()
+        // F-6 (identity-epoch rule, option B): hard sign-out ends the epoch. The
+        // replacement guest below stays UNPROVISIONED (`signInAnonymously` self-defers)
+        // and is never prompted — it lives as a restricted, age-unknown local guest
+        // behind the standard guest gates until a sign-up flow answers or the user
+        // signs in to an existing account.
+        AgeGateStore.shared.clearAnswer()
 
         if isOnline {
             do {
@@ -556,6 +650,10 @@ class FirebaseAuthService: ObservableObject {
         try LocalUserDataPurgeService.shared.purgeAllLocalUserData(oldUserId: oldUserId)
 
         founderEntitlementAttemptedUserIds.removeAll()
+        // F-6 (identity-epoch rule, option B): account deletion ends the epoch; the
+        // replacement guest stays unprovisioned and unprompted (standard guest gates)
+        // until a sign-up flow answers or the user signs in.
+        AgeGateStore.shared.clearAnswer()
 
         // The Auth session is invalid server-side; always clear the local Keychain session.
         do {
@@ -1191,14 +1289,15 @@ class FirebaseAuthService: ObservableObject {
              
              var platformEmail = email
              var platformPhone: String? = nil
-             var platformDisplayName = displayName
-             
+             // Provider display names are discarded — real names are never stored
+             // locally or in Firestore (owner decision, F-6 rework).
+             _ = displayName
+
              // Extract provider data - look for the provider we just linked
              for providerData in linkedUser.providerData {
                  if providerData.providerID == expectedProviderID {
                      platformEmail = platformEmail ?? providerData.email
                      platformPhone = providerData.phoneNumber
-                     platformDisplayName = platformDisplayName ?? providerData.displayName
                      break
                  }
              }
@@ -1221,7 +1320,7 @@ class FirebaseAuthService: ObservableObject {
                  linkedAt: .now,
                  email: platformEmail,
                  phoneNumber: platformPhone,
-                 displayName: platformDisplayName
+                 displayName: nil
              )
              
              if !user.linkedPlatforms.contains(where: { $0.platform == platform }) {
@@ -1346,7 +1445,14 @@ class FirebaseAuthService: ObservableObject {
 
         // Login tracking must not full-profile sync (avoids overwriting username/contact
         // with stale local SwiftData before Firestore hydrate).
-        if isOnline, let firebaseUID = user.firebaseUID {
+        // F-6 (FR-27): the merge write could create a skeleton users/{uid} doc for a
+        // flow-created uid awaiting its declaration, so it honors the same hold
+        // (best-effort; next login re-stamps). No other account is ever held.
+        let ageGateAllowsWrite = !AgeGateProfileWritePolicy.isProfileWriteHeld(
+            userUid: user.firebaseUID,
+            pendingDeclarationUserId: AgeGateStore.shared.pendingDeclarationUserId
+        )
+        if isOnline, ageGateAllowsWrite, let firebaseUID = user.firebaseUID {
             Task {
                 do {
                     try await updateLoginTimestampsInFirestore(userId: firebaseUID, loginDate: loginDate)
@@ -1461,36 +1567,27 @@ class FirebaseAuthService: ObservableObject {
             
         case .createLocalThenTrackLogin:
             let email = firebaseUser.isAnonymous ? nil : firebaseUser.email
-            await createNewUserFromFirebase(
-                firebaseUser,
-                email: email,
-                userName: nil,
-                firstName: nil,
-                lastName: nil,
-                phoneNumber: nil
-            )
+            await createNewUserFromFirebase(firebaseUser, email: email, userName: nil)
             await updateLoginTracking()
-            
+
         case .abortWithoutCreate:
             AnalyticsService.shared.log(.authProfileHydrateFailed(outcome: "abort_no_create"))
             // Do not invent a guest username or full-save over a possibly existing cloud doc.
         }
     }
-    
-    private func createNewUserFromFirebase(_ firebaseUser: User, email: String?, userName: String?, firstName: String?, lastName: String?, phoneNumber: String?) async {
+
+    /// Real names are never collected (owner decision, F-6 rework).
+    private func createNewUserFromFirebase(_ firebaseUser: User, email: String?, userName: String?) async {
         guard let modelContext = modelContext else { return }
-        
+
         let firebaseUID = firebaseUser.uid
         let deviceId = DeviceIdentifier.getDeviceIdentifier()
         let defaultUsername = userName ?? DeviceIdentifier.generateDefaultUsername(deviceId: deviceId)
-        
+
         let newUser = AppUser(
             id: firebaseUID,
             userName: defaultUsername,
-            firstName: firstName,
-            lastName: lastName,
             email: email,
-            phoneNumber: phoneNumber,
             deviceIdentifier: deviceId,
             isUsernameManuallyChanged: userName != nil,
             firebaseUID: firebaseUID
@@ -1511,25 +1608,20 @@ class FirebaseAuthService: ObservableObject {
         }
     }
     
+    /// Real names are never collected (owner decision, F-6 rework): the provider's
+    /// display name is discarded — never split into first/last, never stored locally
+    /// or in Firestore.
     private func updateUserFromOAuth(_ firebaseUser: User, email: String?, displayName: String?) async {
         guard let modelContext = modelContext,
               let user = currentUser else { return }
-        
+
         // Update user info from OAuth
         if let email = email, user.email == nil {
             user.email = email
         }
-        
-        if let displayName = displayName {
-            let components = displayName.components(separatedBy: " ")
-            if components.count >= 2 {
-                user.firstName = components[0]
-                user.lastName = components.dropFirst().joined(separator: " ")
-            } else {
-                user.firstName = displayName
-            }
-        }
-        
+
+        _ = displayName // provider names are intentionally dropped
+
         try? modelContext.save()
         try? await saveUserDataToFirestore(user)
     }
@@ -1576,6 +1668,23 @@ class FirebaseAuthService: ObservableObject {
     
     func saveUserDataToFirestore(_ user: AppUser, extraFields: [String: Any] = [:]) async throws {
         let syncUserId = user.firebaseUID ?? user.id
+
+        // F-6 (FR-27, flow-scoped): the ONLY profile write ever held is the uid a
+        // registration flow created while its under-13 declaration is outstanding —
+        // retried here (declaration first, then the write). Existing accounts are never
+        // held, and a stored answer can never declare a pre-existing uid.
+        if AgeGateProfileWritePolicy.isProfileWriteHeld(
+            userUid: syncUserId,
+            pendingDeclarationUserId: AgeGateStore.shared.pendingDeclarationUserId
+        ) {
+            guard await ensureFlowChildDeclaration(flowUid: syncUserId) else {
+                user.needsSync = true
+                try? syncCoordinator?.enqueueUserProfileSync(userId: syncUserId)
+                try? modelContext?.save()
+                return
+            }
+        }
+
         guard isOnline else {
             user.needsSync = true
             try? syncCoordinator?.enqueueUserProfileSync(userId: syncUserId)
@@ -1681,10 +1790,8 @@ class FirebaseAuthService: ObservableObject {
         )
         
         if let existingUser = try? modelContext.fetch(descriptor).first {
-            // Merge all fields from Firestore
+            // Merge all fields from Firestore (names are never stored — F-6 rework)
             existingUser.userName = firestoreUser.userName
-            existingUser.firstName = firestoreUser.firstName
-            existingUser.lastName = firestoreUser.lastName
             existingUser.email = firestoreUser.email
             existingUser.phoneNumber = firestoreUser.phoneNumber
             existingUser.userImageURL = firestoreUser.userImageURL
@@ -1735,12 +1842,10 @@ class FirebaseAuthService: ObservableObject {
             )
         ]
         
-        if let firstName = user.firstName {
-            data["firstName"] = firstName
-        }
-        if let lastName = user.lastName {
-            data["lastName"] = lastName
-        }
+        // Real names are never collected (owner decision, F-6 rework); purge any
+        // existing dev-doc values on sync (same migration pattern as email/phone).
+        data["firstName"] = FieldValue.delete()
+        data["lastName"] = FieldValue.delete()
         // Email/phone live on private/contact only (not peer-readable public profile).
         data["email"] = FieldValue.delete()
         data["phoneNumber"] = FieldValue.delete()
@@ -1791,8 +1896,7 @@ class FirebaseAuthService: ObservableObject {
     
     private func appUserFromFirestoreData(_ data: [String: Any], id: String) -> AppUser {
         let userName = (data["userName"] as? String) ?? (data["username"] as? String) ?? "User"
-        let firstName = data["firstName"] as? String
-        let lastName = data["lastName"] as? String
+        // firstName/lastName are never read: real names are not collected (F-6 rework).
         let email = data["email"] as? String
         let phoneNumber = data["phoneNumber"] as? String
         let userImageURL = data["userImageURL"] as? String
@@ -1873,8 +1977,6 @@ class FirebaseAuthService: ObservableObject {
         return AppUser(
             id: id,
             userName: userName,
-            firstName: firstName,
-            lastName: lastName,
             email: email,
             phoneNumber: phoneNumber,
             createdAt: createdAt,

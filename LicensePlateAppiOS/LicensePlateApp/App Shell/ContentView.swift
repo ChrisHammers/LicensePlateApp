@@ -48,6 +48,13 @@ struct ContentView: View {
     @ObservedObject private var deferredSetupStore = DeferredProfileSetupStore.shared
     @State private var showDeferredSetupBanner = false
     @State private var isShowingDeferredSetupHub = false
+    // F-6 (FR-28): persistent, non-punitive restricted-state surface for an
+    // unconsented child (local play continues; cloud sync holds until family admission).
+    // A reborn (post-sign-out) age-unknown guest is NOT this: they get the standard
+    // logged-out guest experience and are simply never cloud-provisioned until a
+    // sign-up flow answers the age question (owner decision, option B).
+    @ObservedObject private var ageGateStore = AgeGateStore.shared
+    @State private var showChildFamilyPrompt = false
     
     // Custom detent for the new trip sheet - device-aware sizing
     // On iPad, use a larger fraction since 25% is too small to show the text field
@@ -212,7 +219,9 @@ struct ContentView: View {
                 addTripButton
             }
             .overlay(alignment: .top) {
-                if showDeferredSetupBanner {
+                if showChildFamilyPrompt {
+                    childFamilyPromptBanner
+                } else if showDeferredSetupBanner {
                     deferredSetupBanner
                 }
             }
@@ -281,6 +290,10 @@ struct ContentView: View {
             }
             .onChange(of: authService.currentUser?.id) { _, _ in
                 refreshDeferredSetupBanner()
+                refreshChildFamilyPrompt()
+            }
+            .onChange(of: ageGateStore.revision) { _, _ in
+                refreshChildFamilyPrompt()
             }
             .onChange(of: isShowingCreateSheet) { _, isShowing in
                 handleCreateSheetVisibilityChange(isShowing)
@@ -433,10 +446,20 @@ struct ContentView: View {
         activeTripsListViewModel.load(userId: currentUserId)
         pendingTripsViewModel.loadIfNeeded()
         NotificationRoutingService.shared.ensureObserving(userId: currentUserId)
+        // FR-27 (option B): the reborn guest asks nothing here — it stays an
+        // unprovisioned, age-unknown local guest behind the standard guest gates
+        // until a sign-up flow answers the age question (or they sign in).
+        refreshChildFamilyPrompt()
     }
 
     private func handleActiveFamilyIdChange(_ newFamilyId: String?) {
         ensureSocialInboxListening(userId: currentUserId, activeFamilyId: newFamilyId)
+        // FR-28: family admission (consent) lifts the unconsented-child hold — flush so
+        // queued gameplay events resume automatically. Idempotent no-op for adults.
+        if newFamilyId != nil {
+            SyncCoordinator.shared.scheduleDebouncedGameplaySyncFlushIfOnline()
+        }
+        refreshChildFamilyPrompt()
     }
 
     private func handleTripHydrationSignal() {
@@ -462,6 +485,7 @@ struct ContentView: View {
             await ReturnStreakReminderService.shared.refreshScheduleIfNeeded(userId: userId)
         }
         refreshDeferredSetupBanner()
+        refreshChildFamilyPrompt()
     }
 
     private func handleCreateSheetVisibilityChange(_ isShowing: Bool) {
@@ -529,6 +553,43 @@ struct ContentView: View {
             FirstSessionAnalyticsService.shared.recordDeferredSetupPromptShown(pendingSteps: pending)
         }
         showDeferredSetupBanner = shouldShow
+    }
+
+    private func refreshChildFamilyPrompt() {
+        showChildFamilyPrompt = ChildRestrictedModeService.shared.isRestrictedUnconsentedChild
+    }
+
+    /// FR-28: non-punitive persistent surface while an unconsented child plays locally.
+    /// Icon + text (never color alone); lifts automatically on family admission.
+    private var childFamilyPromptBanner: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "person.2.fill")
+                .font(.system(size: 20))
+                .foregroundStyle(Color.Theme.primaryBlue)
+                .accessibleDecorative()
+            VStack(alignment: .leading, spacing: 4) {
+                Text("child_gate.family_prompt.title".localized)
+                    .font(.system(.subheadline, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                Text("child_gate.family_prompt.subtitle".localized)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+                .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\("child_gate.family_prompt.title".localized). \("child_gate.family_prompt.subtitle".localized)"
+        )
     }
 
     private var deferredSetupBanner: some View {

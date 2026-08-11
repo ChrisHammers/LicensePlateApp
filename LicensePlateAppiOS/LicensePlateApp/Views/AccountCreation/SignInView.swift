@@ -37,14 +37,19 @@ struct SignInView: View {
     @ObservedObject var authService: FirebaseAuthService
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
-    
+    // F-6 (FR-27, identity-epoch rule): the create-account flow asks the neutral age
+    // question at its start whenever the current identity epoch has no answer. Because
+    // sign-out/deletion clear the epoch, a resolved answer here always belongs to THIS
+    // identity (e.g. just given at the first-launch or rebirth gate) and is reused
+    // instead of asking twice in a row; a previous account's answer can never carry
+    // over (incident-2 regression).
+    @ObservedObject private var ageGateStore = AgeGateStore.shared
+
     @State private var isSignInMode: Bool
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
     @State private var userName = ""
-    @State private var firstName = ""
-    @State private var lastName = ""
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var isLoading = false
@@ -54,10 +59,12 @@ struct SignInView: View {
     @State private var didReportAuthSuccess = false
     @State private var showPassword = false
     @State private var showConfirmPassword = false
-    
+    /// FR-27 (flow-scoped): the age step answered within THIS presentation.
+    @State private var hasAnsweredAgeThisFlow = false
+
     var onAuthSuccess: (() -> Void)?
     var deferredSetupTouchSource: String = "profile"
-    
+
     init(
         authService: FirebaseAuthService,
         initialMode: SignInInitialMode = .signIn,
@@ -71,8 +78,6 @@ struct SignInView: View {
         self._password = State(initialValue: "")
         self._confirmPassword = State(initialValue: "")
         self._userName = State(initialValue: "")
-        self._firstName = State(initialValue: "")
-        self._lastName = State(initialValue: "")
         self._showError = State(initialValue: false)
         self._errorMessage = State(initialValue: "")
         self._isLoading = State(initialValue: false)
@@ -82,10 +87,57 @@ struct SignInView: View {
         self._showConfirmPassword = State(initialValue: false)
         self.onAuthSuccess = onAuthSuccess
     }
-    
+
+    private var isCreateModeAwaitingAgeAnswer: Bool {
+        !isSignInMode && !hasAnsweredAgeThisFlow && !ageGateStore.isResolved
+    }
+
     var body: some View {
         NavigationStack {
             AppBackgroundView {
+                if isCreateModeAwaitingAgeAnswer {
+                    // FR-27: the age question starts every create-account flow, fresh.
+                    AgeGateView(source: .registration) {
+                        hasAnsweredAgeThisFlow = true
+                    }
+                } else {
+                    signInScrollContent
+                }
+            }
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                }
+            }
+            .alert("Error", isPresented: $showError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(errorMessage)
+            }
+            .onAppear {
+                accountStateAtAppear = currentAccountState()
+                DeferredProfileSetupStore.shared.markTouched(.account, source: deferredSetupTouchSource)
+            }
+            .onChange(of: authService.currentUser?.email) { _, _ in
+                evaluateAccountStateTransition()
+            }
+            .onChange(of: authService.currentUser?.firebaseUID ?? authService.currentUser?.id) { _, _ in
+                evaluateAccountStateTransition()
+            }
+            .onDisappear {
+                // Cancel any pending password match check when view disappears
+                passwordMatchTask?.cancel()
+            }
+        }
+    }
+
+    private var signInScrollContent: some View {
                 ScrollView {
                     VStack(spacing: 24) {
                         // Header
@@ -121,33 +173,16 @@ struct SignInView: View {
                                         .font(.system(.body, design: .rounded))
                                         .autocapitalization(.none)
                                 }
-                                
-                                // First Name field
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("First Name")
-                                        .font(.system(.body, design: .rounded))
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(Color.Theme.primaryBlue)
-                                    
-                                    TextField("Enter your first name", text: $firstName)
-                                        .textContentType(.givenName)
-                                        .textFieldStyle(.roundedBorder)
-                                        .font(.system(.body, design: .rounded))
-                                        .autocapitalization(.words)
-                                }
-                                
-                                // Last Name field
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Last Name")
-                                        .font(.system(.body, design: .rounded))
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(Color.Theme.primaryBlue)
-                                    
-                                    TextField("Enter your last name", text: $lastName)
-                                        .textContentType(.familyName)
-                                        .textFieldStyle(.roundedBorder)
-                                        .font(.system(.body, design: .rounded))
-                                        .autocapitalization(.words)
+
+                                // No name fields: real names are never collected
+                                // (owner decision, F-6 rework; FR-52 satisfied for all).
+                                if ageGateStore.category == .under13 {
+                                    // Non-punitive child guidance toward family joining.
+                                    Text("child_gate.registration_note".localized)
+                                        .font(.system(.caption, design: .rounded))
+                                        .foregroundStyle(Color.Theme.softBrown)
+                                        .multilineTextAlignment(.leading)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
                                 }
                             }
                             
@@ -300,16 +335,12 @@ struct SignInView: View {
                                         email = ""
                                         if let currentUser = authService.currentUser {
                                             userName = currentUser.userName
-                                            firstName = currentUser.firstName ?? ""
-                                            lastName = currentUser.lastName ?? ""
                                         }
                                     } else {
                                         // Switching to sign in - clear all fields
                                         password = ""
                                         confirmPassword = ""
                                         userName = ""
-                                        firstName = ""
-                                        lastName = ""
                                     }
                                     showPassword = false
                                     showConfirmPassword = false
@@ -377,40 +408,8 @@ struct SignInView: View {
                     }
                     .padding(.bottom, 32)
                 }
-            }
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                    .font(.system(.body, design: .rounded))
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                }
-            }
-            .alert("Error", isPresented: $showError) {
-                Button("OK", role: .cancel) { }
-            } message: {
-                Text(errorMessage)
-            }
-            .onAppear {
-                accountStateAtAppear = currentAccountState()
-                DeferredProfileSetupStore.shared.markTouched(.account, source: deferredSetupTouchSource)
-            }
-            .onChange(of: authService.currentUser?.email) { _, _ in
-                evaluateAccountStateTransition()
-            }
-            .onChange(of: authService.currentUser?.firebaseUID ?? authService.currentUser?.id) { _, _ in
-                evaluateAccountStateTransition()
-            }
-            .onDisappear {
-                // Cancel any pending password match check when view disappears
-                passwordMatchTask?.cancel()
-            }
-        }
     }
-    
+
     private var isFormValid: Bool {
         if isSignInMode {
             return !email.isEmpty && !password.isEmpty
@@ -431,8 +430,6 @@ struct SignInView: View {
         password = ""
         confirmPassword = ""
         userName = ""
-        firstName = ""
-        lastName = ""
         errorMessage = ""
         showPassword = false
         showConfirmPassword = false
@@ -502,9 +499,7 @@ struct SignInView: View {
                 try await authService.createAccount(
                     email: email,
                     password: password,
-                    userName: userName,
-                    firstName: firstName.isEmpty ? nil : firstName,
-                    lastName: lastName.isEmpty ? nil : lastName
+                    userName: userName
                 )
                 await MainActor.run {
                     isLoading = false
@@ -958,5 +953,10 @@ struct OAuthButton: View {
 
 #Preview {
     SignInView(authService: FirebaseAuthService())
+        .modelContainer(for: AppUser.self, inMemory: true)
+}
+
+#Preview("Create account") {
+    SignInView(authService: FirebaseAuthService(), initialMode: .createAccount)
         .modelContainer(for: AppUser.self, inMemory: true)
 }

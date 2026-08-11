@@ -135,16 +135,12 @@ final class AppUser {
         }
     }
     
-    /// Get display name (firstName + lastName, or userName as fallback)
+    /// Display name shown across the app — always the username. Real names are never
+    /// collected or displayed (owner decision, F-6 rework). The stored
+    /// firstName/lastName properties survive only because the SwiftData schema is
+    /// frozen; nothing writes or reads them.
     var displayName: String {
-        if let firstName = firstName, let lastName = lastName, !firstName.isEmpty, !lastName.isEmpty {
-            return "\(firstName) \(lastName)"
-        } else if let firstName = firstName, !firstName.isEmpty {
-            return firstName
-        } else if let lastName = lastName, !lastName.isEmpty {
-            return lastName
-        }
-        return userName
+        userName
     }
 }
 

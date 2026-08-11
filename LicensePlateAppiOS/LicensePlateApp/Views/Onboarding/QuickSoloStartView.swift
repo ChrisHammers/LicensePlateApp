@@ -19,8 +19,35 @@ struct QuickSoloStartView: View {
     @State private var isCreatingTrip = false
     @State private var errorMessage: String?
     @State private var showError = false
+    /// F-6 (FR-27, owner placement): the user first sees what the game is (intro +
+    /// safety card); the age question appears as its own step only when they choose to
+    /// PLAY and this identity epoch has no answer — immediately before guest
+    /// provisioning begins. Sign-up asks in its own form; sign-in never asks.
+    @State private var showAgeStepBeforePlay = false
 
     var body: some View {
+        Group {
+            if showAgeStepBeforePlay {
+                AgeGateView(source: .launch) {
+                    showAgeStepBeforePlay = false
+                    Task { @MainActor in
+                        // FR-27 ordering: provision the guest (anonymous uid + first
+                        // users/{uid} write, with the under-13 declaration bound to
+                        // that uid) BEFORE the trip starts.
+                        await authService.completeDeferredGuestProvisioningIfNeeded()
+                        startQuickSoloTrip()
+                    }
+                }
+                .transition(.opacity)
+            } else {
+                quickStartContent
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: showAgeStepBeforePlay)
+    }
+
+    private var quickStartContent: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 24) {
@@ -76,7 +103,7 @@ struct QuickSoloStartView: View {
                 }
 
                 Button {
-                    startQuickSoloTrip()
+                    startQuickSoloTripTapped()
                 } label: {
                     Group {
                         if isCreatingTrip {
@@ -241,6 +268,18 @@ struct QuickSoloStartView: View {
         try await authService.signOut()
         try authService.resetLocalUserToGuest()
         try await authService.signInAnonymously()
+    }
+
+    /// FR-27: play is the provisioning moment — ask the age question first when this
+    /// identity epoch has no answer (renders `AgeGateStore`'s state; the rule itself
+    /// lives in `GuestProvisioningPolicy` behind `requiresAgeGateForGuestProvisioning`).
+    private func startQuickSoloTripTapped() {
+        guard hasAgreedToSafeDriving else { return }
+        if authService.requiresAgeGateForGuestProvisioning {
+            showAgeStepBeforePlay = true
+            return
+        }
+        startQuickSoloTrip()
     }
 
     private func startQuickSoloTrip() {

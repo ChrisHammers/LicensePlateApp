@@ -16,6 +16,12 @@ struct AppCoordinatorTests {
         #expect(coordinator.rootView == .forceUpdate)
     }
 
+    // F-6 (FR-27, owner placement): the root routes carry NO age gating — the age
+    // question lives inside the flows (quick-start's pre-play step, legacy
+    // onboarding's `.ageVerification` before account creation, sign-up's in-form
+    // ask). The invariant is held by the provisioning guard (`GuestProvisioningPolicy`
+    // + `signInAnonymously`), not by routing.
+
     @Test func transitionFromSplashShowsMainWhenOnboardingComplete() {
         let coordinator = AppCoordinator()
         coordinator.hasSeenOnboarding = true

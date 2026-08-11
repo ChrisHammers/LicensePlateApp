@@ -39,6 +39,7 @@ import {
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   setDoc,
@@ -688,5 +689,86 @@ describe("audit_logs stay fully client-inaccessible", () => {
       })
     );
     await assertFails(deleteDoc(doc(registered("parent"), "audit_logs/row1")));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FR-24 (F-6 rework) — direct `families` creation cannot bypass the createFamily
+// callable's child gate
+// ---------------------------------------------------------------------------
+
+describe("FR-24 (F-6): child accounts cannot create family docs directly", () => {
+  const familyDoc = { name: "New Fam", creatorId: "x", status: "active" };
+
+  it("denies an unconsented child", async () => {
+    await seed({ "users/kid": { userName: "Kid", isChildAccount: true } });
+    await assertFails(
+      setDoc(doc(registered("kid"), "families/famNew1"), familyDoc)
+    );
+  });
+
+  it("denies a consented child too (family membership does not help)", async () => {
+    await seed({
+      "users/kid": { userName: "Kid", isChildAccount: true, activeFamilyId: "fam1" },
+    });
+    await assertFails(
+      setDoc(doc(registered("kid"), "families/famNew2"), familyDoc)
+    );
+  });
+
+  it("allows a registered adult", async () => {
+    await seed({ "users/adult": { userName: "Grown" } });
+    await assertSucceeds(
+      setDoc(doc(registered("adult"), "families/famNew3"), familyDoc)
+    );
+  });
+
+  it("allows a registered caller with no user doc (missing flag means adult)", async () => {
+    await assertSucceeds(
+      setDoc(doc(registered("docless"), "families/famNew4"), familyDoc)
+    );
+  });
+
+  it("still denies anonymous callers (registered-account gate)", async () => {
+    await assertFails(
+      setDoc(doc(anonymous("anon9"), "families/famNew5"), familyDoc)
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F-6 rework — users docs can never reintroduce real-name fields
+// ---------------------------------------------------------------------------
+
+describe("F-6 rework: users docs reject firstName/lastName", () => {
+  beforeEach(async () => {
+    await seed({
+      "users/named": { userName: "Named", firstName: "Ada", lastName: "Lovelace" },
+    });
+  });
+
+  it("denies creates carrying a name field", async () => {
+    await assertFails(
+      setDoc(doc(registered("fresh9"), "users/fresh9"), {
+        userName: "F9",
+        firstName: "Ada",
+      })
+    );
+  });
+
+  it("denies updates reintroducing a name field", async () => {
+    await assertFails(
+      updateDoc(doc(registered("named"), "users/named"), { lastName: "Byron" })
+    );
+  });
+
+  it("allows the migration write that strips names via FieldValue.delete()", async () => {
+    await assertSucceeds(
+      updateDoc(doc(registered("named"), "users/named"), {
+        firstName: deleteField(),
+        lastName: deleteField(),
+        userName: "Named v2",
+      })
+    );
   });
 });

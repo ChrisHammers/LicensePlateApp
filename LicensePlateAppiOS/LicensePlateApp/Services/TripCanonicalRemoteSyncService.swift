@@ -130,6 +130,11 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     private var incrementalGameListeners: [String: ListenerRegistration] = [:]
     private var incrementalEventListeners: [String: ListenerRegistration] = [:]
 
+    /// F-6 (FR-28): while true (unconsented child), canonical publish is a silent no-op —
+    /// all callers are best-effort, and the SyncCoordinator retry machinery republishes
+    /// once consent lifts the hold. Injectable for tests.
+    var cloudSyncHoldProvider: () -> Bool = { ChildRestrictedModeService.shared.isGameplayCloudSyncPaused }
+
     /// Serializes concurrent `publishFullSession` for the same trip (`startTrip` vs combined setup publish).
     private var publishTailBySessionId: [UUID: (UUID, Task<Void, Error>)] = [:]
 
@@ -188,6 +193,9 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     }
 
     private func publishFullSessionBody(sessionId: UUID) async throws {
+        // FR-28: cloud gameplay collection pauses for an unconsented child; local play
+        // continues and the canonical state publishes after consent.
+        guard !cloudSyncHoldProvider() else { return }
         try await AppCheckReadiness.ensureCallablePrerequisites()
         guard let session = try tripSessionRepository.session(byId: sessionId) else {
             throw TripCanonicalRemoteSyncError.sessionNotFoundLocally

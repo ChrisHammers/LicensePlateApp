@@ -111,6 +111,62 @@ struct SyncCoordinatorTests {
         #expect(try repo.fetchPending(limit: 10).isEmpty)
         #expect((try repo.metadata(key: "user:user-123"))?.lastSyncedAt != nil)
     }
+
+    // MARK: - COPPA F-6 (FR-28): unconsented-child gameplay hold
+
+    @Test func gameplayItemsHoldWhileChildSyncPaused() async throws {
+        let ctx = try makeContext()
+        let repo = SyncQueueRepository.shared
+        repo.setModelContext(ctx)
+        let coordinator = SyncCoordinator(repository: repo)
+        coordinator.setGameplayCloudSyncHoldProvider { true }
+
+        try coordinator.enqueueForSync(sessionId: UUID(), eventId: "evt-child-hold")
+        await coordinator.processPendingSyncItems()
+
+        // Queued events simply hold — still pending, never attempted or cancelled.
+        let pending = try repo.fetchPending(limit: 10)
+        #expect(pending.count == 1)
+        #expect(pending[0].state == .pending)
+        #expect(pending[0].payloadEventId == "evt-child-hold")
+    }
+
+    @Test func userProfileSyncStillRunsWhileGameplayHeld() async throws {
+        let ctx = try makeContext()
+        let repo = SyncQueueRepository.shared
+        repo.setModelContext(ctx)
+        let mockExecutor = MockUserSyncExecutor()
+        let coordinator = SyncCoordinator(repository: repo, userSyncExecutor: mockExecutor)
+        coordinator.setGameplayCloudSyncHoldProvider { true }
+
+        // FR-27: the declared child account may still sync its own profile.
+        try coordinator.enqueueUserProfileSync(userId: "user-child")
+        await coordinator.processPendingSyncItems()
+
+        #expect(mockExecutor.syncedUserIds == ["user-child"])
+        #expect(try repo.fetchPending(limit: 10).isEmpty)
+    }
+
+    @Test func gameplayItemsResumeWhenHoldLifts() async throws {
+        let ctx = try makeContext()
+        let repo = SyncQueueRepository.shared
+        repo.setModelContext(ctx)
+        TripActivityEventRepository.shared.setModelContext(ctx)
+        let coordinator = SyncCoordinator(repository: repo)
+
+        var held = true
+        coordinator.setGameplayCloudSyncHoldProvider { held }
+
+        try coordinator.enqueueForSync(sessionId: UUID(), eventId: "evt-resume")
+        await coordinator.processPendingSyncItems()
+        #expect(try repo.fetchPending(limit: 10).count == 1)
+
+        // Consent (family admission) lifts the hold; the same flush path drains the
+        // queue (the local event no longer exists here, so the item completes).
+        held = false
+        await coordinator.processPendingSyncItems()
+        #expect(try repo.fetchPending(limit: 10).isEmpty)
+    }
 }
 
 @MainActor
