@@ -164,6 +164,9 @@ final class OnboardingCoordinator: ObservableObject {
     }
     
     /// Whether to show premium upsell during onboarding (disabled until product re-enables).
+    /// COPPA F-7 (FR-34-amended/D-14): child sessions are NOT skipped — the step view
+    /// itself renders the informational child variant instead of the paywall, so a
+    /// product re-enable here stays correct for children with no further change.
     var shouldShowPremiumUpsell: Bool {
         false
         // TODO: re-enable onboarding premium upsell

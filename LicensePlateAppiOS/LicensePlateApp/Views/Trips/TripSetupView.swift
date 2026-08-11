@@ -9,6 +9,8 @@ import SwiftUI
 
 struct TripSetupView: View {
     @ObservedObject var viewModel: TripSetupViewModel
+    /// COPPA F-7 (FR-33) rendered projection.
+    @ObservedObject private var childPostures = ChildSessionPostureCoordinator.shared
     var onNext: () -> Void
     var onCancel: () -> Void
 
@@ -200,47 +202,53 @@ struct TripSetupView: View {
 
                 Divider()
 
-                SettingToggleRow(
-                    title: "Save location when marking plates".localized,
-                    description: "Store location data when you mark a plate as found".localized,
-                    isOn: $viewModel.saveLocationWhenMarkingPlates
-                )
+                // COPPA F-7 (FR-33): child sessions replace the location prefs with
+                // a short explanation; the flags are forced off at the source of truth.
+                if childPostures.isLocationForcedOffForChildSession {
+                    ChildLocationDisabledNotice()
+                } else {
+                    SettingToggleRow(
+                        title: "Save location when marking plates".localized,
+                        description: "Store location data when you mark a plate as found".localized,
+                        isOn: $viewModel.saveLocationWhenMarkingPlates
+                    )
 
-                Divider()
+                    Divider()
 
-                SettingToggleRow(
-                    title: "Show my location on large map".localized,
-                    description: "Display your current location on the full-screen map".localized,
-                    isOn: $viewModel.showMyLocationOnLargeMap
-                )
+                    SettingToggleRow(
+                        title: "Show my location on large map".localized,
+                        description: "Display your current location on the full-screen map".localized,
+                        isOn: $viewModel.showMyLocationOnLargeMap
+                    )
 
-                Divider()
+                    Divider()
 
-                SettingToggleRow(
-                    title: "Track my location during trip".localized,
-                    description: "Continuously track your location while a trip is active".localized,
-                    isOn: $viewModel.trackMyLocationDuringTrip
-                )
+                    SettingToggleRow(
+                        title: "Track my location during trip".localized,
+                        description: "Continuously track your location while a trip is active".localized,
+                        isOn: $viewModel.trackMyLocationDuringTrip
+                    )
 
-                Divider()
+                    Divider()
 
-                SettingToggleRow(
-                    title: "Show my active trip on the large map".localized,
-                    description: "Display your active trip on the full-screen map".localized,
-                    isOn: $viewModel.showMyActiveTripOnLargeMap
-                )
-                .disabled(!viewModel.trackMyLocationDuringTrip)
-                .opacity(viewModel.trackMyLocationDuringTrip ? 1.0 : 0.5)
+                    SettingToggleRow(
+                        title: "Show my active trip on the large map".localized,
+                        description: "Display your active trip on the full-screen map".localized,
+                        isOn: $viewModel.showMyActiveTripOnLargeMap
+                    )
+                    .disabled(!viewModel.trackMyLocationDuringTrip)
+                    .opacity(viewModel.trackMyLocationDuringTrip ? 1.0 : 0.5)
 
-                Divider()
+                    Divider()
 
-                SettingToggleRow(
-                    title: "Show my active trip on the small map".localized,
-                    description: "Display your active trip on the small map".localized,
-                    isOn: $viewModel.showMyActiveTripOnSmallMap
-                )
-                .disabled(!viewModel.trackMyLocationDuringTrip)
-                .opacity(viewModel.trackMyLocationDuringTrip ? 1.0 : 0.5)
+                    SettingToggleRow(
+                        title: "Show my active trip on the small map".localized,
+                        description: "Display your active trip on the small map".localized,
+                        isOn: $viewModel.showMyActiveTripOnSmallMap
+                    )
+                    .disabled(!viewModel.trackMyLocationDuringTrip)
+                    .opacity(viewModel.trackMyLocationDuringTrip ? 1.0 : 0.5)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 16)

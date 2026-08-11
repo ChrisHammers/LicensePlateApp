@@ -33,6 +33,8 @@ struct ContentView: View {
         authService: FirebaseAuthService()
     )
     @StateObject private var tripLimitPaywallViewModel = PaywallViewModel()
+    /// COPPA F-7 (FR-34) rendered projection.
+    @ObservedObject private var childPostures = ChildSessionPostureCoordinator.shared
     @StateObject private var travelLogViewModel = TravelLogViewModel(
         travelLogRepository: TravelLogRepository.shared,
         tripSessionRepository: TripSessionRepository.shared,
@@ -186,13 +188,20 @@ struct ContentView: View {
                 homeCreateTripSheet
             }
             .sheet(isPresented: tripLimitPaywallPresented) {
-                PaywallView(
-                    viewModel: tripLimitPaywallViewModel,
-                    onDismiss: { pendingTripsViewModel.dismissTripLimitPaywall() },
-                    source: TripLimitGateSource.inviteAccept.rawValue
-                )
-                .onAppear {
-                    tripLimitPaywallViewModel.setTripLimitContext()
+                // COPPA F-7 (FR-34): child sessions get the informational variant in
+                // the same slot — never pricing/purchase UI.
+                switch ChildPremiumSheetVariant.variant(purchasesSuppressed: childPostures.arePurchasesSuppressed) {
+                case .childInfo:
+                    ChildPremiumInfoView(context: .tripLimit, onDismiss: { pendingTripsViewModel.dismissTripLimitPaywall() })
+                case .paywall:
+                    PaywallView(
+                        viewModel: tripLimitPaywallViewModel,
+                        onDismiss: { pendingTripsViewModel.dismissTripLimitPaywall() },
+                        source: TripLimitGateSource.inviteAccept.rawValue
+                    )
+                    .onAppear {
+                        tripLimitPaywallViewModel.setTripLimitContext()
+                    }
                 }
             }
     }

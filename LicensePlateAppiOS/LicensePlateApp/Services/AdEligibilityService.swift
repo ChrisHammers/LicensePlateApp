@@ -18,16 +18,25 @@ enum AdSurface: String, CaseIterable {
 final class AdEligibilityService {
     static let shared = AdEligibilityService(
         remoteConfig: RemoteConfigService.shared,
-        effectiveTierProvider: { EntitlementService.shared.entitlementState(for: $0).effectiveTier }
+        effectiveTierProvider: { EntitlementService.shared.entitlementState(for: $0).effectiveTier },
+        childPostureProvider: { ChildSessionPostureCoordinator.shared.currentPosture }
     )
 
     private let remoteConfig: RemoteConfigValueProviding
     private let effectiveTierProvider: (AppUser) -> UserTier
+    private let childPostureProvider: @MainActor () -> ChildSessionPosture
     private var loggedSignatures: Set<String> = []
 
-    init(remoteConfig: RemoteConfigValueProviding, effectiveTierProvider: @escaping (AppUser) -> UserTier) {
+    init(
+        remoteConfig: RemoteConfigValueProviding,
+        effectiveTierProvider: @escaping (AppUser) -> UserTier,
+        childPostureProvider: @escaping @MainActor () -> ChildSessionPosture = {
+            ChildSessionPostureCoordinator.shared.currentPosture
+        }
+    ) {
         self.remoteConfig = remoteConfig
         self.effectiveTierProvider = effectiveTierProvider
+        self.childPostureProvider = childPostureProvider
     }
 
     func shouldShowAd(for surface: AdSurface, user: AppUser?) -> Bool {
@@ -35,7 +44,16 @@ final class AdEligibilityService {
             logEligibility(surface: surface, eligible: false, reason: "remote_config_disabled")
             return false
         }
+        // COPPA FR-19 (amended, D-6), fail-closed: ineligible whenever the session is
+        // child-true, cached-true, ratcheted-anonymous, or unresolved. One generic
+        // reason for all held states — never a child-identifying one (SRS §12).
+        guard childPostureProvider().isAdDisplayEligible else {
+            logEligibility(surface: surface, eligible: false, reason: "ads_policy_hold")
+            return false
+        }
         guard let user else {
+            // Posture is fresh-confirmed non-child; a missing AppUser row is only a
+            // UI-hydration gap, so keep the historical free-tier treatment.
             logEligibility(surface: surface, eligible: true, reason: "no_user_free_tier")
             return true
         }

@@ -24,6 +24,11 @@ class UserRepository: ObservableObject {
     private let db = Firestore.firestore()
     private var modelContext: ModelContext?
     private var entitlementTagsByUserId: [String: Set<String>] = [:]
+    /// COPPA §7.1 projection: in-memory mirror of `users/{uid}.isChildAccount`
+    /// (server-owned; never persisted to SwiftData — same pattern as
+    /// `entitlementTagsByUserId`). An entry exists only after THIS session freshly
+    /// read the user doc; sign-out clears it.
+    private var isChildByUserId: [String: Bool] = [:]
     private let friendsFamilyAccessPolicy: FriendsFamilyAccessPolicy
     
     @Published var searchResults: [AppUser] = []
@@ -66,6 +71,28 @@ class UserRepository: ObservableObject {
         }
     }
 
+    // MARK: - Child-account projection (COPPA F-7, SRS §7.1)
+
+    /// Tri-state read of the server flag as freshly resolved THIS session:
+    /// - `true` / `false` — this session read `users/{userId}` and saw the flag.
+    /// - `nil` — not resolved yet. nil is NEVER treated as "not child" for gating
+    ///   (FR-19: an unresolved current uid keeps the ads/posture hold).
+    func isChildAccount(for userId: String) -> Bool? {
+        guard !userId.isEmpty else { return nil }
+        return isChildByUserId[userId]
+    }
+
+    func ingestIsChildAccount(userId: String, isChild: Bool) {
+        guard !userId.isEmpty else { return }
+        isChildByUserId[userId] = isChild
+    }
+
+    /// §4 semantics: on an EXISTING doc, a missing flag means "not a child". The
+    /// tri-state nil case is "no fresh doc data", handled by the accessor above.
+    static func parseIsChildAccount(from data: [String: Any]) -> Bool {
+        (data["isChildAccount"] as? Bool) ?? false
+    }
+
     /// Hard sign-out: delete all local AppUser rows (self + peer cache).
     func deleteAllLocalUsers() throws {
         guard let modelContext else { return }
@@ -76,6 +103,7 @@ class UserRepository: ObservableObject {
 
     func clearInMemoryState() {
         entitlementTagsByUserId.removeAll()
+        isChildByUserId.removeAll()
         searchResults = []
         errorMessage = nil
         isLoading = false
@@ -180,6 +208,9 @@ class UserRepository: ObservableObject {
 
     private func mergeRemoteProfileIntoCache(userId: String, data: [String: Any]) async throws {
         ingestEntitlementTags(userId: userId, tags: Self.parseEntitlementTags(from: data))
+        // COPPA §7.1: projection only — the flag never reaches the AppUser model or
+        // any SwiftData row (§7.4). Propagates via the `.userProfilesMerged` post.
+        ingestIsChildAccount(userId: userId, isChild: Self.parseIsChildAccount(from: data))
         let user = try await userFromFirestoreData(data, id: userId)
         cacheUsers([user])
     }

@@ -17,6 +17,12 @@ struct OnboardingPermissionsView: View {
     let onNext: () -> Void
     
     @ObservedObject private var locationManager = LocationManager.shared
+    /// COPPA F-7 (FR-33): child sessions never see or trigger the location permission
+    /// request in onboarding. Rendered projections only; `AgeGateStore` is observed so
+    /// the under-13 answer recorded earlier in this flow re-renders the step even
+    /// before the uid is provisioned (no gap window).
+    @ObservedObject private var childPostures = ChildSessionPostureCoordinator.shared
+    @ObservedObject private var ageGateStore = AgeGateStore.shared
     @State private var microphonePermission: AVAudioSession.RecordPermission = .undetermined
     @State private var speechPermission: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     @State private var cameraPermission: AVAuthorizationStatus = .notDetermined
@@ -39,15 +45,25 @@ struct OnboardingPermissionsView: View {
                         .padding(.horizontal)
                     
                     VStack(spacing: 16) {
-                        OnboardingPermissionRow(
-                            title: "Location".localized,
-                            description: "Show your position on the map, where you found a plate and track your trip".localized,
-                            icon: "location.fill",
-                            status: locationPermissionStatus,
-                            statusColor: locationPermissionColor,
-                            onTap: handleLocationTap
-                        )
-                        
+                        // COPPA F-7 (FR-33): for child sessions (including the
+                        // answered-but-not-yet-provisioned window) the location
+                        // permission is neither shown nor requested — every location
+                        // feature is forced off, so no OS prompt is ever triggered.
+                        if childPostures.isLocationRestrictedForCurrentFlow {
+                            ChildLocationDisabledNotice()
+                                .padding()
+                                .background(Color.Theme.cardBackground, in: RoundedRectangle(cornerRadius: 16))
+                        } else {
+                            OnboardingPermissionRow(
+                                title: "Location".localized,
+                                description: "Show your position on the map, where you found a plate and track your trip".localized,
+                                icon: "location.fill",
+                                status: locationPermissionStatus,
+                                statusColor: locationPermissionColor,
+                                onTap: handleLocationTap
+                            )
+                        }
+
                         OnboardingPermissionRow(
                             title: "Microphone".localized,
                             description: "Voice input for logging plates".localized,

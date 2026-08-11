@@ -25,7 +25,15 @@ class LocationManager: NSObject, ObservableObject {
     /// True while an authorization prompt we triggered is outstanding, so the delegate
     /// starts updates on grant (keeps the map dot appearing mid-flow) without turning
     /// GPS on every time the singleton observes an already-authorized status.
-    private var didRequestAuthorization = false
+    /// Internal-read for tests (COPPA FR-33 prompt-gate pin).
+    private(set) var didRequestAuthorization = false
+
+    /// COPPA F-7 (FR-33): every location feature is forced off for child sessions, so
+    /// the OS location prompt is never triggered for one — from any surface
+    /// (onboarding permissions, settings, trip/gameplay onAppear). Injectable for tests.
+    var childLocationRestrictionProvider: () -> Bool = {
+        ChildSessionPostureCoordinator.shared.isLocationRestrictedForCurrentFlow
+    }
     /// Update requests are ref-counted by named holds so route tracking (GPS Step 6)
     /// survives a map's onDisappear stop. Views keep calling the default-"map" methods.
     private var updateHolds: Set<String> = []
@@ -33,7 +41,9 @@ class LocationManager: NSObject, ObservableObject {
     private static let mapHold = "map"
     private static let routeTrackingHold = "routeTracking"
 
-    private override init() {
+    /// Internal (not private) so tests can pin the child prompt gate on a fresh
+    /// instance; production code uses `shared`.
+    override init() {
         super.init()
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyBest
@@ -44,8 +54,17 @@ class LocationManager: NSObject, ObservableObject {
         authorizationStatus == .authorizedWhenInUse || authorizationStatus == .authorizedAlways
     }
 
-    /// Request When In Use authorization.
+    /// Pure gate (COPPA FR-33): child sessions/flows never see the OS location prompt.
+    static func mayRequestAuthorization(isChildLocationRestricted: Bool) -> Bool {
+        !isChildLocationRestricted
+    }
+
+    /// Request When In Use authorization. No-op for child sessions (FR-33): requesting
+    /// a permission every dependent feature is forced off for is never done.
     func requestAuthorization() {
+        guard Self.mayRequestAuthorization(isChildLocationRestricted: childLocationRestrictionProvider()) else {
+            return
+        }
         didRequestAuthorization = true
         locationManager.requestWhenInUseAuthorization()
     }

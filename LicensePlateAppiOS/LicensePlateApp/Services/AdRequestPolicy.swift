@@ -3,31 +3,43 @@
 //  LicensePlateApp
 //
 //  Privacy Policy §8 (Advertising) / §12 (Children) compliance —
-//  non-personalized, G-rated ad requests for everyone.
+//  non-personalized, G-rated ad requests for everyone; child-directed
+//  treatment carried per session (COPPA F-7, FR-17).
 //
 
 import Foundation
 
 /// Pure decision logic for how every ad request is configured.
 ///
-/// Current posture: no personalized ads for anyone and G-rated ad content
-/// only. Because no tracking occurs under this posture, no
-/// AppTrackingTransparency prompt is required.
+/// Posture: no personalized ads for anyone and G-rated ad content only. Because no
+/// tracking occurs under this posture, no AppTrackingTransparency prompt is required.
 ///
-/// This is the single place ad-request policy lives. Extend it here with a
-/// per-user child-account signal (tagForChildDirectedTreatment /
-/// tagForUnderAgeOfConsent) when one exists — never in views.
+/// The child-directed signal is part of the policy so `AdMobService.makeRequest()`
+/// and the global `RequestConfiguration` derive from the same value and can never
+/// disagree (SRS §9.2). Under FR-19 no child/held session should request an ad at
+/// all — TFCD here is defense-in-depth.
 struct AdRequestPolicy: Equatable {
-    /// Whether ad requests may be personalized. Always false today.
+    /// Whether ad requests may be personalized. Always false.
     let allowsPersonalizedAds: Bool
 
     /// Maximum ad content rating, mirroring GADMaxAdContentRating raw values
-    /// ("G" == GADMaxAdContentRatingGeneral). AdMobService applies this via
-    /// the SDK's typed constant; the two must stay in sync.
+    /// ("G" == MaxAdContentRating.general). AdMobService applies this via the SDK's
+    /// typed constant; the coupling is pinned by a test.
     let maxContentRating: String
 
-    /// The posture applied to every ad request in the app.
-    static let current = AdRequestPolicy(allowsPersonalizedAds: false, maxContentRating: "G")
+    /// FR-17: whether `tagForChildDirectedTreatment` is stamped on the global
+    /// request configuration for this session. TFUA is never set.
+    let childDirected: Bool
+
+    /// The only constructor ad code uses: npa=1 + "G" for everyone; only the
+    /// child-directed signal varies per session.
+    static func policy(childDirected: Bool) -> AdRequestPolicy {
+        AdRequestPolicy(
+            allowsPersonalizedAds: false,
+            maxContentRating: "G",
+            childDirected: childDirected
+        )
+    }
 
     /// AdMob network-extras parameters implementing this policy.
     /// "npa": "1" is Google's non-personalized-ads signal.

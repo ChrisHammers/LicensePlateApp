@@ -24,6 +24,10 @@ struct PrivacyPermissionsView: View {
 
     @StateObject private var notificationSettings = NotificationSettingsViewModel()
     @ObservedObject private var locationManager = LocationManager.shared
+    /// COPPA F-7 (FR-33): child sessions hide the location toggles behind a short
+    /// explanation. Rendered projection only — the forcing happens in
+    /// `LocationSettingsService` via the posture seam, never here.
+    @ObservedObject private var childPostures = ChildSessionPostureCoordinator.shared
     @State private var microphonePermission: AVAudioSession.RecordPermission = .undetermined
     @State private var speechRecognitionPermission: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     @State private var cameraPermission: AVAuthorizationStatus = .notDetermined
@@ -35,32 +39,38 @@ struct PrivacyPermissionsView: View {
                     // Location Section
                     Section {
                         VStack(spacing: 12) {
-                            PermissionRow(
-                                title: "Location".localized,
-                                description: "Show your position on the map, where you found a plate and track your trip".localized,
-                                icon: "location.fill",
-                                status: locationPermissionStatus,
-                                statusColor: locationPermissionColor,
-                                onTap: handleLocationTap
-                            )
-                            
-                            SettingToggleRow(
-                                title: "Save location when marking plates".localized,
-                                description: "Store location data when you mark a plate as found".localized,
-                                isOn: $saveLocationWhenMarkingPlates
-                            )
-                            
-                            SettingToggleRow(
-                                title: "Show my location on large map".localized,
-                                description: "Display your current location on the full-screen map".localized,
-                                isOn: $showMyLocationOnLargeMap
-                            )
-                            
-                            SettingToggleRow(
-                                title: "Track my location during trips".localized,
-                                description: "Continuously track your location while a trip is active (Can be disabled at any time)".localized,
-                                isOn: $trackMyLocationDuringTrips
-                            )
+                            // COPPA F-7 (FR-33): child sessions see neither the OS
+                            // permission row nor the toggles — the prompt is never
+                            // triggered and every location feature is forced off.
+                            if childPostures.isLocationRestrictedForCurrentFlow {
+                                ChildLocationDisabledNotice()
+                            } else {
+                                PermissionRow(
+                                    title: "Location".localized,
+                                    description: "Show your position on the map, where you found a plate and track your trip".localized,
+                                    icon: "location.fill",
+                                    status: locationPermissionStatus,
+                                    statusColor: locationPermissionColor,
+                                    onTap: handleLocationTap
+                                )
+                                SettingToggleRow(
+                                    title: "Save location when marking plates".localized,
+                                    description: "Store location data when you mark a plate as found".localized,
+                                    isOn: $saveLocationWhenMarkingPlates
+                                )
+
+                                SettingToggleRow(
+                                    title: "Show my location on large map".localized,
+                                    description: "Display your current location on the full-screen map".localized,
+                                    isOn: $showMyLocationOnLargeMap
+                                )
+
+                                SettingToggleRow(
+                                    title: "Track my location during trips".localized,
+                                    description: "Continuously track your location while a trip is active (Can be disabled at any time)".localized,
+                                    isOn: $trackMyLocationDuringTrips
+                                )
+                            }
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 16)

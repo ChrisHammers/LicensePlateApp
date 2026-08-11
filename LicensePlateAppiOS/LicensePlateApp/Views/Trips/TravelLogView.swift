@@ -10,6 +10,8 @@ import SwiftData
 
 struct TravelLogView: View {
     @ObservedObject var viewModel: TravelLogViewModel
+    /// COPPA F-7 (FR-34) rendered projection.
+    @ObservedObject private var childPostures = ChildSessionPostureCoordinator.shared
     @Environment(\.dismiss) private var dismiss
     @StateObject private var savedTripPaywallViewModel = PaywallViewModel()
 
@@ -90,15 +92,22 @@ struct TravelLogView: View {
             .sheet(isPresented: $viewModel.shouldPresentSavedTripPaywall, onDismiss: {
                 viewModel.dismissSavedTripPaywall()
             }) {
-                PaywallView(
-                    viewModel: savedTripPaywallViewModel,
-                    onDismiss: {
-                        viewModel.dismissSavedTripPaywall()
-                    },
-                    source: "saved_trip_limit"
-                )
-                .onAppear {
-                    savedTripPaywallViewModel.setSavedTripLimitContext(isAnonymous: viewModel.isCurrentUserAnonymous)
+                // COPPA F-7 (FR-34-amended/D-14): child sessions get the
+                // informational variant in the same slot — never pricing/purchase UI.
+                switch ChildPremiumSheetVariant.variant(purchasesSuppressed: childPostures.arePurchasesSuppressed) {
+                case .childInfo:
+                    ChildPremiumInfoView(context: .savedTrips, onDismiss: { viewModel.dismissSavedTripPaywall() })
+                case .paywall:
+                    PaywallView(
+                        viewModel: savedTripPaywallViewModel,
+                        onDismiss: {
+                            viewModel.dismissSavedTripPaywall()
+                        },
+                        source: "saved_trip_limit"
+                    )
+                    .onAppear {
+                        savedTripPaywallViewModel.setSavedTripLimitContext(isAnonymous: viewModel.isCurrentUserAnonymous)
+                    }
                 }
             }
         }
@@ -153,6 +162,8 @@ struct TravelLogView: View {
                         .accessibilityLabel(accessibilityLabel(for: entry))
                         .accessibilityHint("Double tap to view trip summary".localized)
                 }
+                // COPPA F-7 (FR-34-amended/D-14): the locked row stays visible for
+                // child sessions; tapping presents the informational variant.
                 if viewModel.hiddenSavedTripCount > 0 {
                     savedTripLimitRow
                         .listRowBackground(Color.Theme.cardBackground)

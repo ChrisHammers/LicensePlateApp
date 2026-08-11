@@ -1408,3 +1408,17 @@
 "child_gate.screen.join_button_hint" = "Opens family share code entry";
 "child_gate.screen.friends_title" = "Friends aren't part of child accounts";
 "child_gate.screen.friends_body" = "Play trips with your family instead — everyone in your family is already connected.";
+
+// COPPA F-7 — Child session postures (FR-33 location toggles)
+"child_gate.location_disabled" = "Location options are turned off for child accounts.";
+
+// COPPA F-7 — Child premium info surfaces (FR-34-amended/D-14: visible, informational, no purchase UI)
+"child_gate.trip_limit.title" = "Trip limit reached";
+"child_gate.trip_limit.body" = "Your account has as many active trips as it can hold right now. Wrap up a trip to start a new one.";
+"child_gate.trip_limit.family" = "If your family's captain has Gold or Royale, your family's trip limits go up automatically — ask your captain.";
+"child_gate.premium.upgrades" = "Upgrades are handled by your parent or family captain — purchases aren't available on child accounts.";
+"child_gate.premium.family_tier" = "If your family's captain has Gold or Royale, those benefits apply to your account automatically.";
+"child_gate.premium.intro_title" = "About Premium";
+"child_gate.premium.intro_body" = "Premium unlocks more active trips, more saved trips, and special avatars.";
+"child_gate.premium.avatar_inline" = "Upgrades are handled by your parent or family captain. If your captain has Gold or Royale, these avatars unlock for you automatically.";
+"child_gate.saved_trips.body" = "Your account shows a set number of saved trips. Older trips are hidden, not deleted.";

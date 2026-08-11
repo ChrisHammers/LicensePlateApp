@@ -83,4 +83,35 @@ struct PaywallViewModelTests {
 
         #expect(vm.unlockReasonTitle == "Sign up to keep more saved trips".localized)
     }
+
+    // MARK: - COPPA F-7 (FR-34): child sessions never initiate purchases
+
+    @Test @MainActor func purchaseIsRefusedWhileSuppressedForChildSession() async throws {
+        let spy = AnalyticsLoggingSpy()
+        let vm = PaywallViewModel(
+            bridge: MockRevenueCatBridge(tier: .guest),
+            analytics: spy,
+            purchasesSuppressed: { true }
+        )
+
+        await vm.purchase(packageId: "monthly")
+
+        // Short-circuits before any purchase flow or analytics event.
+        #expect(spy.loggedEvents.isEmpty)
+        #expect(vm.errorMessage == nil)
+        #expect(vm.isPurchasing == false)
+    }
+
+    @Test @MainActor func purchaseProceedsWhenNotSuppressed() async throws {
+        let spy = AnalyticsLoggingSpy()
+        let vm = PaywallViewModel(
+            bridge: MockRevenueCatBridge(tier: .guest),
+            analytics: spy,
+            purchasesSuppressed: { false }
+        )
+
+        await vm.purchase(packageId: "monthly")
+
+        #expect(spy.loggedEvents.contains { $0.name == "purchase_started" })
+    }
 }

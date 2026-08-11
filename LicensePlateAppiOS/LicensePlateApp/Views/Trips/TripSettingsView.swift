@@ -27,6 +27,8 @@ struct TripSettingsView: View {
     @AppStorage(NewTripDefaultsKeys.showMyActiveTripOnSmallMap) private var showMyActiveTripOnSmallMap = true
 
     @ObservedObject private var locationManager = LocationManager.shared
+    /// COPPA F-7 (FR-33) rendered projection.
+    @ObservedObject private var childPostures = ChildSessionPostureCoordinator.shared
 
     private var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
@@ -111,13 +113,20 @@ struct TripSettingsView: View {
             get: { viewModel.shouldPresentTripLimitPaywall },
             set: { if !$0 { viewModel.dismissTripLimitPaywall() } }
         )) {
-            PaywallView(
-                viewModel: tripLimitPaywallViewModel,
-                onDismiss: { viewModel.dismissTripLimitPaywall() },
-                source: TripLimitGateSource.start.rawValue
-            )
-            .onAppear {
-                tripLimitPaywallViewModel.setTripLimitContext()
+            // COPPA F-7 (FR-34): child sessions get the informational variant in the
+            // same slot — never pricing/purchase UI.
+            switch ChildPremiumSheetVariant.variant(purchasesSuppressed: childPostures.arePurchasesSuppressed) {
+            case .childInfo:
+                ChildPremiumInfoView(context: .tripLimit, onDismiss: { viewModel.dismissTripLimitPaywall() })
+            case .paywall:
+                PaywallView(
+                    viewModel: tripLimitPaywallViewModel,
+                    onDismiss: { viewModel.dismissTripLimitPaywall() },
+                    source: TripLimitGateSource.start.rawValue
+                )
+                .onAppear {
+                    tripLimitPaywallViewModel.setTripLimitContext()
+                }
             }
         }
         .task {
@@ -164,7 +173,12 @@ struct TripSettingsView: View {
                     } catch {
                         if error is TripEntitlementGateError {
                             tripLimitPaywallViewModel.setTripLimitContext()
-                            FeedbackService.shared.actionError()
+                            // F-7 owner UX: neutral feel for the child variant sheet.
+                            if childPostures.arePurchasesSuppressed {
+                                FeedbackService.shared.buttonTap()
+                            } else {
+                                FeedbackService.shared.actionError()
+                            }
                             return
                         }
                         viewModel.setError(error.localizedDescription)
@@ -328,6 +342,19 @@ struct TripSettingsView: View {
     }
 
     private var trackingPrivacySettings: some View {
+        Group {
+            // COPPA F-7 (FR-33): child sessions replace the per-trip location
+            // toggles with a short explanation; the flags are forced off at the
+            // source of truth regardless of these prefs.
+            if childPostures.isLocationForcedOffForChildSession {
+                ChildLocationDisabledNotice()
+            } else {
+                trackingPrivacyToggles
+            }
+        }
+    }
+
+    private var trackingPrivacyToggles: some View {
         Group {
             let locationAuthorized = locationManager.authorizationStatus == .authorizedWhenInUse
                 || locationManager.authorizationStatus == .authorizedAlways

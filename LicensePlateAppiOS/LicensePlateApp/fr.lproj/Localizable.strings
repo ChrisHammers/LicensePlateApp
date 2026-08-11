@@ -1377,3 +1377,17 @@
 "child_gate.screen.join_button_hint" = "Ouvre la saisie du code de partage de la famille";
 "child_gate.screen.friends_title" = "Les amis ne font pas partie des comptes enfants";
 "child_gate.screen.friends_body" = "Joue des voyages avec ta famille — tous les membres de ta famille sont déjà connectés.";
+
+// COPPA F-7 — Child session postures (FR-33 location toggles)
+"child_gate.location_disabled" = "Les options de localisation sont désactivées pour les comptes d'enfants.";
+
+// COPPA F-7 — Child premium info surfaces (FR-34-amended/D-14: visible, informational, no purchase UI)
+"child_gate.trip_limit.title" = "Limite de voyages atteinte";
+"child_gate.trip_limit.body" = "Ton compte a atteint le nombre maximal de voyages actifs pour le moment. Termine un voyage pour en commencer un nouveau.";
+"child_gate.trip_limit.family" = "Si le capitaine de ta famille a Gold ou Royale, les limites de voyages de ta famille augmentent automatiquement. Demande à ton capitaine.";
+"child_gate.premium.upgrades" = "Les mises à niveau sont gérées par ton parent ou le capitaine de ta famille — les achats ne sont pas offerts sur les comptes d'enfants.";
+"child_gate.premium.family_tier" = "Si le capitaine de ta famille a Gold ou Royale, ces avantages s'appliquent automatiquement à ton compte.";
+"child_gate.premium.intro_title" = "À propos de Premium";
+"child_gate.premium.intro_body" = "Premium débloque plus de voyages actifs, plus de voyages enregistrés et des avatars spéciaux.";
+"child_gate.premium.avatar_inline" = "Les mises à niveau sont gérées par ton parent ou le capitaine de ta famille. Si ton capitaine a Gold ou Royale, ces avatars se débloquent automatiquement pour toi.";
+"child_gate.saved_trips.body" = "Ton compte affiche un nombre fixe de voyages enregistrés. Les voyages plus anciens sont masqués, pas supprimés.";

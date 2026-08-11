@@ -91,6 +91,12 @@ final class AgeGateStore: ObservableObject {
         return declaredChildUserIds.contains(userId)
     }
 
+    /// F-7 (FR-39): whether this device ever declared any child registration —
+    /// feeds the pre-`MobileAds.start()` device-level stamp.
+    var hasDeclaredChildHistory: Bool {
+        !declaredChildUserIds.isEmpty
+    }
+
     private var declaredChildUserIds: Set<String> {
         Set(defaults.stringArray(forKey: AgeGateStoreKeys.declaredChildUserIds) ?? [])
     }

@@ -12,6 +12,8 @@ struct GameSetupView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel: GameSetupViewModel
     @StateObject private var tripLimitPaywallViewModel = PaywallViewModel()
+    /// COPPA F-7 (FR-34) rendered projection.
+    @ObservedObject private var childPostures = ChildSessionPostureCoordinator.shared
     @State private var pendingCreatedSession: TripSession?
 
     var onCreated: ((TripSession) -> Void)?
@@ -106,13 +108,20 @@ struct GameSetupView: View {
             get: { viewModel.shouldPresentTripLimitPaywall },
             set: { if !$0 { viewModel.dismissTripLimitPaywall() } }
         )) {
-            PaywallView(
-                viewModel: tripLimitPaywallViewModel,
-                onDismiss: { viewModel.dismissTripLimitPaywall() },
-                source: TripLimitGateSource.create.rawValue
-            )
-            .onAppear {
-                tripLimitPaywallViewModel.setTripLimitContext()
+            // COPPA F-7 (FR-34): child sessions get the informational variant in the
+            // same slot — never pricing/purchase UI.
+            switch ChildPremiumSheetVariant.variant(purchasesSuppressed: childPostures.arePurchasesSuppressed) {
+            case .childInfo:
+                ChildPremiumInfoView(context: .tripLimit, onDismiss: { viewModel.dismissTripLimitPaywall() })
+            case .paywall:
+                PaywallView(
+                    viewModel: tripLimitPaywallViewModel,
+                    onDismiss: { viewModel.dismissTripLimitPaywall() },
+                    source: TripLimitGateSource.create.rawValue
+                )
+                .onAppear {
+                    tripLimitPaywallViewModel.setTripLimitContext()
+                }
             }
         }
     }
@@ -239,7 +248,13 @@ struct GameSetupView: View {
                 } catch {
                     if error is TripEntitlementGateError {
                         tripLimitPaywallViewModel.setTripLimitContext()
-                        FeedbackService.shared.actionError()
+                        // F-7 owner UX: a sheet is presenting — neutral feel for the
+                        // child informational variant instead of an error buzz.
+                        if childPostures.arePurchasesSuppressed {
+                            FeedbackService.shared.buttonTap()
+                        } else {
+                            FeedbackService.shared.actionError()
+                        }
                         return
                     }
                     viewModel.setError(error.localizedDescription)

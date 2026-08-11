@@ -114,6 +114,8 @@ final class TripSettingsViewModel: ObservableObject {
                 sessionId: sessionId
             )
         } catch let error as TripEntitlementGateError {
+            // COPPA F-7 (FR-34, owner UX): the sheet slot always presents; child
+            // sessions render the informational variant (no purchase UI) there.
             shouldPresentTripLimitPaywall = true
             throw error
         }

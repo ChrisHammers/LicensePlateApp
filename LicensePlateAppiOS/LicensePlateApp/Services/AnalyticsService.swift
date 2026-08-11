@@ -1168,5 +1168,24 @@ class AnalyticsService: AnalyticsLogging {
         print("[Analytics] set_user_property: name=\(name), value=\(value ?? "nil")")
         #endif
     }
+
+    // MARK: - Child session posture (COPPA F-7, FR-32)
+
+    /// Value written to `allow_ad_personalization_signals`: an explicit "false" for
+    /// child-signal sessions; nil for resolved adults, which clears the per-session
+    /// override and falls back to the app-wide Info.plist default (OFF per F-3).
+    static func adPersonalizationUserPropertyValue(disabled: Bool) -> String? {
+        disabled ? "false" : nil
+    }
+
+    /// FR-32: applied at the posture seam (never per-event). Belt-and-braces over the
+    /// app-wide ad-ID hardening floor; no analytics event accompanies this call —
+    /// nothing may fire only for child sessions on the child's instance (SRS §12).
+    func setAdPersonalizationSignalsDisabledForChildSession(_ disabled: Bool) {
+        Analytics.setUserProperty(
+            Self.adPersonalizationUserPropertyValue(disabled: disabled),
+            forName: AnalyticsUserPropertyAllowAdPersonalizationSignals
+        )
+    }
 }
 

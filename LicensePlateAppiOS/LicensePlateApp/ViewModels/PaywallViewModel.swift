@@ -38,10 +38,18 @@ final class PaywallViewModel: ObservableObject {
 
     private let bridge: RevenueCatEntitlementProviding
     private let analytics: AnalyticsLogging
+    private let purchasesSuppressed: @MainActor () -> Bool
 
-    init(bridge: RevenueCatEntitlementProviding = RevenueCatEntitlementBridge.shared, analytics: AnalyticsLogging = AnalyticsService.shared) {
+    init(
+        bridge: RevenueCatEntitlementProviding = RevenueCatEntitlementBridge.shared,
+        analytics: AnalyticsLogging = AnalyticsService.shared,
+        purchasesSuppressed: @escaping @MainActor () -> Bool = {
+            ChildSessionPostureCoordinator.shared.arePurchasesSuppressed
+        }
+    ) {
         self.bridge = bridge
         self.analytics = analytics
+        self.purchasesSuppressed = purchasesSuppressed
     }
 
     /// Unlock reason title for sheet/paywall header when presented from a locked avatar.
@@ -131,6 +139,9 @@ final class PaywallViewModel: ObservableObject {
     }
 
     func purchase(packageId: String) async {
+        // COPPA F-7 (FR-34) belt-and-braces beneath surface suppression: a child
+        // session never initiates a purchase even if a paywall slipped through.
+        guard !purchasesSuppressed() else { return }
         guard !isPurchasing else { return }
         isPurchasing = true
         errorMessage = nil

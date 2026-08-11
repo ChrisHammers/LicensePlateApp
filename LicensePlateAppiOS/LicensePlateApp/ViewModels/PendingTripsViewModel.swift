@@ -158,8 +158,15 @@ final class PendingTripsViewModel: ObservableObject {
                 FeedbackService.shared.actionSuccess()
                 loadInvites(userId: userId)
             } catch is TripEntitlementGateError {
+                // COPPA F-7 (FR-34, owner UX): the sheet slot always presents; child
+                // sessions render the informational variant (no purchase UI) there.
+                // Neutral haptic for children — a sheet is presenting, not an error.
                 shouldPresentTripLimitPaywall = true
-                FeedbackService.shared.actionError()
+                if ChildSessionPostureCoordinator.shared.arePurchasesSuppressed {
+                    FeedbackService.shared.buttonTap()
+                } else {
+                    FeedbackService.shared.actionError()
+                }
             } catch {
                 errorMessage = error.localizedDescription
                 FeedbackService.shared.actionError()

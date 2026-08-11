@@ -144,6 +144,8 @@ final class TravelLogViewModel: ObservableObject {
 
     func showSavedTripLimitPaywall() {
         FeedbackService.shared.buttonTap()
+        // COPPA F-7 (FR-34-amended/D-14): the sheet slot always presents; child
+        // sessions render the informational variant (no purchase UI) there.
         shouldPresentSavedTripPaywall = true
     }
 

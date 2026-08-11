@@ -184,6 +184,10 @@ class FirebaseAuthService: ObservableObject {
                 try? await createDefaultUser()
             }
         }
+        // COPPA F-7 (FR-23): the auth listener may have fired before `modelContext`
+        // existed; this is the same identity-transition seam, re-run now that the
+        // session is fully bootstrapped.
+        ChildSessionPostureCoordinator.shared.applyPostures(trigger: .identityTransition)
     }
     
     // MARK: - Default User Creation
@@ -330,6 +334,12 @@ class FirebaseAuthService: ObservableObject {
 
             currentUser = localUser
             isAuthenticated = true
+
+            // COPPA F-7 (FR-19): a brand-new uid has no fresh `users/{uid}` READ yet,
+            // so the ads/posture hold would otherwise persist all session. One fresh
+            // read through the sanctioned merge path resolves it (and posts
+            // `.userProfilesMerged`, which re-runs the posture seam).
+            await UserRepository.shared.refreshUsersFromFirestoreIfPresent(userIds: [firebaseUID])
         } catch {
             print("⚠️ Anonymous sign-in failed: \(error)")
             // Continue with local user
@@ -1487,6 +1497,11 @@ class FirebaseAuthService: ObservableObject {
             // Firebase signed out
             isAuthenticated = false
         }
+        // COPPA F-7 (FR-23 trigger 1 of 2): every identity transition re-applies the
+        // child session postures (ads config, analytics, location, paywall) AFTER the
+        // fresh `users/{uid}` read above resolved the projection. The second trigger
+        // is the coordinator's own `.userProfilesMerged` observer.
+        ChildSessionPostureCoordinator.shared.applyPostures(trigger: .identityTransition)
     }
     
     private func loadUserFromFirebase(_ firebaseUser: User) async {
@@ -1601,6 +1616,9 @@ class FirebaseAuthService: ObservableObject {
         
         do {
             try await saveUserDataToFirestore(newUser)
+            // COPPA F-7 (FR-19): fresh-read the just-created doc so the child
+            // projection resolves this session (see signInAnonymously note).
+            await UserRepository.shared.refreshUsersFromFirestoreIfPresent(userIds: [firebaseUID])
         } catch {
             #if DEBUG
             print("⚠️ Failed to save new user \(firebaseUID) to Firestore: \(error)")
@@ -1642,6 +1660,12 @@ class FirebaseAuthService: ObservableObject {
         UserRepository.shared.ingestEntitlementTags(
             userId: userId,
             tags: UserRepository.parseEntitlementTags(from: data)
+        )
+        // COPPA §7.1 projection (F-7): fresh-read resolution of the server-owned
+        // child flag. Never mirrored into AppUser/SwiftData (§7.4).
+        UserRepository.shared.ingestIsChildAccount(
+            userId: userId,
+            isChild: UserRepository.parseIsChildAccount(from: data)
         )
         var user = appUserFromFirestoreData(data, id: userId)
 
@@ -1704,6 +1728,10 @@ class FirebaseAuthService: ObservableObject {
         for (key, value) in extraFields {
             data[key] = value
         }
+        // COPPA §7.4 write guard: the child flag is server-owned (FR-7); no client
+        // profile write may ever carry it.
+        assert(data["isChildAccount"] == nil, "isChildAccount is server-owned (COPPA FR-7); never written by the client")
+        data["isChildAccount"] = nil
         try await docRef.setData(data, merge: true)
         try await savePrivateContact(for: user, userId: firebaseUID)
         await ensureUserProgressionDocumentIfPossible(userId: firebaseUID)

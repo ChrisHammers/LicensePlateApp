@@ -21,6 +21,10 @@ struct AvatarUnlockExplanationSheet: View {
     /// When provided and unlock is purchasable (signedUp/gold/royale), show an "Upgrade" button that calls this with the unlock source.
     var onShowPaywall: ((AvatarUnlockSource) -> Void)? = nil
 
+    /// COPPA F-7 (FR-34): child sessions hide the purchase CTA (family-granted
+    /// entitlement tags still unlock avatars through the normal entitlement path).
+    @ObservedObject private var childPostures = ChildSessionPostureCoordinator.shared
+
     private var isPurchasableTier: Bool {
         switch unlockSource {
         case .signedUp, .gold, .royale: return true
@@ -43,7 +47,7 @@ struct AvatarUnlockExplanationSheet: View {
         case .specialPromotion: return "Special promotion".localized
         }
     }
-    
+
     private var message: String {
         switch unlockSource {
         case .signedUp: return "Create an account to use this avatar and save your progress.".localized
@@ -77,20 +81,28 @@ struct AvatarUnlockExplanationSheet: View {
                     .padding(.horizontal)
 
                 if isPurchasableTier, let onShowPaywall = onShowPaywall {
-                    Button {
-                        onShowPaywall(unlockSource)
-                    } label: {
-                        Text("Upgrade".localized)
-                            .font(.system(.body, design: .rounded))
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Capsule().fill(Color.Theme.primaryBlue))
-                            .foregroundStyle(.white)
+                    // COPPA F-7 (FR-34-amended/D-14): the CTA area stays for child
+                    // sessions as parent-directed information — never the paywall.
+                    if childPostures.arePurchasesSuppressed {
+                        ChildPremiumInlineNotice()
+                            .padding(.horizontal, 24)
+                            .padding(.top, 8)
+                    } else {
+                        Button {
+                            onShowPaywall(unlockSource)
+                        } label: {
+                            Text("Upgrade".localized)
+                                .font(.system(.body, design: .rounded))
+                                .fontWeight(.semibold)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(Capsule().fill(Color.Theme.primaryBlue))
+                                .foregroundStyle(.white)
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.top, 8)
+                        .accessibleButton(label: "Upgrade".localized, hint: "View premium plans".localized)
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 8)
-                    .accessibleButton(label: "Upgrade".localized, hint: "View premium plans".localized)
                 }
 
                 Spacer()
@@ -124,6 +136,9 @@ struct AvatarUnlockPopupView: View {
     let avatarName: String
     let onDismiss: () -> Void
     var onShowPaywall: ((AvatarUnlockSource) -> Void)? = nil
+
+    /// COPPA F-7 (FR-34): child sessions hide the purchase CTA.
+    @ObservedObject private var childPostures = ChildSessionPostureCoordinator.shared
 
     private var isPurchasableTier: Bool {
         switch unlockSource {
@@ -185,6 +200,12 @@ struct AvatarUnlockPopupView: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(4)
 
+                // COPPA F-7 (FR-34-amended/D-14): child sessions keep the CTA area
+                // as parent-directed information above the Done button.
+                if isPurchasableTier, onShowPaywall != nil, childPostures.arePurchasesSuppressed {
+                    ChildPremiumInlineNotice()
+                }
+
                 HStack(spacing: 12) {
                     Button {
                         onDismiss()
@@ -198,7 +219,7 @@ struct AvatarUnlockPopupView: View {
                     }
                     .accessibleButton(label: "Done".localized, hint: "Dismiss".localized)
 
-                    if isPurchasableTier, onShowPaywall != nil {
+                    if isPurchasableTier, onShowPaywall != nil, !childPostures.arePurchasesSuppressed {
                         Button {
                             onShowPaywall?(unlockSource)
                         } label: {

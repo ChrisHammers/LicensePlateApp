@@ -55,9 +55,24 @@ final class LocationSettingsService: LocationSettingsProviding, ObservableObject
 
     private let defaults: UserDefaults
     private var defaultsCancellable: AnyCancellable?
+    private var reapplyCancellable: AnyCancellable?
+
+    /// COPPA F-7 (FR-33 amended): while true, ALL THREE flags read false and any
+    /// stored true value is rewritten to false — including on later flag flips (the
+    /// didChange re-apply below). Set only by `ChildSessionPostureCoordinator` at the
+    /// FR-23 seam; adult sessions are never forced (owner decision D-11).
+    private(set) var isChildSessionForcedOff = false
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        // FR-33 re-apply, synchronous on the writing thread: a flag flipped back on
+        // under a child session is forced off again immediately at the single source
+        // of truth (self-terminating: only true values are rewritten).
+        reapplyCancellable = NotificationCenter.default
+            .publisher(for: UserDefaults.didChangeNotification, object: defaults)
+            .sink { [weak self] _ in
+                self?.forceStoredFlagsOffIfNeeded()
+            }
         defaultsCancellable = NotificationCenter.default
             .publisher(for: UserDefaults.didChangeNotification, object: defaults)
             .receive(on: RunLoop.main)
@@ -66,15 +81,34 @@ final class LocationSettingsService: LocationSettingsProviding, ObservableObject
             }
     }
 
+    func setChildSessionForcedOff(_ forced: Bool) {
+        guard isChildSessionForcedOff != forced else { return }
+        isChildSessionForcedOff = forced
+        forceStoredFlagsOffIfNeeded()
+        objectWillChange.send()
+    }
+
+    /// Writes false only for keys currently true (also prevents didChange loops).
+    private func forceStoredFlagsOffIfNeeded() {
+        guard isChildSessionForcedOff else { return }
+        for key in [
+            LocationSettingsKeys.saveLocationWhenMarkingPlates,
+            LocationSettingsKeys.showMyLocationOnLargeMap,
+            LocationSettingsKeys.trackMyLocationDuringTrips
+        ] where defaults.bool(forKey: key) {
+            defaults.set(false, forKey: key)
+        }
+    }
+
     var saveLocationWhenMarkingPlates: Bool {
-        defaults.bool(forKey: LocationSettingsKeys.saveLocationWhenMarkingPlates)
+        !isChildSessionForcedOff && defaults.bool(forKey: LocationSettingsKeys.saveLocationWhenMarkingPlates)
     }
 
     var showMyLocationOnLargeMap: Bool {
-        defaults.bool(forKey: LocationSettingsKeys.showMyLocationOnLargeMap)
+        !isChildSessionForcedOff && defaults.bool(forKey: LocationSettingsKeys.showMyLocationOnLargeMap)
     }
 
     var trackMyLocationDuringTrips: Bool {
-        defaults.bool(forKey: LocationSettingsKeys.trackMyLocationDuringTrips)
+        !isChildSessionForcedOff && defaults.bool(forKey: LocationSettingsKeys.trackMyLocationDuringTrips)
     }
 }
