@@ -4,6 +4,8 @@ import {
   buildWelcomeEmailContent,
   normalizeEmail,
   profileEmailChanged,
+  redactEmailAddresses,
+  shouldSuppressWelcomeEmailForChild,
 } from "./welcomeEmailCore";
 
 describe("normalizeEmail", () => {
@@ -84,5 +86,33 @@ describe("buildWelcomeEmailContent", () => {
       "alex_r"
     );
     expect(buildWelcomeEmailContent({}).greetingName).toBe("there");
+  });
+});
+
+describe("shouldSuppressWelcomeEmailForChild (COPPA FR-35c)", () => {
+  it("suppresses only for an explicit isChildAccount true", () => {
+    expect(shouldSuppressWelcomeEmailForChild({ isChildAccount: true })).toBe(true);
+    expect(shouldSuppressWelcomeEmailForChild({ isChildAccount: false })).toBe(false);
+    expect(shouldSuppressWelcomeEmailForChild({})).toBe(false);
+    expect(shouldSuppressWelcomeEmailForChild(undefined)).toBe(false);
+    expect(shouldSuppressWelcomeEmailForChild(null)).toBe(false);
+    expect(shouldSuppressWelcomeEmailForChild({ isChildAccount: "true" })).toBe(false);
+  });
+});
+
+describe("redactEmailAddresses (COPPA FR-35a)", () => {
+  it("scrubs addresses out of provider error text", () => {
+    expect(
+      redactEmailAddresses(
+        "Invalid recipient kid.name+tag@sub.example.co.uk (bounced); retry later"
+      )
+    ).toBe("Invalid recipient [redacted-email] (bounced); retry later");
+  });
+
+  it("handles multiple addresses and leaves plain text alone", () => {
+    expect(
+      redactEmailAddresses("from a@b.io to c@d.org")
+    ).toBe("from [redacted-email] to [redacted-email]");
+    expect(redactEmailAddresses("timeout after 30s")).toBe("timeout after 30s");
   });
 });

@@ -4,6 +4,7 @@ import { writeAuditLog } from "./audit";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { buildProgressionBootstrapDefaults } from "./progressionBootstrapCore";
 import { enforcedCallable } from "./callableOptions";
+import { assertNotUnconsentedChild } from "./callableAuth";
 
 const db = admin.firestore();
 
@@ -17,6 +18,7 @@ export const ensureUserProgressionDocument = enforcedCallable(
     }
 
     const userId = context.auth.uid;
+    await assertNotUnconsentedChild(db, userId); // COPPA FR-28
     const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
     const ref = db.collection("user_progression").doc(userId);
 

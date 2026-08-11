@@ -43,6 +43,12 @@ export class FakeFirestore {
   readonly store = new Map<string, Data>();
   /** Number of committed batches, for asserting a re-run is a genuine no-op. */
   writeCount = 0;
+  private autoIdCounter = 0;
+
+  allocateAutoId(): string {
+    this.autoIdCounter += 1;
+    return `auto_${String(this.autoIdCounter).padStart(4, "0")}`;
+  }
 
   collection(id: string): FakeCollectionRef {
     return new FakeCollectionRef(this, id, null);
@@ -87,6 +93,21 @@ export class FakeDocumentRef {
   async get(): Promise<FakeDocumentSnapshot> {
     const data = this.db.store.get(this.path);
     return new FakeDocumentSnapshot(this, data ? deepClone(data) : undefined);
+  }
+
+  async set(data: Data, options?: { merge?: boolean }): Promise<void> {
+    this.applySet(data, options?.merge === true);
+    this.db.writeCount += 1;
+  }
+
+  async update(data: Data): Promise<void> {
+    this.applyUpdate(data);
+    this.db.writeCount += 1;
+  }
+
+  async delete(): Promise<void> {
+    this.applyDelete();
+    this.db.writeCount += 1;
   }
 
   applySet(data: Data, merge: boolean): void {
@@ -143,6 +164,13 @@ export class FakeCollectionRef {
 
   doc(id: string): FakeDocumentRef {
     return new FakeDocumentRef(this.db, `${this.path}/${id}`, this);
+  }
+
+  async add(data: Data): Promise<FakeDocumentRef> {
+    const ref = this.doc(this.db.allocateAutoId());
+    ref.applySet(data, false);
+    this.db.writeCount += 1;
+    return ref;
   }
 
   where(field: string, op: "==", value: unknown): FakeQuery {

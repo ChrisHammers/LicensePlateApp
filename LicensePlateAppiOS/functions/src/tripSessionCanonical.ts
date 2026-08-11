@@ -14,6 +14,7 @@ import {
 import { mergeFairnessAckSeconds } from "./fairnessWatermarkMerge";
 import { clientMetadataWrite, normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
+import { assertNotUnconsentedChild } from "./callableAuth";
 import {
   loadParticipationDefaultsForUser,
   seedParticipantPrefsIfNeeded,
@@ -213,6 +214,7 @@ export const publishTripCanonicalState = enforcedCallable(async (data, context) 
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
   }
   const userId = context.auth.uid;
+  await assertNotUnconsentedChild(db, userId); // COPPA FR-28
   const tripSessionId = data?.tripSessionId as string | undefined;
   const session = data?.session as Record<string, unknown> | undefined;
   const games = data?.games as Record<string, unknown>[] | undefined;
@@ -367,6 +369,7 @@ export const appendTripActivityEvent = enforcedCallable(async (data, context) =>
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
   }
   const userId = context.auth.uid;
+  await assertNotUnconsentedChild(db, userId); // COPPA FR-28
   const tripSessionId = data?.tripSessionId as string | undefined;
   const event = data?.event as Record<string, unknown> | undefined;
   const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
@@ -428,6 +431,7 @@ export const updateFairnessAckWatermark = enforcedCallable(async (data, context)
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
   }
   const userId = context.auth.uid;
+  await assertNotUnconsentedChild(db, userId); // COPPA FR-28
   const tripSessionId = data?.tripSessionId as string | undefined;
   const gameInstanceId = data?.gameInstanceId as string | undefined;
   const lastAckAtSeconds = data?.lastAckAtSeconds as number | undefined;
@@ -550,6 +554,7 @@ export const removeTripParticipantAsOwner = enforcedCallable(async (data, contex
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
   }
   const userId = context.auth.uid;
+  await assertNotUnconsentedChild(db, userId); // COPPA FR-28
   const tripSessionId = data?.tripSessionId as string | undefined;
   const removedUserId = data?.removedUserId as string | undefined;
   const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
@@ -581,6 +586,7 @@ export const markTripCancelledRemote = enforcedCallable(async (data, context) =>
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
   }
   const userId = context.auth.uid;
+  await assertNotUnconsentedChild(db, userId); // COPPA FR-28
   const tripSessionId = data?.tripSessionId as string | undefined;
   const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
   if (!tripSessionId) {

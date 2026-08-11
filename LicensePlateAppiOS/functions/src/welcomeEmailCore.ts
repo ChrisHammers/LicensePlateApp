@@ -37,6 +37,27 @@ export function profileEmailChanged(
 }
 
 /**
+ * COPPA FR-35(c): no welcome email is ever sent to a child account. The check reads the
+ * authoritative `users/{uid}.isChildAccount` flag; missing flag ⇒ adult ⇒ send.
+ */
+export function shouldSuppressWelcomeEmailForChild(
+  profile: Record<string, unknown> | undefined | null
+): boolean {
+  return profile?.isChildAccount === true;
+}
+
+const EMAIL_ADDRESS_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+
+/**
+ * COPPA FR-35(a): audit metadata and Cloud Logging sinks must never carry a plaintext
+ * email address. Provider error messages routinely embed the recipient, so anything
+ * derived from a send failure is scrubbed through this before it is logged or persisted.
+ */
+export function redactEmailAddresses(text: string): string {
+  return text.replace(EMAIL_ADDRESS_PATTERN, "[redacted-email]");
+}
+
+/**
  * Prefixes the subject with `[LABEL]` when `envLabel` is non-empty after trim.
  * Empty / whitespace-only labels leave the subject unchanged.
  */

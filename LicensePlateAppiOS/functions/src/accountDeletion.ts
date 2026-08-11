@@ -1,27 +1,30 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import { writeAuditLog } from "./audit";
+import { writeAuditLogTo } from "./audit";
 import { auditValueHash } from "./auditRedaction";
 import { deidentifyUserResidue } from "./accountDeletionDeidentify";
-import { normalizeClientMetadata } from "./clientMetadata";
+import { normalizeClientMetadata, type ClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
 import { assertRegisteredAccount } from "./callableAuth";
 import { familyMembershipLeaveUserUpdate } from "./wasEverInFamilyUserUpdates";
-import { clearAllSearchIndexesForUser, PRIVATE_CONTACT_DOC } from "./userSearchIndex";
-import { normalizeEmail, normalizePhoneE164, normalizeUsernameLower } from "./userSearchCore";
+import { clearAllSearchIndexesForUser } from "./userSearchIndex";
+import {
+  removeAllFriendEdgesForUser,
+  searchIndexHintsForUser,
+} from "./userResidueCleanup";
+import { writeChildMembershipRevocation } from "./childConsent";
 import {
   RECENT_LOGIN_MAX_AGE_SECONDS,
   isRecentLogin,
   familyCleanupAction,
-  decrementedFriendCount,
-  otherFriendUserId,
 } from "./accountDeletionCore";
 
-const db = admin.firestore();
+type Firestore = admin.firestore.Firestore;
 
 const DELETE_BATCH_LIMIT = 450; // stay under Firestore's 500-op batch cap
 
 async function deleteSubcollectionDocs(
+  db: Firestore,
   parentRef: admin.firestore.DocumentReference,
   subcollectionId: string
 ): Promise<number> {
@@ -36,76 +39,52 @@ async function deleteSubcollectionDocs(
   return docRefs.length;
 }
 
-/**
- * In-app account deletion (App Review Guideline 5.1.1(v); Privacy Policy §11, ToS §15).
- * Deletes the caller's Firebase Auth user and their personal cloud data:
- * users/{uid} (incl. any legacy fcmToken fields), users/{uid}/private/* (incl. the contact
- * doc holding email/phoneNumber and the fcm doc holding the push token, both swept by
- * listDocuments()), search lookup indexes, friend edges (+friendCount on the
- * surviving side), family membership, user_progression, user_achievements, and
- * public_lifetime_stats.
- *
- * Shared trip data belongs to every participant, so it is de-identified rather than deleted
- * (Privacy Policy §9) — see `deidentifyUserResidue`. Concretely: `activity_events` keep their
- * gameplay meaning but their `actorId` and uid-valued payload fields become the
- * `deleted-user` tombstone and their precise `location*` payload keys are stripped; the
- * user's `members/{uid}`, `participant_prefs/{uid}`, `fairness_ack_watermarks/{uid}` and
- * per-doc `private/client_metadata` sidecars are deleted; the session's `createdBy`,
- * `canonicalEndedBy` and `canonicalParticipants` stop naming them; their invites and push
- * buffers are deleted and their share codes are tombstoned + revoked. Nothing left in a
- * shared doc identifies the deleted account.
- *
- * Requires a recent sign-in (auth_time within RECENT_LOGIN_MAX_AGE_SECONDS); otherwise
- * throws failed-precondition with details.reason = "recent-login-required" so the client
- * can prompt re-authentication and retry.
- */
-export const deleteAccount = enforcedCallable(async (data, context) => {
-  const userId = assertRegisteredAccount(context);
-  const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
+export interface AccountDeletionDeps {
+  clearSearchIndexes: typeof clearAllSearchIndexesForUser;
+}
 
-  const authTimeSeconds = Number(context.auth?.token?.auth_time ?? 0);
-  const nowSeconds = Math.floor(Date.now() / 1000);
-  if (!isRecentLogin(authTimeSeconds, nowSeconds, RECENT_LOGIN_MAX_AGE_SECONDS)) {
-    throw new functions.https.HttpsError(
-      "failed-precondition",
-      "Recent sign-in is required to delete your account",
-      { reason: "recent-login-required" }
-    );
-  }
+const defaultDeps: AccountDeletionDeps = {
+  clearSearchIndexes: clearAllSearchIndexesForUser,
+};
+
+export interface AccountDeletionResult {
+  removedFriendEdgeCount: number;
+  familyAction: string;
+}
+
+/**
+ * Deletes `userId`'s personal cloud data (everything except the Firebase Auth user —
+ * the caller deletes that last so a failed cleanup stays retryable).
+ *
+ * Extracted from the `deleteAccount` callable so `requestChildDataDeletion` (FR-30) can
+ * run the identical machinery against a child uid with the parent as `actorId`. The
+ * `AUDIT_ACCOUNT_DELETED` row therefore carries `actorId` (parent or self) while
+ * `subjectId` is always the deleted uid.
+ *
+ * COPPA F-5a additions:
+ *  - the `remove_member` branch writes its previously missing `AUDIT_FAMILY_MEMBER_REMOVED`
+ *    row, and — when the member doc carries `isChild: true` — the FR-6/FR-40
+ *    `AUDIT_PARENTAL_CONSENT_REVOKED` (`member_account_deleted`) record;
+ *  - the `inactivate_family` branch writes REVOKED (`creator_account_deleted`) for every
+ *    other flagged child whose membership the inactivation ends.
+ */
+export async function executeAccountDeletionForUser(
+  db: Firestore,
+  input: {
+    userId: string;
+    actorId: string;
+    clientMetadata: ClientMetadata | null;
+  },
+  deps: AccountDeletionDeps = defaultDeps
+): Promise<AccountDeletionResult> {
+  const { userId, actorId, clientMetadata } = input;
 
   const userRef = db.collection("users").doc(userId);
   const userDoc = await userRef.get();
   const userData = userDoc.data() ?? {};
 
   // ---- Friend edges (both directions) + friendCount on the surviving side
-  const [edgesAsA, edgesAsB] = await Promise.all([
-    db.collection("friends").where("userA", "==", userId).get(),
-    db.collection("friends").where("userB", "==", userId).get(),
-  ]);
-  const edgeDocsByPath = new Map<string, admin.firestore.QueryDocumentSnapshot>();
-  for (const doc of [...edgesAsA.docs, ...edgesAsB.docs]) {
-    edgeDocsByPath.set(doc.ref.path, doc);
-  }
-
-  let removedFriendEdgeCount = 0;
-  for (const edgeDoc of edgeDocsByPath.values()) {
-    const batch = db.batch();
-    batch.delete(edgeDoc.ref);
-
-    const otherUserId = otherFriendUserId(edgeDoc.data(), userId);
-    if (otherUserId) {
-      const otherUserRef = db.collection("users").doc(otherUserId);
-      const otherUserDoc = await otherUserRef.get();
-      if (otherUserDoc.exists) {
-        batch.update(otherUserRef, {
-          friendCount: decrementedFriendCount(otherUserDoc.data()?.friendCount),
-        });
-      }
-    }
-
-    await batch.commit();
-    removedFriendEdgeCount += 1;
-  }
+  const removedFriendEdgeCount = await removeAllFriendEdgesForUser(db, userId);
 
   // ---- Family membership (creator takes the active family down; others just leave)
   const activeFamilyId =
@@ -136,9 +115,20 @@ export const deleteAccount = enforcedCallable(async (data, context) => {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+      // FR-6: capture flagged children BEFORE their member docs are deleted.
+      const childExits: Array<{ childUserId: string; reason: string }> = [];
+
       const membersSnapshot = await familyRef.collection("members").get();
       for (const member of membersSnapshot.docs) {
         batch.delete(member.ref);
+
+        if (member.data()?.isChild === true) {
+          childExits.push({
+            childUserId: member.id,
+            reason:
+              member.id === userId ? "member_account_deleted" : "creator_account_deleted",
+          });
+        }
 
         if (member.id === userId) continue; // own user doc is deleted below
         const memberUserDoc = await db.collection("users").doc(member.id).get();
@@ -155,9 +145,21 @@ export const deleteAccount = enforcedCallable(async (data, context) => {
 
       await batch.commit();
 
-      await writeAuditLog({
+      for (const exit of childExits) {
+        await writeChildMembershipRevocation(db, {
+          familyId: activeFamilyId,
+          childUserId: exit.childUserId,
+          actorId,
+          actorRole: "creator",
+          method: "delete_account",
+          reason: exit.reason,
+          clientMetadata,
+        });
+      }
+
+      await writeAuditLogTo(db, {
         eventType: "AUDIT_FAMILY_INACTIVATED",
-        actorId: userId,
+        actorId,
         subjectType: "family",
         subjectId: activeFamilyId,
         metadata: {
@@ -167,52 +169,52 @@ export const deleteAccount = enforcedCallable(async (data, context) => {
         clientMetadata,
       });
     } else if (familyAction === "remove_member") {
+      const memberData = memberDoc.data() ?? {};
+      const memberRole = typeof memberData.role === "string" ? memberData.role : "unknown";
+      const memberWasChild = memberData.isChild === true;
+
       await memberRef.delete();
+
+      // Previously this branch deleted the member doc with no audit at all (FR-6).
+      await writeAuditLogTo(db, {
+        eventType: "AUDIT_FAMILY_MEMBER_REMOVED",
+        actorId,
+        subjectType: "family",
+        subjectId: activeFamilyId,
+        metadata: { removedMemberId: userId, role: memberRole, reason: "account_deleted" },
+        clientMetadata,
+      });
+
+      if (memberWasChild) {
+        // FR-40: child self-deletion is permitted and evidenced; the account is being
+        // deleted, so the sticky flag question is moot but the REVOKED lineage is not.
+        await writeChildMembershipRevocation(db, {
+          familyId: activeFamilyId,
+          childUserId: userId,
+          actorId,
+          actorRole: memberRole,
+          method: "delete_account",
+          reason: "member_account_deleted",
+          clientMetadata,
+        });
+      }
     }
   }
 
   // ---- Search lookup indexes (usernames / user_lookup_email / user_lookup_phone)
-  const contactDoc = await userRef
-    .collection("private")
-    .doc(PRIVATE_CONTACT_DOC)
-    .get();
-  const contactData = contactDoc.data() ?? {};
-  const emailHint =
-    (typeof contactData.email === "string" ? contactData.email : null) ??
-    (typeof userData.email === "string" ? userData.email : null);
-  const phoneHint =
-    (typeof contactData.phoneNumber === "string" ? contactData.phoneNumber : null) ??
-    (typeof userData.phoneNumber === "string" ? userData.phoneNumber : null);
-  await clearAllSearchIndexesForUser(userId, {
-    userNameLower:
-      (typeof userData.userNameLower === "string" ? userData.userNameLower : null) ??
-      (typeof userData.userName === "string"
-        ? normalizeUsernameLower(userData.userName)
-        : null),
-    emailLower:
-      typeof contactData.emailLower === "string"
-        ? contactData.emailLower
-        : emailHint
-          ? normalizeEmail(emailHint)
-          : null,
-    phoneE164:
-      typeof contactData.phoneE164 === "string"
-        ? contactData.phoneE164
-        : phoneHint
-          ? normalizePhoneE164(phoneHint)
-          : null,
-  });
+  const hints = await searchIndexHintsForUser(db, userId, userData);
+  await deps.clearSearchIndexes(userId, hints);
 
-  // ---- users/{uid}/private/* (contact email/phoneNumber, fcm push token, login locations, ...)
-  await deleteSubcollectionDocs(userRef, "private");
+  // ---- users/{uid}/private/* (contact email/phoneNumber, fcm push token, ...)
+  await deleteSubcollectionDocs(db, userRef, "private");
 
   // ---- Progression / achievements / public stats keyed by uid
   const progressionRef = db.collection("user_progression").doc(userId);
-  await deleteSubcollectionDocs(progressionRef, "xp_grants");
+  await deleteSubcollectionDocs(db, progressionRef, "xp_grants");
   await progressionRef.delete();
 
   const achievementsRef = db.collection("user_achievements").doc(userId);
-  await deleteSubcollectionDocs(achievementsRef, "achievements");
+  await deleteSubcollectionDocs(db, achievementsRef, "achievements");
   await achievementsRef.delete();
 
   await db.collection("public_lifetime_stats").doc(userId).delete();
@@ -224,9 +226,9 @@ export const deleteAccount = enforcedCallable(async (data, context) => {
   // ---- users/{uid} itself (includes any legacy fcmToken / fcmTokenUpdatedAt fields)
   await userRef.delete();
 
-  await writeAuditLog({
+  await writeAuditLogTo(db, {
     eventType: "AUDIT_ACCOUNT_DELETED",
-    actorId: userId,
+    actorId,
     subjectType: "user",
     subjectId: userId,
     metadata: {
@@ -234,6 +236,48 @@ export const deleteAccount = enforcedCallable(async (data, context) => {
       familyAction,
       ...deidentified,
     },
+    clientMetadata,
+  });
+
+  return { removedFriendEdgeCount, familyAction };
+}
+
+/**
+ * In-app account deletion (App Review Guideline 5.1.1(v); Privacy Policy §11, ToS §15).
+ * Deletes the caller's Firebase Auth user and their personal cloud data:
+ * users/{uid} (incl. any legacy fcmToken fields), users/{uid}/private/* (incl. the contact
+ * doc holding email/phoneNumber and the fcm doc holding the push token, both swept by
+ * listDocuments()), search lookup indexes, friend edges (+friendCount on the
+ * surviving side), family membership, user_progression, user_achievements, and
+ * public_lifetime_stats.
+ *
+ * Shared trip data belongs to every participant, so it is de-identified rather than deleted
+ * (Privacy Policy §9) — see `deidentifyUserResidue`.
+ *
+ * A flagged child may self-delete (FR-40): deletion is child-protective, so there is no
+ * child gate here, and the child's family exit is evidenced by the REVOKED record above.
+ *
+ * Requires a recent sign-in (auth_time within RECENT_LOGIN_MAX_AGE_SECONDS); otherwise
+ * throws failed-precondition with details.reason = "recent-login-required" so the client
+ * can prompt re-authentication and retry.
+ */
+export const deleteAccount = enforcedCallable(async (data, context) => {
+  const userId = assertRegisteredAccount(context);
+  const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
+
+  const authTimeSeconds = Number(context.auth?.token?.auth_time ?? 0);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (!isRecentLogin(authTimeSeconds, nowSeconds, RECENT_LOGIN_MAX_AGE_SECONDS)) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Recent sign-in is required to delete your account",
+      { reason: "recent-login-required" }
+    );
+  }
+
+  await executeAccountDeletionForUser(admin.firestore(), {
+    userId,
+    actorId: userId,
     clientMetadata,
   });
 

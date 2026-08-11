@@ -33,6 +33,12 @@ export {
   changeFamilyMemberRole,
   inactivateFamily,
 } from "./family";
+export {
+  setFamilyMemberChildStatus,
+  declareChildRegistration,
+  requestChildDataDeletion,
+  getParentalConsentStatus,
+} from "./familyChildStatus";
 export { expireInvitesAndCodes } from "./expiration";
 export {
   purgeExpiredInvitesAndCodes,

@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
+import { assertNotUnconsentedChild } from "./callableAuth";
 import { achievementCatalogEntry } from "./achievementCatalogCore";
 import {
   buildEvaluationContextFromFirestore,
@@ -42,6 +43,7 @@ export const syncUserAchievementUnlocks = enforcedCallable(async (data, context)
   }
 
   const userId = context.auth.uid;
+  await assertNotUnconsentedChild(db, userId); // COPPA FR-28
   const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
   const entitlementHints = (data?.entitlementHints ?? undefined) as EntitlementHintsWire | undefined;
   const rawCandidates = Array.isArray(data?.candidates) ? (data.candidates as CandidateWire[]) : [];

@@ -45,3 +45,39 @@ describe("familyMembershipLeaveUserUpdate", () => {
     });
   });
 });
+
+describe("familyMembershipGrantUserUpdate isChild stamp (COPPA FR-25)", () => {
+  it("stamps isChildAccount true on an explicit child grant", () => {
+    expect(
+      familyMembershipGrantUserUpdate({
+        familyId: "fam1",
+        isRetiredGeneral: false,
+        isChild: true,
+      })
+    ).toEqual({
+      wasEverInFamily: true,
+      activeFamilyId: "fam1",
+      isChildAccount: true,
+    });
+  });
+
+  it("stamps isChildAccount false on an explicit new-guardian clear", () => {
+    expect(
+      familyMembershipGrantUserUpdate({
+        familyId: "fam1",
+        isRetiredGeneral: false,
+        isChild: false,
+      })
+    ).toEqual({
+      wasEverInFamily: true,
+      activeFamilyId: "fam1",
+      isChildAccount: false,
+    });
+  });
+
+  it("leaves the flag untouched when isChild is omitted", () => {
+    expect(
+      familyMembershipGrantUserUpdate({ familyId: "fam1", isRetiredGeneral: false })
+    ).not.toHaveProperty("isChildAccount");
+  });
+});

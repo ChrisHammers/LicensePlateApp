@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
 import { auditValueHash } from "./auditRedaction";
 import { familyMembershipLeaveUserUpdate } from "./wasEverInFamilyUserUpdates";
+import { writeChildMembershipRevocation } from "./childConsent";
 
 const db = admin.firestore();
 
@@ -23,6 +24,9 @@ export const onAuthUserDeleted = functions.auth
 
     const batch = db.batch();
 
+    // COPPA FR-6: flagged children whose membership this sweep ends, per family.
+    const childExits: Array<{ familyId: string; childUserId: string }> = [];
+
     for (const familyDoc of familiesSnapshot.docs) {
       const familyId = familyDoc.id;
       const familyData = familyDoc.data();
@@ -41,6 +45,10 @@ export const onAuthUserDeleted = functions.auth
       // Remove all members and clear activeFamilyId
       for (const memberDoc of membersSnapshot.docs) {
         const memberId = memberDoc.id;
+
+        if (memberDoc.data()?.isChild === true) {
+          childExits.push({ familyId, childUserId: memberId });
+        }
 
         // Remove member
         batch.delete(memberDoc.ref);
@@ -71,6 +79,19 @@ export const onAuthUserDeleted = functions.auth
     }
 
     await batch.commit();
+
+    // COPPA FR-6: background trigger, so no clientMetadata (permitted for this path).
+    for (const exit of childExits) {
+      await writeChildMembershipRevocation(db, {
+        familyId: exit.familyId,
+        childUserId: exit.childUserId,
+        actorId: userId,
+        actorRole: "system",
+        method: "auth_user_deleted",
+        reason: "auth_user_deleted",
+        clientMetadata: null,
+      });
+    }
 
     console.log(
       `Inactivated ${familiesSnapshot.size} families due to creator deletion`

@@ -8,6 +8,7 @@ import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
+import { assertNotUnconsentedChild } from "./callableAuth";
 import { planReturnStreakDailyClaim } from "./claimReturnStreakDailyXpCore";
 import { writeXpGrantIfAbsent, XP_GRANT_REASON } from "./xpGrantLedgerCore";
 
@@ -19,6 +20,7 @@ export const claimReturnStreakDailyXp = enforcedCallable(async (data, context) =
   }
 
   const userId = context.auth.uid;
+  await assertNotUnconsentedChild(db, userId); // COPPA FR-28
   const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
   const progressionRef = db.collection("user_progression").doc(userId);
 

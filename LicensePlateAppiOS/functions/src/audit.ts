@@ -1,8 +1,6 @@
 import * as admin from "firebase-admin";
 import type { ClientMetadata } from "./clientMetadata";
 
-const db = admin.firestore();
-
 export interface AuditLogData {
   eventType: string;
   actorId: string;
@@ -23,6 +21,18 @@ export interface AuditLogData {
  * parental-consent evidence. Add any new durable-evidence event type to that list.
  */
 export async function writeAuditLog(data: AuditLogData): Promise<void> {
+  await writeAuditLogTo(admin.firestore(), data);
+}
+
+/**
+ * Same as `writeAuditLog`, but against an explicit Firestore handle so callers that are
+ * unit-tested with `testSupport/fakeFirestore.ts` (child-consent lifecycle, account deletion)
+ * can write audit rows without touching the real Admin SDK.
+ */
+export async function writeAuditLogTo(
+  db: admin.firestore.Firestore,
+  data: AuditLogData
+): Promise<void> {
   const auditData: Record<string, unknown> = {
     eventType: data.eventType,
     actorId: data.actorId,

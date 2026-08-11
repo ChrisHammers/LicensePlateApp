@@ -9,6 +9,7 @@ import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
+import { assertNotUnconsentedChild } from "./callableAuth";
 
 export type ParticipationDefaults = {
   skipVoiceConfirmation: boolean;
@@ -160,6 +161,7 @@ export const upsertTripParticipantPrefs = enforcedCallable(async (data, context)
   }
 
   const db = admin.firestore();
+  await assertNotUnconsentedChild(db, userId); // COPPA FR-28
   const sessionRef = db.collection("trip_sessions").doc(tripSessionId);
   const memberSnap = await sessionRef.collection("members").doc(userId).get();
   if (!memberSnap.exists) {

@@ -27,6 +27,8 @@ import {
   buildWelcomeEmailContent,
   normalizeEmail,
   profileEmailChanged,
+  redactEmailAddresses,
+  shouldSuppressWelcomeEmailForChild,
 } from "./welcomeEmailCore";
 
 const db = admin.firestore();
@@ -60,6 +62,15 @@ export const onUserProfileSendWelcomeEmail = functions
     const contactEmail = normalizeEmail(after.email);
     if (!contactEmail) {
       console.log(`welcome email skipped for ${userId}: contact has no email`);
+      return;
+    }
+
+    // COPPA FR-35(c): child accounts receive no welcome email at all — no claim doc,
+    // no provider call, no audit row.
+    const userSnap = await db.collection("users").doc(userId).get();
+    const profile = userSnap.data() ?? {};
+    if (shouldSuppressWelcomeEmailForChild(profile)) {
+      console.log(`welcome email suppressed for ${userId}: child account`);
       return;
     }
 
@@ -114,14 +125,13 @@ export const onUserProfileSendWelcomeEmail = functions
       return;
     }
 
-    const userSnap = await db.collection("users").doc(userId).get();
-    const profile = userSnap.data() ?? {};
     const emailContent = buildWelcomeEmailContent(
       profile,
       welcomeEmailEnvLabel.value()
     );
+    // COPPA FR-35(a): Cloud Logging must not receive the plaintext address.
     console.log(
-      `welcome email sending for ${userId} to ${recipient} from ${fromAddress} subject="${emailContent.subject}"`
+      `welcome email sending for ${userId} subject="${emailContent.subject}"`
     );
 
     try {
@@ -148,16 +158,16 @@ export const onUserProfileSendWelcomeEmail = functions
         { merge: true }
       );
 
+      // COPPA FR-35(a): audit rows outlive accounts; they never carry plaintext
+      // addresses. The recipient remains recoverable to the owner via the private
+      // users/{uid}/private/welcomeEmail status doc, which deletes with the account.
       await writeAuditLog({
         eventType: "welcome_email_sent",
         actorId: userId,
         subjectType: "user",
         subjectId: userId,
         metadata: {
-          toEmail: recipient,
-          fromEmail: fromAddress,
           providerMessageId: result.providerMessageId,
-          contactEmail,
         },
       });
       console.log(
@@ -165,7 +175,11 @@ export const onUserProfileSendWelcomeEmail = functions
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error(`welcome email failed for ${userId}:`, error);
+      // COPPA FR-35(a): provider errors routinely embed the recipient address — scrub
+      // before this reaches Cloud Logging.
+      console.error(
+        `welcome email failed for ${userId}: ${redactEmailAddresses(message)}`
+      );
 
       await welcomeRef.set(
         {
@@ -184,9 +198,7 @@ export const onUserProfileSendWelcomeEmail = functions
         subjectType: "user",
         subjectId: userId,
         metadata: {
-          toEmail: recipient,
-          fromEmail: fromAddress,
-          error: message,
+          error: redactEmailAddresses(message),
         },
       });
     }

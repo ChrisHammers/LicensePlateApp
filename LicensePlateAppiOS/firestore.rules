@@ -75,8 +75,31 @@ service cloud.firestore {
       ]) && userDocLinkedPlatformsAreSanitized();
     }
 
-    function userDocPreservesEntitlementTags() {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(["entitlementTags"]);
+    // FR-7 (COPPA F-5a): server-controlled user-doc fields. `entitlementTags` are granted
+    // by entitlement functions; `isChildAccount` is the authoritative child flag written
+    // only by declareChildRegistration / setFamilyMemberChildStatus /
+    // approveFamilyJoinRequest_CaptainStep. A client write may carry them through
+    // unchanged (merge results) but may never change, add, or remove them.
+    function userDocPreservesServerControlledFields() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(["entitlementTags", "isChildAccount"]);
+    }
+
+    // Create-time twin of the diff-guard: a brand-new user doc cannot smuggle either key
+    // in (there is no `resource.data` to diff against on create).
+    function userDocCreateOmitsServerControlledFields() {
+      return !request.resource.data.keys().hasAny(["entitlementTags", "isChildAccount"]);
+    }
+
+    // FR-28 (COPPA F-5a): an unconsented child — `isChildAccount == true` with no active
+    // family (provisional after declareChildRegistration, or sticky after a consent
+    // revocation) — has no gameplay or social cloud collection. One users/{uid} lookup;
+    // a missing doc or missing flag means adult. Consented children have activeFamilyId
+    // set by the membership-grant batch and cleared by every exit path.
+    function callerIsUnconsentedChild() {
+      return exists(/databases/$(database)/documents/users/$(uid()))
+        && userDoc(uid()).data.get('isChildAccount', false) == true
+        && !('activeFamilyId' in userDoc(uid()).data);
     }
 
     function isFamilyMember(familyId) {
@@ -98,8 +121,10 @@ service cloud.firestore {
     // USERS
     match /users/{userId} {
       allow read: if isSignedIn() && isDiscoverableUserProfile(userId);
-      allow create: if isSignedIn() && uid() == userId && userDocHasNoPrivateFields();
-      allow update: if isSignedIn() && uid() == userId && userDocHasNoPrivateFields() && userDocPreservesEntitlementTags();
+      allow create: if isSignedIn() && uid() == userId && userDocHasNoPrivateFields()
+        && userDocCreateOmitsServerControlledFields();
+      allow update: if isSignedIn() && uid() == userId && userDocHasNoPrivateFields()
+        && userDocPreservesServerControlledFields();
       allow delete: if false; // handle via backend flows if needed
     }
 
@@ -151,15 +176,20 @@ service cloud.firestore {
     }
 
     // FRIENDSHIPS
+    // FR-28: friend edges are the one social-graph surface clients may still write, so an
+    // unconsented child caller is denied here (family admission is their only path back).
+    // Callable-side child enforcement (all child callers/targets, FR-14/24/36) is F-5b.
     match /friends/{friendshipId} {
       allow read: if isSignedIn() &&
         (uid() == resource.data.userA || uid() == resource.data.userB);
 
       allow create: if isRegisteredAccount() &&
+        !callerIsUnconsentedChild() &&
         request.resource.data.status == "pending" &&
         (uid() == request.resource.data.userA || uid() == request.resource.data.userB);
 
       allow update: if isRegisteredAccount() &&
+        !callerIsUnconsentedChild() &&
         (uid() == resource.data.userA || uid() == resource.data.userB);
 
       // Removals go through removeFriend Cloud Function (Admin SDK) for friendCount consistency
@@ -176,6 +206,14 @@ service cloud.firestore {
         (uid() == resource.data.fromUserId || uid() == resource.data.toUserId);
       allow create, update, delete: if false;
     }
+
+    // FR-28 enumeration (COPPA F-5a): no rules block permits direct client GAMEPLAY
+    // writes — trip_sessions, games, activity_events, participant_prefs,
+    // fairness_ack_watermarks, user_progression, user_achievements and
+    // public_lifetime_stats are all client write:false, so the unconsented-child gate
+    // for gameplay lives entirely in the callables (assertNotUnconsentedChild). The
+    // remaining client-writable surfaces that create shared social state — friends and
+    // share_codes — carry the callerIsUnconsentedChild() check above/below.
 
     // TRIP SESSIONS — minimal metadata + authoritative roster in members (writes server-only)
     match /trip_sessions/{sessionId} {
@@ -245,10 +283,15 @@ service cloud.firestore {
     }
 
     // SHARE CODES
+    // FR-28: share codes admit strangers into families/friendships, so an unconsented
+    // child may neither mint nor manage them. Redemption is unaffected — redeemShareCode
+    // is a Cloud Function and stays a child's path back into consented play.
     match /share_codes/{codeId} {
       allow read: if isSignedIn();
-      allow create: if isRegisteredAccount() && request.resource.data.createdBy == uid();
-      allow update: if isRegisteredAccount() && resource.data.createdBy == uid();
+      allow create: if isRegisteredAccount() && !callerIsUnconsentedChild()
+        && request.resource.data.createdBy == uid();
+      allow update: if isRegisteredAccount() && !callerIsUnconsentedChild()
+        && resource.data.createdBy == uid();
       allow delete: if false;
     }
 
@@ -272,13 +315,19 @@ service cloud.firestore {
     match /families/{familyId}/members/{memberId} {
       allow read: if isSignedIn() && isFamilyMember(familyId);
 
-      // Writes are limited; detailed role/limit enforcement should be in Cloud Functions
-      allow create, update, delete: if isRegisteredAccount() && (isCreator(familyId) || isCaptain(familyId));
+      // FR-8 (COPPA F-5a): member docs are server-written only. They carry the `isChild`
+      // projection, so any client write path would be an unaudited flag flip. All live
+      // membership mutations already flow through Cloud Functions — zero client regression.
+      allow create, update, delete: if false;
     }
 
     match /families/{familyId}/pending/{requestId} {
       allow read: if isSignedIn() && isFamilyMember(familyId);
-      allow create: if isRegisteredAccount();
+      // FR-16(b)/G-6 (COPPA F-5a): a join request must name its own author. A forged
+      // request naming another uid could otherwise let a stranger's approval install
+      // them as a child's "consenting manager" with family read access.
+      allow create: if isRegisteredAccount()
+        && request.resource.data.userId == request.auth.uid;
       allow update: if isRegisteredAccount() && (isCreator(familyId) || isCaptain(familyId));
       allow delete: if false;
     }

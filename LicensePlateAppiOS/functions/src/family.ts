@@ -17,6 +17,17 @@ import {
   familyMembershipLeaveUserUpdate,
 } from "./wasEverInFamilyUserUpdates";
 import { canRemoveFamilyMember } from "./familyMemberRemovalPolicy";
+import {
+  CORRECTION_REASON_NEW_GUARDIAN_CLEARED,
+  evaluateApprovalChildDeclaration,
+  sanitizedChildLinkedPlatforms,
+} from "./childAccountCore";
+import {
+  writeChildConsentCorrected,
+  writeChildConsentGranted,
+  writeChildMembershipRevocation,
+} from "./childConsent";
+import { applyChildProtectionsAfterFlagSet } from "./familyChildStatusFlows";
 
 const db = admin.firestore();
 
@@ -488,6 +499,13 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
 
     const batch = db.batch();
 
+    // COPPA FR-25: child follow-ons that must run only after the membership batch
+    // commits (index purge, invite/friend cleanup, consent record).
+    let childFollowUp:
+      | { kind: "grant"; expectedAgeOutYear?: number; targetUserData: Record<string, unknown> }
+      | { kind: "clear_new_guardian" }
+      | null = null;
+
     if (response === "approve") {
       // Get target user to determine role
       const targetUserDoc = await db
@@ -504,6 +522,32 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         ? "retired_general"
         : "scout";
 
+      // COPPA FR-1 / FR-25: the approval payload may (and, for sticky targets, MUST)
+      // declare the member's child status. `isChild: true` is a consent capture and
+      // requires both acknowledgments (FR-31); `isChild: false` on a flagged target is
+      // the new-guardian correction. Absent `isChild` on a flagged target is rejected —
+      // a child flag is never silently laundered through re-admission.
+      const childDecision = evaluateApprovalChildDeclaration({
+        payloadIsChild: data?.isChild,
+        consentAcknowledged: data?.consentAcknowledged,
+        guardianAffirmed: data?.guardianAffirmed,
+        expectedAgeOutYear: data?.expectedAgeOutYear,
+        targetIsChildAccount: targetUserData.isChildAccount === true,
+        nowYear: new Date().getUTCFullYear(),
+      });
+      if (childDecision.kind === "reject") {
+        throw new functions.https.HttpsError(childDecision.code, childDecision.message);
+      }
+      if (childDecision.kind === "grant") {
+        childFollowUp = {
+          kind: "grant",
+          expectedAgeOutYear: childDecision.expectedAgeOutYear,
+          targetUserData,
+        };
+      } else if (childDecision.kind === "clear_new_guardian") {
+        childFollowUp = { kind: "clear_new_guardian" };
+      }
+
       // Check if user can still be added (limits may have changed)
       const canAdd = await canAddMemberToFamily(
         familyId,
@@ -518,7 +562,7 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
       }
 
       // Add member
-      const memberData = {
+      const memberData: Record<string, unknown> = {
         role: newRole,
         permissions: {
           canInvite: false,
@@ -527,19 +571,41 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         joinedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       };
+      if (childDecision.kind === "grant") {
+        memberData.isChild = true; // server-written projection (§7.2)
+      } else if (childDecision.kind === "clear_new_guardian") {
+        memberData.isChild = false;
+      }
 
       batch.set(
         db.collection(`families/${familyId}/members`).doc(requestData.userId),
         memberData
       );
 
-      // Sticky family unlock + activeFamilyId (skip activeFamilyId for retired general)
+      // Sticky family unlock + activeFamilyId (skip activeFamilyId for retired general).
+      // FR-4/FR-25: the child flag and the FR-35(b) linkedPlatforms strip ride the same
+      // batched user update as the membership grant.
+      const grantUpdate = familyMembershipGrantUserUpdate({
+        familyId,
+        isRetiredGeneral: !!targetUserData.isRetiredGeneral,
+        isChild:
+          childDecision.kind === "grant"
+            ? true
+            : childDecision.kind === "clear_new_guardian"
+              ? false
+              : undefined,
+      });
+      if (childDecision.kind === "grant") {
+        const linkedPlatforms = sanitizedChildLinkedPlatforms(
+          targetUserData.linkedPlatforms
+        );
+        if (linkedPlatforms && linkedPlatforms.changed) {
+          grantUpdate.linkedPlatforms = linkedPlatforms.sanitized;
+        }
+      }
       batch.update(
         db.collection("users").doc(requestData.userId),
-        familyMembershipGrantUserUpdate({
-          familyId,
-          isRetiredGeneral: !!targetUserData.isRetiredGeneral,
-        })
+        grantUpdate
       );
 
       // Update request status
@@ -610,6 +676,42 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
 
     await batch.commit();
 
+    // COPPA FR-4/FR-25 follow-ons (non-atomic, idempotent; the F-5b syncer exclusion is
+    // the purge backstop). Runs only after the membership batch has committed.
+    if (childFollowUp?.kind === "grant") {
+      const membersSnapshot = await db
+        .collection(`families/${familyId}/members`)
+        .get();
+      const cleanup = await applyChildProtectionsAfterFlagSet(db, {
+        childUserId: requestData.userId,
+        familyMemberIds: membersSnapshot.docs.map((doc) => doc.id),
+        childUserData: childFollowUp.targetUserData,
+      });
+
+      await writeChildConsentGranted(db, {
+        familyId,
+        childUserId: requestData.userId,
+        actorId: userId,
+        actorRole: memberRole,
+        method: "family_admission",
+        expectedAgeOutYear: childFollowUp.expectedAgeOutYear,
+        removedFriendEdgeCount: cleanup.removedFriendEdgeCount,
+        clientMetadata,
+      });
+    } else if (childFollowUp?.kind === "clear_new_guardian") {
+      // FR-25: new guardian explicitly declared not-a-child. Flag already cleared in the
+      // batch; search indexes rebuild via the normal profile-sync triggers.
+      await writeChildConsentCorrected(db, {
+        familyId,
+        childUserId: requestData.userId,
+        actorId: userId,
+        actorRole: memberRole,
+        method: "readmission_declaration",
+        reason: CORRECTION_REASON_NEW_GUARDIAN_CLEARED,
+        clientMetadata,
+      });
+    }
+
     return { success: true };
   }
 );
@@ -657,6 +759,8 @@ export const removeFamilyMember = enforcedCallable(
     }
 
     const targetMemberRole = targetMemberDoc.data()!.role;
+    // COPPA FR-6: detect the child projection BEFORE the member doc is deleted.
+    const targetWasChild = targetMemberDoc.data()!.isChild === true;
     const isSelf = memberId === userId;
     const decision = canRemoveFamilyMember({
       actorRole: memberRole,
@@ -694,6 +798,20 @@ export const removeFamilyMember = enforcedCallable(
       metadata: { removedMemberId: memberId, role: targetMemberRole },
       clientMetadata,
     });
+
+    // COPPA FR-6: a flagged child's membership just ended — consent is revoked, the
+    // sticky `isChildAccount` flag is untouched (protection persists, collection stops).
+    if (targetWasChild) {
+      await writeChildMembershipRevocation(db, {
+        familyId,
+        childUserId: memberId,
+        actorId: userId,
+        actorRole: isSelf ? targetMemberRole : memberRole,
+        method: "remove_family_member",
+        reason: isSelf ? "member_left_family" : "parent_removed_child",
+        clientMetadata,
+      });
+    }
 
     return { success: true };
   }
@@ -838,9 +956,16 @@ export const inactivateFamily = enforcedCallable(
       .collection(`families/${familyId}/members`)
       .get();
 
+    // COPPA FR-6: capture flagged children BEFORE their member docs are deleted.
+    const childMemberIds: string[] = [];
+
     // Remove all members and clear activeFamilyId
     for (const memberDoc of membersSnapshot.docs) {
       const memberId = memberDoc.id;
+
+      if (memberDoc.data()?.isChild === true) {
+        childMemberIds.push(memberId);
+      }
 
       // Remove member
       batch.delete(memberDoc.ref);
@@ -859,6 +984,20 @@ export const inactivateFamily = enforcedCallable(
     }
 
     await batch.commit();
+
+    // COPPA FR-6: every flagged child's membership ended with the family; consent is
+    // revoked while the sticky `isChildAccount` flag stays true.
+    for (const childUserId of childMemberIds) {
+      await writeChildMembershipRevocation(db, {
+        familyId,
+        childUserId,
+        actorId: userId,
+        actorRole: "creator",
+        method: "inactivate_family",
+        reason: "family_inactivated",
+        clientMetadata,
+      });
+    }
 
     await writeAuditLog({
       eventType: "AUDIT_FAMILY_INACTIVATED",
