@@ -188,8 +188,12 @@ service cloud.firestore {
     // Public lifetime stats (read-only aggregate mirror; writes via Admin SDK / Cloud Functions only)
     // FR-37: strangers must not be able to confirm a child uid exists, or monitor their
     // play, through the stats mirror. Same child exclusion + family carve-out as FR-12.
+    // FR-48 (COPPA F-11): peer reads are further restricted to registered (non-anonymous)
+    // accounts, mirroring the isDiscoverableUserProfile clause order — self always reads
+    // their own stats regardless of registration status; only the peer branch requires it.
     match /public_lifetime_stats/{userId} {
-      allow read: if isSignedIn() && (uid() == userId || targetIsNotHiddenChild(userId));
+      allow read: if isSignedIn()
+        && (uid() == userId || (isRegisteredAccount() && targetIsNotHiddenChild(userId)));
       allow write: if false;
     }
 
@@ -211,8 +215,12 @@ service cloud.firestore {
     }
 
     // USERNAME INDEX (write via Cloud Function / transaction)
+    // FR-48 (COPPA F-11): reads restricted to registered (non-anonymous) accounts — this
+    // doc maps a username straight to a uid, so an anonymous caller gets no exact-match
+    // lookup path. The shipped client never reads this collection directly (all lookups
+    // go through the `searchUsers` callable via the Admin SDK), so there is no regression.
     match /usernames/{usernameLower} {
-      allow read: if isSignedIn();
+      allow read: if isRegisteredAccount();
       allow write: if false; // server-only to preserve uniqueness
     }
 

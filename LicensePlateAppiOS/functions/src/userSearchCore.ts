@@ -34,6 +34,38 @@ export function isSearchIndexEligible(
   return isRegisteredForSearch(data) && !isChildAccountUserData(data);
 }
 
+/**
+ * Username-modality privacy check (FR-48, COPPA F-11). Lives here — not in
+ * `utils/validation.ts` alongside its email/phone sibling `isContactSearchableFromUserData`
+ * — because `userSearchCore.ts` has to stay Firebase-free: `toPublicSearchHit`'s pure unit
+ * tests (and every other pure test that imports `auditQueryFingerprint` etc. from this
+ * module) rely on that, and `utils/validation.ts` calls `admin.firestore()` at module scope.
+ *
+ * Opt-OUT model — the inverse default from `isContactSearchableFromUserData`'s email/phone
+ * gate: username is the primary, always-on discovery surface (`usernames/{lower}` exists to
+ * make it so), so a missing/non-boolean `privacy.usernameSearchable` means "still
+ * searchable" and only an explicit `false` opts a user out. A child is never searchable
+ * regardless of the flag (defense-in-depth; `toPublicSearchHit`'s own child check already
+ * blocks this upstream, but this predicate stays correct if ever called standalone).
+ */
+export function isUsernameSearchableFromUserData(
+  data: Record<string, unknown> | undefined | null
+): boolean {
+  if (isChildAccountUserData(data)) {
+    return false;
+  }
+  const doc = data || {};
+  const privacy =
+    doc.privacy && typeof doc.privacy === "object" && !Array.isArray(doc.privacy)
+      ? (doc.privacy as Record<string, unknown>)
+      : {};
+
+  if (typeof privacy.usernameSearchable === "boolean") {
+    return privacy.usernameSearchable === true;
+  }
+  return true;
+}
+
 export function normalizeEmail(raw: string): string {
   return raw.trim().toLowerCase();
 }
@@ -112,6 +144,12 @@ export function toPublicSearchHit(
   // protected by index removal alone (`syncUsernameSearchIndex` stamps `userNameLower`
   // even for accounts that own no index entries).
   if (isChildAccountUserData(data)) return null;
+  // FR-48 (COPPA F-11): username modality honors a per-user searchability opt-out. This
+  // has to live here rather than only in `searchByUsername`'s two exact-match branches,
+  // for the identical reason FR-9's child check does: the raw `userNameLower` prefix scan
+  // reads user docs directly and calls this function too, so it is the only place that
+  // covers every username path (exact index, `userNameLower` fallback, prefix scan) at once.
+  if (matchedField === "username" && !isUsernameSearchableFromUserData(data)) return null;
   const userName =
     (typeof data.userName === "string" && data.userName) ||
     (typeof data.username === "string" && data.username) ||

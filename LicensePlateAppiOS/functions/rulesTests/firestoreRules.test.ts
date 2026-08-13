@@ -7,6 +7,8 @@
  *  - FR-14 follow-up: `friends` is client write:false;
  *  - FR-16(a) `invites` client-create denial;
  *  - FR-37 `public_lifetime_stats` child exclusion + carve-out.
+ *  - FR-48 `public_lifetime_stats` + `usernames/{usernameLower}` peer reads restricted to
+ *          registered (non-anonymous) accounts (self-access stays unconditional).
  *
  * F-5a covers:
  *  - FR-7  user-doc diff-guard: no client write may change `isChildAccount` or
@@ -526,11 +528,17 @@ describe("FR-37: public_lifetime_stats hides children from strangers", () => {
     );
   });
 
-  it("REGRESSION: adult stats stay readable, including for anonymous callers", async () => {
+  it("REGRESSION: adult stats stay readable for a registered peer", async () => {
     await assertSucceeds(
       getDoc(doc(registered("stranger"), "public_lifetime_stats/adultNoFamily"))
     );
-    await assertSucceeds(
+  });
+
+  // FR-48 (COPPA F-11, deliberate semantics change — ui-refactor-parity does not apply,
+  // this is the acceptance criterion): an anonymous peer used to read any adult's stats;
+  // now peer reads require a registered (non-anonymous) account.
+  it("FR-48: an anonymous peer can no longer read another account's stats", async () => {
+    await assertFails(
       getDoc(doc(anonymous("anon1"), "public_lifetime_stats/adultNoFamily"))
     );
   });
@@ -546,6 +554,55 @@ describe("FR-37: public_lifetime_stats hides children from strangers", () => {
       setDoc(doc(registered("famkid"), "public_lifetime_stats/famkid"), {
         platesFound: 9999,
       })
+    );
+  });
+
+  // FR-48 (COPPA F-11): self-access is unconditional — an anonymous account may always
+  // read its OWN stats row, mirroring isDiscoverableUserProfile's self clause. Only the
+  // peer branch requires a registered account (see the dedicated FR-48 block below).
+  it("FR-48: an anonymous caller still reads their own stats", async () => {
+    await seed({ "users/anon1": { userName: "Anon", isRegistered: false } });
+    await assertSucceeds(
+      getDoc(doc(anonymous("anon1"), "public_lifetime_stats/anon1"))
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FR-48 (F-11) — adult discoverability controls: registered-only reads
+// ---------------------------------------------------------------------------
+
+describe("FR-48: public_lifetime_stats and usernames are registered-only for peers", () => {
+  beforeEach(async () => {
+    await seed({
+      "users/grown": { userName: "Grown" },
+      "public_lifetime_stats/grown": { platesFound: 7 },
+      "usernames/grown": { userId: "grown" },
+    });
+  });
+
+  it("denies an anonymous caller reading public_lifetime_stats for another account", async () => {
+    await assertFails(getDoc(doc(anonymous("anon1"), "public_lifetime_stats/grown")));
+  });
+
+  it("allows a registered caller reading public_lifetime_stats for another account", async () => {
+    await assertSucceeds(getDoc(doc(registered("stranger"), "public_lifetime_stats/grown")));
+  });
+
+  it("denies an anonymous caller reading the usernames index", async () => {
+    await assertFails(getDoc(doc(anonymous("anon1"), "usernames/grown")));
+  });
+
+  it("allows a registered caller reading the usernames index", async () => {
+    await assertSucceeds(getDoc(doc(registered("stranger"), "usernames/grown")));
+  });
+
+  it("usernames writes remain server-only, for both anonymous and registered callers", async () => {
+    await assertFails(
+      setDoc(doc(anonymous("anon1"), "usernames/hijacked"), { userId: "anon1" })
+    );
+    await assertFails(
+      setDoc(doc(registered("stranger"), "usernames/hijacked"), { userId: "stranger" })
     );
   });
 });

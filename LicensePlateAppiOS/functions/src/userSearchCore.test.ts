@@ -5,6 +5,7 @@ import {
   classifySearchQuery,
   isRegisteredForSearch,
   isSearchIndexEligible,
+  isUsernameSearchableFromUserData,
   normalizeEmail,
   normalizePhoneE164,
   normalizeUsernameLower,
@@ -178,6 +179,41 @@ describe("userSearchCore", () => {
         ).toBe("odd");
       });
     });
+
+    // FR-48 (COPPA F-11): username modality honors a per-user searchability opt-out.
+    // toPublicSearchHit is the single choke point that has to carry this check, because
+    // the prefix scan in searchByUsername calls it directly (bypassing any wrapper that
+    // only guards the exact-match paths) — exactly the same reason FR-9's child check
+    // lives here rather than only in the index syncers.
+    describe("FR-48: username modality honors a per-user searchability opt-out", () => {
+      it("hides a user who set privacy.usernameSearchable: false", () => {
+        expect(
+          toPublicSearchHit(
+            "u2",
+            { userName: "OptedOut", privacy: { usernameSearchable: false } },
+            "username"
+          )
+        ).toBeNull();
+      });
+
+      it("defaults to searchable when the flag is missing (opt-out, not opt-in)", () => {
+        expect(
+          toPublicSearchHit("u3", { userName: "Default" }, "username")?.userId
+        ).toBe("u3");
+      });
+
+      it("does not affect email/phone modalities — the opt-out is username-only", () => {
+        const optedOutOfUsername = {
+          userName: "OptedOut",
+          privacy: { usernameSearchable: false, emailSearchable: true },
+          email: "x@example.com",
+        };
+        expect(toPublicSearchHit("u4", optedOutOfUsername, "username")).toBeNull();
+        expect(toPublicSearchHit("u4", optedOutOfUsername, "email")?.userId).toBe(
+          "u4"
+        );
+      });
+    });
   });
 
   // FR-11 (COPPA F-5b): the syncers' eligibility predicate.
@@ -202,6 +238,47 @@ describe("userSearchCore", () => {
       expect(isSearchIndexEligible({})).toBe(true);
       expect(isSearchIndexEligible({ isRegistered: true })).toBe(true);
       expect(isSearchIndexEligible({ isChildAccount: false })).toBe(true);
+    });
+  });
+
+  // FR-48 (COPPA F-11): username modality privacy gate. Opt-OUT model — the inverse
+  // default from isContactSearchableFromUserData's email/phone gate (utils/validation.ts).
+  describe("isUsernameSearchableFromUserData", () => {
+    it("defaults to searchable when the flag is missing (opt-out, not opt-in)", () => {
+      expect(isUsernameSearchableFromUserData({})).toBe(true);
+      expect(isUsernameSearchableFromUserData(null)).toBe(true);
+      expect(isUsernameSearchableFromUserData({ privacy: {} })).toBe(true);
+    });
+
+    it("returns false when privacy.usernameSearchable is explicitly false", () => {
+      expect(
+        isUsernameSearchableFromUserData({ privacy: { usernameSearchable: false } })
+      ).toBe(false);
+    });
+
+    it("returns true when privacy.usernameSearchable is explicitly true", () => {
+      expect(
+        isUsernameSearchableFromUserData({ privacy: { usernameSearchable: true } })
+      ).toBe(true);
+    });
+
+    it("ignores non-boolean values and falls back to the opt-out default", () => {
+      expect(
+        isUsernameSearchableFromUserData({ privacy: { usernameSearchable: "false" } })
+      ).toBe(true);
+    });
+
+    it("FR-48 + FR-9: a child is never username-searchable, opted in or not", () => {
+      expect(
+        isUsernameSearchableFromUserData({
+          isChildAccount: true,
+          privacy: { usernameSearchable: true },
+        })
+      ).toBe(false);
+    });
+
+    it("leaves adults untouched — missing / false isChildAccount ⇒ not a child", () => {
+      expect(isUsernameSearchableFromUserData({ isChildAccount: false })).toBe(true);
     });
   });
 

@@ -10,18 +10,6 @@ import Testing
 @MainActor
 struct UserRepositorySearchFilterTests {
 
-    @Test func registeredForSearchDefaultsMissingFieldToTrue() {
-        #expect(UserRepository.isRegisteredForSearch([:]) == true)
-    }
-
-    @Test func registeredForSearchFalseWhenExplicitlyUnregistered() {
-        #expect(UserRepository.isRegisteredForSearch(["isRegistered": false]) == false)
-    }
-
-    @Test func registeredForSearchTrueWhenExplicitlyRegistered() {
-        #expect(UserRepository.isRegisteredForSearch(["isRegistered": true]) == true)
-    }
-
     @Test func searchUsersReturnsEmptyForGuestLikeSearcher() async throws {
         let policy = FriendsFamilyAccessPolicy(
             accountStateProvider: StaticAccountStateProvider(.firebaseAnonymous)

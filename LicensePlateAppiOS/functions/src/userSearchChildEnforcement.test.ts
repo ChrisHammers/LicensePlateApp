@@ -352,3 +352,53 @@ describe("FR-9 / FR-24: searchUsers end to end", () => {
     expect(response.results.map((hit) => hit.userId)).toEqual(["grown"]);
   });
 });
+
+// FR-48 (COPPA F-11): username search honors a per-user searchability opt-out. The three
+// tests below exercise every path `searchByUsername` has — exact via the `usernames`
+// index, exact via the `userNameLower` fallback query, and the raw prefix scan — because
+// only the prefix scan bypasses `loadUserHit` and calls `toPublicSearchHit` directly; a fix
+// that only guarded the exact-match paths would still leak an opted-out user there.
+describe("FR-48: searchUsers honors the username searchability opt-out end to end", () => {
+  beforeEach(() => {
+    db().seed("users/optedout", {
+      userName: "PrefixMatchOptOut",
+      userNameLower: "prefixmatchoptout",
+      isRegistered: true,
+      privacy: { usernameSearchable: false },
+    });
+    // The `usernames` index doc is written regardless of the opt-out (index eligibility
+    // depends only on isRegistered/isChildAccount, mirroring the email/phone lookup
+    // indexes) — seeded here to prove the query-time check, not index absence, is doing
+    // the work.
+    db().seed("usernames/prefixmatchoptout", { userId: "optedout" });
+    db().seed("users/seeker", { userName: "Seeker", isRegistered: true });
+  });
+
+  it("hides an opted-out user from the exact usernames-index lookup", async () => {
+    const response = await runSearch("seeker", "prefixmatchoptout");
+    expect(response.results).toEqual([]);
+  });
+
+  it("hides an opted-out user from the raw userNameLower PREFIX scan", async () => {
+    // "prefixmatch" does not equal the full username, so neither exact-match branch
+    // fires — only the prefix scan (calling toPublicSearchHit directly) can find this row.
+    const response = await runSearch("seeker", "prefixmatch");
+    expect(response.results).toEqual([]);
+  });
+
+  it("regression: a user who has NOT opted out is still found on every path", async () => {
+    db().seed("users/findable", {
+      userName: "PrefixMatchFindable",
+      userNameLower: "prefixmatchfindable",
+      isRegistered: true,
+      privacy: { usernameSearchable: true },
+    });
+    db().seed("usernames/prefixmatchfindable", { userId: "findable" });
+
+    const exact = await runSearch("seeker", "prefixmatchfindable");
+    expect(exact.results.map((hit) => hit.userId)).toEqual(["findable"]);
+
+    const prefix = await runSearch("seeker", "prefixmatch");
+    expect(prefix.results.map((hit) => hit.userId)).toEqual(["findable"]);
+  });
+});
