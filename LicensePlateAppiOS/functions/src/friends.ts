@@ -16,6 +16,8 @@ import {
   assertTargetIsNotChild,
 } from "./childAccessGuards";
 import { friendInviteExpiresAtMillis } from "./retentionCore";
+import { friendshipEdgeId } from "./inviteRelationshipGate";
+import { consumeInviteRateLimit } from "./inviteRateLimit";
 
 const db = admin.firestore();
 
@@ -96,7 +98,7 @@ export const sendFriendInvite = enforcedCallable(
     }
 
     // Check if friendship already exists
-    const friendshipId = generateFriendshipId(fromUserId, toUserId);
+    const friendshipId = friendshipEdgeId(fromUserId, toUserId);
     const friendshipDoc = await db
       .collection("friends")
       .doc(friendshipId)
@@ -125,6 +127,12 @@ export const sendFriendInvite = enforcedCallable(
         "Pending invite already exists"
       );
     }
+
+    // FR-47 (COPPA F-10): per-sender rate limit, consumed after the
+    // already-friends / already-pending short-circuits above so a replayed offline send
+    // cannot burn budget twice for the same invite. The FR-14/24 child guards ran earlier
+    // and keep precedence — a child caller or child target is refused whatever the budget.
+    await consumeInviteRateLimit(db, { scope: "friend_invite", userId: fromUserId });
 
     // Create invite.
     // Friend invites carry a finite expiry (FR-49b): the every-5-minutes pass in
@@ -248,7 +256,7 @@ export const respondToFriendInvite = enforcedCallable(
 
     if (response === "accept") {
       // Create friendship
-      const friendshipId = generateFriendshipId(
+      const friendshipId = friendshipEdgeId(
         inviteData.fromUserId,
         inviteData.toUserId
       );
@@ -374,9 +382,4 @@ export const removeFriend = enforcedCallable(async (data, context) => {
 
   return { success: true };
 });
-
-function generateFriendshipId(userA: string, userB: string): string {
-  const sorted = [userA, userB].sort();
-  return `${sorted[0]}_${sorted[1]}`;
-}
 

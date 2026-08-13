@@ -80,6 +80,22 @@ export class FakeFirestore {
     return new FakeWriteBatch(this);
   }
 
+  /**
+   * Single-threaded stand-in for `runTransaction`. Reads see committed state; writes are
+   * queued and applied together when the callback resolves, matching Firestore's
+   * all-reads-before-writes shape. There is no contention to retry in a test, so the
+   * callback runs exactly once — which is what makes the FR-47 rate-limit counter
+   * (`inviteRateLimit.ts`) assertable.
+   */
+  async runTransaction<T>(
+    updateFunction: (transaction: FakeTransaction) => Promise<T>
+  ): Promise<T> {
+    const transaction = new FakeTransaction(this);
+    const result = await updateFunction(transaction);
+    transaction.commit();
+    return result;
+  }
+
   /** Seed a document (test helper — bypasses the write counter). */
   seed(path: string, data: Data): void {
     this.store.set(path, deepClone(data));
@@ -180,8 +196,14 @@ export class FakeCollectionRef {
     this.path = parent ? `${parent.path}/${id}` : id;
   }
 
-  doc(id: string): FakeDocumentRef {
-    return new FakeDocumentRef(this.db, `${this.path}/${id}`, this);
+  /**
+   * `doc()` with no id allocates one, as Firestore does — `tripInvites.ts` and `family.ts`
+   * both mint refs that way. Without this every such ref collapsed onto the literal path
+   * ".../undefined", so a test creating two documents silently saw one.
+   */
+  doc(id?: string): FakeDocumentRef {
+    const docId = id ?? this.db.allocateAutoId();
+    return new FakeDocumentRef(this.db, `${this.path}/${docId}`, this);
   }
 
   async add(data: Data): Promise<FakeDocumentRef> {
@@ -317,6 +339,40 @@ export class FakeQuerySnapshot {
 
   forEach(callback: (doc: FakeDocumentSnapshot) => void): void {
     this.docs.forEach((doc) => callback(doc));
+  }
+}
+
+export class FakeTransaction {
+  private ops: (() => void)[] = [];
+
+  constructor(private readonly db: FakeFirestore) {}
+
+  async get(ref: FakeDocumentRef): Promise<FakeDocumentSnapshot>;
+  async get(ref: FakeQuery): Promise<FakeQuerySnapshot>;
+  async get(ref: FakeDocumentRef | FakeQuery): Promise<unknown> {
+    return ref.get();
+  }
+
+  set(ref: FakeDocumentRef, data: Data, options?: { merge?: boolean }): FakeTransaction {
+    this.ops.push(() => ref.applySet(data, options?.merge === true));
+    return this;
+  }
+
+  update(ref: FakeDocumentRef, data: Data): FakeTransaction {
+    this.ops.push(() => ref.applyUpdate(data));
+    return this;
+  }
+
+  delete(ref: FakeDocumentRef): FakeTransaction {
+    this.ops.push(() => ref.applyDelete());
+    return this;
+  }
+
+  /** Applies the queued writes. Called by `FakeFirestore.runTransaction`. */
+  commit(): void {
+    for (const op of this.ops) op();
+    this.db.writeCount += this.ops.length;
+    this.ops = [];
   }
 }
 

@@ -12,6 +12,10 @@ import { describe, it, expect } from "vitest";
 import type * as admin from "firebase-admin";
 import { FakeFirestore } from "./testSupport/fakeFirestore";
 import { executeAccountDeletionForUser } from "./accountDeletion";
+import {
+  INVITE_RATE_LIMIT_COLLECTION,
+  inviteRateLimitDocId,
+} from "./inviteRateLimitCore";
 
 function asFirestore(db: FakeFirestore): admin.firestore.Firestore {
   return db as unknown as admin.firestore.Firestore;
@@ -116,5 +120,39 @@ describe("executeAccountDeletionForUser — child membership exits", () => {
     expect(auditRowsOfType(db, "AUDIT_PARENTAL_CONSENT_REVOKED")).toHaveLength(0);
     expect(auditRowsOfType(db, "AUDIT_FAMILY_MEMBER_REMOVED")).toHaveLength(1);
     expect(auditRowsOfType(db, "AUDIT_ACCOUNT_DELETED")).toHaveLength(1);
+  });
+
+  /**
+   * FR-47's rate-limit counters are keyed by uid in their document id, so FR-50's
+   * "no document anywhere still names the deleted user" claim covers them too.
+   */
+  it("FR-47/FR-50: deletes the user's invite rate-limit counters, leaving others alone", async () => {
+    const db = new FakeFirestore();
+    db.seed("users/adult", {});
+    db.seed("users/bystander", {});
+    for (const scope of ["trip_invite", "friend_invite"] as const) {
+      db.seed(`${INVITE_RATE_LIMIT_COLLECTION}/${inviteRateLimitDocId(scope, "adult")}`, {
+        userId: "adult",
+        scope,
+        windowStartAtMs: 1,
+        count: 3,
+      });
+      db.seed(
+        `${INVITE_RATE_LIMIT_COLLECTION}/${inviteRateLimitDocId(scope, "bystander")}`,
+        { userId: "bystander", scope, windowStartAtMs: 1, count: 3 }
+      );
+    }
+
+    await executeAccountDeletionForUser(
+      asFirestore(db),
+      { userId: "adult", actorId: "adult", clientMetadata: null },
+      noopDeps
+    );
+
+    const remaining = db.docPathsMatching((path) =>
+      path.startsWith(`${INVITE_RATE_LIMIT_COLLECTION}/`)
+    );
+    expect(remaining.some((path) => path.includes("adult"))).toBe(false);
+    expect(remaining).toHaveLength(2); // both of the bystander's counters survive
   });
 });

@@ -3,6 +3,10 @@ import * as admin from "firebase-admin";
 import { writeAuditLogTo } from "./audit";
 import { auditValueHash } from "./auditRedaction";
 import { deidentifyUserResidue } from "./accountDeletionDeidentify";
+import {
+  INVITE_RATE_LIMIT_COLLECTION,
+  inviteRateLimitDocIdsForUser,
+} from "./inviteRateLimitCore";
 import { normalizeClientMetadata, type ClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
 import { assertRegisteredAccount } from "./callableAuth";
@@ -218,6 +222,14 @@ export async function executeAccountDeletionForUser(
   await achievementsRef.delete();
 
   await db.collection("public_lifetime_stats").doc(userId).delete();
+
+  // ---- Invite rate-limit counters (FR-47). Uid-keyed by doc id, so they would otherwise be
+  // residue that names a deleted user and violate FR-50's "no doc anywhere carries the uid".
+  await Promise.all(
+    inviteRateLimitDocIdsForUser(userId).map((docId) =>
+      db.collection(INVITE_RATE_LIMIT_COLLECTION).doc(docId).delete()
+    )
+  );
 
   // ---- Shared gameplay residue: de-identified in place, never left uid-keyed.
   // Idempotent and re-runnable; keyed only on uid so requestChildDataDeletion reuses it.

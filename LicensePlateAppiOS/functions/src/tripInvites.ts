@@ -1,8 +1,10 @@
 /**
  * Trip invites — server-authoritative (Step 08).
  *
- * MVP trust model: trip invites are low-privilege (gameplay / leaderboards). Bad actors may probe
- * trip metadata; tighten with friendship-only invites, rate limits, and captcha in production.
+ * Trust model: invites are restricted to accounts the sender already has a relationship with
+ * (accepted friendship or shared active family) and are rate limited per sender — FR-47
+ * (COPPA F-10), which closed the two step-08 hardening TODOs that used to sit here. The
+ * FR-13/24/38 child rules remain stricter and run first. Captcha remains unimplemented.
  * Share/QR flows should mirror friend/family: joining is not assumed until the server records accept.
  */
 
@@ -24,6 +26,8 @@ import {
   CHILD_FAMILY_ONLY_TRIP_MESSAGE,
   CHILD_TARGET_NOT_SEARCHABLE_MESSAGE,
 } from "./childAccountCore";
+import { assertTripInviteRelationship } from "./inviteRelationshipGate";
+import { consumeInviteRateLimit } from "./inviteRateLimit";
 
 const db = admin.firestore();
 
@@ -63,9 +67,6 @@ export const sendTripInvite = enforcedCallable(async (data, context) => {
     );
   }
 
-  // TODO(step-08-hardening): Gate by friendship/family relationship once invite eligibility policy is finalized.
-  // TODO(step-08-hardening): Add per-user rate limiting / anti-abuse controls for invite spam prevention.
-
   const sessionRef = db.collection("trip_sessions").doc(tripSessionId);
   const recipientMemberRef = sessionRef.collection("members").doc(toUserId);
   const recipientMemberSnap = await recipientMemberRef.get();
@@ -100,6 +101,13 @@ export const sendTripInvite = enforcedCallable(async (data, context) => {
     );
   }
 
+  // FR-47 (COPPA F-10): strangers cannot be invited at all. Placed AFTER the FR-13/24/38
+  // checks above so those keep precedence — a child-target or family-only-trip rejection
+  // always wins, whatever the sender's relationship or remaining budget. The gate throws the
+  // child-target error verbatim so the two are indistinguishable; see
+  // `inviteRelationshipGate.ts` for why that matters.
+  await assertTripInviteRelationship(db, fromUserId, toUserId);
+
   let expiresAt: admin.firestore.Timestamp;
   if (typeof expiresAtMs === "number" && expiresAtMs > Date.now()) {
     expiresAt = admin.firestore.Timestamp.fromMillis(expiresAtMs);
@@ -122,6 +130,12 @@ export const sendTripInvite = enforcedCallable(async (data, context) => {
     const doc = existingPending.docs[0];
     return { inviteId: doc.id };
   }
+
+  // FR-47: per-sender rate limit. Consumed here — after the duplicate short-circuit above,
+  // immediately before the invite is created — so budget is spent only on genuinely NEW
+  // invites: an offline client replaying a queued send re-hits that short-circuit and is
+  // still idempotent. Spam is the creation of new invites, which is exactly what this counts.
+  await consumeInviteRateLimit(db, { scope: "trip_invite", userId: fromUserId });
 
   const batch = db.batch();
 
