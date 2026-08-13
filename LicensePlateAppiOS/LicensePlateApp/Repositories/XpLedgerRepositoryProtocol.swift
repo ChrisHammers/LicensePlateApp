@@ -13,6 +13,10 @@ protocol XpLedgerRepositoryProtocol: AnyObject {
     /// Idempotent base discovery: inserts only if no existing row for the same `xpUniquenessKey` with `provisionalDiscoveryXp` or `finalDiscoveryAward`.
     @discardableResult
     func appendBaseDiscoveryIfAbsent(_ event: XpLedgerEvent) throws -> Bool
+    /// Idempotent append for any grant kind: inserts only if no non-voided row exists for the same `xpUniquenessKey`.
+    /// Used by completion (`game_ended` / `trip_ended`) awards, which replay whenever the event log is re-observed.
+    @discardableResult
+    func appendIfAbsent(_ event: XpLedgerEvent) throws -> Bool
     func ledgerEvents(userId: String, sessionId: UUID, gameInstanceId: UUID, itemId: String?) throws -> [XpLedgerEvent]
     func ledgerEvents(forUniquenessKey: String) throws -> [XpLedgerEvent]
     func ledgerEvents(sourceEventId: String) throws -> [XpLedgerEvent]

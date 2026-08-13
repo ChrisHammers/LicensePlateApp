@@ -386,6 +386,7 @@
         "titleKeyMulti": "xp.toast.group.competitive_place.multi",
         "matchers": {
           "ledgerReasonCodes": [
+            "competitive_first_place_finish",
             "competitive_second_place_finish",
             "competitive_third_place_finish"
           ],

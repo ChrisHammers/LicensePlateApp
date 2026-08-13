@@ -48,6 +48,23 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
         return true
     }
 
+    func appendIfAbsent(_ event: XpLedgerEvent) throws -> Bool {
+        guard let ctx = modelContext else { throw XpLedgerRepositoryError.noModelContext }
+        let key = event.xpUniquenessKey
+        let descriptor = FetchDescriptor<XpLedgerEventEntity>(
+            predicate: #Predicate<XpLedgerEventEntity> { entity in
+                entity.xpUniquenessKey == key && entity.status != "voided"
+            }
+        )
+        if try ctx.fetchCount(descriptor) > 0 {
+            return false
+        }
+        ctx.insert(XpLedgerMapper.toEntity(event))
+        try ctx.save()
+        objectWillChange.send()
+        return true
+    }
+
     func hasBaseDiscoveryForUniquenessKey(_ key: String) throws -> Bool {
         guard let ctx = modelContext else { throw XpLedgerRepositoryError.noModelContext }
         let descriptor = FetchDescriptor<XpLedgerEventEntity>(

@@ -50,6 +50,14 @@ enum XpFeedProjectionBuilder {
             title = "%@ found".localized(name)
             subtitle = nil
             xpText = "+%d XP".localized(row.xpDelta)
+        case .tripCompletion:
+            // Completion bonuses are scoped to the trip/game, not a region — title by reason,
+            // reusing the XP toast group copy so offline recap lines read the same as online ones.
+            title = completionTitle(for: row.reasonCode)
+            subtitle = nil
+            xpText = row.status == .provisional
+                ? "+%d XP pending".localized(row.xpDelta)
+                : "+%d XP".localized(row.xpDelta)
         default:
             title = name
             subtitle = row.grantKind.rawValue
@@ -65,5 +73,19 @@ enum XpFeedProjectionBuilder {
             state: state,
             createdAt: row.createdAt
         )
+    }
+
+    /// Existing localized XP toast group titles (en / es-419 / fr-CA already shipped).
+    private static func completionTitle(for reason: XpReasonCode) -> String {
+        switch reason {
+        case .gameEnded: return "xp.toast.group.game_ended.single".localized
+        case .gameFullClear: return "xp.toast.group.game_full_clear.single".localized
+        case .tripEnded: return "xp.toast.group.trip_ended.single".localized
+        case .tripParticipation: return "xp.toast.group.trip_participation.single".localized
+        case .tripCompetitiveFirstPlace: return "xp.toast.group.trip_competitive_first.single".localized
+        case .competitiveFirstPlaceFinish, .competitiveSecondPlace, .competitiveThirdPlace:
+            return "xp.toast.group.competitive_place.single".localized
+        default: return "xp.toast.group.other.single".localized
+        }
     }
 }

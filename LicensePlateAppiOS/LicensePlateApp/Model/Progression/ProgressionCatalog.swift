@@ -564,6 +564,7 @@ extension ProgressionCatalog {
                 matchers: ProgressionCatalogXpToastMatchers(
                     ledgerGrantKinds: nil,
                     ledgerReasonCodes: [
+                        XpReasonCode.competitiveFirstPlaceFinish.rawValue,
                         XpReasonCode.competitiveSecondPlace.rawValue,
                         XpReasonCode.competitiveThirdPlace.rawValue,
                     ],

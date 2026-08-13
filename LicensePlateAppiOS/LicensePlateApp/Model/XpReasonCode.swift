@@ -15,6 +15,9 @@ enum XpReasonCode: String, Codable, CaseIterable, Sendable {
     case firstFindOfDay = "first_find_of_day"
     case gameEnded = "game_ended"
     case gameFullClear = "game_full_clear"
+    /// Raw values mirror `UserXpGrantReason` / server `XP_GRANT_REASON` so local rows and
+    /// server grants group identically in the XP toast catalog.
+    case competitiveFirstPlaceFinish = "competitive_first_place_finish"
     case competitiveSecondPlace = "competitive_second_place_finish"
     case competitiveThirdPlace = "competitive_third_place_finish"
     case tripEnded = "trip_ended"

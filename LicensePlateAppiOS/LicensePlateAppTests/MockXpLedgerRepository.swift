@@ -29,6 +29,14 @@ final class MockXpLedgerRepository: XpLedgerRepositoryProtocol {
         return true
     }
 
+    func appendIfAbsent(_ event: XpLedgerEvent) throws -> Bool {
+        if stored.contains(where: { $0.xpUniquenessKey == event.xpUniquenessKey && $0.status != .voided }) {
+            return false
+        }
+        stored.append(event)
+        return true
+    }
+
     func ledgerEvents(userId: String, sessionId: UUID, gameInstanceId: UUID, itemId: String?) throws -> [XpLedgerEvent] {
         try ledgerEvents(userId: userId, sessionId: sessionId, gameInstanceId: gameInstanceId, itemId: itemId, statuses: nil)
     }

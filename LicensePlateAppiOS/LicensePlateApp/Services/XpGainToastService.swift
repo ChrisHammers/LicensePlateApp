@@ -35,6 +35,10 @@ final class XpGainToastService: ObservableObject {
     private var activeUserId: String?
     private var acknowledgedIds = Set<String>()
     private var acknowledgedScopeKeys = Set<String>()
+    /// `sourceEventId|reason` of completion awards already toasted from a local ledger row, so the
+    /// server grant mirroring the same award does not toast a second time. Keyed per award rather than
+    /// blanket-skipped by reason: a peer whose device never wrote the local row still gets its toast.
+    private var acknowledgedLocalAwardKeys = Set<String>()
     private var burstEvents: [XpGainToastIngestEvent] = []
     private var rankProgressBaselineXp: Int?
     private var hasBaseline = false
@@ -86,6 +90,7 @@ final class XpGainToastService: ObservableObject {
         timerGeneration += 1
         acknowledgedIds.removeAll()
         acknowledgedScopeKeys.removeAll()
+        acknowledgedLocalAwardKeys.removeAll()
         burstEvents.removeAll()
         rankProgressBaselineXp = nil
         hasBaseline = false
@@ -105,6 +110,7 @@ final class XpGainToastService: ObservableObject {
         activeUserId = nil
         acknowledgedIds.removeAll()
         acknowledgedScopeKeys.removeAll()
+        acknowledgedLocalAwardKeys.removeAll()
         burstEvents.removeAll()
         rankProgressBaselineXp = nil
         hasBaseline = false
@@ -170,6 +176,9 @@ final class XpGainToastService: ObservableObject {
             }
             acknowledgedIds.insert(key)
             acknowledgedScopeKeys.insert(row.xpUniquenessKey)
+            if let awardKey = XpGainToastEligibility.localAwardKey(for: row) {
+                acknowledgedLocalAwardKeys.insert(awardKey)
+            }
             newEvents.append(event)
             sourceMix.insert("ledger")
         }
@@ -177,6 +186,11 @@ final class XpGainToastService: ObservableObject {
         for grant in grants {
             let key = "grant|\(grant.grantId)"
             guard !acknowledgedIds.contains(key) else { continue }
+            // Already toasted from this device's local provisional row for the same award.
+            if acknowledgedLocalAwardKeys.contains(XpGainToastEligibility.localAwardKey(for: grant)) {
+                acknowledgedIds.insert(key)
+                continue
+            }
             guard let event = XpGainToastSourceMapper.ingestEvent(from: grant, catalog: catalog) else {
                 acknowledgedIds.insert(key)
                 continue
@@ -199,6 +213,9 @@ final class XpGainToastService: ObservableObject {
             acknowledgedIds.insert("ledger|\(row.id)")
             if row.xpDelta > 0 {
                 acknowledgedScopeKeys.insert(row.xpUniquenessKey)
+                if let awardKey = XpGainToastEligibility.localAwardKey(for: row) {
+                    acknowledgedLocalAwardKeys.insert(awardKey)
+                }
             }
         }
         for grant in grants {

@@ -77,7 +77,15 @@ final class XpReconciliationService {
     }
 
     private func handleCommittedActivityEventThrowing(_ event: TripActivityEvent) throws {
-        guard event.kind == .regionFound else { return }
+        switch event.kind {
+        case .regionFound:
+            break
+        case .gameCompleted, .gameEnded, .tripEnded:
+            try handleCompletionEventThrowing(event)
+            return
+        default:
+            return
+        }
         guard let payload = event.payload,
               let regionId = payload[TripActivityEventPayloadKey.regionId], !regionId.isEmpty,
               let gidStr = payload[TripActivityEventPayloadKey.gameInstanceId],
@@ -146,6 +154,72 @@ final class XpReconciliationService {
             regionId: regionId,
             participantId: participantId
         )
+    }
+
+    /// Local provisional rows for completion XP (`game_completed` / `game_ended` / `trip_ended`).
+    ///
+    /// Without these, completion XP exists only as a pending *total* and never as an itemized ledger row,
+    /// so offline play shows find XP but no game/trip bonuses on the profile, rank, toast, or recap.
+    /// Amounts come from `ProgressionLocalEngine.completionComponents`, the same mirror of the server's
+    /// `awardsForEvent` the pending totals use, so the later server grant reconciles to a no-op: every row
+    /// carries `sourceEventId == event.id`, and `LedgerPendingXpTotals` stops counting a row once that id
+    /// lands in `appliedProgressionEvents`.
+    private func handleCompletionEventThrowing(_ event: TripActivityEvent) throws {
+        guard let trip = try tripSessionRepository.session(byId: event.sessionId) else { return }
+        guard trip.status != .cancelled else { return }
+
+        let rosterUserIds = trip.participants.filter { $0.leftAt == nil }.map(\.userId)
+        guard !rosterUserIds.isEmpty else { return }
+
+        let games = try gameRepository.fetchByTripSession(sessionId: event.sessionId)
+        let gamesById = Dictionary(
+            games.map { ($0.id, $0.progressionGameSnapshot) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        let components = ProgressionLocalEngine.completionComponents(
+            for: event,
+            windowIncludingEvent: try sessionWindow(upToAndIncluding: event),
+            rosterUserIds: rosterUserIds,
+            gamesById: gamesById,
+            rewards: rewardsConfig.current
+        )
+
+        for component in components where component.amount > 0 {
+            let key = XpLedgerKeyBuilder.uniquenessKey(
+                userId: component.subjectUserId,
+                sessionId: event.sessionId,
+                gameInstanceId: component.gameInstanceId ?? XpLedgerGlobalScope.gameInstanceId,
+                itemId: component.reason.rawValue,
+                xpCategory: .tripCompletion
+            ).storageString
+
+            let row = XpLedgerEvent(
+                userId: component.subjectUserId,
+                sessionId: event.sessionId,
+                gameInstanceId: component.gameInstanceId ?? XpLedgerGlobalScope.gameInstanceId,
+                sourceEventId: event.id,
+                sourceEventType: event.kind.rawValue,
+                itemId: component.reason.rawValue,
+                grantKind: .tripCompletion,
+                status: .provisional,
+                xpDelta: component.amount,
+                reasonCode: component.reason,
+                xpUniquenessKey: key
+            )
+            _ = try xpLedger.appendIfAbsent(row)
+        }
+    }
+
+    /// Session events in timestamp order up to and including `event`, matching the replay window
+    /// `ProgressionLocalEngine` uses when it reaches the same event.
+    private func sessionWindow(upToAndIncluding event: TripActivityEvent) throws -> [TripActivityEvent] {
+        let all = try tripActivityEvents.events(sessionId: event.sessionId, limit: nil)
+            .sorted { $0.timestamp < $1.timestamp }
+        guard let index = all.firstIndex(where: { $0.id == event.id }) else {
+            return all + [event]
+        }
+        return Array(all.prefix(through: index))
     }
 
     /// Persists resolution, closes provisional rows, and writes a final local mirror only when cloud confirms XP.
