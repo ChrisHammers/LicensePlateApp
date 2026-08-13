@@ -28,12 +28,15 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // This ensures Firebase's AppDelegateSwizzler can properly detect the delegate
         let firebaseConfigured = initializeFirebase()
 
-        // RevenueCat: configure after Firebase so we can identify user later. No-op if RevenueCatAPIKey missing.
-        RevenueCatEntitlementBridge.shared.configure()
+        // COPPA F-9 (FR-46): RevenueCat (`configure`/`identify`), FCM registration and
+        // Firebase Analytics COLLECTION are deliberately NOT started here — this runs
+        // long before the session's age is resolved. The gate installs their fail-closed
+        // holds now and releases them, with the right posture, from the one
+        // apply-postures routine in `ChildSessionPostureCoordinator`.
+        // Firebase core + App Check + Crashlytics (internal-ops) already started inside
+        // `initializeFirebase()` above, which FR-46 permits.
+        DeferredSDKStartupService.shared.installAtLaunch(isFirebaseConfigured: firebaseConfigured)
         AdMobService.shared.startIfNeeded()
-        if firebaseConfigured {
-            FirebaseMessagingService.shared.configure(application: application)
-        }
 
         UNUserNotificationCenter.current().delegate = self
 

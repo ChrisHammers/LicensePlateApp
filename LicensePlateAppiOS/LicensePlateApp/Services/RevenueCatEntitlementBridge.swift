@@ -56,6 +56,8 @@ final class RevenueCatEntitlementBridge: ObservableObject, RevenueCatEntitlement
     private var cachedCustomerInfo: CustomerInfo?
     private var cachedOfferings: [PaywallPackage] = []
     private let apiKey: String?
+    /// Whether `Purchases.configure` has actually run this launch (COPPA F-9, FR-46).
+    private var hasConfiguredSDK = false
 
     var currentTier: UserTier {
         tierFromCache()
@@ -69,7 +71,17 @@ final class RevenueCatEntitlementBridge: ObservableObject, RevenueCatEntitlement
         cachedOfferings
     }
 
+    /// COPPA F-9 (FR-46): this now means "the SDK has actually been configured", not
+    /// merely "an API key exists". Every `Purchases.shared` access below is guarded by
+    /// it, and `Purchases.shared` traps when the SDK was never configured — so this is
+    /// what makes deferring `configure()` past app launch safe.
     var isConfigured: Bool {
+        hasConfiguredSDK
+    }
+
+    /// Whether a key exists at all. The FR-46 gate asks this before deciding whether
+    /// starting RevenueCat is even possible for the resolved posture.
+    var hasAPIKey: Bool {
         (apiKey ?? "").isEmpty == false
     }
 
@@ -77,14 +89,19 @@ final class RevenueCatEntitlementBridge: ObservableObject, RevenueCatEntitlement
         self.apiKey = apiKey ?? Self.readAPIKeyFromPlist()
     }
 
-    /// Configure RevenueCat. Call once at app launch (e.g. from AppDelegate). No-op if API key missing.
+    /// Configure RevenueCat. No-op if the API key is missing or the SDK is already up.
+    ///
+    /// COPPA F-9 (FR-46): called by `DeferredSDKStartupService` on the first age-resolved
+    /// posture that permits purchases — never from `didFinishLaunching`, because the SDK
+    /// opens network connections as soon as it is configured.
     func configure() {
-        guard let key = apiKey, !key.isEmpty else {
+        guard !hasConfiguredSDK, let key = apiKey, !key.isEmpty else {
             return
         }
         #if canImport(RevenueCat)
         Purchases.configure(withAPIKey: key)
         #endif
+        hasConfiguredSDK = true
     }
 
     func hasActiveEntitlement(for tier: UserTier) -> Bool {

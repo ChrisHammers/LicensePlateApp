@@ -211,7 +211,10 @@ struct RootView: View {
                 AchievementUnlockCelebrationService.shared.configure(user: user)
             }
             XpGainToastService.shared.configure(userId: userId)
-            await RevenueCatEntitlementBridge.shared.identify(userId: userId)
+            // COPPA F-9 (FR-46): RevenueCat identification is owned by
+            // `DeferredSDKStartupService`, driven from the posture routine that
+            // `initializeAuthState` above already ran. Identifying here would start the
+            // SDK for age-unresolved sessions, which is exactly what FR-46 forbids.
             if authService.isOnline {
                 Task { await SyncCoordinator.shared.processPendingSyncItems() }
             }

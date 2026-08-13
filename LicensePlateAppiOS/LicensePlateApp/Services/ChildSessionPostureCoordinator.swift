@@ -3,16 +3,20 @@
 //  LicensePlateApp
 //
 //  COPPA F-7 (FR-17/18/19/23/32/33/34/39): child session postures for ads, analytics,
-//  location, and purchases. ONE apply-postures routine, fed by exactly two triggers:
+//  location, and purchases. ONE apply-postures routine, fed by exactly three triggers:
 //
 //    1. `FirebaseAuthService.handleAuthStateChange` — every identity transition
 //       (cold start, sign-in, sign-out, anonymous rebirth).
 //    2. A `.userProfilesMerged` observer — mid-session server-side flag changes for
 //       the CURRENT uid, including this session's first fresh resolution (FR-23).
+//    3. `AgeGateViewModel.submit()` — the neutral age screen was answered (COPPA F-9,
+//       FR-46): age resolution can arrive without the identity or the profile document
+//       changing, and the SDK-startup deferral releases on exactly that event.
 //
 //  Order inside the routine: cache + ratchet → TFCD (global ads config) → analytics →
-//  location → paywall projection → banner teardown/reload-or-remove notification LAST,
-//  so a reloading banner can only ever build a request under the already-stamped config.
+//  location → paywall projection → banner teardown/reload-or-remove notification →
+//  deferred non-ads SDK startups (F-9). The banner refresh stays after the TFCD stamp so
+//  a reloading banner can only ever build a request under the already-stamped config.
 //
 //  Views and ViewModels never touch SDK config (CLAUDE.md layering): they render the
 //  published `currentPosture` projections exposed here.
@@ -195,6 +199,11 @@ final class ChildSessionPostureCoordinator: ObservableObject {
     enum Trigger: String {
         case identityTransition = "identity_transition"
         case profileMerge = "profile_merge"
+        /// COPPA F-9 (FR-46): the neutral age screen was just answered. Age resolution is
+        /// the other way a session's posture can become knowable without the identity or
+        /// the profile document changing, and FR-46's deferral releases on exactly that
+        /// event — so it feeds the SAME routine rather than a parallel one.
+        case ageResolution = "age_resolution"
     }
 
     /// Injectable seams so the routine (order, idempotency, ratchet writes) is
@@ -233,6 +242,11 @@ final class ChildSessionPostureCoordinator: ObservableObject {
         var applyChildDirectedTreatment: (Bool) -> Void
         var setAdPersonalizationSignalsDisabled: (Bool) -> Void
         var setLocationForcedOff: (Bool) -> Void
+        /// COPPA F-9 (FR-46): releases — or re-holds — the deferred non-ads SDK startups
+        /// (FCM, RevenueCat, Analytics collection) for the posture this routine just
+        /// derived. Declared last with a no-op default so the existing constructions stay
+        /// source-compatible; `live()` wires the real gate.
+        var releaseDeferredSDKStartups: (ChildSessionPosture) -> Void = { _ in }
 
         @MainActor static func live() -> Dependencies {
             Dependencies(
@@ -276,7 +290,8 @@ final class ChildSessionPostureCoordinator: ObservableObject {
                 setAdPersonalizationSignalsDisabled: {
                     AnalyticsService.shared.setAdPersonalizationSignalsDisabledForChildSession($0)
                 },
-                setLocationForcedOff: { LocationSettingsService.shared.setChildSessionForcedOff($0) }
+                setLocationForcedOff: { LocationSettingsService.shared.setChildSessionForcedOff($0) },
+                releaseDeferredSDKStartups: { DeferredSDKStartupService.shared.apply(posture: $0) }
             )
         }
     }
@@ -391,5 +406,13 @@ final class ChildSessionPostureCoordinator: ObservableObject {
                 userInfo: [AdIdentityChangeKeys.isAdDisplayEligible: posture.isAdDisplayEligible]
             )
         }
+
+        // 7. COPPA F-9 (FR-46): the deferred non-ads SDKs (FCM, RevenueCat, Analytics
+        //    collection) start — or stay held — for the posture just applied. Strictly
+        //    after step 3, so Analytics COLLECTION can never be enabled before a child
+        //    session's ad-personalization posture is in place; and after step 6, so
+        //    steps 1-6 keep their existing ordering guarantees untouched (nothing here
+        //    reads or writes ads configuration).
+        deps.releaseDeferredSDKStartups(posture)
     }
 }

@@ -24,6 +24,26 @@ final class FirebaseMessagingService: NSObject {
         super.init()
     }
 
+    /// COPPA F-9 (FR-46): FCM must not register for an age-unresolved session.
+    /// `isAutoInitEnabled` PERSISTS in UserDefaults across launches, so the gate sets it
+    /// explicitly in both directions rather than turning it off once — otherwise a
+    /// previously resolved install would auto-generate a token during the next cold
+    /// start's pre-resolution window.
+    func setAutoInitEnabled(_ enabled: Bool) {
+        #if canImport(FirebaseMessaging)
+        Messaging.messaging().isAutoInitEnabled = enabled
+        #endif
+    }
+
+    /// FR-46 release point, called by `DeferredSDKStartupService` once the session's age
+    /// posture is known. For a child session this registers exactly what family-trip
+    /// notifications need: the token is the same device token, and *which* pushes a child
+    /// can receive is decided server-side (FR-38 restricts a child to family trips), so
+    /// there is no separate client-side registration to narrow.
+    func configureForResolvedSession() {
+        configure(application: .shared)
+    }
+
     func configure(application: UIApplication) {
         application.registerForRemoteNotifications()
         #if canImport(FirebaseMessaging)

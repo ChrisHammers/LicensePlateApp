@@ -1204,5 +1204,18 @@ class AnalyticsService: AnalyticsLogging {
             forName: AnalyticsUserPropertyAllowAdPersonalizationSignals
         )
     }
+
+    // MARK: - Deferred startup (COPPA F-9, FR-46)
+
+    /// FR-46: Analytics COLLECTION is held off for an age-unresolved session and released
+    /// once the posture is known. Distinct from FR-32's ad-personalization property
+    /// above, which the posture routine applies FIRST — so collection is never enabled
+    /// while a child session's personalization posture is still un-applied.
+    ///
+    /// The setting persists across launches, so `DeferredSDKStartupService` writes it
+    /// explicitly in both directions at every launch.
+    func setAnalyticsCollectionEnabled(_ enabled: Bool) {
+        Analytics.setAnalyticsCollectionEnabled(enabled)
+    }
 }
 

@@ -63,6 +63,12 @@ final class AgeGateViewModel: ObservableObject {
         guard let birthYear = selectedBirthYear else { return false }
         let category = AgeGateStore.category(forBirthYear: birthYear, currentYear: currentYear)
         store.recordAnswer(category)
+        // COPPA F-9 (FR-46): this answer IS the age resolution. Re-run the one
+        // apply-postures routine so the deferred SDK startups are re-evaluated now,
+        // rather than waiting for the next identity transition — the flows that answer
+        // without immediately provisioning a uid would otherwise stay held. Idempotent,
+        // so the provisioning transition that usually follows costs nothing.
+        ChildSessionPostureCoordinator.shared.applyPostures(trigger: .ageResolution)
         analytics.log(.ageGateCompleted(source: source.rawValue))
         return true
     }
