@@ -219,18 +219,17 @@ class FirebaseAuthService: ObservableObject {
         try? await signInAnonymously()
     }
 
-    /// F-6 (FR-27): binds the current flow's outstanding under-13 answer to `flowUid` —
-    /// the uid this registration flow just created or upgraded — and delivers
-    /// `declareChildRegistration`. Declarations can never target any other uid; a stored
-    /// answer cannot declare a pre-existing account (incident-1 regression).
+    /// F-6 (FR-27): binds the current epoch's under-13 answer to `flowUid` — a uid this
+    /// flow just created or upgraded — and delivers `declareChildRegistration`.
+    /// EVERY uid an under-13 epoch provisions is bound, so a second provisioning inside
+    /// one epoch cannot slip through undeclared. Binding is scoped to the CURRENT
+    /// epoch's answer, so a stored answer still cannot declare a pre-existing account
+    /// (incident-1 regression).
     /// - Returns: false while a declaration for `flowUid` is still outstanding (the
     ///   caller must hold that uid's first profile write).
     private func ensureFlowChildDeclaration(flowUid: String) async -> Bool {
         let store = AgeGateStore.shared
-        if store.hasPendingChildDeclaration, store.pendingDeclarationUserId == nil {
-            store.bindPendingDeclaration(toUserId: flowUid)
-        }
-        guard store.pendingDeclarationUserId == flowUid else { return true }
+        guard store.bindAndCheckDeclarationOutstanding(forFlowUserId: flowUid) else { return true }
         guard isOnline, auth.currentUser?.uid == flowUid else { return false }
         do {
             try await UserRepository.shared.declareChildRegistration()
@@ -309,6 +308,15 @@ class FirebaseAuthService: ObservableObject {
         do {
             let result = try await auth.signInAnonymously()
             let firebaseUID = result.user.uid
+
+            // F-6 (FR-27) — BIND BEFORE PUBLISHING, same invariant as the
+            // `createNewUserFromFirebase` choke point: synchronous, no await, ahead of
+            // `localUser.firebaseUID` below. The moment this uid is observable on
+            // `currentUser`, SwiftUI can run `handleHomeOnAppear` → `AppPrefsStore.load`
+            // → a `users/{uid}` writer that decides whether it is held by consulting
+            // `pendingDeclarationUserIds`. Binding after the declaration's `await` would
+            // leave that window unguarded by construction, not just by timing.
+            AgeGateStore.shared.bindPendingDeclaration(toUserId: firebaseUID)
 
             // Link local user to Firebase anonymous account
             localUser.firebaseUID = firebaseUID
@@ -1460,7 +1468,7 @@ class FirebaseAuthService: ObservableObject {
         // (best-effort; next login re-stamps). No other account is ever held.
         let ageGateAllowsWrite = !AgeGateProfileWritePolicy.isProfileWriteHeld(
             userUid: user.firebaseUID,
-            pendingDeclarationUserId: AgeGateStore.shared.pendingDeclarationUserId
+            pendingDeclarationUserIds: AgeGateStore.shared.pendingDeclarationUserIds
         )
         if isOnline, ageGateAllowsWrite, let firebaseUID = user.firebaseUID {
             Task {
@@ -1592,12 +1600,28 @@ class FirebaseAuthService: ObservableObject {
     }
 
     /// Real names are never collected (owner decision, F-6 rework).
+    ///
+    /// F-6 (FR-27): this is the ONE choke point that provisions a brand-new
+    /// `users/{uid}` — reached both from the explicit registration call and from the
+    /// auth-state-listener bootstrap (`AuthProfileSyncPolicy.createLocalThenTrackLogin`,
+    /// which only fires when the cloud doc is CONFIRMED ABSENT, i.e. never for a
+    /// pre-existing account). It binds and delivers the under-13 declaration itself, so
+    /// the declare-before-write ordering no longer depends on which task gets here first.
     private func createNewUserFromFirebase(_ firebaseUser: User, email: String?, userName: String?) async {
         guard let modelContext = modelContext else { return }
 
         let firebaseUID = firebaseUser.uid
         let deviceId = DeviceIdentifier.getDeviceIdentifier()
         let defaultUsername = userName ?? DeviceIdentifier.generateDefaultUsername(deviceId: deviceId)
+
+        // F-6 (FR-27) — BIND BEFORE PUBLISHING. Synchronous, no await, and ahead of
+        // `currentUser` below: the moment this uid becomes observable, SwiftUI can run
+        // `handleHomeOnAppear` → `AppPrefsStore.load` → `updateGameDefaults`, and every
+        // `users/{uid}` writer decides whether it is held by consulting
+        // `pendingDeclarationUserIds`. Binding after the `await` on the declaration
+        // would leave a window in which those writers see an unbound uid and create a
+        // FLAGLESS document for a child. The network half runs below.
+        AgeGateStore.shared.bindPendingDeclaration(toUserId: firebaseUID)
 
         let newUser = AppUser(
             id: firebaseUID,
@@ -1613,7 +1637,12 @@ class FirebaseAuthService: ObservableObject {
         
         currentUser = newUser
         isAuthenticated = true
-        
+
+        // F-6 (FR-27) declare-before-write, at the provisioning choke point itself.
+        // No-op unless this identity epoch answered under-13; on failure the write
+        // below stays held (queued; the choke point retries).
+        _ = await ensureFlowChildDeclaration(flowUid: firebaseUID)
+
         do {
             try await saveUserDataToFirestore(newUser)
             // COPPA F-7 (FR-19): fresh-read the just-created doc so the child
@@ -1662,11 +1691,18 @@ class FirebaseAuthService: ObservableObject {
             tags: UserRepository.parseEntitlementTags(from: data)
         )
         // COPPA §7.1 projection (F-7): fresh-read resolution of the server-owned
-        // child flag. Never mirrored into AppUser/SwiftData (§7.4).
-        UserRepository.shared.ingestIsChildAccount(
-            userId: userId,
-            isChild: UserRepository.parseIsChildAccount(from: data)
-        )
+        // child flag. Never mirrored into AppUser/SwiftData (§7.4). FR-19: only a
+        // server-resolved snapshot may confirm not-child; a cached or
+        // pending-write snapshot leaves the projection nil (held).
+        if ChildFlagIngestPolicy.mayIngest(
+            isFromCache: document.metadata.isFromCache,
+            hasPendingWrites: document.metadata.hasPendingWrites
+        ) {
+            UserRepository.shared.ingestChildAccountResolution(
+                userId: userId,
+                UserRepository.parseChildAccountResolution(from: data)
+            )
+        }
         var user = appUserFromFirestoreData(data, id: userId)
 
         // Own contact may live only under private/contact after PII strip.
@@ -1693,13 +1729,13 @@ class FirebaseAuthService: ObservableObject {
     func saveUserDataToFirestore(_ user: AppUser, extraFields: [String: Any] = [:]) async throws {
         let syncUserId = user.firebaseUID ?? user.id
 
-        // F-6 (FR-27, flow-scoped): the ONLY profile write ever held is the uid a
-        // registration flow created while its under-13 declaration is outstanding —
-        // retried here (declaration first, then the write). Existing accounts are never
-        // held, and a stored answer can never declare a pre-existing uid.
+        // F-6 (FR-27, flow-scoped): the ONLY profile writes ever held are the uids a
+        // registration flow provisioned while their under-13 declaration is outstanding
+        // — retried here (declaration first, then the write). Existing accounts are
+        // never held, and a stored answer can never declare a pre-existing uid.
         if AgeGateProfileWritePolicy.isProfileWriteHeld(
             userUid: syncUserId,
-            pendingDeclarationUserId: AgeGateStore.shared.pendingDeclarationUserId
+            pendingDeclarationUserIds: AgeGateStore.shared.pendingDeclarationUserIds
         ) {
             guard await ensureFlowChildDeclaration(flowUid: syncUserId) else {
                 user.needsSync = true

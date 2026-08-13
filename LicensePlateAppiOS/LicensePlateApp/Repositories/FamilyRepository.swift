@@ -13,7 +13,7 @@ import FirebaseAuth
 import Combine
 
 @MainActor
-class FamilyRepository: ObservableObject {
+class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
     static let shared = FamilyRepository()
     
     private let db = Firestore.firestore()
@@ -25,12 +25,17 @@ class FamilyRepository: ObservableObject {
     @Published var families: [Family] = []
     @Published var familyMembers: [String: [FamilyMember]] = [:] // familyId -> members
     @Published var pendingRequests: [String: [PendingJoinRequest]] = [:] // familyId -> requests
+    /// COPPA §7.2 projection: `families/{familyId}/members/{uid}.isChild`, server-written
+    /// and read-only here. Deliberately NOT a `FamilyMember` stored property — the
+    /// SwiftData schema is frozen (§7.4) — so it lives beside the model rows exactly the
+    /// way `UserRepository.entitlementTagsByUserId` does. familyId -> (userId -> isChild).
+    @Published private(set) var childMemberFlags: [String: [String: Bool]] = [:]
     @Published var isLoading = false
     @Published var errorMessage: String?
     
-    private init() {
-        // Private initializer prevents external instantiation
-    }
+    /// `shared` is the app-wide instance. The initializer stays internal so tests can
+    /// build an isolated repository instead of mutating shared state.
+    init() {}
     
     func setModelContext(_ context: ModelContext) {
         self.modelContext = context
@@ -173,17 +178,18 @@ class FamilyRepository: ObservableObject {
         }
         
         guard let snapshot = snapshot, let modelContext = modelContext else { return }
-        
+
         var members: [FamilyMember] = []
         var userIdsToFetch: [String] = []
-        
+
         for document in snapshot.documents {
             if let member = FamilyMember(from: document, familyId: familyId) {
                 members.append(member)
                 userIdsToFetch.append(member.userId)
             }
         }
-        
+        applyChildMemberFlags(Self.parseChildMemberFlags(documents: snapshot.documents), familyId: familyId)
+
         // Sync members to SwiftData
         for member in members {
             let searchMemberId = member.id
@@ -192,7 +198,7 @@ class FamilyRepository: ObservableObject {
                     m.id == searchMemberId
                 }
             )
-            
+
             if let existing = try? modelContext.fetch(descriptor).first {
                 existing.familyId = member.familyId
                 existing.userId = member.userId
@@ -205,9 +211,13 @@ class FamilyRepository: ObservableObject {
                 modelContext.insert(member)
             }
         }
-        
+        // A member doc that vanished from the snapshot was REMOVED. Without this the
+        // local row survives forever and the roster shows a ghost member whose every
+        // server action then fails with "Member not found".
+        pruneLocalMembers(familyId: familyId, keepingUserIds: Set(members.map(\.userId)))
+
         try? modelContext.save()
-        
+
         // Publish SwiftData members immediately, then hydrate user links and republish.
         familyMembers[familyId] = getMembers(familyId: familyId)
         Task {
@@ -364,6 +374,7 @@ class FamilyRepository: ObservableObject {
             families = []
             familyMembers = [:]
             pendingRequests = [:]
+            childMemberFlags = [:]
             errorMessage = nil
             return
         }
@@ -375,6 +386,7 @@ class FamilyRepository: ObservableObject {
         families = []
         familyMembers = [:]
         pendingRequests = [:]
+        childMemberFlags = [:]
         errorMessage = nil
     }
 
@@ -489,7 +501,8 @@ class FamilyRepository: ObservableObject {
                 userIdsToFetch.append(member.userId)
             }
         }
-        
+        applyChildMemberFlags(Self.parseChildMemberFlags(documents: snapshot.documents), familyId: familyId)
+
         // Sync members to SwiftData
         for member in members {
             let searchMemberId = member.id
@@ -498,7 +511,7 @@ class FamilyRepository: ObservableObject {
                     m.id == searchMemberId
                 }
             )
-            
+
             if let existing = try? modelContext.fetch(descriptor).first {
                 existing.familyId = member.familyId
                 existing.userId = member.userId
@@ -511,13 +524,80 @@ class FamilyRepository: ObservableObject {
                 modelContext.insert(member)
             }
         }
-        
+        pruneLocalMembers(familyId: familyId, keepingUserIds: Set(members.map(\.userId)))
+
         try? modelContext.save()
-        
+
         await fetchAndCacheUsers(userIds: userIdsToFetch, familyId: familyId)
         republishLinkedMembersAndPending(familyId: familyId)
-        
+
         return getMembers(familyId: familyId)
+    }
+
+    // MARK: - Roster reconciliation
+
+    /// Deletes cached members of `familyId` that the server no longer lists. The members
+    /// snapshot/fetch is authoritative for the whole subcollection, so anything missing
+    /// from it has been removed. Internal so tests can drive it with an id set instead of
+    /// a `QuerySnapshot`.
+    func pruneLocalMembers(familyId: String, keepingUserIds: Set<String>) {
+        guard let modelContext else { return }
+        let searchFamilyId = familyId
+        let descriptor = FetchDescriptor<FamilyMember>(
+            predicate: #Predicate<FamilyMember> { $0.familyId == searchFamilyId }
+        )
+        guard let cached = try? modelContext.fetch(descriptor) else { return }
+        for member in cached where !keepingUserIds.contains(member.userId) {
+            modelContext.delete(member)
+        }
+    }
+
+    /// Immediate local reconciliation for a membership the CALLER just ended. The
+    /// snapshot follows within a round trip, but the roster must not show a member the
+    /// server has already deleted — every retry against that ghost fails server-side.
+    func removeLocalMember(familyId: String, memberUserId: String) {
+        if var flags = childMemberFlags[familyId] {
+            flags.removeValue(forKey: memberUserId)
+            childMemberFlags[familyId] = flags
+        }
+        guard let modelContext else { return }
+        let searchFamilyId = familyId
+        let searchUserId = memberUserId
+        let descriptor = FetchDescriptor<FamilyMember>(
+            predicate: #Predicate<FamilyMember> { member in
+                member.familyId == searchFamilyId && member.userId == searchUserId
+            }
+        )
+        if let existing = try? modelContext.fetch(descriptor).first {
+            modelContext.delete(existing)
+            try? modelContext.save()
+        }
+        familyMembers[familyId] = getMembers(familyId: familyId)
+    }
+
+    // MARK: - Child-member projection (COPPA §7.2, FR-20)
+
+    /// Member-doc `isChild` mirror. §4 convention: a missing key means NOT a child.
+    /// Only `true` values are retained so the map stays small and unambiguous.
+    static func parseChildMemberFlags(documents: [QueryDocumentSnapshot]) -> [String: Bool] {
+        var flags: [String: Bool] = [:]
+        for document in documents where (document.data()["isChild"] as? Bool) == true {
+            flags[document.documentID] = true
+        }
+        return flags
+    }
+
+    /// Publishes a parsed projection for one family. The snapshot handlers are the
+    /// production callers; keeping it a named method (rather than an inline assignment)
+    /// gives the projection a single write point.
+    func applyChildMemberFlags(_ flags: [String: Bool], familyId: String) {
+        childMemberFlags[familyId] = flags
+    }
+
+    /// Child user ids in a family — the badge/manage surfaces' single source. View
+    /// models mirror this set; views render the mirror and never derive child status.
+    func childMemberIds(familyId: String) -> Set<String> {
+        Set((childMemberFlags[familyId] ?? [:]).filter { $0.value }.keys)
     }
     
     /// Fetch pending requests directly from Firestore (prioritizes online data)
@@ -712,20 +792,155 @@ class FamilyRepository: ObservableObject {
         ])
     }
     
-    /// Approve or decline a pending join request
-    func respondToPendingRequest(familyId: String, requestId: String, approve: Bool) async throws {
+    /// Approve or decline a pending join request.
+    ///
+    /// COPPA FR-1/FR-25: an approval may carry the manager's child declaration. For a
+    /// target the server already sees as a child the declaration is MANDATORY — the
+    /// callable rejects a silent approval so a flag can never be laundered through
+    /// re-admission. The UI resolves that state before enabling Approve.
+    func respondToPendingRequest(
+        familyId: String,
+        requestId: String,
+        approve: Bool,
+        childDeclaration: ChildApprovalDraft? = nil
+    ) async throws {
         guard Auth.auth().currentUser != nil else {
             throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
         }
-        
+
         let functions = Functions.functions()
         let respondFunction = functions.httpsCallable("approveFamilyJoinRequest_CaptainStep")
-        
-        _ = try await respondFunction.call(([
-            "familyId": familyId,
-            "requestId": requestId,
-            "response": approve ? "approve" : "decline"
-        ] as [String: Any]).addingClientMetadata())
+
+        let payload = FamilyChildStatusPayload.respondToPendingRequest(
+            familyId: familyId,
+            requestId: requestId,
+            approve: approve,
+            declaration: childDeclaration
+        )
+        _ = try await respondFunction.call(payload.addingClientMetadata())
+    }
+
+    // MARK: - Child status callables (COPPA F-8: FR-2, FR-29, FR-30)
+
+    /// FR-2/FR-4/FR-5: creator/captain sets a member's child status, or clears it as a
+    /// CORRECTION (`correctionReason` required). Consent withdrawal is never expressed
+    /// here — that is removal (FR-6) or `requestChildDataDeletion` (FR-30).
+    func setChildStatus(
+        familyId: String,
+        memberUserId: String,
+        isChild: Bool,
+        consentAcknowledged: Bool = false,
+        guardianAffirmed: Bool = false,
+        correctionReason: ChildStatusCorrectionReason? = nil,
+        expectedAgeOutYear: Int? = nil
+    ) async throws {
+        try requireRegisteredAccount()
+
+        let payload: [String: Any]
+        if isChild {
+            payload = FamilyChildStatusPayload.setChild(
+                familyId: familyId,
+                memberUserId: memberUserId,
+                consent: ChildConsentDraft(
+                    consentAcknowledged: consentAcknowledged,
+                    guardianAffirmed: guardianAffirmed,
+                    expectedAgeOutYear: expectedAgeOutYear
+                )
+            )
+        } else {
+            guard let correctionReason else {
+                throw NSError(
+                    domain: "FamilyRepository",
+                    code: 400,
+                    userInfo: [NSLocalizedDescriptionKey: "family.child.error.correction_reason_required".localized]
+                )
+            }
+            payload = FamilyChildStatusPayload.clearChild(
+                familyId: familyId,
+                memberUserId: memberUserId,
+                correctionReason: correctionReason
+            )
+        }
+
+        let respondFunction = Functions.functions().httpsCallable("setFamilyMemberChildStatus")
+        do {
+            _ = try await respondFunction.call(payload.addingClientMetadata())
+        } catch {
+            throw Self.childStatusCallableError(error)
+        }
+    }
+
+    /// FR-30: manager-gated "remove and delete child's data". The server removes the
+    /// membership (REVOKED `parent_requested_deletion`) and runs the full account
+    /// deletion machinery against the child uid.
+    func requestChildDataDeletion(familyId: String, childUserId: String) async throws {
+        try requireRegisteredAccount()
+
+        let payload = FamilyChildStatusPayload.requestChildDataDeletion(
+            familyId: familyId,
+            childUserId: childUserId
+        )
+        let deleteFunction = Functions.functions().httpsCallable("requestChildDataDeletion")
+        do {
+            _ = try await deleteFunction.call(payload.addingClientMetadata())
+        } catch {
+            throw Self.childStatusCallableError(error)
+        }
+    }
+
+    /// FR-29 (SHOULD): manager-gated consent history. `audit_logs` stays client-
+    /// inaccessible; the callable returns curated, uid-free rows.
+    func getParentalConsentStatus(familyId: String, childUserId: String) async throws -> ParentalConsentStatus {
+        try requireRegisteredAccount()
+
+        let payload = FamilyChildStatusPayload.parentalConsentStatus(
+            familyId: familyId,
+            childUserId: childUserId
+        )
+        let statusFunction = Functions.functions().httpsCallable("getParentalConsentStatus")
+        do {
+            let result = try await statusFunction.call(payload.addingClientMetadata())
+            return ParentalConsentStatus.parse(result.data)
+        } catch {
+            throw Self.childStatusCallableError(error)
+        }
+    }
+
+    /// Localized, non-leaky mapping for the child-status callables. The server's own
+    /// messages are English-only and describe states this UI already prevents, so they
+    /// are replaced rather than surfaced.
+    static func childStatusCallableError(_ error: Error) -> Error {
+        let nsError = error as NSError
+        guard nsError.domain == FunctionsErrorDomain,
+              let code = FunctionsErrorCode(rawValue: nsError.code) else {
+            return error
+        }
+
+        let message: String
+        switch code {
+        case .permissionDenied:
+            message = "family.child.error.permission_denied".localized
+        case .notFound:
+            // The caller reconciles this one (FamilyMembershipRecoveryPolicy); the text
+            // only shows if it ever reaches an alert.
+            message = "family.child.error.already_removed".localized
+        case .failedPrecondition:
+            message = "family.child.error.not_allowed".localized
+        case .invalidArgument:
+            message = "family.child.error.invalid".localized
+        case .unavailable, .deadlineExceeded:
+            message = "family.child.error.unavailable".localized
+        case .unauthenticated:
+            message = "family.child.error.signed_out".localized
+        default:
+            message = "family.child.error.server".localized
+        }
+
+        return NSError(
+            domain: nsError.domain,
+            code: nsError.code,
+            userInfo: [NSLocalizedDescriptionKey: message]
+        )
     }
     
     /// Rename family via direct Firestore write (captain/creator). Rules allow only `name` + `updatedAt`.
@@ -871,6 +1086,7 @@ class FamilyRepository: ObservableObject {
         }
         familyMembers[familyId] = []
         pendingRequests[familyId] = []
+        childMemberFlags[familyId] = [:]
         
         try? modelContext.save()
     }
@@ -941,6 +1157,7 @@ class FamilyRepository: ObservableObject {
         }
         familyMembers[familyId] = []
         pendingRequests[familyId] = []
+        childMemberFlags[familyId] = [:]
     }
     
     deinit {

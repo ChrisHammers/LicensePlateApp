@@ -55,8 +55,11 @@ struct ContentView: View {
     // A reborn (post-sign-out) age-unknown guest is NOT this: they get the standard
     // logged-out guest experience and are simply never cloud-provisioned until a
     // sign-up flow answers the age question (owner decision, option B).
+    // F-8 banner polish (owner decision): the prompt introduces itself full-size once,
+    // then persists as a compact row. It lives INSIDE the list under the header, so it
+    // never covers the app title, and it always deep-links to the join-family surface.
     @ObservedObject private var ageGateStore = AgeGateStore.shared
-    @State private var showChildFamilyPrompt = false
+    @State private var childFamilyPromptPresentation: ChildFamilyPromptPresentation = .hidden
     
     // Custom detent for the new trip sheet - device-aware sizing
     // On iPad, use a larger fraction since 25% is too small to show the text field
@@ -228,9 +231,11 @@ struct ContentView: View {
                 addTripButton
             }
             .overlay(alignment: .top) {
-                if showChildFamilyPrompt {
-                    childFamilyPromptBanner
-                } else if showDeferredSetupBanner {
+                // The child prompt is no longer an overlay (it must never cover the app
+                // title); it renders in the list under the header. The deferred-setup
+                // banner keeps its overlay behavior and stays suppressed while the child
+                // prompt is up, exactly as before.
+                if showDeferredSetupBanner, !childFamilyPromptPresentation.isVisible {
                     deferredSetupBanner
                 }
             }
@@ -271,6 +276,9 @@ struct ContentView: View {
             .onReceive(TripCanonicalRemoteSyncService.shared.hydrationSignal) { _ in
                 handleTripHydrationSignal()
             }
+            .onReceive(NotificationCenter.default.publisher(for: .userProfilesMerged)) { notification in
+                handleCurrentUserProfileMerged(notification)
+            }
             .onReceive(NotificationCenter.default.publisher(for: .accountWillHardSignOut)) { _ in
                 handleHardSignOutWillBegin()
             }
@@ -302,6 +310,13 @@ struct ContentView: View {
                 refreshChildFamilyPrompt()
             }
             .onChange(of: ageGateStore.revision) { _, _ in
+                refreshChildFamilyPrompt()
+            }
+            .onChange(of: childPostures.currentPosture) { _, _ in
+                // FR-28: a server-side child-flag resolution can arrive with NO family
+                // edge (offline device comes online, fresh device, re-grant) — the
+                // profile-merge handler's transition gate skips those, so the posture
+                // edge is the trigger that keeps the banner consistent with the gates.
                 refreshChildFamilyPrompt()
             }
             .onChange(of: isShowingCreateSheet) { _, isShowing in
@@ -442,6 +457,11 @@ struct ContentView: View {
             TripInviteRepository.shared.stopListening()
         }
         NotificationRoutingService.shared.ensureObserving(userId: newUserId)
+        // New identity: re-baseline the membership edge and re-pin the self listener.
+        FamilyMembershipTransitionService.shared.seed(
+            familyId: authService.currentUser?.activeFamilyId
+        )
+        ensureSelfProfileListening()
     }
 
     private func handleHardSignOutWillBegin() {
@@ -452,6 +472,9 @@ struct ContentView: View {
     }
 
     private func handleHardSignOutUIReset() {
+        FamilyMembershipTransitionService.shared.reset()
+        FamilyInviteConsumptionStore.shared.clear()
+        ensureSelfProfileListening()
         activeTripsListViewModel.load(userId: currentUserId)
         pendingTripsViewModel.loadIfNeeded()
         NotificationRoutingService.shared.ensureObserving(userId: currentUserId)
@@ -463,12 +486,47 @@ struct ContentView: View {
 
     private func handleActiveFamilyIdChange(_ newFamilyId: String?) {
         ensureSocialInboxListening(userId: currentUserId, activeFamilyId: newFamilyId)
-        // FR-28: family admission (consent) lifts the unconsented-child hold — flush so
-        // queued gameplay events resume automatically. Idempotent no-op for adults.
-        if newFamilyId != nil {
-            SyncCoordinator.shared.scheduleDebouncedGameplaySyncFlushIfOnline()
-        }
+        // FR-28: admission (consent) lifts the unconsented-child hold and removal
+        // re-engages it. Both edges run through one service so the queued backlog drains
+        // immediately on consent — the child-restriction backoff parks rows an hour out,
+        // and a plain debounced flush would skip every one of them.
+        FamilyMembershipTransitionService.shared.note(activeFamilyId: newFamilyId)
         refreshChildFamilyPrompt()
+    }
+
+    /// The membership edge originates on the PARENT's device, so the child only learns
+    /// about it through their own `users/{uid}` listener. `.userProfilesMerged` is that
+    /// delivery point (the same FR-23 seam the ad/analytics postures use), and driving
+    /// the transition from it is what makes removal and admission land live instead of
+    /// on the next screen re-entry.
+    private func handleCurrentUserProfileMerged(_ notification: Notification) {
+        guard let currentUserId,
+              let mergedIds = notification.userInfo?["userIds"] as? [String],
+              mergedIds.contains(currentUserId) else {
+            return
+        }
+        // Only act on an actual change. A self-profile snapshot arrives for any write to
+        // the doc, and re-asserting listeners or rewriting @State on every one of them
+        // churns this view's body — which re-evaluates whatever sheet is on screen,
+        // including the share-code field.
+        let familyId = authService.currentUser?.activeFamilyId
+        guard FamilyMembershipTransitionService.shared.note(activeFamilyId: familyId) != .none else {
+            return
+        }
+        ensureSocialInboxListening(userId: currentUserId, activeFamilyId: familyId)
+        refreshChildFamilyPrompt()
+    }
+
+    /// Keeps a live `users/{uid}` listener on the home screen. Without it the only
+    /// pins are made by the trip/game view models and `MainCoordinator.pop`, so a
+    /// session sitting on Home never sees a server-side membership or child-flag change
+    /// until it navigates. Roster ids stay empty here — Home pins self only, matching
+    /// `MainCoordinator.popToRoot`.
+    private func ensureSelfProfileListening() {
+        UserProfileListenCoordinator.shared.setPinnedUsers(
+            selfUserId: currentUserId,
+            rosterUserIds: []
+        )
     }
 
     private func handleTripHydrationSignal() {
@@ -536,6 +594,12 @@ struct ContentView: View {
             userId: currentUserId,
             activeFamilyId: authService.currentUser?.activeFamilyId
         )
+        // Baseline first, then listen: an existing membership at launch is not a fresh
+        // admission and must not fire a consent-resume edge.
+        FamilyMembershipTransitionService.shared.seed(
+            familyId: authService.currentUser?.activeFamilyId
+        )
+        ensureSelfProfileListening()
         pendingTripsViewModel.loadIfNeeded()
         TripEndRecapSupport.startMultiplayerListeners(for: activeTripsListViewModel.items)
         returnStreakViewModel.bind(userId: currentUserId)
@@ -564,41 +628,15 @@ struct ContentView: View {
         showDeferredSetupBanner = shouldShow
     }
 
+    /// Recomputes the FR-28 prompt. The full presentation is recorded the moment it is
+    /// chosen, so the very next evaluation (next launch, identity change, age-gate
+    /// change) collapses to the compact row while the restriction itself persists.
     private func refreshChildFamilyPrompt() {
-        showChildFamilyPrompt = ChildRestrictedModeService.shared.isRestrictedUnconsentedChild
-    }
-
-    /// FR-28: non-punitive persistent surface while an unconsented child plays locally.
-    /// Icon + text (never color alone); lifts automatically on family admission.
-    private var childFamilyPromptBanner: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "person.2.fill")
-                .font(.system(size: 20))
-                .foregroundStyle(Color.Theme.primaryBlue)
-                .accessibleDecorative()
-            VStack(alignment: .leading, spacing: 4) {
-                Text("child_gate.family_prompt.title".localized)
-                    .font(.system(.subheadline, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(Color.Theme.primaryBlue)
-                Text("child_gate.family_prompt.subtitle".localized)
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundStyle(Color.Theme.softBrown)
-            }
-            Spacer(minLength: 0)
+        let presentation = ChildRestrictedModeService.shared.familyPromptPresentation
+        childFamilyPromptPresentation = presentation
+        if presentation == .full {
+            ChildRestrictedModeService.shared.markFullFamilyPromptPresented()
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.Theme.cardBackground)
-                .shadow(color: Color.black.opacity(0.08), radius: 4, x: 0, y: 2)
-        )
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "\("child_gate.family_prompt.title".localized). \("child_gate.family_prompt.subtitle".localized)"
-        )
     }
 
     private var deferredSetupBanner: some View {
@@ -654,6 +692,19 @@ struct ContentView: View {
                     .listRowBackground(Color.clear)
             }
             .textCase(nil)
+
+            // FR-28: sits BELOW the header so the app title is never covered.
+            if childFamilyPromptPresentation.isVisible {
+                Section {
+                    ChildFamilyPromptBanner(
+                        presentation: childFamilyPromptPresentation,
+                        onJoinFamilyDismissed: { refreshChildFamilyPrompt() }
+                    )
+                    .listRowInsets(.init(top: 0, leading: 20, bottom: 16, trailing: 20))
+                    .listRowBackground(Color.clear)
+                }
+                .textCase(nil)
+            }
 
             if activeTripsListViewModel.items.isEmpty {
                 Section {

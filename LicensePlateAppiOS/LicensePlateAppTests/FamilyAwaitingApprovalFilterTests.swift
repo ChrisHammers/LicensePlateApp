@@ -86,14 +86,69 @@ final class FamilyAwaitingApprovalFilterTests: XCTestCase {
         )
 
         let invites = [pending, acceptedOlder, acceptedNewer, otherUser, friend, declined]
-        let all = FamilyAwaitingApprovalFilter.awaitingApprovalInvites(from: invites, userId: userId)
+        let all = FamilyAwaitingApprovalFilter.awaitingApprovalInvites(
+            from: invites,
+            userId: userId,
+            consumedInviteIds: []
+        )
         XCTAssertEqual(all.map(\.inviteId), ["i-new", "i-old"])
 
         let primary = FamilyAwaitingApprovalFilter.primaryAwaitingApprovalInvite(
             from: invites,
-            userId: userId
+            userId: userId,
+            consumedInviteIds: []
         )
         XCTAssertEqual(primary?.inviteId, "i-new")
         XCTAssertEqual(primary?.familyName, "Newer Fam")
+    }
+
+    /// COPPA F-8 bug B: the server never flips an APPROVED family invite out of
+    /// `accepted` (only the decline path does), so after the member is removed the old
+    /// invite would resurface as a phantom "waiting for captain approval".
+    func testConsumedInvitesAreNotAwaitingApproval() {
+        let userId = "u-1"
+        let exp = Date().addingTimeInterval(3600)
+        let consumed = Invite(
+            inviteId: "i-consumed",
+            type: .family,
+            fromUserId: "captain",
+            toUserId: userId,
+            familyId: "fam-1",
+            status: .accepted,
+            method: .code,
+            expiresAt: exp,
+            createdAt: Date().addingTimeInterval(-600),
+            familyName: "Joined Fam"
+        )
+        let stillWaiting = Invite(
+            inviteId: "i-waiting",
+            type: .family,
+            fromUserId: "captain2",
+            toUserId: userId,
+            familyId: "fam-2",
+            status: .accepted,
+            method: .code,
+            expiresAt: exp,
+            createdAt: Date().addingTimeInterval(-60),
+            familyName: "Other Fam"
+        )
+
+        // Removed from fam-1: the consumed invite must not read as a live request…
+        XCTAssertNil(
+            FamilyAwaitingApprovalFilter.primaryAwaitingApprovalInvite(
+                from: [consumed],
+                userId: userId,
+                consumedInviteIds: ["i-consumed"]
+            )
+        )
+        // …while a genuine, never-redeemed invite to another family still shows.
+        XCTAssertEqual(
+            FamilyAwaitingApprovalFilter.primaryAwaitingApprovalInvite(
+                from: [consumed, stillWaiting],
+                userId: userId,
+                consumedInviteIds: ["i-consumed"]
+            )?.inviteId,
+            "i-waiting"
+        )
     }
 }

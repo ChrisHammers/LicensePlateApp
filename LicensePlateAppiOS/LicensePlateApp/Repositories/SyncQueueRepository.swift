@@ -16,7 +16,9 @@ final class SyncQueueRepository: ObservableObject, SyncQueueRepositoryProtocol {
 
     private var modelContext: ModelContext?
 
-    private init() {}
+    /// `shared` is the app-wide instance; the initializer stays internal so tests can
+    /// build an isolated queue instead of mutating shared state.
+    init() {}
 
     func setModelContext(_ context: ModelContext) {
         modelContext = context
@@ -166,6 +168,31 @@ final class SyncQueueRepository: ObservableObject, SyncQueueRepositoryProtocol {
             entity.updatedAt = now
         }
         try ctx.save()
+    }
+
+    /// COPPA FR-28 consent resume: a child-restriction rejection parks the row an hour
+    /// out (`markFailed(nextRetryAt: +3600)`), which is correct while the restriction
+    /// lasts and wrong the moment it lifts — `fetchFailedRetryDue()` would skip the whole
+    /// backlog until the hour elapsed. Clearing the stamp makes the next flush see them.
+    @discardableResult
+    func clearGameplayRetryBackoff() throws -> Int {
+        guard let ctx = modelContext else { throw SyncQueueRepositoryError.noModelContext }
+        let gameplayKind = SyncQueueItemKind.gameplayEvent.rawValue
+        let failedState = SyncQueueItemState.failed.rawValue
+        let descriptor = FetchDescriptor<SyncQueueItemEntity>(
+            predicate: #Predicate<SyncQueueItemEntity> {
+                $0.kind == gameplayKind && $0.state == failedState
+            }
+        )
+        let rows = try ctx.fetch(descriptor).filter { $0.nextRetryAt != nil }
+        guard !rows.isEmpty else { return 0 }
+        let now = Date()
+        for row in rows {
+            row.nextRetryAt = nil
+            row.updatedAt = now
+        }
+        try ctx.save()
+        return rows.count
     }
 
     /// Hard sign-out: delete all queue rows and remote sync metadata without uploading.

@@ -32,6 +32,12 @@ protocol SyncQueueRepositoryProtocol: AnyObject {
     func hasPendingOrRetryDueGameplayItems() throws -> Bool
     /// After cold start / kill during upload, rows can be stuck `inProgress` and never match `fetchPending`. Clears them to `pending`.
     func resetStuckInProgressSyncItemsToPending() throws
+    /// Clears `nextRetryAt` on failed gameplay rows so the next flush picks them up
+    /// immediately. Used when the reason they were held has demonstrably gone away —
+    /// COPPA FR-28 consent, which retires an hour-long child-restriction backoff.
+    /// Returns the number of rows unblocked.
+    @discardableResult
+    func clearGameplayRetryBackoff() throws -> Int
 }
 
 extension SyncQueueRepositoryProtocol {

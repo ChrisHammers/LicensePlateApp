@@ -145,8 +145,50 @@ struct FriendsFamilySignUpGateView: View {
     }
 }
 
+/// Which surface `RegisteredAccountGate` shows. Extracted from the view body so the
+/// child's route INTO a family is pinned by a test: only `.childGate(.unconsented)` and
+/// `.content` carry share-code entry, and an unconsented child must land on the former.
+enum FriendsFamilyGateRouting: Equatable {
+    case signUpGate
+    case childGate(ChildAccountGateView.GateState)
+    case content
+
+    static func destination(
+        isGuestLike: Bool,
+        childState: ChildRestrictedModeService.ChildSessionState,
+        feature: FriendsFamilyGateFeature
+    ) -> FriendsFamilyGateRouting {
+        if isGuestLike { return .signUpGate }
+        switch childState {
+        case .unconsentedChild:
+            // Both features route through consent: joining a family IS the path.
+            return .childGate(.unconsented)
+        case .consentedChild where feature == .friends:
+            // Friends are not part of child accounts (FR-14/24); family play is.
+            return .childGate(.consented)
+        default:
+            return .content
+        }
+    }
+
+    /// True when the surface offers share-code entry — the child's designated way in
+    /// (FR-24 keeps `redeemShareCode` open to children server-side).
+    var offersShareCodeEntry: Bool {
+        switch self {
+        case .childGate(let state): return state == .unconsented
+        case .content: return true
+        case .signUpGate: return false
+        }
+    }
+}
+
 struct RegisteredAccountGate<Content: View>: View {
     @EnvironmentObject var authService: FirebaseAuthService
+    /// Re-renders the gate when the effective child signal changes mid-session (FR-23
+    /// seam) — e.g. a server-side correction or re-grant arriving while this tab is on
+    /// screen. `childSessionState` itself is computed fresh on every body evaluation;
+    /// this only guarantees an evaluation happens at the flip.
+    @ObservedObject private var postureCoordinator = ChildSessionPostureCoordinator.shared
     let feature: FriendsFamilyGateFeature
     @ViewBuilder let content: () -> Content
 
@@ -161,19 +203,17 @@ struct RegisteredAccountGate<Content: View>: View {
     }
 
     var body: some View {
-        if isGuestLike {
+        switch FriendsFamilyGateRouting.destination(
+            isGuestLike: isGuestLike,
+            childState: childState,
+            feature: feature
+        ) {
+        case .signUpGate:
             FriendsFamilySignUpGateView(feature: feature)
-        } else {
-            switch childState {
-            case .unconsentedChild:
-                // Both features route through consent: joining a family IS the path.
-                ChildAccountGateView(feature: feature, state: .unconsented)
-            case .consentedChild where feature == .friends:
-                // Friends are not part of child accounts (FR-14/24); family play is.
-                ChildAccountGateView(feature: feature, state: .consented)
-            default:
-                content()
-            }
+        case .childGate(let state):
+            ChildAccountGateView(feature: feature, state: state)
+        case .content:
+            content()
         }
     }
 }
@@ -185,7 +225,7 @@ struct RegisteredAccountGate<Content: View>: View {
 /// visual pattern. Deliberately logs NO analytics: an event here would fire only for
 /// child sessions on the child's own instance (forbidden by FR-21 / SRS §12).
 struct ChildAccountGateView: View {
-    enum GateState {
+    enum GateState: Equatable {
         /// No family yet — joining one is how consent happens.
         case unconsented
         /// In a family — friends features simply are not part of child accounts.

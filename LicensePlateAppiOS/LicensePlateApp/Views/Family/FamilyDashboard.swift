@@ -63,7 +63,8 @@ struct FamilyDashboard: View {
                             ForEach(viewModel.members) { member in
                                 FamilyMemberRow(
                                     member: member,
-                                    familyCreatorId: family.creatorId
+                                    familyCreatorId: family.creatorId,
+                                    isChild: viewModel.isChildMember(memberId: member.userId)
                                 )
                             }
                             
@@ -439,6 +440,10 @@ struct FamilyDashboard: View {
 struct FamilyMemberRow: View {
     let member: FamilyMember
     let familyCreatorId: String?
+    /// COPPA FR-20: read-only `members/{uid}.isChild` projection supplied by the view
+    /// model. The dashboard shows the badge only — every manage control lives in
+    /// Family Settings behind the creator/captain gate.
+    var isChild: Bool = false
     @EnvironmentObject private var authService: FirebaseAuthService
 
     private var rolePresentation: FamilyMemberRolePresentation {
@@ -451,6 +456,11 @@ struct FamilyMemberRow: View {
 
     private var currentUserId: String? {
         authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+    }
+
+    /// FR-22: status reaches VoiceOver as text, never as a color-only cue.
+    private var childAccessibilitySuffix: String {
+        isChild ? ", \("family.child.a11y.badge".localized)" : ""
     }
 
     var body: some View {
@@ -474,12 +484,17 @@ struct FamilyMemberRow: View {
                         avatarSize: 50,
                         isCurrentUser: isSelf
                     )
+                    if isChild {
+                        FamilyChildBadge()
+                    }
                     if rolePresentation.showsCreatorBadge {
                         FamilyCreatorBadge()
                     }
                 }
             }
-            .accessibilityLabel("\(decoratedName), @\(user.userName), \(rolePresentation.accessibilityText)")
+            .accessibilityLabel(
+                "\(decoratedName), @\(user.userName), \(rolePresentation.accessibilityText)\(childAccessibilitySuffix)"
+            )
         } else {
             HStack {
                 AvatarImageView(avatarId: nil, size: 50)
@@ -494,13 +509,18 @@ struct FamilyMemberRow: View {
                         .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
                 }
                 Spacer()
+                if isChild {
+                    FamilyChildBadge()
+                }
                 if rolePresentation.showsCreatorBadge {
                     FamilyCreatorBadge()
                 }
             }
             .padding(.vertical, 8)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\("Member".localized), \(rolePresentation.accessibilityText)")
+            .accessibilityLabel(
+                "\("Member".localized), \(rolePresentation.accessibilityText)\(childAccessibilitySuffix)"
+            )
         }
     }
 }

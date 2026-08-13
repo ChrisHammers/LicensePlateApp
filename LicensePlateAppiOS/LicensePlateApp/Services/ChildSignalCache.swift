@@ -70,9 +70,30 @@ final class ChildSignalCache {
         defaults.bool(forKey: ChildSignalCacheKeys.deviceRatchet)
     }
 
-    /// One-way: the ratchet is never cleared (protective; survives sign-out).
+    /// Protective and effectively one-way: engaging is free, lifting is not. Sign-out,
+    /// cache misses, and stale reads never clear it.
     func engageDeviceRatchet() {
         guard !isDeviceRatcheted else { return }
         defaults.set(true, forKey: ChildSignalCacheKeys.deviceRatchet)
+    }
+
+    /// COPPA F-8: the ONE path that lifts the ratchet — a manager-authorized CORRECTION
+    /// (fresh server `isChildAccount == false` for a uid this device had declared)
+    /// leaving no child lineage behind. Callers must have already cleared that uid's
+    /// cache entry and declared-history entry, and must gate on
+    /// `ChildDeviceCorrectionPolicy.liftsDeviceMarkers`. A REVOCATION never reaches
+    /// here: the flag stays true, so the correction test never fires.
+    func disengageDeviceRatchet() {
+        guard isDeviceRatcheted else { return }
+        defaults.set(false, forKey: ChildSignalCacheKeys.deviceRatchet)
+    }
+
+    /// Drops a single uid's cached value entirely (used by the correction path so no
+    /// stale entry can resurrect the lineage).
+    func clearCachedIsChildAccount(for userId: String) {
+        guard !userId.isEmpty else { return }
+        var dict = cachedByUserId
+        guard dict.removeValue(forKey: userId) != nil else { return }
+        defaults.set(dict, forKey: ChildSignalCacheKeys.cachedIsChildByUserId)
     }
 }

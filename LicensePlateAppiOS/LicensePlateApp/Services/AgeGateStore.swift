@@ -24,7 +24,7 @@ enum AgeGateStoreKeys {
     static let category = "ageGate.category"
     static let answeredAt = "ageGate.answeredAt"
     static let pendingChildDeclaration = "ageGate.pendingChildDeclaration"
-    static let pendingDeclarationUserId = "ageGate.pendingDeclarationUserId"
+    static let pendingDeclarationUserIds = "ageGate.pendingDeclarationUserIds"
     static let declaredChildUserIds = "ageGate.declaredChildUserIds"
 }
 
@@ -68,18 +68,40 @@ final class AgeGateStore: ObservableObject {
         category != nil
     }
 
-    /// True while an under-13 answer from the current flow has not yet been bound to
-    /// the uid that flow creates (offline first launch, or no auth uid exists yet).
+    /// True while the CURRENT identity epoch carries an under-13 answer, i.e. every uid
+    /// this epoch provisions still owes a `declareChildRegistration`. Set by the answer,
+    /// cleared only when the epoch ends (`clearAnswer`) — delivering one uid's
+    /// declaration no longer "spends" the answer for the rest of the epoch.
     var hasPendingChildDeclaration: Bool {
         defaults.bool(forKey: AgeGateStoreKeys.pendingChildDeclaration)
     }
 
-    /// The uid created/upgraded by the flow that answered under-13, whose
-    /// `declareChildRegistration` has not yet been confirmed. Declarations may target
-    /// ONLY this uid — a stored answer can never declare any other (pre-existing)
-    /// account. While set, that uid's first profile write is held (FR-27 ordering).
-    var pendingDeclarationUserId: String? {
-        defaults.string(forKey: AgeGateStoreKeys.pendingDeclarationUserId)
+    /// Uids created/upgraded by the under-13 flow whose `declareChildRegistration` has
+    /// not been confirmed yet. Declarations and profile-write holds may target ONLY
+    /// these uids — a stored answer can never declare or hold any other (pre-existing)
+    /// account (incident-1). While a uid is here, its profile write is held (FR-27
+    /// ordering).
+    ///
+    /// A SET, not one slot: a single identity epoch can provision more than one uid
+    /// (the deferred guest uid, then a fresh registration uid when an anonymous link
+    /// fails). Binding a later uid must never release the earlier uid's hold.
+    var pendingDeclarationUserIds: Set<String> {
+        Set(defaults.stringArray(forKey: AgeGateStoreKeys.pendingDeclarationUserIds) ?? [])
+    }
+
+    /// True when `userId` is a uid this device provisioned under an under-13 answer and
+    /// still owes a declaration for.
+    func isPendingDeclaration(userId: String?) -> Bool {
+        guard let userId, !userId.isEmpty else { return false }
+        return pendingDeclarationUserIds.contains(userId)
+    }
+
+    /// True while ANY uid on this device still owes a declaration. The device-level
+    /// correction (ratchet + stored answer) may never lift while this holds: an
+    /// undelivered declaration means the server was never told about a child this
+    /// device knows about.
+    var hasOutstandingChildDeclaration: Bool {
+        !pendingDeclarationUserIds.isEmpty
     }
 
     /// Uids this device successfully declared as child registrations. Used to bind the
@@ -119,35 +141,105 @@ final class AgeGateStore: ObservableObject {
         revision += 1
     }
 
-    /// Binds the flow's outstanding under-13 answer to the uid that flow just created
-    /// or upgraded. From here on the declaration can target only this uid.
+    /// Binds the epoch's under-13 answer to a uid the flow just created or upgraded.
+    /// EVERY uid an under-13 epoch provisions is bound — not only the first one to
+    /// reach a declaration site — so a second provisioning inside the same epoch can
+    /// never slip through as an ordinary adult account.
+    ///
+    /// Scoped by the CURRENT epoch's answer, so an epoch that never answered under-13
+    /// (or whose answer was cleared at sign-out) binds nothing: a stale answer still
+    /// cannot hold or declare a pre-existing account (incident-1/incident-2).
     func bindPendingDeclaration(toUserId userId: String) {
-        guard hasPendingChildDeclaration, !userId.isEmpty else { return }
-        defaults.set(userId, forKey: AgeGateStoreKeys.pendingDeclarationUserId)
+        guard category == .under13, !userId.isEmpty else { return }
+        guard !isDeclaredChildUserId(userId) else { return }
+        var ids = pendingDeclarationUserIds
+        guard ids.insert(userId).inserted else { return }
+        defaults.set(Array(ids), forKey: AgeGateStoreKeys.pendingDeclarationUserIds)
         revision += 1
+    }
+
+    /// Binds `userId` if the current epoch requires it and reports whether it still
+    /// owes a declaration. This is the whole pre-network decision made by
+    /// `FirebaseAuthService.ensureFlowChildDeclaration`, exposed as one call so the
+    /// declare-before-write ordering is testable without Firebase.
+    @discardableResult
+    func bindAndCheckDeclarationOutstanding(forFlowUserId userId: String) -> Bool {
+        bindPendingDeclaration(toUserId: userId)
+        return isPendingDeclaration(userId: userId)
     }
 
     /// Marks the under-13 declaration as delivered for `userId` (the declared uid).
+    /// The epoch's answer itself is NOT consumed: any further uid the same epoch
+    /// provisions must be declared too.
     func markChildDeclarationSent(userId: String) {
-        defaults.set(false, forKey: AgeGateStoreKeys.pendingChildDeclaration)
-        defaults.removeObject(forKey: AgeGateStoreKeys.pendingDeclarationUserId)
-        if !userId.isEmpty {
-            var ids = declaredChildUserIds
-            ids.insert(userId)
-            defaults.set(Array(ids), forKey: AgeGateStoreKeys.declaredChildUserIds)
-        }
+        guard !userId.isEmpty else { return }
+        var pending = pendingDeclarationUserIds
+        pending.remove(userId)
+        defaults.set(Array(pending), forKey: AgeGateStoreKeys.pendingDeclarationUserIds)
+        var ids = declaredChildUserIds
+        ids.insert(userId)
+        defaults.set(Array(ids), forKey: AgeGateStoreKeys.declaredChildUserIds)
         revision += 1
     }
 
-    /// Clears the stored answer and any unfinished declaration intent. Called on
-    /// sign-out and account deletion so the next registration flow asks fresh —
-    /// a stale answer can never carry over to a new or different account.
-    /// `declaredChildUserIds` history is uid-bound and deliberately survives.
+    /// COPPA F-8 (FR-5/FR-25 client half): a manager-authorized CORRECTION cleared this
+    /// uid's server flag, so the device's under-13 lineage for that uid is no longer
+    /// true and must not keep applying child postures until reinstall.
+    ///
+    /// Authority: only the server can clear `isChildAccount`, and only a family manager
+    /// can ask it to (`setFamilyMemberChildStatus` / approval with explicit
+    /// `isChild: false`). A FRESH, EXPLICIT server read of `false` for a DECLARED uid is
+    /// therefore authoritative — unlike a revocation, where the flag stays TRUE and
+    /// nothing here runs. This is the one and only path that removes a uid from the
+    /// declared history.
+    ///
+    /// F-6×F-8 MERGE DECISION (deliberate, not mechanical): this retires ONLY confirmed
+    /// `declaredChildUserIds`. It must NEVER drop a uid from `pendingDeclarationUserIds`.
+    /// A pending uid is one whose declaration never reached the server, so the server
+    /// was never told it is a child — a `false` there is the MISSING DECLARATION, not a
+    /// manager's decision, and there is no authority behind it to honor. Dropping it
+    /// would release that uid's profile-write hold and let the very account this device
+    /// knows to be a child be written out as an adult, permanently.
+    func clearDeclaredChildUserId(_ userId: String) {
+        guard !userId.isEmpty else { return }
+        var ids = declaredChildUserIds
+        guard ids.remove(userId) != nil else { return }
+        defaults.set(Array(ids), forKey: AgeGateStoreKeys.declaredChildUserIds)
+        revision += 1
+    }
+
+    /// Device-level half of the same correction: the stored under-13 ANSWER is what
+    /// `isLocationRestrictedForCurrentFlow` and the guest-provisioning gate read, and it
+    /// is not uid-scoped. It may only be dropped once no child lineage remains on this
+    /// device — the caller enforces that (`ChildDeviceCorrectionPolicy`). A `teenAdult`
+    /// answer is left alone; there is nothing protective to lift.
+    ///
+    /// Fail-closed guard (defense in depth, independent of the caller): an undelivered
+    /// declaration is an unfulfilled promise about a specific account, so the epoch
+    /// answer and the pending set both survive while one is outstanding.
+    func clearUnder13AnswerAfterCorrection() {
+        guard category == .under13 else { return }
+        guard !hasOutstandingChildDeclaration else { return }
+        defaults.removeObject(forKey: AgeGateStoreKeys.category)
+        defaults.removeObject(forKey: AgeGateStoreKeys.answeredAt)
+        defaults.removeObject(forKey: AgeGateStoreKeys.pendingChildDeclaration)
+        revision += 1
+    }
+
+    /// Clears the epoch-scoped answer. Called on sign-out and account deletion so the
+    /// next registration flow asks fresh — a stale answer can never carry over to a new
+    /// or different account (incident-2).
+    ///
+    /// Uid-bound state deliberately survives: `declaredChildUserIds` (protective
+    /// history, consumed by F-7's ratchet) AND `pendingDeclarationUserIds` — an
+    /// undelivered declaration is a promise this device made about ONE specific
+    /// account. Dropping it at sign-out would leave a declared child account with no
+    /// child evidence on the device and none on the server, and its next profile write
+    /// would sail through as an adult.
     func clearAnswer() {
         defaults.removeObject(forKey: AgeGateStoreKeys.category)
         defaults.removeObject(forKey: AgeGateStoreKeys.answeredAt)
         defaults.removeObject(forKey: AgeGateStoreKeys.pendingChildDeclaration)
-        defaults.removeObject(forKey: AgeGateStoreKeys.pendingDeclarationUserId)
         revision += 1
     }
 }
@@ -174,15 +266,63 @@ enum GuestProvisioningPolicy {
 
 // MARK: - Profile-write policy (FR-27 acceptance seam)
 
-/// Pure decision behind `FirebaseAuthService.saveUserDataToFirestore`: the ONLY account
-/// whose profile write can ever be held is the uid a registration flow created while
-/// its under-13 declaration is still outstanding. Existing accounts are never held and
-/// can never be declared by a stored answer (incident-1 regression: the policy takes no
-/// category/answer input at all — an unbound stale answer cannot hold or declare
-/// anything).
+/// Pure decision behind `FirebaseAuthService.saveUserDataToFirestore`: the ONLY accounts
+/// whose profile write can ever be held are the uids a registration flow provisioned
+/// while their under-13 declaration is still outstanding. Existing accounts are never
+/// held and can never be declared by a stored answer (incident-1 regression: the policy
+/// takes no category/answer input at all — an unbound stale answer cannot hold or
+/// declare anything).
 enum AgeGateProfileWritePolicy {
-    static func isProfileWriteHeld(userUid: String?, pendingDeclarationUserId: String?) -> Bool {
-        guard let pendingUid = pendingDeclarationUserId, let userUid else { return false }
-        return pendingUid == userUid
+    static func isProfileWriteHeld(userUid: String?, pendingDeclarationUserIds: Set<String>) -> Bool {
+        guard let userUid, !userUid.isEmpty else { return false }
+        return pendingDeclarationUserIds.contains(userUid)
+    }
+}
+
+// MARK: - users/{uid} document write guard (FR-27 ordering, all writers)
+
+/// Every Firestore writer that can CREATE `users/{uid}` must pass this, not just the
+/// profile write. `setData(merge: true)` creates the document when it is absent, so a
+/// preference write (notification prefs, game defaults, participation defaults) racing
+/// ahead of the declaration would provision a FLAGLESS `users/{uid}` for a child — the
+/// exact shape that reads back as `isChildAccount` absent → not-a-child, turns on ads,
+/// and (post-F-8) trips the manager-correction path that erases the device's under-13
+/// lineage for good.
+///
+/// The declare-before-write choke point (`createNewUserFromFirebase` /
+/// `saveUserDataToFirestore`) is the only writer permitted to bring the document into
+/// existence; everyone else waits behind the same hold.
+enum UserDocumentWritePolicy {
+    /// Held for exactly the uids that still owe a child declaration.
+    static func isWriteHeld(userId: String?, pendingDeclarationUserIds: Set<String>) -> Bool {
+        AgeGateProfileWritePolicy.isProfileWriteHeld(
+            userUid: userId,
+            pendingDeclarationUserIds: pendingDeclarationUserIds
+        )
+    }
+}
+
+/// Thrown by `users/{uid}` writers that are held behind an outstanding child
+/// declaration. Callers surface it like any other write failure and retry later; the
+/// declaration itself is retried by the choke point.
+struct UserDocumentWriteHeldError: LocalizedError {
+    let userId: String
+
+    var errorDescription: String? {
+        "Profile write held pending child registration for \(userId)."
+    }
+}
+
+// MARK: - Child-flag ingest policy (COPPA F-7, FR-19 asymmetric trust)
+
+/// FR-19 requires that only THIS SESSION'S FRESH SERVER READ of `users/{uid}` may
+/// resolve the child projection. A latency-compensated snapshot (served from the local
+/// cache, or reflecting our own not-yet-acknowledged write) is not that read: for a
+/// brand-new uid it shows the fields the client just wrote and nothing else, so a
+/// missing `isChildAccount` there means "unknown", not "adult". Such snapshots leave
+/// the tri-state projection nil, which keeps the session held (fail-closed).
+enum ChildFlagIngestPolicy {
+    static func mayIngest(isFromCache: Bool, hasPendingWrites: Bool) -> Bool {
+        !isFromCache && !hasPendingWrites
     }
 }

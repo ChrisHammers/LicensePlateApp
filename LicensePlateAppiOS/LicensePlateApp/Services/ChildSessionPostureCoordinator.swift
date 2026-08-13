@@ -118,6 +118,60 @@ enum ChildSessionPosturePolicy {
     }
 }
 
+// MARK: - Manager correction (COPPA F-8 handoff, owner-approved)
+
+/// A parent correction (`setFamilyMemberChildStatus(false)` / approval with explicit
+/// `isChild: false`) clears the SERVER flag. Nothing on the child's own device knew
+/// that before F-8, so a corrected account kept applying child postures — including the
+/// device ratchet — until reinstall.
+///
+/// The rule: a FRESH `users/{uid}` read of `false` for a uid this device declared under
+/// 13 IS the authority, because only a family manager can produce that value. A
+/// REVOCATION is not a correction — there the flag stays `true`, so this never fires and
+/// every protection persists (sticky flag, §4).
+enum ChildDeviceCorrectionPolicy {
+    /// Identity-scoped half: does this resolution retire THIS uid's child lineage?
+    ///
+    /// Three independent conditions, each load-bearing:
+    /// 1. `freshIsChildAccount == false` — a cached or unresolved value never counts
+    ///    (FR-19 asymmetric trust runs in the protective direction too).
+    /// 2. `isFreshValueServerExplicit` — the document must have literally carried
+    ///    `isChildAccount: false`. An ABSENT key also reads as `false` under §4, but it
+    ///    is the absence of evidence, not a manager's decision. Any writer that creates
+    ///    a flagless `users/{uid}` (see `UserDocumentWritePolicy`) would otherwise
+    ///    manufacture a "correction" that permanently erases a real child's lineage —
+    ///    strictly worse than the original bug, because nothing can ever re-flag it.
+    ///    `familyChildStatusFlows.ts` always writes the key explicitly, so requiring it
+    ///    never blocks a genuine correction.
+    /// 3. `wasDeclaredChildIdentity` — a CONFIRMED declaration (the uid is in
+    ///    `declaredChildUserIds`). A uid that merely OWES a declaration is not
+    ///    correctable: the server was never told it is a child, so a `false` there is
+    ///    the missing declaration itself.
+    ///
+    /// A REVOCATION is not a correction — there the flag stays `true`, so this never
+    /// fires and every protection persists (sticky flag, §4).
+    static func isCorrection(
+        freshIsChildAccount: Bool?,
+        isFreshValueServerExplicit: Bool,
+        wasDeclaredChildIdentity: Bool
+    ) -> Bool {
+        freshIsChildAccount == false && isFreshValueServerExplicit && wasDeclaredChildIdentity
+    }
+
+    /// Device-scoped half, evaluated AFTER the corrected uid has been removed: the
+    /// ratchet and the stored under-13 answer may lift only when no other cached-true or
+    /// declared child identity remains on this device, AND no uid still owes a
+    /// declaration (an undelivered promise about a specific account outranks a
+    /// correction for a different one).
+    static func liftsDeviceMarkers(
+        hasAnyCachedChildTrue: Bool,
+        hasDeclaredChildHistory: Bool,
+        hasOutstandingChildDeclaration: Bool
+    ) -> Bool {
+        !hasAnyCachedChildTrue && !hasDeclaredChildHistory && !hasOutstandingChildDeclaration
+    }
+}
+
 // MARK: - Banner refresh notification (FR-18)
 
 extension Notification.Name {
@@ -148,6 +202,10 @@ final class ChildSessionPostureCoordinator: ObservableObject {
     struct Dependencies {
         var currentAuthIdentity: () -> (uid: String, isAnonymous: Bool)?
         var freshIsChildAccount: (String) -> Bool?
+        /// Whether this session's resolution came from a document that EXPLICITLY
+        /// carried `isChildAccount`. Gates the destructive correction path only —
+        /// posture derivation deliberately ignores it (an adult doc never has the key).
+        var isFreshChildFlagExplicit: (String) -> Bool
         var cachedIsChildAccount: (String) -> Bool?
         var storeCachedIsChildAccount: (String, Bool) -> Void
         var isDeclaredChildIdentity: (String?) -> Bool
@@ -158,6 +216,20 @@ final class ChildSessionPostureCoordinator: ObservableObject {
         var isAgeResolved: () -> Bool
         var isDeviceRatcheted: () -> Bool
         var engageDeviceRatchet: () -> Void
+        /// F-8 correction seams. `clearChildIdentityLineage` retires ONE uid (declared
+        /// history + cached value); the two predicates report what child lineage the
+        /// device still holds; `liftDeviceChildMarkers` drops the ratchet and the stored
+        /// under-13 answer.
+        var clearChildIdentityLineage: (String) -> Void
+        var hasAnyCachedChildTrue: () -> Bool
+        var hasDeclaredChildHistory: () -> Bool
+        /// Correction gate input: this uid's declaration was CONFIRMED delivered.
+        /// Deliberately narrower than `isDeclaredChildIdentity`, which also reports
+        /// uids that merely owe a declaration — those are never correctable.
+        var hasConfirmedChildDeclaration: (String) -> Bool
+        /// Any uid on this device still owing a declaration; blocks the device lift.
+        var hasOutstandingChildDeclaration: () -> Bool
+        var liftDeviceChildMarkers: () -> Void
         var applyChildDirectedTreatment: (Bool) -> Void
         var setAdPersonalizationSignalsDisabled: (Bool) -> Void
         var setLocationForcedOff: (Bool) -> Void
@@ -169,12 +241,13 @@ final class ChildSessionPostureCoordinator: ObservableObject {
                     return (user.uid, user.isAnonymous)
                 },
                 freshIsChildAccount: { UserRepository.shared.isChildAccount(for: $0) },
+                isFreshChildFlagExplicit: { UserRepository.shared.isChildAccountFlagExplicit(for: $0) },
                 cachedIsChildAccount: { ChildSignalCache.shared.cachedIsChildAccount(for: $0) },
                 storeCachedIsChildAccount: { ChildSignalCache.shared.setCachedIsChildAccount($1, for: $0) },
                 isDeclaredChildIdentity: { uid in
                     let store = AgeGateStore.shared
                     if let uid, !uid.isEmpty {
-                        return store.pendingDeclarationUserId == uid || store.isDeclaredChildUserId(uid)
+                        return store.isPendingDeclaration(userId: uid) || store.isDeclaredChildUserId(uid)
                     }
                     // Pre-uid provisional guest: an under-13 answer for the current
                     // flow classifies the session before its uid exists.
@@ -184,6 +257,21 @@ final class ChildSessionPostureCoordinator: ObservableObject {
                 isAgeResolved: { AgeGateStore.shared.isResolved },
                 isDeviceRatcheted: { ChildSignalCache.shared.isDeviceRatcheted },
                 engageDeviceRatchet: { ChildSignalCache.shared.engageDeviceRatchet() },
+                clearChildIdentityLineage: { uid in
+                    AgeGateStore.shared.clearDeclaredChildUserId(uid)
+                    ChildSignalCache.shared.clearCachedIsChildAccount(for: uid)
+                },
+                hasAnyCachedChildTrue: { ChildSignalCache.shared.hasAnyCachedChildTrue },
+                hasDeclaredChildHistory: { AgeGateStore.shared.hasDeclaredChildHistory },
+                hasConfirmedChildDeclaration: { uid in
+                    let store = AgeGateStore.shared
+                    return store.isDeclaredChildUserId(uid) && !store.isPendingDeclaration(userId: uid)
+                },
+                hasOutstandingChildDeclaration: { AgeGateStore.shared.hasOutstandingChildDeclaration },
+                liftDeviceChildMarkers: {
+                    ChildSignalCache.shared.disengageDeviceRatchet()
+                    AgeGateStore.shared.clearUnder13AnswerAfterCorrection()
+                },
                 applyChildDirectedTreatment: { AdMobService.shared.applyChildDirectedTreatment($0) },
                 setAdPersonalizationSignalsDisabled: {
                     AnalyticsService.shared.setAdPersonalizationSignalsDisabledForChildSession($0)
@@ -247,6 +335,27 @@ final class ChildSessionPostureCoordinator: ObservableObject {
         if let uid, let fresh {
             deps.storeCachedIsChildAccount(uid, fresh)
         }
+
+        // 1b. F-8: a manager CORRECTION (fresh false on a uid this device declared)
+        //     retires that identity's child lineage, and — only if no other child
+        //     identity remains — the device-level markers too. A revocation leaves the
+        //     flag true, so nothing below runs and every protection persists.
+        if let uid,
+           ChildDeviceCorrectionPolicy.isCorrection(
+               freshIsChildAccount: fresh,
+               isFreshValueServerExplicit: deps.isFreshChildFlagExplicit(uid),
+               wasDeclaredChildIdentity: deps.hasConfirmedChildDeclaration(uid)
+           ) {
+            deps.clearChildIdentityLineage(uid)
+            if ChildDeviceCorrectionPolicy.liftsDeviceMarkers(
+                hasAnyCachedChildTrue: deps.hasAnyCachedChildTrue(),
+                hasDeclaredChildHistory: deps.hasDeclaredChildHistory(),
+                hasOutstandingChildDeclaration: deps.hasOutstandingChildDeclaration()
+            ) {
+                deps.liftDeviceChildMarkers()
+            }
+        }
+
         let cached: Bool? = uid.flatMap { deps.cachedIsChildAccount($0) }
         let declared = deps.isDeclaredChildIdentity(uid)
         if fresh == true || cached == true || declared {

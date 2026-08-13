@@ -61,7 +61,8 @@ struct FamilySettings: View {
                             ForEach(viewModel.members) { member in
                                 FamilyMemberSettingsRow(
                                     member: member,
-                                    familyCreatorId: viewModel.family?.creatorId
+                                    familyCreatorId: viewModel.family?.creatorId,
+                                    isChild: viewModel.isChildMember(memberId: member.userId)
                                 )
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     if viewModel.canRemove(memberId: member.userId) {
@@ -72,6 +73,22 @@ struct FamilySettings: View {
                                         }
                                         .disabled(viewModel.isRemovingMember)
                                     }
+                                }
+
+                                // COPPA F-8 (FR-2/5/20/29/30): creator/captain-only child
+                                // controls. Mirrors the server's target rules — no self,
+                                // no creator — so a control is never offered that the
+                                // callable would reject.
+                                if viewModel.canManageChildStatus(memberId: member.userId) {
+                                    FamilyChildManageControls(
+                                        target: viewModel.childMemberTarget(for: member),
+                                        isChild: viewModel.isChildMember(memberId: member.userId),
+                                        isBusy: viewModel.isSavingChildStatus || viewModel.isDeletingChildData,
+                                        onMarkAsChild: { viewModel.beginMarkAsChild($0) },
+                                        onCorrect: { viewModel.beginCorrectChildStatus($0) },
+                                        onOpenPrivacy: { viewModel.openChildPrivacy($0) },
+                                        onRemoveAndDelete: { viewModel.beginRemoveAndDeleteChildData($0) }
+                                    )
                                 }
                             }
                         }
@@ -199,6 +216,222 @@ struct FamilySettings: View {
             } message: {
                 Text("Are you sure you want to delete this family? This will permanently remove the family and all its members. This action cannot be undone.".localized)
             }
+            .modifier(FamilyChildManagementPresentations(viewModel: viewModel))
+        }
+    }
+}
+
+/// COPPA F-8 presentation layer, split out so `FamilySettings.body` stays inside the
+/// type checker's budget. Sheets present through `item:` (identity preserved per member)
+/// and both destructive paths keep their own confirmation step.
+private struct FamilyChildManagementPresentations: ViewModifier {
+    @ObservedObject var viewModel: FamilySettingsViewModel
+
+    func body(content: Content) -> some View {
+        content
+            // FR-2 set-true: consent capture before the callable is ever sent.
+            .sheet(item: $viewModel.childConsentTarget) { target in
+                FamilyChildConsentSheet(target: target, viewModel: viewModel)
+            }
+            // FR-29: read-only review.
+            .sheet(item: $viewModel.childPrivacyTarget) { target in
+                FamilyChildPrivacyView(
+                    target: target,
+                    isChild: viewModel.isChildMember(memberId: target.memberUserId),
+                    loadConsentHistory: { childUserId in
+                        try await viewModel.loadConsentHistory(childUserId: childUserId)
+                    }
+                )
+            }
+            // FR-5: corrections only — the two enumerated reasons, with the
+            // participation-ending paths signposted separately in the message.
+            .confirmationDialog(
+                "family.child.correction_dialog_title".localized,
+                isPresented: Binding(
+                    get: { viewModel.childCorrectionTarget != nil },
+                    set: { if !$0 { viewModel.cancelCorrectChildStatus() } }
+                ),
+                titleVisibility: .visible
+            ) {
+                ForEach(ChildStatusCorrectionReason.allCases) { reason in
+                    Button(reason.localizedTitle) {
+                        viewModel.applyCorrection(reason: reason)
+                    }
+                }
+                Button("Cancel".localized, role: .cancel) {
+                    viewModel.cancelCorrectChildStatus()
+                }
+            } message: {
+                Text("family.child.correction_dialog_message".localized)
+            }
+            // FR-30 step 1 of 2. The dismissal callback must NOT be the full cancel:
+            // SwiftUI fires it after the "Continue" action too, which would clear the
+            // just-armed final target and step 2 would never present.
+            .alert(
+                "family.child.remove_delete_title".localized,
+                isPresented: Binding(
+                    get: { viewModel.childDeletionTarget != nil },
+                    set: { if !$0 { viewModel.dismissInitialDeletionConfirmation() } }
+                )
+            ) {
+                Button("Cancel".localized, role: .cancel) {
+                    viewModel.cancelChildDataDeletion()
+                }
+                Button("Continue".localized, role: .destructive) {
+                    viewModel.advanceToFinalDeletionConfirmation()
+                }
+            } message: {
+                Text("family.child.remove_delete_message".localized)
+            }
+            // FR-30 step 2 of 2 — the irreversible one.
+            .alert(
+                "family.child.remove_delete_final_title".localized,
+                isPresented: Binding(
+                    get: { viewModel.childDeletionFinalTarget != nil },
+                    set: { if !$0 { viewModel.cancelChildDataDeletion() } }
+                )
+            ) {
+                Button("Cancel".localized, role: .cancel) {
+                    viewModel.cancelChildDataDeletion()
+                }
+                Button("family.child.remove_delete_confirm".localized, role: .destructive) {
+                    viewModel.confirmChildDataDeletion()
+                }
+            } message: {
+                Text("family.child.remove_delete_final_message".localized)
+            }
+    }
+}
+
+/// Per-member manage controls (creator/captain only). Rendered inline under the member
+/// row so the action and its subject are never ambiguous.
+struct FamilyChildManageControls: View {
+    let target: FamilyChildMemberTarget
+    let isChild: Bool
+    let isBusy: Bool
+    let onMarkAsChild: (FamilyChildMemberTarget) -> Void
+    let onCorrect: (FamilyChildMemberTarget) -> Void
+    let onOpenPrivacy: (FamilyChildMemberTarget) -> Void
+    let onRemoveAndDelete: (FamilyChildMemberTarget) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if isChild {
+                controlButton(
+                    title: "family.child.manage_privacy".localized,
+                    systemImage: "lock.shield",
+                    hint: "family.child.manage_privacy_hint".localized
+                ) {
+                    onOpenPrivacy(target)
+                }
+                controlButton(
+                    title: "family.child.manage_clear".localized,
+                    systemImage: "pencil.and.outline",
+                    hint: "family.child.manage_clear_hint".localized
+                ) {
+                    onCorrect(target)
+                }
+                controlButton(
+                    title: "family.child.manage_remove_delete".localized,
+                    systemImage: "trash",
+                    hint: "family.child.manage_remove_delete_hint".localized,
+                    isDestructive: true
+                ) {
+                    onRemoveAndDelete(target)
+                }
+            } else {
+                controlButton(
+                    title: "family.child.manage_mark".localized,
+                    systemImage: "figure.child",
+                    hint: "family.child.manage_mark_hint".localized
+                ) {
+                    onMarkAsChild(target)
+                }
+            }
+        }
+        .padding(.leading, 52)
+        .padding(.bottom, 4)
+        .disabled(isBusy)
+    }
+
+    private func controlButton(
+        title: String,
+        systemImage: String,
+        hint: String,
+        isDestructive: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 13))
+                    .accessibleDecorative()
+                Text(title)
+                    .font(.system(.footnote, design: .rounded))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(isDestructive ? Color.red : Color.Theme.primaryBlue)
+            .frame(minHeight: 44, alignment: .center)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibleButton(label: "\(title), \(target.displayName)", hint: hint)
+    }
+}
+
+/// FR-2 set-true consent sheet. The same `FamilyChildConsentBlock` the approval flow
+/// uses, so the affirmation wording can never fork.
+private struct FamilyChildConsentSheet: View {
+    let target: FamilyChildMemberTarget
+    @ObservedObject var viewModel: FamilySettingsViewModel
+
+    var body: some View {
+        NavigationStack {
+            AppBackgroundView {
+                List {
+                    Section {
+                        Text("family.child.set_sheet_subject".localized(target.displayName))
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .listRowBackground(Color.Theme.cardBackground)
+
+                    Section {
+                        FamilyChildConsentBlock(
+                            draft: viewModel.childConsentDraft,
+                            yearOptions: viewModel.expectedAgeOutYearOptions,
+                            onConsentAcknowledgedChange: { viewModel.setChildConsentAcknowledged($0) },
+                            onGuardianAffirmedChange: { viewModel.setChildGuardianAffirmed($0) },
+                            onExpectedAgeOutYearChange: { viewModel.setChildExpectedAgeOutYear($0) }
+                        )
+                    }
+                    .listRowBackground(Color.Theme.cardBackground)
+                }
+                .listStyle(.insetGrouped)
+                .scrollContentBackground(.hidden)
+            }
+            .navigationTitle("family.child.set_sheet_title".localized)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel".localized) { viewModel.cancelMarkAsChild() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("family.child.set_confirm".localized) {
+                        viewModel.confirmMarkAsChild()
+                    }
+                    .disabled(!viewModel.canConfirmMarkAsChild || viewModel.isSavingChildStatus)
+                    .accessibleButton(
+                        label: "family.child.set_confirm".localized,
+                        hint: viewModel.canConfirmMarkAsChild
+                            ? nil
+                            : "family.child.approve_blocked_hint".localized
+                    )
+                }
+            }
         }
     }
 }
@@ -206,6 +439,9 @@ struct FamilySettings: View {
 struct FamilyMemberSettingsRow: View {
     let member: FamilyMember
     let familyCreatorId: String?
+    /// COPPA FR-20 projection (`families/{id}/members/{uid}.isChild`), passed in by the
+    /// view model. The row never derives it.
+    var isChild: Bool = false
     @EnvironmentObject private var authService: FirebaseAuthService
 
     private var rolePresentation: FamilyMemberRolePresentation {
@@ -277,6 +513,10 @@ struct FamilyMemberSettingsRow: View {
 
             Spacer()
 
+            if isChild {
+                FamilyChildBadge()
+            }
+
             if rolePresentation.showsCreatorBadge {
                 FamilyCreatorBadge()
             }
@@ -284,10 +524,12 @@ struct FamilyMemberSettingsRow: View {
     }
 
     private var settingsMemberAccessibilityLabel: String {
+        // FR-22: child status reaches VoiceOver as text, never as a color-only cue.
+        let childSuffix = isChild ? ", \("family.child.a11y.badge".localized)" : ""
         if let user = member.user {
-            return "\(decoratedMemberName(for: user)), @\(user.userName), \(rolePresentation.accessibilityText)"
+            return "\(decoratedMemberName(for: user)), @\(user.userName), \(rolePresentation.accessibilityText)\(childSuffix)"
         }
-        return "\("Member".localized), \(rolePresentation.accessibilityText)"
+        return "\("Member".localized), \(rolePresentation.accessibilityText)\(childSuffix)"
     }
 }
 
@@ -299,4 +541,48 @@ struct FamilyMemberSettingsRow: View {
 #Preview("Family settings — member") {
     FamilySettings(familyId: "test")
         .environmentObject(FirebaseAuthService())
+}
+
+#Preview("Child manage controls — flagged child") {
+    List {
+        FamilyChildManageControls(
+            target: FamilyChildMemberTarget(memberUserId: "child-1", displayName: "Sam"),
+            isChild: true,
+            isBusy: false,
+            onMarkAsChild: { _ in },
+            onCorrect: { _ in },
+            onOpenPrivacy: { _ in },
+            onRemoveAndDelete: { _ in }
+        )
+    }
+}
+
+#Preview("Child manage controls — not a child, dark") {
+    List {
+        FamilyChildManageControls(
+            target: FamilyChildMemberTarget(memberUserId: "member-1", displayName: "Alex"),
+            isChild: false,
+            isBusy: false,
+            onMarkAsChild: { _ in },
+            onCorrect: { _ in },
+            onOpenPrivacy: { _ in },
+            onRemoveAndDelete: { _ in }
+        )
+    }
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Child manage controls — accessibility text size") {
+    List {
+        FamilyChildManageControls(
+            target: FamilyChildMemberTarget(memberUserId: "child-1", displayName: "Sam"),
+            isChild: true,
+            isBusy: false,
+            onMarkAsChild: { _ in },
+            onCorrect: { _ in },
+            onOpenPrivacy: { _ in },
+            onRemoveAndDelete: { _ in }
+        )
+    }
+    .environment(\.dynamicTypeSize, .accessibility2)
 }

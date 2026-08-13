@@ -20,7 +20,9 @@ struct ChildRestrictedModeServiceTests {
         boundPendingUserId: String? = nil,
         declarationSentForUserId: String? = nil,
         currentUserId: String?,
-        activeFamilyId: String?
+        activeFamilyId: String?,
+        cachedIsChild: [String: Bool] = [:],
+        resolvedIsChild: [String: Bool] = [:]
     ) -> ChildRestrictedModeService {
         let suite = "ChildRestrictedModeServiceTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
@@ -35,10 +37,19 @@ struct ChildRestrictedModeServiceTests {
         if let declarationSentForUserId {
             store.markChildDeclarationSent(userId: declarationSentForUserId)
         }
-        let service = ChildRestrictedModeService(ageGateStore: store)
+        let cache = ChildSignalCache(defaults: defaults)
+        for (uid, value) in cachedIsChild {
+            cache.setCachedIsChildAccount(value, for: uid)
+        }
+        let service = ChildRestrictedModeService(
+            ageGateStore: store,
+            defaults: defaults,
+            childSignalCache: cache
+        )
         service.configure(
             currentUserIdProvider: { currentUserId },
-            activeFamilyIdProvider: { activeFamilyId }
+            activeFamilyIdProvider: { activeFamilyId },
+            resolvedIsChildAccountProvider: { resolvedIsChild[$0] }
         )
         return service
     }
@@ -151,7 +162,7 @@ struct ChildRestrictedModeServiceTests {
         // Reborn guest: no provisioning, no prompt state, no child classification.
         #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(isResolved: store.isResolved) == false)
 
-        let rebornGuest = ChildRestrictedModeService(ageGateStore: store)
+        let rebornGuest = ChildRestrictedModeService(ageGateStore: store, defaults: defaults)
         rebornGuest.configure(
             currentUserIdProvider: { nil }, // unprovisioned — no uid exists
             activeFamilyIdProvider: { nil }
@@ -160,7 +171,7 @@ struct ChildRestrictedModeServiceTests {
         #expect(rebornGuest.isRestrictedUnconsentedChild == false)
         #expect(rebornGuest.isAgeUnresolved == true) // F-7 fail-closed surface
         #expect(AgeGateProfileWritePolicy.isProfileWriteHeld(
-            userUid: "any-uid", pendingDeclarationUserId: store.pendingDeclarationUserId
+            userUid: "any-uid", pendingDeclarationUserIds: store.pendingDeclarationUserIds
         ) == false)
 
         // Sign-up asks fresh (epoch unanswered ⇒ SignInView create mode shows the
@@ -193,7 +204,7 @@ struct ChildRestrictedModeServiceTests {
         store.markChildDeclarationSent(userId: "uid-new-child-guest")
 
         // New guest session: child, restricted, sync paused.
-        let childSession = ChildRestrictedModeService(ageGateStore: store)
+        let childSession = ChildRestrictedModeService(ageGateStore: store, defaults: defaults)
         childSession.configure(
             currentUserIdProvider: { "uid-new-child-guest" },
             activeFamilyIdProvider: { nil }
@@ -203,7 +214,7 @@ struct ChildRestrictedModeServiceTests {
 
         // Parent's account: untouched — not restricted, profile writes never held,
         // and never a declaration target (only the flow-bound uid ever was).
-        let parentSession = ChildRestrictedModeService(ageGateStore: store)
+        let parentSession = ChildRestrictedModeService(ageGateStore: store, defaults: defaults)
         parentSession.configure(
             currentUserIdProvider: { "uid-parent" },
             activeFamilyIdProvider: { "family-parent" }
@@ -212,8 +223,131 @@ struct ChildRestrictedModeServiceTests {
         #expect(store.isDeclaredChildUserId("uid-parent") == false)
         #expect(AgeGateProfileWritePolicy.isProfileWriteHeld(
             userUid: "uid-parent",
-            pendingDeclarationUserId: store.pendingDeclarationUserId
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds
         ) == false)
+    }
+
+    // MARK: - Server-resolved child truth (owner repro 2026-08-12)
+
+    /// Owner device repro: manager corrects the child (device age-gate markers wiped by
+    /// the F-8 correction path), re-flags them, then removes them from the family. The
+    /// device lineage is gone, so the server flag — mirrored in the cache — is the only
+    /// remaining signal, and it MUST classify the session as a restricted child.
+    @Test func regrantAfterCorrection_cachedTrueAloneRestoresRestriction() {
+        let service = makeService(
+            category: nil, // under-13 answer wiped by the correction
+            currentUserId: "uid-child",
+            activeFamilyId: nil, // removed from family
+            cachedIsChild: ["uid-child": true]
+        )
+        #expect(service.childSessionState == .unconsentedChild)
+        #expect(service.isRestrictedUnconsentedChild == true)
+        #expect(service.isGameplayCloudSyncPaused == true)
+    }
+
+    /// Same repro via the fresh projection only (cache not yet written): classification
+    /// must not depend on notification-observer ordering between the posture
+    /// coordinator's cache write and the UI's refresh.
+    @Test func regrantAfterCorrection_freshProjectionAloneRestoresRestriction() {
+        let service = makeService(
+            category: nil,
+            currentUserId: "uid-child",
+            activeFamilyId: nil,
+            resolvedIsChild: ["uid-child": true]
+        )
+        #expect(service.childSessionState == .unconsentedChild)
+        #expect(service.isGameplayCloudSyncPaused == true)
+    }
+
+    /// A child account signing in on a device that never ran the age gate for it
+    /// (fresh install, second device): server truth classifies; family splits state.
+    @Test func freshDeviceChildSignIn_classifiesFromServerTruth() {
+        let inFamily = makeService(
+            category: nil,
+            currentUserId: "uid-child",
+            activeFamilyId: "family-1",
+            cachedIsChild: ["uid-child": true]
+        )
+        #expect(inFamily.childSessionState == .consentedChild)
+
+        let familyless = makeService(
+            category: nil,
+            currentUserId: "uid-child",
+            activeFamilyId: nil,
+            cachedIsChild: ["uid-child": true]
+        )
+        #expect(familyless.childSessionState == .unconsentedChild)
+    }
+
+    /// Identity binding holds for the server-resolved source too (incident-1 property):
+    /// another uid's cached-true never restricts the signed-in account.
+    @Test func cachedTrueIsIdentityBound() {
+        let service = makeService(
+            category: nil,
+            currentUserId: "uid-adult",
+            activeFamilyId: nil,
+            cachedIsChild: ["uid-child": true]
+        )
+        #expect(service.childSessionState == .notChild)
+        #expect(service.isGameplayCloudSyncPaused == false)
+    }
+
+    /// FR-19 asymmetry in this consumer too: false/absent server values never restrict
+    /// (and never resurrect a corrected account's restriction).
+    @Test func cachedOrResolvedFalseNeverRestricts() {
+        let service = makeService(
+            category: nil,
+            currentUserId: "uid-1",
+            activeFamilyId: nil,
+            cachedIsChild: ["uid-1": false],
+            resolvedIsChild: ["uid-1": false]
+        )
+        #expect(service.childSessionState == .notChild)
+    }
+
+    /// Full lifecycle walk on one store/cache pair: declared child → manager correction
+    /// (device markers wiped, cache entry cleared → adult) → manager re-grant (server
+    /// true re-cached → restricted child again once familyless). Pins that the
+    /// correction still fully lifts AND that the re-grant fully restores.
+    @Test func correctionThenRegrantLifecycle() {
+        let suite = "ChildRestrictedModeServiceTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let store = AgeGateStore(defaults: defaults)
+        let cache = ChildSignalCache(defaults: defaults)
+        var activeFamilyId: String? = "family-1"
+
+        // Declared child, admitted to a family (consented).
+        store.recordAnswer(.under13)
+        store.bindPendingDeclaration(toUserId: "uid-child")
+        store.markChildDeclarationSent(userId: "uid-child")
+        cache.setCachedIsChildAccount(true, for: "uid-child")
+
+        let service = ChildRestrictedModeService(
+            ageGateStore: store, defaults: defaults, childSignalCache: cache
+        )
+        service.configure(
+            currentUserIdProvider: { "uid-child" },
+            activeFamilyIdProvider: { activeFamilyId }
+        )
+        #expect(service.childSessionState == .consentedChild)
+
+        // Manager CORRECTION — mirrors ChildSessionPostureCoordinator's live path:
+        // lineage cleared for the uid, then device markers lifted.
+        store.clearDeclaredChildUserId("uid-child")
+        cache.clearCachedIsChildAccount(for: "uid-child")
+        cache.disengageDeviceRatchet()
+        store.clearUnder13AnswerAfterCorrection()
+        #expect(service.childSessionState == .notChild)
+
+        // Manager RE-GRANT — server flag true arrives; the posture seam re-caches it.
+        cache.setCachedIsChildAccount(true, for: "uid-child")
+        #expect(service.childSessionState == .consentedChild)
+
+        // Removal (REVOKED, flag sticky): restricted child, not an adult.
+        activeFamilyId = nil
+        #expect(service.childSessionState == .unconsentedChild)
+        #expect(service.isGameplayCloudSyncPaused == true)
     }
 
     // MARK: - Rejection classification (FR-28 friendly-copy mapping)

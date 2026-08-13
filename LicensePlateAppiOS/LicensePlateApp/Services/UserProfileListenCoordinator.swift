@@ -46,9 +46,20 @@ final class UserProfileListenCoordinator {
                     return
                 }
                 guard let snapshot, snapshot.exists, let data = snapshot.data() else { return }
+                // COPPA FR-19: latency-compensated snapshots (local cache, or our own
+                // unacknowledged write) merge profile fields but must not resolve the
+                // child projection — a missing flag there means "unknown", not "adult".
+                let isServerResolved = ChildFlagIngestPolicy.mayIngest(
+                    isFromCache: snapshot.metadata.isFromCache,
+                    hasPendingWrites: snapshot.metadata.hasPendingWrites
+                )
                 Task { @MainActor in
                     do {
-                        try await UserRepository.shared.mergeRemoteUserDocument(userId: id, data: data)
+                        try await UserRepository.shared.mergeRemoteUserDocument(
+                            userId: id,
+                            data: data,
+                            isServerResolved: isServerResolved
+                        )
                     } catch {
                         #if DEBUG
                         print("UserProfileListenCoordinator merge failed for \(id): \(error)")

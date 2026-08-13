@@ -40,7 +40,7 @@ struct AgeGateStoreTests {
         #expect(store.category == nil)
         #expect(store.answeredAt == nil)
         #expect(store.hasPendingChildDeclaration == false)
-        #expect(store.pendingDeclarationUserId == nil)
+        #expect(store.pendingDeclarationUserIds.isEmpty)
     }
 
     @Test func recordAnswerPersistsCategoryAndTimestampOnly() {
@@ -60,7 +60,7 @@ struct AgeGateStoreTests {
             AgeGateStoreKeys.category,
             AgeGateStoreKeys.answeredAt,
             AgeGateStoreKeys.pendingChildDeclaration,
-            AgeGateStoreKeys.pendingDeclarationUserId,
+            AgeGateStoreKeys.pendingDeclarationUserIds,
             AgeGateStoreKeys.declaredChildUserIds,
         ]))
     }
@@ -70,7 +70,7 @@ struct AgeGateStoreTests {
         store.recordAnswer(.under13)
         #expect(store.category == .under13)
         #expect(store.hasPendingChildDeclaration == true)
-        #expect(store.pendingDeclarationUserId == nil)
+        #expect(store.pendingDeclarationUserIds.isEmpty)
     }
 
     @Test func under13AnswerIsProtectiveDirectionOnly() {
@@ -82,25 +82,45 @@ struct AgeGateStoreTests {
 
     // MARK: - Flow binding (declaration can only target the flow-created uid)
 
-    @Test func bindThenSendClearsPendingAndRecordsUid() {
+    @Test func bindThenSendClearsThatUidsHoldAndRecordsIt() {
         let (store, _) = makeStore()
         store.recordAnswer(.under13)
         store.bindPendingDeclaration(toUserId: "uid-flow-1")
-        #expect(store.pendingDeclarationUserId == "uid-flow-1")
+        #expect(store.pendingDeclarationUserIds == ["uid-flow-1"])
+        #expect(store.isPendingDeclaration(userId: "uid-flow-1") == true)
 
         store.markChildDeclarationSent(userId: "uid-flow-1")
-        #expect(store.hasPendingChildDeclaration == false)
-        #expect(store.pendingDeclarationUserId == nil)
+        // The uid's own obligation is discharged...
+        #expect(store.isPendingDeclaration(userId: "uid-flow-1") == false)
+        #expect(store.pendingDeclarationUserIds.isEmpty)
+        #expect(store.hasOutstandingChildDeclaration == false)
+        // ...but the EPOCH's answer is NOT spent: any further uid this same flow
+        // provisions must be declared too (the second-uid defect).
+        #expect(store.hasPendingChildDeclaration == true)
         #expect(store.isDeclaredChildUserId("uid-flow-1") == true)
         #expect(store.isDeclaredChildUserId("uid-other") == false)
         #expect(store.isDeclaredChildUserId(nil) == false)
     }
 
-    @Test func bindIsNoOpWithoutAPendingAnswer() {
+    @Test func bindIsNoOpWithoutAnUnder13Answer() {
         let (store, _) = makeStore()
         store.recordAnswer(.teenAdult)
         store.bindPendingDeclaration(toUserId: "uid-x")
-        #expect(store.pendingDeclarationUserId == nil)
+        #expect(store.pendingDeclarationUserIds.isEmpty)
+    }
+
+    /// The obligation is a SET: a second uid provisioned inside one epoch binds too,
+    /// and binding it must not release the first uid's hold.
+    @Test func everyUidProvisionedInOneEpochIsBound() {
+        let (store, _) = makeStore()
+        store.recordAnswer(.under13)
+        store.bindPendingDeclaration(toUserId: "uid-guest")
+        store.bindPendingDeclaration(toUserId: "uid-registered")
+
+        #expect(store.pendingDeclarationUserIds == ["uid-guest", "uid-registered"])
+        store.markChildDeclarationSent(userId: "uid-registered")
+        #expect(store.isPendingDeclaration(userId: "uid-guest") == true)
+        #expect(store.hasOutstandingChildDeclaration == true)
     }
 
     // MARK: - Incident regressions (owner device, 2026-08-11)
@@ -115,21 +135,21 @@ struct AgeGateStoreTests {
         store.recordAnswer(.under13) // stale, unbound answer sitting on the device
 
         // No flow bound a uid, so NO account's profile write is held — captain included.
-        #expect(store.pendingDeclarationUserId == nil)
+        #expect(store.pendingDeclarationUserIds.isEmpty)
         #expect(AgeGateProfileWritePolicy.isProfileWriteHeld(
             userUid: "captain-uid",
-            pendingDeclarationUserId: store.pendingDeclarationUserId
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds
         ) == false)
 
         // And the hold can only ever match the uid a flow explicitly bound.
         store.bindPendingDeclaration(toUserId: "uid-flow-child")
         #expect(AgeGateProfileWritePolicy.isProfileWriteHeld(
             userUid: "captain-uid",
-            pendingDeclarationUserId: store.pendingDeclarationUserId
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds
         ) == false)
         #expect(AgeGateProfileWritePolicy.isProfileWriteHeld(
             userUid: "uid-flow-child",
-            pendingDeclarationUserId: store.pendingDeclarationUserId
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds
         ) == true)
     }
 
@@ -149,9 +169,27 @@ struct AgeGateStoreTests {
         #expect(store.category == nil)
         #expect(store.answeredAt == nil)
         #expect(store.hasPendingChildDeclaration == false)
-        #expect(store.pendingDeclarationUserId == nil)
+        #expect(store.pendingDeclarationUserIds.isEmpty)
         // Uid-bound protective history survives (F-7 ratchet consumes it).
         #expect(store.isDeclaredChildUserId("uid-old-child") == true)
+    }
+
+    /// Sign-out ends the epoch, but an UNDELIVERED declaration is a promise about one
+    /// specific account and outlives it — otherwise that account's next profile write
+    /// would sail through as an adult with no child evidence anywhere.
+    @Test func clearAnswerKeepsUndeliveredDeclarationObligations() {
+        let (store, _) = makeStore()
+        store.recordAnswer(.under13)
+        store.bindPendingDeclaration(toUserId: "uid-undelivered")
+
+        store.clearAnswer()
+
+        #expect(store.isResolved == false)
+        #expect(store.isPendingDeclaration(userId: "uid-undelivered") == true)
+        #expect(AgeGateProfileWritePolicy.isProfileWriteHeld(
+            userUid: "uid-undelivered",
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds
+        ) == true)
     }
 
     /// Pure pins for `GuestProvisioningPolicy`: no NEW anonymous uid without an epoch
@@ -180,19 +218,48 @@ struct AgeGateStoreTests {
 
     // MARK: - Profile-write policy
 
-    @Test func profileWriteHeldOnlyForTheBoundUid() {
+    @Test func profileWriteHeldOnlyForBoundUids() {
         #expect(AgeGateProfileWritePolicy.isProfileWriteHeld(
-            userUid: "uid-1", pendingDeclarationUserId: nil
+            userUid: "uid-1", pendingDeclarationUserIds: []
         ) == false)
         #expect(AgeGateProfileWritePolicy.isProfileWriteHeld(
-            userUid: nil, pendingDeclarationUserId: "uid-1"
+            userUid: nil, pendingDeclarationUserIds: ["uid-1"]
         ) == false)
         #expect(AgeGateProfileWritePolicy.isProfileWriteHeld(
-            userUid: "uid-2", pendingDeclarationUserId: "uid-1"
+            userUid: "uid-2", pendingDeclarationUserIds: ["uid-1"]
         ) == false)
         #expect(AgeGateProfileWritePolicy.isProfileWriteHeld(
-            userUid: "uid-1", pendingDeclarationUserId: "uid-1"
+            userUid: "uid-1", pendingDeclarationUserIds: ["uid-1"]
         ) == true)
+        // Every bound uid is held, not just one.
+        #expect(AgeGateProfileWritePolicy.isProfileWriteHeld(
+            userUid: "uid-2", pendingDeclarationUserIds: ["uid-1", "uid-2"]
+        ) == true)
+    }
+
+    /// GAP 1(a): the prefs writers share the profile write's hold, so none of them can
+    /// be the creator of a flagless `users/{uid}`.
+    @Test func everyUserDocWriterHonorsTheSameHold() {
+        #expect(UserDocumentWritePolicy.isWriteHeld(
+            userId: "uid-child", pendingDeclarationUserIds: ["uid-child"]
+        ) == true)
+        #expect(UserDocumentWritePolicy.isWriteHeld(
+            userId: "uid-adult", pendingDeclarationUserIds: ["uid-child"]
+        ) == false)
+        #expect(UserDocumentWritePolicy.isWriteHeld(
+            userId: "uid-adult", pendingDeclarationUserIds: []
+        ) == false)
+        #expect(UserDocumentWritePolicy.isWriteHeld(
+            userId: nil, pendingDeclarationUserIds: ["uid-child"]
+        ) == false)
+    }
+
+    /// FR-19 provenance gate: only a fresh SERVER snapshot may resolve the projection.
+    @Test func onlyServerResolvedSnapshotsMayIngestTheChildFlag() {
+        #expect(ChildFlagIngestPolicy.mayIngest(isFromCache: false, hasPendingWrites: false) == true)
+        #expect(ChildFlagIngestPolicy.mayIngest(isFromCache: true, hasPendingWrites: false) == false)
+        #expect(ChildFlagIngestPolicy.mayIngest(isFromCache: false, hasPendingWrites: true) == false)
+        #expect(ChildFlagIngestPolicy.mayIngest(isFromCache: true, hasPendingWrites: true) == false)
     }
 
     // MARK: - View model (SRS §12: shown/completed only, never the answer)

@@ -69,6 +69,14 @@ class AnalyticsService: AnalyticsLogging {
         case familyRoleChanged
         case familyNameChanged
         case familyMarkedInactiveCreatorLeftOrDeleted
+
+        // Family child status (COPPA F-8, SRS §12). These fire on the PARENT/manager's
+        // own app instance only. FR-21: no event may exist that fires only for child
+        // sessions on the child's own instance, and no uid, name, or age value is ever
+        // carried in a parameter — `source` and `reason` are fixed enum slugs.
+        case familyChildStatusSet(source: String)
+        case familyChildStatusCorrected(reason: String)
+        case familyChildConsentAcknowledged
         
         // Codes
         case shareCodeGenerated(type: String)
@@ -389,6 +397,9 @@ class AnalyticsService: AnalyticsLogging {
             case .familyRoleChanged: return "family_role_changed"
             case .familyNameChanged: return "family_name_changed"
             case .familyMarkedInactiveCreatorLeftOrDeleted: return "family_marked_inactive_creator_left_or_deleted"
+            case .familyChildStatusSet: return "family_child_status_set"
+            case .familyChildStatusCorrected: return "family_child_status_corrected"
+            case .familyChildConsentAcknowledged: return "family_child_consent_acknowledged"
             case .shareCodeGenerated: return "share_code_generated"
             case .shareCodeUsed: return "share_code_used"
             case .shareCodeExpired: return "share_code_expired"
@@ -605,6 +616,12 @@ class AnalyticsService: AnalyticsLogging {
                 return ["feature": feature]
             case .shareCodeGenerated(let type), .shareCodeUsed(let type):
                 return ["type": type]
+            case .familyChildStatusSet(let source):
+                return ["source": source]
+            case .familyChildStatusCorrected(let reason):
+                return ["reason": reason]
+            case .familyChildConsentAcknowledged:
+                return nil
             case .familyCreateFailed(let error):
                 return ["error": error]
             case .familyJoinFailed(let error):

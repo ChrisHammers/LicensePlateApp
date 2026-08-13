@@ -735,6 +735,16 @@ private struct FAQItem: View {
 struct TermsView: View {
     @Environment(\.dismiss) private var dismiss
 
+    /// COPPA F-8: the parental-consent block links straight to the section it cites, so
+    /// a parent can read it without hunting through the whole document. `nil` keeps the
+    /// document's normal top-of-page behavior for every other entry point.
+    var scrollToSectionTitle: String?
+
+    /// The section the child-consent copy references (ToS section 2).
+    static var childEligibilitySectionTitle: String {
+        "2. Eligibility and Age Requirements".localized
+    }
+
     private struct TermsSection: Identifiable {
         var id: String { title }
         let title: String
@@ -840,32 +850,39 @@ struct TermsView: View {
 
     var body: some View {
         AppBackgroundView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("Terms of Service".localized)
-                        .font(.system(.largeTitle, design: .rounded))
-                        .fontWeight(.bold)
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                        .accessibilityAddTraits(.isHeader)
-
-                    Text("Last updated: August 8, 2026".localized)
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-
-                    ForEach(sections) { section in
-                        Text(section.title)
-                            .font(.system(.headline, design: .rounded))
-                            .fontWeight(.semibold)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        Text("Terms of Service".localized)
+                            .font(.system(.largeTitle, design: .rounded))
+                            .fontWeight(.bold)
                             .foregroundStyle(Color.Theme.primaryBlue)
-                            .padding(.top)
                             .accessibilityAddTraits(.isHeader)
 
-                        Text(section.body)
-                            .font(.system(.body, design: .rounded))
+                        Text("Last updated: August 8, 2026".localized)
+                            .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
+
+                        ForEach(sections) { section in
+                            Text(section.title)
+                                .font(.system(.headline, design: .rounded))
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                                .padding(.top)
+                                .accessibilityAddTraits(.isHeader)
+                                .id(section.id)
+
+                            Text(section.body)
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                        }
                     }
+                    .padding()
                 }
-                .padding()
+                .onAppear {
+                    guard let scrollToSectionTitle else { return }
+                    proxy.scrollTo(scrollToSectionTitle, anchor: .top)
+                }
             }
         }
         .navigationTitle("Terms of Service".localized)
@@ -886,6 +903,14 @@ struct TermsView: View {
 
 struct PrivacyView: View {
     @Environment(\.dismiss) private var dismiss
+
+    /// COPPA F-8: see `TermsView.scrollToSectionTitle`.
+    var scrollToSectionTitle: String?
+
+    /// The section the child-consent copy references (Privacy Policy section 12).
+    static var childrenSectionTitle: String {
+        "12. Children".localized
+    }
 
     private struct PolicySection: Identifiable {
         var id: String { title }
@@ -964,32 +989,39 @@ struct PrivacyView: View {
 
     var body: some View {
         AppBackgroundView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("Privacy Policy".localized)
-                        .font(.system(.largeTitle, design: .rounded))
-                        .fontWeight(.bold)
-                        .foregroundStyle(Color.Theme.primaryBlue)
-                        .accessibilityAddTraits(.isHeader)
-
-                    Text("Last updated: August 8, 2026".localized)
-                        .font(.system(.caption, design: .rounded))
-                        .foregroundStyle(Color.Theme.softBrown)
-
-                    ForEach(sections) { section in
-                        Text(section.title)
-                            .font(.system(.headline, design: .rounded))
-                            .fontWeight(.semibold)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        Text("Privacy Policy".localized)
+                            .font(.system(.largeTitle, design: .rounded))
+                            .fontWeight(.bold)
                             .foregroundStyle(Color.Theme.primaryBlue)
-                            .padding(.top)
                             .accessibilityAddTraits(.isHeader)
 
-                        Text(section.body)
-                            .font(.system(.body, design: .rounded))
+                        Text("Last updated: August 8, 2026".localized)
+                            .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
+
+                        ForEach(sections) { section in
+                            Text(section.title)
+                                .font(.system(.headline, design: .rounded))
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Color.Theme.primaryBlue)
+                                .padding(.top)
+                                .accessibilityAddTraits(.isHeader)
+                                .id(section.id)
+
+                            Text(section.body)
+                                .font(.system(.body, design: .rounded))
+                                .foregroundStyle(Color.Theme.softBrown)
+                        }
                     }
+                    .padding()
                 }
-                .padding()
+                .onAppear {
+                    guard let scrollToSectionTitle else { return }
+                    proxy.scrollTo(scrollToSectionTitle, anchor: .top)
+                }
             }
         }
         .navigationTitle("Privacy Policy".localized)

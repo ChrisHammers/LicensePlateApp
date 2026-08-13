@@ -20,22 +20,32 @@ class FamilyDashboardViewModel: ObservableObject {
     /// Accepted family invite while the user has no active family (awaiting captain approval).
     @Published var awaitingApprovalInvite: Invite?
     @Published var activeShareCode: ShareCode?
+    /// COPPA F-8 (FR-20): read-only mirror of the repository's member-doc `isChild`
+    /// projection, so dashboard rows render a badge without deriving anything.
+    @Published private(set) var childMemberIds: Set<String> = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     
     private let familyRepository: FamilyRepository
     private let userRepository: UserRepository
+    private let inviteConsumptionStore: FamilyInviteConsumptionStore
     private var inviteRepository: InviteRepository?
     private var authService: FirebaseAuthService
     private var cancellables = Set<AnyCancellable>()
     private var isLoadingData = false
     private var hasInviteObservation = false
-    
-    init(familyRepository: FamilyRepository, userRepository: UserRepository, authService: FirebaseAuthService) {
+
+    init(
+        familyRepository: FamilyRepository,
+        userRepository: UserRepository,
+        authService: FirebaseAuthService,
+        inviteConsumptionStore: FamilyInviteConsumptionStore = .shared
+    ) {
         self.familyRepository = familyRepository
         self.userRepository = userRepository
         self.authService = authService
-        
+        self.inviteConsumptionStore = inviteConsumptionStore
+
         // Setup observers
         setupObservers()
         
@@ -149,7 +159,7 @@ class FamilyDashboardViewModel: ObservableObject {
                       let repositoryMembers = familyMembers[familyId] else {
                     return
                 }
-                
+
                 // Reload members from SwiftData to get user relationships
                 // This ensures we have the linked user data
                 let membersWithUsers = self.familyRepository.getMembers(familyId: familyId)
@@ -158,6 +168,15 @@ class FamilyDashboardViewModel: ObservableObject {
                 } else if !repositoryMembers.isEmpty {
                     self.members = repositoryMembers
                 }
+            }
+            .store(in: &cancellables)
+
+        // FR-20: the child projection lives beside the member rows (frozen schema,
+        // §7.4), so it publishes on its own channel.
+        familyRepository.$childMemberFlags
+            .sink { [weak self] flagsByFamily in
+                guard let self, let familyId = self.family?.familyId else { return }
+                self.childMemberIds = Set((flagsByFamily[familyId] ?? [:]).filter { $0.value }.keys)
             }
             .store(in: &cancellables)
 
@@ -184,6 +203,7 @@ class FamilyDashboardViewModel: ObservableObject {
                     if user?.activeFamilyId == nil {
                         self?.family = nil
                         self?.members = []
+                        self?.childMemberIds = []
                         self?.pendingRequests = []
                         self?.outgoingPendingInvites = []
                         self?.activeShareCode = nil
@@ -248,6 +268,7 @@ class FamilyDashboardViewModel: ObservableObject {
                     // No active family — clear dashboard UI and hand listen ownership back to the badge.
                     self.family = nil
                     self.members = []
+                    self.childMemberIds = []
                     self.pendingRequests = []
                     self.outgoingPendingInvites = []
                     self.activeShareCode = nil
@@ -280,6 +301,7 @@ class FamilyDashboardViewModel: ObservableObject {
                             self.familyRepository.clearFamilyFromCache(familyId: activeFamilyId)
                             self.family = nil
                             self.members = []
+                            self.childMemberIds = []
                             self.pendingRequests = []
                             self.outgoingPendingInvites = []
                             self.activeShareCode = nil
@@ -312,6 +334,7 @@ class FamilyDashboardViewModel: ObservableObject {
                         self.family = fetchedFamily
                         self.members = membersWithUsers
                         self.pendingRequests = pendingWithUsers
+                        self.childMemberIds = self.familyRepository.childMemberIds(familyId: activeFamilyId)
                         self.awaitingApprovalInvite = nil
                         self.isLoading = false
                         
@@ -330,6 +353,7 @@ class FamilyDashboardViewModel: ObservableObject {
                         
                         self.family = nil
                         self.members = []
+                        self.childMemberIds = []
                         self.pendingRequests = []
                         self.outgoingPendingInvites = []
                         self.activeShareCode = nil
@@ -355,6 +379,7 @@ class FamilyDashboardViewModel: ObservableObject {
                         self.familyRepository.clearFamilyFromCache(familyId: activeFamilyId)
                         self.family = nil
                         self.members = []
+                        self.childMemberIds = []
                         self.pendingRequests = []
                         self.outgoingPendingInvites = []
                         self.activeShareCode = nil
@@ -411,7 +436,13 @@ class FamilyDashboardViewModel: ObservableObject {
     private func loadFamilyData(familyId: String) {
         members = familyRepository.getMembers(familyId: familyId)
         pendingRequests = familyRepository.getPendingRequests(familyId: familyId)
+        childMemberIds = familyRepository.childMemberIds(familyId: familyId)
         refreshOutgoingPendingInvites(familyId: familyId)
+    }
+
+    /// FR-20 render projection for member rows.
+    func isChildMember(memberId: String) -> Bool {
+        childMemberIds.contains(memberId)
     }
 
     private func refreshOutgoingPendingInvites(familyId: String? = nil) {
@@ -435,7 +466,8 @@ class FamilyDashboardViewModel: ObservableObject {
         }
         awaitingApprovalInvite = FamilyAwaitingApprovalFilter.primaryAwaitingApprovalInvite(
             from: inviteRepository.invites,
-            userId: userId
+            userId: userId,
+            consumedInviteIds: inviteConsumptionStore.consumedInviteIds
         )
     }
     

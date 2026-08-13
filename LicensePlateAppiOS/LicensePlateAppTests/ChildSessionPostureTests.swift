@@ -225,6 +225,9 @@ struct ChildSessionPostureCoordinatorTests {
             let deps = ChildSessionPostureCoordinator.Dependencies(
                 currentAuthIdentity: { [weak self] in self?.identity },
                 freshIsChildAccount: { [weak self] uid in self?.fresh[uid] },
+                // Any resolved value in this harness stands for an explicit server key;
+                // the absent-key case is covered in ChildDeviceCorrectionTests.
+                isFreshChildFlagExplicit: { [weak self] uid in self?.fresh[uid] != nil },
                 cachedIsChildAccount: { [weak self] uid in self?.cached[uid] },
                 storeCachedIsChildAccount: { [weak self] uid, value in
                     self?.cached[uid] = value
@@ -242,6 +245,22 @@ struct ChildSessionPostureCoordinatorTests {
                 engageDeviceRatchet: { [weak self] in
                     self?.ratcheted = true
                     self?.events.append("ratchet")
+                },
+                clearChildIdentityLineage: { [weak self] uid in
+                    self?.declaredUids.remove(uid)
+                    self?.cached.removeValue(forKey: uid)
+                    self?.events.append("clearLineage(\(uid))")
+                },
+                hasAnyCachedChildTrue: { [weak self] in self?.cached.values.contains(true) ?? false },
+                hasDeclaredChildHistory: { [weak self] in !(self?.declaredUids.isEmpty ?? true) },
+                hasConfirmedChildDeclaration: { [weak self] uid in
+                    self?.declaredUids.contains(uid) ?? false
+                },
+                hasOutstandingChildDeclaration: { false },
+                liftDeviceChildMarkers: { [weak self] in
+                    self?.ratcheted = false
+                    self?.under13FlowAnswer = false
+                    self?.events.append("liftDeviceMarkers")
                 },
                 applyChildDirectedTreatment: { [weak self] in self?.events.append("tfcd(\($0))") },
                 setAdPersonalizationSignalsDisabled: { [weak self] in self?.events.append("analytics(disabled=\($0))") },

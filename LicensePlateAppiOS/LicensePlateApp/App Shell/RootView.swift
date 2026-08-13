@@ -164,11 +164,25 @@ struct RootView: View {
             // family admission; the restriction is keyed to the declared identity.
             ChildRestrictedModeService.shared.configure(
                 currentUserIdProvider: { authService.currentUser?.firebaseUID ?? authService.currentUser?.id },
-                activeFamilyIdProvider: { authService.currentUser?.activeFamilyId }
+                activeFamilyIdProvider: { authService.currentUser?.activeFamilyId },
+                // Server-resolved child truth: keeps the restriction classified from
+                // `users/{uid}` even after a manager correction wiped the device's
+                // age-gate markers (correct → re-grant → remove) or on a device that
+                // never ran the gate for this account.
+                resolvedIsChildAccountProvider: { UserRepository.shared.isChildAccount(for: $0) }
             )
             syncCoordinator.setGameplayCloudSyncHoldProvider {
                 ChildRestrictedModeService.shared.isGameplayCloudSyncPaused
             }
+            // F-8 fix: the consent edge (activeFamilyId nil ⇄ set) drives the queue
+            // resume and the awaiting-approval invite bookkeeping.
+            FamilyMembershipTransitionService.shared.configure(
+                dependencies: .live(
+                    currentUserIdProvider: {
+                        authService.currentUser?.firebaseUID ?? authService.currentUser?.id
+                    }
+                )
+            )
             authService.setSyncCoordinator(syncCoordinator)
             let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
             let activeFamilyId = authService.currentUser?.activeFamilyId

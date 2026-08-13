@@ -28,7 +28,7 @@ class UserRepository: ObservableObject {
     /// (server-owned; never persisted to SwiftData — same pattern as
     /// `entitlementTagsByUserId`). An entry exists only after THIS session freshly
     /// read the user doc; sign-out clears it.
-    private var isChildByUserId: [String: Bool] = [:]
+    private var childResolutionByUserId: [String: ChildAccountResolution] = [:]
     private let friendsFamilyAccessPolicy: FriendsFamilyAccessPolicy
     
     @Published var searchResults: [AppUser] = []
@@ -73,24 +73,92 @@ class UserRepository: ObservableObject {
 
     // MARK: - Child-account projection (COPPA F-7, SRS §7.1)
 
+    /// One resolution of `users/{uid}.isChildAccount`, carrying BOTH the effective
+    /// value and whether the document literally contained the key.
+    ///
+    /// Two bits, not one, because the two consumers need different things and
+    /// collapsing them is what made an absent field dangerous:
+    /// - **Gating** (posture, ads) uses `isChild`, where §4's "an existing doc without
+    ///   the flag means not-a-child" is correct and necessary — a legitimate adult
+    ///   document never carries the key, and treating that as unresolved would hold
+    ///   every adult account forever.
+    /// - **The destructive F-8 manager-correction path** uses `isServerExplicit`, and
+    ///   accepts ONLY a key the server actually wrote. An absent key is the *absence of
+    ///   evidence*, never a manager's decision to un-child an account.
+    struct ChildAccountResolution: Equatable, Sendable {
+        /// §4 effective value: absent key resolves to `false`.
+        var isChild: Bool
+        /// True only when the resolved document actually contained `isChildAccount`.
+        var isServerExplicit: Bool
+    }
+
     /// Tri-state read of the server flag as freshly resolved THIS session:
-    /// - `true` / `false` — this session read `users/{userId}` and saw the flag.
+    /// - `true` / `false` — this session read `users/{userId}` and resolved the flag.
     /// - `nil` — not resolved yet. nil is NEVER treated as "not child" for gating
     ///   (FR-19: an unresolved current uid keeps the ads/posture hold).
     func isChildAccount(for userId: String) -> Bool? {
         guard !userId.isEmpty else { return nil }
-        return isChildByUserId[userId]
+        return childResolutionByUserId[userId]?.isChild
     }
 
-    func ingestIsChildAccount(userId: String, isChild: Bool) {
+    /// Whether this session's resolution of `userId` came from a document that
+    /// EXPLICITLY carried `isChildAccount`. False when unresolved or when the key was
+    /// absent. Only an explicit value may authorize retiring a child's lineage.
+    func isChildAccountFlagExplicit(for userId: String) -> Bool {
+        guard !userId.isEmpty else { return false }
+        return childResolutionByUserId[userId]?.isServerExplicit ?? false
+    }
+
+    /// Ingest requires stating provenance, so no call site can record a resolution
+    /// without saying whether the server actually wrote the key.
+    func ingestChildAccountResolution(userId: String, _ resolution: ChildAccountResolution) {
         guard !userId.isEmpty else { return }
-        isChildByUserId[userId] = isChild
+        childResolutionByUserId[userId] = resolution
+    }
+
+    /// Distinguishes "explicitly `false`" from "key absent" — the distinction the
+    /// correction gate turns on. Both resolve `isChild == false` for gating.
+    static func parseChildAccountResolution(from data: [String: Any]) -> ChildAccountResolution {
+        guard let explicit = data["isChildAccount"] as? Bool else {
+            return ChildAccountResolution(isChild: false, isServerExplicit: false)
+        }
+        return ChildAccountResolution(isChild: explicit, isServerExplicit: true)
     }
 
     /// §4 semantics: on an EXISTING doc, a missing flag means "not a child". The
     /// tri-state nil case is "no fresh doc data", handled by the accessor above.
     static func parseIsChildAccount(from data: [String: Any]) -> Bool {
-        (data["isChildAccount"] as? Bool) ?? false
+        parseChildAccountResolution(from: data).isChild
+    }
+
+    /// COPPA F-8 (FR-1/FR-25): fresh read of ANOTHER user's child flag for the manager
+    /// approval surface. Returns `nil` when the doc cannot be read — which is expected,
+    /// not exceptional: FR-12 denies peer reads of a child's `users/{uid}` doc to anyone
+    /// outside the child's family, and a pending join requester is not a member yet.
+    /// Callers MUST treat `nil` as "unresolved" and demand an explicit declaration —
+    /// never as "not a child".
+    func fetchIsChildAccount(userId: String) async -> Bool? {
+        guard !userId.isEmpty else { return nil }
+        do {
+            let document = try await db.collection("users").document(userId).getDocument()
+            guard let data = document.data() else { return nil }
+            // FR-19 (GAP 2): the same snapshot-provenance gate every other ingest path
+            // applies. A cached or pending-write snapshot is not a fresh server read, so
+            // it neither resolves the shared projection nor answers the manager's
+            // approval question — both fail closed to "unresolved".
+            guard ChildFlagIngestPolicy.mayIngest(
+                isFromCache: document.metadata.isFromCache,
+                hasPendingWrites: document.metadata.hasPendingWrites
+            ) else { return nil }
+            let resolution = Self.parseChildAccountResolution(from: data)
+            ingestChildAccountResolution(userId: userId, resolution)
+            return resolution.isChild
+        } catch {
+            #if DEBUG
+            print("UserRepository.fetchIsChildAccount unreadable for \(userId): \(error.localizedDescription)")
+            #endif
+            return nil
+        }
     }
 
     /// Hard sign-out: delete all local AppUser rows (self + peer cache).
@@ -103,7 +171,7 @@ class UserRepository: ObservableObject {
 
     func clearInMemoryState() {
         entitlementTagsByUserId.removeAll()
-        isChildByUserId.removeAll()
+        childResolutionByUserId.removeAll()
         searchResults = []
         errorMessage = nil
         isLoading = false
@@ -189,7 +257,14 @@ class UserRepository: ObservableObject {
             do {
                 let userDoc = try await db.collection("users").document(userId).getDocument()
                 guard userDoc.exists, let data = userDoc.data() else { continue }
-                try await mergeRemoteProfileIntoCache(userId: userId, data: data)
+                try await mergeRemoteProfileIntoCache(
+                    userId: userId,
+                    data: data,
+                    isServerResolved: ChildFlagIngestPolicy.mayIngest(
+                        isFromCache: userDoc.metadata.isFromCache,
+                        hasPendingWrites: userDoc.metadata.hasPendingWrites
+                    )
+                )
                 mergedIds.append(userId)
             } catch {
                 #if DEBUG
@@ -201,16 +276,26 @@ class UserRepository: ObservableObject {
     }
 
     /// Merges a Firestore `users/{userId}` snapshot into SwiftData (shared path for explicit fetch + pinned listeners).
-    func mergeRemoteUserDocument(userId: String, data: [String: Any]) async throws {
-        try await mergeRemoteProfileIntoCache(userId: userId, data: data)
+    /// - Parameter isServerResolved: FR-19 — whether the snapshot is this session's
+    ///   fresh SERVER read (see `ChildFlagIngestPolicy`). Only then may it resolve the
+    ///   child projection; profile fields merge either way.
+    func mergeRemoteUserDocument(userId: String, data: [String: Any], isServerResolved: Bool) async throws {
+        try await mergeRemoteProfileIntoCache(userId: userId, data: data, isServerResolved: isServerResolved)
         postUserProfilesMergedIfNeeded([userId])
     }
 
-    private func mergeRemoteProfileIntoCache(userId: String, data: [String: Any]) async throws {
+    private func mergeRemoteProfileIntoCache(
+        userId: String,
+        data: [String: Any],
+        isServerResolved: Bool
+    ) async throws {
         ingestEntitlementTags(userId: userId, tags: Self.parseEntitlementTags(from: data))
         // COPPA §7.1: projection only — the flag never reaches the AppUser model or
         // any SwiftData row (§7.4). Propagates via the `.userProfilesMerged` post.
-        ingestIsChildAccount(userId: userId, isChild: Self.parseIsChildAccount(from: data))
+        // FR-19: a cached / latency-compensated snapshot never confirms not-child.
+        if isServerResolved {
+            ingestChildAccountResolution(userId: userId, Self.parseChildAccountResolution(from: data))
+        }
         let user = try await userFromFirestoreData(data, id: userId)
         cacheUsers([user])
     }
@@ -982,6 +1067,7 @@ class UserRepository: ObservableObject {
 
     /// Writes all keys together so merge does not wipe sibling preferences.
     func updateNotificationPrefs(userId: String, prefs: NotificationPrefs) async throws {
+        try assertMayWriteUserDocument(userId: userId)
         try await db.collection("users").document(userId).setData([
             "notificationPrefs": prefs.firestoreMap
         ], merge: true)
@@ -1045,6 +1131,7 @@ class UserRepository: ObservableObject {
 
     /// Writes all keys under `appPrefs.gameDefaults` via dotted-path merge so sibling `appPrefs` fields survive.
     func updateGameDefaults(userId: String, defaults: GameDefaults) async throws {
+        try assertMayWriteUserDocument(userId: userId)
         try await db.collection("users").document(userId).setData([
             "appPrefs.gameDefaults": defaults.firestoreMap
         ], merge: true)
@@ -1068,9 +1155,31 @@ class UserRepository: ObservableObject {
     }
 
     func updateParticipationDefaults(userId: String, defaults: ParticipationDefaults) async throws {
+        try assertMayWriteUserDocument(userId: userId)
         try await db.collection("users").document(userId).setData([
             "appPrefs.participationDefaults": defaults.firestoreMap
         ], merge: true)
+    }
+
+    // MARK: - users/{uid} write guard (COPPA FR-27 ordering)
+
+    /// Gate for every `users/{uid}` writer in this repository. All of them use
+    /// `setData(merge: true)`, which CREATES the document when it is absent — so any of
+    /// them can provision a brand-new account's `users/{uid}` with no `isChildAccount`
+    /// on it, ahead of the declaration.
+    ///
+    /// Concrete path this closes: `ContentView.handleHomeOnAppear` → `AppPrefsStore.load`
+    /// → (cloud map absent for a brand-new uid) → `updateGameDefaults`, which fires
+    /// unconditionally on the first Home-tab appearance. For a child mid-registration
+    /// that wrote a flagless doc that reads back as not-a-child.
+    ///
+    /// Only the declare-before-write choke point may bring the document into existence.
+    private func assertMayWriteUserDocument(userId: String) throws {
+        guard UserDocumentWritePolicy.isWriteHeld(
+            userId: userId,
+            pendingDeclarationUserIds: AgeGateStore.shared.pendingDeclarationUserIds
+        ) else { return }
+        throw UserDocumentWriteHeldError(userId: userId)
     }
 }
 

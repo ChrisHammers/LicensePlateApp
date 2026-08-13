@@ -93,6 +93,17 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         }
     }
 
+    /// COPPA FR-28 consent resume. A child-restriction rejection parks each queued
+    /// gameplay row an hour out; consent retires that reason immediately, so the backoff
+    /// must be cleared BEFORE the flush or the backlog sits for the rest of the hour
+    /// (`fetchFailedRetryDue()` filters on `nextRetryAt`). Idempotent: with no held rows
+    /// this is just an ordinary flush.
+    func resumeGameplaySyncAfterConsent() async {
+        guard !processingSuspendedForPurge else { return }
+        try? repository.clearGameplayRetryBackoff()
+        await processPendingSyncItems()
+    }
+
     /// Cancels in-flight debounce and blocks queue processing during hard sign-out wipe.
     func suspendProcessingForPurge() {
         processingSuspendedForPurge = true

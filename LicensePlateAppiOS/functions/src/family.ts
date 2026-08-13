@@ -649,6 +649,28 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+      // Retire the matching accepted invite, mirroring the decline branch: left in
+      // "accepted" forever, it reads as a live "awaiting approval" request on the
+      // requester's dashboard after they later leave or are removed (F-8 bug B).
+      const approvedMatchingInvites = await db
+        .collection("invites")
+        .where("familyId", "==", familyId)
+        .where("toUserId", "==", requestData.userId)
+        .where("type", "==", "family")
+        .where("status", "==", "accepted")
+        .limit(5)
+        .get();
+
+      for (const inviteDoc of approvedMatchingInvites.docs) {
+        // "expired" (not a new status): the client parses unknown statuses as
+        // .pending, which would resurrect the invite as live. Expired is terminal
+        // client-side and the retention job cleans it up.
+        batch.update(inviteDoc.ref, {
+          status: "expired",
+          respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+
       // Send push notification (gated by recipient notificationPrefs.family)
       const fcmToken = await getFCMTokenForSocialPush(requestData.userId, "family");
       if (fcmToken) {
