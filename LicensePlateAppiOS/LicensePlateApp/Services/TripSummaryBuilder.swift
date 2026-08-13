@@ -74,9 +74,18 @@ enum TripSummaryBuilder {
             ))
         }
 
+        // FR-28h: standings are frozen at trip end. A find replayed in after the game
+        // closed still shows in the recap's discovery lists and totals above — it just
+        // cannot re-rank the participants. Credits are rebuilt from the eligible set:
+        // `weightedScore` comes entirely from credits, so filtering only the discovery
+        // list would leave the late find's weight in the score.
+        let outcomeCredits = Self.creditsForTripSummary(
+            games: games,
+            discoveries: CompetitiveOutcomeEligibility.outcomeEligible(discoveries)
+        )
         let rawContributions = ParticipantContributionBuilder.contributionSummary(
-            discoveries: discoveries,
-            credits: credits
+            discoveries: CompetitiveOutcomeEligibility.outcomeEligible(discoveries),
+            credits: outcomeCredits
         )
         let mergedContributions = TripRosterContributionMerge.merge(
             roster: session.participants,

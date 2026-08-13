@@ -119,12 +119,30 @@ final class FamilyMembershipTransitionService {
     static let shared = FamilyMembershipTransitionService()
 
     /// Injectable effects so the edge logic is testable without Firebase or singletons.
+    ///
+    /// This service stays the SINGLE detector of the consent edge; everything that has to
+    /// happen at consent hangs off these dependencies rather than growing a second
+    /// detector somewhere else.
     struct Dependencies {
         /// Accepted family invites for `familyId` addressed to the current user.
         var acceptedInviteIds: (String) -> [String]
         var markInvitesConsumed: ([String]) -> Void
-        /// Clears the child-restriction backoff and flushes the gameplay queue.
+        /// Whether this session is a child account at all — the gate for every FR-28
+        /// recovery effect. Adults take the pre-existing path and nothing more.
+        var isChildAccountSession: () -> Bool
+        /// UNIVERSAL, unchanged since FR-28c shipped: clear the child-restriction backoff
+        /// and flush. Every admission runs this, child or adult.
         var resumeGameplaySync: () async -> Void
+        /// Child-only: restore the in-memory retry budgets the restricted period must not
+        /// have spent.
+        var resetRetryBudgets: () -> Void
+        /// Child-only: budget reset, cancelled-row recovery, canonical publish, drain, and
+        /// then the achievement resend (which must follow the drain).
+        var runDurableRecovery: () async -> Void
+        /// Child-only: retries the held return-streak daily claim immediately.
+        var retryReturnStreakDailyClaim: () async -> Void
+        /// Child-only: runs the XP ledger reconcile, skipped for the restricted period.
+        var reconcileXpGrants: () async -> Void
 
         @MainActor
         static func live(currentUserIdProvider: @escaping () -> String?) -> Dependencies {
@@ -141,7 +159,23 @@ final class FamilyMembershipTransitionService {
                         .map(\.inviteId)
                 },
                 markInvitesConsumed: { FamilyInviteConsumptionStore.shared.markConsumed(inviteIds: $0) },
-                resumeGameplaySync: { await SyncCoordinator.shared.resumeGameplaySyncAfterConsent() }
+                isChildAccountSession: {
+                    ChildRestrictedModeService.shared.isChildAccountSession
+                },
+                resumeGameplaySync: { await SyncCoordinator.shared.resumeGameplaySyncAfterConsent() },
+                resetRetryBudgets: {
+                    AchievementUnlockSyncService.shared.resetRetryBudgetAfterConsent()
+                    ReturnStreakDailyXpClaimService.shared.resetRetryBudgetAfterConsent()
+                },
+                runDurableRecovery: {
+                    await ChildRestrictedDataRecoveryService.shared.runConsentRecovery()
+                },
+                retryReturnStreakDailyClaim: {
+                    await ConsentRecoverySupport.retryReturnStreakDailyClaim()
+                },
+                reconcileXpGrants: {
+                    await ConsentRecoverySupport.reconcileXpGrants()
+                }
             )
         }
     }
@@ -195,7 +229,25 @@ final class FamilyMembershipTransitionService {
         }
         if transition.resumesGameplaySync {
             Task { [deps] in
-                await deps.resumeGameplaySync()
+                guard deps.isChildAccountSession() else {
+                    // Adults keep exactly the behaviour that shipped with FR-28c: clear the
+                    // backoff and flush. None of the recovery machinery below applies to an
+                    // account that was never restricted, and running it would spend
+                    // callables and erase genuine give-up progress for nothing.
+                    await deps.resumeGameplaySync()
+                    return
+                }
+                // Budgets first, so nothing that follows starts one failure from being
+                // discarded. `runDurableRecovery` then does the ordered gameplay work
+                // (reset, recover, publish, drain) and only afterwards re-sends
+                // achievements — progression has to settle before that snapshot is taken.
+                // The streak and XP kicks come last: they are independent of the queue, and
+                // running them here is what stops them waiting for a scenePhase cycle that
+                // may not come for hours.
+                deps.resetRetryBudgets()
+                await deps.runDurableRecovery()
+                await deps.retryReturnStreakDailyClaim()
+                await deps.reconcileXpGrants()
             }
         }
         return transition

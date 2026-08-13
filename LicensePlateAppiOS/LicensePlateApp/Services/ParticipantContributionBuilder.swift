@@ -15,6 +15,54 @@ struct ParticipantContribution: Sendable {
     var firstFindCount: Int
 }
 
+/// COPPA FR-28h: which finds may influence a competitive RESULT.
+///
+/// A late replay is a genuine find — it happened during the game, it just reached the
+/// server after the game closed (offline play, or a child's queue draining at consent). It
+/// counts everywhere a find counts: XP, lifetime stats, the found list, the recap's totals.
+///
+/// What it must not do is move an outcome. Competitive standings are frozen at trip end:
+/// participants are expected to get their finds in before the game closes, and a result
+/// that could be overturned days later by someone's phone reconnecting is not a result.
+/// Collaborative and solo play have no winner, so nothing is filtered there.
+enum CompetitiveOutcomeEligibility {
+
+    /// The finds that may set the winner and weighted points.
+    static func outcomeEligible(_ discoveries: [GameDiscovery]) -> [GameDiscovery] {
+        discoveries.filter { !$0.isLateReplay }
+    }
+
+    /// Outcome-eligible finds AND the credits derived from exactly those finds.
+    ///
+    /// Both halves are required. `weightedScore` comes entirely from credits, so filtering
+    /// the discovery list while passing credits built from the unfiltered set leaves the
+    /// late find's weight in the score and the freeze does not hold. Callers must never
+    /// build credits from one set and rank from another.
+    ///
+    /// This is deliberately NOT pushed down into `DiscoveryRulesEngine.creditsForDiscoveries`:
+    /// that builder also feeds lifetime stats and the discovery-credit display projection,
+    /// which must keep COUNTING late finds. Only outcome derivation freezes.
+    static func outcomeInputs(
+        discoveries: [GameDiscovery],
+        mode: GameMode,
+        teams: [TripTeam] = []
+    ) -> (discoveries: [GameDiscovery], credits: [GameCredit]) {
+        let eligible = outcomeEligible(discoveries)
+        let credits = DiscoveryRulesEngine.creditsForDiscoveries(
+            mode: mode,
+            discoveriesByTarget: Dictionary(grouping: eligible, by: \.targetId),
+            teams: teams
+        )
+        return (eligible, credits)
+    }
+
+    /// True when excluding late replays would actually change the input — i.e. this game
+    /// received at least one late find.
+    static func hasLateReplays(_ discoveries: [GameDiscovery]) -> Bool {
+        discoveries.contains { $0.isLateReplay }
+    }
+}
+
 /// Builds per-participant contribution summaries from discoveries and credits. Pure logic; no persistence.
 /// Uses ParticipantDiscoveryResolver for first-finder per target; uses credits for weights.
 enum ParticipantContributionBuilder {

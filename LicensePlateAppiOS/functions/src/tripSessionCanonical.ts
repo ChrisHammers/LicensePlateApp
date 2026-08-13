@@ -419,6 +419,9 @@ export const appendTripActivityEvent = enforcedCallable(async (data, context) =>
     resolution: result.resolution,
     appliedEventId: result.appliedEventId,
     rejectionEvent: result.rejectionEvent,
+    // FR-28h: tells the finder's own device to stamp its local copy, so every device
+    // computes the same (frozen) competitive outcome.
+    lateReplay: result.lateReplay === true,
   };
 });
 

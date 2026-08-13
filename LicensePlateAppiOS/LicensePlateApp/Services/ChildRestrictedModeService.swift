@@ -126,6 +126,21 @@ final class ChildRestrictedModeService: ObservableObject {
         childSessionState == .unconsentedChild
     }
 
+    /// True when this session belongs to a child account AT ALL — restricted or consented.
+    ///
+    /// This is the scope for FR-28 consent-recovery work, and the distinction from
+    /// `isRestrictedUnconsentedChild` is the point: after consent the account is no longer
+    /// restricted, but it is still the account whose data the restriction stranded. The
+    /// signal is effectively sticky (`isChildAccount` only clears through a parent
+    /// correction), so it survives the restart that loses in-memory retry state — which is
+    /// exactly when recovery needs to run.
+    ///
+    /// Adults are `.notChild` and skip every recovery path, so they never pay for machinery
+    /// that exists to undo a restriction they were never under.
+    var isChildAccountSession: Bool {
+        childSessionState != .notChild
+    }
+
     /// F-7 consumption surface (option B): true while this device's identity epoch has
     /// no age answer — e.g. a post-sign-out reborn guest, which is never prompted and
     /// simply lives behind the standard guest gates. F-7 treats age-unresolved as

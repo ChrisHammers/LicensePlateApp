@@ -3,7 +3,7 @@
  */
 
 import * as admin from "firebase-admin";
-import { replayDiscoveriesFromDocs } from "./gameplayEventResolver";
+import { replayDiscoveriesFromDocs, KIND_REGION_FOUND, PK } from "./gameplayEventResolver";
 
 export const KIND_TRIP_ENDED = "trip_ended";
 
@@ -17,6 +17,8 @@ type DiscoveryRow = {
   discoveredAt: admin.firestore.Timestamp;
   inputMethod: string;
   serverCommittedAtSec: number;
+  /** FR-28h: server-stamped late replay (excluded from competitive OUTCOME). */
+  isLateReplay?: boolean;
 };
 
 type GameCredit = { discoveryId: string; participantId: string; weight: number; teamId?: string | null };
@@ -244,6 +246,163 @@ export type TripEndedApplyPreview = {
     }
   >;
 };
+
+/**
+ * Whether this session's trip-end baseline has already been folded into a stats doc.
+ *
+ * The baseline records it with `set(..., {merge:true})` and a key of `appliedTrips.<id>`.
+ * Dot-path EXPANSION is an `update()` behaviour — under `set()` the SDK stores a literal
+ * top-level field whose name contains a dot. So the nested `appliedTrips` map the obvious
+ * read expects never exists, and a guard written against it always misses. Both shapes are
+ * checked here: the literal key is what production actually has, the nested map is what a
+ * future `update()`-based writer would produce.
+ */
+export function hasAppliedTripBaseline(
+  statsData: admin.firestore.DocumentData | undefined,
+  sessionId: string
+): boolean {
+  if (!statsData) return false;
+  if (statsData[`appliedTrips.${sessionId}`] != null) return true;
+  const nested = statsData.appliedTrips as Record<string, unknown> | undefined;
+  return !!nested && nested[sessionId] != null;
+}
+
+/** The only two lifetime fields an extra find can move. Trip/game/social counts are trip-level. */
+export interface LateReplayStatsContribution {
+  totalDiscoveries: number;
+  totalWeightedScore: number;
+}
+
+/**
+ * Per-session record of how much LATE-REPLAY contribution is already inside a user's
+ * lifetime totals — written by whichever of the two triggers counted it.
+ *
+ * A subcollection, not a map field on the stats doc, so it is never subject to the
+ * dot-path trap described on `hasAppliedTripBaseline`.
+ */
+export function lateReplayLedgerRef(
+  db: admin.firestore.Firestore,
+  uid: string,
+  sessionId: string
+): admin.firestore.DocumentReference {
+  return db
+    .collection("public_lifetime_stats")
+    .doc(uid)
+    .collection("late_replay_applied")
+    .doc(sessionId);
+}
+
+export function readLateReplayLedger(
+  data: admin.firestore.DocumentData | undefined
+): LateReplayStatsContribution {
+  return {
+    totalDiscoveries: Number(data?.totalDiscoveries ?? 0) || 0,
+    totalWeightedScore: Number(data?.totalWeightedScore ?? 0) || 0,
+  };
+}
+
+/**
+ * Whether the session has a `trip_ended` event yet — i.e. whether the trip-end baseline
+ * has been TRIGGERED, regardless of whether it has committed.
+ *
+ * This is what distinguishes the two no-baseline-marker cases for a late find:
+ *   - no `trip_ended` → genuinely pre-baseline; the baseline's own later read will include
+ *     this find (finds drain before `trip_ended`), so doing nothing is correct.
+ *   - `trip_ended` present but marker absent → the baseline is in flight and may have read
+ *     the event log BEFORE this find existed, so nobody would ever count it.
+ */
+export function sessionHasTripEndedEvent(
+  activityEventDocs: admin.firestore.QueryDocumentSnapshot[]
+): boolean {
+  return activityEventDocs.some((d) => (d.data()?.kind as string) === KIND_TRIP_ENDED);
+}
+
+/** Re-check cadence and bound for the baseline marker (per-user txs commit in seconds). */
+export const BASELINE_MARKER_POLL_INTERVAL_MS = 2_000;
+export const BASELINE_MARKER_MAX_WAIT_MS = 60_000;
+
+export type BaselineWaitDecision = "proceed" | "wait" | "skip";
+
+/**
+ * What a late find should do when no baseline marker is present yet.
+ *
+ * The trip-end trigger reads the event log ONCE and then commits per-user transactions
+ * sequentially. A find created inside that window is missing from the baseline's totals
+ * and has no marker to key off — so without this it is counted nowhere.
+ */
+export function decideBaselineWait(params: {
+  hasTripEnded: boolean;
+  markerPresent: boolean;
+}): BaselineWaitDecision {
+  if (params.markerPresent) return "proceed";
+  // No trip_ended: genuinely pre-baseline. Finds drain before `trip_ended`, so the
+  // baseline's own read will include this one.
+  if (!params.hasTripEnded) return "skip";
+  // trip_ended exists but the marker has not landed — the baseline is in flight.
+  return "wait";
+}
+
+/** FR-28h: a `region_found` the server accepted into an already-ended game. */
+export function isLateReplayFindDoc(doc: admin.firestore.QueryDocumentSnapshot): boolean {
+  const data = doc.data();
+  if ((data?.kind as string) !== KIND_REGION_FOUND) return false;
+  const payload = data?.payload as Record<string, unknown> | undefined;
+  return String(payload?.[PK.lateReplay] ?? "") === "true";
+}
+
+/**
+ * How much of this session's lifetime stats is owed to LATE-REPLAY finds, per user.
+ *
+ * Computed as a difference of two full recomputes — with and without the late finds —
+ * rather than a per-find increment, because `totalWeightedScore` is not additive: in
+ * collaborative mode a target's credit is split `1/n` across its finders, so a late find
+ * arriving on an already-found target REDUCES every earlier finder's credit for it. Only a
+ * recompute-and-diff gets that right, and it gets it right for every affected member, not
+ * just the late finder.
+ *
+ * The result is CUMULATIVE (all late finds so far), which is what makes applying it
+ * idempotent: the caller stores what it has already applied and increments by the
+ * remainder, so replaying the trigger — or a second late find — converges instead of
+ * double-counting.
+ *
+ * Returns null when the trip is not in a state the trip-end aggregator would have scored.
+ */
+export function previewLateReplayContribution(input: {
+  canonicalStatus: string | undefined;
+  memberUserIds: string[];
+  gameDocs: admin.firestore.QueryDocumentSnapshot[];
+  activityEventDocs: admin.firestore.QueryDocumentSnapshot[];
+}): Record<string, LateReplayStatsContribution> | null {
+  const empty: Record<string, Set<string>> = {};
+  const shared = {
+    canonicalStatus: input.canonicalStatus,
+    memberUserIds: input.memberUserIds,
+    gameDocs: input.gameDocs,
+    familyMemberIdsByUser: empty,
+    friendUserIdsByUser: empty,
+  };
+
+  const withLate = previewTripEndedAggregates({ ...shared, activityEventDocs: input.activityEventDocs });
+  if (!withLate) return null;
+  const withoutLateDocs = input.activityEventDocs.filter((d) => !isLateReplayFindDoc(d));
+  if (withoutLateDocs.length === input.activityEventDocs.length) {
+    return null; // No late finds recorded — nothing owed.
+  }
+  const withoutLate = previewTripEndedAggregates({ ...shared, activityEventDocs: withoutLateDocs });
+  if (!withoutLate) return null;
+
+  const out: Record<string, LateReplayStatsContribution> = {};
+  for (const uid of withLate.memberUserIds) {
+    const a = withLate.perUser[uid];
+    const b = withoutLate.perUser[uid];
+    if (!a || !b) continue;
+    out[uid] = {
+      totalDiscoveries: a.totalDiscoveries - b.totalDiscoveries,
+      totalWeightedScore: a.totalWeightedScore - b.totalWeightedScore,
+    };
+  }
+  return out;
+}
 
 /**
  * Preview per-user Firestore increments for one ended trip from canonical docs (no idempotency here).

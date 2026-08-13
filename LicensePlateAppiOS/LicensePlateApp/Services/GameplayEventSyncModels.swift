@@ -9,7 +9,10 @@ import Foundation
 
 /// Outcome of syncing one gameplay event to the cloud resolver.
 enum GameplayEventAppendOutcome: Sendable {
-    case accepted
+    /// `lateReplay` is the server's FR-28h stamp, echoed back so the finder's own device
+    /// can apply it locally. Without it that one device keeps the original payload and
+    /// computes UNFROZEN competitive outcomes while every other device sees frozen ones.
+    case accepted(lateReplay: Bool)
     /// Local optimistic `region_found` was not written remotely; server authored `srvrej_*` rejection.
     case superseded(localRegionFoundEventId: String, serverRejection: TripActivityEvent)
 }
@@ -67,7 +70,7 @@ enum GameplayAppendCallableResponseParser {
             let rejection = try decodeRejectionEvent(from: rejAny)
             return .superseded(localRegionFoundEventId: uploadedEventId, serverRejection: rejection)
         }
-        return .accepted
+        return .accepted(lateReplay: (dict["lateReplay"] as? Bool) == true)
     }
 
     static func decodeRejectionEvent(from any: Any) throws -> TripActivityEvent {

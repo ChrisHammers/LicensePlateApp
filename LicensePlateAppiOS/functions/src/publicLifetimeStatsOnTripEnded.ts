@@ -5,7 +5,13 @@
 
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import { KIND_TRIP_ENDED, previewTripEndedAggregates } from "./publicLifetimeStatsCore";
+import {
+  KIND_TRIP_ENDED,
+  previewTripEndedAggregates,
+  previewLateReplayContribution,
+  hasAppliedTripBaseline,
+  lateReplayLedgerRef,
+} from "./publicLifetimeStatsCore";
 
 const db = admin.firestore();
 
@@ -87,6 +93,17 @@ export const onTripEndedUpdatePublicLifetimeStats = functions.firestore
       return;
     }
 
+    // FR-28h exactly-once: this recompute counts EVERY find present, including any already
+    // stamped `lateReplay` (the consent drain commonly lands finds before `trip_ended`).
+    // Recording that portion in the ledger — in the same transaction — is what stops the
+    // late trigger from applying it a second time.
+    const lateAlreadyCounted = previewLateReplayContribution({
+      canonicalStatus,
+      memberUserIds,
+      gameDocs: gamesSnap.docs,
+      activityEventDocs: eventsSnap.docs,
+    });
+
     for (const uid of preview.memberUserIds) {
       const deltas = preview.perUser[uid];
       if (!deltas) {
@@ -95,9 +112,21 @@ export const onTripEndedUpdatePublicLifetimeStats = functions.firestore
       await db.runTransaction(async (tx) => {
         const ref = db.collection("public_lifetime_stats").doc(uid);
         const doc = await tx.get(ref);
-        const applied = doc.data()?.appliedTrips as Record<string, unknown> | undefined;
-        if (applied && applied[sessionId] != null) {
+        if (hasAppliedTripBaseline(doc.data(), sessionId)) {
           return;
+        }
+        const includedLate = lateAlreadyCounted?.[uid];
+        if (includedLate) {
+          tx.set(
+            lateReplayLedgerRef(db, uid, sessionId),
+            {
+              totalDiscoveries: includedLate.totalDiscoveries,
+              totalWeightedScore: includedLate.totalWeightedScore,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              source: "trip_ended_baseline",
+            },
+            { merge: true }
+          );
         }
         const appliedPath = `appliedTrips.${sessionId}`;
         tx.set(

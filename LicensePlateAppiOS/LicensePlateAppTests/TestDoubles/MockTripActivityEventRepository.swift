@@ -137,6 +137,16 @@ final class MockTripActivityEventRepository: TripActivityEventRepositoryProtocol
         events.removeAll { $0.id == id }
     }
 
+    @discardableResult
+    func markGameplayEventLateReplay(id: String) throws -> Bool {
+        guard let index = events.firstIndex(where: { $0.id == id }) else { return false }
+        var payload = events[index].payload ?? [:]
+        guard payload[TripActivityEventPayloadKey.lateReplay] != "true" else { return false }
+        payload[TripActivityEventPayloadKey.lateReplay] = "true"
+        events[index].payload = payload
+        return true
+    }
+
     /// Test helper: appended events (e.g. to assert trip_started, game_started)
     func appendedEvents() -> [TripActivityEvent] {
         events

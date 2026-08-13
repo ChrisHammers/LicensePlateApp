@@ -531,7 +531,20 @@ final class LicensePlateGameViewModel: ObservableObject {
             discoveriesByTarget: byTarget,
             teams: game.teams
         )
-        let raw = ParticipantContributionBuilder.contributionSummary(discoveries: discoveries, credits: credits)
+        // FR-28h: standings exclude late replays, and the credits behind `weightedScore`
+        // are rebuilt from the same eligible set. A live game cannot produce a late replay
+        // (the stamp only lands on finds arriving after a game has ENDED), so this matters
+        // when an ended game's board is re-rendered — and keeps every standings derivation
+        // reading from one rule.
+        let outcome = CompetitiveOutcomeEligibility.outcomeInputs(
+            discoveries: discoveries,
+            mode: game.commonConfig.gameMode,
+            teams: game.teams
+        )
+        let raw = ParticipantContributionBuilder.contributionSummary(
+            discoveries: outcome.discoveries,
+            credits: outcome.credits
+        )
         let merged = TripRosterContributionMerge.merge(roster: currentSession.participants, contributions: raw)
         let ranked = TripParticipantRanking.rankContributions(merged)
         rankedScoringForCurrentGame = ranked

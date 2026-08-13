@@ -59,9 +59,30 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     /// events stay pending and resume automatically when consent lifts the hold.
     /// User-profile sync is NOT held (the declared account may sync, FR-27).
     private var gameplayCloudSyncHoldProvider: () -> Bool = { false }
+    /// Publishes one session's canonical state. Injectable so the consent-resume ordering
+    /// (publish before drain) is testable without Firebase.
+    private var canonicalSessionPublisher: (UUID) async -> Void = { sessionId in
+        try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionId)
+    }
+    /// Resolves a local `TripActivityEvent` by id. Injectable so the drain's failure
+    /// classification is testable without SwiftData; recovery also uses it to avoid
+    /// re-enqueuing an event the device no longer has (e.g. superseded and deleted).
+    private var localGameplayEvent: (String) -> TripActivityEvent? = { eventId in
+        (try? TripActivityEventRepository.shared.event(byId: eventId)) ?? nil
+    }
+    /// Uploads one event. Injectable so the drain's FR-28 hold-vs-reject classification is
+    /// pinned by tests without Firebase.
+    private var gameplayEventAppender: (TripActivityEvent) async throws -> GameplayEventAppendOutcome = { event in
+        try await SyncCoordinator.appendEventToRemoteRespectingTimeout(event: event)
+    }
     private var gameplayDebouncedFlushTask: Task<Void, Never>?
     private var gameplayFlushInProgress = false
     private var pendingAnotherGameplayFlush = false
+    /// A child-consent battery that arrived while the gate was held.
+    private var pendingChildConsentResume = false
+    /// Batteries suspended waiting for the gate. Resumed by `releaseGameplayFlushGate` (to
+    /// re-attempt) or by `suspendProcessingForPurge` (to bail).
+    private var childConsentResumeWaiters: [CheckedContinuation<Void, Never>] = []
     private var processingSuspendedForPurge = false
 
     init(repository: SyncQueueRepositoryProtocol, userSyncExecutor: UserSyncExecutorProtocol? = nil) {
@@ -81,6 +102,20 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         gameplayCloudSyncHoldProvider = provider
     }
 
+    func setCanonicalSessionPublisher(_ publisher: @escaping (UUID) async -> Void) {
+        canonicalSessionPublisher = publisher
+    }
+
+    func setLocalGameplayEventProvider(_ provider: @escaping (String) -> TripActivityEvent?) {
+        localGameplayEvent = provider
+    }
+
+    func setGameplayEventAppender(
+        _ appender: @escaping (TripActivityEvent) async throws -> GameplayEventAppendOutcome
+    ) {
+        gameplayEventAppender = appender
+    }
+
     func scheduleDebouncedGameplaySyncFlushIfOnline() {
         guard !processingSuspendedForPurge else { return }
         gameplayDebouncedFlushTask?.cancel()
@@ -93,23 +128,147 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         }
     }
 
-    /// COPPA FR-28 consent resume. A child-restriction rejection parks each queued
-    /// gameplay row an hour out; consent retires that reason immediately, so the backoff
-    /// must be cleared BEFORE the flush or the backlog sits for the rest of the hour
-    /// (`fetchFailedRetryDue()` filters on `nextRetryAt`). Idempotent: with no held rows
-    /// this is just an ordinary flush.
+    /// FR-28c consent resume for ANY family admission, child or adult. A child-restriction
+    /// hold parks queued rows an hour out; consent retires that reason immediately, so the
+    /// backoff must be cleared BEFORE the flush or the backlog sits for the rest of the
+    /// hour (`fetchFailedRetryDue()` filters on `nextRetryAt`). Idempotent: with no held
+    /// rows this is just an ordinary flush.
     func resumeGameplaySyncAfterConsent() async {
         guard !processingSuspendedForPurge else { return }
         try? repository.clearGameplayRetryBackoff()
         await processPendingSyncItems()
     }
 
+    /// The full COPPA FR-28 battery, for CHILD accounts only, in the order the failure
+    /// modes demand. An adult never accumulates policy holds or restriction-driven
+    /// cancels, so running this for them would only erase genuine give-up progress.
+    ///
+    /// 1. **Retire the cost of the hold** — reset `attemptCount`, so no row arrives at the
+    ///    drain part-way to the cancel cap.
+    /// 2. **Recover rows already given up on.** Cancelled rows are re-enqueued FIRST, so a
+    ///    session whose every row was cancelled becomes visible to step 3 — otherwise
+    ///    nothing would ever publish it and its discoveries would stay local forever.
+    /// 3. **Publish canonical sessions BEFORE draining.** The child's sessions do not
+    ///    exist server-side yet (canonical publish is a no-op while restricted), so a
+    ///    drain that runs first meets `game not found` on every event and spends the
+    ///    budget racing a publish it could simply have awaited.
+    /// 4. **Drain.**
+    ///
+    /// The whole sequence holds the single-flush gate, so a concurrent scenePhase or
+    /// debounced flush cannot start draining between the publishes and the drain.
+    ///
+    /// Awaiting this means the battery has actually FINISHED. When another flush owns the
+    /// gate, this suspends until that flush releases it and then re-attempts the claim,
+    /// rather than returning early — callers chain real work on completion (the achievement
+    /// resend must observe post-drain progression), so an early return would hand them a
+    /// stale snapshot. Cold start makes this the common path: `RootView` dispatches the
+    /// launch flush and the launch recovery as concurrent tasks.
+    func resumeGameplaySyncAfterChildConsent() async {
+        while true {
+            if processingSuspendedForPurge { return }
+            guard gameplayFlushInProgress else {
+                gameplayFlushInProgress = true
+                await runChildConsentBatteryHoldingGate()
+                return
+            }
+            // Another flush owns the gate. Park until it releases, then re-attempt —
+            // never degrade into a plain flush that would skip recovery and publish.
+            pendingChildConsentResume = true
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                childConsentResumeWaiters.append(continuation)
+            }
+        }
+    }
+
+    private func runChildConsentBatteryHoldingGate() async {
+        defer { releaseGameplayFlushGate() }
+        try? repository.resetGameplayRetryBudget()
+        recoverDroppedGameplayEventRows()
+        await publishCanonicalSessionsForQueuedGameplay()
+        await processPendingSyncItemsBody()
+    }
+
+    /// Re-enqueues gameplay events whose queue row was cancelled and never landed.
+    ///
+    /// The cancel is not recoverable any other way: canonical replay re-uploads only
+    /// `game_started` / `game_ended` / `game_completed`, so a cancelled `region_found` is
+    /// a discovery that exists on the device and nowhere else.
+    ///
+    /// Self-quenching, which is what keeps this bounded: every source row it acts on is
+    /// settled to `recovered` in the same pass, so the recoverable set shrinks toward empty
+    /// instead of being rescanned on every launch and every family join. Combined with the
+    /// repository already excluding events that have a `completed` or `rejected` row, and
+    /// with `ensureGameplayEventEnqueued` skipping anything holding a live row, a second
+    /// pass re-enqueues nothing and creates no new rows.
+    ///
+    /// Rows are settled even when they are skipped (event gone locally, or a live row
+    /// already exists) — in both cases this row will never be the one that needs healing,
+    /// so leaving it `cancelled` would just re-scan it forever.
+    /// Returns the number of events re-enqueued.
+    @discardableResult
+    func recoverDroppedGameplayEventRows() -> Int {
+        guard !processingSuspendedForPurge else { return 0 }
+        let dropped = (try? repository.unrecoveredCancelledGameplayItems()) ?? []
+        guard !dropped.isEmpty else { return 0 }
+        var recovered = 0
+        var settledIds: [String] = []
+        for item in dropped {
+            guard let sessionStr = item.payloadSessionId,
+                  let sessionId = UUID(uuidString: sessionStr),
+                  let eventId = item.payloadEventId else {
+                settledIds.append(item.id)
+                continue
+            }
+            guard localGameplayEvent(eventId) != nil else {
+                settledIds.append(item.id)
+                continue
+            }
+            do {
+                if try repository.hasNonTerminalGameplayItem(forEventId: eventId) {
+                    settledIds.append(item.id)
+                    continue
+                }
+                try ensureGameplayEventEnqueued(sessionId: sessionId, eventId: eventId)
+                settledIds.append(item.id)
+                recovered += 1
+            } catch {
+                // Leave this row `cancelled` so a later pass can retry the recovery.
+                continue
+            }
+        }
+        try? repository.markGameplayItemsRecovered(ids: settledIds)
+        return recovered
+    }
+
+    /// Publishes the canonical state of every session still referenced by a non-terminal
+    /// gameplay row, so `appendTripActivityEvent` has a `games/{id}` to append to.
+    private func publishCanonicalSessionsForQueuedGameplay() async {
+        let sessionIds = (try? repository.nonTerminalGameplaySessionIds()) ?? []
+        for sessionStr in sessionIds {
+            guard let sessionId = UUID(uuidString: sessionStr) else { continue }
+            await canonicalSessionPublisher(sessionId)
+        }
+    }
+
     /// Cancels in-flight debounce and blocks queue processing during hard sign-out wipe.
+    ///
+    /// A parked child-consent battery MUST be discarded here, not carried across the wipe.
+    /// It is bound to the account that earned it, so surviving the purge would run a
+    /// child's recovery — budget resets, cancelled-row re-enqueues, canonical publishes —
+    /// against whoever signs in next, including an adult who is exempt by design. The
+    /// waiters are resumed so their tasks unwind instead of leaking; each re-checks
+    /// `processingSuspendedForPurge` on wake and returns without claiming the gate.
     func suspendProcessingForPurge() {
         processingSuspendedForPurge = true
         gameplayDebouncedFlushTask?.cancel()
         gameplayDebouncedFlushTask = nil
         pendingAnotherGameplayFlush = false
+        pendingChildConsentResume = false
+        let waiters = childConsentResumeWaiters
+        childConsentResumeWaiters = []
+        for waiter in waiters {
+            waiter.resume()
+        }
     }
 
     func resumeProcessingAfterPurge() {
@@ -162,17 +321,36 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
             return
         }
         gameplayFlushInProgress = true
-        defer {
-            gameplayFlushInProgress = false
-            let needsAnother = pendingAnotherGameplayFlush
-            pendingAnotherGameplayFlush = false
-            if needsAnother {
-                Task { [weak self] in
-                    await self?.processPendingSyncItems()
-                }
+        defer { releaseGameplayFlushGate() }
+        await processPendingSyncItemsBody()
+    }
+
+    /// Releases the single-flush gate and services whatever queued up behind it. A parked
+    /// child-consent battery wins over a plain flush — it ends in a drain anyway, and
+    /// running the plain flush first would drain past the recovery and publish it needs.
+    /// The battery is woken rather than re-dispatched, so its original caller's `await`
+    /// is what completes.
+    private func releaseGameplayFlushGate() {
+        gameplayFlushInProgress = false
+        let waiters = childConsentResumeWaiters
+        childConsentResumeWaiters = []
+        pendingChildConsentResume = false
+        let needsAnother = pendingAnotherGameplayFlush
+        pendingAnotherGameplayFlush = false
+        guard waiters.isEmpty else {
+            // Keep any plain-flush request queued: the battery re-claims the gate, and the
+            // request is serviced when IT releases.
+            pendingAnotherGameplayFlush = needsAnother
+            for waiter in waiters {
+                waiter.resume()
+            }
+            return
+        }
+        if needsAnother {
+            Task { [weak self] in
+                await self?.processPendingSyncItems()
             }
         }
-        await processPendingSyncItemsBody()
     }
 
     /// Wakes the queue after `nextRetryAt` for transient `game not found` (no user action required).
@@ -203,19 +381,27 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                 guard let sessionStr = item.payloadSessionId,
                       let eventId = item.payloadEventId,
                       let sessionUUID = UUID(uuidString: sessionStr) else {
-                    try? repository.markCancelled(id: item.id)
+                    // Malformed payload: there is nothing to retry and nothing to recover.
+                    // `rejected`, not `cancelled`, so consent recovery never picks it up.
+                    try? repository.markRejected(id: item.id)
                     continue
                 }
                 do {
                     try repository.markInProgress(id: item.id)
-                    guard let event = try TripActivityEventRepository.shared.event(byId: eventId) else {
+                    guard let event = localGameplayEvent(eventId) else {
                         try? repository.markCompleted(id: item.id)
                         continue
                     }
-                    let outcome = try await Self.appendEventToRemoteRespectingTimeout(event: event)
+                    let outcome = try await gameplayEventAppender(event)
                     let gameIdStr = event.payload?[TripActivityEventPayloadKey.gameInstanceId] ?? ""
                     switch outcome {
-                    case .accepted:
+                    case .accepted(let lateReplay):
+                        if lateReplay {
+                            // FR-28h: adopt the server's stamp locally, or this device —
+                            // the finder's own — stays the only one computing unfrozen
+                            // competitive outcomes.
+                            try? TripActivityEventRepository.shared.markGameplayEventLateReplay(id: event.id)
+                        }
                         AnalyticsService.shared.log(.gameplayEventServerAccepted(
                             tripSessionId: sessionUUID.uuidString,
                             gameInstanceId: gameIdStr,
@@ -266,14 +452,31 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                     }
                     try? repository.markCompleted(id: item.id)
                 } catch {
-                    let resolvedEvent = try? TripActivityEventRepository.shared.event(byId: eventId)
+                    let resolvedEvent = localGameplayEvent(eventId)
                     let eventKind = resolvedEvent?.kind.rawValue ?? ""
                     let gameIdStr = resolvedEvent?.payload?[TripActivityEventPayloadKey.gameInstanceId] ?? ""
                     if ChildRestrictedModeService.isChildRestrictionRejection(error) {
                         // FR-28: unconsented-child rejection is a hold, never a permanent
                         // failure — the event stays queued and resumes on consent. No
                         // analytics here (no child-only events on the child's instance).
-                        try? repository.markFailed(id: item.id, nextRetryAt: Date().addingTimeInterval(3600))
+                        //
+                        // `markHeld`, not `markFailed`: the row's retry budget is shared by
+                        // every failure class and is what the `game not found` cap spends
+                        // before cancelling a row for good. Charging a policy refusal
+                        // against it would let a long-restricted child arrive at consent
+                        // with a budget already spent, and the discovery would be dropped
+                        // instead of uploaded.
+                        try? repository.markHeld(id: item.id, nextRetryAt: Date().addingTimeInterval(3600))
+                        continue
+                    }
+                    if Self.isGameNotStartedHold(error) {
+                        // Republish so the server sees the started (or ended) lifecycle,
+                        // then park WITHOUT spending the budget — nothing is wrong with
+                        // this find, our canonical state just has not caught up.
+                        Task { @MainActor in
+                            try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionUUID)
+                        }
+                        try? repository.markHeld(id: item.id, nextRetryAt: Date().addingTimeInterval(60))
                         continue
                     }
                     if Self.isTransientGameNotFoundGameplayFailure(error) {
@@ -292,6 +495,10 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                             errorCode: (error as NSError).code,
                             errorDomain: (error as NSError).domain
                         ))
+                        // The retry cap on a TRANSIENT condition — the server never judged
+                        // this event, we simply ran out of patience waiting for its game to
+                        // exist. This is the sole producer of `cancelled`, and the sole
+                        // thing FR-28 consent recovery is allowed to heal.
                         try? repository.markCancelled(id: item.id)
                         continue
                     }
@@ -306,14 +513,19 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                         try? repository.markFailed(id: item.id, nextRetryAt: nextRetryAt)
                         continue
                     }
-                    if Self.isPermanentGameplaySyncFailure(error) {
+                    // FR-28h replay verdicts are named explicitly so the classification is
+                    // deliberate rather than an accident of `failedPrecondition` catch-all.
+                    if Self.isPermanentReplayRejection(error) || Self.isPermanentGameplaySyncFailure(error) {
                         AnalyticsService.shared.log(.gameplayEventServerRejected(
                             tripSessionId: sessionUUID.uuidString,
                             eventKind: eventKind,
                             errorCode: (error as NSError).code,
                             errorDomain: (error as NSError).domain
                         ))
-                        try? repository.markCancelled(id: item.id)
+                        // A server VERDICT — invalid argument, permission denied, or a
+                        // non-child failed-precondition such as a discovery that no longer
+                        // exists. Terminal: consent recovery must never push this back.
+                        try? repository.markRejected(id: item.id)
                     } else {
                         if error is GameplayAppendRemoteTimedOutError {
                             let timeoutSec = max(Int(Self.gameplayAppendRemoteTimeoutNanoseconds / 1_000_000_000), 1)
@@ -371,7 +583,8 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
             guard let userIdData = item.payloadData,
                   let userId = String(data: userIdData, encoding: .utf8),
                   !userId.isEmpty else {
-                try? repository.markCancelled(id: item.id)
+                // Malformed payload — nothing to retry. Terminal.
+                try? repository.markRejected(id: item.id)
                 continue
             }
 
@@ -432,6 +645,33 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         default:
             return false
         }
+    }
+
+    /// The server still sees this game's lifecycle as `created`.
+    ///
+    /// FR-28h narrowed this message to the genuine pre-start edge: an ended game now
+    /// ACCEPTS an in-window replay, so reaching this means either the game truly has not
+    /// started yet, or our canonical publish has not landed the started state. Both clear
+    /// on their own, so it is a HOLD — parked without spending the row's retry budget, and
+    /// drained by the next flush once the publish catches up. It used to be classified
+    /// permanent, which is what destroyed every offline-completed trip's discoveries.
+    private static func isGameNotStartedHold(_ error: Error) -> Bool {
+        let ns = error as NSError
+        guard ns.domain == FunctionsErrorDomain else { return false }
+        guard let code = FunctionsErrorCode(rawValue: ns.code), code == .failedPrecondition else { return false }
+        return ns.localizedDescription.lowercased().contains("game not started")
+    }
+
+    /// FR-28h replay verdicts: the find's timestamp is outside the game's played window, or
+    /// it arrived past the replay horizon. Both are final server judgements about THIS
+    /// event — retrying cannot change either, so they are permanent (`rejected`), never
+    /// recovered.
+    private static func isPermanentReplayRejection(_ error: Error) -> Bool {
+        let ns = error as NSError
+        guard ns.domain == FunctionsErrorDomain else { return false }
+        guard let code = FunctionsErrorCode(rawValue: ns.code), code == .failedPrecondition else { return false }
+        let message = ns.localizedDescription.lowercased()
+        return message.contains("replay outside game window") || message.contains("replay horizon expired")
     }
 
     /// `appendTripActivityEvent` before `games/{id}` exists (publish still in flight or failed). Retry, do not cancel the queue row.

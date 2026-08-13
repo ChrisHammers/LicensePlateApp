@@ -28,6 +28,14 @@ struct GameDiscovery: Codable, Identifiable, Sendable {
     var riskFlag: String?
     /// Authoritative discovery risk field (Step 11 expected structure). New code must use this for display, analytics, and presentation. Legacy-adapted discoveries may have nil.
     var riskFlags: [RiskFlag]?
+    /// COPPA FR-28h: the server accepted this find into an already-ENDED game (offline play
+    /// uploaded late, or a child's queue draining at consent). Server-stamped only.
+    ///
+    /// It is a real find everywhere the user sees one — it counts for XP, lifetime stats,
+    /// and every "found" surface — but it is EXCLUDED from competitive outcome derivation
+    /// (winner, weighted points, placement). A competitive game's result is frozen at trip
+    /// end: nobody's win is taken away days later by a phone coming back online.
+    var isLateReplay: Bool
 
     init(
         id: String = UUID().uuidString,
@@ -39,7 +47,8 @@ struct GameDiscovery: Codable, Identifiable, Sendable {
         inputMethod: FoundRegion.InputMethod,
         location: LocationData? = nil,
         riskFlag: String? = nil,
-        riskFlags: [RiskFlag]? = nil
+        riskFlags: [RiskFlag]? = nil,
+        isLateReplay: Bool = false
     ) {
         self.id = id
         self.gameInstanceId = gameInstanceId
@@ -51,6 +60,7 @@ struct GameDiscovery: Codable, Identifiable, Sendable {
         self.location = location
         self.riskFlag = riskFlag
         self.riskFlags = riskFlags
+        self.isLateReplay = isLateReplay
     }
 
     /// Highest severity among risk flags, if any.

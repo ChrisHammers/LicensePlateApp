@@ -19,28 +19,64 @@ struct AchievementUnlockSyncResult: Sendable {
     var rejectedIds: [String]
 }
 
+/// What one sync attempt cost. `heldForChildRestriction` is the FR-28 case: nothing was
+/// delivered, but nothing was spent either — the batch waits for consent.
+enum AchievementUnlockSyncAttempt: Equatable, Sendable {
+    case succeeded
+    case heldForChildRestriction
+    case failed
+}
+
 @MainActor
 final class AchievementUnlockSyncService {
 
     static let shared = AchievementUnlockSyncService()
 
-    private let functions: Functions
+    /// Performs the `syncUserAchievementUnlocks` call. Injectable so the FR-28 hold
+    /// behaviour is testable without Firebase.
+    private let remoteCall: ([String: Any]) async throws -> Any?
+    /// FR-28: true while this session is a restricted unconsented child. Injectable.
+    private var isRestrictedUnconsentedChild: () -> Bool
     private var pendingCandidates: [AchievementUnlockSyncCandidate] = []
     private var pendingUser: AppUser?
     private var pendingEntitlement: EntitlementState?
     private var pendingRetryCount = 0
     private let maxRetryAttempts = 3
 
-    init(functions: Functions = Functions.functions()) {
-        self.functions = functions
+    init(
+        functions: Functions? = nil,
+        remoteCall: (([String: Any]) async throws -> Any?)? = nil,
+        isRestrictedUnconsentedChild: (() -> Bool)? = nil
+    ) {
+        self.remoteCall = remoteCall ?? { payload in
+            try await AppCheckReadiness.ensureCallablePrerequisites()
+            let fn = (functions ?? Functions.functions()).httpsCallable("syncUserAchievementUnlocks")
+            return try await fn.call(payload).data
+        }
+        self.isRestrictedUnconsentedChild = isRestrictedUnconsentedChild
+            ?? { ChildRestrictedModeService.shared.isRestrictedUnconsentedChild }
     }
 
+    func configureRestrictionProvider(_ provider: @escaping () -> Bool) {
+        isRestrictedUnconsentedChild = provider
+    }
+
+    @discardableResult
     func syncUnlocks(
         user: AppUser,
         entitlement: EntitlementState,
         candidates: [AchievementUnlockSyncCandidate]
-    ) async {
-        guard !candidates.isEmpty else { return }
+    ) async -> AchievementUnlockSyncAttempt {
+        guard !candidates.isEmpty else { return .succeeded }
+        // FR-28 pre-emptive hold: the server would reject this anyway, and every rejection
+        // used to spend one of three retries — so a child who unlocked achievements before
+        // consent arrived with the budget gone and the batch discarded. Remember the
+        // candidates, spend nothing, log nothing (FR-21: no child-only analytics on the
+        // child's own instance).
+        guard !isRestrictedUnconsentedChild() else {
+            storePendingRetry(user: user, entitlement: entitlement, candidates: candidates)
+            return .heldForChildRestriction
+        }
         let payload: [String: Any] = [
             "candidates": candidates.map {
                 [
@@ -52,10 +88,8 @@ final class AchievementUnlockSyncService {
         ].addingClientMetadata()
 
         do {
-            try await AppCheckReadiness.ensureCallablePrerequisites()
-            let fn = functions.httpsCallable("syncUserAchievementUnlocks")
-            let result = try await fn.call(payload)
-            let parsed = parseSyncResponse(result.data)
+            let data = try await remoteCall(payload)
+            let parsed = parseSyncResponse(data)
             AnalyticsService.shared.log(
                 .achievementUnlockSyncSucceeded(
                     recordedCount: parsed.recordedIds.count,
@@ -66,8 +100,14 @@ final class AchievementUnlockSyncService {
             // Do not claw back local unlocks or show "removed" UI on rejectedIds.
             // Achievements stay unlocked locally unless removed from the backend.
             clearPendingRetryState()
+            return .succeeded
         } catch {
             storePendingRetry(user: user, entitlement: entitlement, candidates: candidates)
+            // A restriction rejection that raced the pre-emptive check is still a hold, not
+            // a failure: keep the batch, spend nothing, stay silent (FR-21).
+            guard !ChildRestrictedModeService.isChildRestrictionRejection(error) else {
+                return .heldForChildRestriction
+            }
             AnalyticsService.shared.log(
                 .achievementUnlockSyncFailed(
                     candidateCount: candidates.count,
@@ -77,6 +117,7 @@ final class AchievementUnlockSyncService {
             #if DEBUG
             print("⚠️ syncUserAchievementUnlocks failed: \(error.localizedDescription)")
             #endif
+            return .failed
         }
     }
 
@@ -95,6 +136,9 @@ final class AchievementUnlockSyncService {
     func retryPendingIfNeeded(user: AppUser, entitlement: EntitlementState) async {
         guard !pendingCandidates.isEmpty else { return }
         guard pendingUser?.id == user.id || pendingUser?.firebaseUID == user.firebaseUID else { return }
+        // FR-28: while restricted the call cannot succeed, so trying is pure cost. Hold the
+        // batch and spend nothing — this is what keeps the budget intact until consent.
+        guard !isRestrictedUnconsentedChild() else { return }
         guard pendingRetryCount < maxRetryAttempts else {
             AnalyticsService.shared.log(
                 .achievementUnlockSyncFailed(
@@ -106,7 +150,38 @@ final class AchievementUnlockSyncService {
             return
         }
         pendingRetryCount += 1
-        await syncUnlocks(user: user, entitlement: entitlement, candidates: pendingCandidates)
+        let attempt = await syncUnlocks(user: user, entitlement: entitlement, candidates: pendingCandidates)
+        if attempt == .heldForChildRestriction {
+            // The restriction landed between the guard above and the call. Refund: a policy
+            // hold must never move the budget.
+            pendingRetryCount = max(0, pendingRetryCount - 1)
+        }
+    }
+
+    /// COPPA FR-28 consent resume: restores the full retry budget. A batch that survived
+    /// the restricted period must not arrive at consent one failure from being discarded.
+    func resetRetryBudgetAfterConsent() {
+        pendingRetryCount = 0
+    }
+
+    /// Durable recovery (idempotent): re-sends locally-unlocked achievements as candidates,
+    /// rather than just whatever survives in `pendingCandidates`.
+    ///
+    /// The in-memory pending batch is lost on app restart, so a child who unlocked
+    /// achievements before consent and relaunched has nothing left to retry — the local
+    /// `user_achievements` rows are the only durable record. The server dedupes by
+    /// returning `alreadySyncedIds` and grants no XP for an already-recorded unlock, so
+    /// re-sending is safe and repeatable.
+    ///
+    /// `candidates` must already respect the server's per-call cap; the caller
+    /// (`ConsentRecoverySupport`) does the chunking.
+    func resendAllLocallyUnlockedAchievements(
+        user: AppUser,
+        entitlement: EntitlementState,
+        candidates: [AchievementUnlockSyncCandidate]
+    ) async {
+        guard !candidates.isEmpty else { return }
+        await syncUnlocks(user: user, entitlement: entitlement, candidates: candidates)
     }
 
     func resetForSignOut() {

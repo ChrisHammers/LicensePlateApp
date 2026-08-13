@@ -15,7 +15,7 @@ final class MockTripCanonicalRemoteSync: TripCanonicalRemoteSyncing {
     func publishFullSession(sessionId: UUID) async throws {}
     func appendEventToRemote(_ event: TripActivityEvent) async throws -> GameplayEventAppendOutcome {
         _ = event
-        return .accepted
+        return .accepted(lateReplay: false)
     }
     func bootstrapMemberSession(sessionId: UUID) async throws {}
     func startIncrementalListeningIfNeeded(sessionId: UUID) {}

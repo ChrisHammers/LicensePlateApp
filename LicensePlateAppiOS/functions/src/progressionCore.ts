@@ -41,6 +41,8 @@ type DiscoveryRow = {
   discoveredAt: admin.firestore.Timestamp;
   inputMethod: string;
   serverCommittedAtSec: number;
+  /** FR-28h: server-stamped late replay (excluded from competitive OUTCOME). */
+  isLateReplay?: boolean;
 };
 
 type GameCredit = { discoveryId: string; participantId: string; weight: number; teamId?: string | null };
@@ -425,12 +427,21 @@ function tripHasCompetitiveGame(gameDocs: admin.firestore.QueryDocumentSnapshot[
   });
 }
 
+/**
+ * FR-28h: a competitive OUTCOME (placement, winner, weighted points) is frozen at trip
+ * end, so server-stamped late replays are excluded from it. Their per-find XP and their
+ * lifetime-stats contribution are untouched — only the podium is frozen.
+ */
+export function outcomeEligibleDiscoveries(rows: DiscoveryRow[]): DiscoveryRow[] {
+  return rows.filter((d) => d.isLateReplay !== true);
+}
+
 function tripLevelContributions(input: {
   memberUserIds: string[];
   gameDocs: admin.firestore.QueryDocumentSnapshot[];
   activityEventDocs: admin.firestore.QueryDocumentSnapshot[];
 }): ParticipantContribution[] {
-  const allDiscoveries = replayAllDiscoveries(input.activityEventDocs);
+  const allDiscoveries = outcomeEligibleDiscoveries(replayAllDiscoveries(input.activityEventDocs));
   const gamesById = new Map(input.gameDocs.map((d) => [d.id, d]));
   const credits: GameCredit[] = [];
 
@@ -570,7 +581,16 @@ export function previewProgressionComponentsForActivityEvent(input: {
 
     const teams = parseTeamsDataBase64(data.teamsDataBase64 as string | undefined);
     const allDiscoveries = replayAllDiscoveries(input.activityEventDocs);
-    const gameDisco = allDiscoveries.filter((d) => d.gameInstanceId === gameInstanceId);
+    // FR-28h: placement is an OUTCOME — late replays are excluded from BOTH the discovery
+    // set and the credits built from it. Filtering only the discoveries would leave
+    // `weightedScore` (which comes entirely from credits) still moving.
+    const gameDisco = outcomeEligibleDiscoveries(
+      allDiscoveries.filter((d) => d.gameInstanceId === gameInstanceId)
+    );
+    if (gameDisco.length === 0) {
+      // No frozen result to award: everyone would tie at zero and all take first place.
+      return out;
+    }
     const byTarget = new Map<string, DiscoveryRow[]>();
     for (const d of gameDisco) {
       const arr = byTarget.get(d.targetId) || [];
@@ -638,7 +658,12 @@ export function previewProgressionComponentsForActivityEvent(input: {
       ]);
     }
 
-    if (tripHasCompetitiveGame(input.gameDocs)) {
+    if (
+      tripHasCompetitiveGame(input.gameDocs) &&
+      // FR-28h: a trip whose competitive finds were ALL late replays has no frozen result
+      // to award. Without this every participant ties at zero and everyone takes first.
+      outcomeEligibleDiscoveries(replayAllDiscoveries(input.activityEventDocs)).length > 0
+    ) {
       const merged = tripLevelContributions({
         memberUserIds: input.memberUserIds,
         gameDocs: input.gameDocs,

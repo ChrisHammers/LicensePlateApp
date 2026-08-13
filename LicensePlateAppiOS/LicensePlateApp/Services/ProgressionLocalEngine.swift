@@ -170,13 +170,20 @@ enum ProgressionLocalEngine {
             guard let game = gamesById[gameId], game.gameMode == .competitive else { return components }
 
             let discoveries = TripActivityEventDiscoveryReplay.replay(events: window, gameInstanceFilter: gameId).discoveries
-            let byTarget = Dictionary(grouping: discoveries, by: \.targetId)
-            let credits = DiscoveryRulesEngine.creditsForDiscoveries(
+            // FR-28h: placement XP is an OUTCOME — a late replay may not change who placed.
+            // The find's own discovery XP is unaffected; only the podium is frozen.
+            let outcome = CompetitiveOutcomeEligibility.outcomeInputs(
+                discoveries: discoveries,
                 mode: game.gameMode,
-                discoveriesByTarget: byTarget,
                 teams: game.teams
             )
-            let raw = ParticipantContributionBuilder.contributionSummary(discoveries: discoveries, credits: credits)
+            // An all-late competitive game has no frozen result: every participant would
+            // tie at zero and all of them would take first place.
+            guard !outcome.discoveries.isEmpty else { return components }
+            let raw = ParticipantContributionBuilder.contributionSummary(
+                discoveries: outcome.discoveries,
+                credits: outcome.credits
+            )
             let roster = rosterUserIds.map { TripParticipant(userId: $0) }
             let merged = TripRosterContributionMerge.merge(roster: roster, contributions: raw)
             let ranked = TripParticipantRanking.rankContributions(merged)
@@ -222,9 +229,13 @@ enum ProgressionLocalEngine {
 
             guard gamesById.values.contains(where: { $0.gameMode == .competitive }) else { return components }
 
-            let tripCredits = tripLevelCredits(discoveries: allDiscoveries, gamesById: gamesById)
+            // FR-28h: trip-level competitive first place is likewise frozen at trip end,
+            // and suppressed entirely when nothing outcome-eligible remains.
+            let outcomeDiscoveries = CompetitiveOutcomeEligibility.outcomeEligible(allDiscoveries)
+            guard !outcomeDiscoveries.isEmpty else { return components }
+            let tripCredits = tripLevelCredits(discoveries: outcomeDiscoveries, gamesById: gamesById)
             let raw = ParticipantContributionBuilder.contributionSummary(
-                discoveries: allDiscoveries,
+                discoveries: outcomeDiscoveries,
                 credits: tripCredits
             )
             let roster = rosterUserIds.map { TripParticipant(userId: $0) }

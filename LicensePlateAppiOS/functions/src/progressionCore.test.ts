@@ -292,3 +292,148 @@ describe("progressionCore", () => {
     expect(d.u2?.totalXp).toBe(XP_AMOUNTS.tripEndedBonusXp);
   });
 });
+
+/**
+ * FR-28h — server-side competitive OUTCOME freeze.
+ *
+ * A `region_found` the server accepted into an already-ended game is stamped
+ * `lateReplay`. It still earns its own per-find XP, but it may not move a PLACEMENT:
+ * competitive standings are frozen at trip end. Both server placement paths are covered
+ * here — `game_ended` (per-game podium) and `trip_ended` (trip competitive first).
+ */
+describe("progressionCore — FR-28h late replay outcome freeze", () => {
+  const gid = "550e8400-e29b-41d4-a716-446655440077";
+
+  function findDoc(
+    id: string,
+    seconds: number,
+    participantId: string,
+    regionId: string,
+    late = false
+  ): admin.firestore.QueryDocumentSnapshot {
+    const payload: Record<string, string> = {
+      [PK.gameInstanceId]: gid,
+      [PK.regionId]: regionId,
+      [PK.participantId]: participantId,
+      [PK.inputMethod]: "list",
+    };
+    if (late) payload[PK.lateReplay] = "true";
+    return mockEventDoc(id, KIND_REGION_FOUND, seconds, payload, participantId);
+  }
+
+  /**
+   * u2's late finds are timestamped EARLIER and outnumber u1's on-time find, so without
+   * the freeze they would take the podium outright.
+   */
+  it("game_ended: placement ignores late replays and keeps the on-time winner", () => {
+    const gameEndedPayload = { [PK.gameInstanceId]: gid };
+    const onTimeOnly = [findDoc("f1", 1500, "u1", "US-CA")];
+    const withLate = [
+      findDoc("b1", 1100, "u2", "US-TX", true),
+      findDoc("b2", 1200, "u2", "US-OR", true),
+      findDoc("f1", 1500, "u1", "US-CA"),
+    ];
+
+    const before = previewProgressionDeltasForActivityEvent({
+      kind: KIND_GAME_ENDED,
+      actorId: "u1",
+      payload: gameEndedPayload,
+      memberUserIds: ["u1", "u2"],
+      gameDocs: [mockGameDoc(gid, "competitive")],
+      activityEventDocs: onTimeOnly,
+    });
+    const after = previewProgressionDeltasForActivityEvent({
+      kind: KIND_GAME_ENDED,
+      actorId: "u1",
+      payload: gameEndedPayload,
+      memberUserIds: ["u1", "u2"],
+      gameDocs: [mockGameDoc(gid, "competitive")],
+      activityEventDocs: withLate,
+    });
+
+    expect(before.u1.competitiveFirstPlaceFinishes).toBe(1);
+    expect(after.u1.competitiveFirstPlaceFinishes).toBe(1);
+    expect(after.u2.competitiveFirstPlaceFinishes).toBe(0);
+    expect(after.u1.totalXp).toBe(before.u1.totalXp);
+    expect(after.u2.totalXp).toBe(before.u2.totalXp);
+  });
+
+  /** R8: an all-late game has no frozen result — everyone would tie at zero. */
+  it("game_ended: placement is suppressed when EVERY find was a late replay", () => {
+    const d = previewProgressionDeltasForActivityEvent({
+      kind: KIND_GAME_ENDED,
+      actorId: "u1",
+      payload: { [PK.gameInstanceId]: gid },
+      memberUserIds: ["u1", "u2"],
+      gameDocs: [mockGameDoc(gid, "competitive")],
+      activityEventDocs: [
+        findDoc("b1", 1100, "u2", "US-TX", true),
+        findDoc("b2", 1200, "u1", "US-OR", true),
+      ],
+    });
+
+    expect(d.u1.competitiveFirstPlaceFinishes).toBe(0);
+    expect(d.u2.competitiveFirstPlaceFinishes).toBe(0);
+    expect(d.u1.totalXp).toBe(XP_AMOUNTS.gameEndedBonusXp);
+    expect(d.u2.totalXp).toBe(XP_AMOUNTS.gameEndedBonusXp);
+  });
+
+  it("trip_ended: trip competitive first ignores late replays", () => {
+    const tripEndedPayload = {};
+    const withLate = [
+      findDoc("b1", 1100, "u2", "US-TX", true),
+      findDoc("b2", 1200, "u2", "US-OR", true),
+      findDoc("f1", 1500, "u1", "US-CA"),
+    ];
+
+    const d = previewProgressionDeltasForActivityEvent({
+      kind: KIND_TRIP_ENDED,
+      actorId: "u1",
+      payload: tripEndedPayload,
+      memberUserIds: ["u1", "u2"],
+      gameDocs: [mockGameDoc(gid, "competitive")],
+      activityEventDocs: withLate,
+    });
+
+    // u1 is the only outcome-eligible finder, so u1 takes trip first.
+    expect(d.u1.totalXp).toBeGreaterThan(d.u2.totalXp);
+    expect(d.u1.totalXp - d.u2.totalXp).toBe(XP_AMOUNTS.tripCompetitiveFirstPlaceBonusXp);
+  });
+
+  /** R8 at trip level: nothing eligible, so nobody takes trip competitive first. */
+  it("trip_ended: trip competitive first is suppressed when every find was late", () => {
+    const d = previewProgressionDeltasForActivityEvent({
+      kind: KIND_TRIP_ENDED,
+      actorId: "u1",
+      payload: {},
+      memberUserIds: ["u1", "u2"],
+      gameDocs: [mockGameDoc(gid, "competitive")],
+      activityEventDocs: [
+        findDoc("b1", 1100, "u2", "US-TX", true),
+        findDoc("b2", 1200, "u1", "US-OR", true),
+      ],
+    });
+
+    expect(d.u1.totalXp).toBe(d.u2.totalXp);
+  });
+
+  /** ui-refactor-parity: with no late replays nothing about placement changes. */
+  it("ordinary competitive play is entirely unaffected", () => {
+    const d = previewProgressionDeltasForActivityEvent({
+      kind: KIND_GAME_ENDED,
+      actorId: "u1",
+      payload: { [PK.gameInstanceId]: gid },
+      memberUserIds: ["u1", "u2"],
+      gameDocs: [mockGameDoc(gid, "competitive")],
+      activityEventDocs: [
+        findDoc("b1", 1100, "u2", "US-TX"),
+        findDoc("b2", 1200, "u2", "US-OR"),
+        findDoc("f1", 1500, "u1", "US-CA"),
+      ],
+    });
+
+    // u2 genuinely outscores u1 two to one and takes the podium.
+    expect(d.u2.competitiveFirstPlaceFinishes).toBe(1);
+    expect(d.u1.competitiveFirstPlaceFinishes).toBe(0);
+  });
+});

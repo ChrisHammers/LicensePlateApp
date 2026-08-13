@@ -48,6 +48,8 @@ export { onAuthUserDeleted } from "./auth";
 export { deleteAccount } from "./accountDeletion";
 export { writeAuditLog } from "./audit";
 export { onTripEndedUpdatePublicLifetimeStats } from "./publicLifetimeStatsOnTripEnded";
+// FR-28h: finds accepted after the trip-end stats one-shot already ran.
+export { onLateReplayUpdatePublicLifetimeStats } from "./publicLifetimeStatsOnLateReplay";
 export { onTripEndedNotifyMembers } from "./tripEndedNotifyMembers";
 export { onRegionFoundNotifyMembers, flushPlateFoundNotifyBuffers } from "./plateFoundNotifyMembers";
 export { onActivityEventUpdateUserProgression } from "./progressionOnActivityEvent";

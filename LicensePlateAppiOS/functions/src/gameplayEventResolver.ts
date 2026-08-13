@@ -36,9 +36,18 @@ export const PK = {
   supersededRegionFoundEventId: "supersededRegionFoundEventId",
   /** Optional client calendar day `YYYY-MM-DD` for first-find-of-day XP (local device calendar). */
   xpDayKey: "xpDayKey",
+  /**
+   * FR-28h: server-stamped `"true"` on a `region_found` accepted into an already-ended
+   * game (offline/consent replay). SERVER-SET ONLY — any client-supplied value is
+   * stripped before evaluation, because this flag is what freezes competitive outcomes.
+   */
+  lateReplay: "lateReplay",
 } as const;
 
 export const KIND_REGION_FOUND = "region_found";
+export const KIND_GAME_STARTED = "game_started";
+export const KIND_GAME_ENDED = "game_ended";
+export const KIND_GAME_COMPLETED = "game_completed";
 export const KIND_REGION_REMOVED = "region_removed";
 export const KIND_PARTICIPANT_LEFT = "participant_left";
 export const KIND_PARTICIPANT_INVITED = "participant_invited";
@@ -59,6 +68,32 @@ export interface GameplayAppendCallableResult {
   resolution: AppendResolution;
   appliedEventId?: string;
   rejectionEvent?: Record<string, unknown>;
+  /**
+   * FR-28h: true when the server stamped this accept as a late replay. Returned so the
+   * FINDER'S OWN device learns the stamp — it has the event locally with the original
+   * payload, and without this it would keep computing unfrozen competitive outcomes while
+   * every other device sees the frozen ones.
+   */
+  lateReplay?: boolean;
+}
+
+/**
+ * Payload keys the SERVER owns. They exist on a stored event but never on an incoming one,
+ * so they must be excluded from the idempotency comparison — otherwise a retry of an
+ * already-committed accept (a flaky network on the consent-resume drain, precisely the
+ * cohort FR-28h serves) compares stripped-incoming against stamped-stored, mismatches, and
+ * throws `already-exists`, which the client files as a permanent verdict.
+ */
+const SERVER_STAMPED_PAYLOAD_KEYS: readonly string[] = [PK.lateReplay, PK.serverCommittedAt];
+
+/** Exported for tests: the idempotency comparison must ignore server-owned keys. */
+export function withoutServerStampedKeys(payload: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(payload)) {
+    if (SERVER_STAMPED_PAYLOAD_KEYS.includes(k)) continue;
+    out[k] = v;
+  }
+  return out;
 }
 
 export interface WireEventInput {
@@ -121,6 +156,8 @@ interface DiscoveryRow {
   inputMethod: string;
   /** Unix seconds from payload; 0 = legacy / missing (sorts last for tie-break). */
   serverCommittedAtSec: number;
+  /** FR-28h: server-stamped late replay — excluded from competitive OUTCOME derivation. */
+  isLateReplay: boolean;
 }
 
 function parseServerCommittedAtSec(payload: Record<string, string>): number {
@@ -229,6 +266,7 @@ export function replayDiscoveriesFromDocs(
         discoveredAt: row.timestamp,
         inputMethod,
         serverCommittedAtSec: parseServerCommittedAtSec(row.payload),
+        isLateReplay: row.payload[PK.lateReplay] === "true",
       });
       buckets.set(key, list);
     } else if (row.kind === KIND_REGION_REMOVED) {
@@ -318,6 +356,145 @@ function canParticipantUnfind(
   return discovery.participantId === userId;
 }
 
+/* ------------------------------------------------------------------ *
+ * FR-28h — offline / consent replay acceptance
+ * ------------------------------------------------------------------ */
+
+/** Adult replay horizon after game end. Child accounts are unbounded (FR-28h). */
+export const LATE_REPLAY_HORIZON_DAYS = 14;
+const LATE_REPLAY_HORIZON_SECONDS = LATE_REPLAY_HORIZON_DAYS * 24 * 60 * 60;
+
+/** Genuine pre-start edge only (lifecycle `created`). Client treats this as a HOLD, not a verdict. */
+export const MESSAGE_GAME_NOT_STARTED = "game not started";
+/** Permanent verdict: the find's own timestamp is not inside the game's played window. */
+export const MESSAGE_REPLAY_OUT_OF_WINDOW = "replay outside game window";
+/** Permanent verdict: in-window, but the replay arrived past the adult horizon. */
+export const MESSAGE_REPLAY_HORIZON_EXPIRED = "replay horizon expired";
+
+/**
+ * The interval a find must fall inside to be replayable. `endSec === null` means the game
+ * is closed but recorded no end marker anywhere — see `evaluateReplayAdmission`.
+ */
+export interface GameReplayWindow {
+  startSec: number;
+  endSec: number | null;
+}
+
+export type ReplayAdmission =
+  | { accept: true; lateReplay: boolean }
+  | { accept: false; message: string };
+
+/**
+ * Whether a `region_found` may be written, and whether it counts as a late replay.
+ *
+ * `started` is the ordinary path and is never a late replay. `created` is the genuine
+ * pre-start edge and stays a hold. Anything else means the game has closed, which is
+ * exactly the offline/consent-replay case FR-28h exists for: the find is accepted when it
+ * happened inside the played window and arrived within the horizon.
+ *
+ * The horizon is waived for SOLO trips. Two things make that safe and sufficient: a solo
+ * replay is pure self-data — there is no opponent whose outcome it could distort — and the
+ * consent-delay case is always solo anyway, because an unconsented child cannot be in a
+ * multiplayer trip (FR-38). So no child-specific carve-out is needed, and none exists:
+ * multiplayer is bounded at 14 days for everyone. Ambiguous membership fails closed to the
+ * bounded path.
+ */
+export function evaluateReplayAdmission(params: {
+  lifecycleState: string;
+  eventTimestampSec: number;
+  window: GameReplayWindow;
+  nowSec: number;
+  /** Exactly one session member, who is the caller. Anything else (including unknown). */
+  isSoloTrip: boolean;
+  horizonSeconds?: number;
+}): ReplayAdmission {
+  const { lifecycleState, eventTimestampSec, window, nowSec, isSoloTrip } = params;
+  const horizon = params.horizonSeconds ?? LATE_REPLAY_HORIZON_SECONDS;
+
+  if (lifecycleState === "started") {
+    return { accept: true, lateReplay: false };
+  }
+  if (lifecycleState === "created") {
+    return { accept: false, message: MESSAGE_GAME_NOT_STARTED };
+  }
+
+  // Closed game (ended / completed / anything else non-created): replay path.
+  //
+  // A missing end marker (`endSec === null`) means the game is closed but nothing — game
+  // doc, activity events, or the session's own end — recorded when. That leaves the
+  // horizon with nothing to anchor to, and someone who can influence what gets published
+  // could reach this state deliberately and buy an unbounded window. So on a MULTIPLAYER
+  // trip it FAILS CLOSED. Solo trips are unbounded regardless, and are self-data, so
+  // there is nothing to buy.
+  const upperBound = window.endSec ?? nowSec;
+  if (eventTimestampSec < window.startSec || eventTimestampSec > upperBound) {
+    return { accept: false, message: MESSAGE_REPLAY_OUT_OF_WINDOW };
+  }
+  if (isSoloTrip) {
+    return { accept: true, lateReplay: true };
+  }
+  if (window.endSec === null) {
+    return { accept: false, message: MESSAGE_REPLAY_HORIZON_EXPIRED };
+  }
+  if (nowSec - window.endSec > horizon) {
+    return { accept: false, message: MESSAGE_REPLAY_HORIZON_EXPIRED };
+  }
+  return { accept: true, lateReplay: true };
+}
+
+/**
+ * The game's played window, preferring the game document's own `startedAt` / `endedAt`.
+ *
+ * Those fields are written by `publishTripCanonicalState` and are the same client-supplied
+ * facts the `game_started` / `game_ended` activity_events carry, but they are already in
+ * hand (the resolver has fetched the game doc) and cannot be missing for a published game
+ * — `startedAt` is required at publish. The activity_events are the fallback for the case
+ * where a game doc predates or omits them.
+ */
+export function deriveGameReplayWindow(
+  gameData: admin.firestore.DocumentData | undefined,
+  eventDocs: admin.firestore.QueryDocumentSnapshot[],
+  gameInstanceId: string,
+  /** Last-resort end anchor: the session's own canonical end (FR-28h fail-closed, R7). */
+  sessionCanonicalEndedAt?: admin.firestore.Timestamp | null
+): GameReplayWindow {
+  const docStart = gameData?.startedAt as admin.firestore.Timestamp | undefined;
+  const docEnd = gameData?.endedAt as admin.firestore.Timestamp | undefined;
+
+  let startSec = docStart ? tsToSeconds(docStart) : 0;
+  let endSec = docEnd ? tsToSeconds(docEnd) : null;
+
+  if (!docStart || !docEnd) {
+    let markerStart: number | null = null;
+    let markerEnd: number | null = null;
+    for (const d of eventDocs) {
+      const data = d.data();
+      const k = data.kind as string;
+      if (k !== KIND_GAME_STARTED && k !== KIND_GAME_ENDED && k !== KIND_GAME_COMPLETED) continue;
+      const payload = stringifyPayload(data.payload as Record<string, unknown>);
+      if ((payload[PK.gameInstanceId] || "") !== gameInstanceId) continue;
+      const ts = data.timestamp as admin.firestore.Timestamp | undefined;
+      if (!ts) continue;
+      const sec = tsToSeconds(ts);
+      if (k === KIND_GAME_STARTED) {
+        markerStart = markerStart === null ? sec : Math.min(markerStart, sec);
+      } else {
+        markerEnd = markerEnd === null ? sec : Math.max(markerEnd, sec);
+      }
+    }
+    if (!docStart && markerStart !== null) startSec = markerStart;
+    if (!docEnd && markerEnd !== null) endSec = markerEnd;
+  }
+
+  // A trip that ended bounds every game inside it, so this rescues the legitimate
+  // "game markers missing but the trip clearly closed" case before the fail-closed rule.
+  if (endSec === null && sessionCanonicalEndedAt) {
+    endSec = tsToSeconds(sessionCanonicalEndedAt);
+  }
+
+  return { startSec, endSec };
+}
+
 function parseCommonConfig(commonConfigDataBase64: string | undefined): { gameMode: string; lifecycleState: string } {
   if (!commonConfigDataBase64) {
     throw new Error("missing_common_config");
@@ -379,6 +556,18 @@ export async function resolveGameplayAppendTransaction(
     const existingEventSnap = await tx.get(eventRef);
     const incomingTs = secondsToTimestamp(event.timestamp);
     const incomingPayload = stringifyPayload(event.payload || undefined);
+    // Strip every SERVER-OWNED key from the incoming payload before it is evaluated,
+    // compared for idempotency, or written. Both keys are forgeable levers otherwise:
+    //
+    //   `lateReplay`        — a client could exempt its own finds from competitive
+    //                         outcomes, or force inclusion in them.
+    //   `serverCommittedAt` — it is the supersede tie-break (`compareIncomingVsIncumbent`),
+    //                         where LOWER wins and 0/absent sorts LAST. A client supplying
+    //                         a small value could take a contested find from whoever
+    //                         genuinely got there first.
+    for (const key of SERVER_STAMPED_PAYLOAD_KEYS) {
+      delete incomingPayload[key];
+    }
     const normalizedActor = userId;
 
     // Idempotency before roster check so participant_left retries succeed after roster/members update.
@@ -389,8 +578,25 @@ export async function resolveGameplayAppendTransaction(
       const existingPayload = stringifyPayload(ed.payload as Record<string, unknown>);
       const exSec = ed.timestamp ? tsToSeconds(ed.timestamp as admin.firestore.Timestamp) : -1;
       const tsEq = Math.abs(exSec - event.timestamp) < 0.001;
-      if (sameKind && sameSession && tsEq && payloadsEqualStringMap(incomingPayload, existingPayload)) {
-        return { success: true, resolution: "accepted", appliedEventId: event.id };
+      // Compare only what the CLIENT authored. Server-stamped keys are on the stored copy
+      // and never on the incoming one, so including them would make every retry of a
+      // committed accept look like an id collision.
+      if (
+        sameKind &&
+        sameSession &&
+        tsEq &&
+        payloadsEqualStringMap(
+          withoutServerStampedKeys(incomingPayload),
+          withoutServerStampedKeys(existingPayload)
+        )
+      ) {
+        return {
+          success: true,
+          resolution: "accepted",
+          appliedEventId: event.id,
+          // Re-report the stamp so a retrying device still learns it.
+          lateReplay: existingPayload[PK.lateReplay] === "true",
+        };
       }
       if (sameKind && sameSession) {
         throw new functions.https.HttpsError("already-exists", "event id collision");
@@ -467,9 +673,29 @@ export async function resolveGameplayAppendTransaction(
       } catch {
         throw new functions.https.HttpsError("failed-precondition", "invalid game config");
       }
-      if (cfg.lifecycleState !== "started") {
-        throw new functions.https.HttpsError("failed-precondition", "game not started");
+      // FR-28h: a find replayed after its game closed (offline play, or a child's queue
+      // draining at consent) is accepted when it happened inside the played window and
+      // arrived within the horizon. The previous started-only gate rejected every
+      // offline-completed trip's discoveries as a permanent verdict.
+      const admission = evaluateReplayAdmission({
+        lifecycleState: cfg.lifecycleState,
+        eventTimestampSec: event.timestamp,
+        window: deriveGameReplayWindow(
+          gameData,
+          eventDocs,
+          gameInstanceId,
+          sessionSnap.data()?.canonicalEndedAt as admin.firestore.Timestamp | undefined
+        ),
+        nowSec: admin.firestore.Timestamp.now().seconds,
+        // Exactly one member, and membership of the caller was asserted above — so that
+        // one member IS the caller. An empty or unreadable roster is not solo, which is
+        // the fail-closed direction.
+        isSoloTrip: memSnap.size === 1,
+      });
+      if (!admission.accept) {
+        throw new functions.https.HttpsError("failed-precondition", admission.message);
       }
+      const isLateReplay = admission.lateReplay;
       const gameMode = cfg.gameMode as "collaborative" | "competitive";
 
       const buckets = replayDiscoveriesFromDocs(eventDocs, gameInstanceId);
@@ -478,7 +704,11 @@ export async function resolveGameplayAppendTransaction(
 
       const outcome = evaluateDiscoverySubmission(gameMode, tripMode, existingForTarget, userId);
 
-      if (outcome === "rejected_duplicate" && gameMode === "competitive" && tripMode === "multiplayer") {
+      // FR-28h outcome neutrality: a late replay never runs the supersede machinery. Its
+      // timestamp may well be earlier than an on-time find's, which is exactly the case
+      // that would displace a result the trip already closed on. It still records as a
+      // find (or as an ordinary duplicate rejection below) — it just cannot change who won.
+      if (!isLateReplay && outcome === "rejected_duplicate" && gameMode === "competitive" && tripMode === "multiplayer") {
         const others = existingForTarget.filter((d) => d.participantId !== userId);
         if (others.length > 0) {
           const nowTsEarly = admin.firestore.Timestamp.now();
@@ -591,8 +821,20 @@ export async function resolveGameplayAppendTransaction(
         return { success: true, resolution: "superseded", rejectionEvent: wire };
       }
 
-      normalizeAndWrite({ ...incomingPayload, [PK.participantId]: userId });
-      return { success: true, resolution: "accepted", appliedEventId: event.id };
+      const acceptedPayload: Record<string, string> = { ...incomingPayload, [PK.participantId]: userId };
+      if (isLateReplay) {
+        // Server stamp. Consumers (competitive winner / weighted points) read this to
+        // exclude the find from OUTCOME computation only — it still counts for XP,
+        // lifetime stats, and every "finds" surface.
+        acceptedPayload[PK.lateReplay] = "true";
+      }
+      normalizeAndWrite(acceptedPayload);
+      return {
+        success: true,
+        resolution: "accepted",
+        appliedEventId: event.id,
+        lateReplay: isLateReplay,
+      };
     }
 
     if (kind === KIND_REGION_REMOVED) {

@@ -119,7 +119,8 @@ enum TripActivityEventDiscoveryReplay {
             discoveredAt: event.timestamp,
             serverCommittedAt: serverCommittedAt,
             inputMethod: inputMethod,
-            location: LocationData(payload: event.payload)
+            location: LocationData(payload: event.payload),
+            isLateReplay: payload[TripActivityEventPayloadKey.lateReplay] == "true"
         )
     }
 

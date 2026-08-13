@@ -67,17 +67,38 @@ final class SyncQueueRepository: ObservableObject, SyncQueueRepositoryProtocol {
     }
 
     func markFailed(id: String, nextRetryAt: Date?) throws {
-        guard let ctx = modelContext else { throw SyncQueueRepositoryError.noModelContext }
-        guard let entity = try fetchEntity(id: id, context: ctx) else { return }
-        entity.state = SyncQueueItemState.failed.rawValue
-        entity.nextRetryAt = nextRetryAt
-        entity.updatedAt = Date()
-        entity.attemptCount += 1
-        try ctx.save()
+        try park(id: id, nextRetryAt: nextRetryAt, spendsAttempt: true)
+    }
+
+    /// Policy hold: park the row, spend nothing. See the protocol doc for why FR-28
+    /// rejections must not consume the budget that `markFailed` exists to count down.
+    func markHeld(id: String, nextRetryAt: Date?) throws {
+        try park(id: id, nextRetryAt: nextRetryAt, spendsAttempt: false)
     }
 
     func markCancelled(id: String) throws {
         try updateState(id: id, state: .cancelled)
+    }
+
+    func markRejected(id: String) throws {
+        try updateState(id: id, state: .rejected)
+    }
+
+    func markGameplayItemsRecovered(ids: [String]) throws {
+        guard let ctx = modelContext, !ids.isEmpty else { return }
+        let idSet = Set(ids)
+        let cancelledState = SyncQueueItemState.cancelled.rawValue
+        let descriptor = FetchDescriptor<SyncQueueItemEntity>(
+            predicate: #Predicate<SyncQueueItemEntity> { $0.state == cancelledState }
+        )
+        let rows = try ctx.fetch(descriptor).filter { idSet.contains($0.id) }
+        guard !rows.isEmpty else { return }
+        let now = Date()
+        for row in rows {
+            row.state = SyncQueueItemState.recovered.rawValue
+            row.updatedAt = now
+        }
+        try ctx.save()
     }
 
     func metadata(key: String) throws -> RemoteSyncMetadata? {
@@ -170,12 +191,25 @@ final class SyncQueueRepository: ObservableObject, SyncQueueRepositoryProtocol {
         try ctx.save()
     }
 
-    /// COPPA FR-28 consent resume: a child-restriction rejection parks the row an hour
-    /// out (`markFailed(nextRetryAt: +3600)`), which is correct while the restriction
-    /// lasts and wrong the moment it lifts — `fetchFailedRetryDue()` would skip the whole
-    /// backlog until the hour elapsed. Clearing the stamp makes the next flush see them.
+    /// COPPA FR-28 consent resume: a child-restriction hold parks the row an hour out,
+    /// which is correct while the restriction lasts and wrong the moment it lifts —
+    /// `fetchFailedRetryDue()` would skip the whole backlog until the hour elapsed.
+    /// Clearing the stamp makes the next flush see them. Universal (child and adult).
     @discardableResult
     func clearGameplayRetryBackoff() throws -> Int {
+        try unblockFailedGameplayRows(resettingAttempts: false)
+    }
+
+    /// Child-account consent only — see the protocol doc. Attempts spent before consent
+    /// (historical builds attempted through the hold; timeouts, membership and App Check
+    /// failures spend the same counter) would otherwise follow the row past consent and
+    /// push it toward the cancel cap. Consent retires the reason, so it retires the cost.
+    @discardableResult
+    func resetGameplayRetryBudget() throws -> Int {
+        try unblockFailedGameplayRows(resettingAttempts: true)
+    }
+
+    private func unblockFailedGameplayRows(resettingAttempts: Bool) throws -> Int {
         guard let ctx = modelContext else { throw SyncQueueRepositoryError.noModelContext }
         let gameplayKind = SyncQueueItemKind.gameplayEvent.rawValue
         let failedState = SyncQueueItemState.failed.rawValue
@@ -184,15 +218,71 @@ final class SyncQueueRepository: ObservableObject, SyncQueueRepositoryProtocol {
                 $0.kind == gameplayKind && $0.state == failedState
             }
         )
-        let rows = try ctx.fetch(descriptor).filter { $0.nextRetryAt != nil }
+        let rows = try ctx.fetch(descriptor).filter {
+            $0.nextRetryAt != nil || (resettingAttempts && $0.attemptCount > 0)
+        }
         guard !rows.isEmpty else { return 0 }
         let now = Date()
         for row in rows {
             row.nextRetryAt = nil
+            if resettingAttempts {
+                row.attemptCount = 0
+            }
             row.updatedAt = now
         }
         try ctx.save()
         return rows.count
+    }
+
+    func unrecoveredCancelledGameplayItems() throws -> [SyncQueueItem] {
+        guard let ctx = modelContext else { throw SyncQueueRepositoryError.noModelContext }
+        let gameplayKind = SyncQueueItemKind.gameplayEvent.rawValue
+        let descriptor = FetchDescriptor<SyncQueueItemEntity>(
+            predicate: #Predicate<SyncQueueItemEntity> { $0.kind == gameplayKind }
+        )
+        let entities = try ctx.fetch(descriptor)
+        let completedState = SyncQueueItemState.completed.rawValue
+        let rejectedState = SyncQueueItemState.rejected.rawValue
+        // Two disqualifiers, both permanent:
+        //   `completed` — the upload already landed; re-enqueuing duplicates it.
+        //   `rejected`  — the server refused this event for good; re-enqueuing would push
+        //                 back data it deliberately refused or deleted (FR-30 retention).
+        let settledEventIds = Set(
+            entities
+                .filter { $0.state == completedState || $0.state == rejectedState }
+                .compactMap { $0.payloadEventId }
+        )
+        let cancelledState = SyncQueueItemState.cancelled.rawValue
+        return entities
+            .filter { entity in
+                entity.state == cancelledState
+                    && entity.payloadEventId.map { !settledEventIds.contains($0) } == true
+            }
+            .sorted { $0.createdAt < $1.createdAt }
+            .map { toItem($0) }
+    }
+
+    func nonTerminalGameplaySessionIds() throws -> [String] {
+        guard let ctx = modelContext else { throw SyncQueueRepositoryError.noModelContext }
+        let gameplayKind = SyncQueueItemKind.gameplayEvent.rawValue
+        let descriptor = FetchDescriptor<SyncQueueItemEntity>(
+            predicate: #Predicate<SyncQueueItemEntity> { $0.kind == gameplayKind }
+        )
+        let nonTerminalStates: Set<String> = [
+            SyncQueueItemState.pending.rawValue,
+            SyncQueueItemState.inProgress.rawValue,
+            SyncQueueItemState.failed.rawValue
+        ]
+        var seen = Set<String>()
+        var ordered: [String] = []
+        for entity in try ctx.fetch(descriptor).sorted(by: { $0.createdAt < $1.createdAt }) {
+            guard nonTerminalStates.contains(entity.state),
+                  let sessionId = entity.payloadSessionId,
+                  !sessionId.isEmpty,
+                  seen.insert(sessionId).inserted else { continue }
+            ordered.append(sessionId)
+        }
+        return ordered
     }
 
     /// Hard sign-out: delete all queue rows and remote sync metadata without uploading.
@@ -204,6 +294,18 @@ final class SyncQueueRepository: ObservableObject, SyncQueueRepositoryProtocol {
     }
 
     // MARK: - Private
+
+    private func park(id: String, nextRetryAt: Date?, spendsAttempt: Bool) throws {
+        guard let ctx = modelContext else { throw SyncQueueRepositoryError.noModelContext }
+        guard let entity = try fetchEntity(id: id, context: ctx) else { return }
+        entity.state = SyncQueueItemState.failed.rawValue
+        entity.nextRetryAt = nextRetryAt
+        entity.updatedAt = Date()
+        if spendsAttempt {
+            entity.attemptCount += 1
+        }
+        try ctx.save()
+    }
 
     private func updateState(id: String, state: SyncQueueItemState) throws {
         guard let ctx = modelContext else { throw SyncQueueRepositoryError.noModelContext }

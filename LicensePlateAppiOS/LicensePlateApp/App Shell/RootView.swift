@@ -183,6 +183,16 @@ struct RootView: View {
                     }
                 )
             )
+            // FR-28 consent resume + durable recovery need the signed-in identity, which
+            // lives here. Identity only — the repository reads stay in the service layer.
+            ConsentRecoverySupport.contextProvider = {
+                guard let user = authService.currentUser else { return nil }
+                return ConsentRecoverySupport.Context(
+                    user: user,
+                    userId: user.firebaseUID ?? user.id,
+                    isOnline: authService.isOnline
+                )
+            }
             authService.setSyncCoordinator(syncCoordinator)
             let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id
             let activeFamilyId = authService.currentUser?.activeFamilyId
@@ -217,6 +227,10 @@ struct RootView: View {
             // SDK for age-unresolved sessions, which is exactly what FR-46 forbids.
             if authService.isOnline {
                 Task { await SyncCoordinator.shared.processPendingSyncItems() }
+                // FR-28 safety net: a consent edge only fires while the app is running, so
+                // data dropped before a restriction lifted has no other second chance.
+                // Idempotent, once per launch, and skipped entirely while restricted.
+                Task { await ChildRestrictedDataRecoveryService.shared.runLaunchRecoveryIfEligible() }
             }
             TripParticipationService.shared.bindAuthService(authService)
 

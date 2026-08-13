@@ -318,8 +318,12 @@ struct FamilyMembershipTransitionServiceTests {
     @MainActor
     private final class World {
         var invitesByFamily: [String: [String]] = [:]
+        var isChildAccount = false
         private(set) var consumed: [String] = []
         private(set) var resumeCount = 0
+        /// Every consent effect, in the order it ran — the edge now drives more than the
+        /// gameplay flush for a child, and the ordering is load-bearing.
+        private(set) var kicks: [String] = []
 
         func makeService() -> FamilyMembershipTransitionService {
             FamilyMembershipTransitionService(
@@ -330,12 +334,75 @@ struct FamilyMembershipTransitionServiceTests {
                     markInvitesConsumed: { [weak self] ids in
                         self?.consumed.append(contentsOf: ids)
                     },
+                    isChildAccountSession: { [weak self] in self?.isChildAccount ?? false },
                     resumeGameplaySync: { [weak self] in
                         self?.resumeCount += 1
-                    }
+                        self?.kicks.append("resume")
+                    },
+                    resetRetryBudgets: { [weak self] in self?.kicks.append("budgets") },
+                    runDurableRecovery: { [weak self] in self?.kicks.append("recovery") },
+                    retryReturnStreakDailyClaim: { [weak self] in self?.kicks.append("streak") },
+                    reconcileXpGrants: { [weak self] in self?.kicks.append("xpReconcile") }
                 )
             )
         }
+    }
+
+    /// D: for a CHILD account the consent edge is the single trigger for every recovery
+    /// effect, in an order where nothing runs before the budget it depends on is restored.
+    @Test func childAdmissionKicksEveryRecoveryPathInOrder() async {
+        let world = World()
+        world.isChildAccount = true
+        let service = world.makeService()
+        service.seed(familyId: nil)
+
+        _ = service.note(activeFamilyId: "fam-1")
+        try? await Task.sleep(nanoseconds: 80_000_000)
+
+        #expect(world.kicks == ["budgets", "recovery", "streak", "xpReconcile"])
+    }
+
+    /// R3: an adult family join gets exactly the behaviour that shipped with FR-28c — the
+    /// universal backoff clear and flush, and none of the recovery battery.
+    @Test func adultAdmissionRunsOnlyThePreExistingResume() async {
+        let world = World()
+        world.isChildAccount = false
+        world.invitesByFamily["fam-1"] = ["i-1"]
+        let service = world.makeService()
+        service.seed(familyId: nil)
+
+        _ = service.note(activeFamilyId: "fam-1")
+        try? await Task.sleep(nanoseconds: 80_000_000)
+
+        #expect(world.kicks == ["resume"])
+        #expect(world.resumeCount == 1)
+        // Invite bookkeeping is not part of the recovery battery and still runs.
+        #expect(world.consumed == ["i-1"])
+    }
+
+    /// An adult switching families is still just an adult join.
+    @Test func adultFamilySwitchRunsOnlyThePreExistingResume() async {
+        let world = World()
+        world.isChildAccount = false
+        let service = world.makeService()
+        service.seed(familyId: "fam-1")
+
+        _ = service.note(activeFamilyId: "fam-2")
+        try? await Task.sleep(nanoseconds: 80_000_000)
+
+        #expect(world.kicks == ["resume"])
+    }
+
+    @Test func removalKicksNothing() async {
+        let world = World()
+        world.isChildAccount = true
+        let service = world.makeService()
+        service.seed(familyId: "fam-1")
+
+        _ = service.note(activeFamilyId: nil)
+        try? await Task.sleep(nanoseconds: 60_000_000)
+
+        #expect(world.kicks.isEmpty)
     }
 
     @Test func theFirstObservedValueOnlySeedsTheBaseline() async {
@@ -539,12 +606,18 @@ struct ChildConsentSyncResumeTests {
             dependencies: .init(
                 acceptedInviteIds: { _ in [] },
                 markInvitesConsumed: { _ in },
+                // The universal path — this is the edge every admission takes.
+                isChildAccountSession: { false },
                 resumeGameplaySync: {
                     // Exactly what SyncCoordinator.resumeGameplaySyncAfterConsent does
                     // before draining.
                     try? repository.clearGameplayRetryBackoff()
                     flushed = true
-                }
+                },
+                resetRetryBudgets: {},
+                runDurableRecovery: {},
+                retryReturnStreakDailyClaim: {},
+                reconcileXpGrants: {}
             )
         )
         service.seed(familyId: nil)

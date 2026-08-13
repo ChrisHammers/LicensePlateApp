@@ -34,6 +34,11 @@ protocol TripActivityEventRepositoryProtocol: AnyObject {
     func deleteAllEventsForGame(sessionId: UUID, gameInstanceId: UUID) throws
     /// Single-event delete (e.g. server superseded a local `region_found` after sync). Step 13 fairness path.
     func deleteEvent(id: String) throws
+    /// COPPA FR-28h: applies the server's `lateReplay` stamp to the local copy of a find
+    /// the SERVER accepted late. Without it the finder's own device is the one device
+    /// still computing unfrozen competitive outcomes. Idempotent; returns true if changed.
+    @discardableResult
+    func markGameplayEventLateReplay(id: String) throws -> Bool
 }
 
 @MainActor
@@ -256,6 +261,22 @@ final class TripActivityEventRepository: ObservableObject, TripActivityEventRepo
         guard let entity = try Self.fetchEntity(id: id, context: ctx) else { return }
         ctx.delete(entity)
         try ctx.save()
+    }
+
+    @discardableResult
+    func markGameplayEventLateReplay(id: String) throws -> Bool {
+        guard let ctx = modelContext else { throw TripActivityEventRepositoryError.noModelContext }
+        guard let entity = try Self.fetchEntity(id: id, context: ctx) else { return false }
+        var payload: [String: String] = [:]
+        if let data = entity.payloadData,
+           let decoded = try? JSONDecoder().decode([String: String].self, from: data) {
+            payload = decoded
+        }
+        guard payload[TripActivityEventPayloadKey.lateReplay] != "true" else { return false }
+        payload[TripActivityEventPayloadKey.lateReplay] = "true"
+        entity.payloadData = try JSONEncoder().encode(payload)
+        try ctx.save()
+        return true
     }
 
     /// Hard sign-out: delete all activity events locally (no remote lifecycle calls).

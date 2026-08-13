@@ -47,6 +47,11 @@ enum TripActivityEventPayloadKey {
     static let clientClaimedAt = "clientClaimedAt"
     /// Unix seconds when server accepted this `region_found` (secondary ordering vs same client timestamp).
     static let serverCommittedAt = "serverCommittedAt"
+    /// COPPA FR-28h: `"true"` when the server accepted this `region_found` into an already
+    /// ended game. SERVER-STAMPED ONLY — the client never writes it, and the server strips
+    /// any client-supplied value. Read by competitive outcome derivation to freeze results
+    /// at trip end.
+    static let lateReplay = "lateReplay"
     /// Server `discovery_rejected`: `region_found` id removed by `server_rejected_superseded_by_earlier_timestamp`.
     static let supersededRegionFoundEventId = "supersededRegionFoundEventId"
     /// `participant_left`: `voluntary` | `kicked`
