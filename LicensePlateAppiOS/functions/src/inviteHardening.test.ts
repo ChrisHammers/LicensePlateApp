@@ -13,6 +13,12 @@
  *     budget. Neither new gate can be used to escape a child rule.
  *  2. IDEMPOTENCE — a replayed invite (the offline-first client's retry) short-circuits on
  *     the existing pending row and does NOT spend budget a second time.
+ *
+ * Also here (same callable, same fixtures): the sender-membership gate. Before it existed,
+ * `sendTripInvite` never checked that the CALLER was aboard `tripSessionId`, so its
+ * "already a participant" branch answered roster-membership questions about arbitrary trips
+ * for any registered caller. The gate must refuse an outsider BEFORE any target-specific
+ * read, with a reply that never varies by target.
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
@@ -184,6 +190,98 @@ describe("FR-47: sendTripInvite relationship gate", () => {
     expect(adultError.code).toBe(childError.code);
     expect(adultError.message).toBe(childError.message);
     expect(adultError.details).toEqual(childError.details);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sender-membership gate: sendTripInvite must not be a roster oracle
+// ---------------------------------------------------------------------------
+
+describe("sender-membership gate", () => {
+  // In these probes the sender is `friend`: registered, relationship-eligible (accepted
+  // friendship with `parent`), inside budget — but NOT aboard s1. Every refusal reason the
+  // downstream checks could produce is therefore available; only the membership gate may
+  // answer.
+  const MEMBERSHIP_REJECTION = {
+    code: "permission-denied",
+    message: "Not a member of this trip session",
+  };
+
+  it("refuses a non-member sender without leaking that the target is aboard", async () => {
+    // Target `parent` IS on the s1 roster. Pre-fix this replied "User is already a
+    // participant in this trip" — the oracle this gate closes.
+    await expect(sendTrip("parent", "friend")).rejects.toMatchObject(
+      MEMBERSHIP_REJECTION
+    );
+    expect(tripInvitePaths()).toEqual([]);
+    expect(counter("trip_invite", "friend")).toBeUndefined();
+  });
+
+  it("replies byte-identically whatever the probed target is (aboard / adult / child)", async () => {
+    const aboardTarget = await sendTrip("parent", "friend").catch((e) => e);
+    const adultTarget = await sendTrip("stranger", "friend").catch((e) => e);
+    const childTarget = await sendTrip("kid", "friend").catch((e) => e);
+
+    for (const error of [adultTarget, childTarget]) {
+      expect(error.code).toBe(aboardTarget.code);
+      expect(error.message).toBe(aboardTarget.message);
+      expect(error.details).toEqual(aboardTarget.details);
+    }
+    expect(aboardTarget.message).toBe(MEMBERSHIP_REJECTION.message);
+  });
+
+  it("still allows creating a brand-new trip by inviting into it", async () => {
+    const result = (await (sendTripInvite as unknown as Runnable).run(
+      { tripSessionId: "fresh1", tripName: "Fresh", toUserId: "parent" },
+      context("friend")
+    )) as { inviteId: string };
+
+    expect(db().store.get("trip_sessions/fresh1/members/friend")).toMatchObject({
+      role: "owner",
+    });
+    expect(db().store.get(`trip_invites/${result.inviteId}`)).toMatchObject({
+      tripSessionId: "fresh1",
+      toUserId: "parent",
+      status: "pending",
+    });
+  });
+
+  it("tolerates a creator whose member doc is not seeded yet (client/sync race)", async () => {
+    // Same shape `tripSessionCanonical.ts` repairs: trip doc synced with `createdBy`, the
+    // members subcollection not yet.
+    db().seed("trip_sessions/raced1", { name: "Raced", createdBy: "parent" });
+
+    await expect(
+      (sendTripInvite as unknown as Runnable).run(
+        { tripSessionId: "raced1", tripName: "Raced", toUserId: "friend" },
+        context("parent")
+      )
+    ).resolves.toMatchObject({ inviteId: expect.any(String) });
+    expect(db().store.get("trip_sessions/raced1/members/parent")).toMatchObject({
+      role: "owner",
+    });
+  });
+
+  it("an existing session with a DIFFERENT creator is not adoptable", async () => {
+    // createdBy someone else and sender not aboard: the creator race exemption must not
+    // open the door the membership gate just closed.
+    db().seed("trip_sessions/other1", { name: "Other", createdBy: "parent" });
+    await expect(
+      (sendTripInvite as unknown as Runnable).run(
+        { tripSessionId: "other1", tripName: "Other", toUserId: "parent" },
+        context("friend")
+      )
+    ).rejects.toMatchObject(MEMBERSHIP_REJECTION);
+  });
+
+  it("a member sender still gets the pre-existing 'already a participant' reply", async () => {
+    // The gate must not swallow the legitimate duplicate signal for someone entitled to it:
+    // a roster member can already see who is aboard.
+    db().seed("trip_sessions/s1/members/friend", { role: "member" });
+    await expect(sendTrip("friend", "parent")).rejects.toMatchObject({
+      code: "failed-precondition",
+      message: "User is already a participant in this trip",
+    });
   });
 });
 

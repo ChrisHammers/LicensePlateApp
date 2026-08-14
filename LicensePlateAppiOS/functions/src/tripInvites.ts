@@ -4,7 +4,9 @@
  * Trust model: invites are restricted to accounts the sender already has a relationship with
  * (accepted friendship or shared active family) and are rate limited per sender — FR-47
  * (COPPA F-10), which closed the two step-08 hardening TODOs that used to sit here. The
- * FR-13/24/38 child rules remain stricter and run first. Captcha remains unimplemented.
+ * FR-13/24/38 child rules remain stricter and run first. A sender must also already be
+ * aboard the trip they are inviting to (or be creating it) — see the sender-membership gate
+ * in `sendTripInvite`. Captcha remains unimplemented.
  * Share/QR flows should mirror friend/family: joining is not assumed until the server records accept.
  */
 
@@ -67,7 +69,37 @@ export const sendTripInvite = enforcedCallable(async (data, context) => {
     );
   }
 
+  // Sender-membership gate (found during F-10, fixed separately): every check below this
+  // point reads target- or roster-specific state, so an outsider must be refused before any
+  // of them run. Without this, the "already a participant" branch below was a roster oracle —
+  // any registered user could probe an arbitrary (tripSessionId, toUserId) pair and learn
+  // whether that user is aboard that trip — and the FR-38 branch leaked "a child is aboard"
+  // the same way. Two creation-flow shapes stay allowed, and neither reveals anything about
+  // an existing roster:
+  //   - the session doc does not exist yet (first invite creates the trip; the sender is
+  //     seeded as owner below);
+  //   - the session doc exists with `createdBy == sender` but the owner member doc has not
+  //     been seeded yet — the same client/sync race `tripSessionCanonical.ts` tolerates —
+  //     which the owner-seeding write below repairs.
+  // The rejection is byte-identical to the membership refusal every other trip callable
+  // throws, and it is target-independent (thrown before any target read), so it cannot be
+  // diffed across targets into a child- or roster-detector (FR-24 discipline).
   const sessionRef = db.collection("trip_sessions").doc(tripSessionId);
+  const [senderMemberSnap, sessionSnap] = await Promise.all([
+    sessionRef.collection("members").doc(fromUserId).get(),
+    sessionRef.get(),
+  ]);
+  if (
+    !senderMemberSnap.exists &&
+    sessionSnap.exists &&
+    sessionSnap.data()?.createdBy !== fromUserId
+  ) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Not a member of this trip session"
+    );
+  }
+
   const recipientMemberRef = sessionRef.collection("members").doc(toUserId);
   const recipientMemberSnap = await recipientMemberRef.get();
   if (recipientMemberSnap.exists) {
@@ -150,8 +182,7 @@ export const sendTripInvite = enforcedCallable(async (data, context) => {
   );
 
   const ownerMemberRef = sessionRef.collection("members").doc(fromUserId);
-  const ownerSnap = await ownerMemberRef.get();
-  if (!ownerSnap.exists) {
+  if (!senderMemberSnap.exists) {
     batch.set(ownerMemberRef, {
       role: "owner",
       joinedAt: admin.firestore.FieldValue.serverTimestamp(),
