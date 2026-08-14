@@ -141,50 +141,82 @@ struct ProgressionRewardsConfigTests {
         #expect(ProgressionRankBands.pendingOverlayFraction(pendingXp: 100, presentation: presentation) == 0.5)
     }
 
-    @Test func projectedBandFillFitsInCurrentBand() {
-        let presentation = ProgressionPresentationRewards(visualBandSize: 100, xpPerRankLevel: 3_000)
+    @Test func projectedBandFillMatchesToastEarlyRankFiftyXp() {
+        let catalog = ProgressionCatalog.bundledDefault
+        // Rank span 0→1000: 50 pending ≈ 5%
         let fill = ProgressionRankBands.projectedBandFill(
-            serverXp: 37,
-            pendingXp: 10,
-            presentation: presentation
+            serverXp: 0,
+            pendingXp: 50,
+            catalog: catalog
         )
-        #expect(fill.syncedFractionInCurrentBand == 0.37)
-        #expect(fill.pendingFractionInCurrentBand == 0.10)
+        #expect(fill.syncedFractionInCurrentBand == 0)
+        #expect(abs(fill.pendingFractionInCurrentBand - 0.05) < 0.0001)
         #expect(fill.pendingFractionInNextBand == 0)
         #expect(fill.pendingXpBeyondNextBand == 0)
         #expect(!fill.showsNextBandBar)
-    }
-
-    @Test func projectedBandFillSpillsIntoNextBandOnly() {
-        let presentation = ProgressionPresentationRewards(visualBandSize: 100, xpPerRankLevel: 3_000)
-        // room at 80 = 20; pending 50 → 20 current + 30 next + 0 beyond
-        let fill = ProgressionRankBands.projectedBandFill(
-            serverXp: 80,
-            pendingXp: 50,
-            presentation: presentation
-        )
-        #expect(fill.syncedFractionInCurrentBand == 0.80)
-        #expect(fill.pendingFractionInCurrentBand == 0.20)
-        #expect(fill.pendingFractionInNextBand == 0.30)
-        #expect(fill.pendingXpBeyondNextBand == 0)
-        #expect(fill.showsNextBandBar)
+        #expect(!fill.showsNextRankCaption)
         #expect(!fill.showsBeyondNextBandCaption)
+
+        let toast = XpGainToastRankBandBuilder.build(
+            totalXpBeforeBurst: 0,
+            burstXpGained: 50,
+            catalog: catalog
+        )
+        #expect(toast?.progressBeforeBurst == fill.syncedFractionInCurrentBand)
+        #expect(
+            abs((toast?.progressAfterBurst ?? -1) - (fill.syncedFractionInCurrentBand + fill.pendingFractionInCurrentBand))
+                < 0.0001
+        )
     }
 
-    @Test func projectedBandFillGoesPastNextBand() {
-        let presentation = ProgressionPresentationRewards(visualBandSize: 100, xpPerRankLevel: 3_000)
-        // Screenshot-like: 320 → 20 in band, room 80; +390 → 80 current, 100 next, 210 beyond
+    @Test func projectedBandFillMatchesToastCrossingOneRank() {
+        let catalog = ProgressionCatalog.bundledDefault
+        // 900 + 150 → after 1050 in 1000…3000 (toast segment-from-after)
         let fill = ProgressionRankBands.projectedBandFill(
-            serverXp: 320,
-            pendingXp: 390,
-            presentation: presentation
+            serverXp: 900,
+            pendingXp: 150,
+            catalog: catalog
         )
-        #expect(fill.syncedFractionInCurrentBand == 0.20)
-        #expect(fill.pendingFractionInCurrentBand == 0.80)
-        #expect(fill.pendingFractionInNextBand == 1.0)
-        #expect(fill.pendingXpBeyondNextBand == 210)
-        #expect(fill.showsNextBandBar)
+        let toast = XpGainToastRankBandBuilder.build(
+            totalXpBeforeBurst: 900,
+            burstXpGained: 150,
+            catalog: catalog
+        )
+        #expect(toast != nil)
+        #expect(fill.syncedFractionInCurrentBand == toast?.progressBeforeBurst)
+        #expect(
+            abs(fill.pendingFractionInCurrentBand - ((toast?.progressAfterBurst ?? 0) - (toast?.progressBeforeBurst ?? 0)))
+                < 0.0001
+        )
+        #expect(fill.pendingFractionInNextBand == 0)
+        #expect(fill.pendingXpBeyondNextBand == 0)
+        #expect(fill.showsNextRankCaption)
+        #expect(!fill.showsBeyondNextBandCaption)
+        #expect(!fill.showsNextBandBar)
+    }
+
+    @Test func projectedBandFillBeyondNextRank() {
+        let catalog = ProgressionCatalog.bundledDefault
+        // 0 + 3500 → past 3000 into third rank; beyond = 500
+        let fill = ProgressionRankBands.projectedBandFill(
+            serverXp: 0,
+            pendingXp: 3500,
+            catalog: catalog
+        )
+        let toast = XpGainToastRankBandBuilder.build(
+            totalXpBeforeBurst: 0,
+            burstXpGained: 3500,
+            catalog: catalog
+        )
+        #expect(fill.syncedFractionInCurrentBand == toast?.progressBeforeBurst)
+        #expect(
+            abs(fill.pendingFractionInCurrentBand - ((toast?.progressAfterBurst ?? 0) - (toast?.progressBeforeBurst ?? 0)))
+                < 0.0001
+        )
+        #expect(fill.pendingXpBeyondNextBand == 500)
         #expect(fill.showsBeyondNextBandCaption)
+        #expect(!fill.showsNextRankCaption)
+        #expect(!fill.showsNextBandBar)
     }
 
     @Test func roomInCurrentBandAtBoundaryIsFullBand() {

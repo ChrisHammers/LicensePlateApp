@@ -837,12 +837,12 @@
 "profile.xp.local_fallback_note" = "La XP sincronizada aún no está disponible, así que esto incluye el progreso local pendiente.";
 "profile.xp.pending_ledger_line" = "En este dispositivo: +%d XP aún no reflejados en tu total sincronizado.";
 "profile.xp.pending_section.a11y" = "XP pendiente en este dispositivo";
-"profile.xp.rank_band_title" = "Progreso en la banda de rango actual";
-"profile.xp.rank_band.a11y" = "Progreso visual en la banda de XP actual";
+"profile.xp.rank_band_title" = "Progreso hacia el siguiente rango";
+"profile.xp.rank_band.a11y" = "Progreso visual hacia el siguiente rango";
 "profile.xp.rank_band.a11y.value" = "%d XP sincronizados, %d pendientes en el dispositivo";
 "profile.xp.pending_overlay_caption" = "El amarillo está pendiente en este dispositivo: aún no figura en el total sincronizado de tu cuenta.";
-"profile.xp.pending_next_band_caption" = "Lo pendiente continúa en la siguiente banda.";
-"profile.xp.pending_beyond_next_band_caption" = "Lo pendiente continúa en la siguiente banda y más allá.";
+"profile.xp.pending_next_band_caption" = "Lo pendiente continúa en el siguiente rango.";
+"profile.xp.pending_beyond_next_band_caption" = "Lo pendiente continúa más allá del siguiente rango.";
 
 "tripSummary.xp_recap.title" = "XP y ajustes";
 "tripSummary.xp_recap.subtitle" = "Desde el libro mayor del viaje en este dispositivo.";

@@ -3,6 +3,7 @@
 //  LicensePlateApp
 //
 //  Visual-only: server XP fill + optional pending overlay (does not grant unlocks).
+//  Fill uses RankLadder segments (same math as XP gain toast).
 //
 
 import SwiftUI
@@ -12,7 +13,6 @@ struct ProjectedRankProgressView: View {
     let pendingLedgerXp: Int
 
     private let primaryBarHeight: CGFloat = 8
-    private let nextBandBarHeight: CGFloat = 5
     private let barCornerRadius: CGFloat = 4
 
     private var fill: ProjectedBandFill {
@@ -37,15 +37,6 @@ struct ProjectedRankProgressView: View {
                 height: primaryBarHeight
             )
 
-            if bandFill.showsNextBandBar {
-                composedBar(
-                    syncedFraction: 0,
-                    pendingFraction: bandFill.pendingFractionInNextBand,
-                    height: nextBandBarHeight
-                )
-                .accessibilityLabel("profile.xp.pending_next_band_caption".localized)
-            }
-
             if pendingLedgerXp > 0 {
                 Text("profile.xp.pending_overlay_caption".localized)
                     .font(.system(.caption2, design: .rounded))
@@ -59,7 +50,7 @@ struct ProjectedRankProgressView: View {
                         .foregroundStyle(Color.Theme.softBrown)
                         .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
-                } else if bandFill.showsNextBandBar {
+                } else if bandFill.showsNextRankCaption {
                     Text("profile.xp.pending_next_band_caption".localized)
                         .font(.system(.caption2, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
@@ -124,19 +115,20 @@ struct ProjectedRankProgressView: View {
         .padding()
 }
 
-#Preview("Fits in current band") {
-    ProjectedRankProgressView(serverXp: 37, pendingLedgerXp: 10)
+#Preview("Fits in current rank") {
+    // Early rank span 1000: 50 pending ≈ 5% yellow
+    ProjectedRankProgressView(serverXp: 0, pendingLedgerXp: 50)
         .padding()
 }
 
-#Preview("Spills into next band only") {
-    // Band size 100: room in band at 80 synced = 20; pending 50 → 20 in current, 30 in next, 0 beyond.
-    ProjectedRankProgressView(serverXp: 80, pendingLedgerXp: 50)
+#Preview("Crosses into next rank") {
+    // 900 + 150 → after at 1050 in 1000…3000 segment
+    ProjectedRankProgressView(serverXp: 900, pendingLedgerXp: 150)
         .padding()
 }
 
-#Preview("Goes past next band") {
-    // Screenshot-like: band 100, 320 synced (20 in band), +390 pending → fills current, full next, 210 beyond.
-    ProjectedRankProgressView(serverXp: 320, pendingLedgerXp: 390)
+#Preview("Goes past next rank") {
+    // 0 + 3500 → past 3000 threshold into third rank
+    ProjectedRankProgressView(serverXp: 0, pendingLedgerXp: 3500)
         .padding()
 }
