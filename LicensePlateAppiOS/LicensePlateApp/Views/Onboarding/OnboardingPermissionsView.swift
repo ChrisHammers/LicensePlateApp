@@ -50,7 +50,9 @@ struct OnboardingPermissionsView: View {
                         // permission is neither shown nor requested — every location
                         // feature is forced off, so no OS prompt is ever triggered.
                         if childPostures.isLocationRestrictedForCurrentFlow {
-                            ChildLocationDisabledNotice()
+                            ChildLocationDisabledNotice(
+                                isChildEvidenced: childPostures.isLocationRestrictionChildEvidenced
+                            )
                                 .padding()
                                 .background(Color.Theme.cardBackground, in: RoundedRectangle(cornerRadius: 16))
                         } else {

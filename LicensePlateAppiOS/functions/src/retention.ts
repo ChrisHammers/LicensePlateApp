@@ -28,6 +28,12 @@ import {
   isAuditRetentionExempt,
   purgeDocumentsOlderThan,
 } from "./retentionCore";
+import { currentRevenueCatApiKey } from "./accountDeletion";
+import {
+  PROVISIONAL_CHILD_REDEMPTION_WINDOW_DAYS,
+  provisionalChildDeletionCutoffMillis,
+  sweepExpiredProvisionalChildAccounts,
+} from "./provisionalChildAccounts";
 
 const db = admin.firestore();
 
@@ -62,6 +68,42 @@ export const purgeExpiredInvitesAndCodes = functions
       graceDays: EXPIRED_RECORD_DELETION_GRACE_DAYS,
       cutoff: new Date(cutoffMillis).toISOString(),
       results,
+    });
+
+    return null;
+  });
+
+/**
+ * COPPA FR-60(c) / FR-77 backstop: delete redemption-window child accounts that neither the
+ * decline path nor the invite-expiry path got to, once they are older than
+ * PROVISIONAL_CHILD_REDEMPTION_WINDOW_DAYS.
+ *
+ * The population this catches is small by design — the inline paths handle the normal
+ * outcomes — and consists mainly of the "captain never answered" case, plus anything an
+ * inline failure left behind.
+ *
+ * It CANNOT touch a sticky post-revocation child: those accounts lost their `childDeclaredAt`
+ * marker at admission and carry `wasEverInFamily: true`, and the sweep requires the marker to
+ * even see a document. Their own (12-month, OD-3) retention is a separate FR-77 class.
+ */
+export const purgeExpiredProvisionalChildAccounts = functions
+  .runWith({ timeoutSeconds: RETENTION_TIMEOUT_SECONDS })
+  .pubsub.schedule(RETENTION_SCHEDULE)
+  .timeZone(RETENTION_TIME_ZONE)
+  .onRun(async () => {
+    const cutoffMillis = provisionalChildDeletionCutoffMillis(Date.now());
+
+    const result = await sweepExpiredProvisionalChildAccounts(db, {
+      cutoffMillis,
+      // Uid-only audit actor: no parent or captain authorised this, the schedule did.
+      actorId: "system_retention",
+      revenueCatApiKey: currentRevenueCatApiKey(),
+    });
+
+    functions.logger.info("retention: swept redemption-window child accounts", {
+      windowDays: PROVISIONAL_CHILD_REDEMPTION_WINDOW_DAYS,
+      cutoff: new Date(cutoffMillis).toISOString(),
+      result,
     });
 
     return null;

@@ -73,7 +73,14 @@ final class JoinFamilyViewModel: ObservableObject {
 
         Task {
             do {
-                let inviteId = try await familyRepository.redeemShareCode(code: trimmedCode)
+                // COPPA F-18 (FR-60(b)): share-code entry is the consent-seeking act, and for
+                // an under-13 player it is the ONE moment a backend identity is created.
+                // Sequence — mint anonymous uid → bind → declareChildRegistration — must
+                // complete before the redeem below, because the server admits an anonymous
+                // caller only on a declared `isChildAccount`. A no-op for everyone else.
+                try await authService.provisionIdentityForConsentSeekingRedemptionIfNeeded()
+
+                let inviteId = try await familyRepository.redeemShareCode(code: trimmedCode, expectedType: .family)
                 let familyId = try? await familyRepository.getFamilyIdFromInvite(inviteId: inviteId)
                 isJoining = false
                 redeemedInviteId = inviteId

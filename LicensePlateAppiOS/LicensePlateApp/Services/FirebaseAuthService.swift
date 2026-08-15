@@ -13,6 +13,7 @@ import FirebaseAuth
 import FirebaseFirestore
 import FirebaseCore
 import FirebaseFunctions
+import FirebaseAnalytics
 import AuthenticationServices
 import GoogleSignIn
 import Network
@@ -243,6 +244,79 @@ class FirebaseAuthService: ObservableObject {
         }
     }
 
+    /// F-18 (FR-60(b)/(d)): moves local play history from the device-local play identity onto
+    /// the uid that has just been minted. Best-effort by design — a failure here must not
+    /// abort provisioning, because an un-provisioned child cannot seek consent at all, and a
+    /// history that stayed under the old id is recoverable while a blocked consent path is
+    /// not. Logged loudly in DEBUG.
+    private func rebindLocalPlayIdentity(from previousUserId: String, to newUserId: String) {
+        guard LocalPlayIdentityRebindPolicy.shouldRebind(
+            previousUserId: previousUserId,
+            newUserId: newUserId
+        ) else { return }
+        do {
+            // Same `ModelContext` this service saves the `AppUser` through, so the rebind and
+            // the identity swap share one transaction boundary — and so the rebind still
+            // works on paths that run before `RootView` has wired the repositories.
+            if let modelContext {
+                LocalPlayIdentityRepository.shared.setModelContext(modelContext)
+            }
+            let summary = try LocalPlayIdentityRepository.shared.rebindLocalPlayIdentity(
+                from: previousUserId,
+                to: newUserId
+            )
+            ReturnStreakService.shared.rebindLocalState(from: previousUserId, to: newUserId)
+            #if DEBUG
+            print("F-18: rebound \(summary.totalRowsRewritten) local rows onto \(newUserId)")
+            #endif
+        } catch {
+            #if DEBUG
+            print("⚠️ F-18: local play identity rebind failed: \(error)")
+            #endif
+        }
+    }
+
+    /// F-18 (FR-60(b)) — the ONE provisioning moment for an under-13 player.
+    ///
+    /// Share-code entry is the act of seeking parental consent, so it is the only place a
+    /// child acquires a backend identity. Runs FR-60(b)'s sequence in order:
+    ///
+    ///   mint anonymous uid → bind (before `currentUser` publishes) → declareChildRegistration
+    ///
+    /// and leaves `redeemShareCode` to the caller, which must run LAST. `signInAnonymously`
+    /// owns the first three steps and already enforces FR-27's bind-before-publish ordering;
+    /// this method exists to name the moment, pass the consent-seeking override, and refuse to
+    /// hand back a uid whose declaration never landed.
+    ///
+    /// - Throws: `AuthError.offline` when there is no network (the code cannot be redeemed
+    ///   offline either), and `AuthError.childDeclarationPending` when the uid was minted but
+    ///   `declareChildRegistration` did not land. The uid stays BOUND in that case — its
+    ///   profile write is held by `UserDocumentWritePolicy`, so no flagless `users/{uid}` can
+    ///   appear — and a retry re-enters `ensureFlowChildDeclaration` for the same uid.
+    ///   Redemption must not proceed: the server carve-out admits an anonymous caller only on
+    ///   a declared `isChildAccount`, and a captain approving an undeclared account would
+    ///   admit a child as an adult.
+    func provisionIdentityForConsentSeekingRedemptionIfNeeded() async throws {
+        guard let localUser = currentUser else { throw AuthError.noUser }
+        guard ChildConsentRedemptionPolicy.requiresProvisioning(
+            hasFirebaseUid: localUser.firebaseUID != nil,
+            category: AgeGateStore.shared.category
+        ) else {
+            return
+        }
+        guard isOnline else { throw AuthError.offline }
+
+        try await signInAnonymously(isConsentSeekingRedemption: true)
+
+        let uid = currentUser?.firebaseUID
+        guard ChildConsentRedemptionPolicy.mayRedeem(
+            hasFirebaseUid: uid != nil,
+            isDeclarationOutstanding: AgeGateStore.shared.isPendingDeclaration(userId: uid)
+        ) else {
+            throw AuthError.childDeclarationPending
+        }
+    }
+
     /// Inserts a new local guest `AppUser` with device default username. Does not touch Auth.
     private func createFreshLocalGuestUser() throws {
         guard let modelContext = modelContext else {
@@ -273,12 +347,17 @@ class FirebaseAuthService: ObservableObject {
     // MARK: - Anonymous Authentication
 
     /// Sign in anonymously (creates Firebase anonymous account and links to local user)
-    func signInAnonymously() async throws {
+    ///
+    /// - Parameter isConsentSeekingRedemption: F-18 (FR-60(b)). The ONE caller allowed to
+    ///   provision an under-13 identity — share-code entry, which is the act of seeking
+    ///   parental consent. Every other caller leaves it false and an under-13 epoch stays
+    ///   local-only, with no Firebase account and no `users/{uid}` document.
+    func signInAnonymously(isConsentSeekingRedemption: Bool = false) async throws {
         guard let modelContext = modelContext,
               let localUser = currentUser else {
             throw AuthError.noUser
         }
-        
+
         // If user already has firebaseUID, don't create new anonymous account
         if localUser.firebaseUID != nil {
             return
@@ -287,8 +366,14 @@ class FirebaseAuthService: ObservableObject {
         // F-6 (FR-27, identity-epoch rule): a NEW anonymous uid is never created
         // without an age answer for the current epoch — first launch and post-sign-out
         // guest rebirth alike. The gate UI re-invokes provisioning after the answer.
+        //
+        // F-18 (FR-60(a)): and an under-13 answer no longer provisions at all. This is the
+        // single choke point all five provisioning call sites funnel through, so the rule
+        // holds for relaunch, first launch, the deferred post-age-gate path, sign-out and
+        // post-deletion rebirth without any of them restating it.
         guard GuestProvisioningPolicy.mayCreateAnonymousIdentity(
-            isResolved: AgeGateStore.shared.isResolved
+            category: AgeGateStore.shared.category,
+            isConsentSeekingRedemption: isConsentSeekingRedemption
         ) else {
             localUser.needsSync = true
             try? modelContext.save()
@@ -318,9 +403,20 @@ class FirebaseAuthService: ObservableObject {
             // leave that window unguarded by construction, not just by timing.
             AgeGateStore.shared.bindPendingDeclaration(toUserId: firebaseUID)
 
+            // F-18 (FR-60(b)/(d)): under the local-first model this uid can arrive after
+            // days of local play, so the play identity changes under an existing history.
+            // Carry that history onto the new uid BEFORE `currentUser` publishes it —
+            // otherwise the first view to re-read `firebaseUID ?? id` filters the child's
+            // own trips and XP out, and FR-28h late-replay has nothing correct to upload.
+            // A no-op for the ordinary guest case, where `previousLocalId == firebaseUID`
+            // is impossible but the local id has no rows attached to it yet either.
+            let previousLocalId = localUser.id
+            rebindLocalPlayIdentity(from: previousLocalId, to: firebaseUID)
+
             // Link local user to Firebase anonymous account
             localUser.firebaseUID = firebaseUID
             localUser.id = firebaseUID // Update ID to Firebase UID
+            localUser.localIDBeforeFirebase = previousLocalId
             localUser.needsSync = false
 
             try modelContext.save()
@@ -681,6 +777,7 @@ class FirebaseAuthService: ObservableObject {
         }
         GIDSignIn.sharedInstance.signOut()
         await RevenueCatEntitlementBridge.shared.identify(userId: nil)
+        Analytics.resetAnalyticsData()
 
         try createFreshLocalGuestUser()
         if isOnline {
@@ -2182,6 +2279,9 @@ enum AuthError: LocalizedError {
     case offline
     case cannotUnlinkLastProvider
     case reauthAccountMismatch
+    /// F-18 (FR-60(b)): the redemption uid was minted but `declareChildRegistration` did not
+    /// land, so redemption must not proceed. Retryable — the uid stays bound and held.
+    case childDeclarationPending
 
     var errorDescription: String? {
         switch self {
@@ -2212,6 +2312,8 @@ enum AuthError: LocalizedError {
             return "You are offline. Please connect to the internet to perform this action."
         case .reauthAccountMismatch:
             return "Please verify with the same account you are signed in with.".localized
+        case .childDeclarationPending:
+            return "child_gate.join.setup_incomplete".localized
         }
     }
 }

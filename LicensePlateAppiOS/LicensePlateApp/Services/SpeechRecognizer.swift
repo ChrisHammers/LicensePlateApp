@@ -293,6 +293,10 @@ extension SpeechRecognizer {
     /// mandatory, never conditional — `startDecision` has already refused the unsupported case.
     static func configureRequest(_ request: SFSpeechAudioBufferRecognitionRequest) {
         request.shouldReportPartialResults = true
+        // COPPA rationale: this is what keeps a child's voice out of COPPA-regulated
+        // "online contact information" collection in the first place — server-backed
+        // recognition would stream raw microphone audio to Apple. Must stay
+        // unconditional; see `SpeechRecognizerOnDeviceTests.configureRequestForcesOnDeviceRecognition`.
         request.requiresOnDeviceRecognition = true
     }
 }

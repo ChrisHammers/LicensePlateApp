@@ -12,12 +12,12 @@
 import * as admin from "firebase-admin";
 import {
   buildContactFields,
-  isRegisteredForSearch,
   syncContactLookupIndexes,
   syncUsernameSearchIndex,
   PRIVATE_CONTACT_DOC,
 } from "../src/userSearchIndex";
-import { normalizeUsernameLower } from "../src/userSearchCore";
+import { isSearchIndexEligible, normalizeUsernameLower } from "../src/userSearchCore";
+import { isChildAccountUserData } from "../src/childAccountCore";
 
 const DRY_RUN = process.env.DRY_RUN === "1" || process.env.DRY_RUN === "true";
 const STRIP_PUBLIC_PII =
@@ -36,11 +36,20 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-async function processUser(
+export async function processUser(
   userId: string,
   data: FirebaseFirestore.DocumentData
 ): Promise<{ indexed: boolean; skippedAnon: boolean }> {
-  const isRegistered = isRegisteredForSearch(data);
+  // Children are never search-indexed (FR-70 / FR-11 backstop). isSearchIndexEligible() is
+  // the exact predicate the production trigger (userSearch.ts's onUserProfileSearchIndexSync)
+  // uses, and it already excludes children — but this script's actual defect was calling
+  // isRegisteredForSearch() instead, which checks registration only with no child exclusion,
+  // so it silently re-indexed child accounts into usernames/ + user_lookup_email/ +
+  // user_lookup_phone/. `&& !isChild` re-asserts the exclusion explicitly right here, so
+  // isRegistered can't go back to meaning "registered, child or not" the same way again —
+  // it gates both the Auth-email fallback and every index write below.
+  const isChild = isChildAccountUserData(data);
+  const isRegistered = isSearchIndexEligible(data) && !isChild;
   const userName =
     typeof data.userName === "string"
       ? data.userName
@@ -49,7 +58,9 @@ async function processUser(
         : null;
   const userNameLower = userName ? normalizeUsernameLower(userName) : null;
 
-  // Load Auth email as fallback when Firestore email missing
+  // Load Auth email as fallback when Firestore email missing. Gated on isRegistered, which
+  // is already child-safe above — a child must never gain discoverable contact data (an Auth
+  // email) it didn't already have on its Firestore doc.
   let email =
     typeof data.email === "string" && data.email.trim()
       ? data.email
@@ -76,6 +87,7 @@ async function processUser(
         userId,
         dryRun: true,
         isRegistered,
+        isChild,
         userNameLower,
         hasEmail: !!contact.emailLower,
         hasPhone: !!contact.phoneE164,
@@ -92,6 +104,8 @@ async function processUser(
     );
   }
 
+  // isRegistered is already child-safe (see guard comment above), so this can never create a
+  // usernames/ entry for a child — only ever delete a stale one.
   await syncUsernameSearchIndex({
     userId,
     userName,
@@ -116,6 +130,8 @@ async function processUser(
     { merge: true }
   );
 
+  // Same guard as syncUsernameSearchIndex above — isRegistered can never be true for a child,
+  // so this can never create a user_lookup_email/ or user_lookup_phone/ entry for one.
   await syncContactLookupIndexes({
     userId,
     isRegistered,
@@ -179,7 +195,9 @@ async function main() {
   );
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

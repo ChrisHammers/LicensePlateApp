@@ -18,7 +18,13 @@ enum AppLaunchConfiguration {
     }
 
     static var skipOnboarding: Bool {
+        // QA/UI-test override only (COPPA FR-83a): also seeds an age-gate bypass in
+        // AppCoordinator, so this must never evaluate true in a release binary.
+        #if DEBUG
         ProcessInfo.processInfo.arguments.contains(launchArgSkipOnboarding)
+        #else
+        false
+        #endif
     }
 
     static var forceQuickSoloFirstSession: Bool {

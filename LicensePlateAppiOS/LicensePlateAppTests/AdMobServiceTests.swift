@@ -60,31 +60,30 @@ struct AdMobServiceTests {
         #endif
     }
 
-    // MARK: - Pre-start stamp (FR-19 cached-true / FR-39 ratchet)
+    // MARK: - Pre-start stamp (FR-56: untagged only on positive adult evidence)
 
-    @Test func preStartIsChildDirectedWhenRatcheted() {
-        #expect(AdMobService.preStartChildDirected(
-            isDeviceRatcheted: true, hasAnyCachedChildTrue: false, hasDeclaredChildHistory: false
-        ) == true)
+    /// The inversion itself. The old rule tagged only on positive CHILD evidence, so a
+    /// clean install — where the cache, the ratchet and the declared history are all
+    /// empty by definition — started the SDK untagged before the age gate had been
+    /// shown. Tagging is now the default and adult evidence is the only exit.
+    @Test func preStartIsUntaggedOnlyForAConfirmedAdult() {
+        #expect(AdMobService.preStartChildDirected(posture: .confirmedNonChild) == false)
+        for posture in [ChildSessionPosture.unresolved, .childDirected, .ratchetedAnonymous] {
+            #expect(
+                AdMobService.preStartChildDirected(posture: posture) == true,
+                "\(posture.rawValue) must start tagged child-directed"
+            )
+        }
     }
 
-    @Test func preStartIsChildDirectedWhenAnyCachedTrue() {
-        #expect(AdMobService.preStartChildDirected(
-            isDeviceRatcheted: false, hasAnyCachedChildTrue: true, hasDeclaredChildHistory: false
-        ) == true)
-    }
-
-    @Test func preStartIsChildDirectedWhenDeviceEverDeclaredAChild() {
-        #expect(AdMobService.preStartChildDirected(
-            isDeviceRatcheted: false, hasAnyCachedChildTrue: false, hasDeclaredChildHistory: true
-        ) == true)
-    }
-
-    @Test func preStartIsUntaggedOnACleanDevice() {
-        // Cold-start gap on a clean device is closed by the FR-19 display hold, not
-        // by tagging: nil = untagged until the identity posture resolves.
-        #expect(AdMobService.preStartChildDirected(
-            isDeviceRatcheted: false, hasAnyCachedChildTrue: false, hasDeclaredChildHistory: false
-        ) == false)
+    /// The pre-start stamp and the posture routine's stamp must never disagree for the
+    /// postures that can actually reach a start (FR-17: one TFCD writer, one value).
+    /// They differ only on `.unresolved`, where the pre-start rule is the stricter one.
+    @Test func preStartAgreesWithThePostureStampWhereverAStartIsPossible() {
+        for posture in [ChildSessionPosture.confirmedNonChild, .childDirected, .ratchetedAnonymous] {
+            #expect(AdMobService.preStartChildDirected(posture: posture) == posture.childDirectedTreatment)
+        }
+        #expect(ChildSessionPosture.unresolved.childDirectedTreatment == false)
+        #expect(AdMobService.preStartChildDirected(posture: .unresolved) == true)
     }
 }

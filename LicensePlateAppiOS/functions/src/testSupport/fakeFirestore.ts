@@ -282,9 +282,10 @@ export class FakeQuery {
     return next;
   }
 
-  startAfter(id: string): FakeQuery {
+  /** Accepts a document id or a snapshot/ref, matching Firestore's own cursor overloads. */
+  startAfter(cursor: string | { id: string }): FakeQuery {
     const next = this.clone();
-    next.startAfterId = id;
+    next.startAfterId = typeof cursor === "string" ? cursor : cursor.id;
     return next;
   }
 

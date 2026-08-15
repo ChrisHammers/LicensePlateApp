@@ -93,6 +93,31 @@ enum ChildApprovalTargetState: Equatable, Sendable {
     }
 }
 
+/// Draft state of the correction block shown when a manager clears an EXISTING child flag
+/// during approval (FR-25 new-guardian correction).
+///
+/// COPPA FR-66(b): this branch used to be attestation-free on both sides — the UI asked for
+/// nothing and the server required nothing, so a bare "no, not a child" cleared a sticky
+/// flag. That was the middle link of a laundering chain (found a family from a throwaway
+/// account, arrive from the real flagged account, clear your own flag). The server now
+/// demands an enumerated reason AND both acknowledgments, exactly like a capture does, so
+/// the UI collects them first — a manager must never walk into a raw server rejection.
+struct ChildCorrectionDraft: Equatable, Sendable {
+    var reason: ChildStatusCorrectionReason?
+    /// "This member is 13 or older, or was marked as a child by mistake."
+    var statusAcknowledged: Bool = false
+    /// Reuses the SAME guardian sentence as a consent capture (`AFFIRMATION_VERSION`).
+    var guardianAffirmed: Bool = false
+
+    var isComplete: Bool {
+        reason != nil && statusAcknowledged && guardianAffirmed
+    }
+
+    mutating func reset() {
+        self = ChildCorrectionDraft()
+    }
+}
+
 /// Per-request draft of the approval-time child declaration.
 struct ChildApprovalDraft: Equatable, Sendable {
     /// `nil` = the manager has not answered. For `.notChild` targets the UI seeds
@@ -100,6 +125,7 @@ struct ChildApprovalDraft: Equatable, Sendable {
     /// until the manager chooses.
     var isChild: Bool?
     var consent = ChildConsentDraft()
+    var correction = ChildCorrectionDraft()
 
     static func initial(for state: ChildApprovalTargetState) -> ChildApprovalDraft {
         ChildApprovalDraft(isChild: state.requiresExplicitDeclaration ? nil : false)
@@ -109,17 +135,37 @@ struct ChildApprovalDraft: Equatable, Sendable {
 enum ChildApprovalPolicy {
     /// Whether Approve may be enabled. Mirrors `evaluateApprovalChildDeclaration`:
     /// - explicit declaration required for sticky/unknown targets;
-    /// - `isChild == true` is a consent capture and needs both acknowledgments.
+    /// - `isChild == true` is a consent capture and needs both acknowledgments;
+    /// - `isChild == false` on an ALREADY-FLAGGED target is the FR-66(b) correction and
+    ///   needs a reason plus both acknowledgments.
+    ///
+    /// `.unknown` targets are deliberately NOT gated on the correction block. The flag could
+    /// not be read (FR-12 denies peer reads of a non-family child's doc), so demanding a
+    /// correction from every unreadable target would put that ceremony in front of ordinary
+    /// adult approvals. If the target does turn out to be flagged, the server rejects and
+    /// `FamilyPendingApprovalsViewModel` re-resolves the row to `.alreadyChild`, which then
+    /// shows the block on the second pass.
     static func canApprove(state: ChildApprovalTargetState, draft: ChildApprovalDraft) -> Bool {
         guard let isChild = draft.isChild else {
             return !state.requiresExplicitDeclaration
         }
-        return isChild ? draft.consent.isComplete : true
+        if isChild {
+            return draft.consent.isComplete
+        }
+        return showsCorrectionBlock(state: state, draft: draft) ? draft.correction.isComplete : true
     }
 
     /// Whether the consent block is shown (the manager said "yes, a child").
     static func showsConsentBlock(draft: ChildApprovalDraft) -> Bool {
         draft.isChild == true
+    }
+
+    /// Whether the FR-66(b) correction block is shown — clearing a flag we KNOW is set.
+    static func showsCorrectionBlock(
+        state: ChildApprovalTargetState,
+        draft: ChildApprovalDraft
+    ) -> Bool {
+        state == .alreadyChild && draft.isChild == false
     }
 }
 
@@ -199,7 +245,17 @@ enum FamilyChildStatusPayload {
             return payload
         }
         payload["isChild"] = isChild
-        guard isChild else { return payload }
+        guard isChild else {
+            // FR-66(b): a clear now carries the same evidence a capture does. Sent only when
+            // the manager actually completed the correction block — for an unflagged target
+            // the server treats `isChild: false` as a plain approval and reads none of this.
+            guard declaration.correction.isComplete,
+                  let reason = declaration.correction.reason else { return payload }
+            payload["correctionReason"] = reason.rawValue
+            payload["consentAcknowledged"] = declaration.correction.statusAcknowledged
+            payload["guardianAffirmed"] = declaration.correction.guardianAffirmed
+            return payload
+        }
         payload["consentAcknowledged"] = declaration.consent.consentAcknowledged
         payload["guardianAffirmed"] = declaration.consent.guardianAffirmed
         if let year = declaration.consent.expectedAgeOutYear {
@@ -344,8 +400,6 @@ struct ParentalConsentRecord: Identifiable, Equatable, Sendable {
             return ChildStatusCorrectionReason.flagSetInError.localizedTitle
         case ChildStatusCorrectionReason.childTurned13.rawValue:
             return ChildStatusCorrectionReason.childTurned13.localizedTitle
-        case "new_guardian_cleared":
-            return "family.child.correction_reason.new_guardian_cleared".localized
         default:
             return nil
         }

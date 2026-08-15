@@ -5,6 +5,7 @@
  */
 
 import { createHash } from "crypto";
+import { LOCATION_PAYLOAD_KEYS } from "./payloadKeys";
 
 /**
  * Prefix shared by every deleted-user tombstone id. Clients match on this prefix
@@ -31,15 +32,11 @@ export function deletedUserTombstoneIdFor(userId: string): string {
  * `TripActivityEventPayloadKey.location*` / `LocationData.payloadFields()` on iOS.
  * These are stripped outright — they are the finder's own geolocation, never
  * de-identifiable by swapping the actor id.
+ *
+ * FR-76: defined in `payloadKeys.ts` alongside the write-side allowlist, so the sweep and
+ * the allowlist cannot drift; re-exported here because this is the sweep's import site.
  */
-export const LOCATION_PAYLOAD_KEYS: readonly string[] = [
-  "locationLatitude",
-  "locationLongitude",
-  "locationAltitude",
-  "locationHorizontalAccuracy",
-  "locationVerticalAccuracy",
-  "locationTimestamp",
-];
+export { LOCATION_PAYLOAD_KEYS };
 
 /**
  * Payload keys whose value is a uid. Any of these equal to the deleted uid is

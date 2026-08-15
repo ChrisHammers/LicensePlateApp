@@ -1371,7 +1371,12 @@
 "child_gate.family_prompt.title" = "Pídele a tu papá o mamá que te agregue a su familia";
 "child_gate.family_prompt.subtitle" = "¡Sigue jugando! Tus viajes se quedan en este dispositivo hasta que te unas a una familia.";
 "child_gate.callable_blocked" = "Pídele a tu papá o mamá que te agregue a su familia para usar esto.";
-"child_gate.registration_note" = "Elige un nombre de usuario para jugar. Un padre o madre puede agregarte a su familia con un código de compartir.";
+/* COPPA F-18 (FR-60(e)): under-13 create-account mode shows this instead of a form. */
+"child_gate.signup.title" = "¡Ya puedes jugar!";
+"child_gate.signup.body" = "No necesitas una cuenta. Tus viajes, placas y puntos se guardan aquí mismo, en este dispositivo. Cuando quieras jugar con tu familia, pídele a un adulto un código para unirte a la familia.";
+"child_gate.signup.keep_playing" = "Seguir jugando";
+"child_gate.signup.keep_playing_hint" = "Cierra esta pantalla y vuelve al juego";
+"child_gate.join.setup_incomplete" = "No pudimos terminar de configurar eso. Revisa tu conexión e intenta el código de nuevo.";
 "child_gate.screen.join_title" = "Únete a tu familia para jugar juntos";
 "child_gate.screen.join_body" = "Pídele a tu papá o mamá que te agregue a su familia con un código de compartir. Las funciones familiares se desbloquean cuando te unes.";
 "child_gate.screen.join_button_hint" = "Abre el ingreso del código de compartir de la familia";
@@ -1380,6 +1385,8 @@
 
 // COPPA F-7 — Child session postures (FR-33 location toggles)
 "child_gate.location_disabled" = "Las opciones de ubicación están desactivadas para las cuentas infantiles.";
+// FR-75 amendment (OD-8): held for want of a fresh session check, not because of a child account.
+"child_gate.location_unverified" = "La ubicación está en pausa hasta que se verifique tu sesión.";
 
 // COPPA F-7 — Child premium info surfaces (FR-34-amended/D-14: visible, informational, no purchase UI)
 "child_gate.trip_limit.title" = "Límite de viajes alcanzado";
@@ -1421,6 +1428,15 @@
 "family.child.choice_is_child" = "Sí, menos de 13";
 "family.child.choice_not_child" = "No, 13 o más";
 "family.child.approve_blocked_hint" = "Completa primero los pasos del consentimiento";
+// FR-66(b): quitar una marca de menor existente durante la aprobación ahora exige la misma
+// evidencia que ponerla. La frase del tutor se reutiliza tal cual del bloque de consentimiento.
+"family.child.correction_section_title" = "Corregir la marca de menor";
+"family.child.correction_section_body" = "Este miembro está marcado como menor. Quitar esa marca elimina sus protecciones, así que indica el motivo y confirma que puedes tomar esta decisión.";
+"family.child.correction_reason_label" = "Motivo";
+"family.child.correction_reason_none" = "Elige un motivo";
+"family.child.correction_reason_hint" = "Obligatorio antes de aprobar";
+"family.child.correction_ack" = "Confirmo que este miembro tiene 13 años o más, o que se marcó como menor por error.";
+"family.child.correction_ack_hint" = "Obligatorio para quitar la marca de menor";
 "family.child.manage_mark" = "Marcar como menor (menos de 13 años)";
 "family.child.manage_mark_hint" = "Abre el consentimiento de los padres para este miembro";
 "family.child.manage_clear" = "Corregir el estado de menor";
@@ -1433,7 +1449,6 @@
 "family.child.correction_dialog_message" = "Usa esto solo para corregir el registro: se marcó por error o ya cumplió 13 años. Para terminar la participación de un menor que todavía tiene menos de 13, usa Quitar de la familia o Quitar y eliminar los datos del menor.";
 "family.child.correction_reason.flag_set_in_error" = "Se marcó por error";
 "family.child.correction_reason.child_turned_13" = "Ya cumplió 13 años";
-"family.child.correction_reason.new_guardian_cleared" = "Lo quitó un nuevo capitán de la familia";
 "family.child.remove_delete_title" = "Quitar y eliminar los datos del menor";
 "family.child.remove_delete_message" = "Esto lo quita de tu familia y elimina de forma permanente su cuenta y todo lo que contiene: perfil, viajes, descubrimientos y estadísticas.";
 "family.child.remove_delete_final_title" = "¿Eliminar los datos de este menor?";

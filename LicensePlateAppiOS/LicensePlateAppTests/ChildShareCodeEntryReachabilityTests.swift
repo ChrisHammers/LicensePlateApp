@@ -88,14 +88,47 @@ struct ChildShareCodeEntryReachabilityTests {
         #expect(!friendsGate.offersShareCodeEntry)
     }
 
-    @Test func onlyTheGuestSignUpGateWithholdsShareCodeEntry() {
-        let destination = FriendsFamilyGateRouting.destination(
+    /// The sign-up gate is for ADULT guests only. COPPA FR-85 (F-42) inverts the prior
+    /// expectation here: this test used to pin `isGuestLike: true` + `.unconsentedChild`
+    /// ⇒ `.signUpGate`, which was correct while children registered with credentials.
+    /// FR-60 made both child postures guest-like at the auth layer (unconsented = no
+    /// Firebase account, consented = anonymous), so a registration-first route now sends
+    /// every child to a wall they cannot pass — the unconsented child loses share-code
+    /// entry, the only path to consent, and the consented child loses the family surface
+    /// they were already admitted to.
+    @Test func theSignUpGateIsForAdultGuestsOnly() {
+        let adultGuest = FriendsFamilyGateRouting.destination(
+            isGuestLike: true,
+            childState: .notChild,
+            feature: .family
+        )
+        #expect(adultGuest == .signUpGate)
+        #expect(!adultGuest.offersShareCodeEntry)
+    }
+
+    @Test func aGuestLikeChildSessionStillReachesItsChildSurface() {
+        // Unconsented: keeps the gate that owns "Join a Family".
+        let unconsented = FriendsFamilyGateRouting.destination(
             isGuestLike: true,
             childState: .unconsentedChild,
             feature: .family
         )
-        #expect(destination == .signUpGate)
-        #expect(!destination.offersShareCodeEntry)
+        #expect(unconsented == .childGate(.unconsented))
+        #expect(unconsented.offersShareCodeEntry)
+
+        // Consented: an anonymous account (FR-60) still gets the real family surface.
+        #expect(
+            FriendsFamilyGateRouting.destination(
+                isGuestLike: true, childState: .consentedChild, feature: .family
+            ) == .content
+        )
+
+        // ...and friends stay closed for them regardless of auth shape (FR-14/24).
+        #expect(
+            FriendsFamilyGateRouting.destination(
+                isGuestLike: true, childState: .consentedChild, feature: .friends
+            ) == .childGate(.consented)
+        )
     }
 
     // MARK: - Entry point 2: the restricted-state banner

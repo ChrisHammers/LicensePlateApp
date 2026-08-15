@@ -61,6 +61,12 @@ final class LocationSettingsService: LocationSettingsProviding, ObservableObject
     /// stored true value is rewritten to false — including on later flag flips (the
     /// didChange re-apply below). Set only by `ChildSessionPostureCoordinator` at the
     /// FR-23 seam; adult sessions are never forced (owner decision D-11).
+    ///
+    /// COPPA F-31 (FR-75): this is the DURABLE half of the kill switch, and it is fed by
+    /// the narrow `ChildSessionPosture.rewritesStoredLocationFlagsOff` (a real child
+    /// signal) precisely because the rewrite destroys the value it overwrites. It is no
+    /// longer the enforcement layer: `EffectiveSettingsResolver` ANDs the child signal in
+    /// directly, so a restricted session is denied location whether or not this ever ran.
     private(set) var isChildSessionForcedOff = false
 
     init(defaults: UserDefaults = .standard) {

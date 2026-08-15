@@ -15,7 +15,8 @@ service cloud.firestore {
       return request.auth.uid;
     }
 
-    // Own profile always readable. Peers: registered callers only, and target must not be anonymous.
+    // Own profile always readable. Peers: registered callers (or a consented child reading
+    // their own family — FR-85), and target must not be anonymous.
     //
     // FR-12 (COPPA F-5b): a peer may not read a child's user doc unless they are in the
     // child's active family. Clause order is load-bearing:
@@ -28,13 +29,24 @@ service cloud.firestore {
     // The carve-out exists because family screens hydrate rosters by reading each member's
     // user doc directly (`UserProfileListenCoordinator` / `UserRepository.getUser`);
     // without it, flagging a child would silently break their own family's roster.
+    //
+    // FR-85 (F-42) widens the CALLER side to a consented child reading their own family,
+    // and corrects the TARGET side for the same reason. FR-48's anonymous-target exclusion
+    // (`isRegistered != false`) is the adult discoverability control; a consented child is
+    // now an ANONYMOUS account (FR-60), so their own user doc carries `isRegistered: false`
+    // (written by `FirebaseAuthService.saveUserDataToFirestore`) and that clause was hiding
+    // consented children from their OWN family — the FR-12 degradation this carve-out exists
+    // to prevent. For a child target the FR-12 family carve-out IS the discoverability
+    // control and is strictly stronger, so the two controls are now branches of one test
+    // rather than a conjunction. Adult targets are byte-for-byte unchanged; a plain
+    // anonymous NON-child target is still excluded.
     function isDiscoverableUserProfile(userId) {
       return uid() == userId
-        || (isRegisteredAccount()
-            && resource.data.get('isRegistered', true) != false
+        || ((isRegisteredAccount() || callerIsConsentedChildFamilyPeerOf(userId))
             && ( resource.data.get('isChildAccount', false) != true
-                 || ( 'activeFamilyId' in resource.data
-                      && exists(/databases/$(database)/documents/families/$(resource.data.activeFamilyId)/members/$(request.auth.uid)) ) ));
+                 ? resource.data.get('isRegistered', true) != false
+                 : ( 'activeFamilyId' in resource.data
+                     && exists(/databases/$(database)/documents/families/$(resource.data.activeFamilyId)/members/$(request.auth.uid)) ) ));
     }
 
     function isAdmin() {
@@ -98,15 +110,20 @@ service cloud.firestore {
     // only by declareChildRegistration / setFamilyMemberChildStatus /
     // approveFamilyJoinRequest_CaptainStep. A client write may carry them through
     // unchanged (merge results) but may never change, add, or remove them.
+    // FR-60(c) adds `childDeclaredAt`: the server timestamp that opens a declared child's
+    // redemption window and, once deleted at family admission, closes it. It drives the
+    // transient-account sweep, so a client that could write or clear it could either delete
+    // its own pre-consent footprint on demand or keep an unconsented account alive forever.
     function userDocPreservesServerControlledFields() {
       return !request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(["entitlementTags", "isChildAccount"]);
+        .hasAny(["entitlementTags", "isChildAccount", "childDeclaredAt"]);
     }
 
-    // Create-time twin of the diff-guard: a brand-new user doc cannot smuggle either key
-    // in (there is no `resource.data` to diff against on create).
+    // Create-time twin of the diff-guard: a brand-new user doc cannot smuggle any of the
+    // keys in (there is no `resource.data` to diff against on create).
     function userDocCreateOmitsServerControlledFields() {
-      return !request.resource.data.keys().hasAny(["entitlementTags", "isChildAccount"]);
+      return !request.resource.data.keys()
+        .hasAny(["entitlementTags", "isChildAccount", "childDeclaredAt"]);
     }
 
     // FR-28 (COPPA F-5a): an unconsented child — `isChildAccount == true` with no active
@@ -126,6 +143,61 @@ service cloud.firestore {
     function callerIsNotChildAccount() {
       return !exists(/databases/$(database)/documents/users/$(uid()))
         || userDoc(uid()).data.get('isChildAccount', false) != true;
+    }
+
+    // FR-85 (F-42): for a consented child, FAMILY MEMBERSHIP IS THE CREDENTIAL.
+    // FR-60 made consented children anonymous Firebase accounts, but `isRegisteredAccount()`
+    // is used across this file as the proxy for "legitimate member" — so a consented child
+    // silently lost reads they are entitled to (their own roster hydrated to raw uids: the
+    // exact degradation the FR-12 carve-out above exists to prevent, in the other direction).
+    // This is the replacement proxy, and it is used on READ surfaces ONLY. Registration stays
+    // the gate on `families` create, `share_codes` create/update, `usernames` reads and every
+    // invite surface, where it is a genuine anti-abuse gate (children are separately barred
+    // there by `callerIsNotChildAccount()`, FR-24/FR-66(d)).
+    //
+    // Server-verified end to end. Two of the three facts are server-written only:
+    // `isChildAccount` (FR-7 diff-guard) and the member doc (FR-8, client write:false).
+    // The third — `activeFamilyId` — IS client-writable on one's own user doc, so it is
+    // never trusted alone: the member-doc `exists()` is the authority, and a child that
+    // forges `activeFamilyId` gains nothing because no member doc will back it.
+    //
+    // Ordering discipline, same as FR-12/FR-37 above:
+    //   1. every call site puts `isRegisteredAccount()` first, so a registered caller —
+    //      the overwhelming majority — short-circuits and pays zero extra document access;
+    //   2. the string / non-empty guard comes BEFORE the path is constructed, so an
+    //      orphaned or sticky post-revocation child (flag true, family cleared on exit)
+    //      denies cleanly instead of erroring on a malformed path;
+    //   3. the `exists()` on the caller's own doc precedes every `get()`, because `get()`
+    //      on a missing document error-denies.
+    function callerIsConsentedChildMemberOf(familyId) {
+      return isSignedIn()
+        && familyId is string
+        && familyId != ''
+        && exists(/databases/$(database)/documents/users/$(uid()))
+        && userDoc(uid()).data.get('isChildAccount', false) == true
+        && userDoc(uid()).data.get('activeFamilyId', '') == familyId
+        && exists(/databases/$(database)/documents/families/$(familyId)/members/$(uid()));
+    }
+
+    // The caller's own active family, or '' when they have no user doc or no family.
+    // Guarded with `exists()` for the same reason as `targetIsNotHiddenChild` below.
+    function callerActiveFamilyId() {
+      return exists(/databases/$(database)/documents/users/$(uid()))
+        ? userDoc(uid()).data.get('activeFamilyId', '')
+        : '';
+    }
+
+    // FR-85: the exact read surface a consented child legitimately needs — the roster of
+    // their OWN family, scoped by their OWN `activeFamilyId`, never a blanket anonymous read.
+    // `userId` must hold a member doc in that family, which is the same invariant the server
+    // already enforces over a child's entire peer surface (`evaluateTripChildParticipation`:
+    // every other member of a roster containing a child is a member of that child's family).
+    // Membership is proved by the member doc rather than by the peer's `activeFamilyId`, so
+    // retired-general members — who hold a member doc but carry no `activeFamilyId` of their
+    // own — hydrate correctly instead of showing as raw uids.
+    function callerIsConsentedChildFamilyPeerOf(userId) {
+      return callerIsConsentedChildMemberOf(callerActiveFamilyId())
+        && exists(/databases/$(database)/documents/families/$(callerActiveFamilyId())/members/$(userId));
     }
 
     // FR-37 (COPPA F-5b): the FR-12 carve-out for a document that is NOT the user doc, so
@@ -191,9 +263,15 @@ service cloud.firestore {
     // FR-48 (COPPA F-11): peer reads are further restricted to registered (non-anonymous)
     // accounts, mirroring the isDiscoverableUserProfile clause order — self always reads
     // their own stats regardless of registration status; only the peer branch requires it.
+    // FR-85 (F-42): a consented child is an anonymous account, so FR-48's registration test
+    // was also denying them their own family's stats. Same caller-side widening as
+    // isDiscoverableUserProfile, in the same clause position; FR-37's target-side child
+    // exclusion is untouched and still applies to the child caller.
     match /public_lifetime_stats/{userId} {
       allow read: if isSignedIn()
-        && (uid() == userId || (isRegisteredAccount() && targetIsNotHiddenChild(userId)));
+        && (uid() == userId
+            || ((isRegisteredAccount() || callerIsConsentedChildFamilyPeerOf(userId))
+                && targetIsNotHiddenChild(userId)));
       allow write: if false;
     }
 
@@ -330,22 +408,67 @@ service cloud.firestore {
       // is zero-regression. It closes forged invites for adults too — a client could
       // previously mint an invite naming any fromUserId/toUserId pair.
       allow create: if false;
-      allow update: if isRegisteredAccount() &&
-        (uid() == resource.data.fromUserId || uid() == resource.data.toUserId);
+
+      // FR-66(c) (COPPA F-22, closes v2.1 §18 residual (a)/G53): a party could previously
+      // rewrite ANY field of an invite they were named on — including `familyId`, which
+      // retargets the invite at a family the sender never had rights to, and `type`, which
+      // converts a friend invite into a family one. Only the response itself is a party's to
+      // write. Verified zero-regression: the shipped client never updates `invites` at all
+      // (it reads them and calls the callables); every live status change is Admin SDK.
+      allow update: if isRegisteredAccount()
+        && (uid() == resource.data.fromUserId || uid() == resource.data.toUserId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(["status", "updatedAt"]);
 
       allow delete: if false;
     }
 
     // SHARE CODES
-    // FR-28: share codes admit strangers into families/friendships, so an unconsented
-    // child may neither mint nor manage them. Redemption is unaffected — redeemShareCode
-    // is a Cloud Function and stays a child's path back into consented play.
+    // FR-28: share codes admit strangers into families/friendships, so a child may neither
+    // mint nor manage them. Redemption is unaffected — redeemShareCode is a Cloud Function
+    // and stays a child's path back into consented play.
+    //
+    // FR-66(d) (F-22, closes v2.1 §18 residual (b)/G39): two holes closed here.
+    //   - `!callerIsUnconsentedChild()` let a CONSENTED child mint codes — but minting is
+    //     stranger-contact initiation, which sits outside `consentScope` no matter what a
+    //     parent agreed to. `callerIsNotChildAccount()` is the axis the callable already
+    //     uses (`assertCallerIsNotChild`), so rules and callable now agree.
+    //   - nothing checked that the minter belonged to the family the code NAMES. Any adult
+    //     could mint a live join code for a family they had merely seen the id of, and
+    //     `activeFamilyId` is readable on peer user docs. Applied to update as well, so the
+    //     familyId cannot be retargeted after the fact.
+    //
+    // FR-67 (F-23): the read rule was `isSignedIn()` — every signed-in account could LIST
+    // the whole collection and harvest live codes, which made the 6-character code space
+    // irrelevant. Scoped to the owner and the named family; a stranger with a code in hand
+    // still redeems it through the `redeemShareCode` callable (Admin SDK, rules-exempt),
+    // which is now the only resolver and is rate-limited. Verified zero-regression: the
+    // client's only live query is by familyId (`FamilyRepository.getActiveShareCode`), and
+    // its only write is the owner revoking their own code.
+    // Write-path helper only. The absent-familyId default is TRUE because a friend code
+    // names no family, so there is nothing to own — correct when authorizing a write the
+    // caller is already proving ownership of via `createdBy == uid()`.
+    // It MUST NOT be reused on the read path: there the same default makes every friend
+    // code world-readable to any signed-in account, which is the exact hole FR-67 closes.
+    function shareCodeFamilyIsOwned(codeData) {
+      return !('familyId' in codeData) || isFamilyMember(codeData.familyId);
+    }
+
+    // Read is deliberately the strict form, not `shareCodeFamilyIsOwned`: a friend code is
+    // readable only by its creator; a family code additionally by that family's members.
+    function shareCodeIsReadableBySelf(codeData) {
+      return codeData.createdBy == uid()
+        || ('familyId' in codeData && isFamilyMember(codeData.familyId));
+    }
+
     match /share_codes/{codeId} {
-      allow read: if isSignedIn();
-      allow create: if isRegisteredAccount() && !callerIsUnconsentedChild()
-        && request.resource.data.createdBy == uid();
-      allow update: if isRegisteredAccount() && !callerIsUnconsentedChild()
-        && resource.data.createdBy == uid();
+      allow read: if isSignedIn() && shareCodeIsReadableBySelf(resource.data);
+      allow create: if isRegisteredAccount() && callerIsNotChildAccount()
+        && request.resource.data.createdBy == uid()
+        && shareCodeFamilyIsOwned(request.resource.data);
+      allow update: if isRegisteredAccount() && callerIsNotChildAccount()
+        && resource.data.createdBy == uid()
+        && shareCodeFamilyIsOwned(request.resource.data);
       allow delete: if false;
     }
 
@@ -378,11 +501,21 @@ service cloud.firestore {
 
     match /families/{familyId}/pending/{requestId} {
       allow read: if isSignedIn() && isFamilyMember(familyId);
-      // FR-16(b)/G-6 (COPPA F-5a): a join request must name its own author. A forged
-      // request naming another uid could otherwise let a stranger's approval install
-      // them as a child's "consenting manager" with family read access.
-      allow create: if isRegisteredAccount()
-        && request.resource.data.userId == request.auth.uid;
+
+      // FR-66(a) (COPPA F-22, supersedes FR-16(b)/G-6): join requests are minted
+      // SERVER-SIDE ONLY. Self-naming was never enough, because family membership is this
+      // app's parental-consent object: a child could mint a throwaway "adult" account, call
+      // createFamily to become their own captain, write a truthfully self-named request
+      // from their real flagged account (target familyIds are harvestable — `activeFamilyId`
+      // is on the peer-readable user doc), then approve themselves as not-a-child. Closing
+      // creation removes the middle step entirely; `respondToFamilyInvite_UserStep` is now
+      // the only minter and stamps the invite it came from (see
+      // `familyJoinRequestIntegrity.ts`), which the approval callable requires.
+      //
+      // Verified zero-regression: the shipped client only ever READS this subcollection —
+      // a snapshot listener (`FamilyRepository.startListening`) and a status-filtered
+      // getDocuments (`FamilyRepository.fetchPendingRequests`). There is no client write.
+      allow create: if false;
       allow update: if isRegisteredAccount() && (isCreator(familyId) || isCaptain(familyId));
       allow delete: if false;
     }

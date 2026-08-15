@@ -75,6 +75,30 @@ final class ReturnStreakService: ObservableObject {
         }
     }
 
+    /// COPPA F-18 (FR-60(b)): the local-first child plays for days under a device-local
+    /// identity and only acquires a uid at share-code entry. The streak is keyed by that
+    /// identity, so it moves with it — otherwise the child's run resets to zero at the exact
+    /// moment they ask a parent for consent, which reads as a punishment for asking.
+    ///
+    /// Idempotent and non-destructive: it does nothing unless the old keys exist, and never
+    /// overwrites state already recorded under the new identity.
+    func rebindLocalState(from previousUserId: String?, to newUserId: String) {
+        guard let previousUserId, !previousUserId.isEmpty, !newUserId.isEmpty,
+              previousUserId != newUserId else { return }
+
+        let previousStreakKey = streakKey(userId: previousUserId)
+        let previousLastDayKey = lastDayKey(userId: previousUserId)
+        guard let lastDay = defaults.object(forKey: previousLastDayKey) as? Date else { return }
+
+        let newLastDayKey = lastDayKey(userId: newUserId)
+        if defaults.object(forKey: newLastDayKey) == nil {
+            defaults.set(defaults.integer(forKey: previousStreakKey), forKey: streakKey(userId: newUserId))
+            defaults.set(lastDay, forKey: newLastDayKey)
+        }
+        defaults.removeObject(forKey: previousStreakKey)
+        defaults.removeObject(forKey: previousLastDayKey)
+    }
+
     /// Hard sign-out: remove streak keys for the prior user (and legacy device keys).
     func clearLocalState(forUserId userId: String?) {
         if let userId, !userId.isEmpty {

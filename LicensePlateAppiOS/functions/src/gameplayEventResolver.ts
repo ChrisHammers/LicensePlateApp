@@ -6,53 +6,40 @@
 import * as admin from "firebase-admin";
 import * as functions from "firebase-functions";
 import type { ClientMetadata } from "./clientMetadata";
+import { isChildAccountUserData } from "./childAccountCore";
+import {
+  PK,
+  SERVER_STAMPED_PAYLOAD_KEYS,
+  KIND_REGION_FOUND,
+  KIND_GAME_STARTED,
+  KIND_GAME_ENDED,
+  KIND_GAME_COMPLETED,
+  KIND_REGION_REMOVED,
+  KIND_PARTICIPANT_LEFT,
+  KIND_PARTICIPANT_INVITED,
+  KIND_PARTICIPANT_JOINED,
+  KIND_DISCOVERY_REJECTED,
+  payloadCarriesCoarseLocation,
+  sanitizeIncomingEventPayload,
+} from "./payloadKeys";
 
 const MAX_EVENTS_POLICY = 2500;
 
-export const PK = {
-  regionId: "regionId",
-  gameInstanceId: "gameInstanceId",
-  participantId: "participantId",
-  inputMethod: "inputMethod",
-  rejectionReason: "rejectionReason",
-  removedDiscoveryEventId: "removedDiscoveryEventId",
-  clientAttemptEventId: "clientAttemptEventId",
-  firstFinderParticipantId: "firstFinderParticipantId",
-  firstFinderDiscoveredAt: "firstFinderDiscoveredAt",
-  firstFinderEventId: "firstFinderEventId",
-  serverResolvedAt: "serverResolvedAt",
-  clientClaimedAt: "clientClaimedAt",
-  gameMode: "gameMode",
-  participantCount: "participantCount",
-  leaveReason: "leaveReason",
-  initiatedByUserId: "initiatedByUserId",
-  fromUserId: "fromUserId",
-  toUserId: "toUserId",
-  inviteId: "inviteId",
-  inviteMethod: "inviteMethod",
-  /** Unix seconds when server accepted this `region_found` (tie-break after client timestamp). */
-  serverCommittedAt: "serverCommittedAt",
-  /** `discovery_rejected`: `region_found` doc id voided by server_rejected_superseded_by_earlier_timestamp. */
-  supersededRegionFoundEventId: "supersededRegionFoundEventId",
-  /** Optional client calendar day `YYYY-MM-DD` for first-find-of-day XP (local device calendar). */
-  xpDayKey: "xpDayKey",
-  /**
-   * FR-28h: server-stamped `"true"` on a `region_found` accepted into an already-ended
-   * game (offline/consent replay). SERVER-SET ONLY — any client-supplied value is
-   * stripped before evaluation, because this flag is what freezes competitive outcomes.
-   */
-  lateReplay: "lateReplay",
-} as const;
-
-export const KIND_REGION_FOUND = "region_found";
-export const KIND_GAME_STARTED = "game_started";
-export const KIND_GAME_ENDED = "game_ended";
-export const KIND_GAME_COMPLETED = "game_completed";
-export const KIND_REGION_REMOVED = "region_removed";
-export const KIND_PARTICIPANT_LEFT = "participant_left";
-export const KIND_PARTICIPANT_INVITED = "participant_invited";
-export const KIND_PARTICIPANT_JOINED = "participant_joined";
-export const KIND_DISCOVERY_REJECTED = "discovery_rejected";
+// The event vocabulary lives in `payloadKeys.ts` (FR-76: one module, so the allowlist, the
+// server-stamped keys and the deletion sweep's location list cannot drift). Re-exported
+// here because this module has been their import site since Step 13.
+export {
+  PK,
+  KIND_REGION_FOUND,
+  KIND_GAME_STARTED,
+  KIND_GAME_ENDED,
+  KIND_GAME_COMPLETED,
+  KIND_REGION_REMOVED,
+  KIND_PARTICIPANT_LEFT,
+  KIND_PARTICIPANT_INVITED,
+  KIND_PARTICIPANT_JOINED,
+  KIND_DISCOVERY_REJECTED,
+};
 
 /** Appended only by Cloud Functions / trusted paths — not via appendTripActivityEvent from clients. */
 const CLIENT_FORBIDDEN_KINDS = new Set<string>([KIND_PARTICIPANT_INVITED, KIND_PARTICIPANT_JOINED]);
@@ -76,15 +63,6 @@ export interface GameplayAppendCallableResult {
    */
   lateReplay?: boolean;
 }
-
-/**
- * Payload keys the SERVER owns. They exist on a stored event but never on an incoming one,
- * so they must be excluded from the idempotency comparison — otherwise a retry of an
- * already-committed accept (a flaky network on the consent-resume drain, precisely the
- * cohort FR-28h serves) compares stripped-incoming against stamped-stored, mismatches, and
- * throws `already-exists`, which the client files as a permanent verdict.
- */
-const SERVER_STAMPED_PAYLOAD_KEYS: readonly string[] = [PK.lateReplay, PK.serverCommittedAt];
 
 /** Exported for tests: the idempotency comparison must ignore server-owned keys. */
 export function withoutServerStampedKeys(payload: Record<string, string>): Record<string, string> {
@@ -555,9 +533,24 @@ export async function resolveGameplayAppendTransaction(
 
     const existingEventSnap = await tx.get(eventRef);
     const incomingTs = secondsToTimestamp(event.timestamp);
-    const incomingPayload = stringifyPayload(event.payload || undefined);
-    // Strip every SERVER-OWNED key from the incoming payload before it is evaluated,
-    // compared for idempotency, or written. Both keys are forgeable levers otherwise:
+    const rawIncomingPayload = stringifyPayload(event.payload || undefined);
+
+    // FR-76: is the ACTOR a child? Server-resolved, never a client claim. One read, and
+    // only when it can change the outcome — a find that carries location keys at all.
+    // Everything else is decided by the allowlist, which needs no I/O.
+    const actorIsChild =
+      kind === KIND_REGION_FOUND && payloadCarriesCoarseLocation(rawIncomingPayload)
+        ? isChildAccountUserData(
+            (await tx.get(db.collection("users").doc(userId))).data() as
+              | Record<string, unknown>
+              | undefined
+          )
+        : false;
+
+    // FR-76 + FR-28h: the ONE sanitize pass. Everything outside this kind's allowlist is
+    // dropped, a child's coordinates are stripped, an adult's are re-rounded server-side,
+    // and every SERVER-OWNED key goes before the payload is evaluated, compared for
+    // idempotency, or written. The server-owned keys are forgeable levers otherwise:
     //
     //   `lateReplay`        — a client could exempt its own finds from competitive
     //                         outcomes, or force inclusion in them.
@@ -565,9 +558,14 @@ export async function resolveGameplayAppendTransaction(
     //                         where LOWER wins and 0/absent sorts LAST. A client supplying
     //                         a small value could take a contested find from whoever
     //                         genuinely got there first.
-    for (const key of SERVER_STAMPED_PAYLOAD_KEYS) {
-      delete incomingPayload[key];
-    }
+    //
+    // Sanitizing HERE, before the idempotency comparison, is what keeps a retry idempotent:
+    // the stored copy was written through this same pass, so both sides compare normalized.
+    const incomingPayload = sanitizeIncomingEventPayload({
+      kind,
+      payload: rawIncomingPayload,
+      actorIsChild,
+    });
     const normalizedActor = userId;
 
     // Idempotency before roster check so participant_left retries succeed after roster/members update.

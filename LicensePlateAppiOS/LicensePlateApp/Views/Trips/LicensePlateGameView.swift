@@ -1473,7 +1473,9 @@ struct LicensePlateGameView: View {
         
         // Prevent processing the same text multiple times
         if normalizedText == lastProcessedText {
+            #if DEBUG
             print("⏭️ [Speech Match] Skipping duplicate text: '\(normalizedText)'")
+            #endif
             return
         }
         lastProcessedText = normalizedText
@@ -1484,8 +1486,10 @@ struct LicensePlateGameView: View {
         // Split text into words for better matching
         let words = cleanedText.components(separatedBy: " ").filter { !$0.isEmpty }
         
+        #if DEBUG
         print("🔍 [Speech Match] Processing recognized text: '\(cleanedText)'")
         print("🔍 [Speech Match] Words extracted: \(words)")
+        #endif
         
         // Try to find a matching region - prioritize exact matches and better matches
         var bestMatch: PlateRegion?
@@ -1500,14 +1504,18 @@ struct LicensePlateGameView: View {
             
             // Check for exact match (highest priority)
             if cleanedText == normalizedRegionName {
+                #if DEBUG
                 print("✅ [Speech Match] EXACT MATCH: '\(cleanedText)' == '\(normalizedRegionName)' -> \(region.name)")
+                #endif
                 addRegionIfNotFound(region)
                 return
             }
             
             // Check if the recognized text contains the full region name
             if cleanedText.contains(normalizedRegionName) {
+                #if DEBUG
                 print("✅ [Speech Match] CONTAINS MATCH: '\(cleanedText)' contains '\(normalizedRegionName)' -> \(region.name)")
+                #endif
                 addRegionIfNotFound(region)
                 return
             }
@@ -1571,17 +1579,23 @@ struct LicensePlateGameView: View {
                 
                 // Only consider it a match if ALL words matched
                 if allWordsMatched && matchedWords == regionWords.count {
+                    #if DEBUG
                     print("🔍 [Speech Match] Candidate: \(region.name) - Matched \(matchedWords)/\(regionWords.count) words")
                     print("   Details: \(matchedWordDetails.joined(separator: ", "))")
+                    #endif
                     
                     if matchedWords > bestMatchScore {
                         bestMatch = region
                         bestMatchScore = matchedWords
+                        #if DEBUG
                         print("   ⭐ New best match (multi-word): \(region.name) with score \(bestMatchScore)")
+                        #endif
                     }
                 } else if matchedWords > 0 {
+                    #if DEBUG
                     print("⚠️ [Speech Match] Partial: \(region.name) - Only matched \(matchedWords)/\(regionWords.count) words")
                     print("   Details: \(matchedWordDetails.joined(separator: ", "))")
+                    #endif
                 }
             } else {
                 // Single word regions - use original logic but be more strict
@@ -1616,7 +1630,9 @@ struct LicensePlateGameView: View {
                     if 1 > bestMatchScore {
                         bestMatch = region
                         bestMatchScore = 1
+                        #if DEBUG
                         print("   ⭐ New best match (single word): \(region.name)")
+                        #endif
                     }
                 }
             }
@@ -1624,10 +1640,14 @@ struct LicensePlateGameView: View {
         
         // If we found a good match, use it
         if let match = bestMatch {
+            #if DEBUG
             print("✅ [Speech Match] FINAL MATCH: \(match.name) with score \(bestMatchScore)")
+            #endif
             addRegionIfNotFound(match)
         } else {
+            #if DEBUG
             print("❌ [Speech Match] NO MATCH FOUND for '\(cleanedText)'")
+            #endif
         }
     }
     
@@ -1646,7 +1666,9 @@ struct LicensePlateGameView: View {
                 showVoiceMatchConfirmation = true
             }
         } else {
+            #if DEBUG
             print("ℹ️ [Speech Match] Region \(region.name) already found, skipping")
+            #endif
         }
     }
     

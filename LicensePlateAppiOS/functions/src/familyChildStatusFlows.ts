@@ -41,6 +41,7 @@ import {
   executeAccountDeletionForUser,
   type AccountDeletionDeps,
 } from "./accountDeletion";
+import { CHILD_DECLARED_AT_FIELD } from "./provisionalChildAccounts";
 
 type Firestore = admin.firestore.Firestore;
 
@@ -236,6 +237,12 @@ export interface DeclareChildRegistrationResult {
  * parent — FR-26). Uses set-merge so it is safe to call BEFORE any profile write exists,
  * which is exactly how the age gate sequences registration. Idempotent: a repeat call
  * returns without writing a duplicate DECLARED record.
+ *
+ * FR-60(c): the same write stamps `childDeclaredAt` — a SERVER timestamp that opens the
+ * redemption window. Under the local-first model this call happens at share-code entry, so
+ * the stamp is the moment consent-seeking began, and it is what the FR-77 backstop sweep
+ * ages out. It is deliberately not `createdAt`: that field is client-supplied from the
+ * local `AppUser`, which can predate the code entry by months.
  */
 export async function declareChildRegistrationFlow(
   db: Firestore,
@@ -248,7 +255,13 @@ export async function declareChildRegistrationFlow(
     return { success: true, isChildAccount: true, alreadyDeclared: true };
   }
 
-  await userRef.set({ isChildAccount: true }, { merge: true });
+  await userRef.set(
+    {
+      isChildAccount: true,
+      [CHILD_DECLARED_AT_FIELD]: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
 
   await writeChildRegistrationDeclared(db, {
     childUserId: input.userId,
@@ -277,6 +290,8 @@ export async function requestChildDataDeletionFlow(
     familyId: string;
     childUserId: string;
     clientMetadata: ClientMetadata | null;
+    /** FR-78(a): resolved RevenueCat secret key, or null/omitted when unconfigured. */
+    revenueCatApiKey?: string | null;
   },
   deps?: AccountDeletionDeps
 ): Promise<RequestChildDataDeletionResult> {
@@ -341,7 +356,12 @@ export async function requestChildDataDeletionFlow(
 
   const deletion = await executeAccountDeletionForUser(
     db,
-    { userId: childUserId, actorId, clientMetadata },
+    {
+      userId: childUserId,
+      actorId,
+      clientMetadata,
+      revenueCatApiKey: input.revenueCatApiKey ?? null,
+    },
     deps
   );
 

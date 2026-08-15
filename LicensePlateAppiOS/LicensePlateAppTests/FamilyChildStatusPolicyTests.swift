@@ -133,13 +133,49 @@ struct ChildApprovalPolicyTests {
         #expect(draft.isChild == nil)
         #expect(!ChildApprovalPolicy.canApprove(state: .alreadyChild, draft: draft))
 
-        // Explicit "no" is the new-guardian correction — allowed, no consent needed.
+        // FR-66(b): explicit "no" is the new-guardian correction, and it is no longer free.
+        // It used to approve on its own; clearing a flag now costs the same evidence as
+        // setting one, because a bare "no" was the middle link of the CB-7 laundering chain.
         #expect(
-            ChildApprovalPolicy.canApprove(
+            !ChildApprovalPolicy.canApprove(
                 state: .alreadyChild,
                 draft: ChildApprovalDraft(isChild: false)
             )
         )
+    }
+
+    @Test func clearingAStickyFlagNeedsAReasonAndBothAcknowledgments() {
+        var draft = ChildApprovalDraft(isChild: false)
+        #expect(ChildApprovalPolicy.showsCorrectionBlock(state: .alreadyChild, draft: draft))
+        #expect(!ChildApprovalPolicy.canApprove(state: .alreadyChild, draft: draft))
+
+        draft.correction.reason = .childTurned13
+        #expect(!ChildApprovalPolicy.canApprove(state: .alreadyChild, draft: draft))
+
+        draft.correction.statusAcknowledged = true
+        #expect(!ChildApprovalPolicy.canApprove(state: .alreadyChild, draft: draft))
+
+        draft.correction.guardianAffirmed = true
+        #expect(ChildApprovalPolicy.canApprove(state: .alreadyChild, draft: draft))
+
+        // A reason is not optional even with both boxes ticked.
+        draft.correction.reason = nil
+        #expect(!ChildApprovalPolicy.canApprove(state: .alreadyChild, draft: draft))
+    }
+
+    @Test func theCorrectionBlockIsScopedToKnownFlaggedTargets() {
+        // An unreadable target (FR-12 denies peer reads) must not put correction ceremony
+        // in front of every ordinary adult approval. If the server disagrees it rejects,
+        // and the view model re-resolves the row to `.alreadyChild` for a second pass.
+        let clearing = ChildApprovalDraft(isChild: false)
+        #expect(!ChildApprovalPolicy.showsCorrectionBlock(state: .unknown, draft: clearing))
+        #expect(!ChildApprovalPolicy.showsCorrectionBlock(state: .notChild, draft: clearing))
+        #expect(ChildApprovalPolicy.canApprove(state: .unknown, draft: clearing))
+
+        // And it never shows on the capture branch — that is the consent block's job.
+        var declaring = ChildApprovalDraft(isChild: true)
+        declaring.consent = ChildConsentDraft(consentAcknowledged: true, guardianAffirmed: true)
+        #expect(!ChildApprovalPolicy.showsCorrectionBlock(state: .alreadyChild, draft: declaring))
     }
 
     @Test func unresolvableTargetIsTreatedLikeAStickyOne() {
@@ -238,6 +274,8 @@ struct FamilyChildStatusPayloadTests {
     }
 
     @Test func approvalPayloadSendsExplicitFalseWithoutConsentFields() {
+        // An unanswered correction block sends the bare `false` — the shape the server
+        // treats as a plain approval for an UNFLAGGED target, and refuses for a flagged one.
         let payload = FamilyChildStatusPayload.respondToPendingRequest(
             familyId: "fam-1",
             requestId: "req-1",
@@ -245,8 +283,32 @@ struct FamilyChildStatusPayloadTests {
             declaration: ChildApprovalDraft(isChild: false)
         )
         #expect(payload["isChild"] as? Bool == false)
+        #expect(payload["correctionReason"] == nil)
         #expect(payload["consentAcknowledged"] == nil)
         #expect(payload["guardianAffirmed"] == nil)
+    }
+
+    /// FR-66(b): the server requires an enumerated reason plus both acknowledgments on the
+    /// clear path. These field names must match the `data?.…` reads in `family.ts`.
+    @Test func approvalPayloadSendsTheCorrectionEvidenceWhenClearingAFlag() {
+        var declaration = ChildApprovalDraft(isChild: false)
+        declaration.correction = ChildCorrectionDraft(
+            reason: .flagSetInError,
+            statusAcknowledged: true,
+            guardianAffirmed: true
+        )
+        let payload = FamilyChildStatusPayload.respondToPendingRequest(
+            familyId: "fam-1",
+            requestId: "req-1",
+            approve: true,
+            declaration: declaration
+        )
+        #expect(payload["isChild"] as? Bool == false)
+        #expect(payload["correctionReason"] as? String == "flag_set_in_error")
+        #expect(payload["consentAcknowledged"] as? Bool == true)
+        #expect(payload["guardianAffirmed"] as? Bool == true)
+        // The capture-only field never rides along on a clear.
+        #expect(payload["expectedAgeOutYear"] == nil)
     }
 
     @Test func approvalPayloadSendsConsentFieldsWithTrue() {

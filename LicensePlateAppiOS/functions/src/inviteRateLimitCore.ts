@@ -48,11 +48,23 @@ export const TRIP_INVITE_MAX_PER_WINDOW = 20;
  */
 export const FRIEND_INVITE_MAX_PER_WINDOW = 20;
 
-export type InviteRateLimitScope = "trip_invite" | "friend_invite";
+/**
+ * Share-code redemptions per redeemer per hour (FR-67 / OD-4).
+ *
+ * Sizing: a code is six characters from a 36-symbol alphabet, so guessing one blind is a
+ * 2.2-billion-attempt search. Ten per hour is far above any real "I mistyped the code my
+ * cousin read out" burst and turns brute force into millennia. This is the limit that makes
+ * FR-67's read-rule scoping meaningful: once `share_codes` stops being world-listable, the
+ * callable is the only resolver left, so the callable is where the search has to be bounded.
+ */
+export const SHARE_REDEEM_MAX_PER_WINDOW = 10;
+
+export type InviteRateLimitScope = "trip_invite" | "friend_invite" | "share_redeem";
 
 export const INVITE_RATE_LIMIT_MAX_PER_WINDOW: Record<InviteRateLimitScope, number> = {
   trip_invite: TRIP_INVITE_MAX_PER_WINDOW,
   friend_invite: FRIEND_INVITE_MAX_PER_WINDOW,
+  share_redeem: SHARE_REDEEM_MAX_PER_WINDOW,
 };
 
 /**

@@ -4,7 +4,10 @@
 //
 //  Step 18 — Google Mobile Ads bootstrap and ad unit lookup.
 //  COPPA F-7 (FR-17/FR-19): sole writer of tagForChildDirectedTreatment; the
-//  cached child signal / device ratchet is stamped BEFORE MobileAds.start().
+//  posture is stamped BEFORE MobileAds.start().
+//  COPPA F-15 (FR-56): the SDK is no longer started at launch. It starts from the
+//  `DeferredSDKStartupService` gate, for a resolved `.confirmedNonChild` posture only,
+//  and any start without that positive adult evidence is tagged child-directed.
 //
 
 import Foundation
@@ -27,16 +30,20 @@ final class AdMobService {
 
     private init() {}
 
-    /// FR-19/FR-39 pre-start stamp: child-directed at cold start when the device
-    /// ratchet is set, any uid's cached flag is true, or this device ever declared
-    /// a child registration. Runs before auth resolves — per-identity postures
-    /// re-stamp at the FR-23 seam.
-    static func preStartChildDirected(
-        isDeviceRatcheted: Bool,
-        hasAnyCachedChildTrue: Bool,
-        hasDeclaredChildHistory: Bool
-    ) -> Bool {
-        isDeviceRatcheted || hasAnyCachedChildTrue || hasDeclaredChildHistory
+    /// FR-56 pre-start stamp, inverted: a start is UNTAGGED only on positive ADULT
+    /// evidence — this session's posture resolved to `.confirmedNonChild`. Every other
+    /// start is tagged child-directed, `.unresolved` included, because SDK
+    /// initialization is itself a data event to the ad network and the FR-19 display
+    /// hold governs requests, not initialization.
+    ///
+    /// Device-level child evidence (FR-19 cached-true, FR-39 ratchet, declared history)
+    /// no longer needs a clause of its own: it can only ever produce a non-adult
+    /// posture, which this already tags. Keeping the posture as the single input also
+    /// keeps this in agreement with `ChildSessionPosture.childDirectedTreatment`, the
+    /// stamp the posture routine applies — two writers of TFCD that could disagree is
+    /// exactly what FR-17 forbids.
+    static func preStartChildDirected(posture: ChildSessionPosture) -> Bool {
+        posture != .confirmedNonChild
     }
 
     /// The current per-session request policy (npa=1 + "G" for everyone; the
@@ -57,18 +64,14 @@ final class AdMobService {
         #endif
     }
 
-    func startIfNeeded() {
+    /// FR-56: called ONLY from the deferred-startup gate, which releases ads for a
+    /// resolved `.confirmedNonChild` posture — never from `didFinishLaunching`. The
+    /// posture is the caller's, so the stamp lands BEFORE `start()` in every case.
+    func startIfNeeded(posture: ChildSessionPosture) {
         guard !hasStarted else { return }
         hasStarted = true
         #if canImport(GoogleMobileAds)
-        // FR-19 asymmetric cache + FR-39 ratchet: stamped BEFORE the SDK starts so a
-        // cold start on a device that ever hosted a child never builds an untagged
-        // request. Adult sessions are un-stamped at the FR-23 seam once confirmed.
-        applyChildDirectedTreatment(Self.preStartChildDirected(
-            isDeviceRatcheted: ChildSignalCache.shared.isDeviceRatcheted,
-            hasAnyCachedChildTrue: ChildSignalCache.shared.hasAnyCachedChildTrue,
-            hasDeclaredChildHistory: AgeGateStore.shared.hasDeclaredChildHistory
-        ))
+        applyChildDirectedTreatment(Self.preStartChildDirected(posture: posture))
         // G-rated creatives only, per AdRequestPolicy (Privacy Policy §8/§12).
         MobileAds.shared.requestConfiguration.maxAdContentRating =
             Self.sdkMaxAdContentRating(for: currentRequestPolicy)

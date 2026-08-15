@@ -25,11 +25,14 @@ struct AgeGateStoreTests {
     @Test func derivationClassifiesBelowThirteenAsChild() {
         #expect(AgeGateStore.category(forBirthYear: 2014, currentYear: 2026) == .under13)
         #expect(AgeGateStore.category(forBirthYear: 2026, currentYear: 2026) == .under13)
+        // FR-55: the ambiguous cohort (could be 12 or 13) fails closed to under13.
+        #expect(AgeGateStore.category(forBirthYear: 2013, currentYear: 2026) == .under13)
     }
 
     @Test func derivationClassifiesThirteenOrOlderAsTeenAdult() {
-        #expect(AgeGateStore.category(forBirthYear: 2013, currentYear: 2026) == .teenAdult)
         #expect(AgeGateStore.category(forBirthYear: 1990, currentYear: 2026) == .teenAdult)
+        // FR-55: one year past the ambiguous cohort is unambiguously 13+, the boundary's other side.
+        #expect(AgeGateStore.category(forBirthYear: 2012, currentYear: 2026) == .teenAdult)
     }
 
     // MARK: - Persistence
@@ -195,15 +198,16 @@ struct AgeGateStoreTests {
     /// Pure pins for `GuestProvisioningPolicy`: no NEW anonymous uid without an epoch
     /// answer; ask-sites gate only unprovisioned identities; signed-in sessions never
     /// gate. (The full option-B rebirth narrative lives in
-    /// `ChildRestrictedModeServiceTests.signOutRebirth_producesRestrictedGuestNotPrompt`.)
+    /// `ChildRestrictedModeServiceTests.signOutRebirth_producesRestrictedGuestNotPrompt`;
+    /// the FR-60 under-13 half is `FR60ProvisioningPolicyTests`.)
     @Test func guestProvisioningPolicyMatrix() {
         let (store, _) = makeStore()
 
         store.recordAnswer(.teenAdult)
-        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(isResolved: store.isResolved) == true)
+        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(category: store.category) == true)
 
         store.clearAnswer()
-        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(isResolved: store.isResolved) == false)
+        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(category: store.category) == false)
         #expect(GuestProvisioningPolicy.requiresAgeGate(
             hasFirebaseUid: false, isResolved: store.isResolved
         ) == true)
@@ -211,8 +215,13 @@ struct AgeGateStoreTests {
             hasFirebaseUid: true, isResolved: store.isResolved
         ) == false)
 
+        // FR-60(a): an under-13 answer records the epoch's obligation but NO LONGER
+        // provisions. Share-code entry is the only caller that may (FR-60(b)).
         store.recordAnswer(.under13)
-        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(isResolved: store.isResolved) == true)
+        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(category: store.category) == false)
+        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(
+            category: store.category, isConsentSeekingRedemption: true
+        ) == true)
         #expect(store.hasPendingChildDeclaration == true)
     }
 

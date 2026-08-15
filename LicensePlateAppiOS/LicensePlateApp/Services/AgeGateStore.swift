@@ -45,10 +45,11 @@ final class AgeGateStore: ObservableObject {
     // MARK: - Derivation (FR-27)
 
     /// Neutral year-only classification: with only a birth year, the person's age is
-    /// `currentYear - birthYear` at most. A difference below 13 means the person cannot
-    /// yet be 13 in `currentYear`, so they are classified under 13.
+    /// ambiguous between `currentYear - birthYear` and one less (birthday not yet
+    /// reached). A mixed-audience, child-directed service must resolve that ambiguity
+    /// toward protection, so the ambiguous cohort is classified under 13.
     static func category(forBirthYear birthYear: Int, currentYear: Int) -> AgeGateCategory {
-        (currentYear - birthYear) < 13 ? .under13 : .teenAdult
+        (currentYear - birthYear) < 14 ? .under13 : .teenAdult
     }
 
     // MARK: - Read surface (consumed by F-7)
@@ -244,23 +245,91 @@ final class AgeGateStore: ObservableObject {
     }
 }
 
-// MARK: - Guest provisioning policy (FR-27 acceptance seam)
+// MARK: - Guest provisioning policy (FR-27 / FR-60 acceptance seam)
 
 /// Pure rules for anonymous-identity creation. The age answer is scoped to an
 /// IDENTITY EPOCH: sign-out and account deletion clear it, so a stored answer never
 /// carries across identities — and no NEW anonymous uid is ever provisioned without
 /// an answer for the current epoch. First launch and post-sign-out guest rebirth are
 /// the same case; signed-in / keychain-restored sessions (uid exists) never gate.
+///
+/// FR-60 (F-18) narrows this further: an **under-13 answer no longer provisions at all**.
+/// A child who never seeks family consent gets no Firebase account and no `users/{uid}` —
+/// they play entirely locally, on a uid-less `AppUser`. The single provisioning moment for
+/// that population is share-code entry, which IS the act of seeking consent, and it must
+/// say so explicitly at the call site (`isConsentSeekingRedemption`). Nothing else may.
 enum GuestProvisioningPolicy {
     /// Gate on `FirebaseAuthService.signInAnonymously` — the single place fresh
     /// anonymous uids are created.
-    static func mayCreateAnonymousIdentity(isResolved: Bool) -> Bool {
-        isResolved
+    ///
+    /// - Parameters:
+    ///   - category: this identity epoch's answer; `nil` = unanswered (FR-27: never provision).
+    ///   - isConsentSeekingRedemption: true ONLY on the share-code redemption sequence
+    ///     (FR-60(b)). This is the whole exception — it is a parameter rather than a stored
+    ///     flag so that "may a child be provisioned right now?" is answered by the caller's
+    ///     identity, not by device state an unrelated code path could have left behind.
+    static func mayCreateAnonymousIdentity(
+        category: AgeGateCategory?,
+        isConsentSeekingRedemption: Bool = false
+    ) -> Bool {
+        guard let category else { return false }
+        guard category == .under13 else { return true }
+        return isConsentSeekingRedemption
     }
 
     /// Whether the current session must pass the age screen before guest provisioning.
     static func requiresAgeGate(hasFirebaseUid: Bool, isResolved: Bool) -> Bool {
         !hasFirebaseUid && !isResolved
+    }
+}
+
+// MARK: - Consent-seeking redemption sequence (FR-60(b) acceptance seam)
+
+/// The ordering FR-60(b) mandates when an under-13 local player enters a family share code.
+/// Extracted as pure rules so the sequence is pinned by test without Firebase, in the same
+/// spirit as `ChildRegistrationOrderingTests`' transcription of the FR-27 sequence.
+///
+/// Why the order is load-bearing, step by step:
+///  1. `mintAnonymousIdentity` — nothing before this exists server-side. This is the first
+///     and only moment an under-13 player acquires a backend identity.
+///  2. `bindDeclaration` — FR-27's bind-before-publish discipline. The uid is bound
+///     SYNCHRONOUSLY, before `currentUser` publishes it, because the instant it is
+///     observable SwiftUI can run a `users/{uid}` writer; binding after the declaration's
+///     `await` leaves that window unguarded by construction. Violating this is what
+///     produced the "created an account, set to child, but am seeing ads" incident.
+///  3. `declareChildRegistration` — the server sets `isChildAccount = true` BEFORE any
+///     profile write. Under FR-60 it is also what makes step 4 possible at all: the server
+///     carve-out (`assertRegisteredAccountOrDeclaredChild`) admits an anonymous caller only
+///     on that flag.
+///  4. `redeemShareCode` — last. Redeeming with an undeclared uid would present an
+///     anonymous, unflagged account to the family, and the captain's approval would then
+///     admit a child as an adult.
+enum ChildConsentRedemptionPolicy {
+    enum Step: Int, CaseIterable, Comparable {
+        case mintAnonymousIdentity
+        case bindDeclaration
+        case declareChildRegistration
+        case redeemShareCode
+
+        static func < (lhs: Step, rhs: Step) -> Bool { lhs.rawValue < rhs.rawValue }
+    }
+
+    /// FR-60(b) order, in one place, so a test can assert it rather than a comment.
+    static let orderedSteps: [Step] = Step.allCases
+
+    /// True when share-code entry must provision first: an under-13 epoch that has no uid
+    /// yet. A child who already holds a uid (declined once and re-entering, or sticky
+    /// post-revocation) skips straight to redemption.
+    static func requiresProvisioning(hasFirebaseUid: Bool, category: AgeGateCategory?) -> Bool {
+        !hasFirebaseUid && category == .under13
+    }
+
+    /// The gate in front of step 4. A uid whose declaration never reached the server is
+    /// exactly the "flagless account" failure shape FR-27 exists to prevent, so redemption
+    /// is refused and retried rather than proceeding — the uid stays bound and its profile
+    /// write stays held (`UserDocumentWritePolicy`), so nothing leaks in the meantime.
+    static func mayRedeem(hasFirebaseUid: Bool, isDeclarationOutstanding: Bool) -> Bool {
+        hasFirebaseUid && !isDeclarationOutstanding
     }
 }
 

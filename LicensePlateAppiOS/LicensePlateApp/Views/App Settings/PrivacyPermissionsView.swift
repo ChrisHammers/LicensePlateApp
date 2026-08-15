@@ -43,7 +43,9 @@ struct PrivacyPermissionsView: View {
                             // permission row nor the toggles — the prompt is never
                             // triggered and every location feature is forced off.
                             if childPostures.isLocationRestrictedForCurrentFlow {
-                                ChildLocationDisabledNotice()
+                                ChildLocationDisabledNotice(
+                                    isChildEvidenced: childPostures.isLocationRestrictionChildEvidenced
+                                )
                             } else {
                                 PermissionRow(
                                     title: "Location".localized,

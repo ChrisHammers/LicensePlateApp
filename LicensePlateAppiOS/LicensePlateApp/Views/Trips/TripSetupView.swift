@@ -205,7 +205,9 @@ struct TripSetupView: View {
                 // COPPA F-7 (FR-33): child sessions replace the location prefs with
                 // a short explanation; the flags are forced off at the source of truth.
                 if childPostures.isLocationForcedOffForChildSession {
-                    ChildLocationDisabledNotice()
+                    ChildLocationDisabledNotice(
+                        isChildEvidenced: childPostures.isLocationRestrictionChildEvidenced
+                    )
                 } else {
                     SettingToggleRow(
                         title: "Save location when marking plates".localized,

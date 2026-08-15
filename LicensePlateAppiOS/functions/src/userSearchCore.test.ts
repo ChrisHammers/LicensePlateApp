@@ -239,6 +239,33 @@ describe("userSearchCore", () => {
       expect(isSearchIndexEligible({ isRegistered: true })).toBe(true);
       expect(isSearchIndexEligible({ isChildAccount: false })).toBe(true);
     });
+
+    /**
+     * FR-85 (F-42) / FR-70 / FR-11 pin. FR-85 grants a consented child the `.signedUp`
+     * capability through `users/{uid}.entitlementTags`, deliberately NOT by writing
+     * `isRegistered: true` — that field is this predicate's input, so the prohibited
+     * implementation would have re-indexed children into user search. This asserts the
+     * capability grant is inert to every search-eligibility predicate.
+     */
+    it("FR-85: the signed-up-equivalent tag does not make a child indexable", () => {
+      const consentedChild = {
+        userName: "KidRacer",
+        isChildAccount: true,
+        isRegistered: false,
+        activeFamilyId: "fam1",
+        entitlementTags: ["signedUpEquivalent"],
+      };
+      expect(isSearchIndexEligible(consentedChild)).toBe(false);
+      expect(isRegisteredForSearch(consentedChild)).toBe(false);
+      expect(isUsernameSearchableFromUserData(consentedChild)).toBe(false);
+      for (const field of ["username", "email", "phone"] as const) {
+        expect(toPublicSearchHit("kid", consentedChild, field)).toBeNull();
+      }
+      // Even if some future code path flipped isRegistered, the child check still holds.
+      expect(
+        isSearchIndexEligible({ ...consentedChild, isRegistered: true })
+      ).toBe(false);
+    });
   });
 
   // FR-48 (COPPA F-11): username modality privacy gate. Opt-OUT model — the inverse

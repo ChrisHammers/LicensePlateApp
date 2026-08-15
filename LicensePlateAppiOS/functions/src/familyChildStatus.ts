@@ -17,6 +17,7 @@ import * as admin from "firebase-admin";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
 import { assertAuthenticated, assertRegisteredAccount } from "./callableAuth";
+import { currentRevenueCatApiKey } from "./accountDeletion";
 import {
   declareChildRegistrationFlow,
   getParentalConsentStatusFlow,
@@ -73,31 +74,34 @@ export const declareChildRegistration = enforcedCallable(async (data, context) =
  * machinery (including de-identification of shared trip residue) against the child uid,
  * then deletes the child's Firebase Auth user last so a failed cleanup stays retryable.
  */
-export const requestChildDataDeletion = enforcedCallable(async (data, context) => {
-  const actorId = assertRegisteredAccount(context);
-  const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
+export const requestChildDataDeletion = enforcedCallable(
+  async (data, context) => {
+    const actorId = assertRegisteredAccount(context);
+    const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
-  const familyId = requireString(data?.familyId, "familyId");
-  const childUserId = requireString(data?.childUserId, "childUserId");
+    const familyId = requireString(data?.familyId, "familyId");
+    const childUserId = requireString(data?.childUserId, "childUserId");
 
-  const result = await requestChildDataDeletionFlow(admin.firestore(), {
-    actorId,
-    familyId,
-    childUserId,
-    clientMetadata,
-  });
+    const result = await requestChildDataDeletionFlow(admin.firestore(), {
+      actorId,
+      familyId,
+      childUserId,
+      clientMetadata,
+      revenueCatApiKey: currentRevenueCatApiKey(),
+    });
 
-  try {
-    await admin.auth().deleteUser(childUserId);
-  } catch (error) {
-    const code = (error as { code?: string }).code;
-    if (code !== "auth/user-not-found") {
-      throw error;
+    try {
+      await admin.auth().deleteUser(childUserId);
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code !== "auth/user-not-found") {
+        throw error;
+      }
     }
-  }
 
-  return result;
-});
+    return result;
+  }
+);
 
 /**
  * FR-29 (SHOULD): manager-gated consent history for a flagged child. `audit_logs`

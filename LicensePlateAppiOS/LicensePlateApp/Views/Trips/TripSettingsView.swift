@@ -347,7 +347,9 @@ struct TripSettingsView: View {
             // toggles with a short explanation; the flags are forced off at the
             // source of truth regardless of these prefs.
             if childPostures.isLocationForcedOffForChildSession {
-                ChildLocationDisabledNotice()
+                ChildLocationDisabledNotice(
+                    isChildEvidenced: childPostures.isLocationRestrictionChildEvidenced
+                )
             } else {
                 trackingPrivacyToggles
             }

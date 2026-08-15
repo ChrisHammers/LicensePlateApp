@@ -155,6 +155,118 @@ private struct ChildConsentCheckbox: View {
     }
 }
 
+/// COPPA FR-66(b): the evidence a manager must supply to CLEAR an existing child flag while
+/// approving a re-admission.
+///
+/// It lives beside the consent block, and reuses its checkbox row, because the two are the
+/// same kind of moment: a consent-affecting declaration that the server records and requires
+/// proof of. Before FR-66(b) the clear branch asked for nothing at all, which made "not a
+/// child" the cheapest possible answer on the one screen where it should be the most
+/// expensive. The guardian sentence is the SAME localized string the consent block uses
+/// (`family.child.guardian_affirmation`), deliberately: it is the same attestation, it is
+/// pinned by `AFFIRMATION_VERSION`, and reusing it verbatim keeps that lock intact.
+struct FamilyChildCorrectionBlock: View {
+    let draft: ChildCorrectionDraft
+    let onReasonChange: (ChildStatusCorrectionReason?) -> Void
+    let onStatusAcknowledgedChange: (Bool) -> Void
+    let onGuardianAffirmedChange: (Bool) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("family.child.correction_section_title".localized)
+                .font(.system(.subheadline, design: .rounded))
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.Theme.primaryBlue)
+                .accessibleHeader("family.child.correction_section_title".localized)
+
+            Text("family.child.correction_section_body".localized)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Picker(
+                "family.child.correction_reason_label".localized,
+                selection: Binding<ChildStatusCorrectionReason?>(
+                    get: { draft.reason },
+                    set: { onReasonChange($0) }
+                )
+            ) {
+                Text("family.child.correction_reason_none".localized)
+                    .tag(ChildStatusCorrectionReason?.none)
+                ForEach(ChildStatusCorrectionReason.allCases) { reason in
+                    Text(reason.localizedTitle).tag(ChildStatusCorrectionReason?.some(reason))
+                }
+            }
+            .pickerStyle(.menu)
+            .tint(Color.Theme.primaryBlue)
+            .font(.system(.footnote, design: .rounded))
+            .frame(minHeight: 44)
+            .accessibilityLabel("family.child.correction_reason_label".localized)
+            .accessibilityValue(
+                draft.reason?.localizedTitle ?? "family.child.correction_reason_none".localized
+            )
+            .accessibilityHint("family.child.correction_reason_hint".localized)
+
+            ChildConsentCheckbox(
+                title: "family.child.correction_ack".localized,
+                isOn: draft.statusAcknowledged,
+                accessibilityHint: "family.child.correction_ack_hint".localized,
+                onChange: onStatusAcknowledgedChange
+            )
+
+            ChildConsentCheckbox(
+                title: "family.child.guardian_affirmation".localized,
+                isOn: draft.guardianAffirmed,
+                accessibilityHint: "family.child.guardian_affirmation_hint".localized,
+                onChange: onGuardianAffirmedChange
+            )
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.Theme.primaryBlue.opacity(0.06))
+        )
+    }
+}
+
+#Preview("Correction block — empty") {
+    FamilyChildCorrectionBlock(
+        draft: ChildCorrectionDraft(),
+        onReasonChange: { _ in },
+        onStatusAcknowledgedChange: { _ in },
+        onGuardianAffirmedChange: { _ in }
+    )
+    .padding()
+}
+
+#Preview("Correction block — complete, dark") {
+    FamilyChildCorrectionBlock(
+        draft: ChildCorrectionDraft(
+            reason: .childTurned13,
+            statusAcknowledged: true,
+            guardianAffirmed: true
+        ),
+        onReasonChange: { _ in },
+        onStatusAcknowledgedChange: { _ in },
+        onGuardianAffirmedChange: { _ in }
+    )
+    .padding()
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Correction block — accessibility text size") {
+    ScrollView {
+        FamilyChildCorrectionBlock(
+            draft: ChildCorrectionDraft(reason: .flagSetInError),
+            onReasonChange: { _ in },
+            onStatusAcknowledgedChange: { _ in },
+            onGuardianAffirmedChange: { _ in }
+        )
+        .padding()
+    }
+    .environment(\.dynamicTypeSize, .accessibility3)
+}
+
 #Preview("Consent block — empty") {
     FamilyChildConsentBlock(
         draft: ChildConsentDraft(),

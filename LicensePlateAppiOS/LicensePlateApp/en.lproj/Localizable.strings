@@ -1402,7 +1402,12 @@
 "child_gate.family_prompt.title" = "Ask a parent to add you to their family";
 "child_gate.family_prompt.subtitle" = "Keep playing! Your trips stay on this device until you join a family.";
 "child_gate.callable_blocked" = "Ask a parent to add you to their family to use this.";
-"child_gate.registration_note" = "Pick a username to play. A parent can add you to their family with a share code.";
+/* COPPA F-18 (FR-60(e)): under-13 create-account mode shows this instead of a form. */
+"child_gate.signup.title" = "You're all set to play";
+"child_gate.signup.body" = "You don't need an account. Your trips, plates and points are saved right here on this device. When you're ready to play with your family, ask a parent for a family share code.";
+"child_gate.signup.keep_playing" = "Keep Playing";
+"child_gate.signup.keep_playing_hint" = "Closes this screen and returns to the game";
+"child_gate.join.setup_incomplete" = "We couldn't finish setting that up. Please check your connection and try the code again.";
 "child_gate.screen.join_title" = "Join your family to play together";
 "child_gate.screen.join_body" = "Ask a parent to add you to their family with a share code. Family features unlock once you join.";
 "child_gate.screen.join_button_hint" = "Opens family share code entry";
@@ -1411,6 +1416,8 @@
 
 // COPPA F-7 — Child session postures (FR-33 location toggles)
 "child_gate.location_disabled" = "Location options are turned off for child accounts.";
+// FR-75 amendment (OD-8): held for want of a fresh session check, not because of a child account.
+"child_gate.location_unverified" = "Location is paused until your session is verified.";
 
 // COPPA F-7 — Child premium info surfaces (FR-34-amended/D-14: visible, informational, no purchase UI)
 "child_gate.trip_limit.title" = "Trip limit reached";
@@ -1451,6 +1458,15 @@
 "family.child.choice_is_child" = "Yes, under 13";
 "family.child.choice_not_child" = "No, 13 or older";
 "family.child.approve_blocked_hint" = "Finish the parent consent steps first";
+// FR-66(b): clearing an EXISTING child flag during approval now costs the same evidence
+// as setting one. The guardian sentence is reused verbatim from the consent block above.
+"family.child.correction_section_title" = "Correcting the child flag";
+"family.child.correction_section_body" = "This member is marked as a child. Clearing that removes their child protections, so tell us why and confirm you can make this call.";
+"family.child.correction_reason_label" = "Reason";
+"family.child.correction_reason_none" = "Choose a reason";
+"family.child.correction_reason_hint" = "Required before you can approve";
+"family.child.correction_ack" = "I confirm this member is 13 or older, or was marked as a child by mistake.";
+"family.child.correction_ack_hint" = "Required to clear the child flag";
 "family.child.manage_mark" = "Mark as a child (under 13)";
 "family.child.manage_mark_hint" = "Opens parental consent for this member";
 "family.child.manage_clear" = "Correct child status";
@@ -1463,7 +1479,6 @@
 "family.child.correction_dialog_message" = "Use this only to fix the record — the flag was set by mistake, or they have turned 13. To end a child's participation while they are still under 13, use Remove from family, or Remove and delete child's data.";
 "family.child.correction_reason.flag_set_in_error" = "Set by mistake";
 "family.child.correction_reason.child_turned_13" = "They turned 13";
-"family.child.correction_reason.new_guardian_cleared" = "Cleared by a new family captain";
 "family.child.remove_delete_title" = "Remove and delete child's data";
 "family.child.remove_delete_message" = "This removes them from your family and permanently deletes their account and everything in it: profile, trips, discoveries, and stats.";
 "family.child.remove_delete_final_title" = "Delete this child's data?";

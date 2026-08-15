@@ -153,21 +153,34 @@ enum FriendsFamilyGateRouting: Equatable {
     case childGate(ChildAccountGateView.GateState)
     case content
 
+    /// COPPA FR-85 (F-42): child status is resolved BEFORE the guest gate, and this order
+    /// is load-bearing. FR-60 made BOTH child postures guest-like at the auth layer — an
+    /// unconsented child has no Firebase account at all, and a consented child holds an
+    /// ANONYMOUS one — so a registration-first test routes every child to a sign-up screen
+    /// they can never satisfy: the consented child loses the family surface they were
+    /// admitted to, and the unconsented child loses share-code entry, the only path to
+    /// consent. Registration is no longer a proxy for "legitimate member"; for a consented
+    /// child, family membership IS the credential (OD-2).
+    ///
+    /// This is a UI route, not an authorization decision: every callable behind it keeps its
+    /// own server gate (`assertRegisteredAccountOrDeclaredChild` / `assertCallerIsNotChild`)
+    /// and the family data behind `.content` is still fetched under `firestore.rules`.
+    /// Friends stay closed to consented children (FR-14/24) exactly as before, and an adult
+    /// guest still meets the sign-up gate.
     static func destination(
         isGuestLike: Bool,
         childState: ChildRestrictedModeService.ChildSessionState,
         feature: FriendsFamilyGateFeature
     ) -> FriendsFamilyGateRouting {
-        if isGuestLike { return .signUpGate }
         switch childState {
         case .unconsentedChild:
             // Both features route through consent: joining a family IS the path.
             return .childGate(.unconsented)
-        case .consentedChild where feature == .friends:
+        case .consentedChild:
             // Friends are not part of child accounts (FR-14/24); family play is.
-            return .childGate(.consented)
-        default:
-            return .content
+            return feature == .friends ? .childGate(.consented) : .content
+        case .notChild:
+            return isGuestLike ? .signUpGate : .content
         }
     }
 

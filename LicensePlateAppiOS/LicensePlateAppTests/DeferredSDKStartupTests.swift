@@ -2,10 +2,12 @@
 //  DeferredSDKStartupTests.swift
 //  LicensePlateAppTests
 //
-//  COPPA F-9 (FR-46): the SDK-startup deferral policy and its delta application.
+//  COPPA F-9 (FR-46) + F-15 (FR-56/FR-57): the SDK-startup deferral policy and its delta
+//  application, ads SDK included.
 //  Pure and deterministic — injectable seams only, no Firebase, no RevenueCat, no timing.
 //
 
+import Foundation
 import Testing
 @testable import LicensePlateApp
 
@@ -45,39 +47,71 @@ struct DeferredSDKStartupPolicyTests {
         #expect(plan(ageResolved: false, posture: .confirmedNonChild) == .allDeferred)
     }
 
-    @Test func resolvedAdultStartsAllThree() {
+    @Test func resolvedAdultStartsAllFour() {
         let plan = plan(ageResolved: true, posture: .confirmedNonChild)
         #expect(plan.startsMessaging)
         #expect(plan.startsAnalyticsCollection)
         #expect(plan.startsPurchases)
+        #expect(plan.startsAds)
     }
 
-    /// FR-32/FR-34 postures: a resolved child still gets family-trip push and
-    /// internal-ops analytics, and is never handed to RevenueCat.
-    @Test func resolvedChildStartsMessagingAndAnalyticsButNeverPurchases() {
+    /// FR-32/FR-34/FR-56 postures: a resolved child still gets family-trip push and
+    /// internal-ops analytics, and is never handed to RevenueCat or to the ad network.
+    @Test func resolvedChildStartsMessagingAndAnalyticsOnly() {
         let plan = plan(ageResolved: true, posture: .childDirected)
         #expect(plan.startsMessaging)
         #expect(plan.startsAnalyticsCollection)
         #expect(plan.startsPurchases == false)
+        #expect(plan.startsAds == false)
     }
 
-    /// A ratcheted-anonymous session is ad-ineligible (FR-39) but is not a child
-    /// account, so FR-34 does not suppress its purchases. The gate must not
-    /// over-restrict once the epoch has an answer.
-    @Test func ratchetedAnonymousWithAnAnswerMayStartPurchases() {
+    /// FR-57 (overturns the old ratcheted-anonymous purchase carve-out): a device that
+    /// has hosted a child hands its anonymous uid to NEITHER commerce SDK nor ad SDK,
+    /// answered epoch or not. Push and internal-ops analytics still release.
+    @Test func ratchetedAnonymousWithAnAnswerStartsNeitherPurchasesNorAds() {
         let plan = plan(ageResolved: true, posture: .ratchetedAnonymous)
-        #expect(plan.startsPurchases)
+        #expect(plan.startsPurchases == false)
+        #expect(plan.startsAds == false)
         #expect(plan.startsMessaging)
         #expect(plan.startsAnalyticsCollection)
     }
 
+    /// The whole matrix in one place: four postures × four startups, at the only age
+    /// state that can release anything. `.unresolved` is held by the gate above; it is
+    /// listed here so the row exists and can never silently start something.
+    @Test func planMatrixOverEveryPosture() {
+        // posture → (messaging, analytics, purchases, ads)
+        let expected: [(ChildSessionPosture, Bool, Bool, Bool, Bool)] = [
+            (.unresolved,        false, false, false, false),
+            (.childDirected,     true,  true,  false, false),
+            (.ratchetedAnonymous, true, true,  false, false),
+            (.confirmedNonChild, true,  true,  true,  true),
+        ]
+        for (posture, messaging, analytics, purchases, ads) in expected {
+            let plan = plan(ageResolved: true, posture: posture)
+            #expect(plan.startsMessaging == messaging, "messaging for \(posture.rawValue)")
+            #expect(plan.startsAnalyticsCollection == analytics, "analytics for \(posture.rawValue)")
+            #expect(plan.startsPurchases == purchases, "purchases for \(posture.rawValue)")
+            #expect(plan.startsAds == ads, "ads for \(posture.rawValue)")
+        }
+    }
+
+    /// FR-56: ad STARTUP and ad DISPLAY are released by the same predicate, so the SDK
+    /// can never be running for a session that may not show ads.
+    @Test func adStartupTracksAdDisplayEligibility() {
+        for posture in [ChildSessionPosture.unresolved, .childDirected, .ratchetedAnonymous, .confirmedNonChild] {
+            #expect(plan(ageResolved: true, posture: posture).startsAds == posture.isAdDisplayEligible)
+        }
+    }
+
     /// Offline-only mode (no Firebase app): the two Firebase-side SDKs have nothing to
-    /// start; RevenueCat does not depend on Firebase.
-    @Test func withoutFirebaseOnlyPurchasesCanStart() {
+    /// start; neither RevenueCat nor Google Mobile Ads depends on Firebase.
+    @Test func withoutFirebaseOnlyPurchasesAndAdsCanStart() {
         let plan = plan(ageResolved: true, posture: .confirmedNonChild, firebase: false)
         #expect(plan.startsMessaging == false)
         #expect(plan.startsAnalyticsCollection == false)
         #expect(plan.startsPurchases)
+        #expect(plan.startsAds)
     }
 
     @Test func withoutAnApiKeyPurchasesNeverStart() {
@@ -117,7 +151,8 @@ struct DeferredSDKStartupServiceTests {
                 configureMessaging: { [weak self] in self?.events.append("fcmConfigure") },
                 setAnalyticsCollectionEnabled: { [weak self] in self?.events.append("analytics(\($0))") },
                 configurePurchases: { [weak self] in self?.events.append("rcConfigure") },
-                identifyPurchases: { [weak self] in self?.events.append("rcIdentify(\($0 ?? "nil"))") }
+                identifyPurchases: { [weak self] in self?.events.append("rcIdentify(\($0 ?? "nil"))") },
+                startAds: { [weak self] in self?.events.append("adsStart(\($0.rawValue))") }
             )
             return DeferredSDKStartupService(dependencies: deps)
         }
@@ -162,6 +197,7 @@ struct DeferredSDKStartupServiceTests {
 
         #expect(world.events == [
             "fcmAutoInit(true)", "fcmConfigure", "analytics(true)", "rcConfigure", "rcIdentify(u1)",
+            "adsStart(confirmedNonChild)",
         ])
 
         // Re-running the routine with unchanged inputs must emit nothing.
@@ -171,8 +207,8 @@ struct DeferredSDKStartupServiceTests {
         #expect(world.events.isEmpty)
     }
 
-    /// A child session resolves too — it just never reaches RevenueCat.
-    @Test func resolvedChildReleasesWithoutTouchingPurchases() {
+    /// A child session resolves too — it just never reaches RevenueCat or the ads SDK.
+    @Test func resolvedChildReleasesWithoutTouchingPurchasesOrAds() {
         let world = World()
         let service = world.makeService()
         service.installAtLaunch(isFirebaseConfigured: true)
@@ -265,8 +301,9 @@ struct DeferredSDKStartupServiceTests {
         #expect(world.events == ["rcIdentify(nil)"])
     }
 
-    /// A parent correction back to adult re-identifies, and still never re-configures.
-    @Test func childToAdultCorrectionReIdentifies() {
+    /// A parent correction back to adult re-identifies and starts the ads SDK for the
+    /// first time, and still never re-configures what is already configured.
+    @Test func childToAdultCorrectionReIdentifiesAndStartsAds() {
         let world = World()
         let service = world.makeService()
         service.installAtLaunch(isFirebaseConfigured: true)
@@ -277,7 +314,58 @@ struct DeferredSDKStartupServiceTests {
 
         service.apply(posture: .confirmedNonChild)
 
-        #expect(world.events == ["rcConfigure", "rcIdentify(u1)"])
+        #expect(world.events == ["rcConfigure", "rcIdentify(u1)", "adsStart(confirmedNonChild)"])
+    }
+
+    // MARK: Ads (FR-56)
+
+    /// The FR-56 defect, as a test: no posture short of a confirmed adult may start the
+    /// ads SDK, however many triggers fire — this is the clean-install path that used to
+    /// run `MobileAds.start()` untagged from `didFinishLaunching`.
+    @Test func adsNeverStartForANonAdultPosture() {
+        let world = World()
+        let service = world.makeService()
+        service.installAtLaunch(isFirebaseConfigured: true)
+        world.ageResolved = true
+        world.authUserId = "u1"
+
+        service.apply(posture: .unresolved)
+        service.apply(posture: .childDirected)
+        service.apply(posture: .ratchetedAnonymous)
+
+        #expect(world.events.contains { $0.hasPrefix("adsStart") } == false)
+        #expect(service.currentPlan.startsAds == false)
+    }
+
+    /// `MobileAds.start()` is one-way: the SDK cannot be un-started, so the release
+    /// happens exactly once and a later child correction does not re-fire it.
+    @Test func adsStartOnceAndNeverRestart() {
+        let world = World()
+        let service = world.makeService()
+        service.installAtLaunch(isFirebaseConfigured: true)
+        world.ageResolved = true
+        world.authUserId = "u1"
+        service.apply(posture: .confirmedNonChild)
+        world.events.removeAll()
+
+        service.apply(posture: .childDirected)
+        service.apply(posture: .confirmedNonChild)
+        service.apply(posture: .confirmedNonChild)
+
+        #expect(world.events.contains { $0.hasPrefix("adsStart") } == false)
+    }
+
+    /// The start carries the posture that released it, so `AdMobService`'s pre-start
+    /// stamp is derived from the same value the posture routine applied (FR-17).
+    @Test func adsStartCarriesTheReleasingPosture() {
+        let world = World()
+        let service = world.makeService()
+        service.installAtLaunch(isFirebaseConfigured: true)
+        world.ageResolved = true
+        service.apply(posture: .confirmedNonChild)
+
+        #expect(world.events.contains("adsStart(confirmedNonChild)"))
+        #expect(AdMobService.preStartChildDirected(posture: .confirmedNonChild) == false)
     }
 }
 
@@ -301,7 +389,7 @@ struct DeferredSDKStartupPostureOrderingTests {
             freshIsChildAccount: { _ in true },
             isFreshChildFlagExplicit: { _ in true },
             cachedIsChildAccount: { _ in nil },
-            storeCachedIsChildAccount: { _, _ in },
+            storeCachedIsChildAccount: { _, _, _ in },
             isDeclaredChildIdentity: { _ in false },
             isUnder13FlowAnswer: { false },
             isAgeResolved: { true },
@@ -328,6 +416,54 @@ struct DeferredSDKStartupPostureOrderingTests {
         #expect(log.events == ["personalization(disabled=true)", "release(childDirected)"])
     }
 
+    /// FR-56 ordering, both sides: the TFCD stamp is applied BEFORE the ads SDK is
+    /// released, and the banner refresh notification fires AFTER it — so a reloading
+    /// banner can neither out-run the tag nor build a request into an unstarted SDK.
+    @Test func adsAreTaggedThenStartedThenBannersRefresh() {
+        let log = Log()
+        let observer = NotificationCenter.default.addObserver(
+            forName: .adIdentityDidChange,
+            object: nil,
+            queue: nil
+        ) { [weak log] _ in
+            // Posted synchronously on the main actor (queue: nil), like the live
+            // `AdBannerView` observer.
+            MainActor.assumeIsolated {
+                log?.events.append("bannerRefresh")
+            }
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        let deps = ChildSessionPostureCoordinator.Dependencies(
+            currentAuthIdentity: { ("u1", false) },
+            freshIsChildAccount: { _ in false },
+            isFreshChildFlagExplicit: { _ in true },
+            cachedIsChildAccount: { _ in nil },
+            storeCachedIsChildAccount: { _, _, _ in },
+            isDeclaredChildIdentity: { _ in false },
+            isUnder13FlowAnswer: { false },
+            isAgeResolved: { true },
+            isDeviceRatcheted: { false },
+            engageDeviceRatchet: {},
+            clearChildIdentityLineage: { _ in },
+            hasAnyCachedChildTrue: { false },
+            hasDeclaredChildHistory: { false },
+            hasConfirmedChildDeclaration: { _ in false },
+            hasOutstandingChildDeclaration: { false },
+            liftDeviceChildMarkers: {},
+            applyChildDirectedTreatment: { [weak log] in log?.events.append("tfcd(\($0))") },
+            setAdPersonalizationSignalsDisabled: { _ in },
+            setLocationForcedOff: { _ in },
+            releaseDeferredSDKStartups: { [weak log] in
+                log?.events.append("release(\($0.rawValue))")
+            }
+        )
+        let coordinator = ChildSessionPostureCoordinator(dependencies: deps)
+        coordinator.applyPostures(trigger: .identityTransition)
+
+        #expect(log.events == ["tfcd(false)", "release(confirmedNonChild)", "bannerRefresh"])
+    }
+
     /// The age answer is itself a resolution event, so it re-runs the one routine.
     @Test func ageResolutionIsATriggerOnTheSameRoutine() {
         let log = Log()
@@ -336,7 +472,7 @@ struct DeferredSDKStartupPostureOrderingTests {
             freshIsChildAccount: { _ in false },
             isFreshChildFlagExplicit: { _ in true },
             cachedIsChildAccount: { _ in nil },
-            storeCachedIsChildAccount: { _, _ in },
+            storeCachedIsChildAccount: { _, _, _ in },
             isDeclaredChildIdentity: { _ in false },
             isUnder13FlowAnswer: { false },
             isAgeResolved: { true },

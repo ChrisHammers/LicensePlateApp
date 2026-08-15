@@ -2,15 +2,18 @@
 //  DeferredSDKStartupService.swift
 //  LicensePlateApp
 //
-//  COPPA F-9 (FR-46): SDK startup deferral, non-ads.
+//  COPPA F-9 (FR-46) + F-15 (FR-56): SDK startup deferral.
 //
-//  Three SDK startups must not happen for an AGE-UNRESOLVED session, and must then
+//  Four SDK startups must not happen for an AGE-UNRESOLVED session, and must then
 //  start with the posture that resolution produced:
 //
 //    1. FCM registration  — `FirebaseMessagingService.configure` + Messaging auto-init.
 //    2. Firebase Analytics COLLECTION — distinct from FR-32's ad-personalization
 //       property, which the posture routine applies first (see ordering note below).
 //    3. RevenueCat — `configure` + `identify`.
+//    4. Google Mobile Ads — `MobileAds.start()` (FR-56). It used to start
+//       unconditionally in `didFinishLaunching`, which on a clean install meant an
+//       untagged SDK init before the age gate had even been shown.
 //
 //  Firebase core, App Check and Crashlytics are internal-ops and deliberately absent:
 //  FR-46 lets them start immediately, and they still do, in `didFinishLaunching`.
@@ -27,19 +30,21 @@ import FirebaseAuth
 
 // MARK: - Which deferred SDKs a session may start (pure policy)
 
-/// The three FR-46 startups, as one snapshot. Compared against the last applied plan so
-/// the service only ever emits deltas (idempotent re-runs are free).
+/// The four deferred startups, as one snapshot. Compared against the last applied plan
+/// so the service only ever emits deltas (idempotent re-runs are free).
 struct DeferredSDKStartupPlan: Equatable {
     var startsMessaging: Bool
     var startsAnalyticsCollection: Bool
     var startsPurchases: Bool
+    var startsAds: Bool
 
     /// Fail-closed value: what an age-unresolved session gets, and the state the app
     /// installs at launch before anything has resolved.
     static let allDeferred = DeferredSDKStartupPlan(
         startsMessaging: false,
         startsAnalyticsCollection: false,
-        startsPurchases: false
+        startsPurchases: false,
+        startsAds: false
     )
 }
 
@@ -87,7 +92,12 @@ enum DeferredSDKStartupPolicy {
             // with the appropriate posture" for an SDK whose only purpose is purchasing.
             // Family-granted `entitlementTags` are unaffected: they come from Firestore
             // (`EntitlementService`), never from RevenueCat.
-            startsPurchases: hasPurchasesAPIKey && !posture.suppressesPurchases
+            startsPurchases: hasPurchasesAPIKey && !posture.suppressesPurchases,
+            // FR-56: the ads SDK starts for exactly the sessions that may DISPLAY ads —
+            // `.confirmedNonChild` and nothing else. Same shape as `startsPurchases`
+            // (which FR-57 also reduces to that one posture); expressed through the
+            // canonical FR-19 projection so there is one definition of ad-eligibility.
+            startsAds: posture.isAdDisplayEligible
         )
     }
 }
@@ -109,6 +119,9 @@ final class DeferredSDKStartupService {
         var setAnalyticsCollectionEnabled: (Bool) -> Void
         var configurePurchases: () -> Void
         var identifyPurchases: (String?) -> Void
+        /// FR-56: `MobileAds.start()`, carrying the posture that released it so the
+        /// pre-start TFCD stamp is derived from the same value the routine just applied.
+        var startAds: (ChildSessionPosture) -> Void
 
         @MainActor static func live() -> Dependencies {
             Dependencies(
@@ -127,7 +140,8 @@ final class DeferredSDKStartupService {
                 configurePurchases: { RevenueCatEntitlementBridge.shared.configure() },
                 identifyPurchases: { userId in
                     Task { await RevenueCatEntitlementBridge.shared.identify(userId: userId) }
-                }
+                },
+                startAds: { AdMobService.shared.startIfNeeded(posture: $0) }
             )
         }
     }
@@ -139,6 +153,7 @@ final class DeferredSDKStartupService {
     private var hasConfiguredPurchases = false
     private var hasIdentifiedPurchases = false
     private var identifiedPurchaseUserId: String?
+    private var hasStartedAds = false
 
     init(dependencies: Dependencies? = nil) {
         self.deps = dependencies ?? Dependencies.live()
@@ -164,15 +179,18 @@ final class DeferredSDKStartupService {
 
     /// Called by `ChildSessionPostureCoordinator.applyPostures` for every trigger.
     func apply(posture: ChildSessionPosture) {
-        applyPlan(DeferredSDKStartupPolicy.plan(
-            isAgeGateResolved: deps.isAgeGateResolved(),
-            posture: posture,
-            isFirebaseConfigured: isFirebaseConfigured,
-            hasPurchasesAPIKey: deps.hasPurchasesAPIKey()
-        ))
+        applyPlan(
+            DeferredSDKStartupPolicy.plan(
+                isAgeGateResolved: deps.isAgeGateResolved(),
+                posture: posture,
+                isFirebaseConfigured: isFirebaseConfigured,
+                hasPurchasesAPIKey: deps.hasPurchasesAPIKey()
+            ),
+            posture: posture
+        )
     }
 
-    private func applyPlan(_ plan: DeferredSDKStartupPlan) {
+    private func applyPlan(_ plan: DeferredSDKStartupPlan, posture: ChildSessionPosture) {
         // FCM. Auto-init is toggled in both directions; `configure` (APNs registration +
         // delegate + first token fetch) is a one-time bootstrap — re-registering on every
         // later transition would be pointless network work, and sign-out token clearing
@@ -212,6 +230,16 @@ final class DeferredSDKStartupService {
             // but holds no user.
             identifiedPurchaseUserId = nil
             deps.identifyPurchases(nil)
+        }
+
+        // Google Mobile Ads (FR-56). One-way, like `Purchases.configure`: the SDK cannot
+        // be un-started, so it starts on the first plan that allows it — a posture that
+        // is both age-resolved and `.confirmedNonChild`. Losing that posture later needs
+        // no counterpart here: FR-19's display hold removes the banners (FR-18) and no
+        // request is ever built for an ineligible session.
+        if plan.startsAds, !hasStartedAds {
+            hasStartedAds = true
+            deps.startAds(posture)
         }
 
         applied = plan

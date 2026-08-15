@@ -656,6 +656,12 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
     private func requireRegisteredAccount() throws {
         try FriendsFamilyAccessPolicy.shared.validateFriendsFamilyCallableAccess(for: nil)
     }
+
+    /// COPPA F-18 (FR-60(b)): the consent exits also admit a declared child's anonymous
+    /// session. See `FriendsFamilyAccessPolicy.validateConsentExitCallableAccess`.
+    private func requireRegisteredAccountOrDeclaredChild() throws {
+        try FriendsFamilyAccessPolicy.shared.validateConsentExitCallableAccess(for: nil)
+    }
     
     /// Create a new family
     func createFamily(name: String) async throws -> String {
@@ -681,17 +687,30 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         return familyId
     }
     
-    /// Redeem a share code to join a family
-    func redeemShareCode(code: String) async throws -> String {
-        try requireRegisteredAccount()
-        
+    /// Redeem a share code on a specific surface.
+    ///
+    /// COPPA FR-67: `expectedType` names the screen doing the redeeming, and the server
+    /// refuses a code of the other kind — a friend code fed to the join-a-family flow used
+    /// to mint a stranger→child friend invite that was only blocked later, at accept. It is
+    /// REQUIRED server-side, so it can never be dropped to skip the check.
+    func redeemShareCode(
+        code: String,
+        expectedType: ShareCode.ShareCodeType
+    ) async throws -> String {
+        // COPPA FR-60(b): a child provisioned at share-code entry is still anonymous here.
+        // The caller runs the mint → bind → declare sequence before this point; this gate
+        // stops an ordinary anonymous guest while letting the declared child through, and
+        // the server's `assertRegisteredAccountOrDeclaredChild` remains the authority.
+        try requireRegisteredAccountOrDeclaredChild()
+
         let functions = Functions.functions()
         let redeemCodeFunction = functions.httpsCallable("redeemShareCode")
-        
+
         let result: HTTPSCallableResult
         do {
             result = try await redeemCodeFunction.call(([
-                "code": code
+                "code": code,
+                "expectedType": expectedType.rawValue
             ] as [String: Any]).addingClientMetadata())
         } catch {
             throw Self.userFacingCallableError(error)

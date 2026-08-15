@@ -128,7 +128,7 @@ final class JoinFriendByCodeViewModel: ObservableObject {
 
         Task {
             do {
-                let inviteId = try await familyRepository.redeemShareCode(code: trimmedCode)
+                let inviteId = try await familyRepository.redeemShareCode(code: trimmedCode, expectedType: .friend)
                 await MainActor.run {
                     isRedeeming = false
                     redeemedInviteId = inviteId

@@ -34,7 +34,8 @@ struct TripRouteTrackingServiceTests {
     private func makeService(
         source: FakeLocationSource,
         track: Bool,
-        userId: String = "user-a"
+        userId: String = "user-a",
+        childRestricted: Bool = false
     ) -> (TripRouteTrackingService, UUID) {
         let sessionId = UUID()
         let prefsStore = TripParticipantPrefsStore(
@@ -53,7 +54,11 @@ struct TripRouteTrackingServiceTests {
         )
         let privacy = UserDefaults(suiteName: "test.route.privacy.\(UUID().uuidString)")!
         LocationSettingsBootstrap.registerFactoryDefaults(using: privacy)
-        let resolver = EffectiveSettingsResolver(privacyDefaults: privacy, prefsStore: prefsStore)
+        let resolver = EffectiveSettingsResolver(
+            privacyDefaults: privacy,
+            prefsStore: prefsStore,
+            childRestriction: .fixed(childRestricted)
+        )
         let service = TripRouteTrackingService(locationSource: source, resolver: resolver)
         return (service, sessionId)
     }
@@ -164,6 +169,21 @@ struct TripRouteTrackingServiceTests {
         #expect(service.routePoints.count == 1)
 
         service.tripDidStart(sessionId: UUID(), viewerUserId: "user-a")
+        #expect(service.routePoints.isEmpty)
+    }
+
+    /// COPPA F-31 (FR-75a): the child signal is ANDed inside the resolver, so a restricted
+    /// session never begins capture even with the trip active, the setting on and the OS
+    /// authorization already granted.
+    @Test func childRestrictedSessionNeverCapturesDespiteSettingOnAndAuthorization() {
+        let source = FakeLocationSource()
+        let (service, sessionId) = makeService(source: source, track: true, childRestricted: true)
+
+        service.tripDidStart(sessionId: sessionId, viewerUserId: "user-a")
+
+        #expect(service.isCapturing == false)
+        #expect(source.beginCount == 0)
+        source.subject.send(fix(lat: 1, lon: 1))
         #expect(service.routePoints.isEmpty)
     }
 }

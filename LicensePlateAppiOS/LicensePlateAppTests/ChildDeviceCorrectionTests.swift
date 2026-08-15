@@ -224,6 +224,7 @@ struct ChildCorrectionPostureTests {
         /// `freshFlagAbsent`.
         var freshFlagAbsent: Set<String> = []
         var cached: [String: Bool] = [:]
+        var cachedServerExplicitUids: Set<String> = []
         var declaredUids: Set<String> = []
         var pendingDeclarationUids: Set<String> = []
         var under13Answer = false
@@ -239,8 +240,13 @@ struct ChildCorrectionPostureTests {
                     return self.fresh[uid] != nil && !self.freshFlagAbsent.contains(uid)
                 },
                 cachedIsChildAccount: { [weak self] uid in self?.cached[uid] },
-                storeCachedIsChildAccount: { [weak self] uid, value in
+                storeCachedIsChildAccount: { [weak self] uid, value, isServerExplicit in
                     self?.cached[uid] = value
+                    if isServerExplicit {
+                        self?.cachedServerExplicitUids.insert(uid)
+                    } else {
+                        self?.cachedServerExplicitUids.remove(uid)
+                    }
                     if value { self?.ratcheted = true }
                 },
                 isDeclaredChildIdentity: { [weak self] uid in
@@ -255,6 +261,7 @@ struct ChildCorrectionPostureTests {
                 clearChildIdentityLineage: { [weak self] uid in
                     self?.declaredUids.remove(uid)
                     self?.cached.removeValue(forKey: uid)
+                    self?.cachedServerExplicitUids.remove(uid)
                     self?.events.append("clearLineage(\(uid))")
                 },
                 hasAnyCachedChildTrue: { [weak self] in self?.cached.values.contains(true) ?? false },
@@ -274,7 +281,10 @@ struct ChildCorrectionPostureTests {
                 },
                 applyChildDirectedTreatment: { [weak self] in self?.events.append("tfcd(\($0))") },
                 setAdPersonalizationSignalsDisabled: { _ in },
-                setLocationForcedOff: { [weak self] in self?.events.append("location(forcedOff=\($0))") }
+                setLocationForcedOff: { [weak self] in self?.events.append("location(forcedOff=\($0))") },
+                isCachedChildFlagServerExplicit: { [weak self] uid in
+                    self?.cachedServerExplicitUids.contains(uid) ?? false
+                }
             )
             return ChildSessionPostureCoordinator(dependencies: deps)
         }

@@ -74,9 +74,24 @@ async function ensureOwnerMemberIfCreatorPayload(
   if (!createdBy || createdBy !== userId) {
     return;
   }
-  const memberRef = sessionRef(tripSessionId).collection("members").doc(userId);
+  const ref = sessionRef(tripSessionId);
+  const memberRef = ref.collection("members").doc(userId);
   if ((await memberRef.get()).exists) {
     return;
+  }
+  // FR-68: never trust the client-supplied `createdBy` against an already-existing session.
+  // Anyone who merely learns a tripSessionId (a past/removed participant, or a trip-invite
+  // recipient — trip_invites is party-readable and carries tripSessionId) could otherwise
+  // claim to be the creator and self-install as owner of someone else's trip. The stored
+  // document's `createdBy` is the only trustworthy record of who actually created it. Only a
+  // genuine first publish (no stored session yet) or a republish by the true creator may
+  // install the caller as owner here.
+  const stored = await ref.get();
+  if (stored.exists && (stored.data()?.createdBy as string | undefined) !== userId) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Not a member of this trip session"
+    );
   }
   await memberRef.set(
     {

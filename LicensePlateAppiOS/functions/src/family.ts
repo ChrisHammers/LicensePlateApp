@@ -6,7 +6,10 @@ import { auditValueHash } from "./auditRedaction";
 import { getFCMTokenForSocialPush, sendPushNotification } from "./utils/notifications";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
-import { assertRegisteredAccount } from "./callableAuth";
+import {
+  assertRegisteredAccount,
+  assertRegisteredAccountOrDeclaredChild,
+} from "./callableAuth";
 import { loadFamilyName } from "./familyInviteDisplay";
 import {
   PENDING_FAMILY_INVITE_EXISTS_MESSAGE,
@@ -19,11 +22,15 @@ import {
 import { canRemoveFamilyMember } from "./familyMemberRemovalPolicy";
 import {
   CHILD_TARGET_NOT_SEARCHABLE_MESSAGE,
-  CORRECTION_REASON_NEW_GUARDIAN_CLEARED,
   evaluateApprovalChildDeclaration,
   isChildWithActiveFamilyUserData,
   sanitizedChildLinkedPlatforms,
 } from "./childAccountCore";
+import {
+  assertGuardianClearSeasoning,
+  assertJoinRequestLineage,
+  buildJoinRequestLineage,
+} from "./familyJoinRequestIntegrity";
 import {
   writeChildConsentCorrected,
   writeChildConsentGranted,
@@ -31,6 +38,11 @@ import {
 } from "./childConsent";
 import { applyChildProtectionsAfterFlagSet } from "./familyChildStatusFlows";
 import { assertCallerIsNotChild } from "./childAccessGuards";
+import { currentRevenueCatApiKey } from "./accountDeletion";
+import {
+  CHILD_DECLARED_AT_FIELD,
+  deleteProvisionalChildAccountIfNeverConsented,
+} from "./provisionalChildAccounts";
 
 const db = admin.firestore();
 
@@ -316,7 +328,10 @@ export const sendFamilyInvite = enforcedCallable(
  */
 export const respondToFamilyInvite_UserStep = enforcedCallable(
   async (data, context) => {
-    const userId = assertRegisteredAccount(context);
+    // FR-60 (F-18): the second of the two consent exits. A child provisioned at share-code
+    // entry is still ANONYMOUS here — the carve-out lets a server-verified declared child
+    // through and leaves every other anonymous caller with the byte-identical refusal.
+    const userId = await assertRegisteredAccountOrDeclaredChild(db, context);
 
     const { inviteId, response } = data;
     const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
@@ -379,13 +394,23 @@ export const respondToFamilyInvite_UserStep = enforcedCallable(
         );
       }
 
-      // Create pending join request (awaiting captain approval)
+      // Create pending join request (awaiting captain approval).
+      //
+      // FR-66(a): stamp the invite that authorised this request — and the share code behind
+      // it, when `redeemShareCode` minted the invite. `invites` has been server-created-only
+      // since FR-16(a) and `pending` now is too, so the stamp chains a join request back to
+      // a document no client could have forged. `approveFamilyJoinRequest_CaptainStep`
+      // refuses to approve a row without one.
       const requestData = {
         userId,
         requestedBy: inviteData.fromUserId,
         method: inviteData.method,
         status: "pending",
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        ...buildJoinRequestLineage({
+          inviteId: inviteDoc.id,
+          codeId: inviteData.codeId,
+        }),
       };
 
       const requestRef = db.collection(`families/${familyId}/pending`).doc();
@@ -538,10 +563,14 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
     // commits (index purge, invite/friend cleanup, consent record).
     let childFollowUp:
       | { kind: "grant"; expectedAgeOutYear?: number; targetUserData: Record<string, unknown> }
-      | { kind: "clear_new_guardian" }
+      | { kind: "clear_new_guardian"; correctionReason: string }
       | null = null;
 
     if (response === "approve") {
+      // FR-66(a): only a request an invite produced may be approved. Decline stays open
+      // below, so a manager can always clear a malformed row out of their queue.
+      assertJoinRequestLineage(requestData);
+
       // Get target user to determine role
       const targetUserDoc = await db
         .collection("users")
@@ -566,6 +595,7 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         payloadIsChild: data?.isChild,
         consentAcknowledged: data?.consentAcknowledged,
         guardianAffirmed: data?.guardianAffirmed,
+        correctionReason: data?.correctionReason,
         expectedAgeOutYear: data?.expectedAgeOutYear,
         targetIsChildAccount: targetUserData.isChildAccount === true,
         nowYear: new Date().getUTCFullYear(),
@@ -580,7 +610,18 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
           targetUserData,
         };
       } else if (childDecision.kind === "clear_new_guardian") {
-        childFollowUp = { kind: "clear_new_guardian" };
+        // FR-66(b): evidence is necessary but not sufficient — a fabricated guardian can
+        // supply a reason and tick both boxes. The family itself must also look real.
+        await assertGuardianClearSeasoning(db, {
+          familyId,
+          approverUserId: userId,
+          targetUserId: requestData.userId,
+          requestData,
+        });
+        childFollowUp = {
+          kind: "clear_new_guardian",
+          correctionReason: childDecision.correctionReason,
+        };
       }
 
       // Check if user can still be added (limits may have changed)
@@ -638,6 +679,12 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
           grantUpdate.linkedPlatforms = linkedPlatforms.sanitized;
         }
       }
+      // FR-60(c): admission CLOSES the redemption window, so the marker that opened it goes
+      // with the same batch. Belt-and-braces with `wasEverInFamily` (also set here): the
+      // transient-account sweep can only see accounts that still carry this stamp, so an
+      // admitted child — and, later, a sticky post-revocation child — is invisible to it by
+      // construction rather than by the sweep's own predicate. A no-op for adults.
+      grantUpdate[CHILD_DECLARED_AT_FIELD] = admin.firestore.FieldValue.delete();
       batch.update(
         db.collection("users").doc(requestData.userId),
         grantUpdate
@@ -758,15 +805,48 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
     } else if (childFollowUp?.kind === "clear_new_guardian") {
       // FR-25: new guardian explicitly declared not-a-child. Flag already cleared in the
       // batch; search indexes rebuild via the normal profile-sync triggers.
+      //
+      // FR-66(b): the row now records the manager's ENUMERATED reason rather than a fixed
+      // `new_guardian_cleared` slug. No information is lost — `method` already identifies
+      // this as the re-admission path — and the audit gains the evidence the gate demands.
       await writeChildConsentCorrected(db, {
         familyId,
         childUserId: requestData.userId,
         actorId: userId,
         actorRole: memberRole,
         method: "readmission_declaration",
-        reason: CORRECTION_REASON_NEW_GUARDIAN_CLEARED,
+        reason: childFollowUp.correctionReason,
         clientMetadata,
       });
+    }
+
+    // COPPA FR-60(c): a declined request from a NEVER-CONSENTED provisional child ends that
+    // account outright. Under the local-first model the uid exists only because the child
+    // entered a share code; a decline means consent was refused, so the transient server
+    // footprint has no basis to persist. The device keeps its age answer and ratchet, so a
+    // later code entry re-provisions cleanly as a child.
+    //
+    // The helper re-reads the user doc and is a no-op for anyone else — an adult, a
+    // consented child, and (critically) a STICKY POST-REVOCATION child, who keeps the FR-28
+    // restricted state and the OD-3 window. See `provisionalChildAccounts.ts`.
+    //
+    // Deliberately non-fatal: the decline itself has already committed, and re-running this
+    // callable would fail on "Request already resolved". A failure here leaves the account
+    // for the FR-77 seven-day backstop sweep, which exists for exactly this case.
+    if (response === "decline") {
+      try {
+        await deleteProvisionalChildAccountIfNeverConsented(db, {
+          userId: requestData.userId,
+          actorId: userId,
+          clientMetadata,
+          revenueCatApiKey: currentRevenueCatApiKey(),
+        });
+      } catch (error) {
+        functions.logger.error(
+          "FR-60(c): provisional child cleanup after decline failed; backstop sweep will retry",
+          { childUserId: requestData.userId, error }
+        );
+      }
     }
 
     return { success: true };

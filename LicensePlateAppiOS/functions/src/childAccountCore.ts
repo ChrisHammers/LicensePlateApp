@@ -57,6 +57,20 @@ export const CHILD_CONSENT_SCOPE: readonly string[] = [
  */
 export const CONSENT_TEXT_VERSION = "1.0.0-2026-08-10";
 export const AFFIRMATION_VERSION = "1.0.0-2026-08-10";
+
+/**
+ * SHA-256 hex digest of `JSON.stringify([en, es, fr])` for the localized
+ * `family.child.guardian_affirmation` string (the sentence AFFIRMATION_VERSION pins —
+ * see the header comment in `FamilyChildConsentBlock.swift`). Recorded here, alongside
+ * the version, as a machine-checkable lock: `affirmationTextLock.test.ts` recomputes
+ * this hash from the live `en/es/fr.lproj/Localizable.strings` files on every run and
+ * fails if it drifts. If you're updating this constant because the wording
+ * intentionally changed, bump BOTH `AFFIRMATION_VERSION` and `CONSENT_TEXT_VERSION`
+ * above in the SAME commit — do not update the hash alone.
+ */
+export const AFFIRMATION_TEXT_HASH =
+  "1051f1534c0e6029d739bfef368462797e7108318abee57517d84307e8b70466";
+
 export const CONSENT_POLICY_VERSIONS: Readonly<Record<string, string>> = {
   termsOfService: "2026-08-09.c54758ed",
   // 2026-08-11: data-collection paragraph rewritten — real names are no longer
@@ -69,9 +83,6 @@ export const CHILD_STATUS_CORRECTION_REASONS: readonly string[] = [
   "flag_set_in_error",
   "child_turned_13",
 ];
-
-/** FR-25: correction recorded when a new guardian explicitly declares `isChild: false`. */
-export const CORRECTION_REASON_NEW_GUARDIAN_CLEARED = "new_guardian_cleared";
 
 /**
  * FR-6 / §8.3: reasons a REVOKED record may carry. One per membership-exit path.
@@ -283,7 +294,7 @@ export type ApprovalChildDecision =
   | ChildStatusRejection
   | { kind: "none" }
   | { kind: "grant"; expectedAgeOutYear: number | undefined }
-  | { kind: "clear_new_guardian" };
+  | { kind: "clear_new_guardian"; correctionReason: string };
 
 /**
  * FR-1 / FR-25 gate for `approveFamilyJoinRequest_CaptainStep`:
@@ -291,11 +302,22 @@ export type ApprovalChildDecision =
  *    so a flag is never silently laundered through re-admission;
  *  - `isChild: true` is a consent capture ⇒ both acknowledgments required (FR-31);
  *  - `isChild: false` on a sticky target is the new-guardian correction.
+ *
+ * FR-66(b): that last branch used to be ATTESTATION-FREE — a bare `isChild: false` cleared a
+ * sticky flag with no reason and no acknowledgment, which is strictly weaker than the
+ * in-family clear (`validateSetChildStatusInput`) that has always demanded an enumerated
+ * `correctionReason`. It was the middle link of the self-made-captain laundering chain: mint
+ * a throwaway adult account, found a family, arrive from the real flagged account, approve
+ * yourself as "not a child". It now requires an enumerated reason AND both acknowledgments,
+ * so a clear carries at least as much evidence as a grant does. The caller pairs this with
+ * `assertGuardianClearSeasoning` (`familyJoinRequestIntegrity.ts`), which additionally
+ * refuses brand-new single-adult families — evidence alone cannot fix a fabricated guardian.
  */
 export function evaluateApprovalChildDeclaration(input: {
   payloadIsChild: unknown;
   consentAcknowledged: unknown;
   guardianAffirmed: unknown;
+  correctionReason: unknown;
   expectedAgeOutYear: unknown;
   targetIsChildAccount: boolean;
   nowYear: number;
@@ -330,7 +352,31 @@ export function evaluateApprovalChildDeclaration(input: {
     return { kind: "grant", expectedAgeOutYear: year.year };
   }
 
-  return input.targetIsChildAccount ? { kind: "clear_new_guardian" } : { kind: "none" };
+  if (!input.targetIsChildAccount) {
+    return { kind: "none" };
+  }
+
+  // FR-66(b): the new-guardian clear is a consent-affecting decision, so it carries the same
+  // evidence a capture does. Acknowledgments first, mirroring the `isChild: true` branch
+  // above, so the two paths reject in the same order for the same shape of missing input.
+  if (input.consentAcknowledged !== true || input.guardianAffirmed !== true) {
+    return reject(
+      "failed-precondition",
+      "Clearing a child flag on approval requires consentAcknowledged and guardianAffirmed"
+    );
+  }
+  if (
+    typeof input.correctionReason !== "string" ||
+    !CHILD_STATUS_CORRECTION_REASONS.includes(input.correctionReason)
+  ) {
+    return reject(
+      "invalid-argument",
+      `Clearing child status requires correctionReason in [${CHILD_STATUS_CORRECTION_REASONS.join(
+        ", "
+      )}]`
+    );
+  }
+  return { kind: "clear_new_guardian", correctionReason: input.correctionReason };
 }
 
 // ---------------------------------------------------------------------------

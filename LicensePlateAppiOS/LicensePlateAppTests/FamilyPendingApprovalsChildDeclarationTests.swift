@@ -177,22 +177,60 @@ struct FamilyPendingApprovalsChildDeclarationTests {
         #expect(harness.world.respondCallCount == 0)
     }
 
+    /// FR-66(b): a bare "no" on a flagged target used to approve on the spot. It is now the
+    /// start of the correction block, not the end of the decision — the server would refuse
+    /// this payload, so the UI must refuse it first.
+    @Test func stickyTargetClearedWithoutEvidenceCannotBeApproved() async throws {
+        let harness = try makeHarness(targetFlag: .some(true))
+        await harness.viewModel.resolveChildTargetStates()
+        let vm = harness.viewModel
+
+        vm.setIsChild(false, for: harness.request)
+        #expect(!vm.canApprove(request: harness.request))
+
+        let approved = await vm.approve(request: harness.request)
+        #expect(approved == false)
+        #expect(harness.world.respondCallCount == 0)
+    }
+
     @Test func stickyTargetApprovedAsNotAChildRecordsTheGuardianCorrection() async throws {
         let harness = try makeHarness(targetFlag: .some(true))
         await harness.viewModel.resolveChildTargetStates()
         let vm = harness.viewModel
 
         vm.setIsChild(false, for: harness.request)
+        vm.setCorrectionReason(.childTurned13, for: harness.request)
+        vm.setCorrectionAcknowledged(true, for: harness.request)
+        vm.setCorrectionGuardianAffirmed(true, for: harness.request)
         #expect(vm.canApprove(request: harness.request))
 
         _ = await vm.approve(request: harness.request)
-        #expect(harness.world.respondCalls.last?.declaration?.isChild == false)
+        let declaration = harness.world.respondCalls.last?.declaration
+        #expect(declaration?.isChild == false)
+        #expect(declaration?.correction.reason == .childTurned13)
+        #expect(declaration?.correction.statusAcknowledged == true)
+        #expect(declaration?.correction.guardianAffirmed == true)
+        // FR-66(b): the analytics slug is the manager's chosen reason, matching the server's
+        // consent-correction audit row, rather than a fixed "new_guardian_cleared".
         #expect(harness.analytics.loggedEvents.contains { event in
             if case .familyChildStatusCorrected(let reason) = event {
-                return reason == "new_guardian_cleared"
+                return reason == "child_turned_13"
             }
             return false
         })
+    }
+
+    @Test func answeringYesAfterStartingACorrectionDiscardsTheCorrectionDraft() async throws {
+        let harness = try makeHarness(targetFlag: .some(true))
+        await harness.viewModel.resolveChildTargetStates()
+        let vm = harness.viewModel
+
+        vm.setIsChild(false, for: harness.request)
+        vm.setCorrectionReason(.flagSetInError, for: harness.request)
+        vm.setCorrectionAcknowledged(true, for: harness.request)
+
+        vm.setIsChild(true, for: harness.request)
+        #expect(vm.childDraft(for: harness.request).correction == ChildCorrectionDraft())
     }
 
     @Test func stickyTargetApprovedAsAChildLogsTheApprovalSource() async throws {

@@ -40,7 +40,9 @@ struct NewTripDefaultsView: View {
                             // defaults with a short explanation; the flags are forced
                             // off at the source of truth.
                             if childPostures.isLocationForcedOffForChildSession {
-                                ChildLocationDisabledNotice()
+                                ChildLocationDisabledNotice(
+                                    isChildEvidenced: childPostures.isLocationRestrictionChildEvidenced
+                                )
                             } else {
                                 SettingToggleRow(
                                     title: "Save location when marking plates".localized,

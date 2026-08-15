@@ -25,18 +25,40 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         UserDefaults.standard.set(false, forKey: "boundariesLoaded")
         
         // Initialize Firebase here (after delegate is fully set up)
-        // This ensures Firebase's AppDelegateSwizzler can properly detect the delegate
+        // This ensures Firebase's AppDelegateSwizzler can properly detect the delegate.
+        // `initializeFirebase()` brings up Firebase core, App Check and Crashlytics
+        // (internal-ops, which FR-46 permits) and nothing else.
         let firebaseConfigured = initializeFirebase()
 
-        // COPPA F-9 (FR-46): RevenueCat (`configure`/`identify`), FCM registration and
-        // Firebase Analytics COLLECTION are deliberately NOT started here — this runs
-        // long before the session's age is resolved. The gate installs their fail-closed
-        // holds now and releases them, with the right posture, from the one
-        // apply-postures routine in `ChildSessionPostureCoordinator`.
-        // Firebase core + App Check + Crashlytics (internal-ops) already started inside
-        // `initializeFirebase()` above, which FR-46 permits.
+        // COPPA F-9/F-15/F-16 (FR-46/FR-56/FR-58): RevenueCat (`configure`/`identify`),
+        // FCM registration, Firebase Analytics COLLECTION and `MobileAds.start()` are
+        // deliberately NOT started here — this runs long before the session's age is
+        // resolved. The gate installs their fail-closed holds now and releases them, with
+        // the right posture, from the one apply-postures routine in
+        // `ChildSessionPostureCoordinator`.
+        //
+        // FR-58: this is the FIRST thing after `FirebaseApp.configure`. Both Firebase
+        // switches persist in UserDefaults, so on a relaunch after a resolved session
+        // collection is ON until this line re-applies the hold — nothing may run in
+        // between that could log.
         DeferredSDKStartupService.shared.installAtLaunch(isFirebaseConfigured: firebaseConfigured)
-        AdMobService.shared.startIfNeeded()
+
+        // COPPA F-31 (FR-75b): apply the session's postures SYNCHRONOUSLY, here, from the
+        // signals that are already readable — `ChildSignalCache`, `AgeGateStore`, and the
+        // auth identity Firebase restored during `configure`. The other three triggers are
+        // all asynchronous: the earliest of them runs behind `RootView`'s remote-config
+        // fetch and `initializeAuthState`, and until it lands a device that already knows
+        // it hosts a child still had factory-default `true` location flags plus a live OS
+        // authorization from a previous grant — long enough to capture route points and
+        // stamp coordinates onto discoveries. Nothing that can start location exists yet at
+        // this line, so the window closes. Restrictive steps only: this pass deliberately
+        // does not release the deferred SDK startups installed on the line above
+        // (`Trigger.releasesDeferredSDKStartups`), so FR-46/FR-58 timing is unchanged.
+        ChildSessionPostureCoordinator.shared.applyPostures(trigger: .launch)
+
+        if firebaseConfigured {
+            startPostConfigureFirebaseWork()
+        }
 
         UNUserNotificationCenter.current().delegate = self
 
@@ -133,16 +155,25 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         
         AppCheckConfigurator.configure()
         FirebaseApp.configure(options: options)
+        print("✅ Firebase initialized successfully with config: \(configFileName).plist")
+        return true
+    }
+
+    /// COPPA F-16 (FR-58): everything that runs AFTER `FirebaseApp.configure` lives here
+    /// instead of inside `initializeFirebase()`, so the caller can install the
+    /// deferred-startup holds in between. Nothing in this function may log analytics
+    /// synchronously; `RemoteConfigService.fetchAndActivate` (which does, and which the
+    /// force-update gate needs at launch) is an internal operation kicked off as a Task
+    /// after the holds are already in place.
+    private func startPostConfigureFirebaseWork() {
         AppCheckConfigurator.logDevelopmentSetupHintIfNeeded()
         AppCheckReadiness.warmUp()
         CrashReportingService.shared.configure()
         Task { @MainActor in
             await RemoteConfigService.shared.fetchAndActivate()
         }
-        print("✅ Firebase initialized successfully with config: \(configFileName).plist")
-        return true
     }
-    
+
     // Handle deep links
     func application(_ app: UIApplication,
                      open url: URL,

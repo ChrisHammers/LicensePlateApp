@@ -1371,7 +1371,12 @@
 "child_gate.family_prompt.title" = "Demande à un parent de t'ajouter à sa famille";
 "child_gate.family_prompt.subtitle" = "Continue de jouer! Tes trajets restent sur cet appareil jusqu'à ce que tu rejoignes une famille.";
 "child_gate.callable_blocked" = "Demande à un parent de t'ajouter à sa famille pour utiliser ceci.";
-"child_gate.registration_note" = "Choisis un nom d'utilisateur pour jouer. Un parent peut t'ajouter à sa famille avec un code de partage.";
+/* COPPA F-18 (FR-60(e)): under-13 create-account mode shows this instead of a form. */
+"child_gate.signup.title" = "Tu es prêt à jouer!";
+"child_gate.signup.body" = "Tu n'as pas besoin de compte. Tes trajets, tes plaques et tes points sont enregistrés ici même, sur cet appareil. Quand tu voudras jouer avec ta famille, demande un code de famille à un parent.";
+"child_gate.signup.keep_playing" = "Continuer à jouer";
+"child_gate.signup.keep_playing_hint" = "Ferme cet écran et retourne au jeu";
+"child_gate.join.setup_incomplete" = "Nous n'avons pas pu terminer la configuration. Vérifie ta connexion et réessaie le code.";
 "child_gate.screen.join_title" = "Rejoins ta famille pour jouer ensemble";
 "child_gate.screen.join_body" = "Demande à un parent de t'ajouter à sa famille avec un code de partage. Les fonctions familiales se débloquent quand tu rejoins ta famille.";
 "child_gate.screen.join_button_hint" = "Ouvre la saisie du code de partage de la famille";
@@ -1380,6 +1385,8 @@
 
 // COPPA F-7 — Child session postures (FR-33 location toggles)
 "child_gate.location_disabled" = "Les options de localisation sont désactivées pour les comptes d'enfants.";
+// FR-75 amendment (OD-8): held for want of a fresh session check, not because of a child account.
+"child_gate.location_unverified" = "La localisation est en pause jusqu'à ce que votre session soit vérifiée.";
 
 // COPPA F-7 — Child premium info surfaces (FR-34-amended/D-14: visible, informational, no purchase UI)
 "child_gate.trip_limit.title" = "Limite de voyages atteinte";
@@ -1421,6 +1428,16 @@
 "family.child.choice_is_child" = "Oui, moins de 13 ans";
 "family.child.choice_not_child" = "Non, 13 ans ou plus";
 "family.child.approve_blocked_hint" = "Terminez d'abord les étapes du consentement parental";
+// FR-66(b) : retirer un indicateur d'enfant existant lors de l'approbation exige maintenant
+// la même preuve que de le poser. La phrase du tuteur est reprise telle quelle du bloc de
+// consentement.
+"family.child.correction_section_title" = "Corriger l'indicateur d'enfant";
+"family.child.correction_section_body" = "Ce membre est marqué comme enfant. Retirer cette marque supprime ses protections, alors indiquez la raison et confirmez que vous pouvez prendre cette décision.";
+"family.child.correction_reason_label" = "Raison";
+"family.child.correction_reason_none" = "Choisissez une raison";
+"family.child.correction_reason_hint" = "Obligatoire avant d'approuver";
+"family.child.correction_ack" = "Je confirme que ce membre a 13 ans ou plus, ou qu'il a été marqué comme enfant par erreur.";
+"family.child.correction_ack_hint" = "Obligatoire pour retirer l'indicateur d'enfant";
 "family.child.manage_mark" = "Marquer comme enfant (moins de 13 ans)";
 "family.child.manage_mark_hint" = "Ouvre le consentement parental pour ce membre";
 "family.child.manage_clear" = "Corriger le statut d'enfant";
@@ -1433,7 +1450,6 @@
 "family.child.correction_dialog_message" = "À utiliser uniquement pour corriger la fiche : le statut a été marqué par erreur, ou l'enfant a eu 13 ans. Pour mettre fin à la participation d'un enfant qui a toujours moins de 13 ans, utilisez Retirer de la famille ou Retirer et supprimer les données de l'enfant.";
 "family.child.correction_reason.flag_set_in_error" = "Marqué par erreur";
 "family.child.correction_reason.child_turned_13" = "Il a eu 13 ans";
-"family.child.correction_reason.new_guardian_cleared" = "Retiré par un nouveau capitaine de famille";
 "family.child.remove_delete_title" = "Retirer et supprimer les données de l'enfant";
 "family.child.remove_delete_message" = "Cette action le retire de votre famille et supprime définitivement son compte et tout ce qu'il contient : profil, voyages, découvertes et statistiques.";
 "family.child.remove_delete_final_title" = "Supprimer les données de cet enfant?";

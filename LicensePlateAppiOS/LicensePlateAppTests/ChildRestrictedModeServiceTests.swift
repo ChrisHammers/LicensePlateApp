@@ -160,7 +160,7 @@ struct ChildRestrictedModeServiceTests {
         store.clearAnswer()
 
         // Reborn guest: no provisioning, no prompt state, no child classification.
-        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(isResolved: store.isResolved) == false)
+        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(category: store.category) == false)
 
         let rebornGuest = ChildRestrictedModeService(ageGateStore: store, defaults: defaults)
         rebornGuest.configure(

@@ -182,6 +182,7 @@ describe("evaluateApprovalChildDeclaration (FR-1 / FR-25)", () => {
     payloadIsChild: undefined as unknown,
     consentAcknowledged: undefined as unknown,
     guardianAffirmed: undefined as unknown,
+    correctionReason: undefined as unknown,
     expectedAgeOutYear: undefined as unknown,
     targetIsChildAccount: false,
     nowYear: NOW_YEAR,
@@ -229,16 +230,82 @@ describe("evaluateApprovalChildDeclaration (FR-1 / FR-25)", () => {
     }
   });
 
-  it("isChild false clears sticky targets (new_guardian_cleared) and is a no-op otherwise", () => {
+  it("isChild false clears sticky targets with full evidence, and is a no-op otherwise", () => {
     expect(
       evaluateApprovalChildDeclaration({
         ...base,
         payloadIsChild: false,
         targetIsChildAccount: true,
+        consentAcknowledged: true,
+        guardianAffirmed: true,
+        correctionReason: "child_turned_13",
       })
-    ).toEqual({ kind: "clear_new_guardian" });
+    ).toEqual({ kind: "clear_new_guardian", correctionReason: "child_turned_13" });
     expect(
       evaluateApprovalChildDeclaration({ ...base, payloadIsChild: false })
+    ).toEqual({ kind: "none" });
+  });
+
+  /**
+   * FR-66(b). This branch used to return `clear_new_guardian` from a bare `isChild: false`
+   * with no reason and no acknowledgment — strictly weaker than the in-family clear, and the
+   * middle link of the self-made-captain laundering chain. Every way of arriving with
+   * incomplete evidence must now be refused.
+   */
+  it("FR-66(b): an attestation-free clear on a sticky target is refused", () => {
+    const clearAttempt = (patch: Record<string, unknown>) =>
+      evaluateApprovalChildDeclaration({
+        ...base,
+        payloadIsChild: false,
+        targetIsChildAccount: true,
+        ...patch,
+      });
+
+    // The exact shape the pre-FR-66 chain relied on: nothing but `isChild: false`.
+    expect(clearAttempt({}).kind).toBe("reject");
+
+    // Acknowledgments missing or half-supplied.
+    for (const patch of [
+      { correctionReason: "child_turned_13" },
+      { correctionReason: "child_turned_13", consentAcknowledged: true },
+      { correctionReason: "child_turned_13", guardianAffirmed: true },
+    ]) {
+      const decision = clearAttempt(patch);
+      expect(decision.kind === "reject" && decision.code).toBe("failed-precondition");
+    }
+
+    // Acknowledged, but the reason is absent or outside the enumerated set — same set the
+    // in-family clear (`validateSetChildStatusInput`) has always required.
+    for (const correctionReason of [undefined, "", "because_i_said_so", "new_guardian_cleared"]) {
+      const decision = clearAttempt({
+        consentAcknowledged: true,
+        guardianAffirmed: true,
+        correctionReason,
+      });
+      expect(decision.kind === "reject" && decision.code).toBe("invalid-argument");
+    }
+
+    // Both enumerated reasons are accepted, and the chosen one is carried out for the audit.
+    for (const correctionReason of CHILD_STATUS_CORRECTION_REASONS) {
+      expect(
+        clearAttempt({
+          consentAcknowledged: true,
+          guardianAffirmed: true,
+          correctionReason,
+        })
+      ).toEqual({ kind: "clear_new_guardian", correctionReason });
+    }
+  });
+
+  it("FR-66(b): an unflagged target is still a no-op, evidence or not", () => {
+    // The clear gate must not start demanding ceremony for the ordinary adult approval,
+    // which is the overwhelming majority of traffic.
+    expect(
+      evaluateApprovalChildDeclaration({
+        ...base,
+        payloadIsChild: false,
+        targetIsChildAccount: false,
+      })
     ).toEqual({ kind: "none" });
   });
 

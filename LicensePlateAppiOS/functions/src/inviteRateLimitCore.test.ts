@@ -9,7 +9,9 @@
 import { describe, it, expect } from "vitest";
 import {
   FRIEND_INVITE_MAX_PER_WINDOW,
+  INVITE_RATE_LIMIT_MAX_PER_WINDOW,
   INVITE_RATE_LIMIT_WINDOW_MS,
+  SHARE_REDEEM_MAX_PER_WINDOW,
   TRIP_INVITE_MAX_PER_WINDOW,
   evaluateInviteRateLimit,
   inviteRateLimitDocId,
@@ -149,15 +151,23 @@ describe("counter doc ids", () => {
 
   it("enumerates every id a user can own, for deletion residue cleanup (FR-50)", () => {
     const ids = inviteRateLimitDocIdsForUser("u1");
-    expect(ids).toHaveLength(2);
+    // Derived from INVITE_RATE_LIMIT_MAX_PER_WINDOW's keys, so a new scope is swept
+    // automatically — asserted against the live scope list rather than a hard-coded count,
+    // which is what let FR-67's `share_redeem` land without touching the cleanup path.
+    expect(ids).toHaveLength(Object.keys(INVITE_RATE_LIMIT_MAX_PER_WINDOW).length);
     expect(ids).toContain(inviteRateLimitDocId("trip_invite", "u1"));
     expect(ids).toContain(inviteRateLimitDocId("friend_invite", "u1"));
+    expect(ids).toContain(inviteRateLimitDocId("share_redeem", "u1"));
   });
 });
 
 describe("configured limits", () => {
   it("are positive and finite (a zero would close invites entirely)", () => {
-    for (const limit of [TRIP_INVITE_MAX_PER_WINDOW, FRIEND_INVITE_MAX_PER_WINDOW]) {
+    for (const limit of [
+      TRIP_INVITE_MAX_PER_WINDOW,
+      FRIEND_INVITE_MAX_PER_WINDOW,
+      SHARE_REDEEM_MAX_PER_WINDOW,
+    ]) {
       expect(Number.isInteger(limit)).toBe(true);
       expect(limit).toBeGreaterThan(0);
     }

@@ -92,6 +92,17 @@ struct SignInView: View {
         !isSignInMode && !hasAnsweredAgeThisFlow && !ageGateStore.isResolved
     }
 
+    /// COPPA F-18 (FR-60(e)): an under-13 epoch has no account to create. Registration
+    /// collected the child's own email and password, which is online contact information
+    /// under §312.2 — collecting it BEFORE a parent has consented was itself the violation,
+    /// and the previous advisory note left the fields live beside it. Under the local-first
+    /// model there is nothing to replace it with: the child already has everything they need
+    /// locally, so create-mode offers exactly the two things FR-60(e) names — keep playing
+    /// here, or join a family with a share code.
+    private var isCreateModeForChild: Bool {
+        !isSignInMode && ageGateStore.category == .under13
+    }
+
     var body: some View {
         NavigationStack {
             AppBackgroundView {
@@ -100,6 +111,21 @@ struct SignInView: View {
                     AgeGateView(source: .registration) {
                         hasAnsweredAgeThisFlow = true
                     }
+                } else if isCreateModeForChild {
+                    ChildAccountCreationGuidanceView(
+                        authService: authService,
+                        onKeepPlaying: { dismiss() },
+                        onSwitchToSignIn: {
+                            withAnimation {
+                                password = ""
+                                confirmPassword = ""
+                                userName = ""
+                                showPassword = false
+                                showConfirmPassword = false
+                                isSignInMode = true
+                            }
+                        }
+                    )
                 } else {
                     signInScrollContent
                 }
@@ -176,14 +202,10 @@ struct SignInView: View {
 
                                 // No name fields: real names are never collected
                                 // (owner decision, F-6 rework; FR-52 satisfied for all).
-                                if ageGateStore.category == .under13 {
-                                    // Non-punitive child guidance toward family joining.
-                                    Text("child_gate.registration_note".localized)
-                                        .font(.system(.caption, design: .rounded))
-                                        .foregroundStyle(Color.Theme.softBrown)
-                                        .multilineTextAlignment(.leading)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
+                                //
+                                // COPPA F-18 (FR-60(e)): the under-13 advisory note that used
+                                // to sit here is gone with the form it annotated — an under-13
+                                // epoch never reaches this branch now (`isCreateModeForChild`).
                             }
                             
                             // Email field
@@ -922,6 +944,117 @@ struct PasswordRequirement: View {
     }
 }
 
+// MARK: - Child create-account guidance (COPPA F-18, FR-60(e))
+
+/// What an under-13 epoch sees instead of the create-account form.
+///
+/// Non-punitive by construction: nothing here reads as a refusal or a lock-out. The child is
+/// already playing — locally, fully, with their history on the device — and the only thing an
+/// account would have added is the family features a parent has to consent to anyway. So the
+/// screen states the good news first and offers the share-code route as the way forward.
+///
+/// Deliberately logs NO analytics: an event here fires only for child sessions on the child's
+/// own device (FR-21 / SRS §12), which is the case the taxonomy must never carry.
+struct ChildAccountCreationGuidanceView: View {
+    /// Passed explicitly rather than read from the environment: `SignInView` takes its auth
+    /// service as an `@ObservedObject` parameter, and `JoinFamilySheet` requires the
+    /// `@EnvironmentObject`. Relying on sheet environment inheritance here is exactly the
+    /// fragility that once made the child's join route silently present nothing (see
+    /// `ChildFamilyPromptBanner`).
+    @ObservedObject var authService: FirebaseAuthService
+    let onKeepPlaying: () -> Void
+    let onSwitchToSignIn: () -> Void
+
+    @State private var showJoinFamilySheet = false
+
+    private var title: String { "child_gate.signup.title".localized }
+    private var bodyText: String { "child_gate.signup.body".localized }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                Image(systemName: "gamecontroller.fill")
+                    .font(.system(size: 60))
+                    .foregroundStyle(Color.Theme.accentYellow)
+                    .accessibleDecorative()
+                    .padding(.top, 32)
+
+                VStack(spacing: 16) {
+                    Text(title)
+                        .font(.system(.title2, design: .rounded))
+                        .fontWeight(.bold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                        .multilineTextAlignment(.center)
+                        .accessibleHeader(title)
+                        .supportsDynamicType()
+
+                    Text(bodyText)
+                        .font(.system(.body, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .supportsDynamicType()
+                }
+                .accessibilityElement(children: .contain)
+
+                VStack(spacing: 12) {
+                    Button {
+                        showJoinFamilySheet = true
+                    } label: {
+                        Text("Join a Family".localized)
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Capsule().fill(Color.Theme.primaryBlue))
+                            .foregroundStyle(.white)
+                    }
+                    .accessibleButton(
+                        label: "Join a Family".localized,
+                        hint: "child_gate.screen.join_button_hint".localized
+                    )
+
+                    Button {
+                        onKeepPlaying()
+                    } label: {
+                        Text("child_gate.signup.keep_playing".localized)
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(
+                                Capsule().stroke(Color.Theme.primaryBlue, lineWidth: 1.5)
+                            )
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    .accessibleButton(
+                        label: "child_gate.signup.keep_playing".localized,
+                        hint: "child_gate.signup.keep_playing_hint".localized
+                    )
+                }
+                .padding(.horizontal, 24)
+
+                // Sign-in stays reachable: FR-27 forbids ASKING the age question at sign-in,
+                // not signing in. A child with an existing account still needs the door.
+                Button {
+                    onSwitchToSignIn()
+                } label: {
+                    Text("Already have an account? Sign in")
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                }
+                .padding(.top, 4)
+                .padding(.bottom, 32)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .sheet(isPresented: $showJoinFamilySheet) {
+            JoinFamilySheet()
+                .environmentObject(authService)
+        }
+    }
+}
+
 // MARK: - OAuth Button Component
 
 struct OAuthButton: View {
@@ -959,4 +1092,28 @@ struct OAuthButton: View {
 #Preview("Create account") {
     SignInView(authService: FirebaseAuthService(), initialMode: .createAccount)
         .modelContainer(for: AppUser.self, inMemory: true)
+}
+
+#Preview("Child create-account guidance") {
+    AppBackgroundView {
+        ChildAccountCreationGuidanceView(
+            authService: FirebaseAuthService(),
+            onKeepPlaying: {},
+            onSwitchToSignIn: {}
+        )
+    }
+    .environmentObject(FirebaseAuthService())
+}
+
+#Preview("Child create-account guidance — dark, large text") {
+    AppBackgroundView {
+        ChildAccountCreationGuidanceView(
+            authService: FirebaseAuthService(),
+            onKeepPlaying: {},
+            onSwitchToSignIn: {}
+        )
+    }
+    .preferredColorScheme(.dark)
+    .environment(\.dynamicTypeSize, .accessibility2)
+    .environmentObject(FirebaseAuthService())
 }

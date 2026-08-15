@@ -147,6 +147,10 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
         // stale acknowledgment can never ride along with a later `true`.
         if !isChild {
             draft.consent.reset()
+        } else {
+            // ...and symmetrically, answering "yes, a child" discards a half-filled
+            // FR-66(b) correction, so clear-evidence can never ride along with a capture.
+            draft.correction.reset()
         }
         childDrafts[request.requestId] = draft
     }
@@ -170,6 +174,29 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
     func setExpectedAgeOutYear(_ year: Int?, for request: PendingJoinRequest) {
         var draft = childDraft(for: request)
         draft.consent.expectedAgeOutYear = year
+        childDrafts[request.requestId] = draft
+    }
+
+    // MARK: - FR-66(b) new-guardian correction
+
+    func setCorrectionReason(
+        _ reason: ChildStatusCorrectionReason?,
+        for request: PendingJoinRequest
+    ) {
+        var draft = childDraft(for: request)
+        draft.correction.reason = reason
+        childDrafts[request.requestId] = draft
+    }
+
+    func setCorrectionAcknowledged(_ acknowledged: Bool, for request: PendingJoinRequest) {
+        var draft = childDraft(for: request)
+        draft.correction.statusAcknowledged = acknowledged
+        childDrafts[request.requestId] = draft
+    }
+
+    func setCorrectionGuardianAffirmed(_ affirmed: Bool, for request: PendingJoinRequest) {
+        var draft = childDraft(for: request)
+        draft.correction.guardianAffirmed = affirmed
         childDrafts[request.requestId] = draft
     }
 
@@ -265,6 +292,7 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
                 var draft = childDraft(for: request)
                 draft.isChild = nil
                 draft.consent.reset()
+                draft.correction.reset()
                 childDrafts[request.requestId] = draft
                 return false
             }
@@ -292,9 +320,12 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
         guard let isChild = declaration?.isChild else { return }
         if isChild {
             analytics.log(.familyChildStatusSet(source: FamilyChildStatusAnalyticsSource.approval.rawValue))
-        } else if targetState == .alreadyChild {
+        } else if targetState == .alreadyChild, let reason = declaration?.correction.reason?.rawValue {
             // FR-25: an explicit `false` on a flagged target is a new-guardian correction.
-            analytics.log(.familyChildStatusCorrected(reason: "new_guardian_cleared"))
+            // FR-66(b): the manager's enumerated reason is what both the server audit row
+            // and this event record. A reason-less clear cannot reach here — the UI blocks
+            // approval until one is chosen and the server rejects the payload without it.
+            analytics.log(.familyChildStatusCorrected(reason: reason))
         }
     }
 

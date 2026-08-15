@@ -297,8 +297,13 @@ describe("declareChildRegistrationFlow (FR-27 server half)", () => {
     });
     expect(result).toEqual({ success: true, isChildAccount: true, alreadyDeclared: false });
 
-    // The users doc now exists with ONLY the flag — nothing else was invented.
-    expect(db.store.get("users/newkid")).toEqual({ isChildAccount: true });
+    // The users doc now exists with ONLY the flag and FR-60(c)'s server-owned
+    // redemption-window stamp — nothing else was invented. (`FakeFirestore` JSON-clones, so
+    // the `serverTimestamp()` sentinel round-trips as `{}`; its presence is the assertion.)
+    expect(db.store.get("users/newkid")).toEqual({
+      isChildAccount: true,
+      childDeclaredAt: expect.anything(),
+    });
 
     const declared = auditRowsOfType(db, "AUDIT_CHILD_REGISTRATION_DECLARED");
     expect(declared).toHaveLength(1);
@@ -330,6 +335,7 @@ describe("declareChildRegistrationFlow (FR-27 server half)", () => {
     expect(db.store.get("users/guest")).toEqual({
       userName: "Guesty",
       isChildAccount: true,
+      childDeclaredAt: expect.anything(),
     });
   });
 

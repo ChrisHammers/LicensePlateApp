@@ -52,6 +52,15 @@ struct FamilyPendingApprovals: View {
                                 onExpectedAgeOutYearChange: {
                                     viewModel.setExpectedAgeOutYear($0, for: request)
                                 },
+                                onCorrectionReasonChange: {
+                                    viewModel.setCorrectionReason($0, for: request)
+                                },
+                                onCorrectionAcknowledgedChange: {
+                                    viewModel.setCorrectionAcknowledged($0, for: request)
+                                },
+                                onCorrectionGuardianAffirmedChange: {
+                                    viewModel.setCorrectionGuardianAffirmed($0, for: request)
+                                },
                                 onApprove: {
                                     await viewModel.approve(request: request)
                                 },
@@ -105,6 +114,10 @@ struct PendingApprovalRow: View {
     let onConsentAcknowledgedChange: (Bool) -> Void
     let onGuardianAffirmedChange: (Bool) -> Void
     let onExpectedAgeOutYearChange: (Int?) -> Void
+    /// FR-66(b): the new-guardian correction block, shown only when clearing a KNOWN flag.
+    let onCorrectionReasonChange: (ChildStatusCorrectionReason?) -> Void
+    let onCorrectionAcknowledgedChange: (Bool) -> Void
+    let onCorrectionGuardianAffirmedChange: (Bool) -> Void
     let onApprove: () async -> Bool
     let onDecline: () async -> Bool
     @State private var resolvedUser: AppUser?
@@ -236,6 +249,19 @@ struct PendingApprovalRow: View {
                 )
                 .disabled(isDisabled)
             }
+
+            // FR-66(b): clearing a flag we KNOW is set now costs the same evidence as
+            // setting one. Mutually exclusive with the consent block above, which is the
+            // `isChild == true` branch.
+            if ChildApprovalPolicy.showsCorrectionBlock(state: childTargetState, draft: childDraft) {
+                FamilyChildCorrectionBlock(
+                    draft: childDraft.correction,
+                    onReasonChange: onCorrectionReasonChange,
+                    onStatusAcknowledgedChange: onCorrectionAcknowledgedChange,
+                    onGuardianAffirmedChange: onCorrectionGuardianAffirmedChange
+                )
+                .disabled(isDisabled)
+            }
         }
     }
 
@@ -347,6 +373,9 @@ struct PendingApprovalRow: View {
             onConsentAcknowledgedChange: { _ in },
             onGuardianAffirmedChange: { _ in },
             onExpectedAgeOutYearChange: { _ in },
+            onCorrectionReasonChange: { _ in },
+            onCorrectionAcknowledgedChange: { _ in },
+            onCorrectionGuardianAffirmedChange: { _ in },
             onApprove: { true },
             onDecline: { true }
         )
@@ -368,6 +397,34 @@ struct PendingApprovalRow: View {
             onConsentAcknowledgedChange: { _ in },
             onGuardianAffirmedChange: { _ in },
             onExpectedAgeOutYearChange: { _ in },
+            onCorrectionReasonChange: { _ in },
+            onCorrectionAcknowledgedChange: { _ in },
+            onCorrectionGuardianAffirmedChange: { _ in },
+            onApprove: { true },
+            onDecline: { true }
+        )
+    }
+}
+
+/// FR-66(b): the state that used to approve with one tap and now cannot.
+#Preview("Approval row — clearing a sticky flag") {
+    List {
+        PendingApprovalRow(
+            request: PendingJoinRequest(requestId: "req-4", familyId: "fam", userId: "u4", requestedBy: "u4", method: .code),
+            childTargetState: .alreadyChild,
+            childDraft: ChildApprovalDraft(isChild: false),
+            canApprove: false,
+            expectedAgeOutYearOptions: Array(2026...2039),
+            isApproveBusy: false,
+            isDeclineBusy: false,
+            isDisabled: false,
+            onIsChildChange: { _ in },
+            onConsentAcknowledgedChange: { _ in },
+            onGuardianAffirmedChange: { _ in },
+            onExpectedAgeOutYearChange: { _ in },
+            onCorrectionReasonChange: { _ in },
+            onCorrectionAcknowledgedChange: { _ in },
+            onCorrectionGuardianAffirmedChange: { _ in },
             onApprove: { true },
             onDecline: { true }
         )
@@ -389,6 +446,9 @@ struct PendingApprovalRow: View {
             onConsentAcknowledgedChange: { _ in },
             onGuardianAffirmedChange: { _ in },
             onExpectedAgeOutYearChange: { _ in },
+            onCorrectionReasonChange: { _ in },
+            onCorrectionAcknowledgedChange: { _ in },
+            onCorrectionGuardianAffirmedChange: { _ in },
             onApprove: { true },
             onDecline: { true }
         )

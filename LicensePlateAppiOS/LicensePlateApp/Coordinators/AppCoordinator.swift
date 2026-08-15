@@ -25,6 +25,10 @@ final class AppCoordinator: ObservableObject {
     @AppStorage("hasSeenOnboarding") var hasSeenOnboarding = false
 
     init() {
+        // DEBUG-only (COPPA FR-83a): this age-gate bypass must never compile into a
+        // release binary. `AppLaunchConfiguration.skipOnboarding` is also DEBUG-gated,
+        // so this is belt-and-suspenders rather than the only guard.
+        #if DEBUG
         if AppLaunchConfiguration.skipOnboarding {
             hasSeenOnboarding = true
             // QA/UI-test override only: skipping onboarding also seeds an adult age
@@ -35,6 +39,7 @@ final class AppCoordinator: ObservableObject {
                 AgeGateStore.shared.recordAnswer(.teenAdult)
             }
         }
+        #endif
     }
 
     // MARK: - Navigation Methods

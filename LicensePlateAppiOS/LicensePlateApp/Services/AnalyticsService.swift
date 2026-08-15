@@ -299,7 +299,6 @@ class AnalyticsService: AnalyticsLogging {
         case softUpdatePromptShown(gateKind: String, clientCompat: Int, appVersion: String, appBuild: String)
         case softUpdatePromptDismissed(gateKind: String, clientCompat: Int, appVersion: String, appBuild: String)
         case updateStoreCTATapped(gateKind: String, clientCompat: Int, appVersion: String, appBuild: String)
-        case crashReportingConfigured
         case crashReportingNonFatalRecorded(context: String)
         case adEligibilityEvaluated(surface: String, eligible: Bool, reason: String)
         case adImpression(surface: String)
@@ -523,7 +522,6 @@ class AnalyticsService: AnalyticsLogging {
             case .softUpdatePromptShown: return "soft_update_prompt_shown"
             case .softUpdatePromptDismissed: return "soft_update_prompt_dismissed"
             case .updateStoreCTATapped: return "update_store_cta_tapped"
-            case .crashReportingConfigured: return "crash_reporting_configured"
             case .crashReportingNonFatalRecorded: return "crash_reporting_non_fatal_recorded"
             case .adEligibilityEvaluated: return "ad_eligibility_evaluated"
             case .adImpression: return "ad_impression"
@@ -1021,8 +1019,6 @@ class AnalyticsService: AnalyticsLogging {
                     "app_version": appVersion,
                     "app_build": appBuild
                 ]
-            case .crashReportingConfigured:
-                return nil
             case .crashReportingNonFatalRecorded(let context):
                 return ["context": context]
             case .adEligibilityEvaluated(let surface, let eligible, let reason):

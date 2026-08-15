@@ -155,6 +155,7 @@ struct RootView: View {
             PublicLifetimeStatsRepository.shared.setModelContext(modelContext)
             FamilyMemberUserIdsRepository.shared.setModelContext(modelContext)
             FriendUserIdsRepository.shared.setModelContext(modelContext)
+            LocalPlayIdentityRepository.shared.setModelContext(modelContext)
             EntitlementService.shared.setModelContext(modelContext)
             LifetimeStatsCoordinator.shared.authService = authService
             let syncCoordinator = SyncCoordinator.shared
@@ -162,8 +163,17 @@ struct RootView: View {
             syncCoordinator.setGameplaySyncOnlineProvider { authService.isOnline }
             // F-6 (FR-28): unconsented-child restriction — gameplay uploads hold until
             // family admission; the restriction is keyed to the declared identity.
+            // F-18 (FR-60(a)): the uid provider is deliberately `firebaseUID` ONLY — not the
+            // `?? id` fallback used elsewhere for the play identity. An under-13 player now
+            // has no uid for the whole time they play locally, and feeding the local UUID in
+            // here sends `childSessionState` down its signed-in branch, where the UUID
+            // matches no declared/pending uid and no server flag, and the session classifies
+            // `.notChild`. That would take away the FR-28 banner — the child's only route to
+            // share-code entry — from exactly the population it exists for. A nil uid instead
+            // reaches the pre-uid provisional branch below it, which reads the epoch's
+            // under-13 answer and correctly returns `.unconsentedChild`.
             ChildRestrictedModeService.shared.configure(
-                currentUserIdProvider: { authService.currentUser?.firebaseUID ?? authService.currentUser?.id },
+                currentUserIdProvider: { authService.currentUser?.firebaseUID },
                 activeFamilyIdProvider: { authService.currentUser?.activeFamilyId },
                 // Server-resolved child truth: keeps the restriction classified from
                 // `users/{uid}` even after a manager correction wiped the device's

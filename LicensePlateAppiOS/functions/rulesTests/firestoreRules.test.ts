@@ -10,6 +10,15 @@
  *  - FR-48 `public_lifetime_stats` + `usernames/{usernameLower}` peer reads restricted to
  *          registered (non-anonymous) accounts (self-access stays unconditional).
  *
+ * F-22/F-23 (COPPA v3) add:
+ *  - FR-66(a) `families/{id}/pending` client-create denial — SUPERSEDES the F-5a G-6
+ *          self-naming rule, which an attacker satisfied honestly (see the block comment);
+ *  - FR-66(c) `invites` party updates limited to `status` / `updatedAt`;
+ *  - FR-66(d) `share_codes` writes barred to ALL children (not just unconsented ones) and
+ *          bound to a familyId the creator belongs to;
+ *  - FR-67  `share_codes` reads scoped to the creator or the named family — the collection
+ *          was world-listable, which made the 6-character code space irrelevant.
+ *
  * F-5a covers:
  *  - FR-7  user-doc diff-guard: no client write may change `isChildAccount` or
  *          `entitlementTags` (update diff-guard + create key-guard);
@@ -44,8 +53,11 @@ import {
   deleteField,
   doc,
   getDoc,
+  getDocs,
+  query,
   setDoc,
   updateDoc,
+  where,
   type Firestore,
 } from "firebase/firestore";
 
@@ -167,6 +179,36 @@ describe("FR-7: users diff-guard protects isChildAccount and entitlementTags", (
       setDoc(doc(registered("fresh3"), "users/fresh3"), { userName: "F3" })
     );
   });
+
+  /**
+   * FR-60(c): `childDeclaredAt` opens the redemption window and, once deleted at admission,
+   * closes it. It is what the transient-account sweep reads, so a client that could write or
+   * clear it could delete its own pre-consent footprint on demand, or keep an unconsented
+   * account alive past the window by re-stamping it.
+   */
+  it("denies clients writing, changing or clearing childDeclaredAt (FR-60)", async () => {
+    await seed({
+      "users/provisional": { userName: "Kid", isChildAccount: true, childDeclaredAt: 1000 },
+    });
+
+    await assertFails(
+      updateDoc(doc(registered("provisional"), "users/provisional"), { childDeclaredAt: 5000 })
+    );
+    await assertFails(
+      setDoc(doc(registered("provisional"), "users/provisional"), { userName: "Kid v2" })
+    );
+    await assertFails(
+      setDoc(doc(registered("fresh4"), "users/fresh4"), {
+        userName: "F4",
+        childDeclaredAt: 1000,
+      })
+    );
+
+    // The child's own ordinary profile sync, which never touches the key, still lands.
+    await assertSucceeds(
+      updateDoc(doc(registered("provisional"), "users/provisional"), { userName: "Kid v2" })
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -215,16 +257,24 @@ describe("FR-8: family member docs reject every client write", () => {
 // FR-16(b) / G-6 — pending join-request forgery denial
 // ---------------------------------------------------------------------------
 
-describe("G-6: pending join requests must name their own author", () => {
+describe("FR-66(a): pending join requests are server-minted only", () => {
   beforeEach(async () => {
     await seed({
       "families/fam1": { name: "Fam", creatorId: "creator", status: "active" },
       "families/fam1/members/creator": { role: "creator" },
+      "families/fam1/pending/req1": { userId: "joiner", status: "pending" },
     });
   });
 
-  it("allows a registered user creating a request for themselves", async () => {
-    await assertSucceeds(
+  /**
+   * SUPERSEDES the G-6 self-naming rule. Self-naming was never sufficient, because family
+   * membership is this app's parental-consent object: a child could found a family from a
+   * throwaway "adult" account, write a TRUTHFULLY self-named request from their real flagged
+   * account, and approve themselves out of every child protection (CB-7). The honest request
+   * and the laundering request were byte-identical, so no content check could separate them.
+   */
+  it("denies a registered user creating a request for themselves (was allowed pre-FR-66)", async () => {
+    await assertFails(
       setDoc(doc(collection(registered("joiner"), "families/fam1/pending")), {
         userId: "joiner",
         status: "pending",
@@ -241,12 +291,15 @@ describe("G-6: pending join requests must name their own author", () => {
     );
   });
 
-  it("denies a request with no userId at all", async () => {
-    await assertFails(
-      setDoc(doc(collection(registered("stranger"), "families/fam1/pending")), {
-        status: "pending",
-      })
-    );
+  it("denies a family member and the creator too — there is no privileged writer", async () => {
+    for (const uid of ["creator", "joiner"]) {
+      await assertFails(
+        setDoc(doc(collection(registered(uid), "families/fam1/pending")), {
+          userId: uid,
+          status: "pending",
+        })
+      );
+    }
   });
 
   it("denies anonymous callers even for their own uid", async () => {
@@ -255,6 +308,69 @@ describe("G-6: pending join requests must name their own author", () => {
         userId: "anon1",
         status: "pending",
       })
+    );
+  });
+
+  it("REGRESSION: family members can still READ the queue (the client's only use)", async () => {
+    await assertSucceeds(getDoc(doc(registered("creator"), "families/fam1/pending/req1")));
+    await assertFails(getDoc(doc(registered("stranger"), "families/fam1/pending/req1")));
+  });
+
+  it("REGRESSION: a captain can still resolve a request", async () => {
+    await assertSucceeds(
+      updateDoc(doc(registered("creator"), "families/fam1/pending/req1"), {
+        status: "declined",
+      })
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FR-66(c) — invite party updates are limited to the response itself
+// ---------------------------------------------------------------------------
+
+describe("FR-66(c): invite updates cannot retarget the invite", () => {
+  beforeEach(async () => {
+    await seed({
+      "families/fam1": { name: "Fam", creatorId: "creator", status: "active" },
+      "families/fam1/members/creator": { role: "creator" },
+      "invites/inv1": {
+        type: "family",
+        fromUserId: "creator",
+        toUserId: "invitee",
+        familyId: "fam1",
+        status: "pending",
+      },
+    });
+  });
+
+  it("allows a party to write status (+ updatedAt) and nothing else", async () => {
+    await assertSucceeds(
+      updateDoc(doc(registered("invitee"), "invites/inv1"), { status: "accepted" })
+    );
+  });
+
+  /**
+   * The residual this closes (v2.1 §18(a)/G53): either party could rewrite ANY field.
+   * Retargeting `familyId` pointed an already-accepted invite at a family the sender had no
+   * rights over — and a family invite is the front half of the consent boundary.
+   */
+  it("denies retargeting familyId, type, or the counterparty", async () => {
+    for (const patch of [
+      { familyId: "someone-elses-family" },
+      { status: "accepted", familyId: "someone-elses-family" },
+      { type: "friend" },
+      { fromUserId: "invitee" },
+      { toUserId: "someone-else" },
+      { status: "accepted", codeId: "forged" },
+    ]) {
+      await assertFails(updateDoc(doc(registered("invitee"), "invites/inv1"), patch));
+    }
+  });
+
+  it("still denies a non-party entirely", async () => {
+    await assertFails(
+      updateDoc(doc(registered("stranger"), "invites/inv1"), { status: "accepted" })
     );
   });
 });
@@ -331,14 +447,153 @@ describe("FR-28: unconsented children cannot write friends or share_codes", () =
     );
   });
 
-  it("a consented child passes the rules gate (stricter callable gates land in F-5b)", async () => {
-    await assertSucceeds(
+  /**
+   * FR-66(d) flips this case. `!callerIsUnconsentedChild()` let a CONSENTED child mint share
+   * codes, but minting one is stranger-contact initiation — outside `consentScope` no matter
+   * what a parent agreed to, and exactly the axis `assertCallerIsNotChild` already enforces
+   * in the callable. Rules and callable now agree.
+   */
+  it("FR-66(d): a CONSENTED child is now refused too (was allowed under FR-28)", async () => {
+    await assertFails(
       setDoc(doc(registered("famkid"), "share_codes/famkidCode"), {
         type: "friend",
         createdBy: "famkid",
         isRevoked: false,
       })
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FR-66(d) + FR-67 — share_codes write binding and read scoping
+// ---------------------------------------------------------------------------
+
+describe("FR-66(d): a share code must name a family the creator belongs to", () => {
+  beforeEach(async () => {
+    await seed({
+      "users/member": { userName: "Member" },
+      "users/outsider": { userName: "Outsider" },
+      "families/fam1": { name: "Fam", creatorId: "member", status: "active" },
+      "families/fam1/members/member": { role: "creator" },
+      "share_codes/memberCode": {
+        type: "family",
+        createdBy: "member",
+        familyId: "fam1",
+        isRevoked: false,
+      },
+    });
+  });
+
+  it("allows a member to mint a code for their own family", async () => {
+    await assertSucceeds(
+      setDoc(doc(registered("member"), "share_codes/newCode"), {
+        type: "family",
+        createdBy: "member",
+        familyId: "fam1",
+        isRevoked: false,
+      })
+    );
+  });
+
+  /** Adult-reachable forgery: `activeFamilyId` is readable on peer user docs. */
+  it("denies a non-member minting a code for a family they merely named", async () => {
+    await assertFails(
+      setDoc(doc(registered("outsider"), "share_codes/forged"), {
+        type: "family",
+        createdBy: "outsider",
+        familyId: "fam1",
+        isRevoked: false,
+      })
+    );
+  });
+
+  it("REGRESSION: friend codes carry no familyId and stay unaffected", async () => {
+    await assertSucceeds(
+      setDoc(doc(registered("outsider"), "share_codes/friendCode"), {
+        type: "friend",
+        createdBy: "outsider",
+        isRevoked: false,
+      })
+    );
+  });
+
+  it("REGRESSION: the owner can still revoke their own code", async () => {
+    await assertSucceeds(
+      updateDoc(doc(registered("member"), "share_codes/memberCode"), { isRevoked: true })
+    );
+  });
+
+  it("denies retargeting an existing code at a family the owner is not in", async () => {
+    await assertFails(
+      updateDoc(doc(registered("member"), "share_codes/memberCode"), {
+        familyId: "fam-someone-else",
+      })
+    );
+  });
+});
+
+describe("FR-67: share codes are not enumerable", () => {
+  beforeEach(async () => {
+    await seed({
+      "families/fam1": { name: "Fam", creatorId: "member", status: "active" },
+      "families/fam1/members/member": { role: "creator" },
+      "share_codes/famCode": {
+        type: "family",
+        code: "FAM111",
+        createdBy: "member",
+        familyId: "fam1",
+        isRevoked: false,
+      },
+      "share_codes/friendCode": {
+        type: "friend",
+        code: "FRD222",
+        createdBy: "member",
+        isRevoked: false,
+      },
+    });
+  });
+
+  /**
+   * The hole: `allow read: if isSignedIn()` made the whole collection listable by any
+   * account, so the six-character code space was irrelevant — you did not have to guess a
+   * code, you could read them all. A stranger holding a code still redeems it through the
+   * `redeemShareCode` callable (Admin SDK, rules-exempt, now rate-limited).
+   */
+  it("denies a stranger reading a code document", async () => {
+    await assertFails(getDoc(doc(registered("stranger"), "share_codes/famCode")));
+    await assertFails(getDoc(doc(registered("stranger"), "share_codes/friendCode")));
+  });
+
+  it("denies a stranger LISTING the collection, filtered or not", async () => {
+    await assertFails(getDocs(collection(registered("stranger"), "share_codes")));
+    await assertFails(
+      getDocs(
+        query(
+          collection(registered("stranger"), "share_codes"),
+          where("familyId", "==", "fam1")
+        )
+      )
+    );
+  });
+
+  it("allows the creator to read their own code", async () => {
+    await assertSucceeds(getDoc(doc(registered("member"), "share_codes/friendCode")));
+  });
+
+  /** The client's ONLY live query (`FamilyRepository.getActiveShareCode`). */
+  it("REGRESSION: a family member can still query their family's codes by familyId", async () => {
+    await assertSucceeds(
+      getDocs(
+        query(
+          collection(registered("member"), "share_codes"),
+          where("familyId", "==", "fam1")
+        )
+      )
+    );
+  });
+
+  it("denies anonymous callers outright", async () => {
+    await assertFails(getDoc(doc(anonymous("anon1"), "share_codes/famCode")));
   });
 });
 
@@ -604,6 +859,266 @@ describe("FR-48: public_lifetime_stats and usernames are registered-only for pee
     await assertFails(
       setDoc(doc(registered("stranger"), "usernames/hijacked"), { userId: "stranger" })
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FR-85 (F-42) — a consented child is a full member, not a second-class anonymous session
+// ---------------------------------------------------------------------------
+
+/**
+ * FR-60 made consented children ANONYMOUS Firebase accounts, so every rule that used
+ * `isRegisteredAccount()` as a proxy for "legitimate member" started denying them. These
+ * fixtures use the real FR-60 shape — note `isRegistered: false` on the child docs, which
+ * `FirebaseAuthService.saveUserDataToFirestore` writes for any anonymous session, and which
+ * used to hide a consented child from their OWN family through the FR-48 target clause.
+ *
+ * fam1: parent (creator) + famkid (consented child) + adultInFamily + retiredGeneral.
+ * `retiredGeneral` is the member who holds a member doc but carries NO `activeFamilyId` —
+ * the case that forces membership to be proved by the member doc rather than by the peer's
+ * own `activeFamilyId` field.
+ * `forgedkid` is the attack: a child who self-wrote `activeFamilyId: "fam1"` (the one field
+ * of the three a client CAN write on its own user doc) with no member doc to back it.
+ */
+async function seedFr85Fixtures(): Promise<void> {
+  await seed({
+    "users/parent": { userName: "Parent", activeFamilyId: "fam1" },
+    "users/adultInFamily": { userName: "Grown", activeFamilyId: "fam1" },
+    "users/retiredGeneral": { userName: "Retired", isRetiredGeneral: true },
+    "users/famkid": {
+      userName: "FamKid",
+      isChildAccount: true,
+      activeFamilyId: "fam1",
+      isRegistered: false,
+      entitlementTags: ["signedUpEquivalent"],
+    },
+    "users/sibkid": {
+      userName: "SibKid",
+      isChildAccount: true,
+      activeFamilyId: "fam1",
+      isRegistered: false,
+    },
+    "users/orphankid": {
+      userName: "OrphanKid",
+      isChildAccount: true,
+      isRegistered: false,
+    },
+    "users/forgedkid": {
+      userName: "ForgedKid",
+      isChildAccount: true,
+      activeFamilyId: "fam1",
+      isRegistered: false,
+    },
+    "users/anonStranger": { userName: "Anon", isRegistered: false },
+    "users/adultNoFamily": { userName: "Solo" },
+    "users/otherParent": { userName: "OtherParent", activeFamilyId: "fam2" },
+    "families/fam1": { name: "Fam", creatorId: "parent", status: "active" },
+    "families/fam1/members/parent": { role: "creator" },
+    "families/fam1/members/adultInFamily": { role: "scout" },
+    "families/fam1/members/retiredGeneral": { role: "retired_general" },
+    "families/fam1/members/famkid": { role: "scout", isChild: true },
+    "families/fam1/members/sibkid": { role: "scout", isChild: true },
+    "families/fam2": { name: "Other", creatorId: "otherParent", status: "active" },
+    "families/fam2/members/otherParent": { role: "creator" },
+    "public_lifetime_stats/parent": { platesFound: 40 },
+    "public_lifetime_stats/adultInFamily": { platesFound: 22 },
+    "public_lifetime_stats/retiredGeneral": { platesFound: 9 },
+    "public_lifetime_stats/sibkid": { platesFound: 5 },
+    "public_lifetime_stats/adultNoFamily": { platesFound: 77 },
+  });
+}
+
+/**
+ * The five callers of the acceptance matrix. `famkid` is the population FR-85 is about:
+ * anonymous, flagged, and holding a server-written member doc in fam1.
+ */
+const FR85_CALLERS = {
+  consentedChild: () => anonymous("famkid"),
+  anonymousStranger: () => anonymous("anonStranger"),
+  unconsentedChild: () => anonymous("orphankid"),
+  registeredFamilyAdult: () => registered("parent"),
+  registeredNonFamilyAdult: () => registered("adultNoFamily"),
+} as const;
+
+/** Exactly the two reads FR-85 grants, and the two writes it must NOT. */
+const FR85_MATRIX: Array<{
+  caller: keyof typeof FR85_CALLERS;
+  peerUserDoc: boolean;
+  peerStats: boolean;
+}> = [
+  { caller: "consentedChild", peerUserDoc: true, peerStats: true },
+  { caller: "anonymousStranger", peerUserDoc: false, peerStats: false },
+  { caller: "unconsentedChild", peerUserDoc: false, peerStats: false },
+  { caller: "registeredFamilyAdult", peerUserDoc: true, peerStats: true },
+  // A registered non-family adult reads adult profiles/stats but not the family's children.
+  { caller: "registeredNonFamilyAdult", peerUserDoc: true, peerStats: true },
+];
+
+describe("FR-85: consented-child capability parity", () => {
+  beforeEach(seedFr85Fixtures);
+
+  describe("matrix: (caller) x (peer user doc, public_lifetime_stats)", () => {
+    for (const row of FR85_MATRIX) {
+      it(`${row.caller}: peer user doc read ${row.peerUserDoc ? "allowed" : "denied"}`, async () => {
+        const read = getDoc(doc(FR85_CALLERS[row.caller](), "users/adultInFamily"));
+        await (row.peerUserDoc ? assertSucceeds(read) : assertFails(read));
+      });
+
+      it(`${row.caller}: peer stats read ${row.peerStats ? "allowed" : "denied"}`, async () => {
+        const read = getDoc(
+          doc(FR85_CALLERS[row.caller](), "public_lifetime_stats/adultInFamily")
+        );
+        await (row.peerStats ? assertSucceeds(read) : assertFails(read));
+      });
+    }
+  });
+
+  describe("matrix: (caller) x (families create, share_codes create) — nobody gains these", () => {
+    for (const caller of Object.keys(FR85_CALLERS) as Array<keyof typeof FR85_CALLERS>) {
+      const allowed = caller === "registeredFamilyAdult" || caller === "registeredNonFamilyAdult";
+
+      it(`${caller}: families create ${allowed ? "allowed" : "denied"}`, async () => {
+        const write = setDoc(doc(FR85_CALLERS[caller](), `families/new_${caller}`), {
+          name: "New",
+          creatorId: "whoever",
+          status: "active",
+        });
+        await (allowed ? assertSucceeds(write) : assertFails(write));
+      });
+
+      it(`${caller}: share_codes create ${allowed ? "allowed" : "denied"}`, async () => {
+        const uid = {
+          consentedChild: "famkid",
+          anonymousStranger: "anonStranger",
+          unconsentedChild: "orphankid",
+          registeredFamilyAdult: "parent",
+          registeredNonFamilyAdult: "adultNoFamily",
+        }[caller];
+        const write = setDoc(doc(FR85_CALLERS[caller](), `share_codes/code_${caller}`), {
+          type: "friend",
+          createdBy: uid,
+          isRevoked: false,
+        });
+        await (allowed ? assertSucceeds(write) : assertFails(write));
+      });
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // The grant, in detail
+  // -------------------------------------------------------------------------
+
+  it("hydrates the child's ENTIRE own-family roster, retired generals included", async () => {
+    const kid = FR85_CALLERS.consentedChild();
+    for (const memberId of ["parent", "adultInFamily", "retiredGeneral", "sibkid", "famkid"]) {
+      await assertSucceeds(getDoc(doc(kid, `users/${memberId}`)));
+    }
+  });
+
+  it("reads own-family stats, including another child's", async () => {
+    const kid = FR85_CALLERS.consentedChild();
+    for (const memberId of ["parent", "adultInFamily", "retiredGeneral", "sibkid"]) {
+      await assertSucceeds(getDoc(doc(kid, `public_lifetime_stats/${memberId}`)));
+    }
+  });
+
+  // The FR-48 target clause (`isRegistered != false`) was hiding consented children from
+  // their own family, because FR-60 makes their account anonymous. This is the reverse of
+  // the FR-12 degradation and the reason the target side had to be corrected too.
+  it("REGRESSION (FR-85 target side): the family can read a consented child whose doc says isRegistered:false", async () => {
+    await assertSucceeds(getDoc(doc(registered("parent"), "users/famkid")));
+    await assertSucceeds(getDoc(doc(registered("adultInFamily"), "users/famkid")));
+    await assertSucceeds(getDoc(doc(anonymous("famkid"), "users/sibkid")));
+  });
+
+  // -------------------------------------------------------------------------
+  // The scope of the grant — everything the child must still NOT get
+  // -------------------------------------------------------------------------
+
+  it("scopes the widening to the child's OWN family, not a blanket anonymous read", async () => {
+    const kid = FR85_CALLERS.consentedChild();
+    await assertFails(getDoc(doc(kid, "users/adultNoFamily")));
+    await assertFails(getDoc(doc(kid, "users/otherParent")));
+    await assertFails(getDoc(doc(kid, "public_lifetime_stats/adultNoFamily")));
+  });
+
+  it("a forged activeFamilyId with no member doc behind it gains nothing", async () => {
+    const forger = anonymous("forgedkid");
+    await assertFails(getDoc(doc(forger, "users/parent")));
+    await assertFails(getDoc(doc(forger, "users/adultInFamily")));
+    await assertFails(getDoc(doc(forger, "public_lifetime_stats/parent")));
+  });
+
+  it("does not widen usernames, invites, or share-code reads", async () => {
+    await seed({
+      "usernames/parent": { userId: "parent" },
+      "share_codes/parentCode": {
+        type: "family",
+        createdBy: "parent",
+        familyId: "fam1",
+        isRevoked: false,
+      },
+      "invites/inv1": {
+        fromUserId: "parent",
+        toUserId: "famkid",
+        type: "family",
+        familyId: "fam1",
+        status: "pending",
+      },
+    });
+    const kid = FR85_CALLERS.consentedChild();
+    // usernames maps a name straight to a uid — registration stays the gate (FR-48).
+    await assertFails(getDoc(doc(kid, "usernames/parent")));
+    // Invite responses are Admin-SDK only for a child; the client rule stays registered-only.
+    await assertFails(updateDoc(doc(kid, "invites/inv1"), { status: "accepted" }));
+    // Share-code READS are family-scoped, not registration-scoped, so this one is not a
+    // widening — pinned here so a future change cannot quietly move it either way.
+    await assertSucceeds(getDoc(doc(kid, "share_codes/parentCode")));
+    await assertFails(
+      updateDoc(doc(kid, "share_codes/parentCode"), { isRevoked: true })
+    );
+  });
+
+  it("still cannot write its own server-controlled fields, tag included", async () => {
+    const kid = FR85_CALLERS.consentedChild();
+    await assertFails(
+      updateDoc(doc(kid, "users/famkid"), { entitlementTags: ["founder", "signedUpEquivalent"] })
+    );
+    await assertFails(updateDoc(doc(kid, "users/famkid"), { isChildAccount: false }));
+  });
+
+  // FR-70 / FR-11 pin: the tag must not become a back door into search. `usernames` is the
+  // exact-match index the syncers strip for children; a child must own no row and be unable
+  // to read one. (`user_lookup_email` / `user_lookup_phone` are read/write:false for all.)
+  it("FR-70/FR-11: a consented child has no search-index row and cannot read the index", async () => {
+    await seed({ "usernames/grown": { userId: "adultInFamily" } });
+    const kid = FR85_CALLERS.consentedChild();
+    await assertFails(getDoc(doc(kid, "usernames/grown")));
+    await assertFails(getDoc(doc(kid, "usernames/famkid")));
+    await assertFails(
+      setDoc(doc(kid, "usernames/famkid"), { userId: "famkid" })
+    );
+    await assertFails(getDoc(doc(kid, "user_lookup_email/kid@example.com")));
+    await assertFails(getDoc(doc(kid, "user_lookup_phone/15555550100")));
+  });
+
+  it("REGRESSION: an unconsented (orphaned) child stays fully excluded", async () => {
+    const orphan = FR85_CALLERS.unconsentedChild();
+    await assertFails(getDoc(doc(orphan, "users/parent")));
+    await assertFails(getDoc(doc(orphan, "public_lifetime_stats/parent")));
+    // ...and is still unreadable to their own ex-family (FR-12 unchanged).
+    await assertFails(getDoc(doc(registered("parent"), "users/orphankid")));
+  });
+
+  it("REGRESSION: a registered non-family adult still cannot see the family's children", async () => {
+    const outsider = FR85_CALLERS.registeredNonFamilyAdult();
+    await assertFails(getDoc(doc(outsider, "users/famkid")));
+    await assertFails(getDoc(doc(outsider, "public_lifetime_stats/sibkid")));
+  });
+
+  it("REGRESSION: a plain anonymous NON-child target stays undiscoverable", async () => {
+    await assertFails(getDoc(doc(registered("parent"), "users/anonStranger")));
+    await assertFails(getDoc(doc(anonymous("famkid"), "users/anonStranger")));
   });
 });
 
