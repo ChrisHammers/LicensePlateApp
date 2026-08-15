@@ -62,6 +62,14 @@ enum XpAwardRuleEngine {
         case .acceptedLate:
             return (baseDiscovery, .competitiveLateFinder)
         case .acceptedShared:
+            // A solo trip's game is collaborative by construction, so the sync path resolves every
+            // solo find as `.acceptedShared`. Without this the settled row reads
+            // `collaborative_shared_finder` while the provisional row this settles reads
+            // `solo_new_discovery`, and one find surfaces in the ledger as both a "collab" and a
+            // "solo" award. Same amount, same rule as `.acceptedFirst` — only the label.
+            if tripMode == .solo {
+                return (baseDiscovery, .soloNewDiscovery)
+            }
             return (baseDiscovery, .collaborativeSharedFinder)
         case .rejectedDuplicate:
             return (0, .duplicateNoXp)

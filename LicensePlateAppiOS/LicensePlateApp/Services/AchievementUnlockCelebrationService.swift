@@ -242,7 +242,24 @@ final class AchievementUnlockCelebrationService: ObservableObject {
             }
         }
 
+        recheckServerRejectedUnlocks(user: user)
         self.previousSnapshot = snapshot
+    }
+
+    /// Re-sends unlock candidates the server could not verify yet.
+    ///
+    /// This service already refreshes on `userProgressionRepository.objectWillChange`, i.e. on every
+    /// new server progression snapshot — and a new snapshot is precisely the state a rejected
+    /// candidate was waiting for (the server evaluates `explorer_10` against its own
+    /// `acceptedRegionFindCount`, which trails the local total that fired the popup). Rechecking
+    /// here is what makes the XP and the cloud `user_achievements` row land in the same session
+    /// instead of on the next cold start. Bounded by the sync service's recheck budget.
+    private func recheckServerRejectedUnlocks(user: AppUser) {
+        guard achievementUnlockSyncService.hasPendingCandidates else { return }
+        let entitlement = entitlementService.entitlementState(for: user)
+        Task {
+            await achievementUnlockSyncService.retryPendingIfNeeded(user: user, entitlement: entitlement)
+        }
     }
 
     private func establishBaseline(snapshot: AchievementProgressSnapshot, userId: String) {

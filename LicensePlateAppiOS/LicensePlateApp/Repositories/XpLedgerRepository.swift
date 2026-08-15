@@ -39,6 +39,7 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
             throw XpLedgerRepositoryError.appendBaseDiscoveryRequiresProvisionalOrFinalKind
         }
         guard let ctx = modelContext else { throw XpLedgerRepositoryError.noModelContext }
+        try repairKeysRetiredByIdentityRebind(matching: event.xpUniquenessKey)
         if try hasBaseDiscoveryForUniquenessKey(event.xpUniquenessKey) {
             return false
         }
@@ -50,6 +51,7 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
 
     func appendIfAbsent(_ event: XpLedgerEvent) throws -> Bool {
         guard let ctx = modelContext else { throw XpLedgerRepositoryError.noModelContext }
+        try repairKeysRetiredByIdentityRebind(matching: event.xpUniquenessKey)
         let key = event.xpUniquenessKey
         let descriptor = FetchDescriptor<XpLedgerEventEntity>(
             predicate: #Predicate<XpLedgerEventEntity> { entity in
@@ -81,6 +83,7 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
     @discardableResult
     func voidProvisionalRows(forUniquenessKey key: String, resolvedAt: Date) throws -> Int {
         guard let ctx = modelContext else { throw XpLedgerRepositoryError.noModelContext }
+        try repairKeysRetiredByIdentityRebind(matching: key)
         let descriptor = FetchDescriptor<XpLedgerEventEntity>(
             predicate: #Predicate<XpLedgerEventEntity> { entity in
                 entity.xpUniquenessKey == key
@@ -135,6 +138,7 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
 
     func ledgerEvents(forUniquenessKey key: String) throws -> [XpLedgerEvent] {
         guard let ctx = modelContext else { throw XpLedgerRepositoryError.noModelContext }
+        try repairKeysRetiredByIdentityRebind(matching: key)
         let descriptor = FetchDescriptor<XpLedgerEventEntity>(
             predicate: #Predicate<XpLedgerEventEntity> { $0.xpUniquenessKey == key }
         )
@@ -195,6 +199,53 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
     func deleteAllLocal() throws {
         guard let ctx = modelContext else { throw XpLedgerRepositoryError.noModelContext }
         try ctx.delete(model: XpLedgerEventEntity.self)
+        try ctx.save()
+        objectWillChange.send()
+    }
+
+    /// Repoints rows whose `xpUniquenessKey` still names an identity this device has retired.
+    ///
+    /// COPPA F-18 / FR-60: a local-first child plays for days under a device-minted UUID and only
+    /// gets a uid when they enter a share code. `LocalPlayIdentityRepository.rebindLocalPlayIdentity`
+    /// then rewrites `XpLedgerEventEntity.userId` — but `xpUniquenessKey` is a *derived* string
+    /// (`xp|v1|<userId>|<session>|<game>|<item>|<category>`) and the sweep leaves it embedding the
+    /// retired UUID. Every idempotency lookup in this repository is key equality, so after a rebind
+    /// they all miss: `appendBaseDiscoveryIfAbsent` mints a second award for a discovery that
+    /// already has one, and `voidProvisionalRows` fails to close the original provisional row, so
+    /// one find ends up carrying two live rows (FR-28h late replay makes this happen to the child's
+    /// whole pre-consent history at once).
+    ///
+    /// The repair is keyed on what the rebind *does* maintain: the row's `userId` column. Candidates
+    /// are narrowed by `itemId` (a region id, a day key, or a reason raw value — cheap and
+    /// selective) and then matched on the key's own parsed slot, so the repair does not assume the
+    /// row's scope columns mirror its key (user-scoped rows deliberately key under
+    /// `XpLedgerGlobalScope`). A row is only touched when it already belongs to the target user and
+    /// occupies exactly the same award slot — a stale identity string is then the only thing that
+    /// can differ, and rewriting it is an index repair, not a ledger mutation (the same repair
+    /// `UserAchievementEntity.recordKey` already gets inside the sweep). Idempotent: after one
+    /// pass nothing matches, so re-running is a no-op.
+    private func repairKeysRetiredByIdentityRebind(matching key: String) throws {
+        guard let ctx = modelContext else { throw XpLedgerRepositoryError.noModelContext }
+        guard let target = XpUniquenessKey.parse(storageString: key) else { return }
+
+        let userId = target.userId
+        let itemId = target.itemId
+        let descriptor = FetchDescriptor<XpLedgerEventEntity>(
+            predicate: #Predicate<XpLedgerEventEntity> { entity in
+                entity.userId == userId
+                    && entity.itemId == itemId
+                    && entity.xpUniquenessKey != key
+            }
+        )
+
+        var didRepair = false
+        for row in try ctx.fetch(descriptor) {
+            guard let stored = XpUniquenessKey.parse(storageString: row.xpUniquenessKey) else { continue }
+            guard stored.slot == target.slot, stored.userId != userId else { continue }
+            row.xpUniquenessKey = key
+            didRepair = true
+        }
+        guard didRepair else { return }
         try ctx.save()
         objectWillChange.send()
     }

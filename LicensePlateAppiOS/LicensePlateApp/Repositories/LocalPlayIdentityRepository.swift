@@ -210,9 +210,24 @@ final class LocalPlayIdentityRepository {
         }
 
         // ---- XP ledger: without this the child's whole XP total reads as zero.
+        //      `xpUniquenessKey` is DERIVED from the uid (like `recordKey` below) and every
+        //      idempotency check in `XpLedgerRepository` is key-string equality — leaving the
+        //      stale key made late-replay reconciliation miss and double-award (device-pass
+        //      Bug A, 2026-08-15). The repository also self-repairs stale keys at its call
+        //      sites; this is the belt half of that belt-and-braces.
         let ledgerRows = try context.fetch(FetchDescriptor<XpLedgerEventEntity>())
         for row in ledgerRows where row.userId == previousUserId {
             row.userId = newUserId
+            if let parsed = XpUniquenessKey.parse(storageString: row.xpUniquenessKey),
+               parsed.userId == previousUserId {
+                row.xpUniquenessKey = XpUniquenessKey(
+                    userId: newUserId,
+                    sessionId: parsed.sessionId,
+                    gameInstanceId: parsed.gameInstanceId,
+                    itemId: parsed.itemId,
+                    xpCategory: parsed.xpCategory
+                ).storageString
+            }
             summary.xpLedgerEvents += 1
         }
 

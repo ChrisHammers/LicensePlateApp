@@ -21,9 +21,12 @@ struct AchievementUnlockSyncResult: Sendable {
 
 /// What one sync attempt cost. `heldForChildRestriction` is the FR-28 case: nothing was
 /// delivered, but nothing was spent either — the batch waits for consent.
+/// `rejectedPendingServerCatchUp` is the same shape for a different wait: the call succeeded but
+/// the server could not yet verify the unlock, so the batch waits for server progression.
 enum AchievementUnlockSyncAttempt: Equatable, Sendable {
     case succeeded
     case heldForChildRestriction
+    case rejectedPendingServerCatchUp
     case failed
 }
 
@@ -42,6 +45,15 @@ final class AchievementUnlockSyncService {
     private var pendingEntitlement: EntitlementState?
     private var pendingRetryCount = 0
     private let maxRetryAttempts = 3
+    /// Separate budget from `pendingRetryCount`: a server rejection is not a failure, it is a
+    /// "not yet". It must not consume the transport-failure budget, but it still needs a ceiling so
+    /// a genuine client/server disagreement cannot recheck forever.
+    private var pendingRecheckCount = 0
+    private let maxRecheckAttempts = 6
+
+    /// True while a batch is parked (transport failure, child-restriction hold, or a server
+    /// rejection waiting on progression to catch up).
+    var hasPendingCandidates: Bool { !pendingCandidates.isEmpty }
 
     init(
         functions: Functions? = nil,
@@ -99,8 +111,35 @@ final class AchievementUnlockSyncService {
             )
             // Do not claw back local unlocks or show "removed" UI on rejectedIds.
             // Achievements stay unlocked locally unless removed from the backend.
+            //
+            // But a rejection is not a settled outcome either. The server re-evaluates every
+            // candidate against ITS OWN `user_progression` doc, which trails the client's
+            // locally-computed totals by however long the gameplay event takes to reach
+            // `onActivityEventUpdateUserProgression`. "Getting Started" (`explorer_10`) unlocks the
+            // instant the 10th find commits locally, so the sync that fires with the popup routinely
+            // arrives before the server has counted find #10 and comes back rejected — no
+            // `user_achievements` row, no XP. Discarding the batch here (the old behaviour) meant
+            // nothing retried until the next cold start resent it from the achievement baseline,
+            // which is exactly the "XP only appears after a restart" report. Family Road Trip is
+            // unaffected because `activeFamilyId` is already server truth when the client sees it.
+            // Keep the unverified candidates queued and let a fresh progression snapshot settle them.
+            let rejected = Set(parsed.rejectedIds)
+            let unverified = candidates.filter { rejected.contains($0.achievementId) }
+            let recheckSoFar = pendingRecheckCount
             clearPendingRetryState()
-            return .succeeded
+            guard !unverified.isEmpty else { return .succeeded }
+            guard recheckSoFar < maxRecheckAttempts else {
+                AnalyticsService.shared.log(
+                    .achievementUnlockSyncFailed(
+                        candidateCount: unverified.count,
+                        errorSummary: "server_rejected_recheck_limit"
+                    )
+                )
+                return .failed
+            }
+            storePendingRetry(user: user, entitlement: entitlement, candidates: unverified)
+            pendingRecheckCount = recheckSoFar + 1
+            return .rejectedPendingServerCatchUp
         } catch {
             storePendingRetry(user: user, entitlement: entitlement, candidates: candidates)
             // A restriction rejection that raced the pre-emptive check is still a hold, not
@@ -149,12 +188,20 @@ final class AchievementUnlockSyncService {
             clearPendingRetryState()
             return
         }
-        pendingRetryCount += 1
+        let spent = pendingRetryCount + 1
+        pendingRetryCount = spent
         let attempt = await syncUnlocks(user: user, entitlement: entitlement, candidates: pendingCandidates)
-        if attempt == .heldForChildRestriction {
+        switch attempt {
+        case .heldForChildRestriction:
             // The restriction landed between the guard above and the call. Refund: a policy
             // hold must never move the budget.
-            pendingRetryCount = max(0, pendingRetryCount - 1)
+            pendingRetryCount = max(0, spent - 1)
+        case .rejectedPendingServerCatchUp:
+            // A "not yet" from the server is not a transport failure. `syncUnlocks` already reset
+            // the transport budget and charged the recheck budget instead; leave it that way.
+            break
+        case .succeeded, .failed:
+            break
         }
     }
 
@@ -162,6 +209,7 @@ final class AchievementUnlockSyncService {
     /// the restricted period must not arrive at consent one failure from being discarded.
     func resetRetryBudgetAfterConsent() {
         pendingRetryCount = 0
+        pendingRecheckCount = 0
     }
 
     /// Durable recovery (idempotent): re-sends locally-unlocked achievements as candidates,
@@ -207,6 +255,7 @@ final class AchievementUnlockSyncService {
         pendingUser = nil
         pendingEntitlement = nil
         pendingRetryCount = 0
+        pendingRecheckCount = 0
     }
 
     private func parseSyncResponse(_ data: Any?) -> AchievementUnlockSyncResult {

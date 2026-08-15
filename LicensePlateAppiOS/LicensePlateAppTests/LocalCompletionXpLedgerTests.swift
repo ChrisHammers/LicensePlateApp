@@ -149,6 +149,33 @@ struct LocalCompletionXpLedgerTests {
         ).displayedTotalXp
     }
 
+    /// Displayed XP from this trip's rows only.
+    ///
+    /// The ledger also carries **account-scoped** rows written under `XpLedgerGlobalScope` — the
+    /// return-streak daily grant, and (FR-28e parity, owner 2026-08-15) the lifetime-first and
+    /// first-of-day find bonuses. Those are deliberately not part of any single trip and
+    /// `ProgressionLocalEngine` does not model them, so a comparison against the engine's
+    /// session-scoped pending delta has to exclude them or it is comparing different things.
+    private func sessionScopedDisplayedXp(
+        ledger: MockXpLedgerRepository,
+        userId: String,
+        sessionId: UUID
+    ) throws -> Int {
+        let rows = try ledger.ledgerEvents(userId: userId).filter { $0.sessionId == sessionId }
+        return ProgressionDisplayTotalsResolver.resolve(
+            userId: userId,
+            ledgerEvents: rows,
+            serverSnapshot: nil,
+            verifiedGrantSum: nil,
+            hasReceivedGrantSnapshot: false
+        ).displayedTotalXp
+    }
+
+    /// The two find bonuses one first-ever discovery on a fresh account mints locally.
+    private var singleFirstFindBonuses: Int {
+        rewards.lifetimeUniqueRegionFindBonusXp + rewards.firstFindOfDayBonusXp
+    }
+
     // MARK: - Reproduction: local solo play, never synced
 
     @Test func localSoloPlayShowsFindAndCompletionXpWithoutServer() throws {
@@ -161,6 +188,9 @@ struct LocalCompletionXpLedgerTests {
         try commit(tripEnded(id: "trip-end-1", trip: trip, endedBy: uid, at: t0.addingTimeInterval(2)), into: trip)
 
         let expected = rewards.baseDiscoveryXp
+            // Owner parity ruling 2026-08-15: the lifetime-first (+20) and first-of-day (+10)
+            // bonuses are no longer server-only, so unsynced local play earns them too.
+            + singleFirstFindBonuses
             + rewards.gameEndedBonusXp
             + rewards.competitiveFirstPlaceFinishBonusXp
             + rewards.tripEndedBonusXp
@@ -189,8 +219,11 @@ struct LocalCompletionXpLedgerTests {
             rewards: ProgressionRewardsConfig.bundledDefault
         )
 
-        // The two local projections of the same offline play must agree.
-        #expect(try displayedXp(ledger: trip.ledger, userId: uid) == enginePending.totalXp)
+        // The two local projections of the same offline play must agree on this trip's XP.
+        #expect(
+            try sessionScopedDisplayedXp(ledger: trip.ledger, userId: uid, sessionId: trip.sessionId)
+                == enginePending.totalXp
+        )
     }
 
     @Test func fullClearAwardsGameCompletedBonusLocally() throws {
@@ -288,8 +321,15 @@ struct LocalCompletionXpLedgerTests {
         #expect(groupIds.contains("discovery"))
         #expect(groupIds.contains("trip_ended"))
         #expect(groupIds.contains("trip_participation"))
+        // Owner parity ruling 2026-08-15: a held child earns the find bonuses too, so their
+        // toast groups fire without any server involvement.
+        #expect(groupIds.contains("lifetime_unique"))
+        #expect(groupIds.contains("first_of_day"))
 
-        let expectedBurst = rewards.baseDiscoveryXp + rewards.tripEndedBonusXp + rewards.tripParticipationBonusXp
+        let expectedBurst = rewards.baseDiscoveryXp
+            + singleFirstFindBonuses
+            + rewards.tripEndedBonusXp
+            + rewards.tripParticipationBonusXp
         #expect(presentation.totalXp == expectedBurst)
 
         // Consent lands, sync drains, and the server grants the same trip_ended event.
