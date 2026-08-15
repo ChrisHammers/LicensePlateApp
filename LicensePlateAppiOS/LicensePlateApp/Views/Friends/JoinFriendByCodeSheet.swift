@@ -22,7 +22,7 @@ struct JoinFriendByCodeSheet: View {
                 Form {
                     Section {
                         TextField("Enter Share Code".localized, text: $viewModel.shareCode)
-                            .textInputAutocapitalization(.never)
+                            .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
                             .accessibleTextField(
                                 label: "Share Code".localized,
@@ -32,6 +32,14 @@ struct JoinFriendByCodeSheet: View {
                             .onChange(of: scannedCode) { _, newValue in
                                 if let code = newValue {
                                     viewModel.shareCode = extractCode(from: code)
+                                }
+                            }
+                            // Codes are uppercase-only; force it so entry never silently
+                            // mismatches on case (owner device testing, 2026-08-15).
+                            .onChange(of: viewModel.shareCode) { _, newValue in
+                                let uppercased = newValue.uppercased()
+                                if uppercased != newValue {
+                                    viewModel.shareCode = uppercased
                                 }
                             }
                     } header: {

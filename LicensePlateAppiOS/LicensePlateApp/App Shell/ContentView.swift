@@ -60,6 +60,9 @@ struct ContentView: View {
     // never covers the app title, and it always deep-links to the join-family surface.
     @ObservedObject private var ageGateStore = AgeGateStore.shared
     @State private var childFamilyPromptPresentation: ChildFamilyPromptPresentation = .hidden
+    /// F-8 device testing (2026-08-15): refreshed alongside `childFamilyPromptPresentation`
+    /// — see `refreshChildFamilyPrompt()`.
+    @State private var isChildFamilyApprovalPending: Bool = false
     
     // Custom detent for the new trip sheet - device-aware sizing
     // On iPad, use a larger fraction since 25% is too small to show the text field
@@ -462,6 +465,11 @@ struct ContentView: View {
             familyId: authService.currentUser?.activeFamilyId
         )
         ensureSelfProfileListening()
+        // F-8 device testing (2026-08-15): `isFamilyApprovalPending` is already
+        // identity-bound (it compares the stored uid to the current one), so this is
+        // hygiene rather than a correctness requirement — it just frees the stored key
+        // instead of leaving it to sit unread across a sign-out/rebirth or account switch.
+        refreshChildFamilyPrompt()
     }
 
     private func handleHardSignOutWillBegin() {
@@ -637,6 +645,14 @@ struct ContentView: View {
         if presentation == .full {
             ChildRestrictedModeService.shared.markFullFamilyPromptPresented()
         }
+        // F-8 device testing (2026-08-15): membership arriving (or any other exit from
+        // unconsented-child state — correction, sign-out/rebirth) always lands here
+        // through one of this function's callers, so clearing in one place — rather than
+        // duplicating the check at every call site — keeps a single source of truth.
+        if !ChildRestrictedModeService.shared.isRestrictedUnconsentedChild {
+            ChildRestrictedModeService.shared.clearFamilyApprovalPending()
+        }
+        isChildFamilyApprovalPending = ChildRestrictedModeService.shared.isFamilyApprovalPending
     }
 
     private var deferredSetupBanner: some View {
@@ -698,6 +714,7 @@ struct ContentView: View {
                 Section {
                     ChildFamilyPromptBanner(
                         presentation: childFamilyPromptPresentation,
+                        isPendingApproval: isChildFamilyApprovalPending,
                         onJoinFamilyDismissed: { refreshChildFamilyPrompt() }
                     )
                     .listRowInsets(.init(top: 0, leading: 20, bottom: 16, trailing: 20))

@@ -19,6 +19,13 @@ import SwiftUI
 
 struct ChildFamilyPromptBanner: View {
     let presentation: ChildFamilyPromptPresentation
+    /// F-8 device testing (2026-08-15): true once a share-code redemption has been
+    /// submitted and is awaiting the family captain's approval
+    /// (`ChildRestrictedModeService.isFamilyApprovalPending`). Same slot and tap
+    /// target as the ordinary prompt — only the copy changes — so the child (or a
+    /// parent glancing at the device) learns the request landed instead of seeing the
+    /// generic "ask a parent" text indefinitely.
+    var isPendingApproval: Bool = false
     /// Called after the join surface closes so the host can re-evaluate the prompt.
     var onJoinFamilyDismissed: () -> Void = {}
 
@@ -31,8 +38,16 @@ struct ChildFamilyPromptBanner: View {
     /// the trigger; this now matches.
     @State private var isShowingJoinFamily = false
 
-    private var title: String { "child_gate.family_prompt.title".localized }
-    private var subtitle: String { "child_gate.family_prompt.subtitle".localized }
+    private var title: String {
+        isPendingApproval
+            ? "child_gate.family_prompt.pending_title".localized
+            : "child_gate.family_prompt.title".localized
+    }
+    private var subtitle: String {
+        isPendingApproval
+            ? "child_gate.family_prompt.pending_subtitle".localized
+            : "child_gate.family_prompt.subtitle".localized
+    }
 
     var body: some View {
         switch presentation {
@@ -132,6 +147,24 @@ struct ChildFamilyPromptBanner: View {
 #Preview("Family prompt — compact") {
     VStack {
         ChildFamilyPromptBanner(presentation: .compact)
+        Spacer()
+    }
+    .padding()
+    .environmentObject(FirebaseAuthService())
+}
+
+#Preview("Family prompt — pending approval, full") {
+    VStack {
+        ChildFamilyPromptBanner(presentation: .full, isPendingApproval: true)
+        Spacer()
+    }
+    .padding()
+    .environmentObject(FirebaseAuthService())
+}
+
+#Preview("Family prompt — pending approval, compact") {
+    VStack {
+        ChildFamilyPromptBanner(presentation: .compact, isPendingApproval: true)
         Spacer()
     }
     .padding()

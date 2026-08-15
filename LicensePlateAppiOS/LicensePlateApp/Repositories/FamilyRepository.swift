@@ -720,7 +720,16 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
               let inviteId = data["inviteId"] as? String else {
             throw NSError(domain: "FamilyRepository", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid response from redeemShareCode"])
         }
-        
+
+        // F-8 device testing (2026-08-15): every family-code redemption call site (join
+        // sheet, onboarding join view) funnels through here, so this is the one place to
+        // mark the FR-28 home banner's "waiting for approval" state. Friend-code
+        // redemptions never touch family membership and are excluded; an already-
+        // consented (or adult) caller is excluded too — the banner never shows for them.
+        if expectedType == .family, ChildRestrictedModeService.shared.isRestrictedUnconsentedChild {
+            ChildRestrictedModeService.shared.markFamilyApprovalPending()
+        }
+
         return inviteId
     }
     
@@ -1211,7 +1220,15 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
                 message = "The server rejected this request. Sign in and try again."
             }
         case .failedPrecondition:
-            message = "Create an account to use Friends & Family features."
+            // FR-24 keeps the SERVER's refusal byte-identical for "unregistered" and
+            // "child not admitted", so the client cannot tell them apart from the error —
+            // but it can tell them apart from the SESSION. Telling a child on a child
+            // device to "create an account" is both wrong (FR-60(e): they have no account
+            // to create) and the exact misdirection reported when a declined child's uid
+            // had been deleted underneath them.
+            message = ChildRestrictedModeService.shared.isChildAccountSession
+                ? FriendsFamilyCallableErrors.childRestrictionMessage
+                : "Create an account to use Friends & Family features."
         case .permissionDenied:
             message = "You do not have permission to create this share code."
         case .unavailable:

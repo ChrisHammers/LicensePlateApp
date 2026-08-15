@@ -386,6 +386,108 @@ struct ChildRestrictedModeServiceTests {
         #expect(ChildRestrictedModeService.isChildRestrictionRejection(wrongCode) == false)
     }
 
+    // MARK: - Pending family approval (F-8 device testing, 2026-08-15)
+
+    @Test func markingPendingApprovalIsVisibleToTheSameIdentity() {
+        let service = makeService(
+            category: .under13,
+            declarationSentForUserId: "uid-child",
+            currentUserId: "uid-child",
+            activeFamilyId: nil
+        )
+        #expect(service.isFamilyApprovalPending == false)
+        service.markFamilyApprovalPending()
+        #expect(service.isFamilyApprovalPending == true)
+    }
+
+    @Test func clearingPendingApprovalLiftsTheFlag() {
+        let service = makeService(
+            category: .under13,
+            declarationSentForUserId: "uid-child",
+            currentUserId: "uid-child",
+            activeFamilyId: nil
+        )
+        service.markFamilyApprovalPending()
+        #expect(service.isFamilyApprovalPending == true)
+        service.clearFamilyApprovalPending()
+        #expect(service.isFamilyApprovalPending == false)
+        // Idempotent: clearing an already-clear flag is a safe no-op.
+        service.clearFamilyApprovalPending()
+        #expect(service.isFamilyApprovalPending == false)
+    }
+
+    @Test func markingPendingApprovalWithNoCurrentUserIsANoOp() {
+        let service = makeService(
+            category: .under13,
+            currentUserId: nil,
+            activeFamilyId: nil
+        )
+        service.markFamilyApprovalPending()
+        #expect(service.isFamilyApprovalPending == false)
+    }
+
+    /// Incident-1 pattern applied to the new flag: the stored uid is the whole safety
+    /// argument, so a later different identity sharing this device's UserDefaults must
+    /// never read a previous identity's pending redemption as its own.
+    @Test func pendingApprovalIsIdentityBound() {
+        let suite = "ChildRestrictedModeServiceTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let store = AgeGateStore(defaults: defaults)
+        store.recordAnswer(.under13)
+        store.bindPendingDeclaration(toUserId: "uid-child")
+        store.markChildDeclarationSent(userId: "uid-child")
+
+        let childService = ChildRestrictedModeService(ageGateStore: store, defaults: defaults)
+        childService.configure(
+            currentUserIdProvider: { "uid-child" },
+            activeFamilyIdProvider: { nil }
+        )
+        childService.markFamilyApprovalPending()
+        #expect(childService.isFamilyApprovalPending == true)
+
+        // Same device, same UserDefaults suite, a DIFFERENT current identity (e.g. a
+        // sign-out/rebirth, or a parent's own account) — must read as not pending.
+        let otherService = ChildRestrictedModeService(ageGateStore: store, defaults: defaults)
+        otherService.configure(
+            currentUserIdProvider: { "uid-other" },
+            activeFamilyIdProvider: { nil }
+        )
+        #expect(otherService.isFamilyApprovalPending == false)
+
+        // No current identity at all (signed out) also reads as not pending.
+        let signedOutService = ChildRestrictedModeService(ageGateStore: store, defaults: defaults)
+        signedOutService.configure(
+            currentUserIdProvider: { nil },
+            activeFamilyIdProvider: { nil }
+        )
+        #expect(signedOutService.isFamilyApprovalPending == false)
+    }
+
+    /// Full lifecycle: redemption marks it, and the clear this device's ContentView
+    /// issues once membership arrives (or the restriction otherwise lifts) removes it —
+    /// the exact two edges the fix requires, driven through the same service a third
+    /// identity never sees.
+    @Test func pendingApprovalLifecycle_redeemThenApprovalClears() {
+        let service = makeService(
+            category: .under13,
+            declarationSentForUserId: "uid-child",
+            currentUserId: "uid-child",
+            activeFamilyId: nil
+        )
+        #expect(service.childSessionState == .unconsentedChild)
+
+        // Redemption succeeds (`FamilyRepository.redeemShareCode`'s call).
+        service.markFamilyApprovalPending()
+        #expect(service.isFamilyApprovalPending == true)
+
+        // Captain approves — membership arrives, lifting the restriction. ContentView's
+        // `refreshChildFamilyPrompt()` clears the flag once `isRestrictedUnconsentedChild`
+        // is false; simulated here as the same explicit call.
+        service.clearFamilyApprovalPending()
+        #expect(service.isFamilyApprovalPending == false)
+    }
+
     // MARK: - Onboarding routing (FR-27)
 
     /// Owner placement: the age step sits after the welcome/disclaimer intro and

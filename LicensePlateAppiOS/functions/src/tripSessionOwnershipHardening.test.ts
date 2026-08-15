@@ -243,3 +243,97 @@ describe("FR-68: legitimate creator flows still work", () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Owner device pass 2026-08-15, bug 2 — the server half of the identity fork
+// ---------------------------------------------------------------------------
+
+/**
+ * "No trip sessions written to cloud for my registered adult... anon kids/adults kept theirs."
+ *
+ * Registration is supposed to LINK the guest's anonymous uid (v2.1 §11.4), so the uid never
+ * changes and `session.createdBy` keeps naming the caller. When the client instead settled on
+ * a NEW uid and left the local rows keyed to the old one, every publish arrived carrying a
+ * stale `createdBy` — and this file's own FR-68 hardening is what (correctly) refuses it:
+ * `ensureOwnerMemberIfCreatorPayload` returns without seeding `members/{uid}` because the
+ * payload's creator is not the caller, and `assertTripOwner` then rejects.
+ *
+ * That refusal is right and must not be relaxed — the fix belongs on the client, which now
+ * carries the local play identity onto the registered uid (`LocalPlayIdentityRepository`,
+ * FR-60(d)). These cases pin both sides of that contract so a future "just seed the member
+ * row anyway" shortcut cannot reopen FR-68.
+ */
+describe("bug 2: a publish carrying a stale identity as createdBy is refused, not silently accepted", () => {
+  it("a registered caller publishing their own trip under the pre-signup anonymous uid is refused", async () => {
+    // Exactly the post-fork state: local row still says the anon uid, caller is the new
+    // registered uid, and no trip_sessions doc exists yet (first publish).
+    await expect(
+      publish(
+        "orphaned-trip",
+        { createdBy: "anon-uid-before-signup", name: "Road trip", status: "active" },
+        "registered-uid-after-signup"
+      )
+    ).rejects.toMatchObject(NOT_A_MEMBER);
+
+    // Nothing was written at all — which is why the owner saw an empty cloud.
+    expect(db().store.get("trip_sessions/orphaned-trip")).toBeUndefined();
+    expect(
+      db().store.get("trip_sessions/orphaned-trip/members/registered-uid-after-signup")
+    ).toBeUndefined();
+    expect(
+      db().store.get("trip_sessions/orphaned-trip/members/anon-uid-before-signup")
+    ).toBeUndefined();
+  });
+
+  it("the same trip publishes cleanly once the client rebinds createdBy onto the registered uid", async () => {
+    await expect(
+      publish(
+        "orphaned-trip",
+        { createdBy: "registered-uid-after-signup", name: "Road trip", status: "active" },
+        "registered-uid-after-signup"
+      )
+    ).resolves.toMatchObject({ success: true });
+
+    expect(
+      db().store.get("trip_sessions/orphaned-trip/members/registered-uid-after-signup")
+    ).toMatchObject({ role: "owner" });
+    expect(db().store.get("trip_sessions/orphaned-trip")).toMatchObject({
+      createdBy: "registered-uid-after-signup",
+    });
+  });
+
+  it("a LINKED upgrade needs no rebind: the uid is unchanged, so a republish after signup still succeeds", async () => {
+    // The v2.1 §11.4 path. The trip was created and published while anonymous; linking keeps
+    // the uid, so the follow-up publish is an ordinary idempotent republish by the same owner.
+    await expect(
+      publish("linked-trip", { createdBy: "guest-uid", name: "Road trip", status: "active" }, "guest-uid")
+    ).resolves.toMatchObject({ success: true });
+
+    await expect(
+      publish("linked-trip", { createdBy: "guest-uid", name: "Road trip", status: "ended" }, "guest-uid")
+    ).resolves.toMatchObject({ success: true });
+
+    expect(db().store.get("trip_sessions/linked-trip/members/guest-uid")).toMatchObject({
+      role: "owner",
+    });
+  });
+
+  it("the stale-identity refusal is byte-identical to an outsider's, so it leaks no ownership oracle", async () => {
+    db().seed("trip_sessions/someone-elses", { name: "Theirs", createdBy: "victim" });
+    db().seed("trip_sessions/someone-elses/members/victim", { role: "owner" });
+
+    const stale = await publish(
+      "orphaned-trip",
+      { createdBy: "anon-uid-before-signup" },
+      "registered-uid-after-signup"
+    ).catch((e) => e);
+    const outsider = await publish(
+      "someone-elses",
+      { createdBy: "attacker" },
+      "attacker"
+    ).catch((e) => e);
+
+    expect(stale.code).toBe(outsider.code);
+    expect(stale.message).toBe(outsider.message);
+  });
+});

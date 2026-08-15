@@ -65,6 +65,10 @@ struct AgeGateStoreTests {
             AgeGateStoreKeys.pendingChildDeclaration,
             AgeGateStoreKeys.pendingDeclarationUserIds,
             AgeGateStoreKeys.declaredChildUserIds,
+            // FR-60(c): uids retired because the account behind them is gone server-side.
+            // Uid bookkeeping like the two above it — still no birth year, still nothing
+            // about the answer beyond the derived category.
+            AgeGateStoreKeys.detachedIdentityUserIds,
         ]))
     }
 

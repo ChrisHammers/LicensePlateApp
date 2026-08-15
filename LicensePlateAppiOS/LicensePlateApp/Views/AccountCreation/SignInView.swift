@@ -110,6 +110,11 @@ struct SignInView: View {
                     // FR-27: the age question starts every create-account flow, fresh.
                     AgeGateView(source: .registration) {
                         hasAnsweredAgeThisFlow = true
+                        // F-18 follow-up (FR-60(a)): a reinstall can restore an anonymous uid
+                        // from the Keychain before any age screen is shown. An under-13
+                        // answer must not land on top of it — see
+                        // `RestoredIdentityAgeAnswerPolicy`.
+                        Task { await authService.applyRecordedAgeAnswerToRestoredIdentity() }
                     }
                 } else if isCreateModeForChild {
                     ChildAccountCreationGuidanceView(

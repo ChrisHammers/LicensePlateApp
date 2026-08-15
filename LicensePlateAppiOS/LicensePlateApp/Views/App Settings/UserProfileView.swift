@@ -147,7 +147,14 @@ struct UserProfileView: View {
             isRoyale: entitlementService.entitlementState(for: user).effectiveTier >= .royale
         ))
     }
-    
+
+    /// Drives the Authentication Status CTA (F-8 device testing, 2026-08-15).
+    /// `ChildRestrictedModeService` already classifies child sessions for the FR-28 home
+    /// banner; mirroring it here keeps one source of truth instead of a parallel check.
+    private var childGateSessionState: ChildRestrictedModeService.ChildSessionState {
+        ChildRestrictedModeService.shared.childSessionState
+    }
+
     var body: some View {
             AppBackgroundView {
                 List {
@@ -308,28 +315,46 @@ struct UserProfileView: View {
                               }
                           }
                           
-                          // Sign in / Create account button (show if NOT truly authenticated)
+                          // Sign in / Create account button (show if NOT truly authenticated).
+                          // F-8 device testing (2026-08-15): a child-flow session has no
+                          // account to create, so it gets the established child-gate
+                          // guidance instead (see ChildAccountCreationGuidanceView in
+                          // SignInView.swift / ChildPremiumInfoView for the house style).
+                          // Adults and plain guests are unaffected — `childGateSessionState`
+                          // is `.notChild` for both.
                           if !authService.isTrulyAuthenticated {
-                              Button {
-                                  authService.showSignInSheet = true
-                              } label: {
-                                  HStack {
-                                      Text("Sign In or Create Account".localized)
-                                          .font(.system(.body, design: .rounded))
-                                          .fontWeight(.semibold)
-                                      
-                                      Spacer()
-                                      
-                                      Image(systemName: "arrow.right")
-                                          .font(.system(size: 14, weight: .semibold))
+                              switch childGateSessionState {
+                              case .notChild:
+                                  Button {
+                                      authService.showSignInSheet = true
+                                  } label: {
+                                      HStack {
+                                          Text("Sign In or Create Account".localized)
+                                              .font(.system(.body, design: .rounded))
+                                              .fontWeight(.semibold)
+
+                                          Spacer()
+
+                                          Image(systemName: "arrow.right")
+                                              .font(.system(size: 14, weight: .semibold))
+                                      }
+                                      .foregroundStyle(.white)
+                                      .padding(.vertical, 12)
+                                      .padding(.horizontal, 16)
+                                      .background(
+                                          RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                              .fill(Color.Theme.primaryBlue)
+                                      )
                                   }
-                                  .foregroundStyle(.white)
-                                  .padding(.vertical, 12)
-                                  .padding(.horizontal, 16)
-                                  .background(
-                                      RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                          .fill(Color.Theme.primaryBlue)
+                              case .unconsentedChild:
+                                  ChildAccountSectionGuidance(
+                                      title: "child_gate.screen.join_title".localized,
+                                      message: "child_gate.screen.join_body".localized,
+                                      showsJoinButton: true
                                   )
+                                  .environmentObject(authService)
+                              case .consentedChild:
+                                  ChildPremiumInlineNotice(textKey: "child_gate.account.consented_notice")
                               }
                           } else {
                               // Sign out button (only show if truly authenticated)
@@ -725,8 +750,16 @@ struct UserProfileView: View {
     }
     
     /// Persists profile to Firestore; surfaces failures via the existing error alert.
+    ///
+    /// F-8 device testing (2026-08-15): gating this on `isTrulyAuthenticated` (true only
+    /// for a non-anonymous account) silently dropped every edit an anonymous consented
+    /// child made here — avatar changes saved locally, then reverted on the next cloud
+    /// echo, because the cloud doc never received them in the first place.
+    /// `saveUserDataToFirestore` itself has no such restriction (an anonymous Firebase
+    /// uid's self-write to its own `users/{uid}` is permitted by the Firestore rules);
+    /// the real precondition is a cloud identity to write to, i.e. a `firebaseUID`.
     private func syncProfileToFirestoreIfNeeded() {
-        guard authService.isTrulyAuthenticated else { return }
+        guard user.firebaseUID != nil else { return }
         Task {
             do {
                 try await authService.saveUserDataToFirestore(user)
@@ -875,5 +908,122 @@ private struct ProfileLicenseWalletSheet: View {
             }
         }
     }
+}
+
+// MARK: - Child account section guidance (COPPA child-gate, F-8 device testing 2026-08-15)
+
+/// What an unconsented child sees on `UserProfileView` instead of Sign In / Create
+/// Account: a non-punitive explanation plus the same share-code route
+/// `ChildAccountCreationGuidanceView` (SignInView.swift) offers, at card scale for this
+/// screen's Authentication Status section rather than a full-screen takeover.
+///
+/// Deliberately logs NO analytics: an event here would fire only for child sessions on
+/// the child's own instance (forbidden by FR-21 / SRS §12), same rule as
+/// `ChildFamilyPromptBanner`.
+private struct ChildAccountSectionGuidance: View {
+    let title: String
+    let message: String
+    let showsJoinButton: Bool
+
+    @EnvironmentObject private var authService: FirebaseAuthService
+    @State private var showJoinFamilySheet = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "figure.and.child.holdinghands")
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                    .frame(width: 24)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(.subheadline, design: .rounded))
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(message)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .accessibilityElement(children: .combine)
+
+            if showsJoinButton {
+                Button {
+                    showJoinFamilySheet = true
+                } label: {
+                    HStack {
+                        Text("Join a Family".localized)
+                            .font(.system(.body, design: .rounded))
+                            .fontWeight(.semibold)
+
+                        Spacer()
+
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.Theme.primaryBlue)
+                    )
+                }
+                .accessibleButton(
+                    label: "Join a Family".localized,
+                    hint: "child_gate.screen.join_button_hint".localized
+                )
+            }
+        }
+        .sheet(isPresented: $showJoinFamilySheet) {
+            JoinFamilySheet()
+                .environmentObject(authService)
+        }
+    }
+}
+
+#Preview("Profile — unconsented child guidance") {
+    AppBackgroundView {
+        List {
+            ChildAccountSectionGuidance(
+                title: "child_gate.screen.join_title".localized,
+                message: "child_gate.screen.join_body".localized,
+                showsJoinButton: true
+            )
+            .listRowBackground(Color.Theme.cardBackground)
+        }
+        .scrollContentBackground(.hidden)
+    }
+    .environmentObject(FirebaseAuthService())
+}
+
+#Preview("Profile — consented child notice") {
+    AppBackgroundView {
+        List {
+            ChildPremiumInlineNotice(textKey: "child_gate.account.consented_notice")
+                .listRowBackground(Color.Theme.cardBackground)
+        }
+        .scrollContentBackground(.hidden)
+    }
+}
+
+#Preview("Profile — unconsented child guidance, dark, large text") {
+    AppBackgroundView {
+        List {
+            ChildAccountSectionGuidance(
+                title: "child_gate.screen.join_title".localized,
+                message: "child_gate.screen.join_body".localized,
+                showsJoinButton: true
+            )
+            .listRowBackground(Color.Theme.cardBackground)
+        }
+        .scrollContentBackground(.hidden)
+    }
+    .environmentObject(FirebaseAuthService())
+    .preferredColorScheme(.dark)
+    .environment(\.dynamicTypeSize, .accessibility2)
 }
 

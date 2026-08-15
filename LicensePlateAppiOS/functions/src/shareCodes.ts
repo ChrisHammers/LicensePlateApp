@@ -196,6 +196,11 @@ export const redeemShareCode = enforcedCallable(
       );
     }
 
+    // Codes are generated uppercase-only (generateRandomCode); normalize server-side
+    // too so a lowercase code from any caller still matches (owner device testing,
+    // 2026-08-15).
+    const normalizedCode = typeof code === "string" ? code.toUpperCase() : code;
+
     // FR-67: which surface is redeeming. Required, because a caller who could simply omit it
     // would skip the type check entirely — which is the whole hole being closed. This is a
     // payload-shape error, uniform for every caller, and discloses nothing about anyone.
@@ -209,7 +214,7 @@ export const redeemShareCode = enforcedCallable(
     // Find code
     const codesSnapshot = await db
       .collection("share_codes")
-      .where("code", "==", code)
+      .where("code", "==", normalizedCode)
       .limit(1)
       .get();
 

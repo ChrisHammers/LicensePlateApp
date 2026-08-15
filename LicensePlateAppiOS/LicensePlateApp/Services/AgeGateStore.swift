@@ -26,6 +26,7 @@ enum AgeGateStoreKeys {
     static let pendingChildDeclaration = "ageGate.pendingChildDeclaration"
     static let pendingDeclarationUserIds = "ageGate.pendingDeclarationUserIds"
     static let declaredChildUserIds = "ageGate.declaredChildUserIds"
+    static let detachedIdentityUserIds = "ageGate.detachedIdentityUserIds"
 }
 
 /// UserDefaults-backed age-gate state (no SwiftData; follows `FirstSessionState` idiom).
@@ -120,8 +121,26 @@ final class AgeGateStore: ObservableObject {
         !declaredChildUserIds.isEmpty
     }
 
-    private var declaredChildUserIds: Set<String> {
+    var declaredChildUserIds: Set<String> {
         Set(defaults.stringArray(forKey: AgeGateStoreKeys.declaredChildUserIds) ?? [])
+    }
+
+    /// FR-60(c) zombie guard — uids this device has DETACHED because the identity no longer
+    /// exists server-side (a captain declined, or a parent used remove-and-delete, and the
+    /// cleanup removed both the Auth user and `users/{uid}`).
+    ///
+    /// The device keeps the uid in three places the server cannot reach — the Keychain Auth
+    /// session, `AppUser.firebaseUID`, and `declaredChildUserIds` — so without this the dead
+    /// uid stays addressable: `updateLoginTimestampsInFirestore` and the `appPrefs` writers
+    /// both use `setData(merge: true)`, which CREATES the document, and the resurrected doc
+    /// cannot carry `isChildAccount` (rules forbid it on create), so it reads back as an
+    /// adult. Once an identity is detached, no writer on this device may address it again.
+    ///
+    /// Distinct from `pendingDeclarationUserIds` on purpose: that set holds a write until a
+    /// declaration lands and then RELEASES it, which is exactly why it never covered this —
+    /// a deleted account's declaration had already landed.
+    var detachedIdentityUserIds: Set<String> {
+        Set(defaults.stringArray(forKey: AgeGateStoreKeys.detachedIdentityUserIds) ?? [])
     }
 
     // MARK: - Mutations
@@ -227,6 +246,21 @@ final class AgeGateStore: ObservableObject {
         revision += 1
     }
 
+    /// Records that this device has stopped using `userId` as an identity, because the
+    /// account behind it is gone server-side (FR-60(c) decline/deletion cleanup) or because
+    /// the session was a restored identity this device's current age answer does not own.
+    ///
+    /// Never removed. A detached anonymous uid is unrecoverable by construction — it has no
+    /// credentials — so there is no future in which writing to it again is correct, and the
+    /// set stays a one-way protective ratchet like `declaredChildUserIds`.
+    func markIdentityDetached(userId: String) {
+        guard !userId.isEmpty else { return }
+        var ids = detachedIdentityUserIds
+        guard ids.insert(userId).inserted else { return }
+        defaults.set(Array(ids), forKey: AgeGateStoreKeys.detachedIdentityUserIds)
+        revision += 1
+    }
+
     /// Clears the epoch-scoped answer. Called on sign-out and account deletion so the
     /// next registration flow asks fresh — a stale answer can never carry over to a new
     /// or different account (incident-2).
@@ -283,6 +317,92 @@ enum GuestProvisioningPolicy {
     }
 }
 
+// MARK: - Under-13 answer on a RESTORED identity (FR-60(a) completion, FR-74(d′) spirit)
+
+/// FR-60(a) stops an under-13 answer from CREATING an anonymous identity. It says nothing
+/// about an identity that already exists — and the iOS Keychain survives app deletion, so a
+/// reinstall hands the next session a restored anonymous uid before the age screen is ever
+/// shown.
+///
+/// The result is a chimera, because the two halves of the system key off different things:
+///
+///  * the flow-scoped half (location restriction, `hasPendingChildDeclaration`) reads the
+///    ANSWER, so it correctly treats the session as a child;
+///  * the identity-bound half (`ChildRestrictedModeService.childSessionState`, the FR-28
+///    banner, `UserDocumentWritePolicy`) reads whether the uid is BOUND to that answer — and
+///    a restored uid never passed through `bindPendingDeclaration`, so it reads `.notChild`.
+///
+/// So the child loses the FR-28 banner (their only route to share-code entry), sees adult
+/// "Sign up to access" gates, and — worst — every `users/{uid}` writer is unheld, which
+/// creates a FLAGLESS document for a child: a zero-server-footprint population acquiring
+/// exactly the footprint FR-60 exists to prevent.
+///
+/// The resolution follows FR-74(d′)'s asymmetry — a protective answer wins over a stale
+/// artefact of a previous epoch. The restored identity is dropped LOCALLY ONLY (it may hold
+/// another person's data; deleting it server-side is never this device's call), and the
+/// session continues as the clean, unprovisioned local-first child FR-60 specifies.
+enum RestoredIdentityAgeAnswerPolicy {
+    /// - Parameters:
+    ///   - category: the answer just recorded for this epoch.
+    ///   - isAnonymousSession: a registered session is out of scope — it has credentials, its
+    ///     owner can sign back in, and FR-27 forbids the age answer touching it at all.
+    ///   - isBoundToCurrentAnswer: the uid passed through `bindPendingDeclaration` for THIS
+    ///     epoch (pending or already declared). A uid this flow provisioned is the normal
+    ///     case and must never be detached.
+    static func requiresLocalDetach(
+        category: AgeGateCategory?,
+        isAnonymousSession: Bool,
+        isBoundToCurrentAnswer: Bool
+    ) -> Bool {
+        guard category == .under13 else { return false }
+        guard isAnonymousSession else { return false }
+        return !isBoundToCurrentAnswer
+    }
+}
+
+// MARK: - Server-deleted identity detection (FR-60(c) zombie guard)
+
+/// FR-60(c) deletes a declined or expired provisional child: the Auth user AND `users/{uid}`
+/// both go. The cleanup deliberately preserves the DEVICE's age answer and ratchet so the
+/// child re-enters a code later and "re-provisions cleanly" — but the device also keeps the
+/// UID, and both `ChildConsentRedemptionPolicy.requiresProvisioning` and
+/// `signInAnonymously` short-circuit on `firebaseUID != nil`. So the re-provision never
+/// happens: the next redemption calls with the dead uid, the server's declared-child read
+/// hits a missing document, and the caller is refused as unregistered.
+///
+/// Meanwhile the dead uid is still addressable by every `users/{uid}` merge writer, which
+/// resurrects the document — flagless, because rules forbid `isChildAccount` on create.
+///
+/// Both halves are the same defect: a deleted identity that the device never let go of.
+enum DetachedIdentityDetectionPolicy {
+    /// What a self-read of `users/{uid}` established about the identity.
+    enum SelfDocumentStatus {
+        /// Read succeeded and the document exists.
+        case present
+        /// Read succeeded and the document is CONFIRMED absent.
+        case confirmedAbsent
+        /// The read failed (offline, transport, App Check). Never actionable — a network
+        /// blip must not cost a live account its session.
+        case unknown
+    }
+
+    /// True when a session must be dropped because the account behind it is gone.
+    ///
+    /// Scoped to ANONYMOUS sessions whose declaration this device already DELIVERED. That
+    /// scope is what makes "absent" provable rather than merely unobserved: a delivered
+    /// declaration is a server write, so the document existed; its absence now can only mean
+    /// deletion. A brand-new uid mid-provisioning has no delivered declaration yet, so the
+    /// rule cannot misfire on it and sign out an account seconds after minting it.
+    static func requiresDetach(
+        isAnonymousSession: Bool,
+        documentStatus: SelfDocumentStatus,
+        wasDeclaredByThisDevice: Bool
+    ) -> Bool {
+        guard isAnonymousSession, wasDeclaredByThisDevice else { return false }
+        return documentStatus == .confirmedAbsent
+    }
+}
+
 // MARK: - Consent-seeking redemption sequence (FR-60(b) acceptance seam)
 
 /// The ordering FR-60(b) mandates when an under-13 local player enters a family share code.
@@ -324,6 +444,18 @@ enum ChildConsentRedemptionPolicy {
         !hasFirebaseUid && category == .under13
     }
 
+    /// FR-60(c) zombie guard, run BEFORE `requiresProvisioning` decides to skip.
+    ///
+    /// "A child who already holds a uid skips straight to redemption" is only sound while
+    /// that uid still exists. After a decline or a remove-and-delete it does not, and the
+    /// skip is what strands the child: the callable's declared-child read hits a deleted
+    /// document and refuses them as unregistered, on every code they try, forever. The
+    /// existing uid therefore has to be verified against the server before it is trusted;
+    /// `DetachedIdentityDetectionPolicy` owns the verdict.
+    static func requiresIdentityVerification(hasFirebaseUid: Bool, category: AgeGateCategory?) -> Bool {
+        hasFirebaseUid && category == .under13
+    }
+
     /// The gate in front of step 4. A uid whose declaration never reached the server is
     /// exactly the "flagless account" failure shape FR-27 exists to prevent, so redemption
     /// is refused and retried rather than proceeding — the uid stays bound and its profile
@@ -342,9 +474,18 @@ enum ChildConsentRedemptionPolicy {
 /// takes no category/answer input at all — an unbound stale answer cannot hold or
 /// declare anything).
 enum AgeGateProfileWritePolicy {
-    static func isProfileWriteHeld(userUid: String?, pendingDeclarationUserIds: Set<String>) -> Bool {
+    /// - Parameter detachedIdentityUserIds: FR-60(c) zombie guard. A uid this device
+    ///   detached because the account no longer exists server-side is held FOREVER — the
+    ///   pending-declaration half releases once a declaration lands, which is precisely why
+    ///   it never covered a DELETED declared child (its declaration had already landed).
+    static func isProfileWriteHeld(
+        userUid: String?,
+        pendingDeclarationUserIds: Set<String>,
+        detachedIdentityUserIds: Set<String> = []
+    ) -> Bool {
         guard let userUid, !userUid.isEmpty else { return false }
         return pendingDeclarationUserIds.contains(userUid)
+            || detachedIdentityUserIds.contains(userUid)
     }
 }
 
@@ -362,11 +503,17 @@ enum AgeGateProfileWritePolicy {
 /// `saveUserDataToFirestore`) is the only writer permitted to bring the document into
 /// existence; everyone else waits behind the same hold.
 enum UserDocumentWritePolicy {
-    /// Held for exactly the uids that still owe a child declaration.
-    static func isWriteHeld(userId: String?, pendingDeclarationUserIds: Set<String>) -> Bool {
+    /// Held for the uids that still owe a child declaration, and forever for the uids this
+    /// device detached because the account behind them was deleted server-side.
+    static func isWriteHeld(
+        userId: String?,
+        pendingDeclarationUserIds: Set<String>,
+        detachedIdentityUserIds: Set<String> = []
+    ) -> Bool {
         AgeGateProfileWritePolicy.isProfileWriteHeld(
             userUid: userId,
-            pendingDeclarationUserIds: pendingDeclarationUserIds
+            pendingDeclarationUserIds: pendingDeclarationUserIds,
+            detachedIdentityUserIds: detachedIdentityUserIds
         )
     }
 }

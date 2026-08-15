@@ -1401,6 +1401,9 @@
 "age_gate.continue_hint" = "Continues with the selected year";
 "child_gate.family_prompt.title" = "Ask a parent to add you to their family";
 "child_gate.family_prompt.subtitle" = "Keep playing! Your trips stay on this device until you join a family.";
+/* F-8 device testing (2026-08-15): shown instead of the two lines above once a share-code redemption is awaiting captain approval. */
+"child_gate.family_prompt.pending_title" = "Waiting for your family's approval";
+"child_gate.family_prompt.pending_subtitle" = "Keep playing! We'll let you know as soon as your family says yes.";
 "child_gate.callable_blocked" = "Ask a parent to add you to their family to use this.";
 /* COPPA F-18 (FR-60(e)): under-13 create-account mode shows this instead of a form. */
 "child_gate.signup.title" = "You're all set to play";
@@ -1413,6 +1416,8 @@
 "child_gate.screen.join_button_hint" = "Opens family share code entry";
 "child_gate.screen.friends_title" = "Friends aren't part of child accounts";
 "child_gate.screen.friends_body" = "Play trips with your family instead — everyone in your family is already connected.";
+/* F-8 device testing (2026-08-15): UserProfileView's Authentication Status section for a CONSENTED child (replaces Sign In / Create Account). */
+"child_gate.account.consented_notice" = "Accounts are managed by your family captain — you're all set to keep playing.";
 
 // COPPA F-7 — Child session postures (FR-33 location toggles)
 "child_gate.location_disabled" = "Location options are turned off for child accounts.";

@@ -820,10 +820,17 @@ class UserRepository: ObservableObject {
     /// that wrote a flagless doc that reads back as not-a-child.
     ///
     /// Only the declare-before-write choke point may bring the document into existence.
+    ///
+    /// FR-60(c) second half: the same `setData(merge: true)` create is also how a DELETED
+    /// child's document came back — a decline or remove-and-delete removes the Auth user and
+    /// `users/{uid}`, but the device kept the uid and kept writing to it. The
+    /// pending-declaration hold could never cover that (it releases once a declaration
+    /// lands, and a deleted account's had), so detached uids are held here too.
     private func assertMayWriteUserDocument(userId: String) throws {
         guard UserDocumentWritePolicy.isWriteHeld(
             userId: userId,
-            pendingDeclarationUserIds: AgeGateStore.shared.pendingDeclarationUserIds
+            pendingDeclarationUserIds: AgeGateStore.shared.pendingDeclarationUserIds,
+            detachedIdentityUserIds: AgeGateStore.shared.detachedIdentityUserIds
         ) else { return }
         throw UserDocumentWriteHeldError(userId: userId)
     }

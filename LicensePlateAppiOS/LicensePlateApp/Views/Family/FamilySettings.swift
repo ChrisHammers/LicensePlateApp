@@ -84,6 +84,7 @@ struct FamilySettings: View {
                                         target: viewModel.childMemberTarget(for: member),
                                         isChild: viewModel.isChildMember(memberId: member.userId),
                                         isBusy: viewModel.isSavingChildStatus || viewModel.isDeletingChildData,
+                                        isDeletingChildData: viewModel.isDeletingChildData,
                                         onMarkAsChild: { viewModel.beginMarkAsChild($0) },
                                         onCorrect: { viewModel.beginCorrectChildStatus($0) },
                                         onOpenPrivacy: { viewModel.openChildPrivacy($0) },
@@ -309,6 +310,11 @@ struct FamilyChildManageControls: View {
     let target: FamilyChildMemberTarget
     let isChild: Bool
     let isBusy: Bool
+    /// F-8 device testing (2026-08-15): the FR-30 deletion specifically, so its control
+    /// can show its own progress feedback instead of just going silently unresponsive
+    /// for however long the callable takes (`isBusy` already disables every control
+    /// in this stack; this additionally drives the spinner on the one causing it).
+    var isDeletingChildData: Bool = false
     let onMarkAsChild: (FamilyChildMemberTarget) -> Void
     let onCorrect: (FamilyChildMemberTarget) -> Void
     let onOpenPrivacy: (FamilyChildMemberTarget) -> Void
@@ -335,7 +341,9 @@ struct FamilyChildManageControls: View {
                     title: "family.child.manage_remove_delete".localized,
                     systemImage: "trash",
                     hint: "family.child.manage_remove_delete_hint".localized,
-                    isDestructive: true
+                    isDestructive: true,
+                    isBusy: isDeletingChildData,
+                    busyTitle: "Deleting...".localized
                 ) {
                     onRemoveAndDelete(target)
                 }
@@ -359,17 +367,28 @@ struct FamilyChildManageControls: View {
         systemImage: String,
         hint: String,
         isDestructive: Bool = false,
+        isBusy: Bool = false,
+        busyTitle: String? = nil,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 13))
-                    .accessibleDecorative()
-                Text(title)
-                    .font(.system(.footnote, design: .rounded))
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
+                if isBusy {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text(busyTitle ?? title)
+                        .font(.system(.footnote, design: .rounded))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 13))
+                        .accessibleDecorative()
+                    Text(title)
+                        .font(.system(.footnote, design: .rounded))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 Spacer(minLength: 0)
             }
             .foregroundStyle(isDestructive ? Color.red : Color.Theme.primaryBlue)
@@ -377,7 +396,10 @@ struct FamilyChildManageControls: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibleButton(label: "\(title), \(target.displayName)", hint: hint)
+        .accessibleButton(
+            label: "\(isBusy ? (busyTitle ?? title) : title), \(target.displayName)",
+            hint: hint
+        )
     }
 }
 
@@ -549,6 +571,21 @@ struct FamilyMemberSettingsRow: View {
             target: FamilyChildMemberTarget(memberUserId: "child-1", displayName: "Sam"),
             isChild: true,
             isBusy: false,
+            onMarkAsChild: { _ in },
+            onCorrect: { _ in },
+            onOpenPrivacy: { _ in },
+            onRemoveAndDelete: { _ in }
+        )
+    }
+}
+
+#Preview("Child manage controls — deleting data") {
+    List {
+        FamilyChildManageControls(
+            target: FamilyChildMemberTarget(memberUserId: "child-1", displayName: "Sam"),
+            isChild: true,
+            isBusy: true,
+            isDeletingChildData: true,
             onMarkAsChild: { _ in },
             onCorrect: { _ in },
             onOpenPrivacy: { _ in },

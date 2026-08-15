@@ -40,6 +40,10 @@ enum ChildFamilyPromptPolicy {
 
 enum ChildRestrictedModeKeys {
     static let hasPresentedFullFamilyPrompt = "childGate.hasPresentedFullFamilyPrompt"
+    /// F-8 device testing (2026-08-15): uid a share-code redemption is awaiting the
+    /// family captain's approval for. Stores the uid (not a bare Bool) so the read is
+    /// identity-bound — see `isFamilyApprovalPending`.
+    static let pendingFamilyApprovalUserId = "childGate.pendingFamilyApprovalUserId"
 }
 
 @MainActor
@@ -170,6 +174,42 @@ final class ChildRestrictedModeService: ObservableObject {
             isRestrictedUnconsentedChild: isRestrictedUnconsentedChild,
             hasPresentedFullBanner: hasPresentedFullFamilyPrompt
         )
+    }
+
+    // MARK: - Pending family approval (F-8 device testing, 2026-08-15)
+    //
+    // A share-code redemption gives an unconsented child nothing to look at until a
+    // captain approves it — the FR-28 banner kept showing the generic "ask a parent"
+    // prompt as if nothing had happened. This is a purely device-local flag (no cloud
+    // reads): `FamilyRepository.redeemShareCode` marks it right after a successful
+    // FAMILY-type redemption; it clears once membership arrives (an
+    // `.userProfilesMerged` delivery that lifts the restriction — ContentView already
+    // observes that notification for FR-28) or the identity changes. Identity-bound by
+    // storing the uid itself, so a later different identity on this device — or a
+    // decline path that signs the child out, which the identity agent owns — never
+    // inherits a stale "waiting" state (same pattern as the incident-1 regression
+    // guarded elsewhere in this file).
+
+    /// True while a share-code redemption THIS identity made is awaiting captain
+    /// approval (no active family yet). False once membership arrives, the flag is
+    /// explicitly cleared, or the current identity never set it.
+    var isFamilyApprovalPending: Bool {
+        guard let uid = currentUserIdProvider(), !uid.isEmpty else { return false }
+        return defaults.string(forKey: ChildRestrictedModeKeys.pendingFamilyApprovalUserId) == uid
+    }
+
+    /// Called after `FamilyRepository.redeemShareCode` succeeds for a `.family` code
+    /// while the caller is a restricted unconsented child.
+    func markFamilyApprovalPending() {
+        guard let uid = currentUserIdProvider(), !uid.isEmpty else { return }
+        defaults.set(uid, forKey: ChildRestrictedModeKeys.pendingFamilyApprovalUserId)
+    }
+
+    /// Membership arrived (active family now present) or the identity reset. Safe to
+    /// call unconditionally — a no-op when nothing is pending.
+    func clearFamilyApprovalPending() {
+        guard defaults.string(forKey: ChildRestrictedModeKeys.pendingFamilyApprovalUserId) != nil else { return }
+        defaults.removeObject(forKey: ChildRestrictedModeKeys.pendingFamilyApprovalUserId)
     }
 
     /// Gameplay cloud uploads hold while restricted; queued events simply wait.

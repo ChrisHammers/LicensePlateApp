@@ -210,7 +210,17 @@ class FirebaseAuthService: ObservableObject {
     /// F-6 (FR-27): called when a guest age step completes (first launch or rebirth).
     /// Performs the deferred anonymous sign-in; an under-13 answer is declared inside
     /// `signInAnonymously` for exactly the uid it creates, before its first profile write.
+    ///
+    /// F-18 follow-up (FR-60(a), FR-74(d′) spirit): the answer is applied to the IDENTITY
+    /// first. A reinstall restores the Keychain's anonymous uid before the age screen is ever
+    /// shown, and an under-13 answer that lands on such a session produces the chimera
+    /// `RestoredIdentityAgeAnswerPolicy` documents — half the app treating it as a child, the
+    /// other half writing a flagless `users/{uid}` for one. Detaching first makes the deferred
+    /// provisioning below correct by construction: the session is a clean, uid-less
+    /// local-first child, exactly as a genuine first install would be.
     func completeDeferredGuestProvisioningIfNeeded() async {
+        await applyRecordedAgeAnswerToRestoredIdentity()
+
         guard AgeGateStore.shared.isResolved,
               let user = currentUser,
               user.firebaseUID == nil,
@@ -218,6 +228,125 @@ class FirebaseAuthService: ObservableObject {
             return
         }
         try? await signInAnonymously()
+    }
+
+    /// FR-60(a) / FR-74(d′) spirit: drop a restored anonymous identity that the age answer
+    /// just recorded does not own. LOCAL ONLY — the account may hold another person's data,
+    /// and deleting it server-side is never this device's call.
+    ///
+    /// Called from every surface that presents the age screen. Two of them
+    /// (`OnboardingContainerView`, `QuickSoloStartView`) reach it through
+    /// `completeDeferredGuestProvisioningIfNeeded`; `SignInView`'s in-form ask calls it
+    /// directly, because that flow deliberately does not provision a guest.
+    func applyRecordedAgeAnswerToRestoredIdentity() async {
+        guard let firebaseUser = auth.currentUser else { return }
+        let store = AgeGateStore.shared
+        let uid = firebaseUser.uid
+        guard RestoredIdentityAgeAnswerPolicy.requiresLocalDetach(
+            category: store.category,
+            isAnonymousSession: firebaseUser.isAnonymous,
+            isBoundToCurrentAnswer: store.isPendingDeclaration(userId: uid)
+                || store.isDeclaredChildUserId(uid)
+        ) else { return }
+
+        await detachAnonymousIdentityLocally(uid: uid, reason: "restored_identity_under13_answer")
+    }
+
+    /// The one teardown both zombie paths share: end the Auth session, retire the uid so no
+    /// `users/{uid}` writer can address it again, and leave the device as an UNPROVISIONED
+    /// local-first player.
+    ///
+    /// Local gameplay rows are deliberately untouched and `AppUser.id` deliberately keeps the
+    /// retired uid, so `firebaseUID ?? id` still resolves every trip, discovery and XP row the
+    /// player already has — and the next provisioning rebinds them onto the new uid through
+    /// FR-60(d)'s existing pass. The device ratchet (`declaredChildUserIds`, `ChildSignalCache`,
+    /// the epoch answer) is preserved: the FR-60(c) cleanup preserves it deliberately, and
+    /// nothing here is a correction.
+    ///
+    /// Deliberately logs NO analytics: both callers are child-session paths on a child's own
+    /// device, which is the case the taxonomy must never carry (FR-21 / SRS §12).
+    private func detachAnonymousIdentityLocally(uid: String, reason: StaticString) async {
+        _ = reason // DEBUG-only provenance; never leaves the device.
+        AgeGateStore.shared.markIdentityDetached(userId: uid)
+
+        do {
+            try auth.signOut()
+        } catch {
+            #if DEBUG
+            print("⚠️ Local detach sign-out failed for \(uid): \(error)")
+            #endif
+        }
+        // The auth-state listener runs as its own MainActor task; let it settle before the
+        // local user is put back into its unprovisioned shape, so its `isAuthenticated = false`
+        // cannot land after this method's own state.
+        await Task.yield()
+
+        UserRepository.shared.clearEntitlementTags(for: uid)
+
+        // `currentUser` is nil on the launch path (the auth listener reaches here before the
+        // bootstrap publishes anyone), so the row is resolved by uid as well.
+        let existingRow = currentUser ?? modelContext.flatMap { context in
+            try? context.fetch(
+                FetchDescriptor<AppUser>(
+                    predicate: #Predicate<AppUser> { $0.id == uid || $0.firebaseUID == uid }
+                )
+            ).first
+        }
+
+        if let user = existingRow {
+            user.firebaseUID = nil
+            user.email = nil
+            user.linkedPlatforms = []
+            user.activeFamilyId = nil
+            user.lastDateLoggedIn = nil
+            user.needsSync = false
+            user.lastUpdated = .now
+            try? modelContext?.save()
+            currentUser = user
+            isAuthenticated = true
+        } else {
+            // Nothing local to keep (reinstall): start the unprovisioned local-first session
+            // the FR-60 model expects instead of leaving the app with no user at all.
+            try? createFreshLocalGuestUser()
+        }
+
+        #if DEBUG
+        print("F-18: detached local identity \(uid) (\(reason))")
+        #endif
+        ChildSessionPostureCoordinator.shared.applyPostures(trigger: .identityTransition)
+    }
+
+    /// The bootstrap read's outcome, in the vocabulary the detach decision speaks. A FAILED
+    /// read is `.unknown`, never absence — an offline relaunch must never cost a live account
+    /// its session.
+    private static func selfDocumentStatus(
+        for load: AuthProfileSyncPolicy.DocumentLoadStatus
+    ) -> DetachedIdentityDetectionPolicy.SelfDocumentStatus {
+        switch load {
+        case .found: return .present
+        case .notFound: return .confirmedAbsent
+        case .failed: return .unknown
+        }
+    }
+
+    /// Fresh SERVER read of the caller's own `users/{uid}`, reduced to the tri-state the
+    /// detach decision needs. `.server` on purpose: the offline cache would happily report a
+    /// document that the server deleted, and a stale "present" is the failure this whole
+    /// guard exists to end. Any read failure is `.unknown`, which is never actionable.
+    private func selfUserDocumentStatus(
+        userId: String
+    ) async -> DetachedIdentityDetectionPolicy.SelfDocumentStatus {
+        guard isOnline else { return .unknown }
+        do {
+            let snapshot = try await db.collection("users").document(userId)
+                .getDocument(source: .server)
+            return snapshot.exists ? .present : .confirmedAbsent
+        } catch {
+            #if DEBUG
+            print("⚠️ Self user-document read failed for \(userId): \(error)")
+            #endif
+            return .unknown
+        }
     }
 
     /// F-6 (FR-27): binds the current epoch's under-13 answer to `flowUid` — a uid this
@@ -298,9 +427,30 @@ class FirebaseAuthService: ObservableObject {
     ///   admit a child as an adult.
     func provisionIdentityForConsentSeekingRedemptionIfNeeded() async throws {
         guard let localUser = currentUser else { throw AuthError.noUser }
+        let store = AgeGateStore.shared
+
+        // FR-60(c) zombie guard, BEFORE the "already has a uid ⇒ skip" shortcut below.
+        // A declined or removed-and-deleted child still holds the dead uid in the Keychain,
+        // and skipping on its strength is what made every subsequent share code fail as
+        // "unregistered". Verified against a fresh SERVER read; an unreadable server leaves
+        // the session exactly as it was.
+        if ChildConsentRedemptionPolicy.requiresIdentityVerification(
+            hasFirebaseUid: localUser.firebaseUID != nil,
+            category: store.category
+        ), let existingUid = localUser.firebaseUID {
+            let status = await selfUserDocumentStatus(userId: existingUid)
+            if DetachedIdentityDetectionPolicy.requiresDetach(
+                isAnonymousSession: isAnonymousUser,
+                documentStatus: status,
+                wasDeclaredByThisDevice: store.isDeclaredChildUserId(existingUid)
+            ) {
+                await detachAnonymousIdentityLocally(uid: existingUid, reason: "server_deleted_identity")
+            }
+        }
+
         guard ChildConsentRedemptionPolicy.requiresProvisioning(
             hasFirebaseUid: localUser.firebaseUID != nil,
-            category: AgeGateStore.shared.category
+            category: store.category
         ) else {
             return
         }
@@ -393,6 +543,14 @@ class FirebaseAuthService: ObservableObject {
         do {
             let result = try await auth.signInAnonymously()
             let firebaseUID = result.user.uid
+
+            // This flow owns the uid from here until it publishes. Without this the
+            // auth-state listener bootstraps the brand-new uid in parallel, finds no local
+            // row yet, and replaces the local player with a default-named, avatar-less
+            // `AppUser` — which is how the redemption-provisioned child lost the avatar and
+            // username they had picked (owner device pass 2026-08-15).
+            uidsBeingProvisionedLocally.insert(firebaseUID)
+            defer { uidsBeingProvisionedLocally.remove(firebaseUID) }
 
             // F-6 (FR-27) — BIND BEFORE PUBLISHING, same invariant as the
             // `createNewUserFromFirebase` choke point: synchronous, no await, ahead of
@@ -578,11 +736,11 @@ class FirebaseAuthService: ObservableObject {
             throw AuthError.offline
         }
         
-        guard let modelContext = modelContext,
+        guard modelContext != nil,
               let currentUser = currentUser else {
             throw AuthError.noUser
         }
-        
+
         let trimmedUserName = UsernameValidation.trimmed(userName)
         if let failure = UsernameValidation.failure(for: trimmedUserName) {
             throw AuthError.usernameValidationFailure(failure)
@@ -594,50 +752,75 @@ class FirebaseAuthService: ObservableObject {
             throw AuthError.usernameTaken
         }
         
+        // The identity every local gameplay row is keyed to right now (`firebaseUID ?? id`,
+        // the app's play-identity resolution). Captured BEFORE anything touches Auth so the
+        // rebind below has a truthful "from" even on the paths that replace the session.
+        let previousPlayIdentity = currentUser.firebaseUID ?? currentUser.id
+
         do {
-            // Check if current user is anonymous
+            // v2.1 §11.4: a guest becomes a registered user by LINKING, not by registering a
+            // second account. The uid is the whole point — it is what keeps this device's
+            // trips, XP and achievements owned by the same player and what lets the server
+            // accept `createdBy` on the next publish.
             if let firebaseUser = auth.currentUser, firebaseUser.isAnonymous {
-                // Link email/password to anonymous account
                 let credential = EmailAuthProvider.credential(withEmail: email, password: password)
-                
+
+                // ONLY the link call is guarded. Everything after a successful link (profile
+                // save, declaration, Firestore write) used to sit inside this `do`, so a
+                // Firestore failure on an ALREADY-LINKED account fell into the fallback,
+                // signed the linked session out and registered a second account behind the
+                // user's back — the "it made a new user instead of converting" report.
+                var linkedUser: User?
                 do {
-                    let result = try await firebaseUser.link(with: credential)
-                    // Update user info
-                    currentUser.email = email
-                    currentUser.userName = trimmedUserName
-                    currentUser.isUsernameManuallyChanged = true
+                    linkedUser = try await firebaseUser.link(with: credential).user
+                } catch let linkError as NSError
+                    where AnonymousUpgradePolicy.shouldFallBackToFreshAccount(
+                        linkErrorCode: linkError.code
+                    ) {
+                    // The email belongs to another account; a fresh account is the only
+                    // thing that could resolve it. Every other failure (network, App Check,
+                    // backend) is transient — it rethrows and the anonymous session survives
+                    // for the retry instead of being forked.
+                    linkedUser = nil
+                }
 
-                    try modelContext.save()
-
-                    // F-6 (FR-27): an under-13 answer from THIS flow is declared for the
-                    // uid the flow upgraded, before its first profile write (the choke
-                    // point holds the write if the declaration is still outstanding).
-                    _ = await ensureFlowChildDeclaration(flowUid: result.user.uid)
-                    try await saveUserDataToFirestore(currentUser)
-
-                    isAuthenticated = true
-
-                    // Update login tracking
-                    await updateLoginTracking()
-                } catch {
-                    // If linking fails (email already in use), create new account
-                    try auth.signOut()
+                if let linkedUser {
+                    // uid preserved. The rebind is a no-op in the normal case and repairs the
+                    // desynced case where the local `AppUser` never took the anonymous uid.
+                    await bindLocalIdentityToRegisteredAccount(
+                        linkedUser,
+                        email: email,
+                        userName: trimmedUserName,
+                        previousPlayIdentity: previousPlayIdentity
+                    )
+                } else {
+                    // FR-60(d): the stale anonymous session is abandoned client-side (it keeps
+                    // no local data — the rebind moves all of it — and server-side it is an
+                    // unreferenced anonymous account, swept by the FR-60(c) backstop when it
+                    // is a declared child). `createUser` replaces the session itself, so it is
+                    // NOT signed out first: a `createUser` failure then leaves the anonymous
+                    // session intact rather than stranding the user with no session at all.
                     let result = try await auth.createUser(withEmail: email, password: password)
-                    _ = await ensureFlowChildDeclaration(flowUid: result.user.uid)
-                    await createNewUserFromFirebase(result.user, email: email, userName: trimmedUserName)
-
-                    // Update login tracking
-                    await updateLoginTracking()
+                    await bindLocalIdentityToRegisteredAccount(
+                        result.user,
+                        email: email,
+                        userName: trimmedUserName,
+                        previousPlayIdentity: previousPlayIdentity
+                    )
                 }
             } else {
-                // Not anonymous, create new account
+                // No anonymous session to upgrade (registration straight from an
+                // unprovisioned local guest). The local play history still has to follow the
+                // player onto the uid this creates.
                 let result = try await auth.createUser(withEmail: email, password: password)
-                _ = await ensureFlowChildDeclaration(flowUid: result.user.uid)
-                await createNewUserFromFirebase(result.user, email: email, userName: trimmedUserName)
-
-                // Update login tracking
-                await updateLoginTracking()
+                await bindLocalIdentityToRegisteredAccount(
+                    result.user,
+                    email: email,
+                    userName: trimmedUserName,
+                    previousPlayIdentity: previousPlayIdentity
+                )
             }
+            await updateLoginTracking()
         } catch {
             if let error = error as NSError? {
                 switch error.code {
@@ -652,7 +835,104 @@ class FirebaseAuthService: ObservableObject {
             throw AuthError.networkError
         }
     }
-    
+
+    /// Settles the device's local identity onto the uid a registration flow just produced —
+    /// whether that uid came from a link (unchanged) or from a fresh account (changed).
+    ///
+    /// This is the seam Bug 2 came through. Before FR-60 the two could not diverge in any way
+    /// that mattered: a guest's local `AppUser.id` was a UUID for milliseconds, so a fresh
+    /// registration account "orphaned" nothing. Under the local-first model a player can hold
+    /// days of trips, discoveries and XP under the previous identity, and every one of those
+    /// rows resolves through `firebaseUID ?? id`. Leaving them behind is invisible locally
+    /// (the fetch predicates simply stop matching) and fatal in the cloud:
+    /// `ensureOwnerMemberIfCreatorPayload` declines to seed `members/{uid}` when the payload's
+    /// `createdBy` is not the caller, and `assertTripOwner` then rejects the publish.
+    ///
+    /// FR-27 ordering is preserved: the uid is bound SYNCHRONOUSLY before `currentUser`
+    /// publishes it, exactly as `signInAnonymously` / `createNewUserFromFirebase` do.
+    private func bindLocalIdentityToRegisteredAccount(
+        _ firebaseUser: User,
+        email: String,
+        userName: String,
+        previousPlayIdentity: String
+    ) async {
+        guard let modelContext else { return }
+        let newUid = firebaseUser.uid
+
+        // Same ownership claim as `signInAnonymously`: the auth-state listener must not
+        // bootstrap this uid in parallel and publish a default profile over the one this
+        // flow is about to write.
+        uidsBeingProvisionedLocally.insert(newUid)
+        defer { uidsBeingProvisionedLocally.remove(newUid) }
+
+        // FR-60(d): carry this device's local play history onto the registered uid FIRST, so
+        // it is already correct by the time any view re-reads the play identity.
+        if AnonymousUpgradePolicy.requiresLocalPlayIdentityRebind(
+            previousPlayIdentity: previousPlayIdentity,
+            registeredUid: newUid
+        ) {
+            rebindLocalPlayIdentity(from: previousPlayIdentity, to: newUid)
+        }
+
+        // FR-27 BIND BEFORE PUBLISHING — synchronous, no await, ahead of `currentUser`.
+        AgeGateStore.shared.bindPendingDeclaration(toUserId: newUid)
+
+        // `AppUser.id` is `@Attribute(.unique)`, so a row already holding this uid — the
+        // auth-state listener can reach `createNewUserFromFirebase` first — is ADOPTED rather
+        // than collided with. Otherwise the row that carried the previous play identity is
+        // REPOINTED rather than shadowed by a second one, so the ordinary path cannot leave
+        // the device with an empty duplicate `AppUser` for a later device-identifier lookup
+        // to resolve to instead.
+        let existingForNewUid = try? modelContext.fetch(
+            FetchDescriptor<AppUser>(
+                predicate: #Predicate<AppUser> { $0.id == newUid || $0.firebaseUID == newUid }
+            )
+        ).first
+        let carrier = existingForNewUid
+            ?? currentUser.flatMap { ($0.firebaseUID ?? $0.id) == previousPlayIdentity ? $0 : nil }
+
+        guard let user = carrier else {
+            // No local row to carry: fall back to the shared provisioning choke point.
+            await createNewUserFromFirebase(firebaseUser, email: email, userName: userName)
+            return
+        }
+
+        if user.id != newUid {
+            user.localIDBeforeFirebase = user.id
+            user.id = newUid
+        }
+        user.firebaseUID = newUid
+        user.email = email
+        user.userName = userName
+        user.isUsernameManuallyChanged = true
+        user.lastUpdated = .now
+        user.needsSync = true
+        try? modelContext.save()
+
+        currentUser = user
+        isAuthenticated = true
+
+        // F-6 (FR-27): an under-13 answer from THIS flow is declared for the uid the flow
+        // settled on, before its first profile write (the choke point holds the write while
+        // the declaration is outstanding).
+        _ = await ensureFlowChildDeclaration(flowUid: newUid)
+
+        do {
+            try await saveUserDataToFirestore(user)
+            // COPPA F-7 (FR-19): resolve the child projection from a fresh server read.
+            await UserRepository.shared.refreshUsersFromFirestoreIfPresent(userIds: [newUid])
+        } catch {
+            // The Auth account exists — a Firestore hiccup is a sync problem, not a failed
+            // registration, and must never be answered by creating a second account.
+            user.needsSync = true
+            try? syncCoordinator?.enqueueUserProfileSync(userId: newUid)
+            try? modelContext.save()
+            #if DEBUG
+            print("⚠️ Registered profile write failed for \(newUid); queued for sync: \(error)")
+            #endif
+        }
+    }
+
     /// Sign out (keeps local user, clears Firebase auth)
     func signOut() async throws {
         guard let modelContext = modelContext else {
@@ -1563,9 +1843,13 @@ class FirebaseAuthService: ObservableObject {
         // F-6 (FR-27): the merge write could create a skeleton users/{uid} doc for a
         // flow-created uid awaiting its declaration, so it honors the same hold
         // (best-effort; next login re-stamps). No other account is ever held.
+        // FR-60(c): a detached uid is held here too. This exact write — `lastDateLoggedIn` +
+        // `lastUpdated`, `setData(merge: true)` — is what resurrected a deleted child's
+        // document on the next relaunch.
         let ageGateAllowsWrite = !AgeGateProfileWritePolicy.isProfileWriteHeld(
             userUid: user.firebaseUID,
-            pendingDeclarationUserIds: AgeGateStore.shared.pendingDeclarationUserIds
+            pendingDeclarationUserIds: AgeGateStore.shared.pendingDeclarationUserIds,
+            detachedIdentityUserIds: AgeGateStore.shared.detachedIdentityUserIds
         )
         if isOnline, ageGateAllowsWrite, let firebaseUID = user.firebaseUID {
             Task {
@@ -1597,10 +1881,12 @@ class FirebaseAuthService: ObservableObject {
     
     private func handleAuthStateChange(_ user: User?) async {
         if let firebaseUser = user {
+            lastObservedAnonymousUid = firebaseUser.isAnonymous ? firebaseUser.uid : nil
             await loadUserFromFirebase(firebaseUser)
         } else {
             // Firebase signed out
             isAuthenticated = false
+            await releaseVanishedAnonymousIdentityIfNeeded()
         }
         // COPPA F-7 (FR-23 trigger 1 of 2): every identity transition re-applies the
         // child session postures (ads config, analytics, location, paywall) AFTER the
@@ -1609,19 +1895,73 @@ class FirebaseAuthService: ObservableObject {
         ChildSessionPostureCoordinator.shared.applyPostures(trigger: .identityTransition)
     }
     
+    /// FR-60(c) zombie guard. The uid of the last ANONYMOUS session this service observed.
+    ///
+    /// When Firebase's own token refresh discovers the Auth user is gone it force-signs-out,
+    /// and the listener fires with `nil` — the only notice the client ever gets. An anonymous
+    /// uid has no credentials, so a session lost that way is unrecoverable by construction:
+    /// keeping it on `AppUser.firebaseUID` only blocks re-provisioning forever, because both
+    /// `signInAnonymously` and `ChildConsentRedemptionPolicy.requiresProvisioning`
+    /// short-circuit on a non-nil uid.
+    private var lastObservedAnonymousUid: String?
+
+    /// Uids a provisioning flow in THIS service is currently attaching to the local player.
+    ///
+    /// Firebase fires the auth-state listener the moment a uid exists — before the flow has
+    /// had a chance to write it onto the local `AppUser`. The listener's bootstrap then sees
+    /// "brand-new uid, no local row, no cloud doc" and does the one thing that is right for a
+    /// genuine new account and catastrophic here: it builds a SECOND `AppUser` with a
+    /// device-default username and no avatar, publishes it as `currentUser`, and saves it to
+    /// Firestore over the profile the flow was about to write.
+    ///
+    /// The flow owns the uid until it says otherwise: it does its own bind, profile write and
+    /// fresh read, so the bootstrap has nothing to add and every reason to stay out.
+    private var uidsBeingProvisionedLocally: Set<String> = []
+
+    /// Returns the device to an unprovisioned local-first session after an anonymous Auth
+    /// session vanished underneath it. Deliberate sign-outs cannot reach the body: they
+    /// either clear `currentUser` first (`hardSignOutAndResetToGuest`,
+    /// `finalizeDeletedAccountLocally`) or apply only to registered accounts (`signOut`).
+    private func releaseVanishedAnonymousIdentityIfNeeded() async {
+        guard let uid = lastObservedAnonymousUid else { return }
+        lastObservedAnonymousUid = nil
+        guard auth.currentUser == nil,
+              let user = currentUser,
+              user.firebaseUID == uid else { return }
+
+        AgeGateStore.shared.markIdentityDetached(userId: uid)
+        UserRepository.shared.clearEntitlementTags(for: uid)
+        user.firebaseUID = nil
+        user.needsSync = false
+        user.lastUpdated = .now
+        try? modelContext?.save()
+        isAuthenticated = true
+        ChildSessionPostureCoordinator.shared.applyPostures(trigger: .identityTransition)
+    }
+
     private func loadUserFromFirebase(_ firebaseUser: User) async {
         guard let modelContext = modelContext else { return }
-        
+
         let firebaseUID = firebaseUser.uid
-        
+
+        // Owner device pass 2026-08-15: the redemption-provisioned child lost their chosen
+        // avatar and username. This is the race that ate them. `signInAnonymously` mints the
+        // uid, and Firebase fires the auth-state listener for it BEFORE the flow has written
+        // that uid onto the local `AppUser` — so this bootstrap finds no local row for a
+        // brand-new uid, resolves `.createLocalThenTrackLogin`, and builds a SECOND `AppUser`
+        // with a device-default username and no avatar, publishes it as `currentUser`, and
+        // saves THAT to Firestore. The flow's own profile write then has nothing left to
+        // carry. Under FR-60 the stakes changed: the local player now holds a real, chosen
+        // profile for days before the uid exists.
+        guard !uidsBeingProvisionedLocally.contains(firebaseUID) else { return }
+
         // Check if user exists locally
         let descriptor = FetchDescriptor<AppUser>(
             predicate: #Predicate<AppUser> { $0.firebaseUID == firebaseUID || $0.id == firebaseUID }
         )
-        
-        let existingUser = try? modelContext.fetch(descriptor).first
-        let hasLocalUser = existingUser != nil
-        
+
+        var existingUser = try? modelContext.fetch(descriptor).first
+
         let loadStatus: AuthProfileSyncPolicy.DocumentLoadStatus
         var loadedCloudUser: AppUser?
         do {
@@ -1638,11 +1978,36 @@ class FirebaseAuthService: ObservableObject {
             #endif
         }
         
+        // FR-60(c) zombie guard, ahead of every branch below. A uid this device DECLARED has
+        // a `users/{uid}` by construction — the declaration is a server write — so a
+        // CONFIRMED absence can only mean the account was deleted (captain decline, or
+        // remove-and-delete). Left alone, `.keepLocalThenTrackLogin` runs
+        // `updateLoginTracking()` on the way out and RESURRECTS the document as a flagless
+        // `{lastDateLoggedIn, lastUpdated}` create — a deleted child reappearing server-side,
+        // reading back as an adult because rules forbid `isChildAccount` on create.
+        //
+        // Only ABSENCE acts. A present-but-flagless document is deliberately not treated as
+        // deletion: that is also what a manager CORRECTION leaves behind, and detaching an
+        // anonymous session is irreversible.
+        if DetachedIdentityDetectionPolicy.requiresDetach(
+            isAnonymousSession: firebaseUser.isAnonymous,
+            documentStatus: Self.selfDocumentStatus(for: loadStatus),
+            wasDeclaredByThisDevice: AgeGateStore.shared.isDeclaredChildUserId(firebaseUID)
+        ) {
+            await detachAnonymousIdentityLocally(uid: firebaseUID, reason: "server_deleted_identity_restore")
+            return
+        }
+
+        // Re-sample after the network wait. The first read happened BEFORE the Firestore
+        // await, and a provisioning flow can attach this uid to the local player during it —
+        // acting on the stale sample is what creates the duplicate, default-profile `AppUser`.
+        existingUser = (try? modelContext.fetch(descriptor).first) ?? existingUser
+
         let action = AuthProfileSyncPolicy.bootstrapAction(
-            hasLocalUser: hasLocalUser,
+            hasLocalUser: existingUser != nil,
             load: loadStatus
         )
-        
+
         switch action {
         case .applyCloudThenTrackLogin:
             guard let existingUser, let cloud = loadedCloudUser else { return }
@@ -1709,7 +2074,24 @@ class FirebaseAuthService: ObservableObject {
 
         let firebaseUID = firebaseUser.uid
         let deviceId = DeviceIdentifier.getDeviceIdentifier()
-        let defaultUsername = userName ?? DeviceIdentifier.generateDefaultUsername(deviceId: deviceId)
+
+        // FR-60(b) promotion: when this uid is being minted for the device's own
+        // UNPROVISIONED local player, the profile they already chose comes with them.
+        // Defence in depth behind `uidsBeingProvisionedLocally` — that guard keeps this path
+        // out of the provisioning race entirely, but if anything else ever reaches here for a
+        // local-first player, defaults must not be what gets published to their new family.
+        let localPlayer = LocalPlayerPromotionPolicy.carriesLocalProfile(
+            isAnonymousSession: firebaseUser.isAnonymous,
+            localPlayerHasFirebaseUid: currentUser?.firebaseUID != nil
+        ) ? currentUser : nil
+
+        let defaultUsername = userName
+            ?? localPlayer?.userName
+            ?? DeviceIdentifier.generateDefaultUsername(deviceId: deviceId)
+        let carriedAvatarId = localPlayer?.avatarId
+        let carriedManualUsername = userName != nil
+            || (localPlayer?.isUsernameManuallyChanged ?? false)
+        let previousPlayIdentity = localPlayer.map { $0.firebaseUID ?? $0.id }
 
         // F-6 (FR-27) — BIND BEFORE PUBLISHING. Synchronous, no await, and ahead of
         // `currentUser` below: the moment this uid becomes observable, SwiftUI can run
@@ -1720,18 +2102,26 @@ class FirebaseAuthService: ObservableObject {
         // FLAGLESS document for a child. The network half runs below.
         AgeGateStore.shared.bindPendingDeclaration(toUserId: firebaseUID)
 
+        // FR-60(d): the promoted player's local history follows them onto the new uid,
+        // before `currentUser` publishes it.
+        if let previousPlayIdentity {
+            rebindLocalPlayIdentity(from: previousPlayIdentity, to: firebaseUID)
+        }
+
         let newUser = AppUser(
             id: firebaseUID,
             userName: defaultUsername,
             email: email,
             deviceIdentifier: deviceId,
-            isUsernameManuallyChanged: userName != nil,
+            isUsernameManuallyChanged: carriedManualUsername,
             firebaseUID: firebaseUID
         )
-        
+        newUser.avatarId = carriedAvatarId
+        newUser.localIDBeforeFirebase = previousPlayIdentity
+
         modelContext.insert(newUser)
         try? modelContext.save()
-        
+
         currentUser = newUser
         isAuthenticated = true
 
@@ -1830,6 +2220,15 @@ class FirebaseAuthService: ObservableObject {
         // registration flow provisioned while their under-13 declaration is outstanding
         // — retried here (declaration first, then the write). Existing accounts are
         // never held, and a stored answer can never declare a pre-existing uid.
+        // FR-60(c): a DETACHED uid is held permanently and is never queued for retry — the
+        // account behind it is gone, there is no declaration left to deliver, and the write
+        // would recreate the very document the server deleted.
+        if AgeGateStore.shared.detachedIdentityUserIds.contains(syncUserId) {
+            user.needsSync = false
+            try? modelContext?.save()
+            return
+        }
+
         if AgeGateProfileWritePolicy.isProfileWriteHeld(
             userUid: syncUserId,
             pendingDeclarationUserIds: AgeGateStore.shared.pendingDeclarationUserIds

@@ -47,12 +47,20 @@ struct OnboardingJoinFamilyView: View {
                         
                         TextField("Enter share code".localized, text: $shareCode)
                             .textFieldStyle(.roundedBorder)
-                            .textInputAutocapitalization(.never)
+                            .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
                             .accessibleTextField(label: "Share Code".localized, hint: "Enter share code".localized, value: shareCode)
                             .onChange(of: scannedCode) { _, newValue in
                                 if let code = newValue {
                                     shareCode = extractCode(from: code)
+                                }
+                            }
+                            // Codes are uppercase-only; force it so entry never silently
+                            // mismatches on case (owner device testing, 2026-08-15).
+                            .onChange(of: shareCode) { _, newValue in
+                                let uppercased = newValue.uppercased()
+                                if uppercased != newValue {
+                                    shareCode = uppercased
                                 }
                             }
                     }

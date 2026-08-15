@@ -355,3 +355,382 @@ struct FR60LocalPlayIdentityRebindTests {
         #expect(LocalPlayIdentityRebindPolicy.reboundPayloadData(once, from: oldId, to: newUid) == nil)
     }
 }
+
+// MARK: - FR-60(a) on a RESTORED identity (owner device pass 2026-08-15, bug 3)
+
+/// "Deleted the app, reinstalled. The Keychain restored the old anonymous uid, Firestore had
+/// been wiped. Answered 2013/2014/2022 and got: a generic 'User' name, NO child banner,
+/// anonymous 'Sign up to access' gates, location correctly disabled, and a `users/{uid}` doc
+/// written to the cloud — the same doc all three times, because the same uid came back."
+///
+/// FR-60(a) stops an under-13 answer CREATING an identity. It never considered one that
+/// already existed, and the two halves of the system then disagreed about the same session:
+/// the flow-scoped half read the ANSWER (location off — correct), the identity-bound half read
+/// whether the uid was BOUND to it (banner, gates, write holds — all wrong). The result is the
+/// exact population FR-60 exists to keep off the server acquiring a flagless `users/{uid}`.
+@MainActor
+struct FR60RestoredIdentityTests {
+
+    private let restoredUid = "restored-keychain-anon-uid"
+
+    private func makeStore(suite: String = "FR60RestoredIdentityTests") -> (AgeGateStore, UserDefaults) {
+        let name = "\(suite)-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: name)!
+        defaults.removePersistentDomain(forName: name)
+        return (AgeGateStore(defaults: defaults), defaults)
+    }
+
+    @Test func theDetachMatrix() {
+        // The reported case: under-13 answered onto a restored anonymous session it does not own.
+        #expect(RestoredIdentityAgeAnswerPolicy.requiresLocalDetach(
+            category: .under13, isAnonymousSession: true, isBoundToCurrentAnswer: false
+        ) == true)
+
+        // The ordinary FR-60(b) case — a uid THIS answer provisioned — must never detach, or
+        // share-code redemption would tear down the identity it just minted.
+        #expect(RestoredIdentityAgeAnswerPolicy.requiresLocalDetach(
+            category: .under13, isAnonymousSession: true, isBoundToCurrentAnswer: true
+        ) == false)
+
+        // A registered session is out of scope: it has credentials, its owner can sign back
+        // in, and FR-27 forbids an age answer touching a pre-existing account at all.
+        #expect(RestoredIdentityAgeAnswerPolicy.requiresLocalDetach(
+            category: .under13, isAnonymousSession: false, isBoundToCurrentAnswer: false
+        ) == false)
+
+        // FR-74(d′) asymmetry: only the PROTECTIVE answer displaces a restored identity.
+        #expect(RestoredIdentityAgeAnswerPolicy.requiresLocalDetach(
+            category: .teenAdult, isAnonymousSession: true, isBoundToCurrentAnswer: false
+        ) == false)
+        #expect(RestoredIdentityAgeAnswerPolicy.requiresLocalDetach(
+            category: nil, isAnonymousSession: true, isBoundToCurrentAnswer: false
+        ) == false)
+    }
+
+    /// The chimera itself, reproduced against the real classifier and then resolved. The banner
+    /// is not cosmetic — it is the unconsented child's ONLY route to share-code entry, so
+    /// losing it strands them.
+    @Test func theRestoredIdentityLosesTheChildBannerUntilItIsDetached() {
+        let (store, defaults) = makeStore()
+        let service = ChildRestrictedModeService(ageGateStore: store, defaults: defaults)
+        store.recordAnswer(.under13)
+
+        // THE BUG: the uid is present but unbound, so the identity-bound branch classifies the
+        // session `.notChild` — no FR-28 banner, adult gates.
+        var currentUid: String? = restoredUid
+        service.configure(
+            currentUserIdProvider: { currentUid },
+            activeFamilyIdProvider: { nil }
+        )
+        #expect(service.childSessionState == .notChild)
+        #expect(service.isRestrictedUnconsentedChild == false)
+        #expect(service.familyPromptPresentation == .hidden)
+
+        // THE FIX: detaching returns the session to the uid-less local-first child FR-60
+        // specifies, which the pre-uid provisional branch classifies correctly.
+        currentUid = nil
+        #expect(service.childSessionState == .unconsentedChild)
+        #expect(service.isRestrictedUnconsentedChild == true)
+        #expect(service.familyPromptPresentation == .full)
+    }
+
+    /// The cloud-footprint half. An unbound uid is held by nothing, so every `users/{uid}`
+    /// writer is free to create a FLAGLESS document for a child — which reads back as an adult
+    /// because Firestore rules forbid `isChildAccount` on create.
+    @Test func anUnboundRestoredUidIsHeldByNothingUntilItIsDetached() {
+        let (store, _) = makeStore()
+        store.recordAnswer(.under13)
+
+        // THE BUG: nothing holds it.
+        #expect(store.isPendingDeclaration(userId: restoredUid) == false)
+        #expect(UserDocumentWritePolicy.isWriteHeld(
+            userId: restoredUid,
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds,
+            detachedIdentityUserIds: store.detachedIdentityUserIds
+        ) == false)
+
+        // THE FIX: after the detach the uid is retired for good, and the session has no uid a
+        // writer could address at all (FR-60's zero-footprint claim, restored).
+        store.markIdentityDetached(userId: restoredUid)
+        #expect(UserDocumentWritePolicy.isWriteHeld(
+            userId: restoredUid,
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds,
+            detachedIdentityUserIds: store.detachedIdentityUserIds
+        ) == true)
+        #expect(UserDocumentWritePolicy.isWriteHeld(
+            userId: nil,
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds,
+            detachedIdentityUserIds: store.detachedIdentityUserIds
+        ) == false)
+    }
+
+    /// FR-60(a) is not weakened by any of this: the detached session still cannot provision.
+    /// Only the consent-seeking act can, and only once the child asks for it.
+    @Test func aDetachedChildSessionStillMayNotProvision() {
+        let (store, _) = makeStore()
+        store.recordAnswer(.under13)
+        store.markIdentityDetached(userId: restoredUid)
+
+        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(category: store.category) == false)
+        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(
+            category: store.category, isConsentSeekingRedemption: true
+        ) == true)
+        #expect(ChildConsentRedemptionPolicy.requiresProvisioning(
+            hasFirebaseUid: false, category: store.category
+        ) == true)
+    }
+}
+
+// MARK: - FR-60(b) promotion keeps the player's chosen profile (owner device pass 2026-08-15)
+
+/// "The child's avatar and username are LOST at redemption-time provisioning — the cloud
+/// profile carries defaults instead."
+///
+/// The profile write was never the problem: `firestoreDataFromAppUser` serialises `userName`
+/// and `avatarId` off whatever `AppUser` it is handed. What changed underneath it is WHICH
+/// `AppUser` that is. Minting the uid fires the auth-state listener, whose bootstrap sees a
+/// brand-new uid with no local row and no cloud doc, and does the only sane thing for a
+/// genuinely new account: it builds a fresh `AppUser` with a device-default username and no
+/// avatar, publishes it as `currentUser`, and saves THAT.
+///
+/// Before FR-60 that was harmless — the local `AppUser` was a placeholder for milliseconds.
+/// The local-first child picks an avatar in onboarding and plays for days before any uid
+/// exists, so the same race now publishes a stranger to the family they are asking to join.
+/// The fix is ownership (`uidsBeingProvisionedLocally` keeps the bootstrap out of a flow's
+/// uid); this policy is the second line, deciding when a promotion must carry the profile.
+@MainActor
+struct FR60LocalPlayerPromotionTests {
+
+    /// The FR-60 case: an anonymous uid minted for a player who had none.
+    @Test func promotingThisDevicesUnprovisionedPlayerCarriesTheirProfile() {
+        #expect(LocalPlayerPromotionPolicy.carriesLocalProfile(
+            isAnonymousSession: true, localPlayerHasFirebaseUid: false
+        ) == true)
+    }
+
+    /// A registered sign-in must never inherit a guest's identity off the same device — the
+    /// avatar and name on the local row belong to whoever was playing, not to the account
+    /// being signed into.
+    @Test func aRegisteredSignInNeverInheritsTheLocalPlayersProfile() {
+        #expect(LocalPlayerPromotionPolicy.carriesLocalProfile(
+            isAnonymousSession: false, localPlayerHasFirebaseUid: false
+        ) == false)
+    }
+
+    /// A local player who already holds a uid is not being promoted; some other account is
+    /// being loaded, and carrying this one's profile onto it would be a cross-identity leak.
+    @Test func anAlreadyProvisionedPlayerIsNotAPromotion() {
+        #expect(LocalPlayerPromotionPolicy.carriesLocalProfile(
+            isAnonymousSession: true, localPlayerHasFirebaseUid: true
+        ) == false)
+        #expect(LocalPlayerPromotionPolicy.carriesLocalProfile(
+            isAnonymousSession: false, localPlayerHasFirebaseUid: true
+        ) == false)
+    }
+
+    /// The promotion is also an identity change, so it owes FR-60(d) the same rebind the
+    /// redemption path performs — the carried profile and the carried play history have to
+    /// name the same uid or the child arrives with an avatar and no trips.
+    @Test func aPromotionAlsoOwesTheLocalPlayHistoryRebind() {
+        let localId = "3F2E1D00-0000-0000-0000-00000000AAAA"
+        #expect(LocalPlayIdentityRebindPolicy.shouldRebind(
+            previousUserId: localId, newUserId: "minted-anon-uid"
+        ) == true)
+    }
+}
+
+// MARK: - FR-60(c) zombie uid (owner device pass 2026-08-15, bug 4)
+
+/// "After the captain declined — and separately after Remove-and-delete — the child device
+/// showed 'Create an account to use friends and family features' on every new share-code
+/// attempt; and the DELETED child's uid got RESURRECTED server-side: an AppPrefs doc plus
+/// lastLoggedIn/lastUpdated fields appeared on reopen."
+///
+/// FR-60(c) deletes the Auth user and `users/{uid}` and deliberately preserves the device's
+/// age answer and ratchet, on the premise that the child "re-enters a fresh code later and
+/// re-provisions cleanly". The device also keeps the UID — in the Keychain, on
+/// `AppUser.firebaseUID`, and in `declaredChildUserIds` — and both
+/// `ChildConsentRedemptionPolicy.requiresProvisioning` and `signInAnonymously` short-circuit
+/// on a non-nil uid, so the re-provision never happens. Same root, both symptoms.
+@MainActor
+struct FR60DetachedIdentityTests {
+
+    private let deletedUid = "declined-child-uid"
+
+    private func makeStore() -> AgeGateStore {
+        let suite = "FR60DetachedIdentityTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return AgeGateStore(defaults: defaults)
+    }
+
+    /// An existing uid may no longer be trusted on sight; the redemption sequence has to check
+    /// it before it decides to skip provisioning.
+    @Test func anExistingChildUidIsVerifiedBeforeTheSkip() {
+        #expect(ChildConsentRedemptionPolicy.requiresIdentityVerification(
+            hasFirebaseUid: true, category: .under13
+        ) == true)
+        // Nothing to verify when there is no uid — that is the ordinary provisioning case.
+        #expect(ChildConsentRedemptionPolicy.requiresIdentityVerification(
+            hasFirebaseUid: false, category: .under13
+        ) == false)
+        // Adults and unanswered epochs are not this flow's business (unchanged from FR-60(b)).
+        #expect(ChildConsentRedemptionPolicy.requiresIdentityVerification(
+            hasFirebaseUid: true, category: .teenAdult
+        ) == false)
+        #expect(ChildConsentRedemptionPolicy.requiresIdentityVerification(
+            hasFirebaseUid: true, category: nil
+        ) == false)
+    }
+
+    @Test func theDetachMatrix() {
+        typealias Status = DetachedIdentityDetectionPolicy.SelfDocumentStatus
+
+        // The reported case: a uid this device declared, whose document is confirmed gone.
+        #expect(DetachedIdentityDetectionPolicy.requiresDetach(
+            isAnonymousSession: true, documentStatus: .confirmedAbsent, wasDeclaredByThisDevice: true
+        ) == true)
+
+        // A live account is left alone.
+        #expect(DetachedIdentityDetectionPolicy.requiresDetach(
+            isAnonymousSession: true, documentStatus: .present, wasDeclaredByThisDevice: true
+        ) == false)
+
+        // An UNREADABLE server is never absence. An offline relaunch must not cost a live
+        // account its session — and an anonymous session, once dropped, is unrecoverable.
+        #expect(DetachedIdentityDetectionPolicy.requiresDetach(
+            isAnonymousSession: true, documentStatus: .unknown, wasDeclaredByThisDevice: true
+        ) == false)
+
+        // A uid whose declaration has NOT been delivered yet is out of scope: its document is
+        // supposed to be absent (the write is held), so absence proves nothing. Without this
+        // the rule would sign a child out seconds after minting their uid.
+        #expect(DetachedIdentityDetectionPolicy.requiresDetach(
+            isAnonymousSession: true, documentStatus: .confirmedAbsent, wasDeclaredByThisDevice: false
+        ) == false)
+
+        // Registered accounts are never detached — they have credentials and a sign-in route.
+        #expect(DetachedIdentityDetectionPolicy.requiresDetach(
+            isAnonymousSession: false, documentStatus: .confirmedAbsent, wasDeclaredByThisDevice: true
+        ) == false)
+    }
+
+    /// Why the existing hold never covered this — the answer to "the `UserDocumentWritePolicy`
+    /// hold should cover it; find why it didn't".
+    ///
+    /// The pending-declaration hold is a hold on an OBLIGATION, and it releases the moment the
+    /// obligation is met. A deleted child's declaration had been met long ago, so from the
+    /// hold's point of view the uid was in perfect standing — and `updateLoginTimestamps` and
+    /// the `appPrefs` writers, all `setData(merge: true)`, recreated the document.
+    @Test func thePendingDeclarationHoldReleasesWhichIsWhyItNeverCoveredADeletedChild() {
+        let store = makeStore()
+        store.recordAnswer(.under13)
+        store.bindPendingDeclaration(toUserId: deletedUid)
+
+        // Held while the declaration is outstanding...
+        #expect(UserDocumentWritePolicy.isWriteHeld(
+            userId: deletedUid,
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds,
+            detachedIdentityUserIds: store.detachedIdentityUserIds
+        ) == true)
+
+        // ...and released the instant it lands. THIS is the hole: everything after this point
+        // — including the server deleting the account — leaves the uid freely writable.
+        store.markChildDeclarationSent(userId: deletedUid)
+        #expect(store.isDeclaredChildUserId(deletedUid) == true)
+        #expect(UserDocumentWritePolicy.isWriteHeld(
+            userId: deletedUid,
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds,
+            detachedIdentityUserIds: store.detachedIdentityUserIds
+        ) == false)
+
+        // The detached set is the closure: a one-way ratchet with no release condition.
+        store.markIdentityDetached(userId: deletedUid)
+        #expect(UserDocumentWritePolicy.isWriteHeld(
+            userId: deletedUid,
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds,
+            detachedIdentityUserIds: store.detachedIdentityUserIds
+        ) == true)
+        #expect(AgeGateProfileWritePolicy.isProfileWriteHeld(
+            userUid: deletedUid,
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds,
+            detachedIdentityUserIds: store.detachedIdentityUserIds
+        ) == true)
+    }
+
+    /// The hold outlives the epoch. A sign-out clears the answer, and the resurrection writers
+    /// do not care about the answer at all — so a release here would reopen the hole.
+    @Test func theDetachedHoldSurvivesSignOutAndOtherIdentities() {
+        let store = makeStore()
+        store.recordAnswer(.under13)
+        store.markIdentityDetached(userId: deletedUid)
+
+        store.clearAnswer()
+        #expect(store.isResolved == false)
+        #expect(store.detachedIdentityUserIds.contains(deletedUid))
+        #expect(UserDocumentWritePolicy.isWriteHeld(
+            userId: deletedUid,
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds,
+            detachedIdentityUserIds: store.detachedIdentityUserIds
+        ) == true)
+
+        // Scoped to the retired uid only — a different account on the same device is untouched.
+        #expect(UserDocumentWritePolicy.isWriteHeld(
+            userId: "some-other-account",
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds,
+            detachedIdentityUserIds: store.detachedIdentityUserIds
+        ) == false)
+    }
+
+    /// After the detach the child is back where FR-60(c)'s cleanup intended them to be: a
+    /// uid-less local-first child who re-provisions on the next share code. The device ratchet
+    /// the cleanup deliberately preserved is preserved here too.
+    @Test func aDetachedChildReProvisionsOnTheNextShareCodeWithTheRatchetIntact() {
+        let store = makeStore()
+        store.recordAnswer(.under13)
+        store.bindPendingDeclaration(toUserId: deletedUid)
+        store.markChildDeclarationSent(userId: deletedUid)
+
+        // THE BUG: the uid is present, so the sequence skips provisioning and redeems with a
+        // dead identity — refused by the server as unregistered, on every code, forever.
+        #expect(ChildConsentRedemptionPolicy.requiresProvisioning(
+            hasFirebaseUid: true, category: store.category
+        ) == false)
+
+        store.markIdentityDetached(userId: deletedUid)
+
+        // THE FIX: a uid-less child provisions again, and the whole FR-60(b) sequence re-runs
+        // for the NEW uid — bind, declare, then redeem.
+        #expect(ChildConsentRedemptionPolicy.requiresProvisioning(
+            hasFirebaseUid: false, category: store.category
+        ) == true)
+
+        let freshUid = "reprovisioned-child-uid"
+        #expect(store.bindAndCheckDeclarationOutstanding(forFlowUserId: freshUid) == true)
+        #expect(ChildConsentRedemptionPolicy.mayRedeem(
+            hasFirebaseUid: true, isDeclarationOutstanding: true
+        ) == false)
+        store.markChildDeclarationSent(userId: freshUid)
+        #expect(ChildConsentRedemptionPolicy.mayRedeem(
+            hasFirebaseUid: true, isDeclarationOutstanding: store.isPendingDeclaration(userId: freshUid)
+        ) == true)
+
+        // Device ratchet intact: the answer, the declared history and the retired uid all
+        // survive, so nothing about the protective posture is softened by the recovery.
+        #expect(store.category == .under13)
+        #expect(store.hasDeclaredChildHistory == true)
+        #expect(store.isDeclaredChildUserId(deletedUid) == true)
+        #expect(store.detachedIdentityUserIds.contains(deletedUid))
+        // ...and the retired uid stays unwritable even while the fresh one is live.
+        #expect(UserDocumentWritePolicy.isWriteHeld(
+            userId: deletedUid,
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds,
+            detachedIdentityUserIds: store.detachedIdentityUserIds
+        ) == true)
+        #expect(UserDocumentWritePolicy.isWriteHeld(
+            userId: freshUid,
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds,
+            detachedIdentityUserIds: store.detachedIdentityUserIds
+        ) == false)
+    }
+}
