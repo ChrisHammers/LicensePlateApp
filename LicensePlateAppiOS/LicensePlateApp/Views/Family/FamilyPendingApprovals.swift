@@ -126,6 +126,24 @@ struct PendingApprovalRow: View {
         request.user ?? resolvedUser
     }
 
+    /// FR-86: identity stamped onto the pending doc at creation (server agent), so two
+    /// pending children are distinguishable on this approve screen before — or even
+    /// without — a live user-doc resolve. Defensive: `nil` on older rows or before the
+    /// stamp ships; whitespace-only counts as absent too. NOTE: depends on
+    /// `PendingJoinRequest.userName`/`.avatarId` (optional `String`) landing on the
+    /// model from the parallel server/data-layer work — see task report.
+    private var stampedDisplayName: String? {
+        guard let raw = request.userName?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else { return nil }
+        return raw
+    }
+
+    private var stampedAvatarId: String? {
+        guard let raw = request.avatarId?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else { return nil }
+        return raw
+    }
+
     private var isApproveDisabled: Bool {
         isDisabled || !canApprove
     }
@@ -137,8 +155,10 @@ struct PendingApprovalRow: View {
                     UserIdentityRowView(user: user, subtitle: nil, avatarSize: 50)
                 } else {
                     HStack(spacing: 12) {
-                        AvatarImageView(avatarId: nil, size: 50)
-                        Text("User".localized)
+                        // Unknown/absent id falls back to the standard placeholder icon
+                        // — same catalog lookup roster rows use (AvatarImageView(avatarId:)).
+                        AvatarImageView(avatarId: stampedAvatarId, size: 50)
+                        Text(stampedDisplayName ?? "User".localized)
                             .font(.system(.body, design: .rounded))
                             .fontWeight(.semibold)
                             .foregroundStyle(Color.Theme.primaryBlue)
@@ -329,6 +349,9 @@ struct PendingApprovalRow: View {
     private var pendingApprovalAccessibilityLabel: String {
         if let user = displayUser {
             return "\(user.displayName), @\(user.userName)"
+        }
+        if let name = stampedDisplayName {
+            return name
         }
         return "User".localized
     }

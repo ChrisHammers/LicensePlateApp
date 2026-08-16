@@ -613,6 +613,10 @@ class UserRepository: ObservableObject {
     }
 
     func updateFCMToken(userId: String, token: String) async throws {
+        // Same hold as the user-doc writers: after remove-and-delete, the child device's
+        // token re-registration would otherwise recreate `private/fcm` under the dead uid
+        // (setData(merge:) creates) — the last resurrection path W3-B's sweep found.
+        try assertMayWriteUserDocument(userId: userId)
         try await privateFCMTokenRef(userId: userId).setData([
             "token": token,
             "updatedAt": FieldValue.serverTimestamp()

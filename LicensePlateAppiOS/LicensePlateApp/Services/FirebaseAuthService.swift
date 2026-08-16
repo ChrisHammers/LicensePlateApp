@@ -185,6 +185,16 @@ class FirebaseAuthService: ObservableObject {
                 try? await createDefaultUser()
             }
         }
+        // FR-60(c) eager verification (device pass 2026-08-16, bug 1). `loadUserFromFirebase`
+        // above already detaches on a confirmed-absent bootstrap read, but that read is the
+        // cache-tolerant `getDocument()` — an offline or cache-served launch reports the
+        // document present and the one-shot check is spent. This forces the `.server` read on
+        // session restore, so a deletion that landed while the app was closed is caught before
+        // any writer can paper over it. Costs one extra document read per launch, and only for
+        // an anonymous session this device DECLARED as a child — every other session is
+        // refused by `requiresVerification` before any network happens.
+        await verifyAnonymousChildIdentityIfNeeded(force: true)
+
         // COPPA F-7 (FR-23): the auth listener may have fired before `modelContext`
         // existed; this is the same identity-transition seam, re-run now that the
         // session is fully bootstrapped.
@@ -252,6 +262,57 @@ class FirebaseAuthService: ObservableObject {
         await detachAnonymousIdentityLocally(uid: uid, reason: "restored_identity_under13_answer")
     }
 
+    /// FR-60(c) EAGER detection (device pass 2026-08-16, bug 1). Verifies that the anonymous
+    /// identity this session is running on still exists server-side, and detaches it the
+    /// moment it is confirmed gone.
+    ///
+    /// Wave 1 only looked on identity EDGES — the auth-state bootstrap, share-code redemption,
+    /// and Firebase's own force-sign-out. A captain's remove-and-delete produces none of them
+    /// on the child's device: the account disappears while the app sits in the foreground, and
+    /// the cached ID token keeps authenticating reads and writes for the rest of its hour.
+    ///
+    /// The window is self-sealing, which is what made it stick: the first self-doc write inside
+    /// it (`saveUserDataToFirestore` from an avatar edit) RECREATES `users/{uid}` with
+    /// `setData(merge: true)`, so the next launch's bootstrap reads `.present`, the detach never
+    /// fires, and the device settles into a permanent half-state — a live-looking anonymous uid
+    /// whose account is gone. Checking on foreground and on session restore closes it before a
+    /// write can.
+    ///
+    /// Debounced, because `scenePhase` flips on every notification-centre pull. A read failure
+    /// is never actionable (`.unknown`), so an offline foreground costs nothing but a no-op.
+    func verifyAnonymousChildIdentityIfNeeded(force: Bool = false) async {
+        guard let firebaseUser = auth.currentUser else { return }
+        let uid = firebaseUser.uid
+        let store = AgeGateStore.shared
+
+        guard DetachedIdentityDetectionPolicy.requiresVerification(
+            hasFirebaseUid: true,
+            isAnonymousSession: firebaseUser.isAnonymous,
+            wasDeclaredByThisDevice: store.isDeclaredChildUserId(uid),
+            isAlreadyDetached: store.isIdentityDetached(uid),
+            isOnline: isOnline
+        ) else { return }
+
+        if !force, let last = lastIdentityVerificationAt,
+           Date().timeIntervalSince(last) < Self.identityVerificationDebounce {
+            return
+        }
+        lastIdentityVerificationAt = .now
+
+        let status = await selfUserDocumentStatus(userId: uid)
+        guard DetachedIdentityDetectionPolicy.requiresDetach(
+            isAnonymousSession: firebaseUser.isAnonymous,
+            documentStatus: status,
+            wasDeclaredByThisDevice: store.isDeclaredChildUserId(uid)
+        ) else { return }
+
+        await detachAnonymousIdentityLocally(uid: uid, reason: "server_deleted_identity_eager")
+    }
+
+    /// Foreground checks must not turn a notification-centre pull into a Firestore read storm.
+    private static let identityVerificationDebounce: TimeInterval = 30
+    private var lastIdentityVerificationAt: Date?
+
     /// The one teardown both zombie paths share: end the Auth session, retire the uid so no
     /// `users/{uid}` writer can address it again, and leave the device as an UNPROVISIONED
     /// local-first player.
@@ -267,7 +328,18 @@ class FirebaseAuthService: ObservableObject {
     /// device, which is the case the taxonomy must never carry (FR-21 / SRS §12).
     private func detachAnonymousIdentityLocally(uid: String, reason: StaticString) async {
         _ = reason // DEBUG-only provenance; never leaves the device.
+        // Re-entrancy guard: the `auth.signOut()` below fires the auth-state listener, whose
+        // `releaseVanishedAnonymousIdentityIfNeeded` now routes back into this same teardown.
+        // One settle per uid — the outer call finishes it.
+        guard detachesInFlightUids.insert(uid).inserted else { return }
+        defer { detachesInFlightUids.remove(uid) }
+
         AgeGateStore.shared.markIdentityDetached(userId: uid)
+        // Device pass 2026-08-16 (bug 1): the detach has to settle the WHOLE session, not
+        // just the uid. A "waiting for your family's approval" flag that outlives the
+        // identity it was recorded for is one half of a hybrid — the screen would keep
+        // promising an answer from a captain who is looking at nothing.
+        ChildRestrictedModeService.shared.clearFamilyApprovalPending()
 
         do {
             try auth.signOut()
@@ -679,6 +751,17 @@ class FirebaseAuthService: ObservableObject {
             return currentUser?.firebaseUID != nil && !isTrulyAuthenticated
         }
         return firebaseUser.isAnonymous
+    }
+
+    /// FR-60(c): true when the identity this session would address has been retired by this
+    /// device. Exposed so UI-side write triggers can decline before calling a writer, rather
+    /// than relying on each writer's own hold — same answer, but the surface can also stop
+    /// telling the player the edit was published.
+    var isCurrentIdentityDetached: Bool {
+        let store = AgeGateStore.shared
+        if let uid = auth.currentUser?.uid, store.isIdentityDetached(uid) { return true }
+        guard let user = currentUser else { return false }
+        return store.isIdentityDetached(user.firebaseUID ?? user.id)
     }
     
     var wasPreviouslySignedIn: Bool {
@@ -1918,6 +2001,9 @@ class FirebaseAuthService: ObservableObject {
     /// fresh read, so the bootstrap has nothing to add and every reason to stay out.
     private var uidsBeingProvisionedLocally: Set<String> = []
 
+    /// Uids whose local detach is mid-flight — see `detachAnonymousIdentityLocally`.
+    private var detachesInFlightUids: Set<String> = []
+
     /// Returns the device to an unprovisioned local-first session after an anonymous Auth
     /// session vanished underneath it. Deliberate sign-outs cannot reach the body: they
     /// either clear `currentUser` first (`hardSignOutAndResetToGuest`,
@@ -1929,14 +2015,14 @@ class FirebaseAuthService: ObservableObject {
               let user = currentUser,
               user.firebaseUID == uid else { return }
 
-        AgeGateStore.shared.markIdentityDetached(userId: uid)
-        UserRepository.shared.clearEntitlementTags(for: uid)
-        user.firebaseUID = nil
-        user.needsSync = false
-        user.lastUpdated = .now
-        try? modelContext?.save()
-        isAuthenticated = true
-        ChildSessionPostureCoordinator.shared.applyPostures(trigger: .identityTransition)
+        // Device pass 2026-08-16 (bug 1): ONE teardown for both zombie paths. This used to
+        // retire the uid and stop there, leaving `activeFamilyId`, `email`, `linkedPlatforms`
+        // and the pending-approval flag pointing at an account that no longer exists — a
+        // session that is uid-less by one measure and still in a family by another. Every
+        // surface that mixes those two reads renders a hybrid. `detachAnonymousIdentityLocally`
+        // is the settle; the redundant `signOut()` inside it is a no-op here (Firebase already
+        // signed this session out, which is why the listener fired at all).
+        await detachAnonymousIdentityLocally(uid: uid, reason: "vanished_anonymous_session")
     }
 
     private func loadUserFromFirebase(_ firebaseUser: User) async {
@@ -1954,6 +2040,16 @@ class FirebaseAuthService: ObservableObject {
         // carry. Under FR-60 the stakes changed: the local player now holds a real, chosen
         // profile for days before the uid exists.
         guard !uidsBeingProvisionedLocally.contains(firebaseUID) else { return }
+
+        // FR-60(c) one-way ratchet (device pass 2026-08-16, bug 1). A uid this device retired
+        // is never adopted again, whatever the server currently shows. The check below only
+        // detaches on a CONFIRMED-ABSENT document, and a resurrection write puts a document
+        // back — so without this the ratchet could be un-ratcheted by the very write it exists
+        // to prevent, and the session would settle back onto the dead identity for good.
+        if AgeGateStore.shared.isIdentityDetached(firebaseUID) {
+            await detachAnonymousIdentityLocally(uid: firebaseUID, reason: "already_detached_identity")
+            return
+        }
 
         // Check if user exists locally
         let descriptor = FetchDescriptor<AppUser>(
@@ -2223,7 +2319,14 @@ class FirebaseAuthService: ObservableObject {
         // FR-60(c): a DETACHED uid is held permanently and is never queued for retry — the
         // account behind it is gone, there is no declaration left to deliver, and the write
         // would recreate the very document the server deleted.
-        if AgeGateStore.shared.detachedIdentityUserIds.contains(syncUserId) {
+        //
+        // Both id fields are checked, not just `firebaseUID ?? id`: a detach nils `firebaseUID`
+        // and deliberately leaves the retired uid on `id` (so `firebaseUID ?? id` still resolves
+        // the player's local rows), and a row can reach here from either direction.
+        let store = AgeGateStore.shared
+        if store.isIdentityDetached(syncUserId)
+            || store.isIdentityDetached(user.firebaseUID)
+            || store.isIdentityDetached(user.id) {
             user.needsSync = false
             try? modelContext?.save()
             return

@@ -1388,6 +1388,19 @@
 /* F-8 device testing (2026-08-15): UserProfileView's Authentication Status section for a CONSENTED child (replaces Sign In / Create Account). */
 "child_gate.account.consented_notice" = "Las cuentas las maneja el capitán de tu familia — ya tienes todo listo para seguir jugando.";
 
+/* Device pass 2026-08-16 (bug 2): UserProfileView's Authentication Status card, one entry per CHILD session state. Adult states keep their existing strings. No child state mentions signing in — a child has no account to create and no credential to sign in with (FR-60(e)). */
+/* (4) Local-first child: under-13, no Firebase identity at all. Replaces the adult "Sign in to sync to the cloud" line. */
+"auth_status.child.local_subtitle" = "Tus viajes se guardan aquí mismo, en este dispositivo.";
+/* (6) Consented child: anonymous uid inside a family. */
+"auth_status.child.family_header" = "Cuenta familiar";
+"auth_status.child.family_subtitle" = "La maneja el capitán de tu familia y se sincroniza con tu familia.";
+/* (7) Post-revocation child: still a child account, no family right now. */
+"auth_status.child.no_family_header" = "Cuenta familiar en pausa";
+"auth_status.child.no_family_subtitle" = "Ahora mismo no estás en una familia. Pídele a tu papá o mamá un código de familia nuevo.";
+/* (5) Transient declared child: share code submitted, captain has not decided yet. Header and subtitle reuse the home banner's waiting copy. */
+"auth_status.child.pending_guidance_title" = "Esperando a una persona adulta";
+"auth_status.child.pending_guidance_body" = "Tu solicitud está con el capitán de tu familia. Si lo necesitas, puedes ingresar otro código de familia.";
+
 // COPPA F-7 — Child session postures (FR-33 location toggles)
 "child_gate.location_disabled" = "Las opciones de ubicación están desactivadas para las cuentas infantiles.";
 // FR-75 amendment (OD-8): held for want of a fresh session check, not because of a child account.

@@ -59,6 +59,11 @@ struct ContentView: View {
     // then persists as a compact row. It lives INSIDE the list under the header, so it
     // never covers the app title, and it always deep-links to the join-family surface.
     @ObservedObject private var ageGateStore = AgeGateStore.shared
+    /// Device pass 2026-08-16 (bug 3): observed so a share-code redemption made ANYWHERE —
+    /// the profile card, onboarding, the child gate — reaches this banner. Previously the
+    /// only redemption that refreshed it was the one started from the banner's own sheet,
+    /// which is why a dismissed join sheet took the "waiting for approval" state with it.
+    @ObservedObject private var childRestrictedMode = ChildRestrictedModeService.shared
     @State private var childFamilyPromptPresentation: ChildFamilyPromptPresentation = .hidden
     /// F-8 device testing (2026-08-15): refreshed alongside `childFamilyPromptPresentation`
     /// — see `refreshChildFamilyPrompt()`.
@@ -315,6 +320,11 @@ struct ContentView: View {
             .onChange(of: ageGateStore.revision) { _, _ in
                 refreshChildFamilyPrompt()
             }
+            .onChange(of: childRestrictedMode.revision) { _, _ in
+                // Bug 3: the pending-approval flag's own publisher. Every redemption site
+                // now lands here, not just the banner's sheet.
+                refreshChildFamilyPrompt()
+            }
             .onChange(of: childPostures.currentPosture) { _, _ in
                 // FR-28: a server-side child-flag resolution can arrive with NO family
                 // edge (offline device comes online, fresh device, re-grant) — the
@@ -386,6 +396,16 @@ struct ContentView: View {
         ReturnStreakReminderService.shared.logReminderOpenedIfNeeded(userId: currentUserId)
         Task {
             await ReturnStreakReminderService.shared.refreshScheduleIfNeeded(userId: currentUserId)
+        }
+        // FR-60(c) eager zombie check (device pass 2026-08-16, bug 1). A captain's
+        // remove-and-delete lands while the child's app is in the FOREGROUND, so no auth
+        // edge fires and the cached ID token keeps the dead uid writable for the rest of
+        // its hour — long enough for one avatar edit to recreate `users/{uid}` and hide the
+        // deletion from every later check. Foreground is the first moment we can look.
+        // Self-debouncing and a no-op for adults, registered sessions and offline devices.
+        Task {
+            await authService.verifyAnonymousChildIdentityIfNeeded()
+            refreshChildFamilyPrompt()
         }
     }
 
@@ -640,19 +660,27 @@ struct ContentView: View {
     /// chosen, so the very next evaluation (next launch, identity change, age-gate
     /// change) collapses to the compact row while the restriction itself persists.
     private func refreshChildFamilyPrompt() {
-        let presentation = ChildRestrictedModeService.shared.familyPromptPresentation
-        childFamilyPromptPresentation = presentation
-        if presentation == .full {
-            ChildRestrictedModeService.shared.markFullFamilyPromptPresented()
-        }
+        let service = ChildRestrictedModeService.shared
         // F-8 device testing (2026-08-15): membership arriving (or any other exit from
         // unconsented-child state — correction, sign-out/rebirth) always lands here
         // through one of this function's callers, so clearing in one place — rather than
         // duplicating the check at every call site — keeps a single source of truth.
-        if !ChildRestrictedModeService.shared.isRestrictedUnconsentedChild {
-            ChildRestrictedModeService.shared.clearFamilyApprovalPending()
+        //
+        // Ordered BEFORE the presentation read (device pass 2026-08-16, bug 3): the pending
+        // flag now drives the presentation, so reading it first would render one frame of a
+        // waiting banner for a child who has just been approved.
+        if !service.isRestrictedUnconsentedChild {
+            service.clearFamilyApprovalPending()
         }
-        isChildFamilyApprovalPending = ChildRestrictedModeService.shared.isFamilyApprovalPending
+        let isPending = service.isFamilyApprovalPending
+        let presentation = service.familyPromptPresentation
+        childFamilyPromptPresentation = presentation
+        // The waiting variant is forced full-size and is a DIFFERENT message, so it must
+        // not spend the one-time introduction of the ordinary "ask a parent" prompt.
+        if presentation == .full, !isPending {
+            service.markFullFamilyPromptPresented()
+        }
+        isChildFamilyApprovalPending = isPending
     }
 
     private var deferredSetupBanner: some View {

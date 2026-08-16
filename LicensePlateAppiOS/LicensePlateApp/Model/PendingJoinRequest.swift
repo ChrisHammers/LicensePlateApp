@@ -22,7 +22,21 @@ final class PendingJoinRequest {
     
     // Relationship to cached user data
     var user: AppUser?
-    
+
+    /// FR-86: identity the server stamps onto the pending row at creation, so a captain can
+    /// tell two pending children apart *before* approving — FR-12 denies peer reads of a
+    /// non-member child's user doc, so this is the only identity available pre-approval.
+    ///
+    /// `@Transient` is deliberate, not a shortcut: `PendingJoinRequest` is registered in the
+    /// FROZEN V1 schema (`SchemaVersions.swift:25`), so adding *stored* properties would
+    /// change V1's fingerprint — which CLAUDE.md forbids. These are safe to drop because
+    /// pending rows are re-decoded from Firestore every time a family screen loads, and every
+    /// consumer falls back to the generic placeholder when they are nil (so a cold-cache read
+    /// renders exactly as it did before FR-86). Username and avatar ONLY — never contact
+    /// fields; the server side is test-pinned against that.
+    @Transient var userName: String?
+    @Transient var avatarId: String?
+
     enum RequestStatus: String, Codable, CaseIterable {
         case pending
         case approved
@@ -119,6 +133,19 @@ extension PendingJoinRequest {
             createdAt: createdAtTimestamp.dateValue(),
             resolvedAt: resolvedAt
         )
+
+        // FR-86 stamp. Absent on rows written before FR-86 and on any row the server did not
+        // stamp; blank-normalised so an empty string never renders as an empty name.
+        self.userName = Self.stampedValue(data["userName"])
+        self.avatarId = Self.stampedValue(data["avatarId"])
+    }
+
+    /// Trims a stamped identity field and treats blank as absent, so consumers get a clean
+    /// `nil` to fall back on rather than an empty label.
+    private static func stampedValue(_ raw: Any?) -> String? {
+        guard let value = raw as? String else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
     
     func toFirestoreData() -> [String: Any] {

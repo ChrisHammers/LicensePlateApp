@@ -29,10 +29,23 @@ enum ChildFamilyPromptPresentation: String, Equatable, Sendable {
 }
 
 enum ChildFamilyPromptPolicy {
+    /// - Parameter isFamilyApprovalPending: device pass 2026-08-16 (bug 3). A submitted
+    ///   share code is the one prompt state that must NOT collapse to the compact row.
+    ///   The compact row shows the title only, and with several children waiting at once
+    ///   the owner could not tell which device had actually sent a request. The waiting
+    ///   variant therefore always renders full-size — its subtitle is the entire message —
+    ///   and it stays visible for as long as the flag is set, which is until membership
+    ///   arrives, the identity resets (decline / deletion), or the child sends a new code.
     static func presentation(
         isRestrictedUnconsentedChild: Bool,
-        hasPresentedFullBanner: Bool
+        hasPresentedFullBanner: Bool,
+        isFamilyApprovalPending: Bool = false
     ) -> ChildFamilyPromptPresentation {
+        // Pending wins over the restriction classification, not just over the compact
+        // collapse: the flag is identity-bound and only a child session can ever set it,
+        // so if it is up, the child is owed the status regardless of how the FR-28
+        // classification happens to be resolving this instant.
+        if isFamilyApprovalPending { return .full }
         guard isRestrictedUnconsentedChild else { return .hidden }
         return hasPresentedFullBanner ? .compact : .full
     }
@@ -49,6 +62,17 @@ enum ChildRestrictedModeKeys {
 @MainActor
 final class ChildRestrictedModeService: ObservableObject {
     static let shared = ChildRestrictedModeService()
+
+    /// Bumped on every mutation of this service's own UserDefaults-backed state, so SwiftUI
+    /// surfaces re-evaluate (same idiom as `AgeGateStore.revision`).
+    ///
+    /// Device pass 2026-08-16 (bug 3): the pending-approval flag had no publisher, so the
+    /// only way a surface learned about it was by being told to re-read — and `ContentView`
+    /// snapshots it into `@State` at a fixed list of moments. Redeeming a code from anywhere
+    /// other than the home banner's own sheet (the profile card, onboarding, the child gate)
+    /// set the flag with nobody listening, and the child's "waiting" status simply never
+    /// appeared. A published revision makes the flag observable from wherever it is read.
+    @Published private(set) var revision = 0
 
     private let ageGateStore: AgeGateStore
     private let defaults: UserDefaults
@@ -167,12 +191,14 @@ final class ChildRestrictedModeService: ObservableObject {
     func markFullFamilyPromptPresented() {
         guard !hasPresentedFullFamilyPrompt else { return }
         defaults.set(true, forKey: ChildRestrictedModeKeys.hasPresentedFullFamilyPrompt)
+        revision += 1
     }
 
     var familyPromptPresentation: ChildFamilyPromptPresentation {
         ChildFamilyPromptPolicy.presentation(
             isRestrictedUnconsentedChild: isRestrictedUnconsentedChild,
-            hasPresentedFullBanner: hasPresentedFullFamilyPrompt
+            hasPresentedFullBanner: hasPresentedFullFamilyPrompt,
+            isFamilyApprovalPending: isFamilyApprovalPending
         )
     }
 
@@ -202,7 +228,9 @@ final class ChildRestrictedModeService: ObservableObject {
     /// while the caller is a restricted unconsented child.
     func markFamilyApprovalPending() {
         guard let uid = currentUserIdProvider(), !uid.isEmpty else { return }
+        guard defaults.string(forKey: ChildRestrictedModeKeys.pendingFamilyApprovalUserId) != uid else { return }
         defaults.set(uid, forKey: ChildRestrictedModeKeys.pendingFamilyApprovalUserId)
+        revision += 1
     }
 
     /// Membership arrived (active family now present) or the identity reset. Safe to
@@ -210,6 +238,7 @@ final class ChildRestrictedModeService: ObservableObject {
     func clearFamilyApprovalPending() {
         guard defaults.string(forKey: ChildRestrictedModeKeys.pendingFamilyApprovalUserId) != nil else { return }
         defaults.removeObject(forKey: ChildRestrictedModeKeys.pendingFamilyApprovalUserId)
+        revision += 1
     }
 
     /// Gameplay cloud uploads hold while restricted; queued events simply wait.

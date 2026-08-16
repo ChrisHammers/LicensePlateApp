@@ -143,6 +143,16 @@ final class AgeGateStore: ObservableObject {
         Set(defaults.stringArray(forKey: AgeGateStoreKeys.detachedIdentityUserIds) ?? [])
     }
 
+    /// True when `userId` is an identity this device has retired. Read by every self-doc
+    /// writer and by the session bootstrap, which must never re-adopt a retired uid — not
+    /// even when a `users/{uid}` document exists for it again (a resurrection write is
+    /// exactly how the deletion stopped being detectable, see
+    /// `DetachedIdentityDetectionPolicy`).
+    func isIdentityDetached(_ userId: String?) -> Bool {
+        guard let userId, !userId.isEmpty else { return false }
+        return detachedIdentityUserIds.contains(userId)
+    }
+
     // MARK: - Mutations
 
     /// Records the derived answer for the current flow. Protective direction only: an
@@ -400,6 +410,34 @@ enum DetachedIdentityDetectionPolicy {
     ) -> Bool {
         guard isAnonymousSession, wasDeclaredByThisDevice else { return false }
         return documentStatus == .confirmedAbsent
+    }
+
+    /// Whether this session is even worth a server round-trip — the pre-network half of
+    /// the decision, so "when do we look?" is testable separately from "what did we see?".
+    ///
+    /// Device pass 2026-08-16 (bug 1). Wave 1 only ever LOOKED at three moments: the
+    /// auth-state bootstrap, a share-code redemption, and Firebase's own force-sign-out.
+    /// A captain's remove-and-delete happens while the child's app is in the foreground and
+    /// produces none of them — the cached ID token stays valid for the rest of its hour, so
+    /// the client keeps reading and writing as an account that no longer exists. Worse, the
+    /// window is self-sealing: the first self-doc write in it RECREATES `users/{uid}`, and
+    /// the next launch's bootstrap then reads `.present` and never detaches. The detection
+    /// therefore has to run on its own schedule (foreground, session restore) rather than
+    /// only on identity edges.
+    ///
+    /// - Parameters:
+    ///   - hasFirebaseUid: a uid-less local-first child has nothing to verify.
+    ///   - isAlreadyDetached: the ratchet is one-way; a retired uid never needs re-checking.
+    static func requiresVerification(
+        hasFirebaseUid: Bool,
+        isAnonymousSession: Bool,
+        wasDeclaredByThisDevice: Bool,
+        isAlreadyDetached: Bool,
+        isOnline: Bool
+    ) -> Bool {
+        guard hasFirebaseUid, isAnonymousSession, wasDeclaredByThisDevice else { return false }
+        guard !isAlreadyDetached, isOnline else { return false }
+        return true
     }
 }
 

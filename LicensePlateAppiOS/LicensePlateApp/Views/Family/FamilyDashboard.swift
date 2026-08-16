@@ -431,6 +431,10 @@ struct FamilyDashboard: View {
                 viewModel.setAuthService(authService)
                 viewModel.setModelContext(modelContext)
                 viewModel.onAppear()
+                // Owner (2026-08-16): roster hydration only fetches a member's user doc
+                // once per session and caches it — this forces a fresh read so avatar/
+                // username edits made elsewhere stop being stuck on the old copy.
+                viewModel.refreshMemberIdentitiesIfNeeded()
                 DeferredProfileSetupStore.shared.markTouched(.family, source: "settings")
             }
        // }
@@ -603,7 +607,26 @@ struct PendingRequestRow: View {
     private var displayUser: AppUser? {
         request.user ?? resolvedUser
     }
-    
+
+    /// FR-86: identity stamped onto the pending doc at creation (server agent), so two
+    /// pending children are distinguishable before — or even without — a live user-doc
+    /// resolve (FR-12 denies a peer read of a non-family child's doc, so `displayUser`
+    /// can stay nil forever for a flagged child). Defensive: `nil` on older rows or
+    /// before the stamp ships; whitespace-only counts as absent too. NOTE: depends on
+    /// `PendingJoinRequest.userName`/`.avatarId` (optional `String`) landing on the
+    /// model from the parallel server/data-layer work — see task report.
+    private var stampedDisplayName: String? {
+        guard let raw = request.userName?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else { return nil }
+        return raw
+    }
+
+    private var stampedAvatarId: String? {
+        guard let raw = request.avatarId?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else { return nil }
+        return raw
+    }
+
     var body: some View {
         Group {
             if let user = displayUser {
@@ -617,13 +640,15 @@ struct PendingRequestRow: View {
                 .accessibilityLabel(pendingRequestAccessibilityLabel)
             } else {
                 HStack {
-                    AvatarImageView(avatarId: nil, size: 50)
+                    // Unknown/absent id falls back to the standard placeholder icon —
+                    // same catalog lookup roster rows use (AvatarImageView(avatarId:)).
+                    AvatarImageView(avatarId: stampedAvatarId, size: 50)
                     VStack(alignment: .leading) {
-                        Text("Pending User".localized)
+                        Text(stampedDisplayName ?? "Pending User".localized)
                             .font(.system(.body, design: .rounded))
                             .fontWeight(.semibold)
                             .foregroundStyle(Color.Theme.primaryBlue)
-                        
+
                         Text("Waiting for approval".localized)
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
@@ -643,6 +668,9 @@ struct PendingRequestRow: View {
     private var pendingRequestAccessibilityLabel: String {
         if let user = displayUser {
             return "\(user.displayName), @\(user.userName), \("Pending".localized)"
+        }
+        if let name = stampedDisplayName {
+            return "\(name), \("Pending".localized)"
         }
         return "Pending User".localized
     }

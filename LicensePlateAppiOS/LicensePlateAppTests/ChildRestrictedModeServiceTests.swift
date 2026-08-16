@@ -488,6 +488,161 @@ struct ChildRestrictedModeServiceTests {
         #expect(service.isFamilyApprovalPending == false)
     }
 
+    // MARK: - Pending approval stays visible (device pass 2026-08-16, bug 3)
+
+    /// The owner's report: "once the join sheet is dismissed the state is never shown again —
+    /// I had multiple children pending and couldn't tell which was which."
+    ///
+    /// Two separate causes. This is the first: the prompt collapses to a COMPACT row after its
+    /// one full-size introduction, and the compact row shows the title only — so the waiting
+    /// state, whose whole message is in the subtitle, was reduced to a one-line chevron. The
+    /// waiting variant now always renders full-size.
+    @Test func theWaitingPromptIsAlwaysFullSizeEvenAfterTheIntroductionIsSpent() {
+        // Ordinary restricted child, introduction already spent ⇒ compact, as before.
+        #expect(ChildFamilyPromptPolicy.presentation(
+            isRestrictedUnconsentedChild: true,
+            hasPresentedFullBanner: true,
+            isFamilyApprovalPending: false
+        ) == .compact)
+
+        // Same child, now waiting on a captain ⇒ full, subtitle and all.
+        #expect(ChildFamilyPromptPolicy.presentation(
+            isRestrictedUnconsentedChild: true,
+            hasPresentedFullBanner: true,
+            isFamilyApprovalPending: true
+        ) == .full)
+    }
+
+    /// The flag is identity-bound and only a child session can set it, so if it is up the
+    /// child is owed the status — regardless of how the FR-28 classification happens to be
+    /// resolving at that instant (a posture read in flight, a cache miss, a family edge
+    /// mid-delivery). Otherwise the one state the child most needs to see is also the one
+    /// most likely to be swallowed by a transient reclassification.
+    @Test func aPendingRequestIsShownEvenIfTheRestrictionClassificationSaysHidden() {
+        #expect(ChildFamilyPromptPolicy.presentation(
+            isRestrictedUnconsentedChild: false,
+            hasPresentedFullBanner: true,
+            isFamilyApprovalPending: true
+        ) == .full)
+
+        // And with nothing pending, an unrestricted session still shows nothing.
+        #expect(ChildFamilyPromptPolicy.presentation(
+            isRestrictedUnconsentedChild: false,
+            hasPresentedFullBanner: true,
+            isFamilyApprovalPending: false
+        ) == .hidden)
+    }
+
+    /// End to end through the real service: redeeming marks it, the presentation goes to the
+    /// waiting variant and STAYS there across arbitrarily many re-reads (a dismissed sheet, a
+    /// relaunch, a scene-phase change), until membership arrives.
+    @Test func theWaitingPromptSurvivesEveryRereadUntilMembershipArrives() {
+        var activeFamilyId: String?
+        let suite = "ChildRestrictedModeServiceTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let store = AgeGateStore(defaults: defaults)
+        store.recordAnswer(.under13)
+        store.bindPendingDeclaration(toUserId: "uid-child")
+        store.markChildDeclarationSent(userId: "uid-child")
+
+        let service = ChildRestrictedModeService(ageGateStore: store, defaults: defaults)
+        service.configure(
+            currentUserIdProvider: { "uid-child" },
+            activeFamilyIdProvider: { activeFamilyId }
+        )
+
+        // Introduction shown and spent — the pre-redemption steady state.
+        #expect(service.familyPromptPresentation == .full)
+        service.markFullFamilyPromptPresented()
+        #expect(service.familyPromptPresentation == .compact)
+
+        // Share code submitted.
+        service.markFamilyApprovalPending()
+        for _ in 0..<5 {
+            #expect(service.familyPromptPresentation == .full)
+            #expect(service.isFamilyApprovalPending == true)
+        }
+
+        // Captain approves: membership arrives, the restriction lifts, and the host clears the
+        // flag (ContentView's `refreshChildFamilyPrompt`, transcribed).
+        activeFamilyId = "family-1"
+        #expect(service.isRestrictedUnconsentedChild == false)
+        service.clearFamilyApprovalPending()
+        #expect(service.familyPromptPresentation == .hidden)
+    }
+
+    /// The second cause: the flag had no publisher, so a redemption started from anywhere
+    /// other than the banner's own sheet (the profile card, onboarding, the child gate) set it
+    /// with nobody listening. A published `revision` is what makes the flag observable; these
+    /// are the mutations that must move it.
+    @Test func everyPendingApprovalMutationPublishesARevision() {
+        let service = makeService(
+            category: .under13,
+            declarationSentForUserId: "uid-child",
+            currentUserId: "uid-child",
+            activeFamilyId: nil
+        )
+        let start = service.revision
+
+        service.markFamilyApprovalPending()
+        #expect(service.revision > start)
+
+        // Idempotent: re-marking the SAME identity is not a change and must not churn every
+        // observer (this is read from view-update handlers).
+        let afterMark = service.revision
+        service.markFamilyApprovalPending()
+        #expect(service.revision == afterMark)
+
+        service.clearFamilyApprovalPending()
+        #expect(service.revision > afterMark)
+
+        let afterClear = service.revision
+        service.clearFamilyApprovalPending()
+        #expect(service.revision == afterClear)
+
+        service.markFullFamilyPromptPresented()
+        #expect(service.revision > afterClear)
+
+        // ...and that one is a one-shot too, so the observer loop it feeds terminates.
+        let afterPresented = service.revision
+        service.markFullFamilyPromptPresented()
+        #expect(service.revision == afterPresented)
+    }
+
+    /// A detach (decline, remove-and-delete) resets the identity, and the waiting state must
+    /// go with it — a child cannot be waiting on a captain who is looking at nothing. The flag
+    /// is uid-bound, so a detached, uid-less session already reads false; the explicit clear in
+    /// `detachAnonymousIdentityLocally` also frees the stored key.
+    @Test func aDetachedIdentityIsNotWaitingOnAnybody() {
+        var currentUid: String? = "uid-child"
+        let suite = "ChildRestrictedModeServiceTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let store = AgeGateStore(defaults: defaults)
+        store.recordAnswer(.under13)
+        store.bindPendingDeclaration(toUserId: "uid-child")
+        store.markChildDeclarationSent(userId: "uid-child")
+
+        let service = ChildRestrictedModeService(ageGateStore: store, defaults: defaults)
+        service.configure(
+            currentUserIdProvider: { currentUid },
+            activeFamilyIdProvider: { nil }
+        )
+        service.markFamilyApprovalPending()
+        #expect(service.isFamilyApprovalPending == true)
+
+        // The detach: uid retired, session back to uid-less local-first child.
+        store.markIdentityDetached(userId: "uid-child")
+        currentUid = nil
+        service.clearFamilyApprovalPending()
+
+        #expect(service.isFamilyApprovalPending == false)
+        // ...and the child is back on the ordinary "ask a parent" prompt, not a stale wait.
+        #expect(service.childSessionState == .unconsentedChild)
+        #expect(service.familyPromptPresentation != .hidden)
+    }
+
     // MARK: - Onboarding routing (FR-27)
 
     /// Owner placement: the age step sits after the welcome/disclaimer intro and

@@ -48,6 +48,13 @@ struct ChildFamilyPromptBanner: View {
             ? "child_gate.family_prompt.pending_subtitle".localized
             : "child_gate.family_prompt.subtitle".localized
     }
+    /// Device pass 2026-08-16 (bug 3): the waiting state gets its own glyph as well as its
+    /// own copy. With several children pending at once the owner could not tell the
+    /// devices apart at a glance, and an icon reads before a sentence does. (The copy still
+    /// carries the whole meaning — the icon is never the only signal.)
+    private var iconName: String {
+        isPendingApproval ? "hourglass" : "person.2.fill"
+    }
 
     var body: some View {
         switch presentation {
@@ -56,7 +63,7 @@ struct ChildFamilyPromptBanner: View {
         case .full:
             promptButton {
                 HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "person.2.fill")
+                    Image(systemName: iconName)
                         .font(.system(size: 20))
                         .foregroundStyle(Color.Theme.primaryBlue)
                         .accessibleDecorative()
@@ -84,7 +91,7 @@ struct ChildFamilyPromptBanner: View {
         case .compact:
             promptButton {
                 HStack(spacing: 8) {
-                    Image(systemName: "person.2.fill")
+                    Image(systemName: iconName)
                         .font(.system(size: 14))
                         .foregroundStyle(Color.Theme.primaryBlue)
                         .accessibleDecorative()

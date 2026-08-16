@@ -733,4 +733,172 @@ struct FR60DetachedIdentityTests {
             detachedIdentityUserIds: store.detachedIdentityUserIds
         ) == false)
     }
+
+    // MARK: - Eager detection (device pass 2026-08-16, bug 1)
+
+    /// Wave 1 answered "what did we see?" and left "when do we look?" to whichever identity
+    /// edge happened to fire. A captain's remove-and-delete fires none of them on the child's
+    /// device — the app is in the FOREGROUND, the account disappears server-side, and the
+    /// cached ID token keeps authenticating for the rest of its hour.
+    @Test func theVerificationMatrixSaysWhenToLook() {
+        // The reported case: an anonymous, declared child holding a uid, online, not yet
+        // retired. Worth a round-trip on every foreground.
+        #expect(DetachedIdentityDetectionPolicy.requiresVerification(
+            hasFirebaseUid: true, isAnonymousSession: true, wasDeclaredByThisDevice: true,
+            isAlreadyDetached: false, isOnline: true
+        ) == true)
+
+        // FR-60's local-first child has no identity to verify.
+        #expect(DetachedIdentityDetectionPolicy.requiresVerification(
+            hasFirebaseUid: false, isAnonymousSession: true, wasDeclaredByThisDevice: true,
+            isAlreadyDetached: false, isOnline: true
+        ) == false)
+
+        // Registered accounts are out of scope — they have credentials and a sign-in route,
+        // and are never detached (same scope as `requiresDetach`).
+        #expect(DetachedIdentityDetectionPolicy.requiresVerification(
+            hasFirebaseUid: true, isAnonymousSession: false, wasDeclaredByThisDevice: true,
+            isAlreadyDetached: false, isOnline: true
+        ) == false)
+
+        // An adult guest's anonymous uid: nothing was declared, so absence proves nothing and
+        // a foreground check would be a read per foreground for no verdict.
+        #expect(DetachedIdentityDetectionPolicy.requiresVerification(
+            hasFirebaseUid: true, isAnonymousSession: true, wasDeclaredByThisDevice: false,
+            isAlreadyDetached: false, isOnline: true
+        ) == false)
+
+        // One-way ratchet: a uid already retired is never re-examined.
+        #expect(DetachedIdentityDetectionPolicy.requiresVerification(
+            hasFirebaseUid: true, isAnonymousSession: true, wasDeclaredByThisDevice: true,
+            isAlreadyDetached: true, isOnline: true
+        ) == false)
+
+        // Offline is not absence; the round-trip could only return `.unknown`.
+        #expect(DetachedIdentityDetectionPolicy.requiresVerification(
+            hasFirebaseUid: true, isAnonymousSession: true, wasDeclaredByThisDevice: true,
+            isAlreadyDetached: false, isOnline: false
+        ) == false)
+    }
+
+    /// The self-sealing window, transcribed. This is the mechanism behind the owner's report:
+    /// the deletion is only detectable while `users/{uid}` is absent, and the FIRST self-doc
+    /// write inside the window puts a document back. After that every later check reads
+    /// `.present` and the zombie is permanent.
+    @Test func aResurrectionWriteInsideTheWindowHidesTheDeletionFromEveryLaterCheck() {
+        typealias Status = DetachedIdentityDetectionPolicy.SelfDocumentStatus
+        let store = makeStore()
+        store.recordAnswer(.under13)
+        store.bindPendingDeclaration(toUserId: deletedUid)
+        store.markChildDeclarationSent(userId: deletedUid)
+
+        // Captain deletes. The document is gone, so the verdict is available...
+        #expect(DetachedIdentityDetectionPolicy.requiresDetach(
+            isAnonymousSession: true, documentStatus: .confirmedAbsent,
+            wasDeclaredByThisDevice: store.isDeclaredChildUserId(deletedUid)
+        ) == true)
+
+        // ...but nothing had LOOKED yet, so the uid was still writable and an avatar edit
+        // recreated the document. From here `requiresDetach` can never fire again.
+        let statusAfterResurrection: Status = .present
+        #expect(DetachedIdentityDetectionPolicy.requiresDetach(
+            isAnonymousSession: true, documentStatus: statusAfterResurrection,
+            wasDeclaredByThisDevice: store.isDeclaredChildUserId(deletedUid)
+        ) == false)
+
+        // Two independent closures, both required. (1) Look on foreground and session
+        // restore, so the window is entered by a READ before a write can reach it.
+        #expect(DetachedIdentityDetectionPolicy.requiresVerification(
+            hasFirebaseUid: true, isAnonymousSession: true,
+            wasDeclaredByThisDevice: store.isDeclaredChildUserId(deletedUid),
+            isAlreadyDetached: false, isOnline: true
+        ) == true)
+
+        // (2) Once retired, the uid is never re-adopted even if a document exists for it
+        // again — otherwise the resurrection could un-ratchet the ratchet.
+        store.markIdentityDetached(userId: deletedUid)
+        #expect(store.isIdentityDetached(deletedUid) == true)
+        #expect(store.isIdentityDetached("some-other-uid") == false)
+        #expect(store.isIdentityDetached(nil) == false)
+    }
+
+    /// Every self-doc writer on the client is held for a retired uid — including the one the
+    /// avatar edit uses, whose only precondition used to be "a `firebaseUID` exists".
+    ///
+    /// `saveUserDataToFirestore` resolves its target as `firebaseUID ?? id`, and a detach nils
+    /// `firebaseUID` while deliberately leaving the retired uid on `id` (so `firebaseUID ?? id`
+    /// still resolves the player's local trips and XP). Both spellings must be held.
+    @Test func aRetiredUidIsHeldFromEitherIdentityField() {
+        let store = makeStore()
+        store.recordAnswer(.under13)
+        store.markIdentityDetached(userId: deletedUid)
+
+        // The post-detach shape: `firebaseUID == nil`, `id == deletedUid`.
+        #expect(store.isIdentityDetached(nil) == false)          // firebaseUID
+        #expect(store.isIdentityDetached(deletedUid) == true)    // id — the resolved target
+        #expect(AgeGateProfileWritePolicy.isProfileWriteHeld(
+            userUid: deletedUid,
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds,
+            detachedIdentityUserIds: store.detachedIdentityUserIds
+        ) == true)
+
+        // A re-provisioned player carries a fresh uid on BOTH fields and is not held.
+        let freshUid = "reprovisioned-child-uid"
+        #expect(store.isIdentityDetached(freshUid) == false)
+        #expect(AgeGateProfileWritePolicy.isProfileWriteHeld(
+            userUid: freshUid,
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds,
+            detachedIdentityUserIds: store.detachedIdentityUserIds
+        ) == false)
+    }
+
+    // MARK: - The hybrid (device pass 2026-08-16, bug 1)
+
+    /// The owner's screenshot, as a classification problem.
+    ///
+    /// The Authentication Status card resolved its HEADER from `isAnonymousUser ||
+    /// firebaseUID != nil` and its BODY from `childSessionState`. Those are two different
+    /// questions, so a child holding a uid answered them differently: an adult's "Anonymous
+    /// Account — sign up to sync…" headline stacked on a child's "join a family" body.
+    ///
+    /// One classification cannot disagree with itself, which is why the policy decides both.
+    @Test func aChildHoldingAUidIsNeverLabelledAnAnonymousAdult() {
+        let hybridInputs = AuthenticationStatusPolicy.Inputs(
+            isAnonymousSession: true,
+            hasFirebaseUid: true,
+            childSessionState: .unconsentedChild,
+            wasEverInFamily: true
+        )
+        let state = AuthenticationStatusPolicy.state(for: hybridInputs)
+        #expect(state == .postRevocationChild)
+
+        let presentation = AuthenticationStatusPolicy.presentation(for: state)
+        #expect(presentation.headerKey != "Anonymous Account")
+        #expect(presentation.showsSignIn == false)
+        #expect(presentation.showsJoinFamily == true)
+    }
+
+    /// The settle, stated as an invariant: after a detach the session is a plain local-first
+    /// child, indistinguishable from one that never had an identity. Anything that survives
+    /// the detach — a uid on the profile row, a lingering `activeFamilyId`, a pending-approval
+    /// flag — reintroduces a second answer to "what is this session?", which is the hybrid.
+    @Test func theDetachedChildIsIndistinguishableFromAFreshLocalChild() {
+        let freshLocalChild = AuthenticationStatusPolicy.Inputs(
+            childSessionState: .unconsentedChild
+        )
+        let detachedChild = AuthenticationStatusPolicy.Inputs(
+            childSessionState: .unconsentedChild,
+            isIdentityDetached: true,
+            // Was in a family before the captain deleted the account — and it must not matter,
+            // because the identity that membership belonged to no longer exists.
+            wasEverInFamily: true
+        )
+
+        #expect(AuthenticationStatusPolicy.state(for: freshLocalChild) == .localUnconsentedChild)
+        #expect(AuthenticationStatusPolicy.state(for: detachedChild) == .localUnconsentedChild)
+        #expect(
+            AuthenticationStatusPolicy.presentation(for: freshLocalChild)
+                == AuthenticationStatusPolicy.presentation(for: detachedChild)
+        )
+    }
 }

@@ -379,6 +379,74 @@ struct FamilySettingsChildManagementTests {
         #expect(harness.viewModel.errorMessage == "nope")
     }
 
+    /// F-8 device pass wave 2 (2026-08-16) regression: wave 1 wired a single
+    /// `isDeletingChildData` Bool into every row's controls, so deleting ONE child's
+    /// data showed the "Deleting..." spinner on a DIFFERENT child's row too. The
+    /// scoping must be per-member: only the targeted row spins. Every row's
+    /// destructive controls still disable while any deletion is in flight — this pins
+    /// that OTHER rows disable (`isChildDataDeletionInFlight`) without spinning
+    /// (`isDeletingChildData(memberId:)`).
+    @Test func deletionSpinnerIsScopedToTheMemberBeingDeletedNotEveryRow() async throws {
+        let harness = try makeHarness(
+            viewerId: "captain",
+            viewerRole: .captain,
+            extraMembers: [("scout", .scout), ("scout2", .scout)],
+            childMemberIds: ["scout", "scout2"]
+        )
+        let vm = harness.viewModel
+
+        vm.beginRemoveAndDeleteChildData(target("scout"))
+        vm.advanceToFinalDeletionConfirmation()
+        vm.confirmChildDataDeletion()
+
+        // Synchronous, pre-Task state: `deletingChildDataMemberId` is set before the
+        // callable's Task is even created, so this is deterministic without waiting.
+        #expect(vm.isDeletingChildData(memberId: "scout"))
+        #expect(!vm.isDeletingChildData(memberId: "scout2"))
+        // ...but the sibling row's controls still disable (not spin) meanwhile.
+        #expect(vm.isChildDataDeletionInFlight)
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        // Both flags clear once the callable resolves — no row is stuck busy forever.
+        #expect(!vm.isDeletingChildData(memberId: "scout"))
+        #expect(!vm.isChildDataDeletionInFlight)
+        #expect(harness.service.deletionCalls == [
+            MockFamilyChildStatusService.DeletionCall(familyId: "fam-1", childUserId: "scout")
+        ])
+    }
+
+    /// The scoping fix must not reopen the door to two concurrent deletions: a second
+    /// child's deletion, confirmed while the first is still in flight, is refused —
+    /// single-flight, just correctly attributed to the row actually running.
+    @Test func aSecondDeletionIsRefusedWhileAnotherIsInFlight() async throws {
+        let harness = try makeHarness(
+            viewerId: "captain",
+            viewerRole: .captain,
+            extraMembers: [("scout", .scout), ("scout2", .scout)],
+            childMemberIds: ["scout", "scout2"]
+        )
+        let vm = harness.viewModel
+
+        vm.beginRemoveAndDeleteChildData(target("scout"))
+        vm.advanceToFinalDeletionConfirmation()
+        vm.confirmChildDataDeletion()
+        #expect(vm.isDeletingChildData(memberId: "scout"))
+
+        vm.beginRemoveAndDeleteChildData(target("scout2"))
+        vm.advanceToFinalDeletionConfirmation()
+        vm.confirmChildDataDeletion()
+
+        // Refused: the in-flight member id is unchanged, and scout2 never shows busy.
+        #expect(vm.isDeletingChildData(memberId: "scout"))
+        #expect(!vm.isDeletingChildData(memberId: "scout2"))
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+        #expect(harness.service.deletionCalls == [
+            MockFamilyChildStatusService.DeletionCall(familyId: "fam-1", childUserId: "scout")
+        ])
+    }
+
     // MARK: - Child privacy (FR-29)
 
     @Test func childPrivacyOpensOnlyForManageableMembersAndLoadsHistory() async throws {

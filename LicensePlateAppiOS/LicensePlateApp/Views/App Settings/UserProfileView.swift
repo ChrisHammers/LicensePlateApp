@@ -9,6 +9,271 @@ import SwiftUI
 import SwiftData
 import GoogleSignInSwift
 
+// MARK: - Authentication Status state matrix (device pass 2026-08-16, bug 2)
+
+/// Every session this app can actually be in, as the Authentication Status card has to
+/// describe it. Deliberately a closed, mutually exclusive set rather than a chain of
+/// `if` conditions in the view body — the reported defect was a HYBRID: the header
+/// resolved off `isAnonymousUser || firebaseUID != nil` while the section below it
+/// resolved off `ChildRestrictedModeService.childSessionState`, so a child holding a uid
+/// got an adult's "Anonymous Account. Sign up to sync…" headline stacked on top of a
+/// child's "join a family" body. Two independent classifications of one session can
+/// always disagree; one classification cannot.
+///
+/// Ordering rule that kills that class of bug: CHILD states are decided before any
+/// uid-shaped state, so no child session can ever fall through to an adult headline.
+enum AuthenticationStatusState: String, CaseIterable, Equatable, Sendable {
+    /// (1) Email/OAuth account, signed in. The only state with account controls.
+    case registeredAdult
+    /// Registered account, currently signed out (pre-existing branch; adults only).
+    case signedOutRegisteredAdult
+    /// (2) 13+ answered and provisioned — an anonymous uid with no credentials.
+    case anonymousAdult
+    /// (3) Restored anonymous uid with NO answer for this identity epoch. Exists only
+    /// until F-30 lands; presented exactly as `anonymousAdult` because nothing about the
+    /// session is known well enough to say anything else.
+    case unresolvedRestoredSession
+    /// Local guest with no uid and no under-13 answer (offline first launch, post-sign-out
+    /// rebirth). Pre-existing "Local Account" branch.
+    case localAdultGuest
+    /// (8) A 13+/unknown session whose anonymous identity this device retired (FR-60(c)).
+    /// Renders as an ordinary local account: the retirement is not the player's business.
+    case detachedAdultSession
+    /// (4) FR-60 local-first child: under-13, no Firebase identity at all. A DETACHED child
+    /// lands here too, by construction — that identity of outcome is the anti-hybrid
+    /// invariant, and `theDetachedChildIsIndistinguishableFromAFreshLocalChild` pins it.
+    case localUnconsentedChild
+    /// (5) Provisioned child whose share code is with a family captain.
+    case transientDeclaredChild
+    /// (6) Anonymous child uid inside a family — consent granted.
+    case consentedChild
+    /// (7) Child whose membership was revoked. `isChildAccount` is sticky, so the session
+    /// stays a child; only the family is gone.
+    case postRevocationChild
+}
+
+/// What the card renders for one state. A flat record on purpose: the owner asked for a
+/// matrix, and a matrix is what a test can read back.
+struct AuthenticationStatusPresentation: Equatable, Sendable {
+    /// Localization key for the bold status line.
+    var headerKey: String
+    /// Localization key for the caption beneath it.
+    var subtitleKey: String
+    /// Green check vs. amber exclamation. Never the only signal — the header says it too
+    /// (state is never conveyed by color alone).
+    var isCloudSynced: Bool
+    /// Route into `SignInView`. FALSE for every child state (owner, 2026-08-16): a child
+    /// has no account to create and no credentials to sign in with, so the affordance is
+    /// pure misdirection. A future parent-gated setting could reintroduce a sign-in path
+    /// for a guardian on the child's device — NOT BUILT, recorded here only.
+    var showsSignIn: Bool
+    /// Sign Out + Delete Account. They travel together — only a registered session has
+    /// either — and Delete Account is Guideline 5.1.1(v)'s requirement for exactly that
+    /// session.
+    var showsRegisteredAccountControls: Bool
+    /// The child-copy card that replaces the adult CTA.
+    var childGuidance: ChildGuidance?
+    /// Non-interactive child notice (`ChildPremiumInlineNotice`) where there is nothing
+    /// to do.
+    var childNoticeKey: String?
+
+    struct ChildGuidance: Equatable, Sendable {
+        var titleKey: String
+        var bodyKey: String
+        var showsJoinFamilyButton: Bool
+    }
+
+    /// Convenience readouts so the matrix test (and the report table) can talk in the
+    /// owner's columns.
+    var showsDeleteAccount: Bool { showsRegisteredAccountControls }
+    var showsJoinFamily: Bool { childGuidance?.showsJoinFamilyButton ?? false }
+}
+
+enum AuthenticationStatusPolicy {
+    struct Inputs: Equatable, Sendable {
+        /// `FirebaseAuthService.isTrulyAuthenticated` — a non-anonymous Firebase session.
+        var isRegisteredSession: Bool
+        /// `FirebaseAuthService.wasPreviouslySignedIn`.
+        var wasPreviouslySignedIn: Bool
+        /// `FirebaseAuthService.isAnonymousUser`.
+        var isAnonymousSession: Bool
+        /// `AppUser.firebaseUID != nil`.
+        var hasFirebaseUid: Bool
+        /// The one child classification in the app (`ChildRestrictedModeService`).
+        var childSessionState: ChildRestrictedModeService.ChildSessionState
+        /// `ChildRestrictedModeService.isFamilyApprovalPending` (device-local flag only).
+        var isFamilyApprovalPending: Bool
+        /// `AgeGateStore.isResolved` for the current identity epoch.
+        var isAgeAnswerResolved: Bool
+        /// `FirebaseAuthService.isCurrentIdentityDetached` (FR-60(c)).
+        var isIdentityDetached: Bool
+        /// `AppUser.wasEverInFamily` — separates a revoked child from one who never joined.
+        var wasEverInFamily: Bool
+
+        init(
+            isRegisteredSession: Bool = false,
+            wasPreviouslySignedIn: Bool = false,
+            isAnonymousSession: Bool = false,
+            hasFirebaseUid: Bool = false,
+            childSessionState: ChildRestrictedModeService.ChildSessionState = .notChild,
+            isFamilyApprovalPending: Bool = false,
+            isAgeAnswerResolved: Bool = true,
+            isIdentityDetached: Bool = false,
+            wasEverInFamily: Bool = false
+        ) {
+            self.isRegisteredSession = isRegisteredSession
+            self.wasPreviouslySignedIn = wasPreviouslySignedIn
+            self.isAnonymousSession = isAnonymousSession
+            self.hasFirebaseUid = hasFirebaseUid
+            self.childSessionState = childSessionState
+            self.isFamilyApprovalPending = isFamilyApprovalPending
+            self.isAgeAnswerResolved = isAgeAnswerResolved
+            self.isIdentityDetached = isIdentityDetached
+            self.wasEverInFamily = wasEverInFamily
+        }
+    }
+
+    static func state(for inputs: Inputs) -> AuthenticationStatusState {
+        // Adult account states first — unchanged from the pre-matrix chain, byte for byte.
+        // Neither can hold a child: a child session has no credentials, so it is always
+        // anonymous, which makes `wasPreviouslySignedIn` false for it by definition.
+        if inputs.isRegisteredSession { return .registeredAdult }
+        if inputs.wasPreviouslySignedIn { return .signedOutRegisteredAdult }
+
+        // "Does a cloud identity exist for this session?" — the exact condition the old
+        // header used. It is now consulted only AFTER the child branch, which is the whole
+        // fix: a child holding a uid can no longer be labelled an anonymous adult.
+        let hasCloudIdentity = inputs.isAnonymousSession || inputs.hasFirebaseUid
+
+        switch inputs.childSessionState {
+        case .consentedChild:
+            return .consentedChild
+
+        case .unconsentedChild:
+            // A child with no cloud identity is FR-60's local-first child — including one
+            // whose identity was just detached, which is why the detach has to nil the uid
+            // end to end rather than leave the session half-provisioned.
+            guard hasCloudIdentity else { return .localUnconsentedChild }
+            if inputs.isFamilyApprovalPending { return .transientDeclaredChild }
+            // No pending request and they have been in a family before ⇒ they were removed.
+            return inputs.wasEverInFamily ? .postRevocationChild : .transientDeclaredChild
+
+        case .notChild:
+            guard hasCloudIdentity else {
+                return inputs.isIdentityDetached ? .detachedAdultSession : .localAdultGuest
+            }
+            return inputs.isAgeAnswerResolved ? .anonymousAdult : .unresolvedRestoredSession
+        }
+    }
+
+    static func presentation(for state: AuthenticationStatusState) -> AuthenticationStatusPresentation {
+        switch state {
+        case .registeredAdult:
+            return AuthenticationStatusPresentation(
+                headerKey: "Signed In",
+                subtitleKey: "Your account is synced to the cloud",
+                isCloudSynced: true,
+                showsSignIn: false,
+                showsRegisteredAccountControls: true
+            )
+
+        case .signedOutRegisteredAdult:
+            return AuthenticationStatusPresentation(
+                headerKey: "Signed Out",
+                subtitleKey: "You are signed out. Sign in to sync your account and access all features",
+                isCloudSynced: false,
+                showsSignIn: true,
+                showsRegisteredAccountControls: false
+            )
+
+        case .anonymousAdult, .unresolvedRestoredSession:
+            // (3) shares (2)'s presentation deliberately. Until F-30 resolves the epoch we
+            // cannot honestly say more than "anonymous", and inventing a third headline for
+            // a state that is about to be deleted would be copy we localize twice and throw
+            // away.
+            return AuthenticationStatusPresentation(
+                headerKey: "Anonymous Account",
+                subtitleKey: "Sign up to sync your account and access more features",
+                isCloudSynced: false,
+                showsSignIn: true,
+                showsRegisteredAccountControls: false
+            )
+
+        case .localAdultGuest, .detachedAdultSession:
+            return AuthenticationStatusPresentation(
+                headerKey: "Local Account",
+                subtitleKey: "Your account is stored locally only. Sign in to sync to the cloud",
+                isCloudSynced: false,
+                showsSignIn: true,
+                showsRegisteredAccountControls: false
+            )
+
+        case .localUnconsentedChild:
+            // Header stays "Local Account" — it is accurate and already localized. The
+            // SUBTITLE changes: the old one told a child to sign in, which is the one thing
+            // FR-60(e) says they cannot do.
+            return AuthenticationStatusPresentation(
+                headerKey: "Local Account",
+                subtitleKey: "auth_status.child.local_subtitle",
+                isCloudSynced: false,
+                showsSignIn: false,
+                showsRegisteredAccountControls: false,
+                childGuidance: .init(
+                    titleKey: "child_gate.screen.join_title",
+                    bodyKey: "child_gate.screen.join_body",
+                    showsJoinFamilyButton: true
+                )
+            )
+
+        case .transientDeclaredChild:
+            // Same copy as the home banner's waiting variant, on purpose: the child sees one
+            // consistent account state wherever they look for it.
+            return AuthenticationStatusPresentation(
+                headerKey: "child_gate.family_prompt.pending_title",
+                subtitleKey: "child_gate.family_prompt.pending_subtitle",
+                isCloudSynced: false,
+                showsSignIn: false,
+                showsRegisteredAccountControls: false,
+                childGuidance: .init(
+                    titleKey: "auth_status.child.pending_guidance_title",
+                    bodyKey: "auth_status.child.pending_guidance_body",
+                    showsJoinFamilyButton: true
+                )
+            )
+
+        case .consentedChild:
+            // The reported defect: this said "Anonymous Account — sign up to sync…", which is
+            // both wrong (the account IS synced) and an invitation to do the impossible.
+            return AuthenticationStatusPresentation(
+                headerKey: "auth_status.child.family_header",
+                subtitleKey: "auth_status.child.family_subtitle",
+                isCloudSynced: true,
+                showsSignIn: false,
+                showsRegisteredAccountControls: false,
+                childNoticeKey: "child_gate.account.consented_notice"
+            )
+
+        case .postRevocationChild:
+            return AuthenticationStatusPresentation(
+                headerKey: "auth_status.child.no_family_header",
+                subtitleKey: "auth_status.child.no_family_subtitle",
+                isCloudSynced: false,
+                showsSignIn: false,
+                showsRegisteredAccountControls: false,
+                childGuidance: .init(
+                    titleKey: "child_gate.screen.join_title",
+                    bodyKey: "child_gate.screen.join_body",
+                    showsJoinFamilyButton: true
+                )
+            )
+        }
+    }
+
+    static func presentation(for inputs: Inputs) -> AuthenticationStatusPresentation {
+        presentation(for: state(for: inputs))
+    }
+}
+
 struct UserProfileView: View {
     @Bindable var user: AppUser
     @ObservedObject var authService: FirebaseAuthService
@@ -35,6 +300,10 @@ struct UserProfileView: View {
     @ObservedObject private var userProgressionRepository = UserProgressionRepository.shared
     @ObservedObject private var userProgressionService = UserProgressionService.shared
     @ObservedObject private var licenseCosmeticStore = LicenseCosmeticStore.shared
+    /// Observed (not just read) so the card re-renders the moment a share-code redemption
+    /// marks the pending-approval flag or the identity settles — see `revision`.
+    @ObservedObject private var childRestrictedMode = ChildRestrictedModeService.shared
+    @ObservedObject private var ageGateStore = AgeGateStore.shared
 
     // Helper function to get topmost view controller
     private func topViewController(controller: UIViewController? = nil) -> UIViewController? {
@@ -148,11 +417,23 @@ struct UserProfileView: View {
         ))
     }
 
-    /// Drives the Authentication Status CTA (F-8 device testing, 2026-08-15).
+    /// Drives the whole Authentication Status card (device pass 2026-08-16, bug 2).
     /// `ChildRestrictedModeService` already classifies child sessions for the FR-28 home
-    /// banner; mirroring it here keeps one source of truth instead of a parallel check.
-    private var childGateSessionState: ChildRestrictedModeService.ChildSessionState {
-        ChildRestrictedModeService.shared.childSessionState
+    /// banner; feeding that same classification in here keeps one source of truth instead
+    /// of a parallel check — and letting the policy decide the header as well as the CTA
+    /// is what stops the two halves of the card describing different sessions.
+    private var authenticationStatus: AuthenticationStatusPresentation {
+        AuthenticationStatusPolicy.presentation(for: AuthenticationStatusPolicy.Inputs(
+            isRegisteredSession: authService.isTrulyAuthenticated,
+            wasPreviouslySignedIn: authService.wasPreviouslySignedIn,
+            isAnonymousSession: authService.isAnonymousUser,
+            hasFirebaseUid: user.firebaseUID != nil,
+            childSessionState: childRestrictedMode.childSessionState,
+            isFamilyApprovalPending: childRestrictedMode.isFamilyApprovalPending,
+            isAgeAnswerResolved: ageGateStore.isResolved,
+            isIdentityDetached: authService.isCurrentIdentityDetached,
+            wasEverInFamily: user.wasEverInFamily
+        ))
     }
 
     var body: some View {
@@ -261,102 +542,56 @@ struct UserProfileView: View {
 
                   // Authentication Status Section
                   Section {
+                      let status = authenticationStatus
                       VStack(alignment: .leading, spacing: 16) {
-                          // Authentication status
-                          HStack {
-                              VStack(alignment: .leading, spacing: 4) {
-                                  if authService.isTrulyAuthenticated {
-                                      Text("Signed In".localized)
+                          // Authentication status. One classification decides the header,
+                          // the caption, the icon AND the actions (device pass 2026-08-16,
+                          // bug 2) — see `AuthenticationStatusPolicy`.
+                          AuthenticationStatusHeaderRow(presentation: status)
+
+                          // Child sessions never get a sign-in affordance (owner,
+                          // 2026-08-16): there is no account to create and no credential to
+                          // sign in with. They get the established child-gate guidance
+                          // instead (see ChildAccountCreationGuidanceView in SignInView.swift
+                          // / ChildPremiumInfoView for the house style).
+                          if let guidance = status.childGuidance {
+                              ChildAccountSectionGuidance(
+                                  title: guidance.titleKey.localized,
+                                  message: guidance.bodyKey.localized,
+                                  showsJoinButton: guidance.showsJoinFamilyButton
+                              )
+                              .environmentObject(authService)
+                          }
+
+                          if let noticeKey = status.childNoticeKey {
+                              ChildPremiumInlineNotice(textKey: noticeKey)
+                          }
+
+                          if status.showsSignIn {
+                              Button {
+                                  authService.showSignInSheet = true
+                              } label: {
+                                  HStack {
+                                      Text("Sign In or Create Account".localized)
                                           .font(.system(.body, design: .rounded))
                                           .fontWeight(.semibold)
-                                          .foregroundStyle(Color.Theme.primaryBlue)
-                                      
-                                      Text("Your account is synced to the cloud".localized)
-                                          .font(.system(.caption, design: .rounded))
-                                          .foregroundStyle(Color.Theme.softBrown)
-                                  } else if authService.wasPreviouslySignedIn {
-                                      Text("Signed Out".localized)
-                                          .font(.system(.body, design: .rounded))
-                                          .fontWeight(.semibold)
-                                          .foregroundStyle(Color.Theme.primaryBlue)
-                                      
-                                      Text("You are signed out. Sign in to sync your account and access all features".localized)
-                                          .font(.system(.caption, design: .rounded))
-                                          .foregroundStyle(Color.Theme.softBrown)
-                                  } else if authService.isAnonymousUser || user.firebaseUID != nil {
-                                      Text("Anonymous Account".localized)
-                                          .font(.system(.body, design: .rounded))
-                                          .fontWeight(.semibold)
-                                          .foregroundStyle(Color.Theme.primaryBlue)
-                                      
-                                      Text("Sign up to sync your account and access more features".localized)
-                                          .font(.system(.caption, design: .rounded))
-                                          .foregroundStyle(Color.Theme.softBrown)
-                                  } else {
-                                      Text("Local Account".localized)
-                                          .font(.system(.body, design: .rounded))
-                                          .fontWeight(.semibold)
-                                          .foregroundStyle(Color.Theme.primaryBlue)
-                                      
-                                      Text("Your account is stored locally only. Sign in to sync to the cloud".localized)
-                                          .font(.system(.caption, design: .rounded))
-                                          .foregroundStyle(Color.Theme.softBrown)
+
+                                      Spacer()
+
+                                      Image(systemName: "arrow.right")
+                                          .font(.system(size: 14, weight: .semibold))
                                   }
-                              }
-                              
-                              Spacer()
-                              
-                              if authService.isTrulyAuthenticated {
-                                  Image(systemName: "checkmark.circle.fill")
-                                      .foregroundStyle(.green)
-                              } else {
-                                  Image(systemName: "exclamationmark.circle.fill")
-                                      .foregroundStyle(Color.Theme.accentYellow)
+                                  .foregroundStyle(.white)
+                                  .padding(.vertical, 12)
+                                  .padding(.horizontal, 16)
+                                  .background(
+                                      RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                          .fill(Color.Theme.primaryBlue)
+                                  )
                               }
                           }
-                          
-                          // Sign in / Create account button (show if NOT truly authenticated).
-                          // F-8 device testing (2026-08-15): a child-flow session has no
-                          // account to create, so it gets the established child-gate
-                          // guidance instead (see ChildAccountCreationGuidanceView in
-                          // SignInView.swift / ChildPremiumInfoView for the house style).
-                          // Adults and plain guests are unaffected — `childGateSessionState`
-                          // is `.notChild` for both.
-                          if !authService.isTrulyAuthenticated {
-                              switch childGateSessionState {
-                              case .notChild:
-                                  Button {
-                                      authService.showSignInSheet = true
-                                  } label: {
-                                      HStack {
-                                          Text("Sign In or Create Account".localized)
-                                              .font(.system(.body, design: .rounded))
-                                              .fontWeight(.semibold)
 
-                                          Spacer()
-
-                                          Image(systemName: "arrow.right")
-                                              .font(.system(size: 14, weight: .semibold))
-                                      }
-                                      .foregroundStyle(.white)
-                                      .padding(.vertical, 12)
-                                      .padding(.horizontal, 16)
-                                      .background(
-                                          RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                              .fill(Color.Theme.primaryBlue)
-                                      )
-                                  }
-                              case .unconsentedChild:
-                                  ChildAccountSectionGuidance(
-                                      title: "child_gate.screen.join_title".localized,
-                                      message: "child_gate.screen.join_body".localized,
-                                      showsJoinButton: true
-                                  )
-                                  .environmentObject(authService)
-                              case .consentedChild:
-                                  ChildPremiumInlineNotice(textKey: "child_gate.account.consented_notice")
-                              }
-                          } else {
+                          if status.showsRegisteredAccountControls {
                               // Sign out button (only show if truly authenticated)
                               Button {
                                   Task {
@@ -758,8 +993,17 @@ struct UserProfileView: View {
     /// `saveUserDataToFirestore` itself has no such restriction (an anonymous Firebase
     /// uid's self-write to its own `users/{uid}` is permitted by the Firestore rules);
     /// the real precondition is a cloud identity to write to, i.e. a `firebaseUID`.
+    ///
+    /// Device pass 2026-08-16 (bug 1): "a cloud identity" is not the same as "a LIVE cloud
+    /// identity". Relaxing the gate to a bare `firebaseUID` made this the one self-doc
+    /// trigger on the client that asked nothing about FR-60(c) detachment, and an avatar
+    /// edit is the shortest path from a deleted child account to a resurrected
+    /// `users/{uid}`. `saveUserDataToFirestore` holds detached uids as well — this is the
+    /// second lock, at the trigger, so the surface never even starts a write it knows is
+    /// addressed to a retired identity.
     private func syncProfileToFirestoreIfNeeded() {
         guard user.firebaseUID != nil else { return }
+        guard !authService.isCurrentIdentityDetached else { return }
         Task {
             do {
                 try await authService.saveUserDataToFirestore(user)
@@ -910,6 +1154,45 @@ private struct ProfileLicenseWalletSheet: View {
     }
 }
 
+// MARK: - Authentication Status header row (device pass 2026-08-16, bug 2)
+
+/// The status line, its caption and the sync glyph. Extracted so the state matrix can be
+/// previewed end to end without a live `AppUser`, `FirebaseAuthService` and Firestore
+/// session behind it — the previous inline chain could only ever be seen in one state at a
+/// time, on a device, which is how the header and the body drifted apart in the first place.
+struct AuthenticationStatusHeaderRow: View {
+    let presentation: AuthenticationStatusPresentation
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(presentation.headerKey.localized)
+                    .font(.system(.body, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+
+                Text(presentation.subtitleKey.localized)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer()
+
+            // Redundant with the header text on purpose — the glyph is a second reading of
+            // the same fact, never the only one.
+            if presentation.isCloudSynced {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+            } else {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundStyle(Color.Theme.accentYellow)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 // MARK: - Child account section guidance (COPPA child-gate, F-8 device testing 2026-08-15)
 
 /// What an unconsented child sees on `UserProfileView` instead of Sign In / Create
@@ -1008,6 +1291,47 @@ private struct ChildAccountSectionGuidance: View {
         }
         .scrollContentBackground(.hidden)
     }
+}
+
+/// The whole matrix on one screen — the review surface the inline `if` chain never had.
+private struct AuthenticationStatusMatrixPreview: View {
+    var body: some View {
+        AppBackgroundView {
+            List(AuthenticationStatusState.allCases, id: \.self) { state in
+                let presentation = AuthenticationStatusPolicy.presentation(for: state)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(state.rawValue)
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(Color.Theme.softBrown)
+                    AuthenticationStatusHeaderRow(presentation: presentation)
+                    if let guidance = presentation.childGuidance {
+                        ChildAccountSectionGuidance(
+                            title: guidance.titleKey.localized,
+                            message: guidance.bodyKey.localized,
+                            showsJoinButton: guidance.showsJoinFamilyButton
+                        )
+                    }
+                    if let noticeKey = presentation.childNoticeKey {
+                        ChildPremiumInlineNotice(textKey: noticeKey)
+                    }
+                }
+                .padding(.vertical, 8)
+                .listRowBackground(Color.Theme.cardBackground)
+            }
+            .scrollContentBackground(.hidden)
+        }
+        .environmentObject(FirebaseAuthService())
+    }
+}
+
+#Preview("Profile — auth status matrix") {
+    AuthenticationStatusMatrixPreview()
+}
+
+#Preview("Profile — auth status matrix, dark, large text") {
+    AuthenticationStatusMatrixPreview()
+        .preferredColorScheme(.dark)
+        .environment(\.dynamicTypeSize, .accessibility2)
 }
 
 #Preview("Profile — unconsented child guidance, dark, large text") {

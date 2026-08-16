@@ -83,8 +83,11 @@ struct FamilySettings: View {
                                     FamilyChildManageControls(
                                         target: viewModel.childMemberTarget(for: member),
                                         isChild: viewModel.isChildMember(memberId: member.userId),
-                                        isBusy: viewModel.isSavingChildStatus || viewModel.isDeletingChildData,
-                                        isDeletingChildData: viewModel.isDeletingChildData,
+                                        // Fix 2 (2026-08-16): every row disables while ANY
+                                        // deletion is in flight, but only the matching row
+                                        // spins — see `isDeletingChildData(memberId:)`.
+                                        isBusy: viewModel.isSavingChildStatus || viewModel.isChildDataDeletionInFlight,
+                                        isDeletingChildData: viewModel.isDeletingChildData(memberId: member.userId),
                                         onMarkAsChild: { viewModel.beginMarkAsChild($0) },
                                         onCorrect: { viewModel.beginCorrectChildStatus($0) },
                                         onOpenPrivacy: { viewModel.openChildPrivacy($0) },
@@ -172,6 +175,10 @@ struct FamilySettings: View {
                 viewModel.setModelContext(modelContext)
                 viewModel.setAuthService(authService)
                 viewModel.loadData(familyId: familyId)
+                // Owner (2026-08-16): roster hydration only fetches a member's user doc
+                // once per session and caches it — this forces a fresh read so avatar/
+                // username edits made elsewhere stop being stuck on the old copy.
+                viewModel.refreshMemberIdentitiesIfNeeded()
             }
             .onChange(of: viewModel.didLeaveOrDelete) { _, didLeave in
                 if didLeave { dismiss() }

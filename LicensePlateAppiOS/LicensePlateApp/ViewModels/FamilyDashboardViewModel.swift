@@ -34,6 +34,8 @@ class FamilyDashboardViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private var isLoadingData = false
     private var hasInviteObservation = false
+    /// Fix 3 (2026-08-16) re-entrancy guard — see `refreshMemberIdentitiesIfNeeded()`.
+    private var isRefreshingMemberIdentities = false
 
     init(
         familyRepository: FamilyRepository,
@@ -227,6 +229,40 @@ class FamilyDashboardViewModel: ObservableObject {
         seedFromCacheIfNeeded()
         // Soft-refresh when cache already painted the List; spinner only on true first load.
         loadData(showLoading: family == nil)
+    }
+
+    /// Fix 3 (2026-08-16, owner report): "the captain's Family page keeps showing the
+    /// old cached values indefinitely — as if it's not updating its source of truth."
+    /// Root cause: `UserRepository.getUser` is cache-first and, once a member's
+    /// `AppUser` is hydrated, never re-hits Firestore for that id again this session —
+    /// so an avatar/username changed elsewhere never reaches an already-open roster.
+    /// This forces one fresh read of the currently-known member and pending-request
+    /// user docs via the repository's existing (non-cache-first) refresh path. Not a
+    /// listener — the SRS direction is fetch-refresh for now; a live subscription is a
+    /// reasonable follow-up.
+    ///
+    /// Deliberately kept OUT of `onAppear`/`loadData`: `FamilyDashboardViewModel` has
+    /// no dedicated tests today, but keeping this a separate, guarded call preserves
+    /// the option to test `loadData` without touching the network later. The view
+    /// calls this separately from `.onAppear`. Guarded so overlapping appearances only
+    /// run one refresh at a time (resets once the fetch completes, so the next
+    /// appearance still refreshes).
+    func refreshMemberIdentitiesIfNeeded() {
+        guard !isRefreshingMemberIdentities else { return }
+        guard let refreshingFamilyId = family?.familyId else { return }
+        let userIds = Set(members.map(\.userId)).union(pendingRequests.map(\.userId))
+        guard !userIds.isEmpty else { return }
+
+        isRefreshingMemberIdentities = true
+        Task { [weak self] in
+            guard let self else { return }
+            await self.userRepository.refreshUsersFromFirestoreIfPresent(userIds: userIds)
+            if self.family?.familyId == refreshingFamilyId {
+                self.members = self.familyRepository.getMembers(familyId: refreshingFamilyId)
+                self.pendingRequests = self.familyRepository.getPendingRequests(familyId: refreshingFamilyId)
+            }
+            self.isRefreshingMemberIdentities = false
+        }
     }
 
     /// Paint SwiftData cache immediately so re-entry does not flash empty → spinner → list.

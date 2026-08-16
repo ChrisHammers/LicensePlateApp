@@ -48,16 +48,25 @@ class FamilySettingsViewModel: ObservableObject {
     /// Read-only child-privacy detail (FR-29).
     @Published var childPrivacyTarget: FamilyChildMemberTarget?
     @Published private(set) var isSavingChildStatus = false
-    @Published private(set) var isDeletingChildData = false
+    /// F-8 device pass wave 2 (2026-08-16): scoped per-member. Wave 1 wired a single
+    /// Bool into every row's manage controls, so deleting one child's data spun a
+    /// DIFFERENT child's row too whenever two were shown at once. `nil` means no
+    /// deletion is in flight; a non-nil value names the one member whose row should
+    /// show the "Deleting..." spinner — every other row's destructive controls still
+    /// disable (not spin) via `isChildDataDeletionInFlight` while it runs.
+    @Published private(set) var deletingChildDataMemberId: String?
 
     private let familyRepository: FamilyRepository
     private let childStatusService: FamilyChildStatusManaging
     private let analytics: AnalyticsLogging
     private let currentYearProvider: () -> Int
+    private let userRepository: UserRepository
     private var authService: FirebaseAuthService
     private var childProjectionObservation: AnyCancellable?
     private(set) var familyId: String = ""
     private var lastSavedFamilyName: String = ""
+    /// Fix 3 (2026-08-16) re-entrancy guard — see `refreshMemberIdentitiesIfNeeded()`.
+    private var isRefreshingMemberIdentities = false
 
     var family: Family?
 
@@ -66,13 +75,15 @@ class FamilySettingsViewModel: ObservableObject {
         authService: FirebaseAuthService,
         childStatusService: FamilyChildStatusManaging? = nil,
         analytics: AnalyticsLogging = AnalyticsService.shared,
-        currentYearProvider: @escaping () -> Int = { Calendar.current.component(.year, from: .now) }
+        currentYearProvider: @escaping () -> Int = { Calendar.current.component(.year, from: .now) },
+        userRepository: UserRepository = .shared
     ) {
         self.familyRepository = familyRepository
         self.authService = authService
         self.childStatusService = childStatusService ?? familyRepository
         self.analytics = analytics
         self.currentYearProvider = currentYearProvider
+        self.userRepository = userRepository
     }
 
     func setModelContext(_ context: ModelContext) {
@@ -93,6 +104,38 @@ class FamilySettingsViewModel: ObservableObject {
         if let family = family {
             familyName = family.name
             lastSavedFamilyName = family.name
+        }
+    }
+
+    /// Fix 3 (2026-08-16, owner report): "the captain's Family page keeps showing the
+    /// old cached values indefinitely — as if it's not updating its source of truth."
+    /// Root cause: `UserRepository.getUser` is cache-first and, once a member's
+    /// `AppUser` is hydrated, never re-hits Firestore for that id again this session —
+    /// so an avatar/username changed elsewhere never reaches an already-open roster.
+    /// This forces one fresh read of the currently-known members' user docs via the
+    /// repository's existing (non-cache-first) refresh path. Not a listener — the SRS
+    /// direction is fetch-refresh for now; a live subscription is a reasonable
+    /// follow-up.
+    ///
+    /// Deliberately kept OUT of `loadData`: that stays a synchronous, SwiftData-only
+    /// read so the existing tests that call it directly never touch the network. The
+    /// view calls this separately from `.onAppear`. Guarded so overlapping
+    /// appearances only run one refresh at a time (resets once the fetch completes, so
+    /// the next appearance still refreshes).
+    func refreshMemberIdentitiesIfNeeded() {
+        guard !isRefreshingMemberIdentities else { return }
+        let userIds = Set(members.map(\.userId))
+        guard !userIds.isEmpty else { return }
+
+        isRefreshingMemberIdentities = true
+        let refreshingFamilyId = familyId
+        Task { [weak self] in
+            guard let self else { return }
+            await self.userRepository.refreshUsersFromFirestoreIfPresent(userIds: userIds)
+            if self.familyId == refreshingFamilyId {
+                self.members = self.familyRepository.getMembers(familyId: refreshingFamilyId)
+            }
+            self.isRefreshingMemberIdentities = false
         }
     }
 
@@ -147,6 +190,18 @@ class FamilySettingsViewModel: ObservableObject {
 
     func isChildMember(memberId: String) -> Bool {
         childMemberIds.contains(memberId)
+    }
+
+    /// Fix 2 (2026-08-16): the row whose deletion is actually in flight — this is the
+    /// only row that should spin.
+    func isDeletingChildData(memberId: String) -> Bool {
+        deletingChildDataMemberId == memberId
+    }
+
+    /// Every OTHER row's destructive controls disable (not spin) while any deletion is
+    /// in flight, so two children can never be removed concurrently.
+    var isChildDataDeletionInFlight: Bool {
+        deletingChildDataMemberId != nil
     }
 
     /// FR-2 mirror of the server's target rules. Reads `isCaptainOrCreator`, which is
@@ -331,9 +386,9 @@ class FamilySettingsViewModel: ObservableObject {
         guard let target = childDeletionFinalTarget else { return }
         childDeletionFinalTarget = nil
         guard requireOnline() else { return }
-        guard !isDeletingChildData else { return }
+        guard deletingChildDataMemberId == nil else { return }
 
-        isDeletingChildData = true
+        deletingChildDataMemberId = target.memberUserId
         errorMessage = nil
 
         Task {
@@ -344,10 +399,10 @@ class FamilySettingsViewModel: ObservableObject {
                 )
                 analytics.log(.familyMemberRemoved)
                 familyRepository.removeLocalMember(familyId: familyId, memberUserId: target.memberUserId)
-                isDeletingChildData = false
+                deletingChildDataMemberId = nil
                 refreshMembers()
             } catch {
-                isDeletingChildData = false
+                deletingChildDataMemberId = nil
                 presentReconcilingMembershipLoss(error, memberId: target.memberUserId)
             }
         }
