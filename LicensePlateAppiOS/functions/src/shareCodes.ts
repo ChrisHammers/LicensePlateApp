@@ -258,6 +258,66 @@ export const redeemShareCode = enforcedCallable(
     const expiresAtInvite = new Date();
     expiresAtInvite.setMinutes(expiresAtInvite.getMinutes() + 15);
 
+    // F-44: ONE live family invite per (family, recipient).
+    //
+    // Device pass 2026-08-16: the owner entered the same family code twice from one child
+    // account. Each entry minted its own invite, each invite was accepted, and the captain
+    // got two identical "Pending User" rows for a single child — the state that then let a
+    // decline on one row delete the account the other row was waiting on. `sendFamilyInvite`
+    // has rejected duplicate pending invites since F-8; redemption never did, and redemption
+    // is the child's path, so it is the one that mattered.
+    //
+    // Reuse rather than reject: a second entry of a live code is an ordinary "did that
+    // work?" retry, and FR-24 forbids growing the set of things a child-reachable surface can
+    // refuse. The caller gets the invite id they already had, refreshed onto the code they
+    // just entered, and `respondToFamilyInvite_UserStep` sees one invite where it used to see
+    // two. Accepted invites are handled there, not here: retiring them is part of resolving
+    // the pending row they produced.
+    if (codeData.type === "family" && typeof codeData.familyId === "string") {
+      const liveInvites = await db
+        .collection("invites")
+        .where("familyId", "==", codeData.familyId)
+        .where("toUserId", "==", userId)
+        .where("type", "==", "family")
+        .where("status", "==", "pending")
+        .limit(1)
+        .get();
+
+      if (!liveInvites.empty) {
+        const reusedInvite = liveInvites.docs[0];
+        const refresh: Record<string, unknown> = {
+          fromUserId: codeData.createdBy,
+          method: "code",
+          codeId: codeDoc.id,
+          expiresAt: admin.firestore.Timestamp.fromDate(expiresAtInvite),
+        };
+        const familyName = await loadFamilyName(codeData.familyId);
+        if (familyName) {
+          refresh.familyName = familyName;
+        }
+        await reusedInvite.ref.update(refresh);
+
+        await writeAuditLog({
+          eventType: "share_code_used",
+          actorId: userId,
+          subjectType: "invite",
+          subjectId: reusedInvite.id,
+          metadata: {
+            codeId: codeDoc.id,
+            type: codeData.type,
+            reusedExistingInvite: true,
+          },
+          clientMetadata,
+        });
+
+        return {
+          inviteId: reusedInvite.id,
+          type: codeData.type,
+          familyId: codeData.familyId,
+        };
+      }
+    }
+
     const inviteData: any = {
       type: codeData.type,
       fromUserId: codeData.createdBy,

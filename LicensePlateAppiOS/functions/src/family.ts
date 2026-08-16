@@ -27,9 +27,12 @@ import {
   sanitizedChildLinkedPlatforms,
 } from "./childAccountCore";
 import {
+  JOIN_REQUEST_SUPERSEDED_STATUS,
   assertGuardianClearSeasoning,
   assertJoinRequestLineage,
   buildJoinRequestLineage,
+  findLivePendingJoinRequests,
+  readPendingRequestIdentity,
 } from "./familyJoinRequestIntegrity";
 import {
   writeChildConsentCorrected,
@@ -45,6 +48,33 @@ import {
 } from "./provisionalChildAccounts";
 
 const db = admin.firestore();
+
+/**
+ * Every family invite into `familyId` for `toUserId` that has not reached a terminal state.
+ *
+ * Two indexed queries rather than one unindexed three-equality scan: the composite index
+ * `(familyId, toUserId, type, status)` already exists for the status-filtered form, and the
+ * two statuses are exactly the two live ones — `pending` (minted, unanswered) and `accepted`
+ * (answered, awaiting the captain). `expired` and `declined` are terminal and never revive.
+ */
+async function liveFamilyInvitesFor(
+  familyId: string,
+  toUserId: string
+): Promise<admin.firestore.QueryDocumentSnapshot[]> {
+  const [pending, accepted] = await Promise.all(
+    ["pending", "accepted"].map((status) =>
+      db
+        .collection("invites")
+        .where("familyId", "==", familyId)
+        .where("toUserId", "==", toUserId)
+        .where("type", "==", "family")
+        .where("status", "==", status)
+        .limit(10)
+        .get()
+    )
+  );
+  return [...pending.docs, ...accepted.docs];
+}
 
 /**
  * Create a new family
@@ -367,7 +397,19 @@ export const respondToFamilyInvite_UserStep = enforcedCallable(
       );
     }
 
-    if (inviteData.status !== "pending") {
+    // F-44: re-accepting an invite THIS user already accepted is the same request arriving
+    // twice, not a new one. Now that `redeemShareCode` reuses a live invite instead of
+    // minting a rival, a second code entry lands back on an invite already marked accepted —
+    // and the child would have hit "Invite already responded to" on the retry that used to
+    // silently work (by creating the duplicate row this whole change exists to prevent).
+    //
+    // Widened here rather than in the gate above because it must stay narrow: same recipient
+    // (checked already), same direction (accept only), and an already-accepted invite only.
+    // A declined or expired invite is still terminal, and the accept path below reuses the
+    // pending row, so a retry cannot multiply anything. FR-24 is satisfied in the safe
+    // direction — no new refusal reaches a child-reachable surface, one fewer does.
+    const repeatAccept = response === "accept" && inviteData.status === "accepted";
+    if (inviteData.status !== "pending" && !repeatAccept) {
       throw new functions.https.HttpsError(
         "failed-precondition",
         "Invite already responded to"
@@ -401,6 +443,11 @@ export const respondToFamilyInvite_UserStep = enforcedCallable(
       // since FR-16(a) and `pending` now is too, so the stamp chains a join request back to
       // a document no client could have forged. `approveFamilyJoinRequest_CaptainStep`
       // refuses to approve a row without one.
+      //
+      // FR-86 (F-43): and stamp who is asking. The captain cannot read a non-member child's
+      // user doc (FR-12), so without this they approve a raw uid — and FR-31's "I confirm I
+      // am THIS CHILD's parent or legal guardian" cannot be truthfully affirmed about one.
+      // Username and avatar only; see `PENDING_REQUEST_IDENTITY_FIELDS`.
       const requestData = {
         userId,
         requestedBy: inviteData.fromUserId,
@@ -411,12 +458,53 @@ export const respondToFamilyInvite_UserStep = enforcedCallable(
           inviteId: inviteDoc.id,
           codeId: inviteData.codeId,
         }),
+        ...(await readPendingRequestIdentity(db, userId)),
       };
 
-      const requestRef = db.collection(`families/${familyId}/pending`).doc();
-      pendingRequestId = requestRef.id;
+      // F-44: ONE live row per (family, user). Accepting a second invite REFRESHES the
+      // request already waiting on a decision rather than queueing a rival beside it.
+      //
+      // Two rows for one child is what wedged the owner's captain queue on 2026-08-16: they
+      // are indistinguishable in the UI, and resolving either one ran FR-60(c) cleanup and
+      // deleted the account the other was pointing at. A full `set` (not `update`) so the
+      // refreshed row carries the new invite's lineage exactly — a stale `originCodeId` from
+      // the superseded invite would misattribute the request's provenance.
+      //
+      // `createdAt` moves forward with it. That is the safe direction for FR-66(b): a newer
+      // request is younger relative to the family, so the seasoning window gets HARDER to
+      // clear, never easier.
+      const [existingRow, ...supersededRows] = await findLivePendingJoinRequests(db, {
+        familyId,
+        userId,
+      });
 
-      batch.set(requestRef, requestData);
+      if (existingRow) {
+        pendingRequestId = existingRow.id;
+        batch.set(existingRow.ref, requestData);
+        for (const stale of supersededRows) {
+          batch.update(stale.ref, {
+            status: JOIN_REQUEST_SUPERSEDED_STATUS,
+            resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      } else {
+        const requestRef = db.collection(`families/${familyId}/pending`).doc();
+        pendingRequestId = requestRef.id;
+        batch.set(requestRef, requestData);
+      }
+
+      // Retire every OTHER live invite into this family for this user — the one this row used
+      // to be stamped with, and any the child minted by re-entering the code. Left alive they
+      // read as separate live invitations on the requester's dashboard and, worse, an
+      // unaccepted one lapsing on its 15-minute TTL used to run `expireInvitesAndCodes`'
+      // FR-60(c) cleanup and delete an account that had a pending row waiting.
+      for (const stale of await liveFamilyInvitesFor(familyId, userId)) {
+        if (stale.id === inviteDoc.id) continue;
+        batch.update(stale.ref, {
+          status: "expired",
+          respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
 
       await writeAuditLog({
         eventType: "family_join_request_created",
@@ -549,13 +637,42 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
     }
 
     const requestData = requestDoc.data()!;
+    const currentStatus = requestData.status;
 
-    if (requestData.status !== "pending") {
+    if (currentStatus !== "pending") {
+      // F-44: re-invoking the SAME decision is a no-op success, not an error. The captain's
+      // tap can land twice — a retry after a client-side timeout, or two taps on rows this
+      // very function retired together — and a `failed-precondition` there reads to the
+      // captain as "the queue is broken" for work that is in fact already done.
+      //
+      // `expired` counts as declined-equivalent ONLY for a decline: it is what a duplicate
+      // row wears after a sibling row carried the decision, so declining it is asking for a
+      // state it is already in. Approving one is still refused — the decision that mattered
+      // was recorded on the sibling, and this row has no lineage claim to re-open it.
+      const alreadyDeclined =
+        currentStatus === "declined" || currentStatus === "expired";
+      if (
+        (response === "approve" && currentStatus === "approved") ||
+        (response === "decline" && alreadyDeclined)
+      ) {
+        return { success: true };
+      }
       throw new functions.https.HttpsError(
         "failed-precondition",
         "Request already resolved"
       );
     }
+
+    // F-44: any OTHER live row for the same user in this family is resolved by THIS
+    // operation, in the same batch. Duplicates are indistinguishable to the captain, so
+    // leaving one behind leaves a row whose account has just been admitted (nothing to
+    // approve) or deleted (nothing to approve, ever) — the wedge the owner hit on
+    // 2026-08-16. Read before the batch, resolved inside it.
+    const duplicateRequests = await findLivePendingJoinRequests(db, {
+      familyId,
+      userId: requestData.userId,
+      excludeRequestId: requestId,
+    });
 
     const batch = db.batch();
 
@@ -696,6 +813,18 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+      // F-44: the duplicates go with it — retired, NOT declined, because the child was
+      // admitted and "declined" on a sibling row would tell them the opposite. Critically,
+      // this is a row-status write and nothing else: approval must NEVER reach
+      // `deleteProvisionalChildAccountIfNeverConsented`, and the only call to it in this
+      // callable is in the decline branch's follow-up below, guarded on `response`.
+      for (const duplicate of duplicateRequests) {
+        batch.update(duplicate.ref, {
+          status: JOIN_REQUEST_SUPERSEDED_STATUS,
+          resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+
       // Retire the matching accepted invite, mirroring the decline branch: left in
       // "accepted" forever, it reads as a live "awaiting approval" request on the
       // requester's dashboard after they later leave or are removed (F-8 bug B).
@@ -718,21 +847,6 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         });
       }
 
-      // Send push notification (gated by recipient notificationPrefs.family)
-      const fcmToken = await getFCMTokenForSocialPush(requestData.userId, "family");
-      if (fcmToken) {
-        await sendPushNotification(
-          fcmToken,
-          "Family Request Approved",
-          "You've been approved to join the family",
-          {
-            type: "family_join_approved",
-            familyId,
-            deepLink: `roadtrip-royale://family/${familyId}`,
-          }
-        );
-      }
-
       await writeAuditLog({
         eventType: "AUDIT_FAMILY_JOIN_APPROVED",
         actorId: userId,
@@ -747,6 +861,17 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         status: "declined",
         resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
+      // F-44: and every duplicate row for the same user, in the same batch. Here "declined"
+      // IS the truth for all of them — consent was refused for this child, once, and the
+      // rows are copies of one request. This is also what makes the FR-60(c) cleanup below
+      // correct: it runs after the commit, so no live row survives to be stranded by it.
+      for (const duplicate of duplicateRequests) {
+        batch.update(duplicate.ref, {
+          status: "declined",
+          resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
 
       const matchingInvites = await db
         .collection("invites")
@@ -773,12 +898,51 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
           requestId,
           userId: requestData.userId,
           declinedInviteCount: matchingInvites.size,
+          duplicateRequestCount: duplicateRequests.length,
         },
         clientMetadata,
       });
     }
 
     await batch.commit();
+
+    // Push AFTER the commit, and never fatal.
+    //
+    // This used to run inside the approve branch, before `batch.commit()`, with no catch —
+    // so `admin.messaging().send()` rejecting a stale token (`registration-token-not-
+    // registered`, which is exactly what a child's device holds after the account behind it
+    // was deleted and re-provisioned) aborted the ENTIRE approval. Nothing committed, the row
+    // stayed pending, and every retry failed identically: an unapprovable request produced by
+    // a notification. Worse for the timeout the owner saw — the Admin SDK retries FCM with
+    // backoff, so a slow send held the whole callable open past the client's deadline while
+    // the membership grant sat uncommitted in memory.
+    //
+    // Notifying is a courtesy; admission is the decision. It goes last, and it cannot undo it.
+    if (response === "approve") {
+      try {
+        const fcmToken = await getFCMTokenForSocialPush(
+          requestData.userId,
+          "family"
+        );
+        if (fcmToken) {
+          await sendPushNotification(
+            fcmToken,
+            "Family Request Approved",
+            "You've been approved to join the family",
+            {
+              type: "family_join_approved",
+              familyId,
+              deepLink: `roadtrip-royale://family/${familyId}`,
+            }
+          );
+        }
+      } catch (error) {
+        functions.logger.error(
+          "family_join_approved push failed; approval already committed",
+          { newMemberId: requestData.userId, familyId, error }
+        );
+      }
+    }
 
     // COPPA FR-4/FR-25 follow-ons (non-atomic, idempotent; the F-5b syncer exclusion is
     // the purge backstop). Runs only after the membership batch has committed.
@@ -830,9 +994,18 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
     // consented child, and (critically) a STICKY POST-REVOCATION child, who keeps the FR-28
     // restricted state and the OD-3 window. See `provisionalChildAccounts.ts`.
     //
-    // Deliberately non-fatal: the decline itself has already committed, and re-running this
-    // callable would fail on "Request already resolved". A failure here leaves the account
-    // for the FR-77 seven-day backstop sweep, which exists for exactly this case.
+    // F-44, and the reason this sits AFTER `batch.commit()` rather than beside the decline:
+    // the helper now refuses to delete an account that still holds a pending join request
+    // anywhere. The batch above declined this row AND every duplicate of it, so by the time
+    // we get here there is none left and the deletion proceeds — but if the child also has a
+    // live request in some OTHER family, the helper leaves the account alone and that
+    // captain's queue stays answerable. It is also what makes the approve branch safe by
+    // construction: an approved child has `activeFamilyId` and `wasEverInFamily` from the
+    // same batch, so the predicate excludes them even if this ever ran on that path.
+    //
+    // Deliberately non-fatal: the decline itself has already committed. A failure here leaves
+    // the account for the FR-77 seven-day backstop sweep, which exists for exactly this case,
+    // and re-invoking the callable is now an idempotent success rather than an error.
     if (response === "decline") {
       try {
         await deleteProvisionalChildAccountIfNeverConsented(db, {

@@ -21,6 +21,11 @@
  * `childDeclaredAt` is a second, independent guard: it is deleted at admission, so a child
  * who ever reached a family is invisible to the sweep even if `wasEverInFamily` were lost.
  *
+ * THE OTHER ACCOUNT THIS MUST NEVER TOUCH (added 2026-08-16 after the device pass) is one
+ * whose captain has not answered yet — see `hasLiveJoinRequest`. Every route in here fires on
+ * "the decision is in, or is never coming"; a still-pending row means neither, and deleting
+ * then leaves the captain a request they can never approve.
+ *
  * The device-local age answer and ratchet survive all of this untouched: the protection is
  * device-scoped, not account-scoped, so a declined child re-enters a fresh code later and
  * re-provisions cleanly as a child.
@@ -103,7 +108,55 @@ const liveDeps: ProvisionalChildCleanupDeps = {
 export interface ProvisionalChildCleanupResult {
   deleted: boolean;
   /** Why the account was left alone — for logs and for the tests that pin the carve-out. */
-  reason: "deleted" | "not_provisional_child" | "no_user_doc";
+  reason:
+    | "deleted"
+    | "not_provisional_child"
+    | "no_user_doc"
+    | "live_join_request";
+}
+
+/**
+ * Is a captain still holding an undecided consent request for this account?
+ *
+ * THE THIRD CARVE-OUT, added after the 2026-08-16 device pass. The two the module header
+ * describes are both about WHO the account belongs to; this one is about WHEN. A
+ * redemption-window account is deletable because "there is no captain decision coming"
+ * (`expiration.ts`) or because one just arrived and refused (`family.ts`). Neither is true
+ * while a row sits pending, and every path into here could reach one that was:
+ *
+ *   - invite expiry — a child who redeemed the same code twice left one invite unaccepted;
+ *     it lapses on the 15-minute TTL and this cleanup fired, deleting the account out from
+ *     under the OTHER invite's live pending row. No captain acted at all;
+ *   - a decline that resolved one duplicate row while a sibling row was still pending;
+ *   - the FR-77 backstop reaching an account whose captain simply took longer than 7 days.
+ *
+ * In each case the deletion strands a row the captain can then never approve ("User not
+ * found") — the exact unrecoverable state FR-66(a) keeps the decline branch open to avoid.
+ *
+ * Fail-safe on error, like every other ambiguity in this module: if the query itself fails
+ * (a not-yet-built collection-group index, a transient outage) we answer "yes, there might
+ * be one" and skip the deletion. The FR-77 backstop re-attempts later, and the decline and
+ * expiry callers already treat a skip as non-fatal.
+ */
+async function hasLiveJoinRequest(
+  db: Firestore,
+  userId: string
+): Promise<boolean> {
+  try {
+    const snapshot = await db
+      .collectionGroup("pending")
+      .where("userId", "==", userId)
+      .where("status", "==", "pending")
+      .limit(1)
+      .get();
+    return !snapshot.empty;
+  } catch (error) {
+    console.error(
+      `FR-60(c): could not check live join requests for ${userId}; skipping deletion`,
+      error
+    );
+    return true;
+  }
 }
 
 /**
@@ -138,6 +191,14 @@ export async function deleteProvisionalChildAccountIfNeverConsented(
   }
   if (!isNeverConsentedProvisionalChildUserData(snapshot.data())) {
     return { deleted: false, reason: "not_provisional_child" };
+  }
+  // ORDERING, and it is load-bearing. `isNeverConsentedProvisionalChildUserData` reads
+  // `activeFamilyId` / `wasEverInFamily`, both of which an APPROVAL writes in the same batch
+  // as the membership grant — so an approved child is already invisible here the instant that
+  // batch commits, and callers must always commit before calling this. What the predicate
+  // cannot see is a decision that has not been made yet: that is the check below.
+  if (await hasLiveJoinRequest(db, input.userId)) {
+    return { deleted: false, reason: "live_join_request" };
   }
 
   await executeAccountDeletionForUser(

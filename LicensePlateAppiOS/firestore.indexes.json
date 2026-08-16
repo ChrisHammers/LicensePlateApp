@@ -37,6 +37,14 @@
       ]
     },
     {
+      "collectionGroup": "pending",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "trip_invites",
       "queryScope": "COLLECTION",
       "fields": [
