@@ -265,7 +265,9 @@ class FamilyDashboardViewModel: ObservableObject {
             }
             await self.userRepository.refreshUsersFromFirestoreIfPresent(userIds: userIds)
             if self.family?.familyId == refreshingFamilyId {
-                self.members = self.familyRepository.getMembers(familyId: refreshingFamilyId)
+                self.publishRefreshedMembers(
+                    self.familyRepository.getMembers(familyId: refreshingFamilyId)
+                )
                 self.pendingRequests = self.familyRepository.getPendingRequests(familyId: refreshingFamilyId)
             }
         }
@@ -289,6 +291,15 @@ class FamilyDashboardViewModel: ObservableObject {
             guard !Task.isCancelled else { return }
             release()
         }
+    }
+
+    /// The one write point for a roster RE-READ. See `FamilyRosterPublishPolicy`: an empty
+    /// local read is never news, and publishing it is what silently demoted the captain.
+    private func publishRefreshedMembers(_ refreshed: [FamilyMember]) {
+        guard FamilyRosterPublishPolicy.shouldPublish(refreshed: refreshed, current: members) else {
+            return
+        }
+        members = refreshed
     }
 
     /// Paint SwiftData cache immediately so re-entry does not flash empty → spinner → list.
@@ -503,7 +514,10 @@ class FamilyDashboardViewModel: ObservableObject {
     
     
     private func loadFamilyData(familyId: String) {
-        members = familyRepository.getMembers(familyId: familyId)
+        // Cache fallback — reached from `seedFromCacheIfNeeded` and from `loadData`'s catch,
+        // i.e. exactly when the online read FAILED. Publishing its empty answer over a roster
+        // the last successful fetch established is what demoted the captain mid-session.
+        publishRefreshedMembers(familyRepository.getMembers(familyId: familyId))
         pendingRequests = familyRepository.getPendingRequests(familyId: familyId)
         childMemberIds = familyRepository.childMemberIds(familyId: familyId)
         refreshOutgoingPendingInvites(familyId: familyId)

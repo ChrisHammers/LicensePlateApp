@@ -379,7 +379,21 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         // A member doc that vanished from the snapshot was REMOVED. Without this the
         // local row survives forever and the roster shows a ghost member whose every
         // server action then fails with "Member not found".
-        pruneLocalMembers(familyId: familyId, keepingUserIds: Set(members.map(\.userId)))
+        //
+        // Device pass 2026-08-17: SERVER-RESOLVED snapshots only. This had no provenance
+        // guard, and a listener's first callback is routinely served from the local Firestore
+        // cache — which on a cold cache carries ZERO documents. That pruned the entire member
+        // mirror, published `familyMembers[familyId] = []`, and left `getMembers` answering
+        // empty until a server snapshot happened to repopulate it. Every surface that asks
+        // "am I a captain?" reads that answer, so a cache-served empty page could silently
+        // demote the captain for the rest of the session. Same rule, same reason, as the
+        // FR-19 ingest gate.
+        if ChildFlagIngestPolicy.mayIngest(
+            isFromCache: snapshot.metadata.isFromCache,
+            hasPendingWrites: snapshot.metadata.hasPendingWrites
+        ) {
+            pruneLocalMembers(familyId: familyId, keepingUserIds: Set(members.map(\.userId)))
+        }
 
         try? modelContext.save()
 
@@ -449,9 +463,21 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
                 modelContext.insert(request)
             }
         }
-        
+        // A pending doc that vanished from the snapshot is GONE — resolved elsewhere, swept,
+        // or deleted with its requester's account. Server-resolved snapshots only: a
+        // cache-served page can legitimately be empty and must not retire live rows.
+        if ChildFlagIngestPolicy.mayIngest(
+            isFromCache: snapshot.metadata.isFromCache,
+            hasPendingWrites: snapshot.metadata.hasPendingWrites
+        ) {
+            pruneLocalPendingRequests(
+                familyId: familyId,
+                keepingRequestIds: Set(snapshot.documents.map(\.documentID))
+            )
+        }
+
         try? modelContext.save()
-        
+
         pendingRequests[familyId] = getPendingRequests(familyId: familyId)
         Task {
             await self.fetchAndCacheUsers(userIds: userIdsToFetch, familyId: familyId)
@@ -698,7 +724,15 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
                 modelContext.insert(member)
             }
         }
-        pruneLocalMembers(familyId: familyId, keepingUserIds: Set(members.map(\.userId)))
+        // Same provenance rule as the listener: an offline `getDocuments()` is answered from
+        // the local cache, and an empty cached page is not a statement that the family has no
+        // members. See `handleMembersSnapshot`.
+        if ChildFlagIngestPolicy.mayIngest(
+            isFromCache: snapshot.metadata.isFromCache,
+            hasPendingWrites: snapshot.metadata.hasPendingWrites
+        ) {
+            pruneLocalMembers(familyId: familyId, keepingUserIds: Set(members.map(\.userId)))
+        }
 
         try? modelContext.save()
 
@@ -723,6 +757,41 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         guard let cached = try? modelContext.fetch(descriptor) else { return }
         for member in cached where !keepingUserIds.contains(member.userId) {
             modelContext.delete(member)
+        }
+    }
+
+    /// Deletes cached PENDING rows of `familyId` that the server no longer lists.
+    ///
+    /// Device pass 2026-08-17. `pruneLocalMembers` had no twin here, so a pending row that
+    /// vanished server-side — resolved by another captain, retired by the FR-89 sweep, or
+    /// removed with the requester's account by FR-60(c) — survived in SwiftData FOREVER.
+    /// `getPendingRequests` filters on `status == "pending"`, and a deleted document sends no
+    /// snapshot update, so nothing could ever move that row off "pending".
+    ///
+    /// The cost was not one stale row. The ghost keeps rendering with no identity at all (its
+    /// `AppUser` was deleted with the account, and the FR-86 stamp is only ever captured from
+    /// a live decode), and — worse — its dead uid stays in the union that
+    /// `refreshMemberIdentitiesIfNeeded` hydrates, so every future pass pays a denied
+    /// `users/{uid}` round trip for a document that will never exist again.
+    ///
+    /// Only rows the client itself treats as live are eligible: a resolved row is already
+    /// invisible and is left for its own history.
+    ///
+    /// - Parameter keepingRequestIds: every request id the authoritative read carried, at ANY
+    ///   status. Callers must not invoke this for a cache-served snapshot — an empty cached
+    ///   page would retire live rows (see `ChildFlagIngestPolicy`, same rule, same reason).
+    func pruneLocalPendingRequests(familyId: String, keepingRequestIds: Set<String>) {
+        guard let modelContext else { return }
+        let searchFamilyId = familyId
+        let pendingStatus = "pending"
+        let descriptor = FetchDescriptor<PendingJoinRequest>(
+            predicate: #Predicate<PendingJoinRequest> { request in
+                request.familyId == searchFamilyId && request.status == pendingStatus
+            }
+        )
+        guard let cached = try? modelContext.fetch(descriptor) else { return }
+        for request in cached where !keepingRequestIds.contains(request.requestId) {
+            modelContext.delete(request)
         }
     }
 
@@ -823,6 +892,18 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
             } else {
                 modelContext.insert(request)
             }
+        }
+        // Same reconciliation the listener does. This query is already filtered to
+        // `status == "pending"`, so its id set is exactly the live population — a local row
+        // missing from it is one the server has retired.
+        if ChildFlagIngestPolicy.mayIngest(
+            isFromCache: snapshot.metadata.isFromCache,
+            hasPendingWrites: snapshot.metadata.hasPendingWrites
+        ) {
+            pruneLocalPendingRequests(
+                familyId: familyId,
+                keepingRequestIds: Set(snapshot.documents.map(\.documentID))
+            )
         }
 
         try? modelContext.save()

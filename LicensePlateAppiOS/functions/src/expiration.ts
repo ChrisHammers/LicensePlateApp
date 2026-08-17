@@ -1,7 +1,5 @@
 import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
-import { currentRevenueCatApiKey } from "./accountDeletion";
-import { deleteProvisionalChildAccountIfNeverConsented } from "./provisionalChildAccounts";
 import {
   sweepUnansweredJoinRequests,
   unansweredJoinRequestCutoffMillis,
@@ -10,44 +8,30 @@ import {
 const db = admin.firestore();
 
 /**
- * COPPA FR-60(c), expiry half: a family invite that times out unaccepted is the second way a
- * redemption window closes without consent. The child entered a code — which is what minted
- * their uid — and then nothing happened, so there is no captain decision coming and no basis
- * to keep the account.
+ * REMOVED 2026-08-17 — `cleanUpProvisionalChildrenForExpiredInvites`.
  *
- * The helper is a no-op for every other recipient (adults, consented children, and sticky
- * post-revocation children), so this is safe to run over whatever expired in this pass. It is
- * also non-fatal per invite: a failure must not abort the status-flip job that every other
- * invite in the batch depends on, and the FR-77 backstop sweep re-attempts anything missed.
+ * This pass used to delete a provisional child's whole ACCOUNT the moment their family invite
+ * lapsed on its 15-minute TTL. In the field that fired 15 minutes after a captain handed out a
+ * share code: the child redeemed it (which mints the invite) and had not yet tapped Accept, so
+ * no pending row existed, `hasLiveJoinRequest` correctly found nothing to veto, and the sweep
+ * deleted a live, reachable child mid-flow.
+ *
+ * It is the same category error `pendingJoinRequestExpiry.ts` was written to correct, applied
+ * one layer down. The 15 minutes is a REDEMPTION window — it bounds how long a short,
+ * human-typed secret stays usable. It is not, and never was, a statement about how long the
+ * human being holding the phone has to finish. Deleting the account on it destroys the very
+ * thing the longer clock exists to protect, and it does so silently, before anyone has decided
+ * anything.
+ *
+ * The correct reaper is already in place and is the one wave 6 chose for exactly this case:
+ * FR-77's daily backstop (`retention.ts` → `sweepProvisionalChildAccounts`, on
+ * `PROVISIONAL_CHILD_REDEMPTION_WINDOW_DAYS = 7`), vetoed by `hasLiveJoinRequest`. The comment
+ * beside the join-request sweep below already stated that policy — this deletion was the last
+ * caller contradicting it.
+ *
+ * Deleting rather than gating (pre-release rule, 2026-08-10): an inline account-deletion in a
+ * 5-minute cron with no clock of its own has no correct configuration.
  */
-async function cleanUpProvisionalChildrenForExpiredInvites(
-  invites: admin.firestore.QueryDocumentSnapshot[]
-): Promise<void> {
-  const recipientIds = new Set<string>();
-  for (const invite of invites) {
-    const data = invite.data();
-    if (data.type !== "family") continue;
-    if (typeof data.toUserId === "string" && data.toUserId.length > 0) {
-      recipientIds.add(data.toUserId);
-    }
-  }
-
-  for (const userId of recipientIds) {
-    try {
-      await deleteProvisionalChildAccountIfNeverConsented(db, {
-        userId,
-        actorId: userId,
-        clientMetadata: null,
-        revenueCatApiKey: currentRevenueCatApiKey(),
-      });
-    } catch (error) {
-      functions.logger.error(
-        "FR-60(c): provisional child cleanup after invite expiry failed; backstop sweep will retry",
-        { childUserId: userId, error }
-      );
-    }
-  }
-}
 
 /**
  * Scheduled function to expire invites and share codes
@@ -57,9 +41,9 @@ async function cleanUpProvisionalChildrenForExpiredInvites(
  * revoked share codes. Hard deletion happens later, in the daily retention jobs in
  * `retention.ts` (FR-49), once the grace period has elapsed.
  *
- * The one exception is FR-60(c)'s transient-account cleanup below: a never-consented child's
- * whole account is deleted when their family invite expires, because that account exists only
- * for the consent request that just lapsed.
+ * There are NO exceptions to that any more. It had one — an inline FR-60(c) account deletion
+ * on invite expiry — and deleting a live child 15 minutes after a captain shared a code is
+ * what it actually did; see the note at the top of this file.
  *
  * Device pass 2026-08-17: this job also owns the fourth clock — unanswered join requests. It
  * does NOT retire a pending row because that row's invite lapsed; see
@@ -131,10 +115,6 @@ export const expireInvitesAndCodes = functions.pubsub
     const joinRequestSweep = await sweepUnansweredJoinRequests(db, {
       cutoffMillis: unansweredJoinRequestCutoffMillis(now.toMillis()),
     });
-
-    // FR-60(c): strictly after the status flip commits, so a cleanup failure cannot leave an
-    // invite stuck "pending" forever.
-    await cleanUpProvisionalChildrenForExpiredInvites(invitesSnapshot.docs);
 
     console.log(
       `Expired ${invitesSnapshot.size} invites, ${tripInvitesSnapshot.size} trip invites, ` +

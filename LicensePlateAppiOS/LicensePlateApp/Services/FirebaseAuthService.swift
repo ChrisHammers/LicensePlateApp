@@ -593,6 +593,27 @@ class FirebaseAuthService: ObservableObject {
             // provisioning with no live session fails HERE, in the child's own vocabulary and
             // retryably, instead of downstream as an authorization error.
             try assertConsentExitSessionReady()
+            // Device pass 2026-08-17 (captain report: "Pending Users has no user info").
+            //
+            // This branch — the child ALREADY has a uid — is a silent exit that skips the one
+            // write FR-60(b) sanctions. `UnconsentedChildCloudWritePolicy` (wave 6) holds every
+            // ordinary profile write for an unconsented child, and its only exemption lives
+            // inside `signInAnonymously`, scoped by `defer` to that call. So a child who
+            // provisioned in an EARLIER session and enters a code now reaches the captain with
+            // a `users/{uid}` carrying no `userName` and no `avatarId`.
+            //
+            // That is not cosmetic. `respondToFamilyInvite_UserStep` takes ONE read of this
+            // document and uses it twice: FR-86's identity stamp on the pending row, and FR-88's
+            // pending-state stamp written back. `buildPendingRequestIdentity` omits absent
+            // fields, so the row is stamped with nothing and the captain is asked to affirm
+            // "I am THIS CHILD's parent or legal guardian" about a bare uid — the exact thing
+            // FR-86 exists to prevent.
+            //
+            // The write itself is already permitted here: the window is open (FR-83/FR-86 need
+            // the name and avatar precisely now), which is why it runs under the same exemption
+            // the mint path uses. Best-effort — a failure must not block the consent exit, and
+            // the ordinary hold reapplies the moment this returns.
+            await publishConsentSeekingProfileIfNeeded()
             return
         }
         guard isOnline else { throw AuthError.offline }
@@ -607,6 +628,26 @@ class FirebaseAuthService: ObservableObject {
             throw AuthError.childDeclarationPending
         }
         try assertConsentExitSessionReady()
+    }
+
+    /// Publishes an already-provisioned consent-seeking child's profile inside FR-60(b)'s
+    /// sanctioned window.
+    ///
+    /// Same exemption, same `defer`, same one-method scope as the mint path — this is that
+    /// path's missing twin for a uid that already existed. Nothing new reaches the server: it
+    /// is the identical `saveUserDataToFirestore` the mint would have performed, just for the
+    /// child who did not need minting.
+    private func publishConsentSeekingProfileIfNeeded() async {
+        guard isOnline,
+              let user = currentUser,
+              let uid = user.firebaseUID,
+              auth.currentUser != nil,
+              ChildRestrictedModeService.shared.isRestrictedUnconsentedChild else {
+            return
+        }
+        consentSeekingProvisioningUids.insert(uid)
+        defer { consentSeekingProvisioningUids.remove(uid) }
+        try? await saveUserDataToFirestore(user)
     }
 
     /// The post-condition `provisionIdentityForConsentSeekingRedemptionIfNeeded` owes its
@@ -2045,7 +2086,10 @@ class FirebaseAuthService: ObservableObject {
         ) && !UnconsentedChildCloudWritePolicy.isWriteHeld(
             isUnconsentedChild: ChildRestrictedModeService.shared.isRestrictedUnconsentedChild,
             isFamilyApprovalPending: ChildRestrictedModeService.shared.isFamilyApprovalPending,
-            isConsentSeekingProvisioning: false
+            // Was hardcoded `false`, which made this method unreachable for the ONE write
+            // FR-60(b) sanctions — including the mint path's own, since that path routes here.
+            // The uid set is the authority (same read the profile-sync writer already uses).
+            isConsentSeekingProvisioning: user.firebaseUID.map(consentSeekingProvisioningUids.contains) ?? false
         )
         if isOnline, ageGateAllowsWrite, let firebaseUID = user.firebaseUID {
             Task {

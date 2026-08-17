@@ -133,7 +133,9 @@ class FamilySettingsViewModel: ObservableObject {
             guard let self else { return }
             await self.userRepository.refreshUsersFromFirestoreIfPresent(userIds: userIds)
             if self.familyId == refreshingFamilyId {
-                self.members = self.familyRepository.getMembers(familyId: refreshingFamilyId)
+                self.publishRefreshedMembers(
+                    self.familyRepository.getMembers(familyId: refreshingFamilyId)
+                )
             }
             self.isRefreshingMemberIdentities = false
         }
@@ -149,8 +151,19 @@ class FamilySettingsViewModel: ObservableObject {
             .sink { [weak self] flagsByFamily in
                 guard let self else { return }
                 self.childMemberIds = Set((flagsByFamily[familyId] ?? [:]).filter { $0.value }.keys)
-                self.members = self.familyRepository.getMembers(familyId: familyId)
+                self.publishRefreshedMembers(self.familyRepository.getMembers(familyId: familyId))
             }
+    }
+
+    /// The one write point for a roster RE-READ on this sheet. See `FamilyRosterPublishPolicy`
+    /// — `isCaptainOrCreator` (and with it every manage control on this screen) is derived
+    /// from finding MY row in `members`, so an empty local read must never be published over
+    /// a populated roster.
+    private func publishRefreshedMembers(_ refreshed: [FamilyMember]) {
+        guard FamilyRosterPublishPolicy.shouldPublish(refreshed: refreshed, current: members) else {
+            return
+        }
+        members = refreshed
     }
 
     var currentUserId: String? {

@@ -257,10 +257,23 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
     /// `.unknown`, which is the fail-closed direction — `.unknown` demands the same explicit
     /// declaration a confirmed child does, so a timeout can never soften an approval.
     func resolveChildTargetStates() async {
+        // Device pass 2026-08-17: bounded PER ROW as well as overall. One row is routinely
+        // unreadable — FR-12 denies a peer read of a non-member child's doc, and a requester
+        // whose account was deleted leaves a row naming a uid whose document is gone for good.
+        // Under a single shared deadline that one row could consume the whole budget and leave
+        // every row after it at `.unknown`, which disables Approve on rows that had nothing
+        // wrong with them: one dead uid, a dead screen. The outer bound still caps the total.
         try? await FamilyCallable.bounded(name: "resolveChildTargetStates") { [weak self] in
             guard let self else { return }
             for request in self.pendingRequests {
-                let resolved = await self.deps.resolveIsChildAccount(request.userId)
+                let resolved = try? await FamilyCallable.bounded(
+                    name: "resolveIsChildAccount",
+                    seconds: Self.perRowChildResolveDeadline
+                ) { [deps = self.deps, userId = request.userId] in
+                    await deps.resolveIsChildAccount(userId)
+                }
+                // `try?` flattens, so a per-row timeout and an unreadable doc both land on
+                // `nil` — the same fail-closed `.unknown` either way, which is the point.
                 let state: ChildApprovalTargetState
                 switch resolved {
                 case .some(true): state = .alreadyChild
@@ -271,6 +284,10 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
             }
         }
     }
+
+    /// Per-row slice of the surface deadline. Short enough that a wedged or denied row cannot
+    /// starve the rows behind it, long enough to cover an ordinary cold `users/{uid}` read.
+    private static let perRowChildResolveDeadline: TimeInterval = 6
 
     private func applyTargetState(_ state: ChildApprovalTargetState, requestId: String) {
         let previous = childTargetStates[requestId]
