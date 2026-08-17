@@ -28,6 +28,7 @@ import {
   sanitizedChildLinkedPlatforms,
 } from "./childAccountCore";
 import {
+  CROSS_FAMILY_JOIN_REQUEST_LIMIT,
   JOIN_REQUEST_PENDING_STATUS,
   JOIN_REQUEST_SUPERSEDED_STATUS,
   PENDING_FAMILY_REQUEST_FIELD,
@@ -37,7 +38,10 @@ import {
   buildPendingFamilyRequestStamp,
   buildPendingRequestIdentity,
   findLivePendingJoinRequests,
+  findLivePendingJoinRequestsInOtherFamilies,
+  pendingRowFamilyId,
 } from "./familyJoinRequestIntegrity";
+import { stageJoinRequestRetirement } from "./pendingJoinRequestExpiry";
 import {
   writeChildConsentCorrected,
   writeChildConsentGranted,
@@ -884,12 +888,82 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         });
       }
 
+      // OWNER DECISION 2026-08-17: "on accept of a family, we should delete all other
+      // pending... the backend should be authoritative."
+      //
+      // A uid holds exactly one `activeFamilyId`, and the grant above just set it. From this
+      // commit onward every live `pending` row this person holds in ANOTHER family is
+      // unapprovable — `canAddMemberToFamily` answers "User is already in another active
+      // family", and FR-15 refuses even to invite a child who has one — but it still renders
+      // as an ordinary request. That family's captain reads a name, affirms guardianship over
+      // it (FR-31), taps approve, and gets a failure for a decision that could never have
+      // succeeded. F-44 already retires SIBLING rows inside this family for exactly that
+      // reason; the boundary was never the family, it was the user.
+      //
+      // Deliberately not left to the device: the client is offline-first and cannot see the
+      // other family's subcollection at all (`firestore.rules` limits `pending` reads to
+      // members), so the server is the only place this can be true.
+      //
+      // THE ONE EXCEPTION IS THE RETIRED GENERAL, and it is not a special case bolted on — it
+      // is the same rule. `familyMembershipGrantUserUpdate` does not write `activeFamilyId`
+      // for them and `canAddMemberToFamily` exempts them from the one-family check, precisely
+      // so a grandparent can belong to several families at once. Their other rows are still
+      // APPROVABLE, so retiring them would destroy live, legitimate requests in two other
+      // captains' queues. The retirement is keyed off the very variable that decides whether
+      // this grant is exclusive, so the two can never disagree.
+      let crossFamilyRetirement = { rows: 0, stamps: 0, invites: 0 };
+      if (newRole !== "retired_general") {
+        const strandedElsewhere = await findLivePendingJoinRequestsInOtherFamilies(db, {
+          userId: requestData.userId,
+          excludeFamilyId: familyId,
+        });
+        if (strandedElsewhere.truncated) {
+          // No silent caps. The unanswered-row sweep retires the remainder on its own clock.
+          functions.logger.warn(
+            "cross-family join-request retirement hit its per-approval bound; the rest will be retired by the unanswered-row sweep",
+            {
+              familyId,
+              newMemberId: requestData.userId,
+              limit: CROSS_FAMILY_JOIN_REQUEST_LIMIT,
+            }
+          );
+        }
+        // Row + FR-88 stamp + origin invite, through the same helper the unanswered-row sweep
+        // uses, so "retired" cannot come to mean two different things. `expired`, never
+        // `declined`: nobody refused, and the client's `InviteStatus` fails OPEN on an unknown
+        // raw value (parsing it back as `.pending`), so only its four strings are safe.
+        //
+        // Batch discipline: a commit carrying two writes for one document is REJECTED, and
+        // this batch already holds the new member's user doc and this family's accepted
+        // invites. Both are declared here rather than rediscovered.
+        //
+        // FR-88 in particular: `grantUpdate` above already deletes the child's ONE stamp, and
+        // after this retirement that clear is exactly true — no live row survives anywhere. A
+        // second clear would add nothing and invalidate the commit.
+        crossFamilyRetirement = await stageJoinRequestRetirement(
+          db,
+          batch,
+          strandedElsewhere.rows,
+          {
+            skipDocumentPaths: new Set<string>([
+              db.collection("users").doc(requestData.userId).path,
+              ...approvedMatchingInvites.docs.map((inviteDoc) => inviteDoc.ref.path),
+            ]),
+          }
+        );
+      }
+
       await writeAuditLog({
         eventType: "AUDIT_FAMILY_JOIN_APPROVED",
         actorId: userId,
         subjectType: "family",
         subjectId: familyId,
-        metadata: { newMemberId: requestData.userId, role: newRole },
+        metadata: {
+          newMemberId: requestData.userId,
+          role: newRole,
+          crossFamilyRetiredRequestCount: crossFamilyRetirement.rows,
+          crossFamilyRetiredInviteCount: crossFamilyRetirement.invites,
+        },
         clientMetadata,
       });
     } else {
@@ -916,8 +990,49 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         .doc(requestData.userId)
         .get();
       if (declinedUserDoc.exists) {
+        // THE MIRROR of the approve branch's cross-family retirement, and deliberately NOT
+        // the same act. A decline refuses consent in THIS family and says nothing whatsoever
+        // about another: a child who entered two codes still has a second captain genuinely
+        // deliberating, and that request stays live and approvable. Nothing outside this
+        // family is retired here.
+        //
+        // But there is only ONE stamp, so deleting it would erase family B's live decision
+        // from the only document the child can read (FR-12 closes `families/{id}/pending` to
+        // non-members) and the "waiting" state they are actually still in would vanish. So it
+        // is RE-POINTED at a surviving row rather than cleared — one write to one document
+        // either way, and still no path by which the field can claim a decision that is not
+        // happening.
+        //
+        // Scoped to an unconsented child, matching where `respondToFamilyInvite_UserStep`
+        // writes it: `ChildFamilyPromptPolicy` resolves pending before its restriction
+        // classification, so a stamp on anyone else raises the "ask a parent" banner on a
+        // screen that must never show it. Anyone else gets the plain clear.
+        const declinedUserData = declinedUserDoc.data() as
+          | Record<string, unknown>
+          | undefined;
+        let pendingStampValue: unknown = admin.firestore.FieldValue.delete();
+        if (isUnconsentedChildUserData(declinedUserData)) {
+          const survivors = await findLivePendingJoinRequestsInOtherFamilies(db, {
+            userId: requestData.userId,
+            excludeFamilyId: familyId,
+          });
+          const survivor = survivors.rows[0];
+          const survivingFamilyId = survivor ? pendingRowFamilyId(survivor) : null;
+          if (survivor && survivingFamilyId) {
+            // Any survivor will do: PRESENCE is the whole signal and the payload drives no
+            // rule. Its own `createdAt` where readable, so the stamp keeps describing when
+            // that request was made rather than when this unrelated decline landed.
+            pendingStampValue = buildPendingFamilyRequestStamp({
+              familyId: survivingFamilyId,
+              requestId: survivor.id,
+              createdAt:
+                survivor.data()?.createdAt ??
+                admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
+        }
         batch.update(db.collection("users").doc(requestData.userId), {
-          [PENDING_FAMILY_REQUEST_FIELD]: admin.firestore.FieldValue.delete(),
+          [PENDING_FAMILY_REQUEST_FIELD]: pendingStampValue,
         });
       }
 

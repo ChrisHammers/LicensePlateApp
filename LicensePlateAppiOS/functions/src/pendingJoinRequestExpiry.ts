@@ -124,6 +124,90 @@ function uniqueStrings(values: unknown[]): string[] {
   return [...out];
 }
 
+export interface JoinRequestRetirementCounts {
+  rows: number;
+  stamps: number;
+  invites: number;
+}
+
+/**
+ * Stage the retirement of a set of pending rows onto an OPEN batch — the three writes from the
+ * module header (row status, FR-88 stamp, origin invite), and nothing else.
+ *
+ * Extracted so the sweep is not the only caller: `approveFamilyJoinRequest_CaptainStep` retires
+ * the admitted user's rows in every other family through this same code, and the two must not
+ * drift on what "retired" means. Nothing here decides WHICH rows deserve retiring — that is the
+ * caller's judgement — and nothing here commits.
+ *
+ * `skipDocumentPaths` is the batch-write discipline made explicit: Firestore REJECTS a commit
+ * carrying two writes for the same document, and a caller whose batch already writes the user
+ * doc (an approval grant does) or an invite must say so. The helper also tracks every path it
+ * writes itself, so duplicates within `rows` collapse to one write each.
+ *
+ * Every `batch.update` is existence-guarded, because an update against a missing document
+ * fails the WHOLE batch: a row whose account has since been deleted must stay a no-op rather
+ * than wedge the caller.
+ */
+export async function stageJoinRequestRetirement(
+  db: Firestore,
+  batch: admin.firestore.WriteBatch,
+  rows: readonly admin.firestore.QueryDocumentSnapshot[],
+  options: { skipDocumentPaths?: ReadonlySet<string> } = {}
+): Promise<JoinRequestRetirementCounts> {
+  const written = new Set<string>(options.skipDocumentPaths ?? []);
+  const counts: JoinRequestRetirementCounts = { rows: 0, stamps: 0, invites: 0 };
+
+  for (const doc of rows) {
+    if (written.has(doc.ref.path)) continue;
+    written.add(doc.ref.path);
+    batch.update(doc.ref, {
+      status: JOIN_REQUEST_UNANSWERED_STATUS,
+      resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    counts.rows += 1;
+  }
+
+  const data = rows.map((doc) => doc.data() ?? {});
+
+  // Deduped, because one page can easily carry several rows for the same child (two
+  // families) — the same hazard `inactivateFamily` handles with its
+  // `orphanedRequesterIds.delete(memberId)` dance.
+  //
+  // Unconditional as to child-ness, exactly like approve / decline / inactivate: the field's
+  // whole contract is that it may only ever fail toward "nobody is deciding", and deleting an
+  // absent key is a no-op.
+  for (const userId of uniqueStrings(data.map((row) => row.userId))) {
+    const userRef = db.collection("users").doc(userId);
+    if (written.has(userRef.path)) continue;
+    const userDoc = await userRef.get();
+    if (!userDoc.exists) continue;
+    written.add(userRef.path);
+    batch.update(userRef, {
+      [PENDING_FAMILY_REQUEST_FIELD]: admin.firestore.FieldValue.delete(),
+    });
+    counts.stamps += 1;
+  }
+
+  for (const inviteId of uniqueStrings(data.map((row) => row.originInviteId))) {
+    const inviteRef = db.collection("invites").doc(inviteId);
+    if (written.has(inviteRef.path)) continue;
+    const inviteDoc = await inviteRef.get();
+    if (!inviteDoc.exists) continue;
+    const status = inviteDoc.data()?.status;
+    if (!LIVE_INVITE_STATUSES.includes(status as (typeof LIVE_INVITE_STATUSES)[number])) {
+      continue;
+    }
+    written.add(inviteRef.path);
+    batch.update(inviteRef, {
+      status: "expired",
+      respondedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    counts.invites += 1;
+  }
+
+  return counts;
+}
+
 /**
  * Retire every join request that has been awaiting a decision for longer than the window.
  *
@@ -166,49 +250,11 @@ export async function sweepUnansweredJoinRequests(
     if (snapshot.empty) break;
     scanned += snapshot.size;
 
+    // One page, one batch: row + stamp + invite for every row on it. This sweep retires rows
+    // in whatever family they sit in and does NOT re-point a stamp at a survivor elsewhere —
+    // see the FR-88 field comment for why that residual false negative is the tolerable one.
     const batch = db.batch();
-    for (const doc of snapshot.docs) {
-      batch.update(doc.ref, {
-        status: JOIN_REQUEST_UNANSWERED_STATUS,
-        resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
-
-    const rows = snapshot.docs.map((doc) => doc.data() ?? {});
-
-    // Deduped, because Firestore rejects a batch holding two writes to the same document and
-    // one page can easily carry several rows for the same child (two families) — the same
-    // hazard `inactivateFamily` handles with its `orphanedRequesterIds.delete(memberId)` dance.
-    //
-    // Existence-guarded, because `batch.update` on a missing document fails the WHOLE batch,
-    // and a row whose account has since been deleted must stay a no-op rather than wedge the
-    // sweep. Same guard, same reason, as the decline path.
-    for (const userId of uniqueStrings(rows.map((row) => row.userId))) {
-      const userRef = db.collection("users").doc(userId);
-      const userDoc = await userRef.get();
-      if (!userDoc.exists) continue;
-      // Unconditional, exactly like approve / decline / inactivate. FR-88 documents the
-      // accepted false negative (a child with live rows in two families carries one stamp), and
-      // the field's whole contract is that it may only ever fail toward "nobody is deciding".
-      batch.update(userRef, {
-        [PENDING_FAMILY_REQUEST_FIELD]: admin.firestore.FieldValue.delete(),
-      });
-    }
-
-    for (const inviteId of uniqueStrings(rows.map((row) => row.originInviteId))) {
-      const inviteRef = db.collection("invites").doc(inviteId);
-      const inviteDoc = await inviteRef.get();
-      if (!inviteDoc.exists) continue;
-      const status = inviteDoc.data()?.status;
-      if (!LIVE_INVITE_STATUSES.includes(status as (typeof LIVE_INVITE_STATUSES)[number])) {
-        continue;
-      }
-      batch.update(inviteRef, {
-        status: "expired",
-        respondedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    }
-
+    await stageJoinRequestRetirement(db, batch, snapshot.docs);
     await batch.commit();
     retired += snapshot.size;
 

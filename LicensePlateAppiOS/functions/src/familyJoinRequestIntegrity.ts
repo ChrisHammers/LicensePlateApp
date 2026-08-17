@@ -190,6 +190,73 @@ export async function findLivePendingJoinRequests(
 }
 
 // ---------------------------------------------------------------------------
+// The boundary was never the family — it was the user (owner decision 2026-08-17)
+// ---------------------------------------------------------------------------
+
+/**
+ * How many other-family rows one decision may look at. Twenty is far past reachable: F-44
+ * holds a user to ONE live row per family, so this bound is only ever met by legacy or
+ * adversarial data. Exceeded, it is REPORTED rather than swallowed (`truncated`) — the caller
+ * logs, and `sweepUnansweredJoinRequests` retires whatever was left behind on its own clock.
+ */
+export const CROSS_FAMILY_JOIN_REQUEST_LIMIT = 20;
+
+export interface CrossFamilyJoinRequests {
+  rows: admin.firestore.QueryDocumentSnapshot[];
+  /** True when the read bound may have hidden further rows. Never silently. */
+  truncated: boolean;
+}
+
+/**
+ * `families/{familyId}/pending/{requestId}` -> `familyId`. The row does not carry its own
+ * family, so the path is the only source; a collection-group query is the only reader that
+ * needs it.
+ */
+export function pendingRowFamilyId(
+  doc: admin.firestore.DocumentSnapshot | admin.firestore.QueryDocumentSnapshot
+): string | null {
+  return doc.ref.parent.parent?.id ?? null;
+}
+
+/**
+ * Every still-undecided join request `userId` holds OUTSIDE `excludeFamilyId`.
+ *
+ * A user has exactly one `activeFamilyId`. The instant one family admits them, every live row
+ * they hold in another family is unapprovable — `canAddMemberToFamily` answers "User is
+ * already in another active family", and FR-15 refuses even to invite a child who has one —
+ * yet the row still renders as an ordinary pending request. Another captain affirms
+ * guardianship over it, taps approve, and gets a failure for a decision that could never have
+ * succeeded. `findLivePendingJoinRequests` above closes exactly this inside one family; the
+ * query below is the same question asked across all of them.
+ *
+ * Served by the `pending (COLLECTION_GROUP): userId ASC, status ASC` composite index that
+ * `hasLiveJoinRequest` already needs — two equality filters, no new index.
+ *
+ * The approving family is filtered out AFTER the read rather than excluded in the query
+ * (Firestore has no "not this parent" filter), so a caller whose own family holds more than
+ * the bound in duplicate rows can come back `truncated` with rows it never saw. That is the
+ * honest failure: it logs, and the unanswered-row sweep is the backstop.
+ */
+export async function findLivePendingJoinRequestsInOtherFamilies(
+  db: Firestore,
+  input: { userId: string; excludeFamilyId: string; limit?: number }
+): Promise<CrossFamilyJoinRequests> {
+  const limit = input.limit ?? CROSS_FAMILY_JOIN_REQUEST_LIMIT;
+  const snapshot = await db
+    .collectionGroup("pending")
+    .where("userId", "==", input.userId)
+    .where("status", "==", JOIN_REQUEST_PENDING_STATUS)
+    // One past the bound, so "there were more" is distinguishable from "that was all".
+    .limit(limit + 1)
+    .get();
+
+  const rows = snapshot.docs.filter(
+    (doc) => pendingRowFamilyId(doc) !== input.excludeFamilyId
+  );
+  return { rows: rows.slice(0, limit), truncated: snapshot.size > limit };
+}
+
+// ---------------------------------------------------------------------------
 // FR-86 (F-43) — the guardian can tell which child they are approving
 // ---------------------------------------------------------------------------
 
@@ -265,10 +332,28 @@ export function buildPendingRequestIdentity(
  * adult's home screen. A consented child joining a second family is excluded for the same
  * reason — their banner is hidden today and must stay hidden.
  *
- * CLEARING is deliberately NOT scoped: every resolution path clears unconditionally, so the
- * field can only ever fail toward "nobody is deciding". A false negative costs a child a
- * status line they can refresh by re-entering a code (FR-28f keeps that reachable from every
- * pending presentation); a false positive is the unrecoverable state this exists to kill.
+ * CLEARING is deliberately NOT scoped: a resolution clears the field whoever holds it, so it
+ * can only ever fail toward "nobody is deciding". A false negative costs a child a status line
+ * they can refresh by re-entering a code (FR-28f keeps that reachable from every pending
+ * presentation); a false positive is the unrecoverable state this exists to kill.
+ *
+ * ONE STAMP PER USER used to make that failure routine, and owner decision 2026-08-17 removed
+ * the routine case rather than living with it. A child with live rows in two families carries
+ * a single stamp, so resolving one row cleared it while the other was still live. Now:
+ *
+ *   - APPROVE retires every live row the admitted user holds in EVERY OTHER family, in the
+ *     same batch as the grant (`approveFamilyJoinRequest_CaptainStep`). Those rows were
+ *     already unapprovable — one `activeFamilyId` per user — so the single clear is exactly
+ *     true afterwards, and a second clear would be an illegal duplicate write to one document.
+ *   - DECLINE retires nothing elsewhere: refusing consent in family A says nothing about
+ *     family B, whose request is still legitimate. It RE-POINTS the stamp at a surviving row
+ *     instead of clearing it, so the child's "waiting" state survives the decline that was
+ *     never about it.
+ *
+ * Two unconditional clears remain and stay accepted: the unanswered-row sweep
+ * (`pendingJoinRequestExpiry.ts`) and `inactivateFamily`. Each retires rows in ONE family
+ * without re-pointing, so a child holding a live row elsewhere can still lose the status line
+ * early — the tolerable direction, and recoverable by re-entering a code.
  */
 export const PENDING_FAMILY_REQUEST_FIELD = "pendingFamilyRequest";
 

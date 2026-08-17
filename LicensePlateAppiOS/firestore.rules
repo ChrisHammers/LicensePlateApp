@@ -114,8 +114,9 @@ service cloud.firestore {
     // redemption window and, once deleted at family admission, closes it. It drives the
     // transient-account sweep, so a client that could write or clear it could either delete
     // its own pre-consent footprint on demand or keep an unconsented account alive forever.
-    // FR-88 adds `pendingFamilyRequest`: written when a join request is minted and deleted on
-    // every resolution, in the same batch as the row itself. It is the child's ONLY way to
+    // FR-88 adds `pendingFamilyRequest`: written when a join request is minted and retired on
+    // every resolution — deleted, or (on a decline) re-pointed at a request still live in
+    // another family — in the same batch as the row itself. It is the child's ONLY way to
     // verify that a family is still deciding — `families/{id}/pending` is member-read-only
     // and a pending child is not a member — so a client that could write it could fake a
     // consent request in progress, and one that could clear it could hide a real one.
