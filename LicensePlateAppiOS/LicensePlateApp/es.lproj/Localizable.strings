@@ -1501,5 +1501,10 @@
 "family.child.error.already_removed" = "Ese miembro ya se había quitado de esta familia. La lista se actualizó.";
 "family.child.error.invalid" = "Algo de esa solicitud no era válido. Inténtalo de nuevo.";
 "family.child.error.unavailable" = "El servidor no está disponible por ahora. Inténtalo en un momento.";
+"family.callable.error.timed_out" = "Esa solicitud tardó demasiado en llegar al servidor. Revisa tu conexión e inténtalo de nuevo.";
+"family.pending.expired" = "Venció: ya no se puede unir";
+"family.pending.expires_today" = "Vence hoy";
+"family.pending.expires_tomorrow" = "Vence mañana";
+"family.pending.expires_in_days" = "Vence en %d días";
 "family.child.error.signed_out" = "No has iniciado sesión. Inicia sesión e inténtalo de nuevo.";
 "family.child.error.server" = "El servidor no pudo completar ese cambio. Inténtalo en un momento.";

@@ -12,6 +12,164 @@ import FirebaseFunctions
 import FirebaseAuth
 import Combine
 
+/// First-settle-wins handoff between a unit of work and its watchdog.
+///
+/// Lock-based, and shaped exactly like `AppleSignInDelegate`'s resume guard, for the same
+/// reason: two racers may try to resume one caller and exactly one of them may win. A
+/// settle that lands before the caller attaches is replayed, so the race is total — there
+/// is no ordering in which the caller is left suspended.
+private final class FirstSettleBox<T>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<T, Error>?
+    private var settled: Result<T, Error>?
+
+    /// `true` only for the caller that actually settled the box.
+    @discardableResult
+    func settle(_ result: Result<T, Error>) -> Bool {
+        lock.lock()
+        guard settled == nil else {
+            lock.unlock()
+            return false
+        }
+        settled = result
+        let waiting = continuation
+        continuation = nil
+        lock.unlock()
+        waiting?.resume(with: result)
+        return true
+    }
+
+    func attach(_ continuation: CheckedContinuation<T, Error>) {
+        lock.lock()
+        if let settled {
+            lock.unlock()
+            continuation.resume(with: settled)
+            return
+        }
+        self.continuation = continuation
+        lock.unlock()
+    }
+}
+
+/// The single door every family Cloud Functions callable goes through.
+///
+/// DEVICE PASS 2026-08-17 — the hang cluster this exists to end. Approving a pending child,
+/// declining the same row, and creating a new share code each stalled ~60s and then failed
+/// `DEADLINE_EXCEEDED`; killing and relaunching the app made the identical action succeed
+/// instantly. `firebase functions:log` recorded NO invocation for any stuck attempt, and the
+/// slowest invocation the server has ever recorded is 6.7s. So the request never left the
+/// device: 60s is not a server budget, it is the Functions SDK's own fetcher timeout, and
+/// everything upstream of it — the Auth token, the App Check token, the fetcher's session —
+/// is process-lifetime state, which is precisely why a relaunch "fixed" it.
+///
+/// Two defences, and neither depends on knowing which piece of that state was poisoned on a
+/// given day:
+///
+/// 1. **A deadline the SDK cannot miss.** `HTTPSCallable.timeoutInterval` bounds only the
+///    network leg, and the SDK's async `call` is a continuation wrapper with no cancellation
+///    support — so the await is ALSO raced against a watchdog and ABANDONED on expiry. A
+///    callable that never returns therefore can never hold its caller: the caller unwinds at
+///    `deadline` with a retryable error and releases whatever in-flight state it took.
+/// 2. **Token prerequisites acquired first, then force-refreshed on a stall.** Family was the
+///    one callable surface in the app that skipped `AppCheckReadiness` entirely (`UserRepository`,
+///    `FriendshipRepository`, `TripCanonicalRemoteSyncService` and the sync services all use
+///    it). Pre-acquiring puts token work inside the deadline instead of inside the SDK's
+///    unbounded context phase, and the forced refresh on expiry does to the token cache what
+///    the relaunch was doing — without the relaunch.
+///
+/// ACCEPTED EDGE: an abandoned call may still land server-side after the caller gave up, so a
+/// retry can be a second attempt at an already-applied change. Every family callable is
+/// idempotent about that (re-approve/re-decline are idempotent successes, redemption reuses a
+/// live invite) except `createShareCode`, where the cost is one extra code that the 15-minute
+/// sweep revokes. That is strictly cheaper than a surface wedged until relaunch.
+@MainActor
+enum FamilyCallable {
+    /// 25s: ~4x the slowest invocation ever recorded server-side (6.7s), and far enough under
+    /// the SDK's own ~60-70s timer that the CLIENT is what gives up, deliberately and with a
+    /// message the user can act on.
+    static let deadline: TimeInterval = 25
+
+    /// Marks the errors synthesised here, so a client-side abandon stays distinguishable from
+    /// a genuine server-side deadline even though both wear `deadlineExceeded`.
+    static let stalledUserInfoKey = "FamilyCallableStalled"
+
+    static func call(_ name: String, _ payload: [String: Any]) async throws -> HTTPSCallableResult {
+        try await bounded(name: name) {
+            // Best-effort, never fatal: these callables are `enforceAppCheck: true`, so the
+            // server stays the authority on a missing token. Warming here only moves the
+            // token wait inside our deadline; failing the call on it would newly reject
+            // requests the SDK would have retried its way through.
+            try? await AppCheckReadiness.ensureCallablePrerequisites()
+            let callable = Functions.functions().httpsCallable(name)
+            callable.timeoutInterval = deadline
+            return try await callable.call(payload)
+        }
+    }
+
+    /// Runs `operation` under a hard client deadline, abandoning it on expiry.
+    ///
+    /// Internal seam: the tests drive this with an operation that never returns, which is the
+    /// only honest way to reproduce the 2026-08-17 stall without a poisoned device.
+    static func bounded<T>(
+        name: String,
+        seconds: TimeInterval? = nil,
+        operation: @escaping @MainActor () async throws -> T
+    ) async throws -> T {
+        let limit = seconds ?? deadline
+        let box = FirstSettleBox<T>()
+
+        let work = Task { @MainActor in
+            do {
+                box.settle(.success(try await operation()))
+            } catch {
+                box.settle(.failure(error))
+            }
+        }
+
+        let watchdog = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(limit * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            guard box.settle(.failure(stalledError(name: name))) else { return }
+            // Cancellation is best effort only — see the type doc. Abandoning is the point.
+            work.cancel()
+            recoverTokensAfterStall()
+        }
+        defer { watchdog.cancel() }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            box.attach(continuation)
+        }
+    }
+
+    /// Retryable, localized, and NOT a claim about the server: a stalled call may or may not
+    /// have been applied, and the copy says "try again" rather than "it failed".
+    static func stalledError(name: String) -> NSError {
+        NSError(
+            domain: FunctionsErrorDomain,
+            code: FunctionsErrorCode.deadlineExceeded.rawValue,
+            userInfo: [
+                NSLocalizedDescriptionKey: "family.callable.error.timed_out".localized,
+                stalledUserInfoKey: name
+            ]
+        )
+    }
+
+    static func isStalled(_ error: Error) -> Bool {
+        (error as NSError).userInfo[stalledUserInfoKey] != nil
+    }
+
+    /// Fire-and-forget: rebuilds the Auth + App Check tokens so the user's RETRY does not
+    /// inherit the poisoned cache that made this attempt stall. Deliberately unguarded by an
+    /// in-flight flag — a stuck recovery task costs nothing, whereas a flag a stuck task
+    /// never cleared would suppress every future recovery, which is the exact class of bug
+    /// this whole type exists to remove.
+    private static func recoverTokensAfterStall() {
+        Task {
+            try? await AppCheckReadiness.ensureCallablePrerequisites(forceRefresh: true)
+        }
+    }
+}
+
 @MainActor
 class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
     static let shared = FamilyRepository()
@@ -716,13 +874,10 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
     /// Create a new family
     func createFamily(name: String) async throws -> String {
         try requireRegisteredAccount()
-        
-        let functions = Functions.functions()
-        let createFamilyFunction = functions.httpsCallable("createFamily")
-        
+
         let result: HTTPSCallableResult
         do {
-            result = try await createFamilyFunction.call(([
+            result = try await FamilyCallable.call("createFamily", ([
                 "name": name
             ] as [String: Any]).addingClientMetadata())
         } catch {
@@ -753,12 +908,9 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         // the server's `assertRegisteredAccountOrDeclaredChild` remains the authority.
         try requireRegisteredAccountOrDeclaredChild()
 
-        let functions = Functions.functions()
-        let redeemCodeFunction = functions.httpsCallable("redeemShareCode")
-
         let result: HTTPSCallableResult
         do {
-            result = try await redeemCodeFunction.call(([
+            result = try await FamilyCallable.call("redeemShareCode", ([
                 "code": code,
                 "expectedType": expectedType.rawValue
             ] as [String: Any]).addingClientMetadata())
@@ -788,10 +940,7 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         // COPPA FR-41: same guest gate its sibling callables use; the server remains the backstop.
         try requireRegisteredAccount()
 
-        let functions = Functions.functions()
-        let sendInviteFunction = functions.httpsCallable("sendFamilyInvite")
-        
-        let result = try await sendInviteFunction.call(([
+        let result = try await FamilyCallable.call("sendFamilyInvite", ([
             "toUserId": toUserId,
             "familyId": familyId,
             "method": method
@@ -807,17 +956,35 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
     
     /// Respond to a family invite (user step)
     func respondToFamilyInvite(inviteId: String, accept: Bool) async throws {
-        guard Auth.auth().currentUser != nil else {
-            throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
+        // FR-60(b) names this the SECOND consent exit alongside `redeemShareCode`, so it gets
+        // the same gate rather than an ad-hoc auth check with an untranslated message: a
+        // declared child reaching here un-provisioned must be told their setup is still
+        // finishing, never "sign in" (2026-08-17 device report).
+        try requireRegisteredAccountOrDeclaredChild()
+        guard let userId = Auth.auth().currentUser?.uid else {
+            throw NSError(
+                domain: "FamilyRepository",
+                code: 401,
+                userInfo: [NSLocalizedDescriptionKey: FriendsFamilyCallableErrors.childSetupIncompleteMessage]
+            )
         }
-        
-        let functions = Functions.functions()
-        let respondFunction = functions.httpsCallable("respondToFamilyInvite_UserStep")
-        
-        _ = try await respondFunction.call(([
+
+        _ = try await FamilyCallable.call("respondToFamilyInvite_UserStep", ([
             "inviteId": inviteId,
             "response": accept ? "accept" : "decline"
         ] as [String: Any]).addingClientMetadata())
+
+        // FR-88 (device pass 2026-08-17, banner lag): accepting is the call that writes the
+        // pending row AND the `users/{uid}.pendingFamilyRequest` stamp, in one batch. The
+        // stamp is the ONLY truth the FR-28 banner reads — the local optimistic flag loses to
+        // an already-resolved `false` projection — so waiting for the FR-23 listener to push
+        // it is what made the hourglass arrive seconds late. Pull it now, while the sheet the
+        // child is looking at is still up, so the banner is correct on its first render.
+        // Best-effort by construction: `refreshUsersFromFirestoreIfPresent` swallows failures,
+        // and the listener remains the durable path.
+        if accept {
+            await UserRepository.shared.refreshUsersFromFirestoreIfPresent(userIds: [userId])
+        }
     }
     
     /// Get familyId from an invite
@@ -831,9 +998,6 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
     func createShareCode(type: String, familyId: String? = nil) async throws -> (codeId: String, code: String, expiresAt: Date) {
         try requireRegisteredAccount()
 
-        let functions = Functions.functions()
-        let createCodeFunction = functions.httpsCallable("createShareCode")
-
         var data: [String: Any] = ["type": type]
         if let familyId = familyId {
             data["familyId"] = familyId
@@ -841,7 +1005,7 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
 
         let result: HTTPSCallableResult
         do {
-            result = try await createCodeFunction.call(data.addingClientMetadata())
+            result = try await FamilyCallable.call("createShareCode", data.addingClientMetadata())
         } catch {
             throw Self.userFacingCallableError(error)
         }
@@ -865,9 +1029,14 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
             throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
         }
         
-        try await db.collection("share_codes").document(codeId).updateData([
-            "isRevoked": true
-        ])
+        // Bounded like the callables: this is a direct Firestore write, and the refresh flow
+        // awaits it before minting the replacement code, so a wedged write would stall the
+        // whole "get me a new code" tap behind it.
+        try await FamilyCallable.bounded(name: "revokeShareCode") { [db] in
+            try await db.collection("share_codes").document(codeId).updateData([
+                "isRevoked": true
+            ])
+        }
     }
     
     /// Approve or decline a pending join request.
@@ -886,16 +1055,16 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
             throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
         }
 
-        let functions = Functions.functions()
-        let respondFunction = functions.httpsCallable("approveFamilyJoinRequest_CaptainStep")
-
         let payload = FamilyChildStatusPayload.respondToPendingRequest(
             familyId: familyId,
             requestId: requestId,
             approve: approve,
             declaration: childDeclaration
         )
-        _ = try await respondFunction.call(payload.addingClientMetadata())
+        _ = try await FamilyCallable.call(
+            "approveFamilyJoinRequest_CaptainStep",
+            payload.addingClientMetadata()
+        )
     }
 
     // MARK: - Child status callables (COPPA F-8: FR-2, FR-29, FR-30)
@@ -940,9 +1109,11 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
             )
         }
 
-        let respondFunction = Functions.functions().httpsCallable("setFamilyMemberChildStatus")
         do {
-            _ = try await respondFunction.call(payload.addingClientMetadata())
+            _ = try await FamilyCallable.call(
+                "setFamilyMemberChildStatus",
+                payload.addingClientMetadata()
+            )
         } catch {
             throw Self.childStatusCallableError(error)
         }
@@ -958,9 +1129,11 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
             familyId: familyId,
             childUserId: childUserId
         )
-        let deleteFunction = Functions.functions().httpsCallable("requestChildDataDeletion")
         do {
-            _ = try await deleteFunction.call(payload.addingClientMetadata())
+            _ = try await FamilyCallable.call(
+                "requestChildDataDeletion",
+                payload.addingClientMetadata()
+            )
         } catch {
             throw Self.childStatusCallableError(error)
         }
@@ -975,9 +1148,11 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
             familyId: familyId,
             childUserId: childUserId
         )
-        let statusFunction = Functions.functions().httpsCallable("getParentalConsentStatus")
         do {
-            let result = try await statusFunction.call(payload.addingClientMetadata())
+            let result = try await FamilyCallable.call(
+                "getParentalConsentStatus",
+                payload.addingClientMetadata()
+            )
             return ParentalConsentStatus.parse(result.data)
         } catch {
             throw Self.childStatusCallableError(error)
@@ -988,6 +1163,9 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
     /// messages are English-only and describe states this UI already prevents, so they
     /// are replaced rather than surfaced.
     static func childStatusCallableError(_ error: Error) -> Error {
+        // A client-side abandon already carries the retryable copy and, unlike a server
+        // deadline, is not a statement that the server is unavailable. Pass it through.
+        if FamilyCallable.isStalled(error) { return error }
         let nsError = error as NSError
         guard nsError.domain == FunctionsErrorDomain,
               let code = FunctionsErrorCode(rawValue: nsError.code) else {
@@ -1083,10 +1261,7 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         }
         
         // Use removeFamilyMember function; server allows non-creator self-leave
-        let functions = Functions.functions()
-        let removeFunction = functions.httpsCallable("removeFamilyMember")
-        
-        _ = try await removeFunction.call(([
+        _ = try await FamilyCallable.call("removeFamilyMember", ([
             "familyId": familyId,
             "memberId": userId
         ] as [String: Any]).addingClientMetadata())
@@ -1098,10 +1273,7 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
             throw NSError(domain: "FamilyRepository", code: 401, userInfo: [NSLocalizedDescriptionKey: "User must be authenticated"])
         }
 
-        let functions = Functions.functions()
-        let removeFunction = functions.httpsCallable("removeFamilyMember")
-
-        _ = try await removeFunction.call(([
+        _ = try await FamilyCallable.call("removeFamilyMember", ([
             "familyId": familyId,
             "memberId": memberId
         ] as [String: Any]).addingClientMetadata())
@@ -1119,10 +1291,7 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         stopListening()
         
         // Use Cloud Function to delete family (handles permissions server-side)
-        let functions = Functions.functions()
-        let deleteFunction = functions.httpsCallable("inactivateFamily")
-        
-        _ = try await deleteFunction.call(([
+        _ = try await FamilyCallable.call("inactivateFamily", ([
             "familyId": familyId
         ] as [String: Any]).addingClientMetadata())
         
@@ -1242,7 +1411,9 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         stopListening()
     }
 
-    private static func userFacingCallableError(_ error: Error) -> Error {
+    static func userFacingCallableError(_ error: Error) -> Error {
+        // See `childStatusCallableError` — the abandon copy is already the right copy.
+        if FamilyCallable.isStalled(error) { return error }
         let nsError = error as NSError
         guard nsError.domain == FunctionsErrorDomain,
               let code = FunctionsErrorCode(rawValue: nsError.code) else {
@@ -1262,12 +1433,19 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         let message: String
         switch code {
         case .unauthenticated:
-            if Auth.auth().currentUser == nil {
-                message = "You are not signed in. Sign in and try again."
+            // Same rule the `.failedPrecondition` branch below already applies: a child on a
+            // child session must never be told to sign in. FR-60(e) removed the sign-up
+            // screen for an under-13 epoch, so "sign in and try again" is an instruction they
+            // structurally cannot follow — the 2026-08-17 device report. Their real state is
+            // "the identity mint has not finished yet", which is retryable.
+            if ChildRestrictedModeService.shared.isChildAccountSession {
+                message = FriendsFamilyCallableErrors.childSetupIncompleteMessage
+            } else if Auth.auth().currentUser == nil {
+                message = "You are not signed in. Sign in and try again.".localized
             } else if Auth.auth().currentUser?.isAnonymous == true {
-                message = "Create an account to use Friends & Family features."
+                message = "Create an account to use Friends & Family features.".localized
             } else {
-                message = "The server rejected this request. Sign in and try again."
+                message = "The server rejected this request. Sign in and try again.".localized
             }
         case .failedPrecondition:
             // FR-24 keeps the SERVER's refusal byte-identical for "unregistered" and

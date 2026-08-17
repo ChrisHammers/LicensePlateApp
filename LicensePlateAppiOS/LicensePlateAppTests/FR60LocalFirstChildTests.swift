@@ -234,10 +234,18 @@ struct FR60RedemptionSequenceTests {
         #expect(FriendsFamilyAccessPolicy.blocksConsentExitAccess(
             accountState: .signedIn, hasFirebaseSession: true, isDeclaredChildSession: false
         ) == false)
-        // A live Firebase session is still mandatory — the uid-less child provisions FIRST.
+        // A uid-less child does not reach the callable — but NOT because they are refused.
+        // Device pass 2026-08-17 (bug 1) corrected the reason this line exists: the session is
+        // VALID for the exit and merely un-provisioned, so the outcome is
+        // `.childProvisioningIncomplete`, never an authorization failure and never the
+        // "sign in" copy. `FR60ConsentExitContractTests` owns that distinction; this Bool
+        // projection only records that the call does not go out yet.
         #expect(FriendsFamilyAccessPolicy.blocksConsentExitAccess(
             accountState: .localGuest, hasFirebaseSession: false, isDeclaredChildSession: true
         ) == true)
+        #expect(FriendsFamilyAccessPolicy.consentExitAccess(
+            accountState: .localGuest, hasFirebaseSession: false, isDeclaredChildSession: true
+        ) == .childProvisioningIncomplete)
     }
 
     /// Regression guard for the ordinary Friends & Family gate: FR-60 must not loosen it.
@@ -900,5 +908,328 @@ struct FR60DetachedIdentityTests {
             AuthenticationStatusPolicy.presentation(for: freshLocalChild)
                 == AuthenticationStatusPolicy.presentation(for: detachedChild)
         )
+    }
+}
+
+// MARK: - FR-60(b): the consent exit's contract (device pass 2026-08-17, bug 1)
+//
+// Owner report: a local-first child entering a family share code was answered
+// "You are not signed in. Sign in and try again." — FR-60(e) having just removed the only
+// screen on which they could have done that.
+//
+// Two independent defects produced it, and both are pinned here:
+//
+//  1. `validateConsentExitCallableAccess` opened with an unconditional
+//     `guard Auth.auth().currentUser != nil`, AHEAD of the child branch. "No Firebase
+//     session" is the NORMAL pre-state of the one population this exit exists for — FR-60(a)
+//     gives an under-13 epoch no account at all, and the FR-60(c) detach signs a self-healed
+//     child out seconds before they try again — so the gate's first line rejected precisely
+//     whom it was built to admit, in vocabulary they cannot act on.
+//
+//  2. `provisionIdentityForConsentSeekingRedemptionIfNeeded` could return WITHOUT a session
+//     and without throwing, so "the caller provisions first" was true only by convention.
+//     `requiresProvisioning` reads `hasFirebaseUid` off the LOCAL row, and a uid can outlive
+//     the Auth session that justified it (see `requiresLocalOnlyDetach`) — that skip is how a
+//     child with no session reached the gate at all.
+
+@MainActor
+struct FR60ConsentExitContractTests {
+
+    /// The contract, in one assertion per population.
+    ///
+    /// The child rows are the fix: neither is a `.blocked*` outcome, because neither is an
+    /// authorization failure. A child before their uid exists is VALID for this exit and owes
+    /// nothing but the provisioning pass the caller is contracted to run.
+    @Test func theConsentExitMatrix() {
+        // (1) Local-first child, no Firebase session — FR-60(a)'s normal state.
+        #expect(FriendsFamilyAccessPolicy.consentExitAccess(
+            accountState: .localGuest, hasFirebaseSession: false, isDeclaredChildSession: true
+        ) == .childProvisioningIncomplete)
+
+        // (2) The same child one step later, after FR-60(b) minted the uid.
+        #expect(FriendsFamilyAccessPolicy.consentExitAccess(
+            accountState: .firebaseAnonymous, hasFirebaseSession: true, isDeclaredChildSession: true
+        ) == .allowed)
+
+        // (3) Consented child — anonymous by construction (OD-2), admitted (FR-85).
+        #expect(FriendsFamilyAccessPolicy.consentExitAccess(
+            accountState: .firebaseAnonymous, hasFirebaseSession: true, isDeclaredChildSession: true
+        ) == .allowed)
+
+        // (4) Adult guest, signed out — still blocked, and "sign in" is the right thing to
+        //     say to them: they have an account to sign in to.
+        #expect(FriendsFamilyAccessPolicy.consentExitAccess(
+            accountState: .localGuest, hasFirebaseSession: false, isDeclaredChildSession: false
+        ) == .blockedNeedsSignIn)
+
+        // (5) Ordinary anonymous guest — still blocked. This is the line that keeps the
+        //     client gate strictly narrower than the server carve-out.
+        #expect(FriendsFamilyAccessPolicy.consentExitAccess(
+            accountState: .firebaseAnonymous, hasFirebaseSession: true, isDeclaredChildSession: false
+        ) == .blockedNeedsRegistration)
+
+        // (6) Registered adult — allowed, unchanged.
+        #expect(FriendsFamilyAccessPolicy.consentExitAccess(
+            accountState: .signedIn, hasFirebaseSession: true, isDeclaredChildSession: false
+        ) == .allowed)
+    }
+
+    /// The regression itself: no child session, in any state, is ever told to sign in or to
+    /// create an account. FR-60(e) removed both options for this population, so either copy
+    /// is a dead end by construction — this is the assertion that would have caught the bug.
+    @Test func aChildSessionIsNeverToldToSignInOrRegister() {
+        for accountState in [AccountState.localGuest, .firebaseAnonymous, .signedIn] {
+            for hasSession in [true, false] {
+                let decision = FriendsFamilyAccessPolicy.consentExitAccess(
+                    accountState: accountState,
+                    hasFirebaseSession: hasSession,
+                    isDeclaredChildSession: true
+                )
+                #expect(decision != .blockedNeedsSignIn)
+                #expect(decision != .blockedNeedsRegistration)
+            }
+        }
+    }
+
+    /// The non-consent surfaces are deliberately untouched. Friends and search still require
+    /// a registered account, and an adult guest with no session still meets the sign-up gate —
+    /// widening the consent exit must not widen anything else (FR-14/FR-24).
+    @Test func theNonConsentExitGateIsUnchangedForEveryone() {
+        #expect(FriendsFamilyAccessPolicy.blocksCallableAccess(
+            accountState: .localGuest, hasFirebaseSession: false
+        ) == true)
+        #expect(FriendsFamilyAccessPolicy.blocksCallableAccess(
+            accountState: .firebaseAnonymous, hasFirebaseSession: true
+        ) == true)
+        #expect(FriendsFamilyAccessPolicy.blocksCallableAccess(
+            accountState: .signedIn, hasFirebaseSession: true
+        ) == false)
+        #expect(FriendsFamilyAccessPolicy.blocksCallableAccess(
+            accountState: .signedIn, hasFirebaseSession: false
+        ) == true)
+    }
+
+    /// Defect 2, isolated: a local row naming a uid with no Auth session behind it.
+    ///
+    /// Neither existing detector can see this state. `verifyAnonymousChildIdentityIfNeeded`
+    /// opens with `guard let firebaseUser = auth.currentUser`, and
+    /// `releaseVanishedAnonymousIdentityIfNeeded` needs `lastObservedAnonymousUid`, which only
+    /// a listener callback that fired WITH a user in THIS process ever sets. Relaunch after a
+    /// force-sign-out arms neither, so the uid never reaches `detachedIdentityUserIds` — which
+    /// is simultaneously why the consent exit failed (the mint was skipped) and why every
+    /// wave-3b write hold was inert against it.
+    @Test func theSessionlessIdentityMatrix() {
+        // The reported state: declared child, uid on the row, Auth empty.
+        #expect(DetachedIdentityDetectionPolicy.requiresLocalOnlyDetach(
+            hasLocalFirebaseUid: true,
+            hasLiveAuthSession: false,
+            isRegisteredIdentity: false,
+            wasDeclaredByThisDevice: true
+        ) == true)
+
+        // A live session is the ordinary case and is never touched here — the server-verified
+        // `requiresDetach` owns that decision.
+        #expect(DetachedIdentityDetectionPolicy.requiresLocalOnlyDetach(
+            hasLocalFirebaseUid: true,
+            hasLiveAuthSession: true,
+            isRegisteredIdentity: false,
+            wasDeclaredByThisDevice: true
+        ) == false)
+
+        // A REGISTERED account can sign back in, so its uid is not residue.
+        #expect(DetachedIdentityDetectionPolicy.requiresLocalOnlyDetach(
+            hasLocalFirebaseUid: true,
+            hasLiveAuthSession: false,
+            isRegisteredIdentity: true,
+            wasDeclaredByThisDevice: true
+        ) == false)
+
+        // Scoped to the child lineage this device knows about, exactly like `requiresDetach`.
+        #expect(DetachedIdentityDetectionPolicy.requiresLocalOnlyDetach(
+            hasLocalFirebaseUid: true,
+            hasLiveAuthSession: false,
+            isRegisteredIdentity: false,
+            wasDeclaredByThisDevice: false
+        ) == false)
+
+        // Nothing to settle for the uid-less local-first child.
+        #expect(DetachedIdentityDetectionPolicy.requiresLocalOnlyDetach(
+            hasLocalFirebaseUid: false,
+            hasLiveAuthSession: false,
+            isRegisteredIdentity: false,
+            wasDeclaredByThisDevice: true
+        ) == false)
+    }
+
+    /// End to end, as a sequence: the settle is what re-opens the consent exit.
+    ///
+    /// Before it, `requiresProvisioning` sees a uid and skips the mint, so the child arrives
+    /// at the gate session-less — the exact "You are not signed in" path. After it, the same
+    /// child is an ordinary local-first child and the FR-60(b) sequence runs normally.
+    @Test func theSessionlessChildReProvisionsInsteadOfBeingToldToSignIn() {
+        // Before the settle: uid present, Auth empty.
+        #expect(ChildConsentRedemptionPolicy.requiresProvisioning(
+            hasFirebaseUid: true, category: .under13
+        ) == false)
+        #expect(FriendsFamilyAccessPolicy.consentExitAccess(
+            accountState: .localGuest, hasFirebaseSession: false, isDeclaredChildSession: true
+        ) == .childProvisioningIncomplete)
+
+        // The settle nils the uid (and ratchets it, so no writer can address it again).
+        #expect(DetachedIdentityDetectionPolicy.requiresLocalOnlyDetach(
+            hasLocalFirebaseUid: true,
+            hasLiveAuthSession: false,
+            isRegisteredIdentity: false,
+            wasDeclaredByThisDevice: true
+        ) == true)
+
+        // After it: the mint is required again, is permitted (FR-60(b)), and the gate opens.
+        #expect(ChildConsentRedemptionPolicy.requiresProvisioning(
+            hasFirebaseUid: false, category: .under13
+        ) == true)
+        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(
+            category: .under13,
+            isConsentSeekingRedemption: true,
+            hasDeclaredChildHistory: true
+        ) == true)
+        #expect(FriendsFamilyAccessPolicy.consentExitAccess(
+            accountState: .firebaseAnonymous, hasFirebaseSession: true, isDeclaredChildSession: true
+        ) == .allowed)
+    }
+}
+
+// MARK: - FR-60(b)/(d): the unconsented child's cloud footprint (device pass 2026-08-17, bug 2)
+//
+// Owner report: a child removed-and-deleted by their captain settled to "Local Account" — and
+// then changing their avatar put a user document back in Firestore.
+//
+// It was not a resurrection of the deleted uid: `firestore.rules` allow `users/{uid}` writes
+// only for a matching signed-in caller, and the detach signs out before nilling the uid, so
+// the retired identity is unreachable by construction. What wrote was a DIFFERENT, newly
+// minted anonymous uid — and every FR-60(c) hold keys on the RETIRED one, so none of them
+// applied. Two independent routes minted it; both are closed here.
+
+@MainActor
+struct FR60UnconsentedChildCloudFootprintTests {
+
+    /// Route 2 — guest rebirth. The provisioning gate keyed on the epoch ANSWER alone, and the
+    /// answer is clearable: `clearAnswer()` at sign-out / hard reset / post-deletion ends the
+    /// epoch, `requiresAgeGateForGuestProvisioning` becomes true again, and the next answer —
+    /// a `teenAdult` tap, or `AppCoordinator`'s `--skipOnboarding` auto-answer — walked
+    /// straight through on a device still carrying a retired child lineage.
+    @Test func aDeviceWithChildLineageCannotBeRebornAsAnAnonymousAdult() {
+        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(
+            category: .teenAdult,
+            isConsentSeekingRedemption: false,
+            hasDeclaredChildHistory: true
+        ) == false)
+
+        // …and the ratchet never closes the consent exit it exists to protect.
+        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(
+            category: .under13,
+            isConsentSeekingRedemption: true,
+            hasDeclaredChildHistory: true
+        ) == true)
+
+        // A manager CORRECTION retires the lineage (`clearDeclaredChildUserId`), and only then
+        // may the device mint an ordinary guest again — the one authority that can say so.
+        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(
+            category: .teenAdult,
+            isConsentSeekingRedemption: false,
+            hasDeclaredChildHistory: false
+        ) == true)
+
+        // FR-27 unchanged: an unanswered epoch still provisions on no path at all.
+        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(
+            category: nil, isConsentSeekingRedemption: true, hasDeclaredChildHistory: false
+        ) == false)
+    }
+
+    /// Route 1 — the abandoned provisional identity. FR-60(b) sanctions the mint at share-code
+    /// entry, but a redemption that never lands (wrong code, throttle, a decline that spares
+    /// the account) leaves a live anonymous uid with no consent and no family deciding. The
+    /// uid-set holds cannot express that state: this child's declaration LANDED and their
+    /// account is alive. FR-60(d) is explicit that the profile write FOLLOWS consent.
+    @Test func theUnconsentedChildsProfileWriteIsHeldUntilConsentIsBeingSought() {
+        // The reported write: settled child, nobody deciding, changing an avatar.
+        #expect(UnconsentedChildCloudWritePolicy.isWriteHeld(
+            isUnconsentedChild: true,
+            isFamilyApprovalPending: false,
+            isConsentSeekingProvisioning: false
+        ) == true)
+
+        // Inside FR-60(b)'s sequence the write is part of the sanctioned window — FR-83/FR-86
+        // need the name and avatar to tell two pending children apart, and it necessarily runs
+        // before any pending row exists.
+        #expect(UnconsentedChildCloudWritePolicy.isWriteHeld(
+            isUnconsentedChild: true,
+            isFamilyApprovalPending: false,
+            isConsentSeekingProvisioning: true
+        ) == false)
+
+        // A family really is deciding (FR-88 server truth) — the window is open.
+        #expect(UnconsentedChildCloudWritePolicy.isWriteHeld(
+            isUnconsentedChild: true,
+            isFamilyApprovalPending: true,
+            isConsentSeekingProvisioning: false
+        ) == false)
+
+        // A consented child is a full member (FR-85), and an adult was never in scope.
+        #expect(UnconsentedChildCloudWritePolicy.isWriteHeld(
+            isUnconsentedChild: false,
+            isFamilyApprovalPending: false,
+            isConsentSeekingProvisioning: false
+        ) == false)
+    }
+
+    /// The FR-88 tie-in, stated as the window's shape: the device's optimistic flag holds the
+    /// window open while the server has not answered (offline mid-consent must not silently
+    /// drop the child's edits), and a server ABSENT closes it again — which is the same
+    /// self-heal that unsticks the declined child's banner.
+    @Test func theWindowClosesWhenTheServerSaysNobodyIsDeciding() {
+        let unanswered = FamilyApprovalPendingPolicy.isPending(
+            serverPendingFamilyRequest: nil, hasLocalOptimisticFlag: true
+        )
+        #expect(UnconsentedChildCloudWritePolicy.isWriteHeld(
+            isUnconsentedChild: true,
+            isFamilyApprovalPending: unanswered,
+            isConsentSeekingProvisioning: false
+        ) == false)
+
+        let serverSaysNo = FamilyApprovalPendingPolicy.isPending(
+            serverPendingFamilyRequest: false, hasLocalOptimisticFlag: true
+        )
+        #expect(UnconsentedChildCloudWritePolicy.isWriteHeld(
+            isUnconsentedChild: true,
+            isFamilyApprovalPending: serverSaysNo,
+            isConsentSeekingProvisioning: false
+        ) == true)
+    }
+
+    /// Device pass 2026-08-17 (bug 3): delete + reinstall came back as the previous child's
+    /// username, on a device whose age answer had been wiped.
+    ///
+    /// The detach DID fire — wave 1's `applyRecordedAgeAnswerToRestoredIdentity` is reached by
+    /// the age screen and `requiresLocalDetach` is satisfied. What it never undid was the
+    /// PROFILE the launch bootstrap had already hydrated from the restored uid's document,
+    /// minutes before the age screen existed. Dropping the uid and keeping the name is the
+    /// same hybrid in a different field.
+    @Test func onlyTheRestoredIdentityDetachDiscardsTheInheritedProfile() {
+        #expect(IdentityDetachReason.restoredIdentityUnder13Answer.discardsInheritedProfile == true)
+
+        // The deleted-account settles are this player's own row: their username, avatar and
+        // history stay exactly where they are (FR-60(c) preserves local play deliberately).
+        #expect(IdentityDetachReason.serverDeletedIdentity.discardsInheritedProfile == false)
+        #expect(IdentityDetachReason.vanishedAnonymousSession.discardsInheritedProfile == false)
+        #expect(IdentityDetachReason.alreadyDetachedIdentity.discardsInheritedProfile == false)
+        #expect(IdentityDetachReason.sessionLostBeforeRedemption.discardsInheritedProfile == false)
+
+        // The reinstall shape that reaches it: an under-13 answer landing on a restored
+        // anonymous identity this epoch never bound.
+        #expect(RestoredIdentityAgeAnswerPolicy.requiresLocalDetach(
+            category: .under13,
+            isAnonymousSession: true,
+            isBoundToCurrentAnswer: false
+        ) == true)
     }
 }

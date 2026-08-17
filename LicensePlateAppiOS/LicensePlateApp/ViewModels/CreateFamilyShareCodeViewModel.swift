@@ -72,51 +72,39 @@ final class CreateFamilyShareCodeViewModel: ObservableObject {
     }
 
     func generateCode() {
-        guard let authService, authService.isOnline else {
-            errorMessage = "Requires network connection".localized
-            showError = true
-            return
-        }
-
-        isGenerating = true
-        errorMessage = nil
-
-        Task {
-            do {
-                let result = try await familyRepository.createShareCode(type: "family", familyId: familyId)
-                let qrImage = QRCodeService.shared.generateQRCode(from: result.code)
-                shareCode = result.code
-                expiresAt = result.expiresAt
-                currentShareCodeId = result.codeId
-                qrCodeImage = qrImage
-                isGenerating = false
-                AnalyticsService.shared.log(.shareCodeGenerated(type: "family"))
-            } catch {
-                isGenerating = false
-                errorMessage = error.localizedDescription
-                showError = true
-                FriendsFamilyInviteAnalytics.logInviteFailure(error)
-            }
-        }
+        mintCode(revokingCurrent: false)
     }
 
     func refreshShareCode() {
+        if let expiresAt, expiresAt <= currentTime {
+            AnalyticsService.shared.log(.shareCodeExpired)
+        }
+        mintCode(revokingCurrent: true)
+    }
+
+    /// One mint path for both entry points.
+    ///
+    /// Device pass 2026-08-17: `isGenerating` was cleared on the success and failure lines of
+    /// two near-identical copies, so any exit either copy did not spell out left the sheet
+    /// spinning forever — and "create a new share code timed out and never created one" was
+    /// exactly that, an unbounded callable with no reset path. `defer` now owns the reset, and
+    /// `FamilyRepository`'s bounded callable guarantees the `await` returns, so the re-entrancy
+    /// guard below can never be the thing that wedges the button.
+    private func mintCode(revokingCurrent: Bool) {
         guard let authService, authService.isOnline else {
             errorMessage = "Requires network connection".localized
             showError = true
             return
         }
-
-        if let expiresAt, expiresAt <= currentTime {
-            AnalyticsService.shared.log(.shareCodeExpired)
-        }
+        guard !isGenerating else { return }
 
         isGenerating = true
         errorMessage = nil
 
         Task {
+            defer { isGenerating = false }
             do {
-                if let codeId = currentShareCodeId {
+                if revokingCurrent, let codeId = currentShareCodeId {
                     try? await familyRepository.revokeShareCode(codeId: codeId)
                     AnalyticsService.shared.log(.shareCodeRevoked)
                 }
@@ -127,11 +115,9 @@ final class CreateFamilyShareCodeViewModel: ObservableObject {
                 expiresAt = result.expiresAt
                 currentShareCodeId = result.codeId
                 qrCodeImage = qrImage
-                isGenerating = false
                 currentTime = Date()
                 AnalyticsService.shared.log(.shareCodeGenerated(type: "family"))
             } catch {
-                isGenerating = false
                 errorMessage = error.localizedDescription
                 showError = true
                 FriendsFamilyInviteAnalytics.logInviteFailure(error)

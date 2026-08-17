@@ -254,14 +254,40 @@ class FamilyDashboardViewModel: ObservableObject {
         guard !userIds.isEmpty else { return }
 
         isRefreshingMemberIdentities = true
+        let watchdog = armGuardWatchdog { [weak self] in
+            self?.isRefreshingMemberIdentities = false
+        }
         Task { [weak self] in
             guard let self else { return }
+            defer {
+                watchdog.cancel()
+                self.isRefreshingMemberIdentities = false
+            }
             await self.userRepository.refreshUsersFromFirestoreIfPresent(userIds: userIds)
             if self.family?.familyId == refreshingFamilyId {
                 self.members = self.familyRepository.getMembers(familyId: refreshingFamilyId)
                 self.pendingRequests = self.familyRepository.getPendingRequests(familyId: refreshingFamilyId)
             }
-            self.isRefreshingMemberIdentities = false
+        }
+    }
+
+    /// Releases an in-flight guard even when the work behind it never comes back.
+    ///
+    /// Device pass 2026-08-17. Both guards on this view model are released only once a chain of
+    /// Firestore reads returns, and a Firestore read carries NO client deadline — offline it
+    /// serves cache, but against a wedged stream it simply never returns, and `defer` cannot
+    /// fire for a function that never finishes. One such read left the guard set for the rest of
+    /// the process, so the dashboard silently refused to reload anything until the app was
+    /// relaunched. Exactly the failure `FamilyCallable` bounds on the callable side, so it is
+    /// bounded here at the same deadline and for the same reason: a stuck read may cost this
+    /// refresh, never every future one.
+    private func armGuardWatchdog(
+        _ release: @escaping @MainActor () -> Void
+    ) -> Task<Void, Never> {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(FamilyCallable.deadline * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            release()
         }
     }
 
@@ -288,11 +314,18 @@ class FamilyDashboardViewModel: ObservableObject {
         // Prevent multiple simultaneous loads
         guard !isLoadingData else { return }
         isLoadingData = true
-        
+        // ...but never permanently. See `armGuardWatchdog`: every await below is an unbounded
+        // Firestore read, and the `defer` that clears this flag only runs if they all return.
+        let watchdog = armGuardWatchdog { [weak self] in
+            self?.isLoadingData = false
+            self?.isLoading = false
+        }
+
         // First, refresh user from Firestore to get latest activeFamilyId (source of truth)
         Task {
             defer {
                 Task { @MainActor in
+                    watchdog.cancel()
                     self.isLoadingData = false
                 }
             }

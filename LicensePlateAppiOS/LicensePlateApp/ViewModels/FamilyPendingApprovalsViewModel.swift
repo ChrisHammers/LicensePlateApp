@@ -14,15 +14,22 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
     @Published var pendingRequests: [PendingJoinRequest] = []
     @Published var errorMessage: String?
     @Published var showError = false
-    @Published private(set) var busyRequestId: String?
-    @Published private(set) var busyKind: InviteBusyKind?
+    /// Busy state PER ROW.
+    ///
+    /// Device pass 2026-08-17: this was one `busyRequestId` for the whole surface, so while a
+    /// call was in flight on row A, row B's Approve and Decline silently no-op'd — the guard
+    /// returned `false` before touching anything, while the buttons stayed enabled and gave no
+    /// feedback whatsoever ("declining the second row was blocked while the first was in
+    /// flight"). Pending rows resolve independently server-side; nothing ever justified
+    /// serialising them, and serialising them turned one stalled call into a dead screen.
+    @Published private(set) var busyKindByRequestId: [String: InviteBusyKind] = [:]
     @Published private(set) var processedRequestIds: Set<String> = []
 
     /// COPPA FR-1/FR-25 approval-time child declaration, one draft per pending request.
     @Published private(set) var childTargetStates: [String: ChildApprovalTargetState] = [:]
     @Published private(set) var childDrafts: [String: ChildApprovalDraft] = [:]
 
-    var isProcessing: Bool { busyRequestId != nil }
+    var isProcessing: Bool { !busyKindByRequestId.isEmpty }
 
     /// Firebase-touching seams, isolated so the declaration state machine is testable
     /// without the network (same idiom as `ChildSessionPostureCoordinator.Dependencies`).
@@ -82,11 +89,16 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
     }
 
     func isBusy(requestId: String, kind: InviteBusyKind) -> Bool {
-        busyRequestId == requestId && busyKind == kind
+        busyKindByRequestId[requestId] == kind
     }
 
     func isRowDisabled(requestId: String) -> Bool {
-        processedRequestIds.contains(requestId) || busyRequestId == requestId
+        if processedRequestIds.contains(requestId) { return true }
+        if busyKindByRequestId[requestId] != nil { return true }
+        guard let request = pendingRequests.first(where: { $0.requestId == requestId }) else {
+            return false
+        }
+        return isExpired(request)
     }
 
     func configure(authService: FirebaseAuthService, modelContext: ModelContext) {
@@ -105,9 +117,18 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
         pendingObservation = nil
     }
 
+    /// Reconciles the list against the server.
+    ///
+    /// Both halves run under `FamilyCallable.bounded` because both are chains of Firestore
+    /// reads, and a Firestore read has NO client-side deadline — offline it serves cache, but
+    /// against a wedged stream it simply never returns. `.refreshable` and `.task` await this
+    /// directly, so an unbounded hang here is a pull-to-refresh spinner that never stops.
+    /// Timing out falls back to the local store, which is the same path an error already took.
     func refreshPendingRequests() async {
         do {
-            let linked = try await deps.fetchPendingRequests(familyId)
+            let linked = try await FamilyCallable.bounded(name: "fetchPendingRequests") {
+                [deps, familyId] in try await deps.fetchPendingRequests(familyId)
+            }
             pendingRequests = linked.filter { $0.statusEnum == .pending }
         } catch {
             loadPendingRequests()
@@ -145,10 +166,25 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
     /// FR-1/FR-25: Approve stays disabled until the declaration is complete. The server
     /// enforces the same rule; blocking here is what keeps a manager off a raw error.
     func canApprove(request: PendingJoinRequest) -> Bool {
-        ChildApprovalPolicy.canApprove(
+        guard !isExpired(request) else { return false }
+        return ChildApprovalPolicy.canApprove(
             state: childTargetState(for: request),
             draft: childDraft(for: request)
         )
+    }
+
+    // MARK: - Decision window (device pass 2026-08-17)
+
+    /// Past its 7-day decision window. The server sweep retires the row within five minutes;
+    /// until it does, the row renders TERMINAL rather than offering actions the server refuses.
+    func isExpired(_ request: PendingJoinRequest) -> Bool {
+        FamilyPendingRequestLifetime.isExpired(createdAt: request.createdAt)
+    }
+
+    /// "Expires in 4 days" / "Expires today" / "Expired". On screen from the moment the row
+    /// appears, so its eventual retirement is foreseeable instead of a row that vanishes.
+    func expiryLabel(for request: PendingJoinRequest) -> String {
+        FamilyPendingRequestLifetime.localizedLabel(createdAt: request.createdAt)
     }
 
     func setIsChild(_ isChild: Bool, for request: PendingJoinRequest) {
@@ -215,16 +251,24 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
     /// One fresh read per pending target. `nil` (unreadable — FR-12 denies peer reads of
     /// a non-family child's doc) is `.unknown`, which demands the same explicit answer as
     /// a confirmed child: nothing is ever assumed to be an adult.
+    ///
+    /// Bounded as a whole rather than per row: N rows under N separate deadlines would be N
+    /// times the worst case. An abandoned pass leaves the rows it had not reached at
+    /// `.unknown`, which is the fail-closed direction — `.unknown` demands the same explicit
+    /// declaration a confirmed child does, so a timeout can never soften an approval.
     func resolveChildTargetStates() async {
-        for request in pendingRequests {
-            let resolved = await deps.resolveIsChildAccount(request.userId)
-            let state: ChildApprovalTargetState
-            switch resolved {
-            case .some(true): state = .alreadyChild
-            case .some(false): state = .notChild
-            case .none: state = .unknown
+        try? await FamilyCallable.bounded(name: "resolveChildTargetStates") { [weak self] in
+            guard let self else { return }
+            for request in self.pendingRequests {
+                let resolved = await self.deps.resolveIsChildAccount(request.userId)
+                let state: ChildApprovalTargetState
+                switch resolved {
+                case .some(true): state = .alreadyChild
+                case .some(false): state = .notChild
+                case .none: state = .unknown
+                }
+                self.applyTargetState(state, requestId: request.requestId)
             }
-            applyTargetState(state, requestId: request.requestId)
         }
     }
 
@@ -259,7 +303,8 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
     }
 
     private func respond(to request: PendingJoinRequest, approve: Bool) async -> Bool {
-        guard busyRequestId == nil else { return false }
+        // Per-row, not per-surface: a second row must stay actionable while this one runs.
+        guard busyKindByRequestId[request.requestId] == nil else { return false }
         guard !processedRequestIds.contains(request.requestId) else { return false }
 
         guard let authService, authService.isOnline else {
@@ -270,13 +315,9 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
 
         let declaration = approve ? childDraft(for: request) : nil
 
-        busyRequestId = request.requestId
-        busyKind = approve ? .approve : .decline
-        defer {
-            busyRequestId = nil
-            busyKind = nil
-        }
+        busyKindByRequestId[request.requestId] = approve ? .approve : .decline
 
+        let outcome: Result<Void, Error>
         do {
             try await deps.respondToPendingRequest(
                 familyId,
@@ -284,6 +325,21 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
                 approve,
                 declaration
             )
+            outcome = .success(())
+        } catch {
+            outcome = .failure(error)
+        }
+
+        // Release the row BEFORE any reconcile, and outside a `defer` that would only fire
+        // once the whole function — reconcile included — had returned. The reconcile awaits
+        // Firestore reads that carry no client deadline of their own, so holding the flag
+        // across them is what let a SUCCESSFUL approve leave its row disabled until the app
+        // was relaunched. The decision is already made at this point; nothing below needs
+        // the row locked.
+        busyKindByRequestId.removeValue(forKey: request.requestId)
+
+        do {
+            try outcome.get()
             if approve {
                 analytics.log(.familyJoinRequestApproved)
                 logChildDeclarationOutcome(declaration, targetState: childTargetState(for: request))

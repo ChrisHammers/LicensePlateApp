@@ -34,6 +34,8 @@ struct FamilyPendingApprovals: View {
                             PendingApprovalRow(
                                 request: request,
                                 stamp: viewModel.identityStamp(for: request),
+                                expiryLabel: viewModel.expiryLabel(for: request),
+                                isExpired: viewModel.isExpired(request),
                                 childTargetState: viewModel.childTargetState(for: request),
                                 childDraft: viewModel.childDraft(for: request),
                                 canApprove: viewModel.canApprove(request: request),
@@ -111,6 +113,10 @@ struct PendingApprovalRow: View {
     /// Device pass 2026-08-17: previously read off the request as a `@Transient`, which is
     /// nil on every row that comes back out of SwiftData — i.e. every row this list renders.
     var stamp: PendingIdentityStamp?
+    /// Device pass 2026-08-17: the row's own decision window, rendered from the moment it
+    /// appears. Both values are decided by the view model — see `FamilyPendingRequestLifetime`.
+    var expiryLabel: String = ""
+    var isExpired: Bool = false
     /// COPPA FR-1/FR-25 rendered projections — all decided by the view model.
     let childTargetState: ChildApprovalTargetState
     let childDraft: ChildApprovalDraft
@@ -168,11 +174,32 @@ struct PendingApprovalRow: View {
             .accessibilityElement(children: .contain)
             .accessibilityLabel(pendingApprovalAccessibilityLabel)
 
+            expiryLine
+
             childDeclarationSection
         }
         .padding(.vertical, 8)
         .task(id: request.userId) {
             await resolveUserIfNeeded()
+        }
+    }
+
+    /// The decision window. Terminal state carries an icon as well as a colour — state is never
+    /// conveyed by colour alone.
+    @ViewBuilder
+    private var expiryLine: some View {
+        if !expiryLabel.isEmpty {
+            HStack(spacing: 6) {
+                Image(systemName: isExpired ? "clock.badge.xmark" : "clock")
+                    .font(.system(size: 12, weight: .semibold))
+                    .accessibleDecorative()
+                Text(expiryLabel)
+                    .font(.system(.caption, design: .rounded))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .foregroundStyle(isExpired ? Color.Theme.primaryBlue : Color.Theme.softBrown)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(expiryLabel)
         }
     }
 
@@ -473,6 +500,42 @@ struct PendingApprovalRow: View {
             onCorrectionAcknowledgedChange: { _ in },
             onCorrectionGuardianAffirmedChange: { _ in },
             onApprove: { true },
+            onDecline: { true }
+        )
+    }
+}
+
+/// Device pass 2026-08-17: the row past its 7-day decision window. Terminal and visibly so —
+/// the state the owner previously saw as an ordinary, still-approvable row.
+#Preview("Approval row — decision window elapsed") {
+    List {
+        PendingApprovalRow(
+            request: PendingJoinRequest(
+                requestId: "req-6",
+                familyId: "fam",
+                userId: "u6",
+                requestedBy: "u6",
+                method: .code,
+                createdAt: .now.addingTimeInterval(-8 * 24 * 60 * 60)
+            ),
+            stamp: PendingIdentityStamp(firestoreData: ["userName": "pending_pat"]),
+            expiryLabel: "family.pending.expired".localized,
+            isExpired: true,
+            childTargetState: .notChild,
+            childDraft: .initial(for: .notChild),
+            canApprove: false,
+            expectedAgeOutYearOptions: Array(2026...2039),
+            isApproveBusy: false,
+            isDeclineBusy: false,
+            isDisabled: true,
+            onIsChildChange: { _ in },
+            onConsentAcknowledgedChange: { _ in },
+            onGuardianAffirmedChange: { _ in },
+            onExpectedAgeOutYearChange: { _ in },
+            onCorrectionReasonChange: { _ in },
+            onCorrectionAcknowledgedChange: { _ in },
+            onCorrectionGuardianAffirmedChange: { _ in },
+            onApprove: { false },
             onDecline: { true }
         )
     }

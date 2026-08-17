@@ -16,9 +16,17 @@ enum FriendsFamilyCallableErrors {
     /// F-6 (FR-28): non-punitive copy for the server's unconsented-child / child-account
     /// rejections (`details.reason`), matching the restricted-state surface.
     static let childRestrictionMessageKey = "child_gate.callable_blocked"
+    /// F-18 (FR-60(b)): the consent exit was reached before the child's uid was minted.
+    /// Retryable and local — never the "sign in" copy, which FR-60(e) makes unfollowable for
+    /// a child. Shared with `AuthError.childDeclarationPending` so one condition has one voice.
+    static let childSetupIncompleteMessageKey = "child_gate.join.setup_incomplete"
 
     static var guestBlockedMessage: String {
         guestBlockedMessageKey.localized
+    }
+
+    static var childSetupIncompleteMessage: String {
+        childSetupIncompleteMessageKey.localized
     }
 
     static var recipientNotRegisteredMessage: String {

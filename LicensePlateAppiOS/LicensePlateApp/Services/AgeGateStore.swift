@@ -312,13 +312,34 @@ enum GuestProvisioningPolicy {
     ///     (FR-60(b)). This is the whole exception — it is a parameter rather than a stored
     ///     flag so that "may a child be provisioned right now?" is answered by the caller's
     ///     identity, not by device state an unrelated code path could have left behind.
+    ///   - hasDeclaredChildHistory: `AgeGateStore.hasDeclaredChildHistory` — this device has
+    ///     confirmed at least one child registration. Device pass 2026-08-17 (bug 2): the
+    ///     epoch ANSWER is not sufficient on its own, because it is clearable. `clearAnswer()`
+    ///     (sign-out, hard reset, post-deletion) ends the epoch, `requiresAgeGateForGuestProvisioning`
+    ///     then becomes true again, and the next answer — a `teenAdult` tap, or `AppCoordinator`'s
+    ///     `--skipOnboarding` auto-answer — passed this gate with no reference whatsoever to the
+    ///     child lineage the device is still carrying. That is how a settled, uid-less child
+    ///     acquired a BRAND-NEW anonymous uid (and, with it, a fresh `users/{uid}` that every
+    ///     wave-3b hold was blind to, because those holds key on the RETIRED uid).
+    ///
+    ///     The ratchet is the protective direction FR-74(d′)/OD-9(iv) already mandate — "device
+    ///     child history overrides in all cases". It is not permanent: a manager CORRECTION
+    ///     retires the lineage through `clearDeclaredChildUserId`, and signing in to a real
+    ///     account never comes through here at all (FR-60(e)/OD-9(i): sign-in or reinstall are
+    ///     the sanctioned exits).
     static func mayCreateAnonymousIdentity(
         category: AgeGateCategory?,
-        isConsentSeekingRedemption: Bool = false
+        isConsentSeekingRedemption: Bool = false,
+        hasDeclaredChildHistory: Bool = false
     ) -> Bool {
+        // Consent-seeking redemption is the one sanctioned mint for a child device, and it
+        // is checked first so the ratchet can never close the consent exit it protects.
+        if isConsentSeekingRedemption {
+            return category != nil
+        }
+        guard !hasDeclaredChildHistory else { return false }
         guard let category else { return false }
-        guard category == .under13 else { return true }
-        return isConsentSeekingRedemption
+        return category != .under13
     }
 
     /// Whether the current session must pass the age screen before guest provisioning.
@@ -438,6 +459,117 @@ enum DetachedIdentityDetectionPolicy {
         guard hasFirebaseUid, isAnonymousSession, wasDeclaredByThisDevice else { return false }
         guard !isAlreadyDetached, isOnline else { return false }
         return true
+    }
+
+    /// Device pass 2026-08-17 (bug 1): the state NEITHER wave-1 nor wave-3b could see — a
+    /// local player still naming a uid while Firebase Auth holds no session at all.
+    ///
+    /// Both existing detectors are blind to it by construction.
+    /// `verifyAnonymousChildIdentityIfNeeded` opens with `guard let firebaseUser = auth.currentUser`,
+    /// and `releaseVanishedAnonymousIdentityIfNeeded` needs `lastObservedAnonymousUid`, which is
+    /// only ever set by a listener callback that fired WITH a user *in this process*. Kill the
+    /// app after a force-sign-out (or lose the race where the listener reaches the teardown
+    /// before the bootstrap has published `currentUser`) and neither arms: the uid is never
+    /// added to the detached set, so every wave-3b write hold stays inert, and
+    /// `ChildConsentRedemptionPolicy.requiresProvisioning` reads `hasFirebaseUid: true` and
+    /// skips the mint — which is how the consent exit answered "You are not signed in. Sign in
+    /// and try again." to a child who has no account to sign in to.
+    ///
+    /// No network is involved and none is possible: without a session the `.server` self-read
+    /// that `requiresDetach` depends on is refused by rules, so it can only ever return
+    /// `.unknown`. The local facts are sufficient and unambiguous — an anonymous identity has
+    /// no credentials, so a session that is gone is gone forever.
+    ///
+    /// - Parameters:
+    ///   - isRegisteredIdentity: a registered account CAN sign back in; its uid stays.
+    ///   - wasDeclaredByThisDevice: same scoping as `requiresDetach`. Restricts the rule to the
+    ///     child lineage this device knows about, so an adult guest's session is never settled
+    ///     out from under them by this path.
+    static func requiresLocalOnlyDetach(
+        hasLocalFirebaseUid: Bool,
+        hasLiveAuthSession: Bool,
+        isRegisteredIdentity: Bool,
+        wasDeclaredByThisDevice: Bool
+    ) -> Bool {
+        guard hasLocalFirebaseUid, !hasLiveAuthSession else { return false }
+        guard !isRegisteredIdentity, wasDeclaredByThisDevice else { return false }
+        return true
+    }
+}
+
+// MARK: - Why an identity was retired (FR-60(a)/(c) settle)
+
+/// `detachAnonymousIdentityLocally` serves two populations that need DIFFERENT settles, and
+/// the difference was previously carried by a `StaticString` used only for a DEBUG print.
+///
+///  * The child whose own account was deleted server-side keeps their local profile: the
+///    username and avatar are theirs, the trips are theirs, and only the dead uid goes.
+///  * The RESTORED identity that this epoch's under-13 answer does not own is somebody
+///    else's account (or a previous epoch's). Wave 1 dropped the session but left the
+///    profile it had already hydrated from that account's `users/{uid}` — which is why a
+///    reinstall came back as "LittleTimmy" on a device whose age answer had been wiped: the
+///    launch bootstrap reads the Keychain-restored uid's document long before the age screen
+///    is shown, and the detach that follows never undid the inheritance.
+enum IdentityDetachReason: String {
+    /// FR-60(a): an under-13 answer landed on an identity it does not own.
+    case restoredIdentityUnder13Answer
+    /// FR-60(c): a confirmed-absent `users/{uid}` — declined, or remove-and-delete.
+    case serverDeletedIdentity
+    /// Firebase force-signed-out an anonymous session that no longer exists.
+    case vanishedAnonymousSession
+    /// A uid already on the one-way ratchet was offered to the session again.
+    case alreadyDetachedIdentity
+    /// A local player naming a uid with no Auth session left (`requiresLocalOnlyDetach`).
+    case sessionLostBeforeRedemption
+
+    /// True when the local player must NOT keep the retired account's identity fields.
+    /// Only the restored-identity case: there the account belongs to a different answer,
+    /// so carrying its username/avatar forward is the same mistake as carrying its uid.
+    var discardsInheritedProfile: Bool {
+        self == .restoredIdentityUnder13Answer
+    }
+}
+
+// MARK: - Unconsented-child cloud footprint (FR-60(b)/(d) acceptance seam)
+
+/// FR-60's promise is not "a child's uid is deleted afterwards" — it is that an unconsented
+/// child leaves **no server footprint at all**, and FR-60(d) is explicit that the profile
+/// write is what "follows" consent, not what precedes it.
+///
+/// The pre-FR-88 holds could not express that. They key on a UID SET — pending-declaration
+/// and detached — so they cover a uid that owes a declaration and a uid that is dead, and
+/// nothing in between. The population in between is the one that keeps reappearing in device
+/// testing: a child who provisioned at share-code entry (FR-60(b) sanctions the mint) whose
+/// redemption then went nowhere — a wrong code, a throttle, a decline that spared the
+/// account. They hold a live anonymous uid, no consent, and no family deciding about them,
+/// and every ordinary profile writer treats them as an ordinary account. Changing an avatar
+/// publishes a child's name and avatar to a server that has no consent to hold either.
+///
+/// FR-88 is what finally makes the rule expressible: `users/{uid}.pendingFamilyRequest` is
+/// server truth for "a family is deciding about me", so the sanctioned window has an
+/// observable end as well as a beginning.
+///
+/// The window, stated once: **a child's cloud profile is writable exactly while consent is
+/// being sought or has been granted.**
+enum UnconsentedChildCloudWritePolicy {
+    /// - Parameters:
+    ///   - isUnconsentedChild: `ChildRestrictedModeService.isRestrictedUnconsentedChild`. A
+    ///     consented child is a full member (FR-85) and writes freely; an adult is untouched.
+    ///   - isFamilyApprovalPending: the FR-88 reconciled value. Server truth wins; the
+    ///     device's optimistic flag stands only while the server has not answered, which is
+    ///     the same fail-toward-open direction the banner uses — an offline child mid-consent
+    ///     must not have their profile write silently dropped.
+    ///   - isConsentSeekingProvisioning: the uid is INSIDE FR-60(b)'s mint→bind→declare→redeem
+    ///     sequence right now. Its profile write is part of the sanctioned window (FR-83/FR-86
+    ///     need the name and avatar to distinguish two pending children), and it necessarily
+    ///     runs before any pending row exists.
+    static func isWriteHeld(
+        isUnconsentedChild: Bool,
+        isFamilyApprovalPending: Bool,
+        isConsentSeekingProvisioning: Bool
+    ) -> Bool {
+        guard isUnconsentedChild else { return false }
+        return !isFamilyApprovalPending && !isConsentSeekingProvisioning
     }
 }
 

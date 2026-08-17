@@ -243,9 +243,12 @@ struct ChildShareCodeEntryReachabilityTests {
 
     // MARK: - The redeem call itself
 
-    /// `FamilyRepository.redeemShareCode` gates only on `validateFriendsFamilyCallableAccess`
-    /// — a registered account with a live session. Child status is NOT part of that gate
-    /// (FR-24), so the call goes out for a child exactly as it does for an adult.
+    /// `FamilyRepository.redeemShareCode` gates on `validateConsentExitCallableAccess`, whose
+    /// registered-account row is the one asserted here: a registered session with a live
+    /// Firebase user passes, and child status is NOT part of that decision (FR-24), so the
+    /// call goes out for a child exactly as it does for an adult. The anonymous rows — the
+    /// FR-60 local-first child before and after their uid exists — belong to
+    /// `FR60ConsentExitContractTests`, which owns the three-valued contract.
     @Test func theRedeemGateDoesNotBlockARegisteredChild() {
         #expect(
             FriendsFamilyAccessPolicy.blocksCallableAccess(

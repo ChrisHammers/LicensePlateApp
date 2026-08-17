@@ -1502,5 +1502,10 @@
 "family.child.error.already_removed" = "Ce membre avait déjà été retiré de cette famille. La liste a été mise à jour.";
 "family.child.error.invalid" = "Quelque chose dans cette demande n'était pas valide. Réessayez.";
 "family.child.error.unavailable" = "Le serveur est temporairement indisponible. Réessayez dans un moment.";
+"family.callable.error.timed_out" = "Cette demande a mis trop de temps à atteindre le serveur. Vérifiez votre connexion et réessayez.";
+"family.pending.expired" = "Expirée — adhésion impossible";
+"family.pending.expires_today" = "Expire aujourd'hui";
+"family.pending.expires_tomorrow" = "Expire demain";
+"family.pending.expires_in_days" = "Expire dans %d jours";
 "family.child.error.signed_out" = "Vous n'êtes pas connecté. Connectez-vous et réessayez.";
 "family.child.error.server" = "Le serveur n'a pas pu terminer ce changement. Réessayez dans un moment.";

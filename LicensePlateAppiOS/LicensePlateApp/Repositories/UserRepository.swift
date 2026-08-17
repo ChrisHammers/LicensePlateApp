@@ -877,7 +877,23 @@ class UserRepository: ObservableObject {
     /// `users/{uid}`, but the device kept the uid and kept writing to it. The
     /// pending-declaration hold could never cover that (it releases once a declaration
     /// lands, and a deleted account's had), so detached uids are held here too.
+    ///
+    /// FR-60(b)/(d) third hold (device pass 2026-08-17, bug 2): an unconsented child with no
+    /// family deciding about them has no sanctioned server footprint at all, so none of these
+    /// writers may address their uid either — prefs, game defaults, participation defaults,
+    /// and `private/fcm` (which FR-73's provisional-token guard independently wants closed for
+    /// exactly this population). The two uid-set holds above cannot express it: this child's
+    /// declaration LANDED and their account is very much alive.
     private func assertMayWriteUserDocument(userId: String) throws {
+        if UnconsentedChildCloudWritePolicy.isWriteHeld(
+            isUnconsentedChild: ChildRestrictedModeService.shared.isRestrictedUnconsentedChild,
+            isFamilyApprovalPending: ChildRestrictedModeService.shared.isFamilyApprovalPending,
+            // Nothing in this repository participates in FR-60(b)'s provisioning sequence —
+            // the one write that does is `FirebaseAuthService.saveUserDataToFirestore`.
+            isConsentSeekingProvisioning: false
+        ) {
+            throw UserDocumentWriteHeldError(userId: userId)
+        }
         guard UserDocumentWritePolicy.isWriteHeld(
             userId: userId,
             pendingDeclarationUserIds: AgeGateStore.shared.pendingDeclarationUserIds,

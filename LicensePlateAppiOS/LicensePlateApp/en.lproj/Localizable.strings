@@ -1531,5 +1531,10 @@
 "family.child.error.already_removed" = "That member was already removed from this family. The list has been updated.";
 "family.child.error.invalid" = "Something in that request wasn't valid. Try again.";
 "family.child.error.unavailable" = "The server is temporarily unavailable. Try again shortly.";
+"family.callable.error.timed_out" = "That request took too long to reach the server. Check your connection and try again.";
+"family.pending.expired" = "Expired — no longer joinable";
+"family.pending.expires_today" = "Expires today";
+"family.pending.expires_tomorrow" = "Expires tomorrow";
+"family.pending.expires_in_days" = "Expires in %d days";
 "family.child.error.signed_out" = "You are not signed in. Sign in and try again.";
 "family.child.error.server" = "The server couldn't finish that change. Try again in a moment.";

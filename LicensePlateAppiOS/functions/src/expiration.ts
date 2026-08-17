@@ -2,6 +2,10 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import { currentRevenueCatApiKey } from "./accountDeletion";
 import { deleteProvisionalChildAccountIfNeverConsented } from "./provisionalChildAccounts";
+import {
+  sweepUnansweredJoinRequests,
+  unansweredJoinRequestCutoffMillis,
+} from "./pendingJoinRequestExpiry";
 
 const db = admin.firestore();
 
@@ -56,6 +60,12 @@ async function cleanUpProvisionalChildrenForExpiredInvites(
  * The one exception is FR-60(c)'s transient-account cleanup below: a never-consented child's
  * whole account is deleted when their family invite expires, because that account exists only
  * for the consent request that just lapsed.
+ *
+ * Device pass 2026-08-17: this job also owns the fourth clock — unanswered join requests. It
+ * does NOT retire a pending row because that row's invite lapsed; see
+ * `pendingJoinRequestExpiry.ts` for why the redemption window is the wrong clock for a decision
+ * awaiting a human. What it guarantees is that every pending row has exactly ONE owner of its
+ * terminal state, so none is left orphaned by the invite sweep above.
  */
 export const expireInvitesAndCodes = functions.pubsub
   .schedule("every 5 minutes")
@@ -112,12 +122,24 @@ export const expireInvitesAndCodes = functions.pubsub
 
     await codeBatch.commit();
 
+    // Unanswered join requests, on their own 7-day clock. Deliberately NOT followed by an
+    // inline FR-60(c) cleanup of the children whose rows just retired: `inactivateFamily` set
+    // the precedent for exactly this case and left those accounts to the daily FR-77 backstop,
+    // which now picks them up on its next run because retiring the row is what lifts the
+    // `hasLiveJoinRequest` veto. Keeping the deletion machinery out of a 5-minute job also
+    // keeps this pass bounded.
+    const joinRequestSweep = await sweepUnansweredJoinRequests(db, {
+      cutoffMillis: unansweredJoinRequestCutoffMillis(now.toMillis()),
+    });
+
     // FR-60(c): strictly after the status flip commits, so a cleanup failure cannot leave an
     // invite stuck "pending" forever.
     await cleanUpProvisionalChildrenForExpiredInvites(invitesSnapshot.docs);
 
     console.log(
-      `Expired ${invitesSnapshot.size} invites, ${tripInvitesSnapshot.size} trip invites, and ${codesSnapshot.size} codes`
+      `Expired ${invitesSnapshot.size} invites, ${tripInvitesSnapshot.size} trip invites, ` +
+        `${codesSnapshot.size} codes, and ${joinRequestSweep.retired} unanswered join requests` +
+        `${joinRequestSweep.truncated ? " (truncated; next run resumes)" : ""}`
     );
 
     return null;

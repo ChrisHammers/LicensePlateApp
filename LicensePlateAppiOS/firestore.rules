@@ -521,7 +521,19 @@ service cloud.firestore {
       // a snapshot listener (`FamilyRepository.startListening`) and a status-filtered
       // getDocuments (`FamilyRepository.fetchPendingRequests`). There is no client write.
       allow create: if false;
-      allow update: if isRegisteredAccount() && (isCreator(familyId) || isCaptain(familyId));
+      // FIELD-GUARDED (2026-08-17). The update rule was unfielded, so a captain could rewrite
+      // ANY field of a lineage-stamped row from a modified client — including `userId`. That
+      // is a parental-consent bypass, not a display bug: repoint `userId`, approve, and
+      // `approveFamilyJoinRequest_CaptainStep` grants family membership — this app's consent
+      // object — to an arbitrary uid under a stamp proving an invite was issued to someone
+      // else. It also let a captain undo FR-89's expiry by flipping `status` back, or move
+      // `createdAt` to extend the window. Resolution is all a captain legitimately does from
+      // the client, and the server (Admin SDK) is unaffected by this rule, so every real
+      // approve/decline path still works.
+      allow update: if isRegisteredAccount()
+        && (isCreator(familyId) || isCaptain(familyId))
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(["status", "resolvedAt"]);
       allow delete: if false;
     }
 
