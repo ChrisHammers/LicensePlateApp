@@ -179,7 +179,13 @@ struct RootView: View {
                 // `users/{uid}` even after a manager correction wiped the device's
                 // age-gate markers (correct → re-grant → remove) or on a device that
                 // never ran the gate for this account.
-                resolvedIsChildAccountProvider: { UserRepository.shared.isChildAccount(for: $0) }
+                resolvedIsChildAccountProvider: { UserRepository.shared.isChildAccount(for: $0) },
+                // FR-88: server truth for "a family is deciding about me". Tri-state, and
+                // the nil case matters — an unanswered projection keeps the device's
+                // optimistic redemption flag in charge instead of retiring it.
+                serverPendingFamilyRequestProvider: {
+                    UserRepository.shared.hasPendingFamilyRequest(for: $0)
+                }
             )
             syncCoordinator.setGameplayCloudSyncHoldProvider {
                 ChildRestrictedModeService.shared.isGameplayCloudSyncPaused

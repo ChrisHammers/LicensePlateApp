@@ -114,16 +114,21 @@ service cloud.firestore {
     // redemption window and, once deleted at family admission, closes it. It drives the
     // transient-account sweep, so a client that could write or clear it could either delete
     // its own pre-consent footprint on demand or keep an unconsented account alive forever.
+    // FR-88 adds `pendingFamilyRequest`: written when a join request is minted and deleted on
+    // every resolution, in the same batch as the row itself. It is the child's ONLY way to
+    // verify that a family is still deciding — `families/{id}/pending` is member-read-only
+    // and a pending child is not a member — so a client that could write it could fake a
+    // consent request in progress, and one that could clear it could hide a real one.
     function userDocPreservesServerControlledFields() {
       return !request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(["entitlementTags", "isChildAccount", "childDeclaredAt"]);
+        .hasAny(["entitlementTags", "isChildAccount", "childDeclaredAt", "pendingFamilyRequest"]);
     }
 
     // Create-time twin of the diff-guard: a brand-new user doc cannot smuggle any of the
     // keys in (there is no `resource.data` to diff against on create).
     function userDocCreateOmitsServerControlledFields() {
       return !request.resource.data.keys()
-        .hasAny(["entitlementTags", "isChildAccount", "childDeclaredAt"]);
+        .hasAny(["entitlementTags", "isChildAccount", "childDeclaredAt", "pendingFamilyRequest"]);
     }
 
     // FR-28 (COPPA F-5a): an unconsented child — `isChildAccount == true` with no active

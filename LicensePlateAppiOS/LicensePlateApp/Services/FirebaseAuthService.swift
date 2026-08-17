@@ -2285,6 +2285,14 @@ class FirebaseAuthService: ObservableObject {
                 userId: userId,
                 UserRepository.parseChildAccountResolution(from: data)
             )
+            // COPPA FR-88: this session's first server-resolved answer to "is a family still
+            // deciding about me?". It is the read that unsticks a device whose optimistic
+            // "waiting for approval" flag outlived a decline — see
+            // `FamilyApprovalPendingPolicy`. Same provenance gate as the child flag.
+            UserRepository.shared.ingestPendingFamilyRequest(
+                userId: userId,
+                isPresent: UserRepository.parsePendingFamilyRequestPresence(from: data)
+            )
         }
         var user = appUserFromFirestoreData(data, id: userId)
 

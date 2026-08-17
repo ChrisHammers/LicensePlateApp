@@ -111,7 +111,10 @@ enum AuthenticationStatusPolicy {
         var hasFirebaseUid: Bool
         /// The one child classification in the app (`ChildRestrictedModeService`).
         var childSessionState: ChildRestrictedModeService.ChildSessionState
-        /// `ChildRestrictedModeService.isFamilyApprovalPending` (device-local flag only).
+        /// `ChildRestrictedModeService.isFamilyApprovalPending`. FR-88: the reconciled value —
+        /// `users/{uid}.pendingFamilyRequest` when the server has answered, the device's
+        /// optimistic redemption flag only while it has not. The decision below is unchanged;
+        /// what changed is that "a live request exists" is now a claim the server backs.
         var isFamilyApprovalPending: Bool
         /// `AgeGateStore.isResolved` for the current identity epoch.
         var isAgeAnswerResolved: Bool

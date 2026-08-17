@@ -24,15 +24,19 @@ import {
   CHILD_TARGET_NOT_SEARCHABLE_MESSAGE,
   evaluateApprovalChildDeclaration,
   isChildWithActiveFamilyUserData,
+  isUnconsentedChildUserData,
   sanitizedChildLinkedPlatforms,
 } from "./childAccountCore";
 import {
+  JOIN_REQUEST_PENDING_STATUS,
   JOIN_REQUEST_SUPERSEDED_STATUS,
+  PENDING_FAMILY_REQUEST_FIELD,
   assertGuardianClearSeasoning,
   assertJoinRequestLineage,
   buildJoinRequestLineage,
+  buildPendingFamilyRequestStamp,
+  buildPendingRequestIdentity,
   findLivePendingJoinRequests,
-  readPendingRequestIdentity,
 } from "./familyJoinRequestIntegrity";
 import {
   writeChildConsentCorrected,
@@ -448,6 +452,14 @@ export const respondToFamilyInvite_UserStep = enforcedCallable(
       // user doc (FR-12), so without this they approve a raw uid — and FR-31's "I confirm I
       // am THIS CHILD's parent or legal guardian" cannot be truthfully affirmed about one.
       // Username and avatar only; see `PENDING_REQUEST_IDENTITY_FIELDS`.
+      //
+      // ONE read of the requester's own doc, used twice: the FR-86 identity stamp on the row,
+      // and the FR-88 pending-state stamp written back onto that same doc below.
+      const requesterDoc = await db.collection("users").doc(userId).get();
+      const requesterData = requesterDoc.data() as
+        | Record<string, unknown>
+        | undefined;
+
       const requestData = {
         userId,
         requestedBy: inviteData.fromUserId,
@@ -458,7 +470,7 @@ export const respondToFamilyInvite_UserStep = enforcedCallable(
           inviteId: inviteDoc.id,
           codeId: inviteData.codeId,
         }),
-        ...(await readPendingRequestIdentity(db, userId)),
+        ...buildPendingRequestIdentity(requesterData),
       };
 
       // F-44: ONE live row per (family, user). Accepting a second invite REFRESHES the
@@ -491,6 +503,27 @@ export const respondToFamilyInvite_UserStep = enforcedCallable(
         const requestRef = db.collection(`families/${familyId}/pending`).doc();
         pendingRequestId = requestRef.id;
         batch.set(requestRef, requestData);
+      }
+
+      // FR-88: the row's shadow on the one document the requester can always read. SAME
+      // batch as the row itself, so "a pending row exists" and "my user doc says a family is
+      // deciding" cannot disagree — the disagreement IS the bug (a decline that left the
+      // device's guess standing forever).
+      //
+      // Nothing extra is needed for the superseded rows retired just above: they belong to
+      // this same user, and this one stamp now names the row that survived them.
+      //
+      // `batch.update` (not set-merge) and guarded on existence, because a set-merge on a
+      // missing doc would MINT a `users/{uid}` holding nothing but this field. Unconsented
+      // children only — see `PENDING_FAMILY_REQUEST_FIELD` for why an adult must not carry it.
+      if (requesterDoc.exists && isUnconsentedChildUserData(requesterData)) {
+        batch.update(db.collection("users").doc(userId), {
+          [PENDING_FAMILY_REQUEST_FIELD]: buildPendingFamilyRequestStamp({
+            familyId,
+            requestId: pendingRequestId,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          }),
+        });
       }
 
       // Retire every OTHER live invite into this family for this user — the one this row used
@@ -802,6 +835,10 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
       // admitted child — and, later, a sticky post-revocation child — is invisible to it by
       // construction rather than by the sweep's own predicate. A no-op for adults.
       grantUpdate[CHILD_DECLARED_AT_FIELD] = admin.firestore.FieldValue.delete();
+      // FR-88: the decision has arrived, so nobody is deciding any more. Same batch as the
+      // status flip, and unconditional for the same reason the line above is — an adult
+      // never carries the field, and deleting an absent key is a no-op.
+      grantUpdate[PENDING_FAMILY_REQUEST_FIELD] = admin.firestore.FieldValue.delete();
       batch.update(
         db.collection("users").doc(requestData.userId),
         grantUpdate
@@ -861,6 +898,28 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         status: "declined",
         resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
+      // FR-88, AND THE BUG THIS WHOLE FIELD EXISTS FOR. A decline used to clear nothing on
+      // the child's side: the device's "waiting for your family's approval" flag is cleared
+      // only when the child stops being a restricted unconsented child (i.e. approved) or
+      // when the identity detaches (i.e. the account was deleted). FR-60(c) deliberately
+      // does NOT delete a child with `wasEverInFamily === true`, so a declined sticky child
+      // kept a captain deliberating in perpetuity over a request that had already been
+      // refused — and could not check, because `families/{id}/pending` is member-read-only.
+      //
+      // Same batch as the status flip. Guarded on existence only: `batch.update` on a
+      // missing doc fails the WHOLE batch, and declining a row whose account is already gone
+      // has to stay the idempotent success F-44 made it. The read is one document and only
+      // on the decline branch — approve already holds `targetUserDoc`.
+      const declinedUserDoc = await db
+        .collection("users")
+        .doc(requestData.userId)
+        .get();
+      if (declinedUserDoc.exists) {
+        batch.update(db.collection("users").doc(requestData.userId), {
+          [PENDING_FAMILY_REQUEST_FIELD]: admin.firestore.FieldValue.delete(),
+        });
+      }
 
       // F-44: and every duplicate row for the same user, in the same batch. Here "declined"
       // IS the truth for all of them — consent was refused for this child, once, and the
@@ -1266,6 +1325,39 @@ export const inactivateFamily = enforcedCallable(
       .collection(`families/${familyId}/members`)
       .get();
 
+    // FR-88: a family that stops existing stops deciding. Undecided join requests used to be
+    // simply ORPHANED here — the row survived in a subcollection nobody would ever open
+    // again, and the requester (a child, in the case that matters) kept the "waiting for your
+    // family's approval" state with no captain left to end it. That is the same stranding the
+    // decline branch above fixes, arriving by a different door, so it is closed the same way:
+    // the rows go terminal and every requester's server stamp goes with them, in this batch.
+    //
+    // `expired`, not `declined`: no consent decision was ever made, and F-44 already uses
+    // exactly this status for a row retired without one. Deliberately no FR-60(c) account
+    // cleanup — with no live row left, the FR-77 backstop sweep can now reach a
+    // never-consented account on its own schedule, which is the path that exists for it.
+    //
+    // Resolved BEFORE the member loop so the two can be folded into ONE write per user doc.
+    // A commit carrying two writes for the same document is rejected outright, and both
+    // collisions are reachable on legacy data: F-44 duplicate rows for one uid, and a row
+    // left live beside a membership that was granted on its sibling.
+    const orphanedRequests = await db
+      .collection(`families/${familyId}/pending`)
+      .where("status", "==", JOIN_REQUEST_PENDING_STATUS)
+      .get();
+
+    const orphanedRequesterIds = new Set<string>();
+    for (const requestDoc of orphanedRequests.docs) {
+      batch.update(requestDoc.ref, {
+        status: JOIN_REQUEST_SUPERSEDED_STATUS,
+        resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      const requesterId = requestDoc.data()?.userId;
+      if (typeof requesterId === "string" && requesterId.length > 0) {
+        orphanedRequesterIds.add(requesterId);
+      }
+    }
+
     // COPPA FR-6: capture flagged children BEFORE their member docs are deleted.
     const childMemberIds: string[] = [];
 
@@ -1284,12 +1376,28 @@ export const inactivateFamily = enforcedCallable(
       const userDoc = await db.collection("users").doc(memberId).get();
       const userData = userDoc.data();
       if (userData) {
-        batch.update(
-          db.collection("users").doc(memberId),
-          familyMembershipLeaveUserUpdate({
-            isRetiredGeneral: !!userData.isRetiredGeneral,
-          })
-        );
+        const leaveUpdate: Record<string, unknown> = familyMembershipLeaveUserUpdate({
+          isRetiredGeneral: !!userData.isRetiredGeneral,
+        });
+        if (orphanedRequesterIds.delete(memberId)) {
+          leaveUpdate[PENDING_FAMILY_REQUEST_FIELD] =
+            admin.firestore.FieldValue.delete();
+        }
+        batch.update(db.collection("users").doc(memberId), leaveUpdate);
+      } else {
+        // No user doc to write to at all, membership or otherwise.
+        orphanedRequesterIds.delete(memberId);
+      }
+    }
+
+    // Whatever is left is a requester who never became a member. `batch.update` on a missing
+    // doc fails the whole batch, so the existence check is not optional.
+    for (const requesterId of orphanedRequesterIds) {
+      const requesterDoc = await db.collection("users").doc(requesterId).get();
+      if (requesterDoc.exists) {
+        batch.update(db.collection("users").doc(requesterId), {
+          [PENDING_FAMILY_REQUEST_FIELD]: admin.firestore.FieldValue.delete(),
+        });
       }
     }
 

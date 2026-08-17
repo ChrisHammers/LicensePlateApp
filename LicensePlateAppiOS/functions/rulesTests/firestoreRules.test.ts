@@ -209,6 +209,53 @@ describe("FR-7: users diff-guard protects isChildAccount and entitlementTags", (
       updateDoc(doc(registered("provisional"), "users/provisional"), { userName: "Kid v2" })
     );
   });
+
+  /**
+   * FR-88: `pendingFamilyRequest` is the child's only way to verify that a family really is
+   * deciding about them — `families/{id}/pending` is member-read-only and a pending child is
+   * not a member. A client that could WRITE it could manufacture a consent request that no
+   * captain ever received; one that could CLEAR it could hide a real one, or paper over the
+   * decline this field exists to make visible. Server-written only, on the same batch as the
+   * pending row, so the two can never disagree.
+   */
+  it("denies clients writing, changing or clearing pendingFamilyRequest (FR-88)", async () => {
+    await seed({
+      "users/waiting": {
+        userName: "Kid",
+        isChildAccount: true,
+        pendingFamilyRequest: { familyId: "fam1", requestId: "req1", createdAt: 1000 },
+      },
+    });
+
+    // Re-point it at a family that never asked.
+    await assertFails(
+      updateDoc(doc(registered("waiting"), "users/waiting"), {
+        pendingFamilyRequest: { familyId: "attacker", requestId: "req9", createdAt: 5000 },
+      })
+    );
+    // Clear it outright — the "make the decline disappear" write.
+    await assertFails(
+      updateDoc(doc(registered("waiting"), "users/waiting"), {
+        pendingFamilyRequest: deleteField(),
+      })
+    );
+    // Clear it by omission on a full set (affectedKeys catches deletes).
+    await assertFails(
+      setDoc(doc(registered("waiting"), "users/waiting"), { userName: "Kid v2" })
+    );
+    // Smuggle it in on create, forging a request in flight from the first write.
+    await assertFails(
+      setDoc(doc(registered("fresh5"), "users/fresh5"), {
+        userName: "F5",
+        pendingFamilyRequest: { familyId: "fam1", requestId: "req1", createdAt: 1000 },
+      })
+    );
+
+    // The child's own ordinary profile sync, which never touches the key, still lands.
+    await assertSucceeds(
+      updateDoc(doc(registered("waiting"), "users/waiting"), { userName: "Kid v2" })
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------

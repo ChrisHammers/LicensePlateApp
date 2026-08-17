@@ -29,6 +29,11 @@ class UserRepository: ObservableObject {
     /// `entitlementTagsByUserId`). An entry exists only after THIS session freshly
     /// read the user doc; sign-out clears it.
     private var childResolutionByUserId: [String: ChildAccountResolution] = [:]
+    /// COPPA FR-88 projection: whether `users/{uid}` carried `pendingFamilyRequest` in a
+    /// server-resolved snapshot. Server-owned, Firestore-only, never persisted to SwiftData
+    /// (§7.4) — same pattern as the two dictionaries above. An entry exists only after THIS
+    /// session freshly read the doc, which is exactly what makes ABSENCE meaningful.
+    private var pendingFamilyRequestByUserId: [String: Bool] = [:]
     private let friendsFamilyAccessPolicy: FriendsFamilyAccessPolicy
     
     @Published var searchResults: [AppUser] = []
@@ -126,6 +131,40 @@ class UserRepository: ObservableObject {
         parseChildAccountResolution(from: data).isChild
     }
 
+    // MARK: - Pending family request projection (COPPA FR-88)
+
+    /// Tri-state read of `users/{userId}.pendingFamilyRequest` as freshly resolved THIS
+    /// session:
+    /// - `true` — the server says a family is holding an undecided join request.
+    /// - `false` — a SERVER-RESOLVED snapshot carried no such field, so nobody is deciding.
+    ///   This is the half that matters: it is what lets a device discover that the request it
+    ///   still believes is outstanding was declined, and unstick itself.
+    /// - `nil` — unresolved this session (offline, or no server read yet). Callers fall back
+    ///   to the device's optimistic flag rather than guessing.
+    ///
+    /// Presence is the entire signal; the payload is never read. The field is server-written
+    /// only (`firestore.rules` diff-guard), so `true` cannot be forged and `false` cannot be
+    /// manufactured by a client clearing it.
+    func hasPendingFamilyRequest(for userId: String) -> Bool? {
+        guard !userId.isEmpty else { return nil }
+        return pendingFamilyRequestByUserId[userId]
+    }
+
+    /// Ingest is FR-19-gated at every call site (`ChildFlagIngestPolicy`): a cached or
+    /// latency-compensated snapshot must never record `false`, because for a doc whose stamp
+    /// the server wrote moments ago the local cache legitimately does not have it yet.
+    func ingestPendingFamilyRequest(userId: String, isPresent: Bool) {
+        guard !userId.isEmpty else { return }
+        pendingFamilyRequestByUserId[userId] = isPresent
+    }
+
+    /// Presence only — a malformed or non-map value still means "the server put something
+    /// here", which is the conservative reading (keeps the child's "waiting" state up rather
+    /// than silently retiring a live request).
+    static func parsePendingFamilyRequestPresence(from data: [String: Any]) -> Bool {
+        data["pendingFamilyRequest"] != nil
+    }
+
     /// COPPA F-8 (FR-1/FR-25): fresh read of ANOTHER user's child flag for the manager
     /// approval surface. Returns `nil` when the doc cannot be read — which is expected,
     /// not exceptional: FR-12 denies peer reads of a child's `users/{uid}` doc to anyone
@@ -167,6 +206,7 @@ class UserRepository: ObservableObject {
     func clearInMemoryState() {
         entitlementTagsByUserId.removeAll()
         childResolutionByUserId.removeAll()
+        pendingFamilyRequestByUserId.removeAll()
         searchResults = []
         errorMessage = nil
         isLoading = false
@@ -290,6 +330,13 @@ class UserRepository: ObservableObject {
         // FR-19: a cached / latency-compensated snapshot never confirms not-child.
         if isServerResolved {
             ingestChildAccountResolution(userId: userId, Self.parseChildAccountResolution(from: data))
+            // FR-88: same gate, same reason, other field. A cached snapshot that has not
+            // caught up with the server's stamp would report "no request pending" and clear a
+            // child's waiting state out from under a captain who is still deciding.
+            ingestPendingFamilyRequest(
+                userId: userId,
+                isPresent: Self.parsePendingFamilyRequestPresence(from: data)
+            )
         }
         let user = try await userFromFirestoreData(data, id: userId)
         cacheUsers([user])

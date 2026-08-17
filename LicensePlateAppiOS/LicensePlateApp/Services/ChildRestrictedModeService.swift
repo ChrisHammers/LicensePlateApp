@@ -51,6 +51,49 @@ enum ChildFamilyPromptPolicy {
     }
 }
 
+/// COPPA FR-88 — who gets to say whether a family is deciding.
+///
+/// Device pass 2026-08-17. "Waiting for your family's approval" was a device GUESS: a
+/// UserDefaults uid written at share-code redemption, cleared in exactly two places — the
+/// child stops being a restricted unconsented child (i.e. they were approved) and identity
+/// detach (i.e. the account was deleted). A DECLINE that deletes nothing clears neither, and
+/// FR-60(c) deliberately spares a child who was ever in a family. That child kept a screen
+/// promising an answer from a captain who had already said no, and could not check for
+/// themselves: `families/{id}/pending` is member-read-only and a pending child is not a
+/// member.
+///
+/// The server now stamps `users/{uid}.pendingFamilyRequest` on the same batch as the pending
+/// row and deletes it on every resolution, so the answer arrives on the one document the
+/// child can always read — through the FR-23 listener that is already pinned, at no new read
+/// cost. This is the rule that combines it with the device flag:
+///
+/// - server says PRESENT  → pending, whatever the device thinks;
+/// - server says ABSENT   → not pending, and the device's flag is stale and gets cleared.
+///   **This is the self-healing half and the entire point of the field**;
+/// - server has NOT ANSWERED (offline, no read yet this session, no cloud identity) → the
+///   device's optimistic flag stands, so redemption still reads "waiting" immediately and
+///   offline behaviour is exactly what it was.
+///
+/// "Absent" only counts from a server-resolved snapshot (`ChildFlagIngestPolicy` gates the
+/// ingest): a cached or latency-compensated read of a doc the server stamped moments ago
+/// legitimately lacks the field, and treating that as an answer would retire a live request.
+enum FamilyApprovalPendingPolicy {
+    /// - Parameter serverPendingFamilyRequest: tri-state projection; `nil` = unanswered.
+    /// - Parameter hasLocalOptimisticFlag: the device flag, already identity-matched.
+    static func isPending(
+        serverPendingFamilyRequest: Bool?,
+        hasLocalOptimisticFlag: Bool
+    ) -> Bool {
+        serverPendingFamilyRequest ?? hasLocalOptimisticFlag
+    }
+
+    /// Only an explicit server ABSENT retires the device flag. `nil` must never clear it —
+    /// that would throw away the optimistic state on every offline launch.
+    static func shouldClearLocalOptimisticFlag(serverPendingFamilyRequest: Bool?) -> Bool {
+        serverPendingFamilyRequest == false
+    }
+}
+
 enum ChildRestrictedModeKeys {
     static let hasPresentedFullFamilyPrompt = "childGate.hasPresentedFullFamilyPrompt"
     /// F-8 device testing (2026-08-15): uid a share-code redemption is awaiting the
@@ -82,6 +125,12 @@ final class ChildRestrictedModeService: ObservableObject {
     /// This session's fresh `users/{uid}.isChildAccount` resolution (tri-state; nil =
     /// not resolved). Wired to `UserRepository.isChildAccount(for:)` in RootView.
     private var resolvedIsChildAccountProvider: (String) -> Bool? = { _ in nil }
+    /// FR-88: this session's server-resolved read of `users/{uid}.pendingFamilyRequest`
+    /// (tri-state; nil = not answered). Wired to `UserRepository.hasPendingFamilyRequest(for:)`
+    /// in RootView. Default nil keeps every un-configured instance — previews, tests that
+    /// only exercise the device flag — on the pre-FR-88 behaviour.
+    private var serverPendingFamilyRequestProvider: (String) -> Bool? = { _ in nil }
+    private var cancellables = Set<AnyCancellable>()
 
     init(
         ageGateStore: AgeGateStore = .shared,
@@ -93,17 +142,30 @@ final class ChildRestrictedModeService: ObservableObject {
         // The cache is UserDefaults-backed state, so an instance over the same defaults
         // sees the same data as `.shared` — and tests get isolation for free.
         self.childSignalCache = childSignalCache ?? ChildSignalCache(defaults: defaults)
+        // FR-88 self-heal trigger, and the same FR-23 seam `ChildSessionPostureCoordinator`
+        // uses: the pinned self `users/{uid}` listener delivers the server's answer here.
+        // Living on the service rather than in a view is deliberate — the stale flag has to
+        // be retired wherever the child happens to be standing, not only on Home.
+        NotificationCenter.default.publisher(for: .userProfilesMerged)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] notification in
+                let mergedIds = (notification.userInfo?["userIds"] as? [String]) ?? []
+                self?.noteUserProfilesMerged(userIds: mergedIds)
+            }
+            .store(in: &cancellables)
     }
 
     /// Wire identity/family lookups (RootView, after auth bootstrap).
     func configure(
         currentUserIdProvider: @escaping () -> String?,
         activeFamilyIdProvider: @escaping () -> String?,
-        resolvedIsChildAccountProvider: @escaping (String) -> Bool? = { _ in nil }
+        resolvedIsChildAccountProvider: @escaping (String) -> Bool? = { _ in nil },
+        serverPendingFamilyRequestProvider: @escaping (String) -> Bool? = { _ in nil }
     ) {
         self.currentUserIdProvider = currentUserIdProvider
         self.activeFamilyIdProvider = activeFamilyIdProvider
         self.resolvedIsChildAccountProvider = resolvedIsChildAccountProvider
+        self.serverPendingFamilyRequestProvider = serverPendingFamilyRequestProvider
     }
 
     /// Client-side child session classification (advisory; server gates are the
@@ -202,30 +264,70 @@ final class ChildRestrictedModeService: ObservableObject {
         )
     }
 
-    // MARK: - Pending family approval (F-8 device testing, 2026-08-15)
+    // MARK: - Pending family approval (F-8 device testing, 2026-08-15; FR-88, 2026-08-17)
     //
     // A share-code redemption gives an unconsented child nothing to look at until a
     // captain approves it — the FR-28 banner kept showing the generic "ask a parent"
-    // prompt as if nothing had happened. This is a purely device-local flag (no cloud
-    // reads): `FamilyRepository.redeemShareCode` marks it right after a successful
-    // FAMILY-type redemption; it clears once membership arrives (an
-    // `.userProfilesMerged` delivery that lifts the restriction — ContentView already
-    // observes that notification for FR-28) or the identity changes. Identity-bound by
+    // prompt as if nothing had happened. `FamilyRepository.redeemShareCode` marks the
+    // device flag right after a successful FAMILY-type redemption. Identity-bound by
     // storing the uid itself, so a later different identity on this device — or a
     // decline path that signs the child out, which the identity agent owns — never
     // inherits a stale "waiting" state (same pattern as the incident-1 regression
     // guarded elsewhere in this file).
+    //
+    // FR-88 demoted that flag to an OPTIMISTIC hint. It was the only signal, and it could
+    // only ever be cleared by good news (membership arrived) or by the account ceasing to
+    // exist — so a decline that spared the account left it up forever. The authority is now
+    // `users/{uid}.pendingFamilyRequest`, server-written on the same batch as the pending row
+    // and deleted on every resolution, arriving through the FR-23 self listener that is
+    // already pinned. Still no NEW cloud reads: the projection rides a snapshot this session
+    // was receiving anyway. See `FamilyApprovalPendingPolicy`.
 
-    /// True while a share-code redemption THIS identity made is awaiting captain
-    /// approval (no active family yet). False once membership arrives, the flag is
-    /// explicitly cleared, or the current identity never set it.
+    /// True while a family really is holding an undecided join request for THIS identity.
+    ///
+    /// FR-88: server truth first, device guess only as a fallback — see
+    /// `FamilyApprovalPendingPolicy` for the three cases and why absence has to come from a
+    /// server-resolved snapshot. Every consumer (the FR-28 home banner, the Family-tab gate,
+    /// `AuthenticationStatusPolicy`'s `.transientDeclaredChild`) reads through here and needs
+    /// no knowledge of where the answer came from.
     var isFamilyApprovalPending: Bool {
         guard let uid = currentUserIdProvider(), !uid.isEmpty else { return false }
-        return defaults.string(forKey: ChildRestrictedModeKeys.pendingFamilyApprovalUserId) == uid
+        return FamilyApprovalPendingPolicy.isPending(
+            serverPendingFamilyRequest: serverPendingFamilyRequestProvider(uid),
+            hasLocalOptimisticFlag: hasLocalPendingFlag(for: uid)
+        )
+    }
+
+    /// The device's optimistic flag on its own, identity-matched. Stored as the uid rather
+    /// than a bare Bool so a later different identity on this device can never inherit it.
+    private func hasLocalPendingFlag(for uid: String) -> Bool {
+        defaults.string(forKey: ChildRestrictedModeKeys.pendingFamilyApprovalUserId) == uid
+    }
+
+    /// FR-23 merge trigger (separated so tests can drive it deterministically). Only merges
+    /// that include the CURRENT uid matter; the reconciliation is idempotent.
+    func noteUserProfilesMerged(userIds: [String]) {
+        guard let uid = currentUserIdProvider(), userIds.contains(uid) else { return }
+        reconcileFamilyApprovalPendingWithServer()
+    }
+
+    /// FR-88 self-heal: a server-resolved snapshot with no `pendingFamilyRequest` means no
+    /// family is deciding, so the device's optimistic flag is stale and is retired here.
+    ///
+    /// This is what unsticks the declined child. `isFamilyApprovalPending` already reports
+    /// the truth without it — the clear is what stops the stale flag from resurfacing later,
+    /// when the projection is unresolved again (next cold launch, offline).
+    func reconcileFamilyApprovalPendingWithServer() {
+        guard let uid = currentUserIdProvider(), !uid.isEmpty else { return }
+        guard FamilyApprovalPendingPolicy.shouldClearLocalOptimisticFlag(
+            serverPendingFamilyRequest: serverPendingFamilyRequestProvider(uid)
+        ) else { return }
+        clearFamilyApprovalPending()
     }
 
     /// Called after `FamilyRepository.redeemShareCode` succeeds for a `.family` code
-    /// while the caller is a restricted unconsented child.
+    /// while the caller is a restricted unconsented child. Optimistic only: it fills the
+    /// gap until the server answers, and loses to that answer the moment it arrives.
     func markFamilyApprovalPending() {
         guard let uid = currentUserIdProvider(), !uid.isEmpty else { return }
         guard defaults.string(forKey: ChildRestrictedModeKeys.pendingFamilyApprovalUserId) != uid else { return }

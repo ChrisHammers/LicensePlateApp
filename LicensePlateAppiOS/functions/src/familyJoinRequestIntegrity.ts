@@ -216,7 +216,13 @@ export type PendingRequestIdentity = Partial<
   Record<(typeof PENDING_REQUEST_IDENTITY_FIELDS)[number], string>
 >;
 
-/** Pick the FR-86 fields out of a user doc. Absent or non-string values are simply omitted. */
+/**
+ * Pick the FR-86 fields out of a user doc. Absent or non-string values are simply omitted.
+ *
+ * The caller reads the user doc through the Admin SDK, which is the whole point: the captain
+ * cannot make that read themselves (FR-12), and `families/{id}/pending` is already
+ * family-readable, so stamping it server-side needs no rules change.
+ */
 export function buildPendingRequestIdentity(
   userData: Record<string, unknown> | undefined | null
 ): PendingRequestIdentity {
@@ -230,19 +236,64 @@ export function buildPendingRequestIdentity(
   return identity;
 }
 
+// ---------------------------------------------------------------------------
+// FR-88 (F-45) — the child can tell whether anyone is actually deciding
+// ---------------------------------------------------------------------------
+
 /**
- * Read the requester's FR-86 identity through the Admin SDK, which is the whole point: the
- * captain cannot make this read themselves (FR-12), and `families/{id}/pending` is already
- * family-readable, so stamping it server-side needs no rules change.
+ * Server-owned mirror of "a family is deciding about me", written onto the ONE document a
+ * child can always read: their own `users/{uid}`.
+ *
+ * Device pass 2026-08-17. "Waiting for your family's approval" was a pure device guess — a
+ * UserDefaults uid written at share-code redemption, cleared in exactly two places (the child
+ * stops being restricted, i.e. they were approved; and identity detach, i.e. the account was
+ * deleted). A DECLINE that does not delete the account clears neither, and FR-60(c)
+ * deliberately skips deletion for a child with `wasEverInFamily === true`. That child kept
+ * claiming a captain was deciding, forever, with no way to check: `firestore.rules` restricts
+ * `families/{id}/pending` reads to family members, and a pending child is by definition not
+ * one.
+ *
+ * So the truth is pushed to where they can see it. PRESENCE of this field is the whole
+ * signal; the payload is for debugging and for a future "which family?" surface, never for a
+ * rule decision. The field is listed in the rules' server-controlled key guard alongside
+ * `childDeclaredAt`, so a client can neither forge it nor clear it.
+ *
+ * SCOPE — written only for an UNCONSENTED CHILD (`isUnconsentedChildUserData`), which is the
+ * exact population the FR-28 surfaces it drives exist for. An adult accepting a family invite
+ * gets no stamp: `ChildFamilyPromptPolicy` resolves pending BEFORE its restriction
+ * classification, so a stamp on an adult's doc would raise the "ask a parent" banner on an
+ * adult's home screen. A consented child joining a second family is excluded for the same
+ * reason — their banner is hidden today and must stay hidden.
+ *
+ * CLEARING is deliberately NOT scoped: every resolution path clears unconditionally, so the
+ * field can only ever fail toward "nobody is deciding". A false negative costs a child a
+ * status line they can refresh by re-entering a code (FR-28f keeps that reachable from every
+ * pending presentation); a false positive is the unrecoverable state this exists to kill.
  */
-export async function readPendingRequestIdentity(
-  db: Firestore,
-  userId: string
-): Promise<PendingRequestIdentity> {
-  const snapshot = await db.collection("users").doc(userId).get();
-  return buildPendingRequestIdentity(
-    snapshot.data() as Record<string, unknown> | undefined
-  );
+export const PENDING_FAMILY_REQUEST_FIELD = "pendingFamilyRequest";
+
+export interface PendingFamilyRequestStamp {
+  familyId: string;
+  requestId: string;
+  /** `FieldValue.serverTimestamp()` at the call site — the client never reads the value. */
+  createdAt: unknown;
+}
+
+/**
+ * Build the stamp for the row `respondToFamilyInvite_UserStep` is about to write. Shaped as a
+ * builder for the same reason `buildJoinRequestLineage` is: one definition of the payload, so
+ * the stamp and the row it mirrors cannot drift apart across the two branches that write it.
+ */
+export function buildPendingFamilyRequestStamp(input: {
+  familyId: string;
+  requestId: string;
+  createdAt: unknown;
+}): PendingFamilyRequestStamp {
+  return {
+    familyId: input.familyId,
+    requestId: input.requestId,
+    createdAt: input.createdAt,
+  };
 }
 
 // ---------------------------------------------------------------------------
