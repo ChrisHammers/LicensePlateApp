@@ -39,11 +39,21 @@ enum AuthenticationStatusState: String, CaseIterable, Equatable, Sendable {
     /// (8) A 13+/unknown session whose anonymous identity this device retired (FR-60(c)).
     /// Renders as an ordinary local account: the retirement is not the player's business.
     case detachedAdultSession
-    /// (4) FR-60 local-first child: under-13, no Firebase identity at all. A DETACHED child
-    /// lands here too, by construction — that identity of outcome is the anti-hybrid
-    /// invariant, and `theDetachedChildIsIndistinguishableFromAFreshLocalChild` pins it.
+    /// (4) FR-60 local-first child: under-13, not in a family, with no live claim on any
+    /// family's attention. A DETACHED child lands here too, by construction — that identity
+    /// of outcome is the anti-hybrid invariant, and
+    /// `theDetachedChildIsIndistinguishableFromAFreshLocalChild` pins it.
+    ///
+    /// Device pass 2026-08-17: this is also the FALLBACK for a child who holds a uid with no
+    /// pending request and no family history — a declined code, or a reinstall that kept the
+    /// Keychain uid and lost the UserDefaults flag. Their profile row may well be in the
+    /// cloud, so "Local Account" is a slight understatement, but it is the honest end of the
+    /// trade: the alternative was telling them a family was still deciding about a request
+    /// that no longer exists (owner's rule — see `state(for:)`).
     case localUnconsentedChild
-    /// (5) Provisioned child whose share code is with a family captain.
+    /// (5) Provisioned child whose share code is with a family captain, and whose request is
+    /// KNOWN to still be outstanding. `isFamilyApprovalPending` is the only way in: this
+    /// state claims a live request exists, so it is never reached by elimination.
     case transientDeclaredChild
     /// (6) Anonymous child uid inside a family — consent granted.
     case consentedChild
@@ -150,13 +160,40 @@ enum AuthenticationStatusPolicy {
             return .consentedChild
 
         case .unconsentedChild:
+            // Device pass 2026-08-17 (fix 1). Owner's rule, verbatim: "waiting for approval"
+            // must mean a pending request ACTUALLY EXISTS; approved, declined, or none-sent
+            // all get the ordinary local-child wording.
+            //
+            // So the pending flag is the sole entry to (5), and it is consulted FIRST —
+            // ahead of the cloud-identity guard, because the flag is itself identity-bound
+            // (it stores the uid) and therefore already carries the evidence that guard is
+            // looking for. `ChildFamilyPromptPolicy.presentation` resolves pending ahead of
+            // its own classification for exactly the same reason; the two policies now
+            // agree, which is the anti-hybrid rule applied inside this branch.
+            //
+            // This does NOT reopen FR-60(c): the service reads the flag through
+            // `authService.currentUser?.firebaseUID`, so a detached session — whose uid is
+            // nil end to end — reports `isFamilyApprovalPending == false` and still lands on
+            // (4), exactly as `theDetachedChildIsIndistinguishableFromAFreshLocalChild`
+            // requires. Hoisting is inert in production; it is here so the rule "waiting
+            // means a request exists" is structural rather than incidental.
+            if inputs.isFamilyApprovalPending { return .transientDeclaredChild }
+
             // A child with no cloud identity is FR-60's local-first child — including one
             // whose identity was just detached, which is why the detach has to nil the uid
             // end to end rather than leave the session half-provisioned.
             guard hasCloudIdentity else { return .localUnconsentedChild }
-            if inputs.isFamilyApprovalPending { return .transientDeclaredChild }
-            // No pending request and they have been in a family before ⇒ they were removed.
-            return inputs.wasEverInFamily ? .postRevocationChild : .transientDeclaredChild
+
+            // Removed from a family they were once in ⇒ say so. Everything else — never
+            // sent a code, declined, or a request whose outcome this device lost track of —
+            // is an ordinary local child.
+            //
+            // That last case is the reported defect: a reinstall restores the uid from the
+            // Keychain while UserDefaults (which holds the pending flag) is wiped, and
+            // remove-and-delete leaves the same shape. Both used to land on (5) and told the
+            // child their family was still deciding, forever, about a request that no longer
+            // existed. There is no evidence of a live request here, so we do not claim one.
+            return inputs.wasEverInFamily ? .postRevocationChild : .localUnconsentedChild
 
         case .notChild:
             guard hasCloudIdentity else {

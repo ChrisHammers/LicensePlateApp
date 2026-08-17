@@ -115,6 +115,18 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
         await resolveChildTargetStates()
     }
 
+    /// FR-86 render projection for the approve screen (device pass 2026-08-17). The stamp is
+    /// parsed at decode and published by the repository beside the rows — it cannot live on
+    /// `PendingJoinRequest` itself (frozen V1 schema), and as a `@Transient` it never
+    /// survived the `getPendingRequests` fetch the rows actually come from. `nil` keeps the
+    /// existing generic-placeholder fallback.
+    func identityStamp(for request: PendingJoinRequest) -> PendingIdentityStamp? {
+        familyRepository.pendingIdentityStamp(
+            familyId: request.familyId,
+            requestId: request.requestId
+        )
+    }
+
     // MARK: - Child declaration (FR-1 / FR-25)
 
     func childTargetState(for request: PendingJoinRequest) -> ChildApprovalTargetState {

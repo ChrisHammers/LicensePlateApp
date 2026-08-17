@@ -245,31 +245,107 @@ struct ChildAccountGateView: View {
         case consented
     }
 
+    /// What the gate says, as a pure function of the two inputs, so a test can read it back
+    /// (same shape as `AuthenticationStatusPolicy.presentation`). The view renders it; it
+    /// does not decide it.
+    ///
+    /// Device pass 2026-08-17 (fix 2): wave 3b taught the home banner and the profile card
+    /// to say "your request is waiting", but the FAMILY TAB was left behind — an unconsented
+    /// child with a live pending request saw the same "join a family with a share code"
+    /// screen as a child who had sent nothing, on the one surface they would actually go to
+    /// in order to check. Nothing is added to the flow; only the copy changes.
+    struct Presentation: Equatable, Sendable {
+        var titleKey: String
+        var bodyKey: String
+        /// FR-28f: share-code entry is the child's ONLY route into a family, so it survives
+        /// every variant that has one. A stale or misdirected request must never strand
+        /// them — they can always send another code.
+        var showsJoinFamilyButton: Bool
+        /// `nil` = keep the feature's own icon. The waiting variant borrows the home
+        /// banner's hourglass so the two surfaces read as one status, and so the state has a
+        /// non-textual cue that is not a color.
+        var iconOverride: String?
+    }
+
+    static func presentation(
+        state: GateState,
+        isFamilyApprovalPending: Bool
+    ) -> Presentation {
+        switch state {
+        case .unconsented where isFamilyApprovalPending:
+            return Presentation(
+                // Reuses the banner's waiting title verbatim — a child chasing "did my code
+                // go through?" gets one answer on the home screen, in their profile, and
+                // here.
+                titleKey: "child_gate.family_prompt.pending_title",
+                // The profile card's pending body, not the banner's subtitle: this screen
+                // still shows the join button, and this is the string that explains it
+                // ("You can enter a different family code if you need to").
+                bodyKey: "auth_status.child.pending_guidance_body",
+                showsJoinFamilyButton: true,
+                iconOverride: "hourglass"
+            )
+        case .unconsented:
+            return Presentation(
+                titleKey: "child_gate.screen.join_title",
+                bodyKey: "child_gate.screen.join_body",
+                showsJoinFamilyButton: true,
+                iconOverride: nil
+            )
+        case .consented:
+            // A consented child has a family, so there is nothing to wait for — the pending
+            // flag is cleared the moment membership arrives. Ignoring it here means a flag
+            // that somehow outlived its own clear cannot put "waiting" on top of a session
+            // that is already in.
+            return Presentation(
+                titleKey: "child_gate.screen.friends_title",
+                bodyKey: "child_gate.screen.friends_body",
+                showsJoinFamilyButton: false,
+                iconOverride: nil
+            )
+        }
+    }
+
     let feature: FriendsFamilyGateFeature
     let state: GateState
 
+    /// Observed, not snapshotted: `revision` is bumped on every mutation of the flag, so the
+    /// gate flips to the waiting copy the moment a code is redeemed from the sheet this very
+    /// screen presents — and back again when membership arrives — without a navigation
+    /// round-trip. This is the same live-update seam the home banner uses.
+    @ObservedObject private var childRestrictedMode: ChildRestrictedModeService
+
     @State private var showJoinFamilySheet = false
 
-    private var title: String {
-        switch state {
-        case .unconsented: return "child_gate.screen.join_title".localized
-        case .consented: return "child_gate.screen.friends_title".localized
-        }
+    /// The service is injectable for previews only; production always gets the singleton
+    /// every other child surface reads, so there is still exactly one pending flag.
+    init(
+        feature: FriendsFamilyGateFeature,
+        state: GateState,
+        childRestrictedMode: ChildRestrictedModeService = .shared
+    ) {
+        self.feature = feature
+        self.state = state
+        _childRestrictedMode = ObservedObject(wrappedValue: childRestrictedMode)
     }
 
-    private var bodyText: String {
-        switch state {
-        case .unconsented: return "child_gate.screen.join_body".localized
-        case .consented: return "child_gate.screen.friends_body".localized
-        }
+    private var presentation: Presentation {
+        Self.presentation(
+            state: state,
+            isFamilyApprovalPending: childRestrictedMode.isFamilyApprovalPending
+        )
     }
 
     var body: some View {
-        AppBackgroundView {
+        let presentation = self.presentation
+        let title = presentation.titleKey.localized
+        let bodyText = presentation.bodyKey.localized
+
+        return AppBackgroundView {
             VStack(spacing: 24) {
                 Spacer()
 
-                Image(systemName: feature.iconName)
+                Image(systemName: presentation.iconOverride ?? feature.iconName)
                     .font(.system(size: 60))
                     .foregroundStyle(Color.Theme.accentYellow)
                     .accessibleDecorative()
@@ -289,7 +365,7 @@ struct ChildAccountGateView: View {
                         .multilineTextAlignment(.center)
                         .supportsDynamicType()
 
-                    if state == .unconsented {
+                    if presentation.showsJoinFamilyButton {
                         Button {
                             showJoinFamilySheet = true
                         } label: {
@@ -364,4 +440,43 @@ struct ChildAccountGateView: View {
         ChildAccountGateView(feature: .friends, state: .consented)
             .environmentObject(FirebaseAuthService())
     }
+}
+
+/// Preview-only: the pending flag is device-local UserDefaults state, so the waiting variant
+/// gets its own scratch suite rather than reaching into the shared singleton (or the
+/// simulator's real child state).
+@MainActor
+private func previewPendingChildRestrictedMode() -> ChildRestrictedModeService {
+    let defaults = UserDefaults(suiteName: "preview.childAccountGate.pending") ?? .standard
+    let service = ChildRestrictedModeService(defaults: defaults)
+    service.configure(
+        currentUserIdProvider: { "preview-child" },
+        activeFamilyIdProvider: { nil }
+    )
+    service.markFamilyApprovalPending()
+    return service
+}
+
+#Preview("Child gate — waiting for approval") {
+    NavigationStack {
+        ChildAccountGateView(
+            feature: .family,
+            state: .unconsented,
+            childRestrictedMode: previewPendingChildRestrictedMode()
+        )
+        .environmentObject(FirebaseAuthService())
+    }
+}
+
+#Preview("Child gate — waiting, dark, large text") {
+    NavigationStack {
+        ChildAccountGateView(
+            feature: .family,
+            state: .unconsented,
+            childRestrictedMode: previewPendingChildRestrictedMode()
+        )
+        .environmentObject(FirebaseAuthService())
+    }
+    .preferredColorScheme(.dark)
+    .environment(\.dynamicTypeSize, .accessibility2)
 }

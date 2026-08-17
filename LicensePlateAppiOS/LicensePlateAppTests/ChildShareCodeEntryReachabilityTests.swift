@@ -131,6 +131,96 @@ struct ChildShareCodeEntryReachabilityTests {
         )
     }
 
+    // MARK: - Entry point 1b: what the family screen SAYS while a request is outstanding
+
+    /// Device pass 2026-08-17 (fix 2). Wave 3b taught the home banner and the profile card to
+    /// say "your request is waiting"; the FAMILY TAB was left behind, and it is the surface a
+    /// child actually opens to check. An unconsented child with a live pending request saw
+    /// the same "join a family with a share code" screen as a child who had sent nothing.
+    @Test func theFamilyGateSaysAnApprovalIsWaitingWhenOneIs() {
+        let waiting = ChildAccountGateView.presentation(
+            state: .unconsented,
+            isFamilyApprovalPending: true
+        )
+        #expect(waiting.titleKey == "child_gate.family_prompt.pending_title")
+        #expect(waiting.bodyKey == "auth_status.child.pending_guidance_body")
+        #expect(waiting.iconOverride == "hourglass")
+
+        // The copy actually differs from the generic prompt — otherwise the fix is a no-op.
+        let generic = ChildAccountGateView.presentation(
+            state: .unconsented,
+            isFamilyApprovalPending: false
+        )
+        #expect(generic.titleKey == "child_gate.screen.join_title")
+        #expect(generic.bodyKey == "child_gate.screen.join_body")
+        #expect(waiting != generic)
+    }
+
+    /// FR-28f: the child must never be stranded. If the request is stale, or went to the
+    /// wrong family, share-code entry is still on the screen — the waiting copy replaces the
+    /// prompt, it does not remove the route.
+    @Test func theWaitingVariantKeepsShareCodeEntryReachable() {
+        for pending in [true, false] {
+            let presentation = ChildAccountGateView.presentation(
+                state: .unconsented,
+                isFamilyApprovalPending: pending
+            )
+            #expect(
+                presentation.showsJoinFamilyButton,
+                "pending=\(pending) removed the child's only route into a family"
+            )
+        }
+    }
+
+    /// A consented child has a family, so there is nothing to wait for. The flag is cleared
+    /// the moment membership arrives; ignoring it here means one that somehow outlived its
+    /// own clear cannot stack "waiting" on top of a session that is already in.
+    @Test func theConsentedVariantIgnoresAStalePendingFlag() {
+        let consented = ChildAccountGateView.presentation(
+            state: .consented,
+            isFamilyApprovalPending: true
+        )
+        #expect(consented == ChildAccountGateView.presentation(
+            state: .consented,
+            isFamilyApprovalPending: false
+        ))
+        #expect(consented.titleKey == "child_gate.screen.friends_title")
+        #expect(consented.showsJoinFamilyButton == false)
+    }
+
+    /// The gate's waiting copy is driven by the SAME device-local flag as the home banner, so
+    /// the two surfaces cannot disagree about whether a request is outstanding.
+    @Test func theGateAndTheBannerAgreeAboutWaiting() {
+        let service = makeService(under13: true, declaredUid: "child-1", familyId: nil)
+        #expect(service.isFamilyApprovalPending == false)
+        #expect(
+            ChildAccountGateView.presentation(
+                state: .unconsented,
+                isFamilyApprovalPending: service.isFamilyApprovalPending
+            ).titleKey == "child_gate.screen.join_title"
+        )
+
+        service.markFamilyApprovalPending()
+        #expect(service.isFamilyApprovalPending == true)
+        // The banner's waiting title, on the family screen, from one flag.
+        #expect(
+            ChildAccountGateView.presentation(
+                state: .unconsented,
+                isFamilyApprovalPending: service.isFamilyApprovalPending
+            ).titleKey == "child_gate.family_prompt.pending_title"
+        )
+        #expect(service.familyPromptPresentation == .full)
+
+        // ...and it clears together, too.
+        service.clearFamilyApprovalPending()
+        #expect(
+            ChildAccountGateView.presentation(
+                state: .unconsented,
+                isFamilyApprovalPending: service.isFamilyApprovalPending
+            ).titleKey == "child_gate.screen.join_title"
+        )
+    }
+
     // MARK: - Entry point 2: the restricted-state banner
 
     /// The banner is visible in both presentations for a restricted child, and both are

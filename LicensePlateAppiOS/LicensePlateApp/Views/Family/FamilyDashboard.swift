@@ -147,7 +147,10 @@ struct FamilyDashboard: View {
                         if viewModel.canManageFamily && viewModel.pendingMemberRequestsCount > 0 {
                             Section("Pending Approvals".localized) {
                                 ForEach(viewModel.pendingRequests) { request in
-                                    PendingRequestRow(request: request)
+                                    PendingRequestRow(
+                                        request: request,
+                                        stamp: viewModel.identityStamp(for: request)
+                                    )
                                 }
                                 
                                 // Show badge count in section header if needed
@@ -161,7 +164,10 @@ struct FamilyDashboard: View {
                         } else if !viewModel.pendingRequests.isEmpty {
                             Section("Pending".localized) {
                                 ForEach(viewModel.pendingRequests) { request in
-                                    PendingRequestRow(request: request)
+                                    PendingRequestRow(
+                                        request: request,
+                                        stamp: viewModel.identityStamp(for: request)
+                                    )
                                 }
                             }
                             .listRowBackground(Color.Theme.cardBackground)
@@ -423,6 +429,17 @@ struct FamilyDashboard: View {
                         .onDisappear {
                             // Reload data after responding to approvals
                             viewModel.loadData()
+                            // Device pass 2026-08-17: dismissing a sheet does NOT re-fire the
+                            // dashboard's `.onAppear`, so the wave-3b identity refresh never
+                            // ran on the post-approval path — the newly admitted child's row
+                            // rendered from the cache-first `AppUser` the pending phase had
+                            // already stored, and their avatar appeared only after navigating
+                            // away and back. At this instant the dashboard's own
+                            // `pendingRequests` has not been reloaded yet, so the union this
+                            // refreshes still contains the just-approved child: one forced
+                            // read covers exactly the member whose user doc only now became
+                            // readable. Same call/ordering shape as `onAppear`.
+                            viewModel.refreshMemberIdentitiesIfNeeded()
                         }
                 }
             }
@@ -602,30 +619,27 @@ private struct FamilyOutgoingInviteRow: View {
 
 struct PendingRequestRow: View {
     let request: PendingJoinRequest
+    /// FR-86: identity stamped onto the pending doc at creation (server agent), so two
+    /// pending children are distinguishable before — or even without — a live user-doc
+    /// resolve (FR-12 denies a peer read of a non-family child's doc, so `displayUser`
+    /// can stay nil forever for a flagged child). Supplied by the view model from the
+    /// repository's parsed projection; `nil` on unstamped rows, which keeps the generic
+    /// placeholder fallback below.
+    ///
+    /// Device pass 2026-08-17: this used to be read off the request itself, where it lived
+    /// as a `@Transient` — and a transient is nil on every row that comes back out of
+    /// SwiftData, which is every row the list renders. A captain who reinstalled saw
+    /// "Pending User" for a child whose name the server had stamped.
+    var stamp: PendingIdentityStamp?
     @State private var resolvedUser: AppUser?
 
     private var displayUser: AppUser? {
         request.user ?? resolvedUser
     }
 
-    /// FR-86: identity stamped onto the pending doc at creation (server agent), so two
-    /// pending children are distinguishable before — or even without — a live user-doc
-    /// resolve (FR-12 denies a peer read of a non-family child's doc, so `displayUser`
-    /// can stay nil forever for a flagged child). Defensive: `nil` on older rows or
-    /// before the stamp ships; whitespace-only counts as absent too. NOTE: depends on
-    /// `PendingJoinRequest.userName`/`.avatarId` (optional `String`) landing on the
-    /// model from the parallel server/data-layer work — see task report.
-    private var stampedDisplayName: String? {
-        guard let raw = request.userName?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !raw.isEmpty else { return nil }
-        return raw
-    }
+    private var stampedDisplayName: String? { stamp?.userName }
 
-    private var stampedAvatarId: String? {
-        guard let raw = request.avatarId?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !raw.isEmpty else { return nil }
-        return raw
-    }
+    private var stampedAvatarId: String? { stamp?.avatarId }
 
     var body: some View {
         Group {

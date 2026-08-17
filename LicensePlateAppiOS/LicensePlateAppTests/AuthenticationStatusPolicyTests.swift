@@ -149,16 +149,103 @@ struct AuthenticationStatusPolicyTests {
         #expect(p.showsJoinFamily == true)
     }
 
-    /// A child who holds a uid, has never been in a family and has nothing pending is also in
-    /// the transient state — they were provisioned by a redemption whose outcome this device
-    /// has lost track of (relaunch, reinstall). Waiting is the honest description.
-    @Test func aProvisionedChildWithNoHistoryReadsAsTransient() {
+    /// Device pass 2026-08-17 (fix 1). The owner's rule, verbatim: "waiting for approval"
+    /// must mean a pending request actually exists; approved, declined, or none-sent all get
+    /// the ordinary local-child wording.
+    ///
+    /// This test previously asserted the OPPOSITE — a uid-holding child with nothing pending
+    /// read as `.transientDeclaredChild`, on the theory that "waiting" was the honest
+    /// description of a redemption whose outcome the device had lost. On device it was the
+    /// opposite of honest: a reinstall restores the uid from the Keychain and wipes the
+    /// UserDefaults flag, and remove-and-delete leaves the same shape, so the state was the
+    /// FALLBACK for "we know nothing" and told children a family was still deciding about a
+    /// request that no longer existed.
+    @Test func aUidHoldingChildWithNothingPendingIsAnOrdinaryLocalChild() {
         let s = state(Inputs(
             isAnonymousSession: true,
             hasFirebaseUid: true,
             childSessionState: .unconsentedChild,
             isFamilyApprovalPending: false,
             wasEverInFamily: false
+        ))
+        #expect(s == .localUnconsentedChild)
+        #expect(s != .transientDeclaredChild)
+
+        // The reinstall shape specifically: Keychain kept the uid, UserDefaults did not keep
+        // the flag. Identical outcome — nothing about it says a request is outstanding.
+        let afterReinstall = state(Inputs(
+            isAnonymousSession: true,
+            hasFirebaseUid: true,
+            childSessionState: .unconsentedChild,
+            isFamilyApprovalPending: false,
+            isAgeAnswerResolved: false,
+            wasEverInFamily: false
+        ))
+        #expect(afterReinstall == .localUnconsentedChild)
+    }
+
+    /// The same child, with the flag up. This is the ONLY input that produces the waiting
+    /// copy, which is the point of the rule.
+    @Test func onlyALivePendingRequestProducesTheWaitingState() {
+        let pending = state(Inputs(
+            isAnonymousSession: true,
+            hasFirebaseUid: true,
+            childSessionState: .unconsentedChild,
+            isFamilyApprovalPending: true
+        ))
+        #expect(pending == .transientDeclaredChild)
+
+        // Exhaustive converse: across every other input axis, no combination without the
+        // pending flag reaches the waiting state.
+        for isAnonymous in [true, false] {
+            for hasUid in [true, false] {
+                for everInFamily in [true, false] {
+                    for resolved in [true, false] {
+                        for detached in [true, false] {
+                            let s = state(Inputs(
+                                isAnonymousSession: isAnonymous,
+                                hasFirebaseUid: hasUid,
+                                childSessionState: .unconsentedChild,
+                                isFamilyApprovalPending: false,
+                                isAgeAnswerResolved: resolved,
+                                isIdentityDetached: detached,
+                                wasEverInFamily: everInFamily
+                            ))
+                            #expect(
+                                s != .transientDeclaredChild,
+                                "no pending request, yet the card says one is waiting: \(s)"
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// A removed child is still separated from one who never joined — `wasEverInFamily` is
+    /// that evidence, and fix 1 must not collapse (7) into (4).
+    @Test func aUidHoldingChildWhoWasRemovedStillReadsAsPostRevocation() {
+        let s = state(Inputs(
+            isAnonymousSession: true,
+            hasFirebaseUid: true,
+            childSessionState: .unconsentedChild,
+            isFamilyApprovalPending: false,
+            wasEverInFamily: true
+        ))
+        #expect(s == .postRevocationChild)
+    }
+
+    /// Audit follow-up (2026-08-17): the pending check is consulted BEFORE the cloud-identity
+    /// guard. The flag stores the uid it belongs to, so it already carries the evidence that
+    /// guard is looking for, and a session whose `hasFirebaseUid` projection has not caught up
+    /// must not silently downgrade a real outstanding request to "no request".
+    /// `ChildFamilyPromptPolicy` resolves pending first for the same reason.
+    @Test func aPendingRequestOutranksAMissingUidProjection() {
+        let s = state(Inputs(
+            isAnonymousSession: false,
+            hasFirebaseUid: false,
+            childSessionState: .unconsentedChild,
+            isFamilyApprovalPending: true
         ))
         #expect(s == .transientDeclaredChild)
     }

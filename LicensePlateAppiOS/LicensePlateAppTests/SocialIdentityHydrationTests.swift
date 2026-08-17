@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import FirebaseFirestore
 import SwiftData
 import Testing
 @testable import LicensePlateApp
@@ -151,5 +152,146 @@ struct SocialIdentityHydrationTests {
         #expect(linked.count == 1)
         #expect(linked.first?.user?.displayName == "link_pat")
         #expect(linked.first?.user?.avatarId == "scout_otter")
+    }
+
+    // MARK: - FR-86 identity stamp (device pass 2026-08-17)
+    //
+    // The reported defect, precisely: the captain reinstalled with a request still pending.
+    // Cold store, so `request.user` is nil and stays nil (FR-12 denies a peer read of a
+    // non-member child's user doc), and the FR-86 stamp was the only identity left — but it
+    // lived on the model as a `@Transient`, and the rows the list renders do not come from
+    // the decode. They come from `getPendingRequests`, a fresh `FetchDescriptor` fetch, where
+    // a transient is nil by definition. So the captain saw "Pending User" + a placeholder.
+    //
+    // The stamp is now a projection the repository parses at decode and publishes beside the
+    // rows, keyed by requestId — the arrangement `childMemberFlags` already uses for the same
+    // frozen-schema reason.
+
+    private func pendingDocumentData(
+        userId: String,
+        userName: Any? = nil,
+        avatarId: Any? = nil
+    ) -> [String: Any] {
+        var data: [String: Any] = [
+            "userId": userId,
+            "requestedBy": userId,
+            "method": "code",
+            "status": "pending",
+            "createdAt": Timestamp(date: Date(timeIntervalSince1970: 1_760_000_000))
+        ]
+        if let userName { data["userName"] = userName }
+        if let avatarId { data["avatarId"] = avatarId }
+        return data
+    }
+
+    /// Cold store + fresh decode ⇒ the stamp reaches the render path. This walks the exact
+    /// sequence `FamilyRepository.fetchPendingRequests` performs on a reinstall: decode the
+    /// Firestore doc, parse the stamp, insert into an EMPTY store, save, then read the rows
+    /// back the way the UI does.
+    @Test func aStampSurvivesTheColdStoreDecodeThatAReinstallProduces() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let familyId = "family-stamp-reinstall"
+        let requestId = "req-stamp-1"
+        let childUserId = "child-stamp-1"
+
+        let data = pendingDocumentData(
+            userId: childUserId,
+            userName: "pending_pat",
+            avatarId: "scout_otter"
+        )
+
+        // 1. Decode, exactly as the repository does.
+        let decoded = try #require(
+            PendingJoinRequest(from: data, id: requestId, familyId: familyId)
+        )
+        let stamps = FamilyRepository.parsePendingIdentityStamps(
+            documents: [(requestId: requestId, data: data)]
+        )
+
+        // 2. Cold store: nothing cached, so this is the insert branch.
+        context.insert(decoded)
+        try context.save()
+
+        let familyRepository = FamilyRepository.shared
+        familyRepository.setModelContext(context)
+        familyRepository.applyPendingIdentityStamps(stamps, familyId: familyId)
+
+        // 3. Read back the way the list does — a store fetch, not the decoded array.
+        let rows = familyRepository.getPendingRequests(familyId: familyId)
+        #expect(rows.count == 1)
+        let row = try #require(rows.first)
+        // No cached AppUser to resolve: this is precisely when the stamp has to carry the row.
+        #expect(row.user == nil)
+
+        let stamp = try #require(
+            familyRepository.pendingIdentityStamp(familyId: familyId, requestId: row.requestId)
+        )
+        #expect(stamp.userName == "pending_pat")
+        #expect(stamp.avatarId == "scout_otter")
+    }
+
+    /// The graceful fallback the owner asked to keep: an unstamped row resolves to `nil`, so
+    /// the views' "Pending User" + placeholder path is still what renders.
+    @Test func anUnstampedRowStillFallsBackToThePlaceholder() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let familyId = "family-stamp-absent"
+        let requestId = "req-stamp-2"
+
+        let data = pendingDocumentData(userId: "child-stamp-2")
+        let decoded = try #require(
+            PendingJoinRequest(from: data, id: requestId, familyId: familyId)
+        )
+        context.insert(decoded)
+        try context.save()
+
+        let familyRepository = FamilyRepository.shared
+        familyRepository.setModelContext(context)
+        familyRepository.applyPendingIdentityStamps(
+            FamilyRepository.parsePendingIdentityStamps(
+                documents: [(requestId: requestId, data: data)]
+            ),
+            familyId: familyId
+        )
+
+        #expect(familyRepository.getPendingRequests(familyId: familyId).count == 1)
+        #expect(
+            familyRepository.pendingIdentityStamp(familyId: familyId, requestId: requestId) == nil
+        )
+    }
+
+    /// Blank and non-string stamps are absent, not empty labels — a row must never render a
+    /// nameless name. Partial stamps are kept: a name with no avatar is still worth showing.
+    @Test func blankAndMalformedStampsAreTreatedAsAbsent() {
+        #expect(PendingIdentityStamp(firestoreData: ["userName": "   ", "avatarId": ""]) == nil)
+        #expect(PendingIdentityStamp(firestoreData: ["userName": 42, "avatarId": true]) == nil)
+        #expect(PendingIdentityStamp(firestoreData: [:]) == nil)
+
+        let nameOnly = PendingIdentityStamp(firestoreData: ["userName": "  pending_pat  "])
+        #expect(nameOnly?.userName == "pending_pat")
+        #expect(nameOnly?.avatarId == nil)
+    }
+
+    /// Two pending children are distinguishable, which is the whole point of FR-86 — the
+    /// projection is keyed per request, so one unstamped row cannot blank out another.
+    @Test func stampsAreKeyedPerRequestSoPendingChildrenStayDistinguishable() {
+        let stamps = FamilyRepository.parsePendingIdentityStamps(documents: [
+            (
+                requestId: "req-a",
+                data: ["userName": "pending_pat", "avatarId": "scout_otter"]
+            ),
+            (
+                requestId: "req-b",
+                data: ["userName": "pending_sam", "avatarId": "navigator_raccoon"]
+            ),
+            (requestId: "req-c", data: [:])
+        ])
+
+        #expect(stamps["req-a"]?.userName == "pending_pat")
+        #expect(stamps["req-b"]?.userName == "pending_sam")
+        #expect(stamps["req-b"]?.avatarId == "navigator_raccoon")
+        #expect(stamps["req-c"] == nil)
+        #expect(stamps.count == 2)
     }
 }

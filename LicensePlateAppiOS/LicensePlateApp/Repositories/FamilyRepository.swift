@@ -30,6 +30,13 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
     /// SwiftData schema is frozen (§7.4) — so it lives beside the model rows exactly the
     /// way `UserRepository.entitlementTagsByUserId` does. familyId -> (userId -> isChild).
     @Published private(set) var childMemberFlags: [String: [String: Bool]] = [:]
+    /// FR-86 identity stamps for pending rows — familyId -> (requestId -> stamp). Same
+    /// arrangement as `childMemberFlags` and for the same reason: `PendingJoinRequest` sits
+    /// in the frozen V1 schema, so the stamp cannot be a stored property, and (device pass
+    /// 2026-08-17) it cannot be a `@Transient` one either — the rows the UI renders come back
+    /// out of SwiftData via `getPendingRequests`, where a transient is nil by definition.
+    /// Parsed at decode, published beside the rows, keyed by the id the views already have.
+    @Published private(set) var pendingIdentityStamps: [String: [String: PendingIdentityStamp]] = [:]
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -242,17 +249,26 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         }
         
         guard let snapshot = snapshot, let modelContext = modelContext else { return }
-        
+
         var requests: [PendingJoinRequest] = []
         var userIdsToFetch: [String] = []
-        
+        var stampSources: [(requestId: String, data: [String: Any])] = []
+
         for document in snapshot.documents {
             if let request = PendingJoinRequest(from: document, familyId: familyId) {
                 requests.append(request)
                 userIdsToFetch.append(request.userId)
+                // FR-86: read the stamp off the RAW doc, here, while we still have it. It
+                // never reaches the SwiftData row (frozen schema), so this is its only
+                // capture point.
+                stampSources.append((requestId: request.requestId, data: document.data()))
             }
         }
-        
+        applyPendingIdentityStamps(
+            Self.parsePendingIdentityStamps(documents: stampSources),
+            familyId: familyId
+        )
+
         // Cache complete AppUser data for pending users — deferred until after SwiftData sync
         // Sync requests to SwiftData
         for request in requests {
@@ -613,14 +629,22 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         
         var requests: [PendingJoinRequest] = []
         var userIdsToFetch: [String] = []
-        
+        var stampSources: [(requestId: String, data: [String: Any])] = []
+
         for document in snapshot.documents {
             if let request = PendingJoinRequest(from: document, familyId: familyId) {
                 requests.append(request)
                 userIdsToFetch.append(request.userId)
+                // FR-86: same capture point as the listener path. This is the one that runs
+                // on a cold store after a reinstall, which is the case the device pass caught.
+                stampSources.append((requestId: request.requestId, data: document.data()))
             }
         }
-        
+        applyPendingIdentityStamps(
+            Self.parsePendingIdentityStamps(documents: stampSources),
+            familyId: familyId
+        )
+
         // Sync requests to SwiftData
         for request in requests {
             let searchRequestId = request.requestId
@@ -629,7 +653,7 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
                     r.requestId == searchRequestId
                 }
             )
-            
+
             if let existing = try? modelContext.fetch(descriptor).first {
                 existing.familyId = request.familyId
                 existing.userId = request.userId
@@ -642,13 +666,39 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
                 modelContext.insert(request)
             }
         }
-        
+
         try? modelContext.save()
-        
+
         await fetchAndCacheUsers(userIds: userIdsToFetch, familyId: familyId)
         republishLinkedMembersAndPending(familyId: familyId)
-        
+
         return getPendingRequests(familyId: familyId)
+    }
+
+    /// FR-86 render projection: the stamped identity for one pending row, or `nil` when the
+    /// server stamped nothing (or the rows came from the SwiftData cache without a decode
+    /// this session). Consumers keep their "Pending User" + placeholder fallback for `nil`.
+    func pendingIdentityStamp(familyId: String, requestId: String) -> PendingIdentityStamp? {
+        pendingIdentityStamps[familyId]?[requestId]
+    }
+
+    /// Test seam mirroring `applyChildMemberFlags`: gives the projection a single write point
+    /// that does not require a live Firestore snapshot.
+    func applyPendingIdentityStamps(_ stamps: [String: PendingIdentityStamp], familyId: String) {
+        pendingIdentityStamps[familyId] = stamps
+    }
+
+    /// Parses the FR-86 stamps out of a raw pending-collection snapshot. Split out so the
+    /// decode is testable without the network — the reinstall shape (cold store, fresh
+    /// decode) is exactly what this has to get right.
+    static func parsePendingIdentityStamps(
+        documents: [(requestId: String, data: [String: Any])]
+    ) -> [String: PendingIdentityStamp] {
+        var stamps: [String: PendingIdentityStamp] = [:]
+        for document in documents {
+            stamps[document.requestId] = PendingIdentityStamp(firestoreData: document.data)
+        }
+        return stamps
     }
     
     // MARK: - Cloud Functions

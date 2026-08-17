@@ -481,6 +481,21 @@ class FamilyDashboardViewModel: ObservableObject {
         childMemberIds.contains(memberId)
     }
 
+    /// FR-86 render projection for pending rows (device pass 2026-08-17).
+    ///
+    /// Read straight through to the repository rather than mirrored into a `@Published`, and
+    /// that is deliberate: unlike `childMemberIds` — which can change on its own when a
+    /// correction lands with no row change — the stamps are only ever written by the same
+    /// decode that republishes `pendingRequests` immediately afterwards, so the row publish
+    /// is already the render trigger and a mirror would only add a way for the two to drift.
+    /// `nil` keeps the existing "Pending User" + placeholder fallback.
+    func identityStamp(for request: PendingJoinRequest) -> PendingIdentityStamp? {
+        familyRepository.pendingIdentityStamp(
+            familyId: request.familyId,
+            requestId: request.requestId
+        )
+    }
+
     private func refreshOutgoingPendingInvites(familyId: String? = nil) {
         let resolvedFamilyId = familyId ?? family?.familyId
         guard let resolvedFamilyId,

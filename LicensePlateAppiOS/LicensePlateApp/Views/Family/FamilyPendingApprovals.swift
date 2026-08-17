@@ -33,6 +33,7 @@ struct FamilyPendingApprovals: View {
                         ForEach(viewModel.pendingRequests) { request in
                             PendingApprovalRow(
                                 request: request,
+                                stamp: viewModel.identityStamp(for: request),
                                 childTargetState: viewModel.childTargetState(for: request),
                                 childDraft: viewModel.childDraft(for: request),
                                 canApprove: viewModel.canApprove(request: request),
@@ -102,6 +103,14 @@ struct FamilyPendingApprovals: View {
 
 struct PendingApprovalRow: View {
     let request: PendingJoinRequest
+    /// FR-86: identity stamped onto the pending doc at creation (server agent), so two
+    /// pending children are distinguishable on this approve screen before — or even
+    /// without — a live user-doc resolve. Supplied by the view model from the repository's
+    /// parsed projection; `nil` on unstamped rows, which keeps the generic placeholder.
+    ///
+    /// Device pass 2026-08-17: previously read off the request as a `@Transient`, which is
+    /// nil on every row that comes back out of SwiftData — i.e. every row this list renders.
+    var stamp: PendingIdentityStamp?
     /// COPPA FR-1/FR-25 rendered projections — all decided by the view model.
     let childTargetState: ChildApprovalTargetState
     let childDraft: ChildApprovalDraft
@@ -126,23 +135,9 @@ struct PendingApprovalRow: View {
         request.user ?? resolvedUser
     }
 
-    /// FR-86: identity stamped onto the pending doc at creation (server agent), so two
-    /// pending children are distinguishable on this approve screen before — or even
-    /// without — a live user-doc resolve. Defensive: `nil` on older rows or before the
-    /// stamp ships; whitespace-only counts as absent too. NOTE: depends on
-    /// `PendingJoinRequest.userName`/`.avatarId` (optional `String`) landing on the
-    /// model from the parallel server/data-layer work — see task report.
-    private var stampedDisplayName: String? {
-        guard let raw = request.userName?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !raw.isEmpty else { return nil }
-        return raw
-    }
+    private var stampedDisplayName: String? { stamp?.userName }
 
-    private var stampedAvatarId: String? {
-        guard let raw = request.avatarId?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !raw.isEmpty else { return nil }
-        return raw
-    }
+    private var stampedAvatarId: String? { stamp?.avatarId }
 
     private var isApproveDisabled: Bool {
         isDisabled || !canApprove
@@ -437,6 +432,35 @@ struct PendingApprovalRow: View {
             childTargetState: .alreadyChild,
             childDraft: ChildApprovalDraft(isChild: false),
             canApprove: false,
+            expectedAgeOutYearOptions: Array(2026...2039),
+            isApproveBusy: false,
+            isDeclineBusy: false,
+            isDisabled: false,
+            onIsChildChange: { _ in },
+            onConsentAcknowledgedChange: { _ in },
+            onGuardianAffirmedChange: { _ in },
+            onExpectedAgeOutYearChange: { _ in },
+            onCorrectionReasonChange: { _ in },
+            onCorrectionAcknowledgedChange: { _ in },
+            onCorrectionGuardianAffirmedChange: { _ in },
+            onApprove: { true },
+            onDecline: { true }
+        )
+    }
+}
+
+/// FR-86: no cached `AppUser` to resolve (the reinstall / non-readable-child case), so the
+/// row renders entirely off the server's stamp instead of "User" + a placeholder avatar.
+#Preview("Approval row — stamped identity, no resolved user") {
+    List {
+        PendingApprovalRow(
+            request: PendingJoinRequest(requestId: "req-5", familyId: "fam", userId: "u5", requestedBy: "u5", method: .code),
+            stamp: PendingIdentityStamp(
+                firestoreData: ["userName": "pending_pat", "avatarId": "scout_otter"]
+            ),
+            childTargetState: .notChild,
+            childDraft: .initial(for: .notChild),
+            canApprove: true,
             expectedAgeOutYearOptions: Array(2026...2039),
             isApproveBusy: false,
             isDeclineBusy: false,
