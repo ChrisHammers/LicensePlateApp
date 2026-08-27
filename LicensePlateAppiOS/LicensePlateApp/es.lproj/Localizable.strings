@@ -1363,12 +1363,15 @@
 
 // COPPA F-6 — Neutral age screen (FR-27) & child restricted state (FR-28/FR-52)
 "age_gate.title" = "Antes de salir a la carretera";
-"age_gate.subtitle" = "Selecciona el año en que naciste.";
+"age_gate.subtitle" = "Selecciona el mes y el año en que naciste.";
 "age_gate.year_label" = "Año de nacimiento";
 "age_gate.year_placeholder" = "Selecciona el año";
-"age_gate.privacy_note" = "Se usa solo para configurar tu experiencia. Tu año de nacimiento no se guarda.";
+"age_gate.month_label" = "Mes de nacimiento";
+"age_gate.month_placeholder" = "Selecciona el mes";
+"age_gate.picker_hint_month" = "Abre una lista de meses para elegir";
+"age_gate.privacy_note" = "Se usa solo para configurar tu experiencia. Nunca pedimos tu fecha de nacimiento completa.";
 "age_gate.picker_hint" = "Abre una lista de años para elegir";
-"age_gate.continue_hint" = "Continúa con el año seleccionado";
+"age_gate.continue_hint" = "Continúa con el mes y el año seleccionados";
 "child_gate.family_prompt.title" = "Pídele a tu papá o mamá que te agregue a su familia";
 "child_gate.family_prompt.subtitle" = "¡Sigue jugando! Tus viajes se quedan en este dispositivo hasta que te unas a una familia.";
 /* F-8 device testing (2026-08-15): shown instead of the two lines above once a share-code redemption is awaiting captain approval. */

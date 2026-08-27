@@ -77,6 +77,35 @@ struct AgeGateView: View {
 
     private var birthYearCard: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // FR-55 (v3.7): month + year, both neutral — no default selection, nothing
+            // signals a cutoff. The day is deliberately never asked for (minimization);
+            // the residual birthday-month ambiguity classifies protectively in the store.
+            HStack {
+                Text("age_gate.month_label".localized)
+                    .font(.system(.body, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.primaryBlue)
+
+                Spacer(minLength: 12)
+
+                Picker("age_gate.month_label".localized, selection: $viewModel.selectedBirthMonth) {
+                    Text("age_gate.month_placeholder".localized)
+                        .tag(Int?.none)
+                    ForEach(viewModel.monthOptions, id: \.self) { month in
+                        Text(verbatim: viewModel.monthName(month))
+                            .tag(Int?.some(month))
+                    }
+                }
+                .pickerStyle(.menu)
+                .tint(Color.Theme.primaryBlue)
+                .frame(minWidth: 44, minHeight: 44)
+                .accessibilityHint("age_gate.picker_hint_month".localized)
+                .accessibilityValue(
+                    viewModel.selectedBirthMonth.map { viewModel.monthName($0) }
+                        ?? "age_gate.month_placeholder".localized
+                )
+            }
+
             HStack {
                 Text("age_gate.year_label".localized)
                     .font(.system(.body, design: .rounded))

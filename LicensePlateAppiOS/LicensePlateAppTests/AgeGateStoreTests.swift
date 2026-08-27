@@ -20,19 +20,39 @@ struct AgeGateStoreTests {
         return (AgeGateStore(defaults: defaults), defaults)
     }
 
-    // MARK: - Derivation (year-only, D-3)
+    // MARK: - Derivation (FR-55 v3.7: month + year, exact boundary)
 
-    @Test func derivationClassifiesBelowThirteenAsChild() {
-        #expect(AgeGateStore.category(forBirthYear: 2014, currentYear: 2026) == .under13)
-        #expect(AgeGateStore.category(forBirthYear: 2026, currentYear: 2026) == .under13)
-        // FR-55: the ambiguous cohort (could be 12 or 13) fails closed to under13.
-        #expect(AgeGateStore.category(forBirthYear: 2013, currentYear: 2026) == .under13)
+    /// The full boundary matrix around the 13th birthday, for the SRS's worked example:
+    /// born 2014-03 ⇒ 13th birthday in March 2027. The birthday month ITSELF classifies
+    /// `.under13` — the day is never asked for, so that person may be 12 or 13, and the
+    /// ambiguity resolves protectively. Do not "simplify" the equal-month case.
+    @Test func theThirteenthBirthdayBoundaryMatrix() {
+        // Strictly before the birthday month — still 12, child.
+        #expect(AgeGateStore.category(forBirthMonth: 3, birthYear: 2014, currentMonth: 2, currentYear: 2027) == .under13)
+        // THE BIRTHDAY MONTH — ambiguous (12 or 13), fails closed to child.
+        #expect(AgeGateStore.category(forBirthMonth: 3, birthYear: 2014, currentMonth: 3, currentYear: 2027) == .under13)
+        // Strictly after — unambiguously 13, adult side.
+        #expect(AgeGateStore.category(forBirthMonth: 3, birthYear: 2014, currentMonth: 4, currentYear: 2027) == .teenAdult)
+        // Year boundaries around the same birth date.
+        #expect(AgeGateStore.category(forBirthMonth: 3, birthYear: 2014, currentMonth: 12, currentYear: 2026) == .under13)
+        #expect(AgeGateStore.category(forBirthMonth: 3, birthYear: 2014, currentMonth: 1, currentYear: 2028) == .teenAdult)
+        // December birthday crossing a year boundary: born 2013-12 ⇒ marker 202612.
+        #expect(AgeGateStore.category(forBirthMonth: 12, birthYear: 2013, currentMonth: 12, currentYear: 2026) == .under13)
+        #expect(AgeGateStore.category(forBirthMonth: 12, birthYear: 2013, currentMonth: 1, currentYear: 2027) == .teenAdult)
+        // Far sides, unambiguous in both directions.
+        #expect(AgeGateStore.category(forBirthMonth: 6, birthYear: 1990, currentMonth: 8, currentYear: 2026) == .teenAdult)
+        #expect(AgeGateStore.category(forBirthMonth: 6, birthYear: 2020, currentMonth: 8, currentYear: 2026) == .under13)
     }
 
-    @Test func derivationClassifiesThirteenOrOlderAsTeenAdult() {
-        #expect(AgeGateStore.category(forBirthYear: 1990, currentYear: 2026) == .teenAdult)
-        // FR-55: one year past the ambiguous cohort is unambiguously 13+, the boundary's other side.
-        #expect(AgeGateStore.category(forBirthYear: 2012, currentYear: 2026) == .teenAdult)
+    /// FR-110(a): the marker is the 13th-birthday year-month as one comparable integer,
+    /// and it agrees with the classifier's boundary by construction (BOUNDARY SYMMETRY —
+    /// AGEOUT detection is `marker < currentYearMonth`, strict, so the birthday month is
+    /// protected at both ends).
+    @Test func theAgeOutMarkerMatchesTheWorkedExample() {
+        #expect(AgeGateStore.ageOutYearMonth(forBirthMonth: 3, birthYear: 2014) == 202703)
+        #expect(AgeGateStore.ageOutYearMonth(forBirthMonth: 12, birthYear: 2013) == 202612)
+        // Reversibility (deliberate, load-bearing for FR-117): subtract 1300.
+        #expect(202703 - 1300 == 201403)
     }
 
     // MARK: - Persistence
@@ -278,36 +298,100 @@ struct AgeGateStoreTests {
     // MARK: - View model (SRS §12: shown/completed only, never the answer)
 
     @Test func viewModelDerivesAndRecordsWithoutLoggingTheAnswer() {
-        let (store, _) = makeStore()
+        let (store, defaults) = makeStore()
         let spy = AnalyticsSpy()
-        let vm = AgeGateViewModel(source: .launch, store: store, analytics: spy, currentYear: 2026)
+        let vm = AgeGateViewModel(
+            source: .launch, store: store, analytics: spy,
+            currentYear: 2026, currentMonth: 8
+        )
 
         vm.recordShown()
         vm.recordShown()
         vm.selectedBirthYear = 2014
+        vm.selectedBirthMonth = 3
         #expect(vm.submit() == true)
 
         #expect(store.category == .under13)
         #expect(store.hasPendingChildDeclaration == true)
+        // FR-110(a): the under-13 answer captured the marker at the one moment the
+        // inputs existed.
+        #expect(store.ageOutYearMonth == 202703)
 
-        // Exactly one shown + one completed; parameters carry the source only.
+        // Exactly one shown + one completed; parameters carry the source only —
+        // never the answer, the year, or the month.
         #expect(spy.events.count == 2)
         #expect(spy.events[0].name == "age_gate_shown")
         #expect(spy.events[1].name == "age_gate_completed")
         for event in spy.events {
             let values = (event.parameters ?? [:]).values.map { "\($0)" }
             #expect(!values.contains("2014"))
+            #expect(!values.contains("3"))
             #expect(!values.contains("under13"))
             #expect(!values.contains("teen_adult"))
         }
+        // Minimization: no raw birth month/year key in the persisted store — only the
+        // category, timestamp, declaration flag, and the FR-110 marker.
+        let persistedKeys = defaults.dictionaryRepresentation().keys.filter { $0.hasPrefix("ageGate.") }
+        #expect(Set(persistedKeys).isSubset(of: [
+            AgeGateStoreKeys.category,
+            AgeGateStoreKeys.answeredAt,
+            AgeGateStoreKeys.pendingChildDeclaration,
+            AgeGateStoreKeys.ageOutYearMonth,
+        ]))
     }
 
-    @Test func viewModelRequiresASelection() {
+    /// A teen/adult answer records NO marker — the marker exists solely to detect a
+    /// declared child's age-out, and an adult epoch has nothing to age out of.
+    @Test func aTeenAdultAnswerPersistsNoAgeOutMarker() {
+        let (store, _) = makeStore()
+        let vm = AgeGateViewModel(
+            source: .launch, store: store, analytics: AnalyticsSpy(),
+            currentYear: 2026, currentMonth: 8
+        )
+        vm.selectedBirthYear = 1990
+        vm.selectedBirthMonth = 6
+        #expect(vm.submit() == true)
+        #expect(store.category == .teenAdult)
+        #expect(store.ageOutYearMonth == nil)
+    }
+
+    /// FR-110(a): the marker is device-scoped PROTECTION state — it survives
+    /// `clearAnswer()` (sign-out, deletion) and a manager correction, like the ratchet
+    /// and the declared-uid history, because its inputs are discarded and can never be
+    /// backfilled. And a marker-less under-13 re-assert (FR-26 recovery has no birth
+    /// data) must not erase it.
+    @Test func theAgeOutMarkerSurvivesClearsAndMarkerlessReasserts() {
+        let (store, _) = makeStore()
+        store.recordAnswer(.under13, ageOutYearMonth: 202703)
+        #expect(store.ageOutYearMonth == 202703)
+
+        store.clearAnswer()
+        #expect(store.category == nil)
+        #expect(store.ageOutYearMonth == 202703)
+
+        // FR-26 re-assert, no birth data in hand: category returns, marker untouched.
+        store.recordAnswer(.under13)
+        #expect(store.category == .under13)
+        #expect(store.ageOutYearMonth == 202703)
+
+        store.clearUnder13AnswerAfterCorrection()
+        #expect(store.ageOutYearMonth == 202703)
+    }
+
+    @Test func viewModelRequiresBothSelections() {
         let (store, _) = makeStore()
         let spy = AnalyticsSpy()
-        let vm = AgeGateViewModel(source: .registration, store: store, analytics: spy, currentYear: 2026)
+        let vm = AgeGateViewModel(
+            source: .registration, store: store, analytics: spy,
+            currentYear: 2026, currentMonth: 8
+        )
         #expect(vm.canContinue == false)
         #expect(vm.submit() == false)
+        vm.selectedBirthYear = 2014
+        #expect(vm.canContinue == false)
+        #expect(vm.submit() == false)
+        vm.selectedBirthMonth = 3
+        #expect(vm.canContinue == true)
         #expect(store.isResolved == false)
     }
 }

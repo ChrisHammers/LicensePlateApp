@@ -27,6 +27,10 @@ enum AgeGateStoreKeys {
     static let pendingDeclarationUserIds = "ageGate.pendingDeclarationUserIds"
     static let declaredChildUserIds = "ageGate.declaredChildUserIds"
     static let detachedIdentityUserIds = "ageGate.detachedIdentityUserIds"
+    /// FR-110(a): the age-out marker. Device-scoped PROTECTION state like the declared-uid
+    /// history — deliberately NOT cleared by `clearAnswer()` or a correction, because the
+    /// inputs that produced it are discarded and can never be backfilled.
+    static let ageOutYearMonth = "ageGate.ageOutYearMonth"
 }
 
 /// UserDefaults-backed age-gate state (no SwiftData; follows `FirstSessionState` idiom).
@@ -43,14 +47,44 @@ final class AgeGateStore: ObservableObject {
         self.defaults = defaults
     }
 
-    // MARK: - Derivation (FR-27)
+    // MARK: - Derivation (FR-27, amended FR-55 v3.7: exact boundary from month + year)
 
-    /// Neutral year-only classification: with only a birth year, the person's age is
-    /// ambiguous between `currentYear - birthYear` and one less (birthday not yet
-    /// reached). A mixed-audience, child-directed service must resolve that ambiguity
-    /// toward protection, so the ambiguous cohort is classified under 13.
-    static func category(forBirthYear birthYear: Int, currentYear: Int) -> AgeGateCategory {
-        (currentYear - birthYear) < 14 ? .under13 : .teenAdult
+    /// Exact-boundary classification: `.teenAdult` only when the 13th-birthday MONTH is
+    /// strictly in the past — `(currentYear, currentMonth) > (birthYear + 13, birthMonth)`.
+    ///
+    /// The residual ambiguity is NOT eliminated, only shrunk — and still resolved
+    /// protectively: the day is never asked for (deliberate minimization), so a person in
+    /// their birthday month may be 12 or 13, and that cohort classifies `.under13`.
+    /// Month+year shrinks the ambiguous population from roughly half a birth-year cohort
+    /// to one twelfth of one; the conservative tiebreak remains load-bearing and MUST NOT
+    /// be "simplified" into an exact comparison by a future implementer.
+    ///
+    /// BOUNDARY SYMMETRY (FR-55 ↔ AGEOUT FR-110/FR-111, verified, do not touch): this
+    /// gate rule (birthday month ⇒ still `.under13`) and AGEOUT's detection rule
+    /// (`ageOutYearMonth < currentYearMonth`, STRICT) agree exactly — born 2014-03 ⇒
+    /// marker 202703: Feb 2027 child, MARCH 2027 STILL CHILD, Apr 2027 ages out.
+    /// Protection runs through the whole birthday month at both ends; flipping either
+    /// comparison ages a child out during a month they may still be 12.
+    static func category(
+        forBirthMonth birthMonth: Int,
+        birthYear: Int,
+        currentMonth: Int,
+        currentYear: Int
+    ) -> AgeGateCategory {
+        currentYear * 100 + currentMonth
+            > ageOutYearMonth(forBirthMonth: birthMonth, birthYear: birthYear)
+            ? .teenAdult
+            : .under13
+    }
+
+    /// FR-110(a): the age-out marker — `(birthYear + 13) * 100 + birthMonth` (born
+    /// 2014-03 ⇒ `202703`), one comparable integer. Honest framing, per the SRS: this is
+    /// losslessly reversible to the birth year-month (subtract 1300), so persisting it is
+    /// EQUIVALENT to storing month+year — what is actually minimized is the DAY, which is
+    /// never asked for. The reversibility is deliberate and load-bearing (FR-117 shows a
+    /// parent the date being confirmed); a year-month is not an identifier.
+    static func ageOutYearMonth(forBirthMonth birthMonth: Int, birthYear: Int) -> Int {
+        (birthYear + 13) * 100 + birthMonth
     }
 
     // MARK: - Read surface (consumed by F-7)
@@ -63,6 +97,14 @@ final class AgeGateStore: ObservableObject {
     var answeredAt: Date? {
         let interval = defaults.double(forKey: AgeGateStoreKeys.answeredAt)
         return interval > 0 ? Date(timeIntervalSince1970: interval) : nil
+    }
+
+    /// FR-110(a): the persisted age-out marker for this device's under-13 lineage, or
+    /// `nil` when no under-13 answer with birth data has ever been recorded here.
+    /// Survives `clearAnswer()` and correction — see the key's doc comment.
+    var ageOutYearMonth: Int? {
+        let value = defaults.integer(forKey: AgeGateStoreKeys.ageOutYearMonth)
+        return value > 0 ? value : nil
     }
 
     /// True once the neutral age screen has been answered on this device.
@@ -159,7 +201,11 @@ final class AgeGateStore: ObservableObject {
     /// existing `under13` answer is never overwritten by a later `teenAdult` answer
     /// within the same flow lifetime (clearing happens at sign-out; parent correction
     /// flows land in F-8).
-    func recordAnswer(_ newCategory: AgeGateCategory, at date: Date = .now) {
+    func recordAnswer(
+        _ newCategory: AgeGateCategory,
+        ageOutYearMonth: Int? = nil,
+        at date: Date = .now
+    ) {
         if category == .under13, newCategory == .teenAdult {
             return
         }
@@ -167,6 +213,13 @@ final class AgeGateStore: ObservableObject {
         defaults.set(date.timeIntervalSince1970, forKey: AgeGateStoreKeys.answeredAt)
         if newCategory == .under13 {
             defaults.set(true, forKey: AgeGateStoreKeys.pendingChildDeclaration)
+            // FR-110(a): capture the age-out marker while the inputs still exist —
+            // the gate's submit is the ONLY moment they do. A marker-less under-13
+            // call (e.g. FR-26's re-assert, which has no birth data) leaves any
+            // existing marker in place rather than erasing it.
+            if let ageOutYearMonth {
+                defaults.set(ageOutYearMonth, forKey: AgeGateStoreKeys.ageOutYearMonth)
+            }
         }
         revision += 1
     }

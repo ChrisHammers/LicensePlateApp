@@ -1394,12 +1394,15 @@
 
 // COPPA F-6 — Neutral age screen (FR-27) & child restricted state (FR-28/FR-52)
 "age_gate.title" = "Before we hit the road";
-"age_gate.subtitle" = "Select the year you were born.";
+"age_gate.subtitle" = "Select the month and year you were born.";
 "age_gate.year_label" = "Birth year";
 "age_gate.year_placeholder" = "Select year";
-"age_gate.privacy_note" = "Used only to set up your experience. Your birth year is not stored.";
+"age_gate.month_label" = "Birth month";
+"age_gate.month_placeholder" = "Select month";
+"age_gate.picker_hint_month" = "Opens a list of months to choose from";
+"age_gate.privacy_note" = "Used only to set up your experience. We never ask for your full birthday.";
 "age_gate.picker_hint" = "Opens a list of years to choose from";
-"age_gate.continue_hint" = "Continues with the selected year";
+"age_gate.continue_hint" = "Continues with the selected month and year";
 "child_gate.family_prompt.title" = "Ask a parent to add you to their family";
 "child_gate.family_prompt.subtitle" = "Keep playing! Your trips stay on this device until you join a family.";
 /* F-8 device testing (2026-08-15): shown instead of the two lines above once a share-code redemption is awaiting captain approval. */

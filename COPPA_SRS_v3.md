@@ -142,7 +142,7 @@ Risk = enforcement exposure if shipped unfixed. Gate: **L** = launch-blocking, *
 
 | Feature | FR | Note |
 |---|---|---|
-| F-14 | FR-55 | age boundary — **shipped as `< 14`; FR-55 amended at v3.7 to exact month+year. Deployed code is now BEHIND spec until F-14b lands.** |
+| F-14 | FR-55 | age boundary — **F-14b LANDED 2026-08-27**: month+year capture, exact-13th-birthday classifier with the birthday-month protective tiebreak, and FR-110(a)'s `ageOutYearMonth` marker (persisted at answer, survives clearAnswer/correction; boundary symmetry pinned by test). Copy reworded truthfully ×3 ("We never ask for your full birthday" — the marker is reversibly month+year, so the old "not stored" claim had to go). FR-110(b)/(c) (marker required in consent + declaration rows) ride the §3.1.2 email_plus wave. |
 | F-15 | FR-56, FR-57 | ads SDK behind the deferral; purchases suppressed for all non-adult postures |
 | F-16 | FR-58 | launch hold ordering; `crash_reporting_configured` event deleted |
 | F-18 | FR-60 | local-first child path + `provisionalChildAccounts.ts` + 7-day sweep |
@@ -204,13 +204,28 @@ Counsel cleared the closed-group reading (quick review, above); the owner picked
 
 Model lanes (per §2): steps 1–5, 8–9 **Opus/high + adversarial verify**; step 6 **Sonnet**; step 10 fixtures **Haiku**; step 3's transaction and step 4's scheduler get the §2.4 both-directions verification.
 
+**Owner device checks (added 2026-08-27 per the repro-steps-in-SRS rule):**
+
+*F-14b — landed, checkable now (simulator fine; fresh install or post-sign-out so the gate shows).* The observable is WHICH EXPERIENCE the answer routes to (child gate on the Family tab vs. adult surfaces). With "today" = the current month, test the three-birthday matrix around exactly 13 years ago — e.g. in 2026-08:
+1. Born **September 2013** (13th birthday next month) → **child** experience.
+2. Born **August 2013** (birthday month = this month) → **child** — THE tiebreak case; if this routes adult, the protective boundary is broken.
+3. Born **July 2013** (turned 13 last month) → **adult** experience.
+Plus: both pickers start unselected with no cutoff visible; Continue disabled until both are chosen; switch app language to Spanish/French and confirm the month names localize; the privacy line reads the new "full birthday" wording. The `ageOutYearMonth` marker itself has no UI — it becomes console-visible when the email_plus wave stamps it into the declaration/consent rows, which is where to verify it later.
+
+*email_plus core — checklist for when it lands (end-to-end on dev, captain's account using a REAL email you control):*
+1. Child (simulator) redeems the family code and accepts; captain sees the stamped pending row.
+2. Captain taps approve → the row flips to **awaiting guardian confirmation**; the child is NOT admitted (no roster entry, child app still shows waiting; profile writes still held).
+3. The consent-request email arrives carrying the direct notice; click the link → confirmation succeeds → child becomes a member; child app unlocks. Firestore console: a consent record exists with `method: email_plus`, `assuranceLevel: 1`, scopes/versions, and `ageOutYearMonth` present.
+4. Negatives: clicking the link a SECOND time is refused (single-use); an expired link does not admit; before confirmation the child can still decline/walk away and the provisional cleanup runs.
+5. The ≥24h "plus" notice arrives later with the revocation path (dev knob to shorten the delay will ship with the wave so this is testable same-day).
+
 ### §3.2 Implementation notes (hard-won; save the next agent the round-trip)
 
 - **Rules tests need Java, which IS installed but not on `PATH`:** `export JAVA_HOME=/opt/homebrew/opt/openjdk; export PATH="$JAVA_HOME/bin:$PATH"` before `npm run test:rules`. Multiple agents reported "no Java" and shipped **unexecuted** rules cases, which §2.1 step 4 forbids. When the suite finally ran it immediately caught a real fail-open (a friend code has no `familyId`, so a write-path helper reused on the read path made every friend code world-readable). Treat unexecuted rules cases as unshipped.
 - **Swift Testing selects suites by TYPE name, not file name.** `-only-testing:LicensePlateAppTests/SomeFileName` silently matches **zero** tests and still reports success — this produced one false "all green" claim in this program.
 - **Pin the simulator OS:** bare `-destination 'platform=iOS Simulator,name=iPhone 17'` is ambiguous across installed runtimes and stalls; use `,OS=26.5`. Also `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` — `xcode-select` points at CommandLineTools.
 - **`defineSecret()` with no value in Secret Manager is a HARD deploy failure**, not a warning: it blocks *every* functions deploy. FR-78 therefore reads `process.env.REVENUECAT_SECRET_API_KEY` and documents the two-step re-enable in code. Do not "fix" it back to `defineSecret` without provisioning the secret in the same change.
-- **Node.js 20 is decommissioned 2026-10-30** — functions cannot deploy after that date without a runtime upgrade (`firebase-functions` is also flagged outdated). Not COPPA, but a hard pre-launch deadline surfaced by the deploy.
+- **Node.js 20 decommission (2026-10-30): RESOLVED 2026-08-27** — runtime upgraded to nodejs22 with firebase-functions v7.3.2 (imports moved to the `firebase-functions/v1` entrypoint; Gen 1 kept — nodejs22 is GA on Gen 1). All 47 functions redeployed ACTIVE on nodejs22 in dev; vitest 764/764, rules 122/122. Forward note (attention queue-worthy, not urgent): nodejs24 is Gen-2-only, so the NEXT runtime cycle (~2027-28) forces a Gen 2 migration in which `functions.auth.user().onDelete` has no v2 equivalent — the on-delete flow will need rearchitecting then.
 - **Concurrent agents in one worktree** produced transient red tests and mid-build file mutations throughout. Assign disjoint file sets, and re-verify rather than trusting a report written against a moving tree.
 
 ---
