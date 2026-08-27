@@ -1155,7 +1155,7 @@ struct FR60UnconsentedChildCloudFootprintTests {
         #expect(UnconsentedChildCloudWritePolicy.isWriteHeld(
             isUnconsentedChild: true,
             isFamilyApprovalPending: false,
-            isConsentSeekingProvisioning: false
+            isSeekingConsentNow: false
         ) == true)
 
         // Inside FR-60(b)'s sequence the write is part of the sanctioned window — FR-83/FR-86
@@ -1164,21 +1164,21 @@ struct FR60UnconsentedChildCloudFootprintTests {
         #expect(UnconsentedChildCloudWritePolicy.isWriteHeld(
             isUnconsentedChild: true,
             isFamilyApprovalPending: false,
-            isConsentSeekingProvisioning: true
+            isSeekingConsentNow: true
         ) == false)
 
         // A family really is deciding (FR-88 server truth) — the window is open.
         #expect(UnconsentedChildCloudWritePolicy.isWriteHeld(
             isUnconsentedChild: true,
             isFamilyApprovalPending: true,
-            isConsentSeekingProvisioning: false
+            isSeekingConsentNow: false
         ) == false)
 
         // A consented child is a full member (FR-85), and an adult was never in scope.
         #expect(UnconsentedChildCloudWritePolicy.isWriteHeld(
             isUnconsentedChild: false,
             isFamilyApprovalPending: false,
-            isConsentSeekingProvisioning: false
+            isSeekingConsentNow: false
         ) == false)
     }
 
@@ -1193,7 +1193,7 @@ struct FR60UnconsentedChildCloudFootprintTests {
         #expect(UnconsentedChildCloudWritePolicy.isWriteHeld(
             isUnconsentedChild: true,
             isFamilyApprovalPending: unanswered,
-            isConsentSeekingProvisioning: false
+            isSeekingConsentNow: false
         ) == false)
 
         let serverSaysNo = FamilyApprovalPendingPolicy.isPending(
@@ -1202,7 +1202,7 @@ struct FR60UnconsentedChildCloudFootprintTests {
         #expect(UnconsentedChildCloudWritePolicy.isWriteHeld(
             isUnconsentedChild: true,
             isFamilyApprovalPending: serverSaysNo,
-            isConsentSeekingProvisioning: false
+            isSeekingConsentNow: false
         ) == true)
     }
 
@@ -1231,5 +1231,356 @@ struct FR60UnconsentedChildCloudFootprintTests {
             isAnonymousSession: true,
             isBoundToCurrentAnswer: false
         ) == true)
+    }
+}
+
+// MARK: - FR-26/FR-28f: the sticky child's re-admission exit (device pass 2026-08-17, wave 8)
+//
+// Owner report: a child removed from a family ("Family Account Paused") could not join another
+// one. Every valid share code came back "We couldn't finish setting that up. Please check your
+// connection and try the code again." — `child_gate.join.setup_incomplete`, which is worded as
+// a retryable hiccup and was in fact a permanent state.
+//
+// FR-26 gives an orphaned flagged account exactly two exits: join a family, or delete the
+// account. FR-28f requires at least one of them to stay reachable from the restricted surface
+// itself, post-revocation. A dead end on re-admission is therefore not a papercut, it is a
+// contract violation — the child has no third option and no way to report one.
+//
+// THE MECHANISM, as a shape rather than a stack trace. The consent exit's identity step was a
+// single guard:
+//
+//     guard requiresProvisioning(hasFirebaseUid:category:) else {
+//         try assertConsentExitSessionReady()   // throws setup_incomplete with no session
+//         await publishConsentSeekingProfileIfNeeded()
+//         return
+//     }
+//     ...the only mint in the method lives here...
+//
+// `requiresProvisioning` is FALSE for anyone holding a uid — which is the definition of a
+// sticky post-revocation child. So that population always took the skip, and the skip cannot
+// mint. Any way for their uid to outlive its Auth session (a remove-and-delete whose token
+// refresh fails mid-attempt; a declaration this device never recorded, which is the scope
+// `settleSessionlessChildIdentityIfNeeded` restricts itself to; a reinstall that kept the
+// Keychain uid and lost UserDefaults) lands on `assertConsentExitSessionReady` and stays there.
+//
+// These tests pin the replacement: a TOTAL function with no refusing case.
+
+@MainActor
+struct FR26StickyChildReadmissionTests {
+
+    private func makeStore() -> AgeGateStore {
+        let suite = "FR26StickyChildReadmissionTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return AgeGateStore(defaults: defaults)
+    }
+
+    // MARK: - The exit is total
+
+    /// THE REGRESSION TEST. No combination of the facts the consent exit can observe about a
+    /// child session may resolve to "there is nothing I can do" — because the exit's refusal
+    /// is not recoverable by the child, and FR-26 leaves them nowhere else to go.
+    ///
+    /// This is the assertion whose absence let wave 6 ship: every prior test asked what the
+    /// exit does with the states it MODELLED, and the locked-out child was in a state it had
+    /// not modelled. Enumerating the whole input space is what makes that impossible again.
+    @Test func noChildSessionEverReachesADeadEndAtTheConsentExit() {
+        for hasUid in [true, false] {
+            for hasSession in [true, false] {
+                for category in [AgeGateCategory.under13, .teenAdult, nil] {
+                    for isChildSession in [true, false] {
+                        let resolution = ChildConsentRedemptionPolicy.resolution(
+                            hasFirebaseUid: hasUid,
+                            hasLiveAuthSession: hasSession,
+                            isChildSession: isChildSession,
+                            category: category
+                        )
+                        guard isChildSession || category == .under13 else {
+                            #expect(
+                                resolution == .passThrough,
+                                "an adult session must not be routed through the child exit"
+                            )
+                            continue
+                        }
+                        // A child flow ALWAYS has something the device can do: redeem on the
+                        // identity it holds, recover one whose session is gone, or mint.
+                        let inputs = "hasUid=\(hasUid) hasSession=\(hasSession) category=\(String(describing: category))"
+                        #expect(
+                            resolution != .passThrough,
+                            "\(inputs) left a child session with no action — this is the lockout"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /// The reported state, named exactly: sticky child, uid in hand, session gone. The old code
+    /// read this as "already provisioned, nothing to do" and then refused it for having no
+    /// session. It is a RECOVERY, and recovery is not optional.
+    @Test func theStickyChildWhoseSessionDiedIsRecoveredRatherThanRefused() {
+        #expect(ChildConsentRedemptionPolicy.resolution(
+            hasFirebaseUid: true,
+            hasLiveAuthSession: false,
+            isChildSession: true,
+            category: .under13
+        ) == .settleThenProvision)
+
+        // ...and the same child on a device whose epoch answer was cleared by a reinstall.
+        // `category` alone cannot see them; `isChildSession` (server truth, or this device's
+        // declared lineage) is why the widened input exists.
+        #expect(ChildConsentRedemptionPolicy.resolution(
+            hasFirebaseUid: true,
+            hasLiveAuthSession: false,
+            isChildSession: true,
+            category: nil
+        ) == .settleThenProvision)
+    }
+
+    /// The ordinary post-revocation path, which must stay ordinary: live session on an existing
+    /// uid ⇒ publish the profile (FR-83/FR-86 need the name and avatar on the pending row) and
+    /// redeem. No mint, no detach, nothing destructive.
+    @Test func theStickyChildWithALiveSessionSimplyRedeems() {
+        #expect(ChildConsentRedemptionPolicy.resolution(
+            hasFirebaseUid: true,
+            hasLiveAuthSession: true,
+            isChildSession: true,
+            category: .under13
+        ) == .redeemWithExistingIdentity)
+    }
+
+    /// FR-60(b)'s original case is untouched: a local-first child with no identity at all still
+    /// mints at share-code entry, and only there.
+    @Test func theLocalFirstChildStillProvisionsAtShareCodeEntry() {
+        #expect(ChildConsentRedemptionPolicy.resolution(
+            hasFirebaseUid: false,
+            hasLiveAuthSession: false,
+            isChildSession: false,
+            category: .under13
+        ) == .provision)
+    }
+
+    /// Adults never enter this machinery. An adult guest with no session is still refused at the
+    /// exit's own gate, by `consentExitAccess`, exactly as before — widening the child path must
+    /// not widen theirs.
+    @Test func adultsAreUntouchedByTheChildRecovery() {
+        #expect(ChildConsentRedemptionPolicy.resolution(
+            hasFirebaseUid: true,
+            hasLiveAuthSession: false,
+            isChildSession: false,
+            category: .teenAdult
+        ) == .passThrough)
+        #expect(FriendsFamilyAccessPolicy.consentExitAccess(
+            accountState: .localGuest, hasFirebaseSession: false, isDeclaredChildSession: false
+        ) == .blockedNeedsSignIn)
+    }
+
+    /// The recovery has to actually LEAD somewhere: after the settle the child is a uid-less
+    /// local-first child, and the mint must be permitted for them — including with the declared
+    /// child lineage the ratchet keeps forever.
+    @Test func theRecoveredChildCanActuallyMintAgain() {
+        #expect(ChildConsentRedemptionPolicy.resolution(
+            hasFirebaseUid: false,
+            hasLiveAuthSession: false,
+            isChildSession: true,
+            category: .under13
+        ) == .provision)
+        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(
+            category: .under13,
+            isConsentSeekingRedemption: true,
+            hasDeclaredChildHistory: true
+        ) == true)
+    }
+
+    /// The other half of "leads somewhere", and the one the reinstall shape needs: the mint's
+    /// own gate refuses an epoch with NO answer, and `bindPendingDeclaration` refuses to bind
+    /// one — so a sticky child whose answer was cleared would mint nothing, or worse mint an
+    /// UNDECLARED uid. Re-asserting the under-13 answer for a session already known to be a
+    /// child is what makes the new uid bindable and declarable.
+    @Test func aClearedEpochAnswerIsReassertedSoTheMintIsDeclarable() {
+        let store = makeStore()
+        // The reinstall shape: no answer, but the device (or the server) knows this is a child.
+        #expect(store.category == nil)
+        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(
+            category: store.category, isConsentSeekingRedemption: true
+        ) == false)
+        store.bindPendingDeclaration(toUserId: "fresh-uid")
+        #expect(store.isPendingDeclaration(userId: "fresh-uid") == false)
+
+        // What the consent exit does about it — protective direction only, and only for a
+        // session already classified as a child.
+        store.recordAnswer(.under13)
+
+        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(
+            category: store.category, isConsentSeekingRedemption: true
+        ) == true)
+        store.bindPendingDeclaration(toUserId: "fresh-uid")
+        #expect(store.isPendingDeclaration(userId: "fresh-uid") == true)
+    }
+
+    // MARK: - The write window is about intent, not about provisioning
+
+    /// The wave-6 hold's scope error, stated as the thing that was wrong with it.
+    ///
+    /// The exemption was `isConsentSeekingProvisioning` — "this uid is inside the mint
+    /// sequence". Provisioning is the one thing a sticky child does NOT do, so the window
+    /// could never open for them: the population FR-26 says needs re-admission most was the
+    /// population structurally excluded from the window that makes re-admission legible to a
+    /// captain. The input is now `isSeekingConsentNow`, and this is the row that proves the
+    /// difference.
+    @Test func theWindowOpensForASeekingChildWhoIsNotBeingProvisioned() {
+        // No mint, no pending request — and the window is OPEN, because the child is pursuing
+        // admission right now. Under the wave-6 reading this was `true` (held).
+        #expect(UnconsentedChildCloudWritePolicy.isWriteHeld(
+            isUnconsentedChild: true,
+            isFamilyApprovalPending: false,
+            isSeekingConsentNow: true
+        ) == false)
+    }
+
+    /// The window is scoped to the ATTEMPT, and it must close again. Latching it open is the
+    /// wave-6 cloud-footprint bug returning by another door.
+    @Test func theWindowClosesWhenTheAttemptEnds() {
+        let store = makeStore()
+        #expect(store.isSeekingConsent(userId: "kid") == false)
+
+        store.beginConsentSeeking(userId: "kid")
+        #expect(store.isSeekingConsent(userId: "kid") == true)
+        // Identity-bound: another uid on the same device is not in the window.
+        #expect(store.isSeekingConsent(userId: "other-kid") == false)
+        #expect(store.isSeekingConsent(userId: nil) == false)
+
+        store.endConsentSeeking(userId: "kid")
+        #expect(store.isSeekingConsent(userId: "kid") == false)
+    }
+
+    /// A consent-seeking attempt can SWAP identities mid-flight (settle → fresh mint), so the
+    /// close cannot be "the uid we opened with". Both have to go, or the retired one stays
+    /// latched open for the life of the process.
+    @Test func anIdentitySwapMidAttemptLeavesNoWindowLatchedOpen() {
+        let store = makeStore()
+        store.beginConsentSeeking(userId: "stale-uid")
+        store.beginConsentSeeking(userId: "fresh-uid")
+
+        store.endAllConsentSeeking()
+
+        #expect(store.isSeekingConsent(userId: "stale-uid") == false)
+        #expect(store.isSeekingConsent(userId: "fresh-uid") == false)
+    }
+
+    /// The wave-6 hold is NOT weakened. A child who is not seeking consent — settled, nobody
+    /// deciding, just changing an avatar — is held exactly as `FR60UnconsentedChildCloudFootprintTests`
+    /// requires, at BOTH choke points, including the repository writers that used to pass a
+    /// hardcoded `false` and now read the real window.
+    @Test func aChildWhoIsNotSeekingConsentIsStillHeld() {
+        let store = makeStore()
+        #expect(store.isSeekingConsent(userId: "kid") == false)
+        #expect(UnconsentedChildCloudWritePolicy.isWriteHeld(
+            isUnconsentedChild: true,
+            isFamilyApprovalPending: false,
+            isSeekingConsentNow: store.isSeekingConsent(userId: "kid")
+        ) == true)
+
+        // And the window is per-identity, so an unrelated child's open attempt cannot release
+        // this one's hold.
+        store.beginConsentSeeking(userId: "sibling")
+        #expect(UnconsentedChildCloudWritePolicy.isWriteHeld(
+            isUnconsentedChild: true,
+            isFamilyApprovalPending: false,
+            isSeekingConsentNow: store.isSeekingConsent(userId: "kid")
+        ) == true)
+    }
+
+    /// The window is in-memory ONLY. A persisted window would survive the kill that a stalled
+    /// attempt invites, and an unconsented child's cloud footprint would be open forever.
+    @Test func theWindowDoesNotSurviveAFreshStoreOverTheSameDefaults() {
+        let suite = "FR26WindowPersistence-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+
+        let first = AgeGateStore(defaults: defaults)
+        first.beginConsentSeeking(userId: "kid")
+        #expect(first.isSeekingConsent(userId: "kid") == true)
+
+        // A new store over the same backing defaults is the closest a test gets to a relaunch.
+        let relaunched = AgeGateStore(defaults: defaults)
+        #expect(relaunched.isSeekingConsent(userId: "kid") == false)
+    }
+
+    // MARK: - The deleted-account variant
+
+    /// The owner's second reading of the same report ("Deleting became family account paused").
+    /// If the captain used remove-AND-delete, the account really is gone and the correct
+    /// behaviour is a local settle followed by a FRESH mint — a different outcome from the
+    /// alive-account child above, reached by a different route, and both must work.
+    @Test func theDeletedAccountVariantSettlesAndReMints() {
+        let store = makeStore()
+        store.recordAnswer(.under13)
+        let deadUid = "deleted-child-uid"
+        store.bindPendingDeclaration(toUserId: deadUid)
+        store.markChildDeclarationSent(userId: deadUid)
+
+        // A confirmed-absent server read on a declaration this device delivered is the only
+        // combination that proves deletion (FR-60(c)).
+        #expect(DetachedIdentityDetectionPolicy.requiresDetach(
+            isAnonymousSession: true,
+            documentStatus: .confirmedAbsent,
+            wasDeclaredByThisDevice: store.isDeclaredChildUserId(deadUid)
+        ) == true)
+
+        // The settle retires the uid forever...
+        store.markIdentityDetached(userId: deadUid)
+        #expect(AgeGateProfileWritePolicy.isProfileWriteHeld(
+            userUid: deadUid,
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds,
+            detachedIdentityUserIds: store.detachedIdentityUserIds
+        ) == true)
+
+        // ...and the child is then an ordinary local-first child, who mints.
+        #expect(ChildConsentRedemptionPolicy.resolution(
+            hasFirebaseUid: false,
+            hasLiveAuthSession: false,
+            isChildSession: true,
+            category: .under13
+        ) == .provision)
+        #expect(GuestProvisioningPolicy.mayCreateAnonymousIdentity(
+            category: .under13,
+            isConsentSeekingRedemption: true,
+            hasDeclaredChildHistory: store.hasDeclaredChildHistory
+        ) == true)
+
+        // The FRESH uid is not detached and not held — the ratchet is uid-scoped, so it retires
+        // the dead identity without following the child onto the new one.
+        let freshUid = "re-minted-child-uid"
+        #expect(store.isIdentityDetached(freshUid) == false)
+        store.bindPendingDeclaration(toUserId: freshUid)
+        store.markChildDeclarationSent(userId: freshUid)
+        #expect(AgeGateProfileWritePolicy.isProfileWriteHeld(
+            userUid: freshUid,
+            pendingDeclarationUserIds: store.pendingDeclarationUserIds,
+            detachedIdentityUserIds: store.detachedIdentityUserIds
+        ) == false)
+    }
+
+    /// An unreadable server (offline, App Check, a token refresh that just failed) is NEVER
+    /// evidence of deletion — but it must not strand the child either. The read says nothing,
+    /// so the detach does not fire; the SESSION is what decides, and a dead session is
+    /// recovered on its own evidence.
+    @Test func anUnreadableServerNeitherDeletesNorStrands() {
+        #expect(DetachedIdentityDetectionPolicy.requiresDetach(
+            isAnonymousSession: true,
+            documentStatus: .unknown,
+            wasDeclaredByThisDevice: true
+        ) == false)
+
+        // This is the exact sequence the device hit: the zombie read comes back `.unknown`
+        // because the deleted account's token refresh failed — which ALSO killed the session.
+        // Re-reading the session after the read is what turns a dead end into a recovery.
+        #expect(ChildConsentRedemptionPolicy.resolution(
+            hasFirebaseUid: true,
+            hasLiveAuthSession: false,
+            isChildSession: true,
+            category: .under13
+        ) == .settleThenProvision)
     }
 }

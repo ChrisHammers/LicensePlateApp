@@ -73,14 +73,19 @@ final class JoinFamilyViewModel: ObservableObject {
 
         Task {
             do {
-                // COPPA F-18 (FR-60(b)): share-code entry is the consent-seeking act, and for
-                // an under-13 player it is the ONE moment a backend identity is created.
-                // Sequence — mint anonymous uid → bind → declareChildRegistration — must
-                // complete before the redeem below, because the server admits an anonymous
-                // caller only on a declared `isChildAccount`. A no-op for everyone else.
-                try await authService.provisionIdentityForConsentSeekingRedemptionIfNeeded()
-
-                let inviteId = try await familyRepository.redeemShareCode(code: trimmedCode, expectedType: .family)
+                // COPPA F-18 (FR-60(b)): share-code entry is the consent-seeking act. For an
+                // under-13 player it is the ONE moment a backend identity is created — mint →
+                // bind → declareChildRegistration, completing before the redeem, because the
+                // server admits an anonymous caller only on a declared `isChildAccount`. For a
+                // sticky post-revocation child (FR-26) it is instead the moment their existing
+                // identity is verified, recovered if its session is gone, and published.
+                //
+                // Both halves run inside ONE consent-seeking window: the whole attempt is when
+                // this child is "pursuing admission", which is what
+                // `UnconsentedChildCloudWritePolicy` opens on. A no-op for everyone else.
+                let inviteId = try await authService.withConsentSeekingRedemption {
+                    try await familyRepository.redeemShareCode(code: trimmedCode, expectedType: .family)
+                }
                 let familyId = try? await familyRepository.getFamilyIdFromInvite(inviteId: inviteId)
                 isJoining = false
                 redeemedInviteId = inviteId

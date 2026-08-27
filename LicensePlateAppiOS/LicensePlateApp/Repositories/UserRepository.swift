@@ -888,9 +888,13 @@ class UserRepository: ObservableObject {
         if UnconsentedChildCloudWritePolicy.isWriteHeld(
             isUnconsentedChild: ChildRestrictedModeService.shared.isRestrictedUnconsentedChild,
             isFamilyApprovalPending: ChildRestrictedModeService.shared.isFamilyApprovalPending,
-            // Nothing in this repository participates in FR-60(b)'s provisioning sequence —
-            // the one write that does is `FirebaseAuthService.saveUserDataToFirestore`.
-            isConsentSeekingProvisioning: false
+            // Was hardcoded `false`, on the reasoning that nothing in this repository
+            // participates in FR-60(b)'s PROVISIONING sequence. True, and beside the point:
+            // the window is not about provisioning, it is about a child pursuing admission
+            // (FR-26), and while that attempt is in flight this repository's writers are as
+            // sanctioned as the profile write. `AgeGateStore` owns the window so every hold
+            // reads one answer.
+            isSeekingConsentNow: AgeGateStore.shared.isSeekingConsent(userId: userId)
         ) {
             throw UserDocumentWriteHeldError(userId: userId)
         }

@@ -193,11 +193,12 @@ struct OnboardingJoinFamilyView: View {
         
         Task {
             do {
-                // COPPA F-18 (FR-60(b)): same consent-seeking sequence the join sheet runs —
-                // mint → bind → declare, strictly before redeeming. No-op for adults.
-                try await authService.provisionIdentityForConsentSeekingRedemptionIfNeeded()
-
-                _ = try await familyRepository.redeemShareCode(code: trimmedCode, expectedType: .family)
+                // COPPA F-18 (FR-60(b)) / FR-26: same consent-seeking attempt the join sheet
+                // runs — provision or recover the identity, then redeem, both inside one
+                // window. No-op for adults.
+                _ = try await authService.withConsentSeekingRedemption {
+                    try await familyRepository.redeemShareCode(code: trimmedCode, expectedType: .family)
+                }
                 await MainActor.run {
                     isJoining = false
                     onNext()

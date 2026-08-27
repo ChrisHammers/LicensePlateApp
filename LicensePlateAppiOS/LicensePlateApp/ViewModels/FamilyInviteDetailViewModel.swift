@@ -111,7 +111,16 @@ final class FamilyInviteDetailViewModel: ObservableObject {
         Task { @MainActor in
             defer { processingAction = nil }
             do {
-                try await familyRepository.respondToFamilyInvite(inviteId: inviteId, accept: accept)
+                // COPPA FR-60(b)/FR-26: this is the SECOND consent exit, and for a child it is
+                // the call that actually creates the pending row the captain sees — so it is
+                // the moment FR-86's identity stamp is read off `users/{uid}`, and the moment a
+                // sticky post-revocation child most needs their identity recovered if its
+                // session died. It ran bare while `redeemShareCode` got the whole sequence,
+                // which left the two exits FR-26 names as equals behaving differently. A no-op
+                // for adults and for a decline that needs no identity work.
+                try await authService.withConsentSeekingRedemption {
+                    try await familyRepository.respondToFamilyInvite(inviteId: inviteId, accept: accept)
+                }
 
                 if accept {
                     hasAccepted = true

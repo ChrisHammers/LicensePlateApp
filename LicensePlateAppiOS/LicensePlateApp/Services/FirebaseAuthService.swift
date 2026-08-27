@@ -552,7 +552,7 @@ class FirebaseAuthService: ObservableObject {
     ///   a declared `isChildAccount`, and a captain approving an undeclared account would
     ///   admit a child as an adult.
     func provisionIdentityForConsentSeekingRedemptionIfNeeded() async throws {
-        guard let localUser = currentUser else { throw AuthError.noUser }
+        guard currentUser != nil else { throw AuthError.noUser }
         let store = AgeGateStore.shared
 
         // Device pass 2026-08-17 (bug 1), ahead of the server-verified guard below because it
@@ -566,10 +566,11 @@ class FirebaseAuthService: ObservableObject {
         // and skipping on its strength is what made every subsequent share code fail as
         // "unregistered". Verified against a fresh SERVER read; an unreadable server leaves
         // the session exactly as it was.
-        if ChildConsentRedemptionPolicy.requiresIdentityVerification(
-            hasFirebaseUid: localUser.firebaseUID != nil,
-            category: store.category
-        ), let existingUid = localUser.firebaseUID {
+        if let existingUid = currentUser?.firebaseUID,
+           ChildConsentRedemptionPolicy.requiresIdentityVerification(
+               hasFirebaseUid: true,
+               category: store.category
+           ) {
             let status = await selfUserDocumentStatus(userId: existingUid)
             if DetachedIdentityDetectionPolicy.requiresDetach(
                 isAnonymousSession: isAnonymousUser,
@@ -580,27 +581,55 @@ class FirebaseAuthService: ObservableObject {
             }
         }
 
-        guard ChildConsentRedemptionPolicy.requiresProvisioning(
-            hasFirebaseUid: localUser.firebaseUID != nil,
+        // Everything above this line can END THE SESSION, and the decision below has to be
+        // taken on the session that exists NOW. That is not defensive coding: the read above
+        // is the attempt's first network I/O, so it is precisely where a remove-and-delete
+        // shows itself — the deleted anonymous user's token refresh fails, Firebase
+        // force-signs-out underneath us, and the read comes back `.unknown` (so no detach
+        // fires) leaving a uid whose session is gone. Re-reading `currentUser` and
+        // `auth.currentUser` here is what stops that from being read as "nothing to do".
+        try await resolveConsentSeekingIdentity(store: store)
+    }
+
+    /// The consent exit's identity decision, applied. One `switch` over
+    /// `ChildConsentRedemptionPolicy.Resolution`, so the rule lives in a pure policy a test can
+    /// enumerate and this method is only its effects.
+    ///
+    /// FR-26/FR-28f (device pass 2026-08-17, wave 8) — WHY THIS IS A SWITCH AND NOT A GUARD.
+    /// The old shape was `guard requiresProvisioning else { assert-session; publish; return }`,
+    /// which has exactly one dead end in it and a sticky post-revocation child walks straight
+    /// into it: they hold a uid, so the mint is skipped; if the session behind that uid is gone
+    /// the assert throws `child_gate.join.setup_incomplete`; and NOTHING in the method could
+    /// then mint, because the only mint sat behind the `requiresProvisioning` guard that had
+    /// already sent them here. Same error on every code, forever, worded as though a retry
+    /// would help. FR-26 names re-admission as one of the two exits this population must always
+    /// have, so a terminal state on it is a contract violation, not a papercut.
+    private func resolveConsentSeekingIdentity(store: AgeGateStore) async throws {
+        // Read the classification ONCE, here, while the uid is still on the row. It is
+        // uid-bound — `childSessionState` resolves the server signal through
+        // `currentUser?.firebaseUID` — so re-reading it after a detach would ask about a
+        // session that no longer names anyone and get `.notChild` back. Carrying the value
+        // forward is what lets the recovery below still know it is serving a child.
+        let isChildSession = ChildRestrictedModeService.shared.isChildAccountSession
+        let resolution = ChildConsentRedemptionPolicy.resolution(
+            hasFirebaseUid: currentUser?.firebaseUID != nil,
+            hasLiveAuthSession: auth.currentUser != nil,
+            isChildSession: isChildSession,
             category: store.category
-        ) else {
-            // Device pass 2026-08-17 (bug 1): the skip is only sound while the session it is
-            // skipping ON is real. Every silent exit from this method is a promise to the
-            // caller that the next line may call a consent-exit callable — and when the
-            // promise was false the child met `validateConsentExitCallableAccess`'s
-            // "You are not signed in. Sign in and try again.", the one instruction FR-60(e)
-            // guarantees they cannot follow. A child-flow session that reaches the end of
-            // provisioning with no live session fails HERE, in the child's own vocabulary and
-            // retryably, instead of downstream as an authorization error.
-            try assertConsentExitSessionReady()
+        )
+
+        switch resolution {
+        case .passThrough:
+            return
+
+        case .redeemWithExistingIdentity:
             // Device pass 2026-08-17 (captain report: "Pending Users has no user info").
             //
-            // This branch — the child ALREADY has a uid — is a silent exit that skips the one
-            // write FR-60(b) sanctions. `UnconsentedChildCloudWritePolicy` (wave 6) holds every
-            // ordinary profile write for an unconsented child, and its only exemption lives
-            // inside `signInAnonymously`, scoped by `defer` to that call. So a child who
-            // provisioned in an EARLIER session and enters a code now reaches the captain with
-            // a `users/{uid}` carrying no `userName` and no `avatarId`.
+            // The child ALREADY has a uid, so this path skips the one write FR-60(b) sanctions.
+            // `UnconsentedChildCloudWritePolicy` holds every ordinary profile write for an
+            // unconsented child, so a child who provisioned in an EARLIER session and enters a
+            // code now would reach the captain with a `users/{uid}` carrying no `userName` and
+            // no `avatarId`.
             //
             // That is not cosmetic. `respondToFamilyInvite_UserStep` takes ONE read of this
             // document and uses it twice: FR-86's identity stamp on the pending row, and FR-88's
@@ -608,22 +637,65 @@ class FirebaseAuthService: ObservableObject {
             // fields, so the row is stamped with nothing and the captain is asked to affirm
             // "I am THIS CHILD's parent or legal guardian" about a bare uid — the exact thing
             // FR-86 exists to prevent.
-            //
-            // The write itself is already permitted here: the window is open (FR-83/FR-86 need
-            // the name and avatar precisely now), which is why it runs under the same exemption
-            // the mint path uses. Best-effort — a failure must not block the consent exit, and
-            // the ordinary hold reapplies the moment this returns.
             await publishConsentSeekingProfileIfNeeded()
-            return
+
+        case .settleThenProvision:
+            guard let staleUid = currentUser?.firebaseUID else { return }
+            // The scope widens here, deliberately, and only here.
+            // `settleSessionlessChildIdentityIfNeeded` restricts itself to
+            // `declaredChildUserIds` because it runs unprompted on every foreground and must
+            // never settle an adult's session out from under them. At the consent exit we are
+            // already inside a child session that is actively asking to join a family, and the
+            // fact in hand is not in doubt: an ANONYMOUS Auth session has no credentials, so
+            // one that is gone is gone permanently. A sticky child whose declaration this
+            // device never recorded — declared on another device, or a reinstall that kept the
+            // Keychain uid and lost UserDefaults — is exactly the child the narrower scope was
+            // stranding.
+            guard let user = currentUser, user.linkedPlatforms.isEmpty, user.email == nil else {
+                // A registered identity can sign back in; its uid is not residue. Nothing to
+                // settle, and nothing this method can do — the exit's ordinary gates apply.
+                return
+            }
+            await detachAnonymousIdentityLocally(uid: staleUid, reason: .sessionLostBeforeRedemption)
+            try await provisionFreshConsentSeekingIdentity(store: store, isChildSession: isChildSession)
+
+        case .provision:
+            try await provisionFreshConsentSeekingIdentity(store: store, isChildSession: isChildSession)
         }
+    }
+
+    /// FR-60(b)'s mint → bind → declare, plus the two post-conditions the caller depends on.
+    ///
+    /// - Parameter isChildSession: captured by the caller BEFORE any detach, for the reason
+    ///   given there — after the settle there is no uid left to classify.
+    private func provisionFreshConsentSeekingIdentity(
+        store: AgeGateStore,
+        isChildSession: Bool
+    ) async throws {
         guard isOnline else { throw AuthError.offline }
+
+        // FR-27 forbids minting without an answer for the epoch, and `bindPendingDeclaration`
+        // refuses to bind one — so a child whose epoch answer was cleared (reinstall, hard
+        // reset, post-deletion) could not be re-provisioned at all, and the mint's own gate
+        // would refuse them. Both failure modes end in a locked-out child: no uid, no
+        // declaration, no way into a family.
+        //
+        // Re-asserting the answer is the protective direction and nothing else. This is NOT the
+        // incident-1 shape ("a stored answer declares a pre-existing account") — it is the
+        // opposite: the session is ALREADY known to be a child (`isChildAccountSession`, which
+        // needs server truth or this device's own declared lineage), no account exists yet, and
+        // the answer is what makes the uid we are about to create bindable and declarable.
+        // `recordAnswer` never downgrades, so it cannot erase anything.
+        if isChildSession, store.category != .under13 {
+            store.recordAnswer(.under13)
+        }
 
         try await signInAnonymously(isConsentSeekingRedemption: true)
 
         let uid = currentUser?.firebaseUID
         guard ChildConsentRedemptionPolicy.mayRedeem(
             hasFirebaseUid: uid != nil,
-            isDeclarationOutstanding: AgeGateStore.shared.isPendingDeclaration(userId: uid)
+            isDeclarationOutstanding: store.isPendingDeclaration(userId: uid)
         ) else {
             throw AuthError.childDeclarationPending
         }
@@ -631,12 +703,12 @@ class FirebaseAuthService: ObservableObject {
     }
 
     /// Publishes an already-provisioned consent-seeking child's profile inside FR-60(b)'s
-    /// sanctioned window.
+    /// sanctioned window — the mint path's missing twin for a uid that already existed.
+    /// Nothing new reaches the server: it is the identical `saveUserDataToFirestore` the mint
+    /// would have performed, just for the child who did not need minting.
     ///
-    /// Same exemption, same `defer`, same one-method scope as the mint path — this is that
-    /// path's missing twin for a uid that already existed. Nothing new reaches the server: it
-    /// is the identical `saveUserDataToFirestore` the mint would have performed, just for the
-    /// child who did not need minting.
+    /// Best-effort: a failure must not block the consent exit. The child's route into a family
+    /// is worth more than a name on a pending row.
     private func publishConsentSeekingProfileIfNeeded() async {
         guard isOnline,
               let user = currentUser,
@@ -645,9 +717,38 @@ class FirebaseAuthService: ObservableObject {
               ChildRestrictedModeService.shared.isRestrictedUnconsentedChild else {
             return
         }
-        consentSeekingProvisioningUids.insert(uid)
-        defer { consentSeekingProvisioningUids.remove(uid) }
+        // Enrol only — `withConsentSeekingRedemption` closes the window when the whole attempt
+        // ends. Closing it here (the wave-7 shape) shut it before the redeem call it exists to
+        // serve, which is why widening the exemption alone was never going to be the fix.
+        AgeGateStore.shared.beginConsentSeeking(userId: uid)
         try? await saveUserDataToFirestore(user)
+    }
+
+    /// FR-60(b)/(d) + FR-26: runs one whole share-code attempt inside the consent-seeking
+    /// window — provision (or recover) the identity, then `body`, which is the redeem call.
+    ///
+    /// The window is what `UnconsentedChildCloudWritePolicy` opens on, and its meaning is
+    /// **"this child is pursuing admission right now"**. That is a property of the ATTEMPT, so
+    /// it is scoped to the attempt: both consent-exit surfaces call this instead of pairing
+    /// `provision…()` with a bare redeem, and neither can forget to close it.
+    ///
+    /// Closing with `endAllConsentSeeking()` is deliberate — the uid can CHANGE mid-attempt
+    /// (settle → fresh mint), and closing "the uid we opened with" would leave the other one
+    /// latched open for the life of the process, which is the cloud-footprint bug again.
+    @discardableResult
+    func withConsentSeekingRedemption<T>(_ body: () async throws -> T) async throws -> T {
+        let store = AgeGateStore.shared
+        if let uid = currentUser?.firebaseUID {
+            store.beginConsentSeeking(userId: uid)
+        }
+        defer { store.endAllConsentSeeking() }
+
+        try await provisionIdentityForConsentSeekingRedemptionIfNeeded()
+
+        if let uid = currentUser?.firebaseUID {
+            store.beginConsentSeeking(userId: uid)
+        }
+        return try await body()
     }
 
     /// The post-condition `provisionIdentityForConsentSeekingRedemptionIfNeeded` owes its
@@ -764,12 +865,15 @@ class FirebaseAuthService: ObservableObject {
             // consent-seeking sequence (FR-83/FR-86 need the name and avatar to tell two
             // pending children apart), and it necessarily runs before any pending row exists —
             // so it is exempt from `UnconsentedChildCloudWritePolicy`, which holds every
-            // LATER write until a family is actually deciding. Scoped to this method by
-            // `defer`: the moment the sequence ends, the ordinary hold applies again.
+            // LATER write until a family is actually deciding.
+            //
+            // Wave 8: the window is NOT closed here any more. It used to be `defer`-scoped to
+            // this method, which meant it was shut before the redeem call it exists to serve
+            // even ran. `withConsentSeekingRedemption` owns the close now, around the whole
+            // attempt; this call just enrols the uid the mint has produced.
             if isConsentSeekingRedemption {
-                consentSeekingProvisioningUids.insert(firebaseUID)
+                AgeGateStore.shared.beginConsentSeeking(userId: firebaseUID)
             }
-            defer { consentSeekingProvisioningUids.remove(firebaseUID) }
 
             // F-6 (FR-27) — BIND BEFORE PUBLISHING, same invariant as the
             // `createNewUserFromFirebase` choke point: synchronous, no await, ahead of
@@ -2088,8 +2192,8 @@ class FirebaseAuthService: ObservableObject {
             isFamilyApprovalPending: ChildRestrictedModeService.shared.isFamilyApprovalPending,
             // Was hardcoded `false`, which made this method unreachable for the ONE write
             // FR-60(b) sanctions — including the mint path's own, since that path routes here.
-            // The uid set is the authority (same read the profile-sync writer already uses).
-            isConsentSeekingProvisioning: user.firebaseUID.map(consentSeekingProvisioningUids.contains) ?? false
+            // The store is the authority (same read every other hold now uses).
+            isSeekingConsentNow: AgeGateStore.shared.isSeekingConsent(userId: user.firebaseUID)
         )
         if isOnline, ageGateAllowsWrite, let firebaseUID = user.firebaseUID {
             Task {
@@ -2161,9 +2265,11 @@ class FirebaseAuthService: ObservableObject {
     /// Uids whose local detach is mid-flight — see `detachAnonymousIdentityLocally`.
     private var detachesInFlightUids: Set<String> = []
 
-    /// Uids inside FR-60(b)'s mint→bind→declare sequence right now — the one moment an
-    /// unconsented child's profile may reach `users/{uid}`. See `UnconsentedChildCloudWritePolicy`.
-    private var consentSeekingProvisioningUids: Set<String> = []
+    // The consent-seeking window used to live here, as a private `Set<String>` scoped by
+    // `defer` to whichever method opened it. It now lives on `AgeGateStore`
+    // (`beginConsentSeeking` / `isSeekingConsent`) because both write choke points have to
+    // read the same answer and the repository layer cannot see a private field on this
+    // service — see `UnconsentedChildCloudWritePolicy.isWriteHeld(isSeekingConsentNow:)`.
 
     /// Returns the device to an unprovisioned local-first session after an anonymous Auth
     /// session vanished underneath it. Deliberate sign-outs cannot reach the body: they
@@ -2515,7 +2621,7 @@ class FirebaseAuthService: ObservableObject {
         if UnconsentedChildCloudWritePolicy.isWriteHeld(
             isUnconsentedChild: ChildRestrictedModeService.shared.isRestrictedUnconsentedChild,
             isFamilyApprovalPending: ChildRestrictedModeService.shared.isFamilyApprovalPending,
-            isConsentSeekingProvisioning: consentSeekingProvisioningUids.contains(syncUserId)
+            isSeekingConsentNow: store.isSeekingConsent(userId: syncUserId)
         ) {
             // Dirty, not discarded — unlike the detached branch above, this hold can LIFT
             // (consent arrives, or a new code is entered), and FR-28h late-replay carries the

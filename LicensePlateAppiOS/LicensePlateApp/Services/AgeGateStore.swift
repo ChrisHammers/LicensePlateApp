@@ -271,6 +271,47 @@ final class AgeGateStore: ObservableObject {
         revision += 1
     }
 
+    // MARK: - Consent-seeking window (FR-60(b)/(d), FR-26 re-admission)
+
+    /// Uids that are PURSUING ADMISSION to a family at this instant — the open half of
+    /// `UnconsentedChildCloudWritePolicy`'s window.
+    ///
+    /// In memory only, and deliberately so: the window is scoped to one share-code attempt by
+    /// one user gesture. Persisting it would let a killed app leave it latched open forever,
+    /// which is the cloud-footprint bug the hold exists to prevent.
+    ///
+    /// It lives HERE rather than on `FirebaseAuthService` because both write choke points need
+    /// it — `saveUserDataToFirestore` (service layer) and `UserRepository.assertMayWriteUserDocument`
+    /// (repository layer) — and the repository could only ever answer `false` for a private
+    /// field on the service. One authority, consulted by both, is what makes the window mean
+    /// the same thing at every hold.
+    private var consentSeekingUserIds: Set<String> = []
+
+    func isSeekingConsent(userId: String?) -> Bool {
+        guard let userId, !userId.isEmpty else { return false }
+        return consentSeekingUserIds.contains(userId)
+    }
+
+    /// Opens the window for `userId`. Idempotent; the matching `endConsentSeeking` closes it.
+    func beginConsentSeeking(userId: String) {
+        guard !userId.isEmpty else { return }
+        guard consentSeekingUserIds.insert(userId).inserted else { return }
+        revision += 1
+    }
+
+    func endConsentSeeking(userId: String) {
+        guard consentSeekingUserIds.remove(userId) != nil else { return }
+        revision += 1
+    }
+
+    /// Closes the window for every uid. Called when a consent-seeking attempt unwinds, so a
+    /// mid-attempt identity swap (settle → fresh mint) cannot strand the retired uid's entry.
+    func endAllConsentSeeking() {
+        guard !consentSeekingUserIds.isEmpty else { return }
+        consentSeekingUserIds.removeAll()
+        revision += 1
+    }
+
     /// Clears the epoch-scoped answer. Called on sign-out and account deletion so the
     /// next registration flow asks fresh — a stale answer can never carry over to a new
     /// or different account (incident-2).
@@ -559,17 +600,26 @@ enum UnconsentedChildCloudWritePolicy {
     ///     device's optimistic flag stands only while the server has not answered, which is
     ///     the same fail-toward-open direction the banner uses — an offline child mid-consent
     ///     must not have their profile write silently dropped.
-    ///   - isConsentSeekingProvisioning: the uid is INSIDE FR-60(b)'s mint→bind→declare→redeem
-    ///     sequence right now. Its profile write is part of the sanctioned window (FR-83/FR-86
-    ///     need the name and avatar to distinguish two pending children), and it necessarily
-    ///     runs before any pending row exists.
+    ///   - isSeekingConsentNow: this child is PURSUING ADMISSION right now — the whole
+    ///     share-code attempt, from the moment the code is submitted until the redemption
+    ///     resolves. Their profile write is part of the sanctioned window (FR-83/FR-86 need
+    ///     the name and avatar to distinguish two pending children), and it necessarily runs
+    ///     before any pending row exists.
+    ///
+    ///     Device pass 2026-08-17 (wave 8). This parameter was `isConsentSeekingProvisioning`
+    ///     and it meant "the uid is inside FR-60(b)'s mint sequence". That is a statement about
+    ///     PROVISIONING, and provisioning is the one thing a sticky post-revocation child does
+    ///     NOT do — they already hold a uid, so the mint is skipped and the window never
+    ///     opened for the population FR-26 names as needing re-admission most. The window is
+    ///     about intent, not about identity creation: see `AgeGateStore.beginConsentSeeking`,
+    ///     which now owns it for the whole attempt rather than for one method's body.
     static func isWriteHeld(
         isUnconsentedChild: Bool,
         isFamilyApprovalPending: Bool,
-        isConsentSeekingProvisioning: Bool
+        isSeekingConsentNow: Bool
     ) -> Bool {
         guard isUnconsentedChild else { return false }
-        return !isFamilyApprovalPending && !isConsentSeekingProvisioning
+        return !isFamilyApprovalPending && !isSeekingConsentNow
     }
 }
 
@@ -632,6 +682,57 @@ enum ChildConsentRedemptionPolicy {
     /// write stays held (`UserDocumentWritePolicy`), so nothing leaks in the meantime.
     static func mayRedeem(hasFirebaseUid: Bool, isDeclarationOutstanding: Bool) -> Bool {
         hasFirebaseUid && !isDeclarationOutstanding
+    }
+
+    // MARK: - What the consent exit does with the session in front of it
+
+    /// FR-26/FR-28f (device pass 2026-08-17, wave 8). Re-admission is one of the two exits a
+    /// sticky post-revocation child MUST always have, and the exit had a dead end in it.
+    ///
+    /// `requiresProvisioning` answers ONE question — "must a uid be minted?" — and the caller
+    /// treated a `false` as "then there is nothing to do but redeem". That is wrong for the
+    /// state this whole family of bugs keeps producing: **a uid on the local row with no Auth
+    /// session behind it.** `hasFirebaseUid` is true, so the mint is skipped; the session is
+    /// dead, so the exit refuses with `child_gate.join.setup_incomplete`; and the refusal is
+    /// worded as retryable while the state that produced it is terminal. Every subsequent code
+    /// takes the identical path. That is a locked-out child, which FR-26 forbids.
+    ///
+    /// Making the decision a total function over the three facts that matter is the fix: there
+    /// is no input for which the answer is "refuse", because at this exit there is always
+    /// something the device can do.
+    enum Resolution: Equatable {
+        /// Not a child session and no under-13 answer — an adult redeeming a code. The exit's
+        /// ordinary gates own them; this method has nothing to add.
+        case passThrough
+        /// A live session on an existing uid. The sticky post-revocation child's normal path:
+        /// publish the profile inside the window (FR-83/FR-86) and redeem.
+        case redeemWithExistingIdentity
+        /// A uid whose Auth session is gone. An anonymous session has no credentials, so it is
+        /// unrecoverable — the uid is residue. Settle it locally, then mint.
+        case settleThenProvision
+        /// FR-60(b)'s ordinary first provisioning: an under-13 player with no uid at all.
+        case provision
+    }
+
+    /// - Parameters:
+    ///   - isChildSession: `ChildRestrictedModeService.isChildAccountSession`. Wider than
+    ///     `category == .under13` on purpose — a sticky child's evidence can be server truth
+    ///     (`isChildAccount`) on a device whose epoch answer was cleared by a reinstall or a
+    ///     hard reset, and that child is exactly the one who must not be stranded.
+    static func resolution(
+        hasFirebaseUid: Bool,
+        hasLiveAuthSession: Bool,
+        isChildSession: Bool,
+        category: AgeGateCategory?
+    ) -> Resolution {
+        let isChildFlow = isChildSession || category == .under13
+        guard isChildFlow else {
+            // An adult with no uid still provisions through the ordinary guest path, not this
+            // one; an adult with a uid has nothing to do here either.
+            return .passThrough
+        }
+        guard hasFirebaseUid else { return .provision }
+        return hasLiveAuthSession ? .redeemWithExistingIdentity : .settleThenProvision
     }
 }
 

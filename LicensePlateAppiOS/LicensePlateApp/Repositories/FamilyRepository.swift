@@ -93,14 +93,40 @@ enum FamilyCallable {
     /// a genuine server-side deadline even though both wear `deadlineExceeded`.
     static let stalledUserInfoKey = "FamilyCallableStalled"
 
+    /// Wave 8 (device pass 2026-08-17): approval stalled, retried, stalled identically, and
+    /// came back only after a relaunch — with wave 6's deadline firing correctly every time.
+    /// The deadline was never the problem; what the retries kept re-entering was.
+    ///
+    /// `GACAppCheck` memoizes the in-flight token fetch in `ongoingRetrieveOrRefreshTokenPromise`
+    /// and nils it in exactly two places — the promise's own `.then` and `.recover`
+    /// (`AppCheckCore/Sources/Core/GACAppCheck.m:145-152`). A promise that never SETTLES
+    /// therefore pins that property for the life of the process, and its source can genuinely
+    /// never settle: on a physical Debug device `AppCheckConfigurator` selects DeviceCheck, and
+    /// `DCDevice.generateToken` is an XPC round-trip to `devicecheckd` with no timeout, no
+    /// cancellation and no retry (`GACDeviceCheckProvider.m`). Worse, the same file carries
+    /// `TODO(#42): Don't re-use ongoing promise if forcingRefresh is YES` at line 138 — so a
+    /// FORCED refresh joins the identical stuck promise. That is why the wave-6 token recovery
+    /// changed nothing, and why only killing the process ever helped. There is no reset API:
+    /// the property is private with no invalidation entry point, and a fresh `Functions`
+    /// instance would not help either, since it is built from the same `FirebaseApp` container
+    /// and so reaches the same `GACAppCheck`.
+    ///
+    /// The fix is therefore avoidance, not recovery. `requireLimitedUseAppCheckTokens` routes
+    /// the context phase to `GACAppCheck.limitedUseToken`, which calls the provider directly
+    /// and touches no cached promise at all (`GACAppCheck.m:211-219`), so a wedged
+    /// `generateToken` costs ONE attempt bounded by our deadline instead of every callable for
+    /// the rest of the process. All three providers implement it (Debug, DeviceCheck,
+    /// AppAttest), the server only sets `enforceAppCheck: true` and never `consumeAppCheckToken`,
+    /// and a limited-use token satisfies enforcement without consumption.
+    ///
+    /// The pre-warm is gone with it: `try?` catches errors, not hangs, so it could spend the
+    /// whole 25s budget inside the very promise this change exists to stop entering.
     static func call(_ name: String, _ payload: [String: Any]) async throws -> HTTPSCallableResult {
         try await bounded(name: name) {
-            // Best-effort, never fatal: these callables are `enforceAppCheck: true`, so the
-            // server stays the authority on a missing token. Warming here only moves the
-            // token wait inside our deadline; failing the call on it would newly reject
-            // requests the SDK would have retried its way through.
-            try? await AppCheckReadiness.ensureCallablePrerequisites()
-            let callable = Functions.functions().httpsCallable(name)
+            let callable = Functions.functions().httpsCallable(
+                name,
+                options: HTTPSCallableOptions(requireLimitedUseAppCheckTokens: true)
+            )
             callable.timeoutInterval = deadline
             return try await callable.call(payload)
         }
@@ -132,7 +158,6 @@ enum FamilyCallable {
             guard box.settle(.failure(stalledError(name: name))) else { return }
             // Cancellation is best effort only — see the type doc. Abandoning is the point.
             work.cancel()
-            recoverTokensAfterStall()
         }
         defer { watchdog.cancel() }
 
@@ -158,16 +183,20 @@ enum FamilyCallable {
         (error as NSError).userInfo[stalledUserInfoKey] != nil
     }
 
-    /// Fire-and-forget: rebuilds the Auth + App Check tokens so the user's RETRY does not
-    /// inherit the poisoned cache that made this attempt stall. Deliberately unguarded by an
-    /// in-flight flag — a stuck recovery task costs nothing, whereas a flag a stuck task
-    /// never cleared would suppress every future recovery, which is the exact class of bug
-    /// this whole type exists to remove.
-    private static func recoverTokensAfterStall() {
-        Task {
-            try? await AppCheckReadiness.ensureCallablePrerequisites(forceRefresh: true)
-        }
-    }
+    // `recoverTokensAfterStall` used to live here. It is DELETED rather than repaired, and the
+    // reasons are worth keeping so it is not reinvented:
+    //
+    //  * it could not work. It called `ensureCallablePrerequisites(forceRefresh: true)`, and
+    //    `GACAppCheck` ignores `forcingRefresh` while a fetch is in flight — the forced refresh
+    //    joined the same stuck promise it was meant to replace;
+    //  * it was never awaited. It ran at the watchdog, AFTER the caller had already been
+    //    resumed with the error, so no retry could ever have waited on its outcome;
+    //  * it was the app's ONLY `forcingRefresh: true` caller, and Firebase Auth's
+    //    `TokenRefreshCoalescer` has the same clear-on-settle shape — so the one thing it could
+    //    reliably do was arm a SECOND process-lifetime wedge on the Auth side.
+    //
+    // Nothing replaces it: there is no client-reachable reset for that state. `call` avoids the
+    // cache instead — see its doc comment.
 }
 
 @MainActor
