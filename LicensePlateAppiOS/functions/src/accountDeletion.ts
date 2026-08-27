@@ -1,4 +1,4 @@
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { writeAuditLogTo } from "./audit";
 import { auditValueHash } from "./auditRedaction";

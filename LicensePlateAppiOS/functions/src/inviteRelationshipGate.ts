@@ -31,7 +31,7 @@
  * a non-friend, two `users` reads plus two family-member reads.
  */
 
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import type * as admin from "firebase-admin";
 import { CHILD_TARGET_NOT_SEARCHABLE_MESSAGE } from "./childAccountCore";
 

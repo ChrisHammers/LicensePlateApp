@@ -49,7 +49,7 @@
  * are exercisable end to end against `testSupport/fakeFirestore.ts`.
  */
 
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import type * as admin from "firebase-admin";
 
 type Firestore = admin.firestore.Firestore;

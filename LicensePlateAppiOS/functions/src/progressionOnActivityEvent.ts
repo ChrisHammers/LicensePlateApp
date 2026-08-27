@@ -4,7 +4,7 @@
  * per-component `appliedProgressionScopes`.
  */
 
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { KIND_REGION_FOUND, KIND_DISCOVERY_REJECTED } from "./gameplayEventResolver";
 import {

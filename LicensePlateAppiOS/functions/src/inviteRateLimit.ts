@@ -21,7 +21,7 @@
  * for. This mirrors the existing friend-cap rejection, which is also silent.
  */
 
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import {
   INVITE_RATE_LIMIT_COLLECTION,

@@ -3,7 +3,7 @@
  * Skips the actor who ended the trip. Best-effort FCM; sync still delivers via activity_events listeners.
  */
 
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { getFCMTokenForPush, sendPushNotification } from "./utils/notifications";
 import { KIND_TRIP_ENDED } from "./publicLifetimeStatsCore";

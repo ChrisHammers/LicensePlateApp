@@ -18,7 +18,7 @@
  *   RoadTrip Royale <support@roadtriproyale.com>
  */
 
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { defineSecret, defineString } from "firebase-functions/params";
 import { writeAuditLog } from "./audit";

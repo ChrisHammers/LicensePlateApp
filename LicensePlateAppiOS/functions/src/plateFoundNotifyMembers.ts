@@ -3,7 +3,7 @@
  * Buffers per (sessionId, recipientUid) for ~90s, then one push per flush.
  */
 
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { KIND_REGION_FOUND, PK } from "./gameplayEventResolver";
 import {

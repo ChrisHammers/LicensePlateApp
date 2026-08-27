@@ -3,7 +3,7 @@
  * Clients read games/activity_events when trip_sessions member; all writes via these callables.
  */
 
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
 import {

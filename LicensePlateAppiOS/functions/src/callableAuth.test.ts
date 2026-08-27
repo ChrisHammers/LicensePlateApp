@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import type * as admin from "firebase-admin";
 import {
   REGISTERED_ACCOUNT_REQUIRED_MESSAGE,

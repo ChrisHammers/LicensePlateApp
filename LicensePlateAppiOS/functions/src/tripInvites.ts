@@ -10,7 +10,7 @@
  * Share/QR flows should mirror friend/family: joining is not assumed until the server records accept.
  */
 
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
 import { getFCMTokenForPush, sendPushNotification } from "./utils/notifications";

@@ -24,7 +24,7 @@
  * legitimately REDUCE a peer's collaborative credit, can bake in a permanent negative.
  */
 
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import {
   hasAppliedTripBaseline,

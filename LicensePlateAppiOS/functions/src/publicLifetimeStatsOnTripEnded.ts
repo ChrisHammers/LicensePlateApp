@@ -3,7 +3,7 @@
  * `public_lifetime_stats/{uid}` with idempotency via `appliedTrips.{sessionId}`.
  */
 
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import {
   KIND_TRIP_ENDED,

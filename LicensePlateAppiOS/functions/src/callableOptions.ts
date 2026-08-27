@@ -1,4 +1,4 @@
-import * as functions from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 
 type CallableHandler = Parameters<typeof functions.https.onCall>[0];
 type RunWithOptions = Parameters<typeof functions.runWith>[0];
