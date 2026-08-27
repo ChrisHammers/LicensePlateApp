@@ -13,6 +13,9 @@
  *     sweep, and a second redemption dedupes against the awaiting row.
  *  5. EXPIRY IS REFUSAL BY SILENCE. The sweep retires the row, purges the guardian's
  *     email, and deletes the never-consented account inline.
+ *  6. THE PLUS NOTICE COMPLETES THE METHOD. ≥24h after confirmation a second notice
+ *     with the revocation path goes to the SAME address that confirmed — and only
+ *     that send (or abandonment, or expiry) purges the address.
  */
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
@@ -55,17 +58,25 @@ import {
 import { createShareCode, redeemShareCode } from "./shareCodes";
 import {
   commitGuardianConfirmation,
+  reconcileConsentRecords,
+  sendDueConsentPlusNotices,
   sweepExpiredConsentRequests,
   type ConfirmableRequest,
 } from "./consentRequests";
 import {
+  CONSENT_PLUS_NOTICE_DELAY_MS,
+  CONSENT_PLUS_NOTICE_MAX_SEND_ATTEMPTS,
+  CONSENT_PLUS_NOTICE_OVERDUE_MS,
   CONSENT_REQUESTS_COLLECTION,
   CONSENT_REQUEST_TTL_MS,
   JOIN_REQUEST_AWAITING_GUARDIAN_STATUS,
+  buildConsentPlusNoticeEmailContent,
   decideConsentConfirmation,
   hashConsentNonce,
+  isPlusNoticeDue,
   isValidAgeOutYearMonth,
   parseConsentToken,
+  resolvePlusNoticeDelayMillis,
 } from "./consentRequestsCore";
 import {
   confirmGuardianConsent,
@@ -265,12 +276,14 @@ describe("FR-64: the guardian's click commits everything together", () => {
       guardianAffirmed: true,
     });
 
-    // §312.5(c)(1) purpose served: the guardian's email does not outlive the grant.
+    // §312.5(c)(1): the guardian's email SURVIVES confirmation — the method's ≥24h
+    // plus notice must reach the same address that confirmed, so the purpose is not
+    // served until that notice sends. The plus-notice suite pins the purge.
     const request = [...db().store.entries()].find(([path]) =>
       path.startsWith(`${CONSENT_REQUESTS_COLLECTION}/`)
     )!;
     expect(request[1].status).toBe("confirmed");
-    expect(request[1].guardianEmail).toBe("__delete__");
+    expect(request[1].guardianEmail).toBe("captain@example.com");
   });
 
   it("AGEOUT FR-110(b): a child doc without the marker refuses to commit — nothing admits", async () => {
@@ -469,5 +482,334 @@ describe("the expiry sweep closes a lapsed request per FR-60(c)", () => {
       db().store.get(`families/${familyId}/pending/${requestId}`)?.status
     ).toBe(JOIN_REQUEST_AWAITING_GUARDIAN_STATUS);
     expect(db().store.get("users/kid")).toBeDefined();
+  });
+
+  it("a superseded request does not keep the guardian's address either", async () => {
+    const { familyId, requestId } = await childAwaiting();
+    const first = findLiveConsentRequest(db(), { familyId, childUserId: "kid" })!;
+    const firstPath = `${CONSENT_REQUESTS_COLLECTION}/${first.requestId}`;
+
+    // Lapse the request without sweeping it, then re-approve: the stale doc must be
+    // retired AND stripped of the address (it will never send another notice).
+    db().store.set(firstPath, {
+      ...db().store.get(firstPath)!,
+      expiresAtMillis: Date.now() - 1,
+    });
+    await run.approve("captain", { familyId, requestId, ...CHILD_APPROVAL });
+
+    const stale = db().store.get(firstPath)!;
+    expect(stale.status).toBe("superseded");
+    expect(stale.guardianEmail).toBe("__delete__");
+    const fresh = findLiveConsentRequest(db(), { familyId, childUserId: "kid" })!;
+    expect(fresh.requestId).not.toBe(first.requestId);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. The ≥24h plus notice (§3.1.2 step 4)
+// ---------------------------------------------------------------------------
+
+describe("the plus notice completes the email_plus method", () => {
+  async function confirmedRequest(): Promise<{
+    path: string;
+    confirmedAtMillis: number;
+  }> {
+    const { familyId } = await childAwaiting();
+    expect(
+      (await confirmGuardianConsent(db(), { familyId, childUserId: "kid" })).committed
+    ).toBe(true);
+    const entry = [...db().store.entries()].find(
+      ([path, data]) =>
+        path.startsWith(`${CONSENT_REQUESTS_COLLECTION}/`) && data.status === "confirmed"
+    )!;
+    return { path: entry[0], confirmedAtMillis: entry[1].confirmedAtMillis as number };
+  }
+
+  function passInput(nowMillis: number, sendEmail: ReturnType<typeof vi.fn>) {
+    return {
+      nowMillis,
+      delayMillis: CONSENT_PLUS_NOTICE_DELAY_MS,
+      envLabel: "",
+      sendEmail: sendEmail as never,
+    };
+  }
+
+  it("sends nothing before the delay elapses", async () => {
+    const { confirmedAtMillis } = await confirmedRequest();
+    const sendEmail = vi.fn(async () => ({ providerMessageId: "msg_1" }));
+
+    const result = await sendDueConsentPlusNotices(
+      db() as never,
+      passInput(confirmedAtMillis + CONSENT_PLUS_NOTICE_DELAY_MS - 1, sendEmail)
+    );
+
+    expect(result).toEqual({ sent: 0, failed: 0, abandoned: 0 });
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("after the delay: notice to the CONFIRMING address, evidence stamped, address purged, never re-sent", async () => {
+    const { path, confirmedAtMillis } = await confirmedRequest();
+    const sendEmail = vi.fn(async () => ({ providerMessageId: "msg_1" }));
+    const due = confirmedAtMillis + CONSENT_PLUS_NOTICE_DELAY_MS;
+
+    const result = await sendDueConsentPlusNotices(db() as never, passInput(due, sendEmail));
+
+    expect(result).toEqual({ sent: 1, failed: 0, abandoned: 0 });
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    const message = sendEmail.mock.calls[0][0] as Record<string, string>;
+    // The retained address — NOT a re-resolution that could land in a different inbox.
+    expect(message.to).toBe("captain@example.com");
+    expect(message.subject).toContain("Speedy");
+    expect(message.text).toContain("Family settings");
+
+    const request = db().store.get(path)!;
+    expect(request.status).toBe("confirmed"); // still "already confirmed" to a re-clicked link
+    expect(request.plusNoticeSentAtMillis).toBe(due);
+    expect(request.plusNoticeProviderMessageId).toBe("msg_1");
+    expect(request.guardianEmail).toBe("__delete__"); // §312.5(c)(1) purpose now served
+
+    const again = await sendDueConsentPlusNotices(
+      db() as never,
+      passInput(due + 60_000, sendEmail)
+    );
+    expect(again).toEqual({ sent: 0, failed: 0, abandoned: 0 });
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("a pending (unconfirmed) request never gets a plus notice", async () => {
+    await childAwaiting();
+    const sendEmail = vi.fn(async () => ({ providerMessageId: "msg_1" }));
+
+    const result = await sendDueConsentPlusNotices(
+      db() as never,
+      passInput(Date.now() + CONSENT_PLUS_NOTICE_DELAY_MS * 2, sendEmail)
+    );
+
+    expect(result).toEqual({ sent: 0, failed: 0, abandoned: 0 });
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("a request confirmed before the retained-email change falls back to the guardian's contact doc", async () => {
+    // The pre-change shape: confirmed, address already purged at confirm time.
+    db().seed(`${CONSENT_REQUESTS_COLLECTION}/legacy1`, {
+      familyId: "famX",
+      childUserId: "kid",
+      joinRequestId: "row1",
+      guardianUid: "captain",
+      status: "confirmed",
+      confirmedAtMillis: 1_000,
+      childUserName: "Speedy",
+      noticeFamilyName: "Hammers",
+    });
+    const sendEmail = vi.fn(async () => ({ providerMessageId: "msg_legacy" }));
+
+    const result = await sendDueConsentPlusNotices(
+      db() as never,
+      passInput(1_000 + CONSENT_PLUS_NOTICE_DELAY_MS, sendEmail)
+    );
+
+    expect(result).toEqual({ sent: 1, failed: 0, abandoned: 0 });
+    // The harness auth mock has no getUser, so resolution fell through to
+    // users/captain/private/contact — the production fallback order's second stop.
+    expect((sendEmail.mock.calls[0][0] as Record<string, string>).to).toBe(
+      "captain@example.com"
+    );
+    expect(
+      db().store.get(`${CONSENT_REQUESTS_COLLECTION}/legacy1`)!.plusNoticeProviderMessageId
+    ).toBe("msg_legacy");
+  });
+
+  it("a transient send failure keeps the address and retries on the next pass", async () => {
+    const { path, confirmedAtMillis } = await confirmedRequest();
+    const due = confirmedAtMillis + CONSENT_PLUS_NOTICE_DELAY_MS;
+    const sendEmail = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("resend 503"))
+      .mockResolvedValue({ providerMessageId: "msg_2" });
+
+    const first = await sendDueConsentPlusNotices(db() as never, passInput(due, sendEmail));
+    expect(first).toEqual({ sent: 0, failed: 1, abandoned: 0 });
+    const afterFailure = db().store.get(path)!;
+    expect(afterFailure.plusNoticeAttempts).toBe(1);
+    expect(afterFailure.plusNoticeLastFailedAtMillis).toBe(due);
+    expect(afterFailure.guardianEmail).toBe("captain@example.com"); // kept, for the retry
+    expect(afterFailure.plusNoticeSentAtMillis).toBeUndefined();
+
+    const second = await sendDueConsentPlusNotices(
+      db() as never,
+      passInput(due + 900_000, sendEmail)
+    );
+    expect(second).toEqual({ sent: 1, failed: 0, abandoned: 0 });
+    expect(db().store.get(path)!.guardianEmail).toBe("__delete__");
+  });
+
+  it("the attempt cap abandons loudly and purges the address anyway", async () => {
+    const { path, confirmedAtMillis } = await confirmedRequest();
+    const due = confirmedAtMillis + CONSENT_PLUS_NOTICE_DELAY_MS;
+    db().store.set(path, {
+      ...db().store.get(path)!,
+      plusNoticeAttempts: CONSENT_PLUS_NOTICE_MAX_SEND_ATTEMPTS - 1,
+    });
+    const sendEmail = vi.fn().mockRejectedValue(new Error("hard bounce"));
+
+    const result = await sendDueConsentPlusNotices(db() as never, passInput(due, sendEmail));
+
+    expect(result).toEqual({ sent: 0, failed: 0, abandoned: 1 });
+    const abandoned = db().store.get(path)!;
+    expect(abandoned.plusNoticeAbandonedAtMillis).toBe(due);
+    expect(abandoned.guardianEmail).toBe("__delete__"); // retention is bounded even in failure
+
+    // Terminal: later passes skip it.
+    const again = await sendDueConsentPlusNotices(
+      db() as never,
+      passInput(due + 900_000, sendEmail)
+    );
+    expect(again).toEqual({ sent: 0, failed: 0, abandoned: 0 });
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("due-ness is pinned pure: status, stamp, and boundary semantics", () => {
+    const base = { status: "confirmed", confirmedAtMillis: 1_000 };
+    expect(isPlusNoticeDue(base, 1_000 + 100, 100)).toBe(true); // exactly at delay
+    expect(isPlusNoticeDue(base, 1_000 + 99, 100)).toBe(false);
+    expect(isPlusNoticeDue({ ...base, status: "pending" }, 999_999, 100)).toBe(false);
+    expect(isPlusNoticeDue({ ...base, status: "expired" }, 999_999, 100)).toBe(false);
+    expect(isPlusNoticeDue({ status: "confirmed" }, 999_999, 100)).toBe(false); // no timestamp
+    expect(
+      isPlusNoticeDue({ ...base, plusNoticeSentAtMillis: 2_000 }, 999_999, 100)
+    ).toBe(false);
+    expect(
+      isPlusNoticeDue({ ...base, plusNoticeAbandonedAtMillis: 2_000 }, 999_999, 100)
+    ).toBe(false);
+  });
+
+  it("the dev knob shortens the delay; anything invalid keeps the 24h floor", () => {
+    expect(resolvePlusNoticeDelayMillis("")).toBe(CONSENT_PLUS_NOTICE_DELAY_MS);
+    expect(resolvePlusNoticeDelayMillis("1")).toBe(60_000);
+    expect(resolvePlusNoticeDelayMillis("90")).toBe(90 * 60_000);
+    expect(resolvePlusNoticeDelayMillis("0")).toBe(CONSENT_PLUS_NOTICE_DELAY_MS);
+    expect(resolvePlusNoticeDelayMillis("-30")).toBe(CONSENT_PLUS_NOTICE_DELAY_MS);
+    expect(resolvePlusNoticeDelayMillis("abc")).toBe(CONSENT_PLUS_NOTICE_DELAY_MS);
+  });
+
+  it("the notice copy carries the revocation path and escapes what it interpolates", () => {
+    const content = buildConsentPlusNoticeEmailContent({
+      familyDisplayName: `<Fam&ly>`,
+      childUserName: "Speedy",
+      envLabel: "DEV",
+    });
+    expect(content.subject).toBe(
+      "[DEV] Your consent for Speedy on RoadTrip Royale — and how to withdraw it"
+    );
+    expect(content.text).toContain("Family settings");
+    expect(content.text).toContain("withdraw");
+    expect(content.html).toContain("&lt;Fam&amp;ly&gt;");
+    expect(content.html).not.toContain("<Fam&ly>");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. The nightly FR-64 reconcile (§3.1.2 step 8)
+// ---------------------------------------------------------------------------
+
+describe("the FR-64 reconcile re-derives the grant-time guarantee from stored state", () => {
+  async function consentedKid(): Promise<{ familyId: string; requestPath: string }> {
+    const { familyId } = await childAwaiting();
+    expect(
+      (await confirmGuardianConsent(db(), { familyId, childUserId: "kid" })).committed
+    ).toBe(true);
+    const entry = [...db().store.entries()].find(
+      ([path, data]) =>
+        path.startsWith(`${CONSENT_REQUESTS_COLLECTION}/`) && data.status === "confirmed"
+    )!;
+    return { familyId, requestPath: entry[0] };
+  }
+
+  it("a child consented through the real flow, plus notice sent, reconciles CLEAN", async () => {
+    const { requestPath } = await consentedKid();
+    db().store.set(requestPath, {
+      ...db().store.get(requestPath)!,
+      plusNoticeSentAtMillis: Date.now(),
+    });
+
+    const result = await reconcileConsentRecords(db() as never, { nowMillis: Date.now() });
+
+    expect(result.consentedChildren).toBe(1);
+    expect(result.missingRecord).toEqual([]);
+    expect(result.belowRequiredLevel).toEqual([]);
+    expect(result.plusNoticeAbandoned).toEqual([]);
+    expect(result.plusNoticeOverdue).toEqual([]);
+  });
+
+  it("a consented child with NO grant row anywhere is a missing-record finding", async () => {
+    db().seed("users/orphan", { isChildAccount: true, activeFamilyId: "famZ" });
+
+    const result = await reconcileConsentRecords(db() as never, { nowMillis: Date.now() });
+
+    expect(result.missingRecord).toEqual(["orphan"]);
+    expect(result.belowRequiredLevel).toEqual([]);
+  });
+
+  it("a level-less legacy grant flags below-level; an email_plus row alongside it clears (max wins)", async () => {
+    db().seed("users/legacyKid", { isChildAccount: true, activeFamilyId: "famZ" });
+    db().seed("audit_logs/legacyGrant", {
+      eventType: "AUDIT_PARENTAL_CONSENT_GRANTED",
+      subjectId: "legacyKid",
+      metadata: { method: "manager_set" }, // no assuranceLevel — the pre-email_plus shape
+    });
+
+    const flagged = await reconcileConsentRecords(db() as never, { nowMillis: Date.now() });
+    expect(flagged.belowRequiredLevel).toEqual(["legacyKid"]);
+    expect(flagged.missingRecord).toEqual([]);
+
+    // The FR-28 sticky-readmission shape: original email_plus row + level-less
+    // readmission row. The best row carries the child.
+    db().seed("audit_logs/originalGrant", {
+      eventType: "AUDIT_PARENTAL_CONSENT_GRANTED",
+      subjectId: "legacyKid",
+      metadata: { method: "email_plus", assuranceLevel: 1 },
+    });
+    const cleared = await reconcileConsentRecords(db() as never, { nowMillis: Date.now() });
+    expect(cleared.belowRequiredLevel).toEqual([]);
+  });
+
+  it("adults and non-active children are out of scope", async () => {
+    db().seed("users/adult", { activeFamilyId: "famZ" }); // no isChildAccount
+    db().seed("users/stickyKid", { isChildAccount: true }); // no activeFamilyId (FR-28 post-revocation)
+
+    const result = await reconcileConsentRecords(db() as never, { nowMillis: Date.now() });
+
+    expect(result.consentedChildren).toBe(0);
+    expect(result.missingRecord).toEqual([]);
+  });
+
+  it("an abandoned plus notice is a finding forever; an unsent one flags only once OVERDUE", async () => {
+    const { requestPath } = await consentedKid();
+    const requestId = requestPath.split("/").pop()!;
+    const confirmedAtMillis = db().store.get(requestPath)!.confirmedAtMillis as number;
+
+    // Fresh confirm, notice pending, well inside the window: not a finding.
+    const early = await reconcileConsentRecords(db() as never, {
+      nowMillis: confirmedAtMillis + CONSENT_PLUS_NOTICE_OVERDUE_MS - 1,
+    });
+    expect(early.plusNoticeOverdue).toEqual([]);
+    expect(early.plusNoticeAbandoned).toEqual([]);
+
+    // Same doc at the overdue boundary: the delivery job is broken — flag it.
+    const late = await reconcileConsentRecords(db() as never, {
+      nowMillis: confirmedAtMillis + CONSENT_PLUS_NOTICE_OVERDUE_MS,
+    });
+    expect(late.plusNoticeOverdue).toEqual([requestId]);
+
+    // Abandonment is terminal and always a finding (and not double-counted as overdue).
+    db().store.set(requestPath, {
+      ...db().store.get(requestPath)!,
+      plusNoticeAbandonedAtMillis: confirmedAtMillis + 1000,
+    });
+    const abandoned = await reconcileConsentRecords(db() as never, {
+      nowMillis: confirmedAtMillis + CONSENT_PLUS_NOTICE_OVERDUE_MS * 2,
+    });
+    expect(abandoned.plusNoticeAbandoned).toEqual([requestId]);
+    expect(abandoned.plusNoticeOverdue).toEqual([]);
   });
 });

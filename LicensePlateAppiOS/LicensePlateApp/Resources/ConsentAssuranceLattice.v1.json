@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "requiredLevel": 1,
+  "methods": {
+    "email_plus": 1,
+    "card_transaction": 2,
+    "id_verification": 2
+  }
+}

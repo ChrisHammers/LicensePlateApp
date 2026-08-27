@@ -1,17 +1,26 @@
 /**
  * FR-59/FR-59.1 email_plus — the consent-request lifecycle's Firestore/HTTP half
- * (§3.1.2 steps 1–3; step 4's delayed "plus" notice rides the next slice).
+ * (§3.1.2 steps 1–4).
  *
  * Flow: `approveFamilyJoinRequest_CaptainStep` (family.ts) validates everything it
  * always validated, then — for a CHILD grant only — calls `createConsentRequestForApproval`
  * instead of admitting. The onCreate trigger emails the guardian the NP-1 direct notice
  * with a single-use link. `confirmParentalConsent` (this codebase's first `onRequest`)
  * commits the FR-64 single transaction: consent record + guardianship + membership +
- * `activeFamilyId` together, or nothing.
+ * `activeFamilyId` together, or nothing. ≥24h later, `deliverConsentPlusNotices` sends
+ * the method's second notice (the "plus") with the revocation path.
  *
  * AUTHORITY: the server-only `consent_requests` document. Row status is display —
  * clients can write row status strings (rules `hasOnly(["status","resolvedAt"])`), so
  * nothing here ever trusts it.
+ *
+ * §312.5(c)(1) LIFECYCLE OF THE GUARDIAN'S ADDRESS (decided 2026-08-27): the email is
+ * retained THROUGH confirmation and purged when the plus notice sends (or the request
+ * expires / is superseded / notice delivery is abandoned). Rationale: the plus notice
+ * is part of the email_plus method itself, so the address is still serving its
+ * consent purpose until that notice goes out — and it must reach the SAME address
+ * that confirmed; re-resolving at send time could deliver the revocation notice to a
+ * different inbox than the one that clicked the link.
  */
 
 import * as functions from "firebase-functions/v1";
@@ -20,19 +29,25 @@ import { defineSecret, defineString } from "firebase-functions/params";
 import { sendTransactionalEmail } from "./utils/email";
 import { redactEmailAddresses } from "./welcomeEmailCore";
 import { loadFamilyName } from "./familyInviteDisplay";
+import { AUDIT_LOG_COLLECTION } from "./retentionCore";
 import {
+  CONSENT_PLUS_NOTICE_MAX_SEND_ATTEMPTS,
+  CONSENT_PLUS_NOTICE_OVERDUE_MS,
   CONSENT_REQUESTS_COLLECTION,
   CONSENT_REQUEST_STATUS,
   CONSENT_REQUEST_TTL_MS,
   ConsentAssurancePolicy,
   JOIN_REQUEST_AWAITING_GUARDIAN_STATUS,
+  buildConsentPlusNoticeEmailContent,
   buildConsentRequestEmailContent,
   decideConsentConfirmation,
   formatConsentToken,
   hashConsentNonce,
+  isPlusNoticeDue,
   isValidAgeOutYearMonth,
   mintConsentNonce,
   parseConsentToken,
+  resolvePlusNoticeDelayMillis,
 } from "./consentRequestsCore";
 import {
   AUDIT_PARENTAL_CONSENT_GRANTED,
@@ -51,8 +66,40 @@ import { currentRevenueCatApiKey } from "./accountDeletion";
 const resendApiKey = defineSecret("RESEND_API_KEY");
 const welcomeEmailFrom = defineSecret("WELCOME_EMAIL_FROM");
 const consentEmailEnvLabel = defineString("WELCOME_EMAIL_ENV_LABEL", { default: "" });
+// Dev knob only (set in the dev project's .env file); unset/invalid keeps the 24h
+// floor — see `resolvePlusNoticeDelayMillis`. Production must never set this.
+const plusNoticeDelayMinutesOverride = defineString("CONSENT_PLUS_NOTICE_DELAY_MINUTES", {
+  default: "",
+});
 
 type Firestore = admin.firestore.Firestore;
+
+/**
+ * The guardian's reachable address: Auth email, else `users/{uid}/private/contact`.
+ * Used at approve time (family.ts, to stamp the request) and by the plus-notice job
+ * as the FALLBACK for requests confirmed before the retained-email lifecycle landed
+ * (their address was purged at confirm). One implementation on purpose — two
+ * resolvers would drift the moment one learns a new contact source.
+ */
+export async function resolveGuardianEmailByUid(
+  db: Firestore,
+  guardianUid: string
+): Promise<string | null> {
+  try {
+    const authUser = await admin.auth().getUser(guardianUid);
+    if (authUser.email && authUser.email.length > 0) return authUser.email;
+  } catch {
+    // Fall through to the contact doc — an Auth lookup failure must not block consent.
+  }
+  const contact = await db
+    .collection("users")
+    .doc(guardianUid)
+    .collection("private")
+    .doc("contact")
+    .get();
+  const email = contact.data()?.email;
+  return typeof email === "string" && email.length > 0 ? email : null;
+}
 
 // ---------------------------------------------------------------------------
 // Step 1 — creation (called from the approve callable)
@@ -103,8 +150,14 @@ export async function createConsentRequestForApproval(
     if (typeof expiresAtMillis === "number" && expiresAtMillis > now) {
       return { requestId: doc.id, reusedExisting: true };
     }
-    // Lapsed but not yet swept: retire it so exactly one live request exists.
-    await doc.ref.update({ status: CONSENT_REQUEST_STATUS.superseded, resolvedAtMillis: now });
+    // Lapsed but not yet swept: retire it so exactly one live request exists. The
+    // superseded request will never send another notice, so its copy of the
+    // guardian's address has no remaining §312.5(c)(1) purpose — purge it here.
+    await doc.ref.update({
+      status: CONSENT_REQUEST_STATUS.superseded,
+      resolvedAtMillis: now,
+      guardianEmail: admin.firestore.FieldValue.delete(),
+    });
   }
 
   const nonce = mintConsentNonce();
@@ -366,10 +419,10 @@ export async function commitGuardianConfirmation(
     tx.update(requestRef, {
       status: CONSENT_REQUEST_STATUS.confirmed,
       confirmedAtMillis: nowMillis,
-      // The request served its §312.5(c)(1) purpose; the address does not persist
-      // past the grant. The evidence that an email was sent (timestamps, provider
-      // message id) remains.
-      guardianEmail: admin.firestore.FieldValue.delete(),
+      // The guardian's email is deliberately RETAINED here: the method's ≥24h plus
+      // notice must reach the same address that confirmed, so the §312.5(c)(1)
+      // purpose is not served until that notice sends. `sendDueConsentPlusNotices`
+      // purges it with the send (or on abandonment). See the file header.
     });
     // FR-62 groundwork: the durable guardianship record (uid-only), owner-invisible to
     // clients via the private/{docId} whitelist.
@@ -562,6 +615,243 @@ export const confirmParentalConsent = functions.https.onRequest(async (req, res)
     res.status(500).send(PAGES.error);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Step 4 — the "plus": delayed second notice with the revocation path
+// ---------------------------------------------------------------------------
+
+export type SendPlusNoticeEmail = (params: {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+}) => Promise<{ providerMessageId: string | null }>;
+
+export interface PlusNoticePassResult {
+  sent: number;
+  failed: number;
+  abandoned: number;
+}
+
+/**
+ * One pass over confirmed requests: send every due plus notice, stamp the evidence
+ * (`plusNoticeSentAtMillis` + provider message id), and purge the guardian's address
+ * in the same update — the §312.5(c)(1) purpose ends with this send. Failures retry
+ * on later passes (the address is kept for exactly that reason) up to
+ * CONSENT_PLUS_NOTICE_MAX_SEND_ATTEMPTS, then the request is marked abandoned and
+ * purged anyway, loudly — an unsent plus notice is a lawfulness gap, not a hiccup.
+ *
+ * Query shape follows the expiry sweep: one equality filter, due-ness decided in
+ * code (`isPlusNoticeDue`) — no composite index, and the harness stays faithful.
+ */
+export async function sendDueConsentPlusNotices(
+  db: Firestore,
+  input: {
+    nowMillis: number;
+    delayMillis: number;
+    envLabel: string;
+    sendEmail: SendPlusNoticeEmail;
+  }
+): Promise<PlusNoticePassResult> {
+  const confirmed = await db
+    .collection(CONSENT_REQUESTS_COLLECTION)
+    .where("status", "==", CONSENT_REQUEST_STATUS.confirmed)
+    .get();
+
+  const result: PlusNoticePassResult = { sent: 0, failed: 0, abandoned: 0 };
+  for (const doc of confirmed.docs) {
+    const data = doc.data();
+    if (!isPlusNoticeDue(data, input.nowMillis, input.delayMillis)) continue;
+
+    try {
+      const storedEmail = data.guardianEmail;
+      const to =
+        typeof storedEmail === "string" && storedEmail.length > 0
+          ? storedEmail
+          : typeof data.guardianUid === "string"
+            ? await resolveGuardianEmailByUid(db, data.guardianUid)
+            : null;
+      if (!to) throw new Error("no deliverable guardian address");
+
+      const content = buildConsentPlusNoticeEmailContent({
+        familyDisplayName:
+          typeof data.noticeFamilyName === "string" ? data.noticeFamilyName : "your family",
+        childUserName:
+          typeof data.childUserName === "string" && data.childUserName.length > 0
+            ? data.childUserName
+            : "your family's player",
+        envLabel: input.envLabel,
+      });
+      const delivery = await input.sendEmail({
+        to,
+        subject: content.subject,
+        html: content.html,
+        text: content.text,
+      });
+      await doc.ref.update({
+        plusNoticeSentAtMillis: input.nowMillis,
+        plusNoticeProviderMessageId: delivery.providerMessageId ?? null,
+        guardianEmail: admin.firestore.FieldValue.delete(),
+      });
+      result.sent += 1;
+    } catch (error) {
+      const attempts =
+        (typeof data.plusNoticeAttempts === "number" ? data.plusNoticeAttempts : 0) + 1;
+      // FR-35(a): no plaintext addresses in Cloud Logging.
+      functions.logger.error(
+        `consent plus notice send failed for ${doc.id} (attempt ${attempts}/${CONSENT_PLUS_NOTICE_MAX_SEND_ATTEMPTS}): ${redactEmailAddresses(String(error))}`
+      );
+      if (attempts >= CONSENT_PLUS_NOTICE_MAX_SEND_ATTEMPTS) {
+        await doc.ref.update({
+          plusNoticeAttempts: attempts,
+          plusNoticeAbandonedAtMillis: input.nowMillis,
+          guardianEmail: admin.firestore.FieldValue.delete(),
+        });
+        functions.logger.error(
+          "consent plus notice ABANDONED — the email_plus record for this grant is missing its second notice; the FR-64 reconcile must surface it",
+          { requestId: doc.id, childUserId: data.childUserId, familyId: data.familyId }
+        );
+        result.abandoned += 1;
+      } else {
+        await doc.ref.update({
+          plusNoticeAttempts: attempts,
+          plusNoticeLastFailedAtMillis: input.nowMillis,
+        });
+        result.failed += 1;
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * Every 15 minutes rather than daily: the notice should land as soon after the ≥24h
+ * floor as it can (24h–24h15m), and the cadence is what makes the dev knob usable
+ * same-day (delay 1 minute ⇒ notice on the next tick). Each pass is one equality
+ * query; the cost is noise.
+ */
+export const deliverConsentPlusNotices = functions
+  .runWith({ secrets: [resendApiKey, welcomeEmailFrom], timeoutSeconds: 300 })
+  .pubsub.schedule("every 15 minutes")
+  .onRun(async () => {
+    const result = await sendDueConsentPlusNotices(admin.firestore(), {
+      nowMillis: Date.now(),
+      delayMillis: resolvePlusNoticeDelayMillis(plusNoticeDelayMinutesOverride.value()),
+      envLabel: consentEmailEnvLabel.value(),
+      sendEmail: (params) =>
+        sendTransactionalEmail({
+          apiKey: resendApiKey.value(),
+          from: welcomeEmailFrom.value(),
+          ...params,
+        }),
+    });
+    if (result.sent > 0 || result.failed > 0 || result.abandoned > 0) {
+      functions.logger.info("consent plus notice pass", { result });
+    }
+    return null;
+  });
+
+// ---------------------------------------------------------------------------
+// Step 8 — the nightly FR-64 reconcile (detection, not enforcement)
+// ---------------------------------------------------------------------------
+
+export interface ConsentReconcileResult {
+  /** How many currently-consented children (isChildAccount + activeFamilyId) were checked. */
+  consentedChildren: number;
+  /** Child uids with NO AUDIT_PARENTAL_CONSENT_GRANTED row at all. */
+  missingRecord: string[];
+  /** Child uids whose best grant row is below the required assurance level. */
+  belowRequiredLevel: string[];
+  /** Consent-request ids whose plus notice was abandoned after the attempt cap. */
+  plusNoticeAbandoned: string[];
+  /** Consent-request ids confirmed long ago with no plus notice sent — the delivery job is broken. */
+  plusNoticeOverdue: string[];
+}
+
+/**
+ * FR-64's guarantee is transactional at grant time; this pass re-derives it nightly
+ * from stored state, so a bug anywhere upstream becomes a loud finding instead of
+ * silent unlawful collection. Three checks:
+ *
+ *  1. Every consented child has a GRANTED consent row (the rows are retained forever,
+ *     so absence is a defect, never retention).
+ *  2. The child's BEST grant row meets the required assurance level (FR-108(b), max
+ *     across rows so a sticky FR-28 readmission keeps its original email_plus level).
+ *     Grants from paths that never verified (`manager_set`, `family_admission` legacy
+ *     shapes) carry no level and flag as 0 — that is the tripwire, not noise. Temporal
+ *     revoke→readmit sequencing is FR-104's problem; this pass reads grant rows only.
+ *  3. Every confirmed email_plus request got its plus notice: abandoned deliveries and
+ *     overdue-unsent ones (CONSENT_PLUS_NOTICE_OVERDUE_MS) both flag.
+ *
+ * Detection only — nothing is halted or deleted here (FR-104 owns enforcement).
+ * Findings are uid/request-id only, safe for Cloud Logging.
+ */
+export async function reconcileConsentRecords(
+  db: Firestore,
+  input: { nowMillis: number }
+): Promise<ConsentReconcileResult> {
+  const result: ConsentReconcileResult = {
+    consentedChildren: 0,
+    missingRecord: [],
+    belowRequiredLevel: [],
+    plusNoticeAbandoned: [],
+    plusNoticeOverdue: [],
+  };
+
+  // One pass over the permanently-retained grant rows → best level per child.
+  const grantedRows = await db
+    .collection(AUDIT_LOG_COLLECTION)
+    .where("eventType", "==", AUDIT_PARENTAL_CONSENT_GRANTED)
+    .get();
+  const bestLevelByChild = new Map<string, number>();
+  for (const doc of grantedRows.docs) {
+    const data = doc.data();
+    if (typeof data.subjectId !== "string" || data.subjectId.length === 0) continue;
+    const level = data.metadata?.assuranceLevel;
+    const numeric = typeof level === "number" ? level : 0;
+    const previous = bestLevelByChild.get(data.subjectId);
+    if (previous === undefined || numeric > previous) {
+      bestLevelByChild.set(data.subjectId, numeric);
+    }
+  }
+
+  const children = await db
+    .collection("users")
+    .where("isChildAccount", "==", true)
+    .get();
+  for (const doc of children.docs) {
+    const activeFamilyId = doc.data().activeFamilyId;
+    if (typeof activeFamilyId !== "string" || activeFamilyId.length === 0) continue;
+    result.consentedChildren += 1;
+    const best = bestLevelByChild.get(doc.id);
+    if (best === undefined) {
+      result.missingRecord.push(doc.id);
+    } else if (!ConsentAssurancePolicy.isRecordSufficient(best)) {
+      result.belowRequiredLevel.push(doc.id);
+    }
+  }
+
+  const confirmed = await db
+    .collection(CONSENT_REQUESTS_COLLECTION)
+    .where("status", "==", CONSENT_REQUEST_STATUS.confirmed)
+    .get();
+  for (const doc of confirmed.docs) {
+    const data = doc.data();
+    if (data.plusNoticeAbandonedAtMillis !== undefined) {
+      result.plusNoticeAbandoned.push(doc.id);
+      continue;
+    }
+    if (data.plusNoticeSentAtMillis !== undefined) continue;
+    if (
+      typeof data.confirmedAtMillis === "number" &&
+      data.confirmedAtMillis + CONSENT_PLUS_NOTICE_OVERDUE_MS <= input.nowMillis
+    ) {
+      result.plusNoticeOverdue.push(doc.id);
+    }
+  }
+
+  return result;
+}
 
 // ---------------------------------------------------------------------------
 // Expiry — "consent not obtained within a reasonable time" (§312.5(c)(1))

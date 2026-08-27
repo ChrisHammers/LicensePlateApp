@@ -29,7 +29,7 @@ import {
   purgeDocumentsOlderThan,
 } from "./retentionCore";
 import { currentRevenueCatApiKey } from "./accountDeletion";
-import { sweepExpiredConsentRequests } from "./consentRequests";
+import { reconcileConsentRecords, sweepExpiredConsentRequests } from "./consentRequests";
 import {
   PROVISIONAL_CHILD_REDEMPTION_WINDOW_DAYS,
   provisionalChildDeletionCutoffMillis,
@@ -126,6 +126,34 @@ export const expireLapsedConsentRequests = functions
   .onRun(async () => {
     const result = await sweepExpiredConsentRequests(db, Date.now());
     functions.logger.info("retention: expired lapsed consent requests", { result });
+    return null;
+  });
+
+/**
+ * §3.1.2 step 8 / FR-64 + FR-108(f)4: nightly reconcile. Re-derives FR-64's guarantee
+ * from stored state — every consented child holds a sufficient consent record, every
+ * confirmed email_plus grant got its plus notice. Detection only; a finding is a loud
+ * error log with uid/request-id-only payload, and FR-104 owns any enforcement.
+ */
+export const reconcileParentalConsentRecords = functions
+  .runWith({ timeoutSeconds: RETENTION_TIMEOUT_SECONDS })
+  .pubsub.schedule(RETENTION_SCHEDULE)
+  .timeZone(RETENTION_TIME_ZONE)
+  .onRun(async () => {
+    const result = await reconcileConsentRecords(db, { nowMillis: Date.now() });
+    const findingCount =
+      result.missingRecord.length +
+      result.belowRequiredLevel.length +
+      result.plusNoticeAbandoned.length +
+      result.plusNoticeOverdue.length;
+    if (findingCount > 0) {
+      functions.logger.error(
+        "FR-64 reconcile FINDINGS: consented children without sufficient consent records, or plus notices that never sent",
+        { result }
+      );
+    } else {
+      functions.logger.info("FR-64 reconcile clean", { result });
+    }
     return null;
   });
 

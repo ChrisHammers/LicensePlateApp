@@ -45,6 +45,7 @@ export {
   purgeExpiredAuditLogs,
   purgeExpiredProvisionalChildAccounts,
   expireLapsedConsentRequests,
+  reconcileParentalConsentRecords,
 } from "./retention";
 export { onAuthUserDeleted } from "./auth";
 export { deleteAccount } from "./accountDeletion";
@@ -71,5 +72,6 @@ export { onUserProfileSendWelcomeEmail } from "./welcomeEmail";
 export {
   onConsentRequestCreatedSendEmail,
   confirmParentalConsent,
+  deliverConsentPlusNotices,
 } from "./consentRequests";
 

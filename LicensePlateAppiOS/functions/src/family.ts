@@ -53,7 +53,7 @@ import {
   CHILD_DECLARED_AT_FIELD,
   deleteProvisionalChildAccountIfNeverConsented,
 } from "./provisionalChildAccounts";
-import { createConsentRequestForApproval } from "./consentRequests";
+import { createConsentRequestForApproval, resolveGuardianEmailByUid } from "./consentRequests";
 import {
   CONSENT_REQUESTS_COLLECTION,
   JOIN_REQUEST_AWAITING_GUARDIAN_STATUS,
@@ -65,22 +65,10 @@ const db = admin.firestore();
  * FR-59.1: the guardian's own online contact information, for the consent-request email
  * (§312.5(c)(1)). Auth email first (the registered account's credential), then the
  * owner-written `private/contact` doc — the same resolution order the welcome email uses.
+ * Shared with the plus-notice job's fallback path; one implementation on purpose.
  */
 async function resolveGuardianEmail(guardianUid: string): Promise<string | null> {
-  try {
-    const authUser = await admin.auth().getUser(guardianUid);
-    if (authUser.email && authUser.email.length > 0) return authUser.email;
-  } catch {
-    // Fall through to the contact doc — an Auth lookup failure must not block consent.
-  }
-  const contact = await db
-    .collection("users")
-    .doc(guardianUid)
-    .collection("private")
-    .doc("contact")
-    .get();
-  const email = contact.data()?.email;
-  return typeof email === "string" && email.length > 0 ? email : null;
+  return resolveGuardianEmailByUid(db, guardianUid);
 }
 
 /**

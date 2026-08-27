@@ -1,6 +1,6 @@
 /**
  * FR-59/FR-59.1 email_plus — pure logic for the consent-request lifecycle, and
- * FR-59.2/FR-108's assurance levels (§3.1.2 steps 1–3, 5).
+ * FR-59.2/FR-108's assurance levels (§3.1.2 steps 1–5).
  *
  * Everything here is deterministic and Firestore-free so the vitest suites can pin the
  * whole decision surface. The dangerous parts live here on purpose:
@@ -98,6 +98,68 @@ export const LIVE_JOIN_REQUEST_STATUSES: readonly string[] = [
   "pending",
   JOIN_REQUEST_AWAITING_GUARDIAN_STATUS,
 ];
+
+// ---------------------------------------------------------------------------
+// The "plus" notice (§3.1.2 step 4)
+// ---------------------------------------------------------------------------
+
+/**
+ * FR-59.1: the second notice sent ≥24h after confirmation, carrying the revocation
+ * path. It is what distinguishes email_plus (§312.5(b)(2)(viii)) from a bare email
+ * click — REQUIRED for the method's lawfulness, not a courtesy. 24h is the floor;
+ * the scheduler's cadence adds at most its own period on top.
+ */
+export const CONSENT_PLUS_NOTICE_DELAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Send-failure bound. Attempts are spaced by the scheduler's cadence, so this is
+ * hours of retrying a transient outage, after which the request is marked abandoned
+ * (loudly — an unsent plus notice is a lawfulness gap the FR-64 reconcile surfaces)
+ * and the guardian's address is purged rather than retained indefinitely.
+ */
+export const CONSENT_PLUS_NOTICE_MAX_SEND_ATTEMPTS = 24;
+
+/**
+ * Dev knob (§3.1.2 checklist item 5): `CONSENT_PLUS_NOTICE_DELAY_MINUTES` in the
+ * per-project functions `.env` file shortens the delay so the notice is testable
+ * same-day. Anything unset/invalid/non-positive falls back to the 24h default —
+ * production, whose env file never sets the knob, keeps the lawfulness floor.
+ */
+export function resolvePlusNoticeDelayMillis(override: string): number {
+  const minutes = Number.parseInt(override, 10);
+  if (Number.isInteger(minutes) && minutes > 0) return minutes * 60_000;
+  return CONSENT_PLUS_NOTICE_DELAY_MS;
+}
+
+/**
+ * Reconcile tripwire (§3.1.2 step 8): a confirmed request still unsent this long after
+ * confirmation means the delivery job itself is broken (it aims for 24h–24h15m), not
+ * merely slow. Knob-independent on purpose — with the dev knob set, notices send in
+ * minutes and never come near this line.
+ */
+export const CONSENT_PLUS_NOTICE_OVERDUE_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * Whether a consent-request document is due its plus notice. Confirmed requests only;
+ * a sent or abandoned stamp is terminal. The status re-check is deliberate defense —
+ * the caller's query already filters on it, but this predicate is the pinned truth.
+ */
+export function isPlusNoticeDue(
+  data: {
+    status?: unknown;
+    confirmedAtMillis?: unknown;
+    plusNoticeSentAtMillis?: unknown;
+    plusNoticeAbandonedAtMillis?: unknown;
+  },
+  nowMillis: number,
+  delayMillis: number
+): boolean {
+  if (data.status !== CONSENT_REQUEST_STATUS.confirmed) return false;
+  if (typeof data.confirmedAtMillis !== "number") return false;
+  if (data.plusNoticeSentAtMillis !== undefined) return false;
+  if (data.plusNoticeAbandonedAtMillis !== undefined) return false;
+  return data.confirmedAtMillis + delayMillis <= nowMillis;
+}
 
 // ---------------------------------------------------------------------------
 // Nonce + confirmation token
@@ -252,4 +314,53 @@ export function buildConsentRequestEmailContent(
   ].join("");
 
   return { subject, html, text: noticeText };
+}
+
+// ---------------------------------------------------------------------------
+// The "plus" notice email (delayed confirmation + revocation path)
+// ---------------------------------------------------------------------------
+
+export interface ConsentPlusNoticeEmailInput {
+  /** See `ConsentRequestEmailInput.familyDisplayName` for the naming rationale. */
+  familyDisplayName: string;
+  childUserName: string;
+  envLabel: string;
+}
+
+/**
+ * The §312.5(b)(2)(viii) delayed confirmatory notice: a record of the consent the
+ * guardian gave, and the standing path to withdraw it (Family settings in the app).
+ * Deliberately dateless — the guardian's local date can differ from any timestamp we
+ * would print, and "recently" is the truthful framing at every delay setting. English
+ * at MVP, same as the NP-1 builder; localization rides the NP-2 wave.
+ */
+export function buildConsentPlusNoticeEmailContent(
+  input: ConsentPlusNoticeEmailInput
+): { subject: string; html: string; text: string } {
+  const family = escapeHtml(input.familyDisplayName);
+  const child = escapeHtml(input.childUserName);
+  const subjectPrefix = input.envLabel ? `[${input.envLabel}] ` : "";
+  const subject = `${subjectPrefix}Your consent for ${input.childUserName} on RoadTrip Royale — and how to withdraw it`;
+
+  const text = [
+    `This is a follow-up to the consent you recently confirmed for the player "${input.childUserName}" in the "${input.familyDisplayName}" family on RoadTrip Royale. U.S. law (COPPA) requires this second notice so you have a record of that consent and a way to change your mind.`,
+    ``,
+    `What you consented to: the app collects this player's chosen nickname, cartoon avatar selection, gameplay activity (license-plate finds, scores, trip participation), and an internal account identifier — visible only to members of your family group, which you control. Nothing is public, there is no chat or messaging, and their information is never used for advertising and never sold.`,
+    ``,
+    `To withdraw consent at any time: open RoadTrip Royale and go to Family settings. Withdrawing stops collection and lets you delete the player's data.`,
+    ``,
+    `If you did not confirm this consent, open Family settings and remove the player from your family — that withdraws the consent and stops collection immediately.`,
+  ].join("\n");
+
+  const html = [
+    `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1c1c1e;">`,
+    `<h2 style="color:#1d4ed8;">A record of your consent</h2>`,
+    `<p>This is a follow-up to the consent you recently confirmed for the player <strong>${child}</strong> in the <strong>${family}</strong> family on RoadTrip Royale. U.S. law (COPPA) requires this second notice so you have a record of that consent and a way to change your mind.</p>`,
+    `<p><strong>What you consented to:</strong> the app collects this player's chosen nickname, cartoon avatar selection, gameplay activity (license-plate finds, scores, trip participation), and an internal account identifier — visible only to members of your family group, which you control. Nothing is public, there is no chat or messaging, and their information is never used for advertising and never sold.</p>`,
+    `<p><strong>To withdraw consent at any time:</strong> open RoadTrip Royale and go to Family settings. Withdrawing stops collection and lets you delete the player's data.</p>`,
+    `<p style="font-size:13px;color:#6b7280;">If you did not confirm this consent, open Family settings and remove the player from your family — that withdraws the consent and stops collection immediately.</p>`,
+    `</div>`,
+  ].join("");
+
+  return { subject, html, text };
 }

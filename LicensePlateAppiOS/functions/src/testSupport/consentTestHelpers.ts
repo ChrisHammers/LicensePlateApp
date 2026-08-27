@@ -51,8 +51,8 @@ export async function confirmGuardianConsent(
     guardianUid: data.guardianUid as string,
     guardianRole: (data.guardianRole as string) ?? "captain",
     newRole: (data.newRole as string) ?? "scout",
-    expectedAgeOutYear:
-      typeof data.expectedAgeOutYear === "number" ? data.expectedAgeOutYear : null,
+    expectedAgeOutYearMonth:
+      typeof data.expectedAgeOutYearMonth === "number" ? data.expectedAgeOutYearMonth : null,
     assuranceLevel:
       typeof data.assuranceLevel === "number"
         ? data.assuranceLevel
