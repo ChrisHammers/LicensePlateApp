@@ -1,5 +1,6 @@
 # RoadTrip Royale — COPPA Compliance SRS v4 (Program 3: Consent UX, Egress Boundary & Share Surface)
 
+**Version:** 4.6 — 2026-08-27 (**F-67 / FR-108 added: leveled consent assurance framework**, per owner ruling 2026-08-27 (recorded first as v3 FR-59.2). Levels: 0 local-only / 1 email_plus / 2 high-assurance; server-owned required-level per scope; a below-level record is STALE and re-consents through FR-104's existing pipeline — one mechanism, no parallel plumbing. MVP constraint: local plumbing only, zero user-facing copy changes. Includes the two load-bearing triggers (cross-family visibility ⇒ L2 first; any username-keyed contact surface ⇒ L2 or redesign first) and the counsel-gated de-identified-projection hardening (see `COPPA_COUNSEL_MEMO.md`). The doc now defines FR-100…FR-108, F-60…F-67. Prior header follows.)
 **Version:** 4.5 — 2026-08-15 (**owner follow-ups on OD-10; OD-14/OD-15 decided.** OD-10 refined to **two** outcomes — adults (including guest adults, who resolve normally under v3 OD-9) keep usernames; children *and* unresolved participants share one neutral positional label. The owner's own suggestion is adopted: `"child-user"` is dropped from the export because captioning a shareable image that way publishes the fact that a minor is present, and one token for both cases removes any state where an adult is captioned as a child. "(You)" decoration retained on the sharer's own row. OD-14 decided (Option A), OD-15 decided (all three channels). Prior header follows.)
 **Version:** 4.4 — 2026-08-15 (**owner decisions.** OD-10 **decided** — adults keep their names on the share card, children render `"child-user"` consented or not, unresolved participants get a neutral rank label; FR-100(a) rewritten and FR-102(d) gains an explicit `.inApp`/`.export` strictness parameter rather than a second implementation. OD-11 **closed, no decision needed** — the owner correctly identified that SDK deferral is already built and landed; the question only ever concerned a UI default, which the landed enforcement already settles as off. OD-14 and OD-15 **expanded** with the scenarios, options and failure modes the owner asked for. Requirement text elsewhere unchanged.)
 **Version:** 4.3 — 2026-08-15 (**ID move, no requirement text changed.** v4 vacates FR-84…FR-91 / F-40…F-46 entirely and relocates to **FR-100…FR-107 / F-60…F-66**; `COPPA_SRS_AGEOUT.md` moves ahead of it to **FR-110…FR-116 / F-70…F-73**. Rationale: v3's FR-93 work is *already implemented* with `F-42`/`FR-85` in code comments, while v4 existed only on paper — the cheaper move is the one with no code behind it. This dissolves the two-way tag collision rather than managing it, and **releases FR-84…FR-91 / F-40…F-46 back to v3**, which may reclaim them so the in-flight comments need no retag at all. Mapping table in §0.1.)
@@ -91,8 +92,9 @@ Depends reflects **v3 §3.1's live status as of 2026-08-14** — confirm against
 | **F-64** | Consent re-affirmation on material change (push + badge + email) | §0(3) → FR-104 | High | **Opus / high** | v3 F-17, F-21, F-29 — **not started** | **L** |
 | **F-65** | Local route retention + policy parity | §312.10 → FR-105 | Medium | Sonnet | v3 F-33 — **not started**; folds into F-33 | **L** |
 | **F-66** | Family path sharing (adult ↔ adult; child gated) | new feature → FR-101(d), FR-106 | Critical | Fable / xhigh + verify | OD-13 + v3 F-17 — **not started** | **FROZEN** |
+| **F-67** | Leveled consent assurance framework (levels, required-level enforcement, re-consent as a layer) | owner ruling 2026-08-27; v3 FR-59.2 → FR-108 | High | **Opus / high** + verify (policy core + server); Sonnet (client posture mapping, evidence); Haiku (fixtures, matrix expansion) | v3 F-17/F-21 (consent core — **not started**: F-67 is specced NOW so Wave 2 builds it in from day one, never retrofits); F-64/FR-104 (re-affirmation machinery it reuses) | **L** |
 
-**Launch gate =** F-60…F-65. F-66 is specified but frozen under the v3 §0 rule (no feature that widens child-data surface ships on the current consent mechanism).
+**Launch gate =** F-60…F-65, **plus F-67's (a)–(d)** (the framework must exist inside the Wave 2 consent core; its (e) hardening is counsel-gated). F-66 is specified but frozen under the v3 §0 rule (no feature that widens child-data surface ships on the current consent mechanism).
 
 **Startable immediately:** F-60 and F-61 only. Everything else waits on v3's Wave 2 consent core (F-17/F-21) or Wave 4 SDK postures (F-28/F-29). F-62 is the largest v4 row and its dependency is the reason — building the egress boundary before F-28/F-29 land would mean refactoring their call sites twice.
 
@@ -100,7 +102,7 @@ Depends reflects **v3 §3.1's live status as of 2026-08-14** — confirm against
 
 ---
 
-## §4 Requirements (FR-100…FR-107)
+## §4 Requirements (FR-100…FR-108)
 
 ### FR-100 (F-60) — The exported share image carries no personal information, at any age
 
@@ -222,6 +224,26 @@ Specified now so the design is not improvised later. **MUST NOT ship** without O
 Any change that adds an SDK, a network client, a callable response field, or an export surface **must** register or extend an `EgressChannel` (FR-102(b)) in the same change, and the PR description states the declared classes and why. A change that adds egress without a declaration is a spec violation regardless of whether it happens to be harmless. This is the maintenance rule that keeps FR-102 from decaying into the situation §0(2) describes.
 
 ---
+
+### FR-108 (F-67) — Leveled consent assurance: levels, required-level enforcement, re-consent as a layer
+
+**Origin:** owner ruling 2026-08-27 (recorded first as v3 FR-59.2; this FR is the buildable spec). The consent framework must be upgradeable — new verification methods get ADDED as levels, and raising the required level forces re-consent through machinery that already exists, never through new architecture. **MVP constraint (owner): the framework is LOCAL PLUMBING — no user-facing copy changes.** The visible consent flow stays exactly as F-17/FR-59 specifies until a second method actually ships; levels are data, enforcement, and posture until then.
+
+- **(a) Data model.** The FR-59/FR-64 consent record gains `assuranceLevel: Int` beside its existing `method` field (the level is derived from the method at grant time and stored, so the record is self-describing even if a method's level assignment later changes). The level lattice, pinned by a closed enum in BOTH runtimes (Swift policy + TS mirror, parity-tested like the progression catalog):
+  - **0 — none / local-only.** Not a record state — the ABSENCE of a sufficient record. The FR-60 local-first posture is its implementation; nothing new is built for it.
+  - **1 — `email_plus`** (§312.5(b)(2)(viii)). MVP launch method, contingent on the closed-group reading (`COPPA_COUNSEL_MEMO.md`).
+  - **2 — high-assurance** (`card_transaction` §312.5(b)(2)(ii) / ID verification (v)/(vii)). Not built for MVP; the lattice reserves it.
+- **(b) Enforcement.** A server-owned `requiredConsentLevel` per consent scope (config document, server-writable only; MVP default: 1 for every scope). Every server gate that today asks "does a GRANTED consent record exist for this scope?" asks instead "does a GRANTED record with `assuranceLevel >= required(scope)` exist?" — one comparison added at the existing chokepoints, no new gates. A record below the required level is **STALE, not revoked**: collection halts exactly as FR-104 specifies for a version bump, the child drops to the restricted (level-0-equivalent) posture the client already renders, and the guardian is re-prompted at the now-required method. No data is deleted by a level bump — FR-77/OD-3 retention governs, and the guardian's §312.6 rights persist through staleness.
+- **(c) Re-consent is FR-104, not new plumbing.** A level bump and a scope-version bump are the SAME event class — "the consent on file no longer covers current practices" — and MUST flow through FR-104's bump → notify (push + badge + email) → halt → re-affirm pipeline. The only FR-104 delta: the staleness predicate becomes `recordVersion < requiredVersion OR recordLevel < requiredLevel`. Building a second reconsent path is the failure mode this FR exists to prevent.
+- **(d) The two load-bearing triggers (v3 FR-59.2, restated as requirements).** (1) Enabling child friends or ANY cross-family visibility of a child's identity requires `requiredConsentLevel = 2` deployed FIRST — level 1's lawfulness rests on the closed-family fact pattern. (2) Shipping ANY contact surface keyed to the username (chat, mentions, DMs, comments) makes the username online contact information (§312.2 ¶(4)) immediately — level 2 or a child-excluded redesign FIRST. Both are gate conditions on those features' SRS rows, not advisories.
+- **(e) COUNSEL-GATED hardening — de-identified family-readable projections.** If counsel answers the `COPPA_COUNSEL_MEMO.md` addendum question "data-layer release counts": strip the child's uid from family-readable rows — opaque request keys, identity carried only as the FR-86 snapshot stamp (username + stock avatar, no identifier); membership documents re-keyed or projected. Feasible pre-admission; a larger refactor post-admission. **Do not build until counsel answers** — the wire format is otherwise unchanged.
+- **(f) Build plan (models per §2 execution rules; rides Wave 2 — the record it decorates must exist first):**
+  1. *Policy core* — pure `ConsentAssurancePolicy` (level lattice, required-level compare, staleness predicate incl. the FR-104 merge) + TS mirror + parity test. **Opus / high + adversarial verify.** The one piece where a wrong answer is silent unlawful collection.
+  2. *Server enforcement* — record field, config doc, the one comparison at existing gates, audit row carries the level. **Opus / high**; vitest matrix (level × scope × required) + rules test for the config doc's server-only write.
+  3. *Client posture mapping* — stale-level → existing restricted posture; no new screens, no new strings (MVP constraint). **Sonnet.**
+  4. *Evidence & reconcile* — FR-64's nightly reconcile extends to flag any consented child whose record level < required. **Sonnet.**
+  5. *Fixtures + matrix expansion* — test fixtures across both runtimes, localization passthrough check (asserting NO new strings shipped). **Haiku.**
+  *Acceptance:* policy matrix exhaustive in both runtimes and parity-pinned; a staged level bump on dev demonstrates halt → notify → re-affirm → resume with zero client copy changes; FR-64 reconcile catches a seeded below-level record; no new consent UI surface diffs at MVP.
 
 ## §5 Amendment register (v3 / v2.1 items this document changes)
 
