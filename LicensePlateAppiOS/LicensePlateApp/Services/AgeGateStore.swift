@@ -768,7 +768,7 @@ enum ChildConsentRedemptionPolicy {
     /// policy is what keeps that from coming back unnoticed.
     static func inviteResponseSeeksConsent(accept: Bool) -> Bool { accept }
 
-    // MARK: - What the consent exit does with the session in front of it
+// MARK: - What the consent exit does with the session in front of it
 
     /// FR-26/FR-28f (device pass 2026-08-17, wave 8). Re-admission is one of the two exits a
     /// sticky post-revocation child MUST always have, and the exit had a dead end in it.
@@ -819,6 +819,65 @@ enum ChildConsentRedemptionPolicy {
         return hasLiveAuthSession ? .redeemWithExistingIdentity : .settleThenProvision
     }
 }
+
+// MARK: - Consent assurance levels (FR-59.2 / v4 FR-108 — Swift mirror)
+
+/// The client half of the leveled-consent framework. MIRRORS `consentRequestsCore.ts`
+/// exactly — the level lattice and required level are pinned by a parity test on each
+/// side, so the two runtimes cannot drift (progression-catalog discipline).
+///
+/// Owner design 2026-08-27: awaiting-state UI derives from THIS data, not from
+/// hardcoded copy — when a Level 2 method ships, its rows describe their own
+/// verification channel by adding a case here, and no view changes.
+enum ConsentAssurancePolicy {
+    /// Server-owned required level; MVP default 1 (email_plus), per the owner's
+    /// 2026-08-27 ruling. The runtime knob rides the FR-104 wave.
+    static let requiredLevel = 1
+
+    /// The closed method lattice — raw values match the server's consent records.
+    enum Method: String, CaseIterable {
+        case emailPlus = "email_plus"
+        case cardTransaction = "card_transaction"
+        case idVerification = "id_verification"
+
+        var assuranceLevel: Int {
+            switch self {
+            case .emailPlus: return 1
+            case .cardTransaction, .idVerification: return 2
+            }
+        }
+    }
+
+    /// What an awaiting-verification approval row shows, keyed by the method in flight.
+    /// MVP has exactly one method, so rows resolve it from `requiredLevel`; when a second
+    /// method exists the row will carry the server-stamped method instead.
+    struct AwaitingPresentation: Equatable {
+        var subtitleKey: String
+        var cancelAccessibilityKey: String
+        var iconSystemName: String
+    }
+
+    static func awaitingPresentation(
+        method: Method = .emailPlus
+    ) -> AwaitingPresentation {
+        switch method {
+        case .emailPlus:
+            return AwaitingPresentation(
+                subtitleKey: "family.approval.awaiting_guardian_subtitle",
+                cancelAccessibilityKey: "family.a11y.cancel_guardian_confirmation",
+                iconSystemName: "envelope.badge"
+            )
+        case .cardTransaction, .idVerification:
+            // Level 2 ships with its own copy; until then these cases are unreachable
+            // (no server path mints them) and fall back to the email presentation so a
+            // premature record can never render a blank row.
+            return awaitingPresentation(method: .emailPlus)
+        }
+    }
+
+    
+}
+
 
 // MARK: - Profile-write policy (FR-27 acceptance seam)
 

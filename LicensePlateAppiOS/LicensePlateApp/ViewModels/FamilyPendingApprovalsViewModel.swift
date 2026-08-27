@@ -219,9 +219,9 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
         logConsentAcknowledged(wasComplete: wasComplete, isComplete: draft.consent.isComplete)
     }
 
-    func setExpectedAgeOutYear(_ year: Int?, for request: PendingJoinRequest) {
+    func setExpectedAgeOutYearMonth(_ year: Int?, for request: PendingJoinRequest) {
         var draft = childDraft(for: request)
-        draft.consent.expectedAgeOutYear = year
+        draft.consent.expectedAgeOutYearMonth = year
         childDrafts[request.requestId] = draft
     }
 
@@ -363,7 +363,14 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
             } else {
                 analytics.log(.familyJoinRequestDeclined)
             }
-            processedRequestIds.insert(request.requestId)
+            // FR-59.1: an APPROVED child row comes back as awaiting_guardian and must stay
+            // actionable (its Cancel is the guardian's way out) — marking it processed
+            // would disable that button forever. Declines are terminal and stay marked.
+            // The refresh below is authoritative either way: adult rows drop out on their
+            // own, child rows return wearing the awaiting state.
+            if !approve {
+                processedRequestIds.insert(request.requestId)
+            }
             childDrafts.removeValue(forKey: request.requestId)
             childTargetStates.removeValue(forKey: request.requestId)
             await refreshPendingRequests()

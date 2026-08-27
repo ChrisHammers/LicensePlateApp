@@ -654,10 +654,13 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         guard let modelContext = modelContext else { return [] }
         
         let searchFamilyId = familyId
+        // FR-59.1: "live" is two statuses — undecided, and awaiting the guardian's email.
         let pendingStatus = "pending"
+        let awaitingStatus = "awaiting_guardian"
         let descriptor = FetchDescriptor<PendingJoinRequest>(
             predicate: #Predicate<PendingJoinRequest> { request in
-                request.familyId == searchFamilyId && request.status == pendingStatus
+                request.familyId == searchFamilyId
+                    && (request.status == pendingStatus || request.status == awaitingStatus)
             }
         )
         
@@ -813,9 +816,11 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         guard let modelContext else { return }
         let searchFamilyId = familyId
         let pendingStatus = "pending"
+        let awaitingStatus = "awaiting_guardian"
         let descriptor = FetchDescriptor<PendingJoinRequest>(
             predicate: #Predicate<PendingJoinRequest> { request in
-                request.familyId == searchFamilyId && request.status == pendingStatus
+                request.familyId == searchFamilyId
+                    && (request.status == pendingStatus || request.status == awaitingStatus)
             }
         )
         guard let cached = try? modelContext.fetch(descriptor) else { return }
@@ -880,7 +885,10 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         
         let snapshot = try await db.collection("families").document(familyId)
             .collection("pending")
-            .whereField("status", isEqualTo: "pending")
+            // FR-59.1: awaiting-guardian rows are live — dropping them here is what made
+            // the owner's approved card VANISH instead of showing the waiting state
+            // (device find 2026-08-27).
+            .whereField("status", in: ["pending", "awaiting_guardian"])
             .getDocuments()
         
         var requests: [PendingJoinRequest] = []
@@ -1189,7 +1197,7 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         consentAcknowledged: Bool = false,
         guardianAffirmed: Bool = false,
         correctionReason: ChildStatusCorrectionReason? = nil,
-        expectedAgeOutYear: Int? = nil
+        expectedAgeOutYearMonth: Int? = nil
     ) async throws {
         try requireRegisteredAccount()
 
@@ -1201,7 +1209,7 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
                 consent: ChildConsentDraft(
                     consentAcknowledged: consentAcknowledged,
                     guardianAffirmed: guardianAffirmed,
-                    expectedAgeOutYear: expectedAgeOutYear
+                    expectedAgeOutYearMonth: expectedAgeOutYearMonth
                 )
             )
         } else {

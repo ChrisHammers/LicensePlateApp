@@ -53,8 +53,8 @@ struct FamilyPendingApprovals: View {
                                 onGuardianAffirmedChange: {
                                     viewModel.setGuardianAffirmed($0, for: request)
                                 },
-                                onExpectedAgeOutYearChange: {
-                                    viewModel.setExpectedAgeOutYear($0, for: request)
+                                onExpectedAgeOutYearMonthChange: {
+                                    viewModel.setExpectedAgeOutYearMonth($0, for: request)
                                 },
                                 onCorrectionReasonChange: {
                                     viewModel.setCorrectionReason($0, for: request)
@@ -134,7 +134,7 @@ struct PendingApprovalRow: View {
     let onIsChildChange: (Bool) -> Void
     let onConsentAcknowledgedChange: (Bool) -> Void
     let onGuardianAffirmedChange: (Bool) -> Void
-    let onExpectedAgeOutYearChange: (Int?) -> Void
+    let onExpectedAgeOutYearMonthChange: (Int?) -> Void
     /// FR-66(b): the new-guardian correction block, shown only when clearing a KNOWN flag.
     let onCorrectionReasonChange: (ChildStatusCorrectionReason?) -> Void
     let onCorrectionAcknowledgedChange: (Bool) -> Void
@@ -199,24 +199,33 @@ struct PendingApprovalRow: View {
         }
     }
 
-    /// FR-59.1 awaiting state: icon + text, never colour alone; the copy names the
-    /// outstanding action (the captain-guardian's own inbox).
+    /// FR-59.1 awaiting state, rendered from the Approval Level data
+    /// (`ConsentAssurancePolicy.awaitingPresentation` — owner design 2026-08-27): the
+    /// copy and icon belong to the verification METHOD in flight, so a future Level 2
+    /// method describes its own channel without touching this view. Icon + text, never
+    /// colour alone.
+    private var awaitingPresentation: ConsentAssurancePolicy.AwaitingPresentation {
+        ConsentAssurancePolicy.awaitingPresentation()
+    }
+
     private var awaitingGuardianLine: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "envelope.badge")
+        let presentation = awaitingPresentation
+        return HStack(spacing: 6) {
+            Image(systemName: presentation.iconSystemName)
                 .font(.system(size: 12, weight: .semibold))
                 .accessibleDecorative()
-            Text("family.approval.awaiting_guardian_subtitle".localized)
+            Text(presentation.subtitleKey.localized)
                 .font(.system(.caption, design: .rounded))
                 .fixedSize(horizontal: false, vertical: true)
         }
         .foregroundStyle(Color.Theme.softBrown)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("family.approval.awaiting_guardian_subtitle".localized)
+        .accessibilityLabel(presentation.subtitleKey.localized)
     }
 
     private var awaitingGuardianButtons: some View {
-        Button {
+        let presentation = awaitingPresentation
+        return Button {
             Task {
                 guard !isDisabled else { return }
                 _ = await onDecline()
@@ -232,8 +241,8 @@ struct PendingApprovalRow: View {
         .buttonStyle(.bordered)
         .disabled(isDisabled)
         .accessibleButton(
-            label: "family.a11y.cancel_guardian_confirmation".localized,
-            hint: "family.approval.awaiting_guardian_subtitle".localized
+            label: presentation.cancelAccessibilityKey.localized,
+            hint: presentation.subtitleKey.localized
         )
     }
 
@@ -340,7 +349,7 @@ struct PendingApprovalRow: View {
                     yearOptions: expectedAgeOutYearOptions,
                     onConsentAcknowledgedChange: onConsentAcknowledgedChange,
                     onGuardianAffirmedChange: onGuardianAffirmedChange,
-                    onExpectedAgeOutYearChange: onExpectedAgeOutYearChange
+                    onExpectedAgeOutYearMonthChange: onExpectedAgeOutYearMonthChange
                 )
                 .disabled(isDisabled)
             }
@@ -470,7 +479,7 @@ struct PendingApprovalRow: View {
             onIsChildChange: { _ in },
             onConsentAcknowledgedChange: { _ in },
             onGuardianAffirmedChange: { _ in },
-            onExpectedAgeOutYearChange: { _ in },
+            onExpectedAgeOutYearMonthChange: { _ in },
             onCorrectionReasonChange: { _ in },
             onCorrectionAcknowledgedChange: { _ in },
             onCorrectionGuardianAffirmedChange: { _ in },
@@ -494,7 +503,7 @@ struct PendingApprovalRow: View {
             onIsChildChange: { _ in },
             onConsentAcknowledgedChange: { _ in },
             onGuardianAffirmedChange: { _ in },
-            onExpectedAgeOutYearChange: { _ in },
+            onExpectedAgeOutYearMonthChange: { _ in },
             onCorrectionReasonChange: { _ in },
             onCorrectionAcknowledgedChange: { _ in },
             onCorrectionGuardianAffirmedChange: { _ in },
@@ -519,7 +528,7 @@ struct PendingApprovalRow: View {
             onIsChildChange: { _ in },
             onConsentAcknowledgedChange: { _ in },
             onGuardianAffirmedChange: { _ in },
-            onExpectedAgeOutYearChange: { _ in },
+            onExpectedAgeOutYearMonthChange: { _ in },
             onCorrectionReasonChange: { _ in },
             onCorrectionAcknowledgedChange: { _ in },
             onCorrectionGuardianAffirmedChange: { _ in },
@@ -548,7 +557,7 @@ struct PendingApprovalRow: View {
             onIsChildChange: { _ in },
             onConsentAcknowledgedChange: { _ in },
             onGuardianAffirmedChange: { _ in },
-            onExpectedAgeOutYearChange: { _ in },
+            onExpectedAgeOutYearMonthChange: { _ in },
             onCorrectionReasonChange: { _ in },
             onCorrectionAcknowledgedChange: { _ in },
             onCorrectionGuardianAffirmedChange: { _ in },
@@ -584,7 +593,7 @@ struct PendingApprovalRow: View {
             onIsChildChange: { _ in },
             onConsentAcknowledgedChange: { _ in },
             onGuardianAffirmedChange: { _ in },
-            onExpectedAgeOutYearChange: { _ in },
+            onExpectedAgeOutYearMonthChange: { _ in },
             onCorrectionReasonChange: { _ in },
             onCorrectionAcknowledgedChange: { _ in },
             onCorrectionGuardianAffirmedChange: { _ in },
@@ -608,7 +617,7 @@ struct PendingApprovalRow: View {
             onIsChildChange: { _ in },
             onConsentAcknowledgedChange: { _ in },
             onGuardianAffirmedChange: { _ in },
-            onExpectedAgeOutYearChange: { _ in },
+            onExpectedAgeOutYearMonthChange: { _ in },
             onCorrectionReasonChange: { _ in },
             onCorrectionAcknowledgedChange: { _ in },
             onCorrectionGuardianAffirmedChange: { _ in },
