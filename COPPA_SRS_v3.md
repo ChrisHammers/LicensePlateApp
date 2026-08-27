@@ -206,7 +206,7 @@ Model lanes (per §2): steps 1–5, 8–9 **Opus/high + adversarial verify**; st
 
 **Owner device checks (added 2026-08-27 per the repro-steps-in-SRS rule):**
 
-*F-14b — landed, checkable now (simulator fine; fresh install or post-sign-out so the gate shows).* The observable is WHICH EXPERIENCE the answer routes to (child gate on the Family tab vs. adult surfaces). With "today" = the current month, test the three-birthday matrix around exactly 13 years ago — e.g. in 2026-08:
+*F-14b — landed; DEVICE-VERIFIED 2026-08-27 (owner: all three matrix cases behaved as expected, month names localize; the untranslated trip-invite empty-state strings found during the pass were missing keys ×3 locales, fixed same day).* The observable is WHICH EXPERIENCE the answer routes to (child gate on the Family tab vs. adult surfaces). With "today" = the current month, test the three-birthday matrix around exactly 13 years ago — e.g. in 2026-08:
 1. Born **September 2013** (13th birthday next month) → **child** experience.
 2. Born **August 2013** (birthday month = this month) → **child** — THE tiebreak case; if this routes adult, the protective boundary is broken.
 3. Born **July 2013** (turned 13 last month) → **adult** experience.

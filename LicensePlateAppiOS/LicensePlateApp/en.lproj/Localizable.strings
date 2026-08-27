@@ -1087,6 +1087,11 @@
 "Decline" = "Decline";
 "Loading" = "Loading";
 "No pending invites" = "No pending invites";
+"No pending trip invites" = "No pending trip invites";
+"When someone invites you to a trip, it will appear here." = "When someone invites you to a trip, it will appear here.";
+"When someone invites you to a trip, or you invite others, they will appear here." = "When someone invites you to a trip, or you invite others, they will appear here.";
+"No pending trip invites. When someone invites you to a trip, or you invite others, they will appear here." = "No pending trip invites. When someone invites you to a trip, or you invite others, they will appear here.";
+"No pending invites. When someone invites you to a trip, it will appear here." = "No pending invites. When someone invites you to a trip, it will appear here.";
 "You don't have any pending family invitations" = "You don't have any pending family invitations";
 
 /* Friends & Family UI (quality-bar Step 1) */

@@ -1056,6 +1056,11 @@
 "Decline" = "Rechazar";
 "Loading" = "Cargando";
 "No pending invites" = "No hay invitaciones pendientes";
+"No pending trip invites" = "No hay invitaciones de viaje pendientes";
+"When someone invites you to a trip, it will appear here." = "Cuando alguien te invite a un viaje, aparecerá aquí.";
+"When someone invites you to a trip, or you invite others, they will appear here." = "Cuando alguien te invite a un viaje, o tú invites a otros, aparecerán aquí.";
+"No pending trip invites. When someone invites you to a trip, or you invite others, they will appear here." = "No hay invitaciones de viaje pendientes. Cuando alguien te invite a un viaje, o tú invites a otros, aparecerán aquí.";
+"No pending invites. When someone invites you to a trip, it will appear here." = "No hay invitaciones pendientes. Cuando alguien te invite a un viaje, aparecerá aquí.";
 "You don't have any pending family invitations" = "No tienes invitaciones familiares pendientes";
 
 /* Friends & Family UI (quality-bar Step 1) */
