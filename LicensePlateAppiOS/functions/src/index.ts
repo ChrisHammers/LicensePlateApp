@@ -44,6 +44,7 @@ export {
   purgeExpiredInvitesAndCodes,
   purgeExpiredAuditLogs,
   purgeExpiredProvisionalChildAccounts,
+  expireLapsedConsentRequests,
 } from "./retention";
 export { onAuthUserDeleted } from "./auth";
 export { deleteAccount } from "./accountDeletion";
@@ -65,4 +66,10 @@ export {
   onUserContactSearchIndexSync,
 } from "./userSearch";
 export { onUserProfileSendWelcomeEmail } from "./welcomeEmail";
+
+// FR-59/FR-59.1 email_plus consent core (SRS v3 §3.1.2)
+export {
+  onConsentRequestCreatedSendEmail,
+  confirmParentalConsent,
+} from "./consentRequests";
 

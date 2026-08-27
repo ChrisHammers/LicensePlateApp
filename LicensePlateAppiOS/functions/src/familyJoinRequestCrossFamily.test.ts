@@ -63,6 +63,7 @@ vi.mock("firebase-admin", async () => {
 });
 
 import type { FakeFirestore } from "./testSupport/fakeFirestore";
+import { confirmGuardianConsent } from "./testSupport/consentTestHelpers";
 import { FakeWriteBatch } from "./testSupport/fakeFirestore";
 import {
   approveFamilyJoinRequest_CaptainStep,
@@ -130,6 +131,8 @@ async function familyAwaiting(
   child = "kid"
 ): Promise<Request> {
   db().seed(`users/${captain}`, { userName: captain });
+  // FR-59.1: the guardian's email for the consent-request path.
+  db().seed(`users/${captain}/private/contact`, { email: `${captain}@example.com` });
   const { familyId } = await run.createFamily(captain, name);
   const { code } = await run.createShareCode(captain, familyId);
   const { inviteId } = await run.redeemShareCode(child, code);
@@ -207,13 +210,33 @@ beforeEach(() => {
   holder.deletedAuthUsers.length = 0;
 
   // The child as the local-first path leaves them: flagged, no family, never in one.
+  // `ageOutYearMonth` per FR-110(b): the consent record refuses to commit without it.
   db().seed("users/kid", {
     userName: "Speedy",
     avatarId: "scout_otter",
     isChildAccount: true,
     childDeclaredAt: Date.now(),
+    ageOutYearMonth: 203703,
   });
 });
+
+/** FR-59.1 two-phase shorthand: captain approves, then the guardian's link confirms. */
+async function approveAndConfirm(
+  captain: string,
+  request: Request,
+  child = "kid"
+): Promise<void> {
+  await run.approve(captain, {
+    familyId: request.familyId,
+    requestId: request.requestId,
+    ...CHILD_APPROVAL,
+  });
+  const outcome = await confirmGuardianConsent(db(), {
+    familyId: request.familyId,
+    childUserId: child,
+  });
+  expect(outcome.committed).toBe(true);
+}
 
 // ---------------------------------------------------------------------------
 // Approve — the ghost rows go with the admission
@@ -225,11 +248,7 @@ describe("approving into one family retires the requests held in every other", (
     const b = await familyAwaiting("captainB", "Neighbours");
     const c = await familyAwaiting("captainC", "Cousins");
 
-    await run.approve("captainA", {
-      familyId: a.familyId,
-      requestId: a.requestId,
-      ...CHILD_APPROVAL,
-    });
+    await approveAndConfirm("captainA", a);
 
     expect(statusOf(a)).toBe("approved");
     // NOT "declined": nobody refused, and the child WAS admitted — somewhere else.
@@ -244,11 +263,7 @@ describe("approving into one family retires the requests held in every other", (
     const b = await familyAwaiting("captainB", "Neighbours");
     expect(inviteOf(b)?.status).toBe("accepted");
 
-    await run.approve("captainA", {
-      familyId: a.familyId,
-      requestId: a.requestId,
-      ...CHILD_APPROVAL,
-    });
+    await approveAndConfirm("captainA", a);
 
     // Left "accepted" it keeps reading as a live "awaiting approval" invitation on the
     // requester's own dashboard — the same stale surface, one window over.
@@ -270,11 +285,7 @@ describe("approving into one family retires the requests held in every other", (
       originInviteId: "inv-legacy",
     });
 
-    await run.approve("captainA", {
-      familyId: a.familyId,
-      requestId: a.requestId,
-      ...CHILD_APPROVAL,
-    });
+    await approveAndConfirm("captainA", a);
 
     expect(
       db().store.get(`families/${a.familyId}/pending/legacy-dupe`)?.status
@@ -287,11 +298,7 @@ describe("approving into one family retires the requests held in every other", (
     const a = await familyAwaiting("captainA", "Hammers");
     await familyAwaiting("captainB", "Neighbours");
 
-    await run.approve("captainA", {
-      familyId: a.familyId,
-      requestId: a.requestId,
-      ...CHILD_APPROVAL,
-    });
+    await approveAndConfirm("captainA", a);
 
     expect(db().store.get(`families/${a.familyId}/members/kid`)?.isChild).toBe(true);
     expect(db().store.get("users/kid")?.activeFamilyId).toBe(a.familyId);
@@ -307,7 +314,12 @@ describe("approving into one family retires the requests held in every other", (
         requestId: a.requestId,
         ...CHILD_APPROVAL,
       })
-    ).resolves.toMatchObject({ success: true });
+    ).resolves.toMatchObject({ success: true, awaitingGuardianConfirmation: true });
+    const outcome = await confirmGuardianConsent(db(), {
+      familyId: a.familyId,
+      childUserId: "kid",
+    });
+    expect(outcome.committed).toBe(true);
 
     expect(statusOf(a)).toBe("approved");
     expect(rowsIn(a.familyId)).toHaveLength(1);
@@ -332,11 +344,7 @@ describe("approving into one family retires the requests held in every other", (
       return { familyId: b.familyId, requestId, inviteId };
     })();
 
-    await run.approve("captainA", {
-      familyId: a.familyId,
-      requestId: a.requestId,
-      ...CHILD_APPROVAL,
-    });
+    await approveAndConfirm("captainA", a);
 
     expect(statusOf(b)).toBe("expired");
     expect(statusOf(siblingInB)).toBe("pending");
@@ -372,6 +380,11 @@ describe("approving into one family retires the requests held in every other", (
     const payload = { familyId: a.familyId, requestId: a.requestId, ...CHILD_APPROVAL };
 
     await run.approve("captainA", payload);
+    const outcome = await confirmGuardianConsent(db(), {
+      familyId: a.familyId,
+      childUserId: "kid",
+    });
+    expect(outcome.committed).toBe(true);
     const writesAfterFirst = db().writeCount;
 
     await expect(run.approve("captainA", payload)).resolves.toMatchObject({
@@ -393,24 +406,28 @@ describe("FR-88: the single stamp ends in the right state", () => {
     await familyAwaiting("captainB", "Neighbours");
     await familyAwaiting("captainC", "Cousins");
 
+    await run.approve("captainA", {
+      familyId: a.familyId,
+      requestId: a.requestId,
+      ...CHILD_APPROVAL,
+    });
+    // FR-59.1: the grant write (incl. the stamp clear) moved into the confirmation
+    // TRANSACTION; the retirement runs in the follow-up BATCH with users/kid in its
+    // skip set. The per-batch one-write-per-document rule is asserted on those batches;
+    // the transaction writes users/kid exactly once by construction.
     const groups = await batchWriteGroups(() =>
-      run.approve("captainA", {
-        familyId: a.familyId,
-        requestId: a.requestId,
-        ...CHILD_APPROVAL,
-      })
+      confirmGuardianConsent(db(), { familyId: a.familyId, childUserId: "kid" })
     );
-
-    // A commit carrying two writes for one document is REJECTED outright — the cross-family
-    // retirement must not add a second clear beside the grant's.
-    const membershipBatch = groupContaining(
-      groups,
-      `families/${a.familyId}/pending/${a.requestId}`
-    );
-    expect(membershipBatch.filter((path) => path === "users/kid")).toHaveLength(1);
+    // The retirement batch carries users/kid in its SKIP set (the transaction already
+    // cleared the stamp); a later follow-up batch (child protections) may legitimately
+    // write users/kid again — the invariant is one write per document PER BATCH.
     for (const group of groups) {
       expect(group).toEqual([...new Set(group)]);
     }
+    const retirementBatch = groups.find((group) =>
+      group.some((path) => path.includes("/pending/"))
+    );
+    expect(retirementBatch?.filter((path) => path === "users/kid") ?? []).toHaveLength(0);
     expect(stampOn("kid")).toBe("__delete__");
   });
 
@@ -418,11 +435,7 @@ describe("FR-88: the single stamp ends in the right state", () => {
     const a = await familyAwaiting("captainA", "Hammers");
     const b = await familyAwaiting("captainB", "Neighbours");
 
-    await run.approve("captainA", {
-      familyId: a.familyId,
-      requestId: a.requestId,
-      ...CHILD_APPROVAL,
-    });
+    await approveAndConfirm("captainA", a);
 
     const stillLive = await findLivePendingJoinRequestsInOtherFamilies(db() as any, {
       userId: "kid",

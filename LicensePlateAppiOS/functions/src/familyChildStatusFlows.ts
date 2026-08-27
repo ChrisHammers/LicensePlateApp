@@ -246,25 +246,48 @@ export interface DeclareChildRegistrationResult {
  */
 export async function declareChildRegistrationFlow(
   db: Firestore,
-  input: { userId: string; clientMetadata: ClientMetadata | null }
+  input: {
+    userId: string;
+    clientMetadata: ClientMetadata | null;
+    /**
+     * AGEOUT FR-110(c): the F-14b device marker, transmitted at declaration so a
+     * later-approved child carries it without re-asking. Server-validated shape;
+     * stamped onto `users/{uid}` (server-controlled key, rules guard) and onto the
+     * DECLARED audit row. Optional at this seam — a pre-F-14b install has none and
+     * FR-24 forbids stranding them here — but the FR-59 consent record REQUIRES it,
+     * so a marker-less declaration surfaces at the confirmation step (pre-release:
+     * dev testers reinstall, which re-runs the gate and recaptures it).
+     */
+    ageOutYearMonth?: number;
+  }
 ): Promise<DeclareChildRegistrationResult> {
   const userRef = db.collection("users").doc(input.userId);
   const userDoc = await userRef.get();
 
   if (isChildAccountUserData(userDoc.data())) {
+    // Idempotent re-declare: adopt a marker the first declaration lacked, never
+    // overwrite one it had (protective: first capture wins).
+    if (
+      typeof input.ageOutYearMonth === "number" &&
+      typeof userDoc.data()?.ageOutYearMonth !== "number"
+    ) {
+      await userRef.set({ ageOutYearMonth: input.ageOutYearMonth }, { merge: true });
+    }
     return { success: true, isChildAccount: true, alreadyDeclared: true };
   }
 
-  await userRef.set(
-    {
-      isChildAccount: true,
-      [CHILD_DECLARED_AT_FIELD]: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
+  const declaration: Record<string, unknown> = {
+    isChildAccount: true,
+    [CHILD_DECLARED_AT_FIELD]: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  if (typeof input.ageOutYearMonth === "number") {
+    declaration.ageOutYearMonth = input.ageOutYearMonth;
+  }
+  await userRef.set(declaration, { merge: true });
 
   await writeChildRegistrationDeclared(db, {
     childUserId: input.userId,
+    ageOutYearMonth: input.ageOutYearMonth,
     clientMetadata: input.clientMetadata,
   });
 

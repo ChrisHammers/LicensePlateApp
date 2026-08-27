@@ -357,10 +357,21 @@ class UserRepository: ObservableObject {
     /// `users/{uid}` profile write. The server sets `isChildAccount = true` (never
     /// false) and records the uid-only DECLARED lifecycle row. Callable from an
     /// anonymous uid; idempotent, protective direction only.
+    ///
+    /// AGEOUT FR-110(c): the F-14b age-out marker rides the declaration when the device
+    /// holds one — it is server-stamped onto `users/{uid}` (server-controlled key) and
+    /// the FR-59 consent record later REQUIRES it. Best-effort at this seam: a device
+    /// without the marker (pre-F-14b install) still declares (FR-24 — this is a consent
+    /// exit), and the gap surfaces at guardian confirmation instead, where a reinstall
+    /// is the documented pre-release remedy.
     func declareChildRegistration() async throws {
         try await AppCheckReadiness.ensureCallablePrerequisites()
         let fn = Functions.functions().httpsCallable("declareChildRegistration")
-        _ = try await fn.call(([:] as [String: Any]).addingClientMetadata())
+        var payload: [String: Any] = [:]
+        if let ageOutYearMonth = AgeGateStore.shared.ageOutYearMonth {
+            payload["ageOutYearMonth"] = ageOutYearMonth
+        }
+        _ = try await fn.call(payload.addingClientMetadata())
     }
 
     // MARK: - User Search

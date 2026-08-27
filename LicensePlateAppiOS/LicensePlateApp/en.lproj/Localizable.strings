@@ -1221,6 +1221,8 @@
 
 /* Friends & Family accessibility (quality-bar Step 2) */
 "family.a11y.pending_invites" = "Pending family invites, %d";
+"family.approval.awaiting_guardian_subtitle" = "Confirmation email sent — check your email to finish adding this member.";
+"family.a11y.cancel_guardian_confirmation" = "Cancel this member request";
 "family.a11y.pending_approvals" = "Pending join approvals, %d";
 "family.a11y.opens_pending_invites" = "Opens pending family invites";
 "family.a11y.opens_pending_approvals" = "Opens pending join approvals";

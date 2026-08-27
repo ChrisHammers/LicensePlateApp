@@ -51,6 +51,7 @@
 
 import * as functions from "firebase-functions/v1";
 import type * as admin from "firebase-admin";
+import { LIVE_JOIN_REQUEST_STATUSES } from "./consentRequestsCore";
 
 type Firestore = admin.firestore.Firestore;
 
@@ -180,13 +181,22 @@ export async function findLivePendingJoinRequests(
   db: Firestore,
   input: { familyId: string; userId: string; excludeRequestId?: string }
 ): Promise<admin.firestore.QueryDocumentSnapshot[]> {
-  const snapshot = await db
-    .collection(`families/${input.familyId}/pending`)
-    .where("userId", "==", input.userId)
-    .where("status", "==", JOIN_REQUEST_PENDING_STATUS)
-    .limit(20)
-    .get();
-  return snapshot.docs.filter((doc) => doc.id !== input.excludeRequestId);
+  // FR-59.1 (2026-08-27): a row awaiting guardian confirmation is LIVE — a second
+  // redemption must dedupe against it, never mint a rival beside it. Two queries
+  // (no `in` support in the test harness); order pending-first for stable results.
+  const snapshots = await Promise.all(
+    LIVE_JOIN_REQUEST_STATUSES.map((status) =>
+      db
+        .collection(`families/${input.familyId}/pending`)
+        .where("userId", "==", input.userId)
+        .where("status", "==", status)
+        .limit(20)
+        .get()
+    )
+  );
+  return snapshots
+    .flatMap((snapshot) => snapshot.docs)
+    .filter((doc) => doc.id !== input.excludeRequestId);
 }
 
 // ---------------------------------------------------------------------------
@@ -242,18 +252,25 @@ export async function findLivePendingJoinRequestsInOtherFamilies(
   input: { userId: string; excludeFamilyId: string; limit?: number }
 ): Promise<CrossFamilyJoinRequests> {
   const limit = input.limit ?? CROSS_FAMILY_JOIN_REQUEST_LIMIT;
-  const snapshot = await db
-    .collectionGroup("pending")
-    .where("userId", "==", input.userId)
-    .where("status", "==", JOIN_REQUEST_PENDING_STATUS)
-    // One past the bound, so "there were more" is distinguishable from "that was all".
-    .limit(limit + 1)
-    .get();
-
-  const rows = snapshot.docs.filter(
-    (doc) => pendingRowFamilyId(doc) !== input.excludeFamilyId
+  // FR-59.1 (2026-08-27): both live statuses (`pending`, `awaiting_guardian`) — another
+  // family's outstanding guardian confirmation is a live decision this retirement must
+  // resolve too, or the losing family's email link would race the winner's forever.
+  const snapshots = await Promise.all(
+    LIVE_JOIN_REQUEST_STATUSES.map((status) =>
+      db
+        .collectionGroup("pending")
+        .where("userId", "==", input.userId)
+        .where("status", "==", status)
+        // One past the bound, so "there were more" is distinguishable from "that was all".
+        .limit(limit + 1)
+        .get()
+    )
   );
-  return { rows: rows.slice(0, limit), truncated: snapshot.size > limit };
+  const totalSeen = snapshots.reduce((sum, snapshot) => sum + snapshot.size, 0);
+  const rows = snapshots
+    .flatMap((snapshot) => snapshot.docs)
+    .filter((doc) => pendingRowFamilyId(doc) !== input.excludeFamilyId);
+  return { rows: rows.slice(0, limit), truncated: totalSeen > limit };
 }
 
 // ---------------------------------------------------------------------------

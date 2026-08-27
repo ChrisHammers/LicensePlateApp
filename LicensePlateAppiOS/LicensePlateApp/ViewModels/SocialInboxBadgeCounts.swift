@@ -54,6 +54,6 @@ enum SocialInboxBadgeCounts {
             return 0
         }
         let requests = pendingRequestsByFamily[familyId] ?? []
-        return requests.filter { $0.statusEnum == .pending }.count
+        return requests.filter { $0.statusEnum.isLiveOnApprovalSurface }.count
     }
 }

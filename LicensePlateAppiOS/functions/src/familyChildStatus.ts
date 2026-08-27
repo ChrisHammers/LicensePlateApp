@@ -17,6 +17,7 @@ import * as admin from "firebase-admin";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
 import { assertAuthenticated, assertRegisteredAccount } from "./callableAuth";
+import { isValidAgeOutYearMonth } from "./consentRequestsCore";
 import { currentRevenueCatApiKey } from "./accountDeletion";
 import {
   declareChildRegistrationFlow,
@@ -66,7 +67,19 @@ export const declareChildRegistration = enforcedCallable(async (data, context) =
   const userId = assertAuthenticated(context);
   const clientMetadata = normalizeClientMetadata(data?.clientMetadata);
 
-  return declareChildRegistrationFlow(admin.firestore(), { userId, clientMetadata });
+  // AGEOUT FR-110(c): accept the F-14b marker when the client has one; silently drop a
+  // malformed value rather than refusing — this callable is a child-reachable consent
+  // exit and FR-24 forbids growing its refusal set. The consent RECORD is where the
+  // field is required, and that check has a guardian in front of it, not a child.
+  const ageOutYearMonth = isValidAgeOutYearMonth(data?.ageOutYearMonth)
+    ? (data.ageOutYearMonth as number)
+    : undefined;
+
+  return declareChildRegistrationFlow(admin.firestore(), {
+    userId,
+    clientMetadata,
+    ageOutYearMonth,
+  });
 });
 
 /**

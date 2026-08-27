@@ -25,7 +25,6 @@ import {
   evaluateApprovalChildDeclaration,
   isChildWithActiveFamilyUserData,
   isUnconsentedChildUserData,
-  sanitizedChildLinkedPlatforms,
 } from "./childAccountCore";
 import {
   CROSS_FAMILY_JOIN_REQUEST_LIMIT,
@@ -54,8 +53,35 @@ import {
   CHILD_DECLARED_AT_FIELD,
   deleteProvisionalChildAccountIfNeverConsented,
 } from "./provisionalChildAccounts";
+import { createConsentRequestForApproval } from "./consentRequests";
+import {
+  CONSENT_REQUESTS_COLLECTION,
+  JOIN_REQUEST_AWAITING_GUARDIAN_STATUS,
+} from "./consentRequestsCore";
 
 const db = admin.firestore();
+
+/**
+ * FR-59.1: the guardian's own online contact information, for the consent-request email
+ * (§312.5(c)(1)). Auth email first (the registered account's credential), then the
+ * owner-written `private/contact` doc — the same resolution order the welcome email uses.
+ */
+async function resolveGuardianEmail(guardianUid: string): Promise<string | null> {
+  try {
+    const authUser = await admin.auth().getUser(guardianUid);
+    if (authUser.email && authUser.email.length > 0) return authUser.email;
+  } catch {
+    // Fall through to the contact doc — an Auth lookup failure must not block consent.
+  }
+  const contact = await db
+    .collection("users")
+    .doc(guardianUid)
+    .collection("private")
+    .doc("contact")
+    .get();
+  const email = contact.data()?.email;
+  return typeof email === "string" && email.length > 0 ? email : null;
+}
 
 /**
  * Every family invite into `familyId` for `toUserId` that has not reached a terminal state.
@@ -501,6 +527,16 @@ export const respondToFamilyInvite_UserStep = enforcedCallable(
         userId,
       });
 
+      // FR-59.1: a row already awaiting guardian confirmation is PAST the child's part —
+      // the captain approved, the guardian's email is out. A re-accept (child re-entered
+      // the code, "did it work?") must not reset it to `pending`: that would silently
+      // demote a decision in flight and orphan the live consent request. Idempotent
+      // success, exactly like the repeat-accept above.
+      if (existingRow?.data().status === JOIN_REQUEST_AWAITING_GUARDIAN_STATUS) {
+        await batch.commit();
+        return { success: true, requestId: existingRow.id };
+      }
+
       if (existingRow) {
         pendingRequestId = existingRow.id;
         batch.set(existingRow.ref, requestData);
@@ -715,7 +751,10 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
     const requestData = requestDoc.data()!;
     const currentStatus = requestData.status;
 
-    if (currentStatus !== "pending") {
+    if (
+      currentStatus !== "pending" &&
+      currentStatus !== JOIN_REQUEST_AWAITING_GUARDIAN_STATUS
+    ) {
       // F-44: re-invoking the SAME decision is a no-op success, not an error. The captain's
       // tap can land twice — a retry after a client-side timeout, or two taps on rows this
       // very function retired together — and a `failed-precondition` there reads to the
@@ -738,6 +777,10 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         "Request already resolved"
       );
     }
+    // FR-59.1: `awaiting_guardian` rows stay actionable BOTH ways. Approve re-enters the
+    // grant path, whose consent-request creation is idempotent (old clients render the
+    // row as pending and captains WILL re-tap — every tap after the first reuses the
+    // live request, no fresh email). Decline cancels the outstanding request below.
 
     // F-44: any OTHER live row for the same user in this family is resolved by THIS
     // operation, in the same batch. Duplicates are indistinguishable to the captain, so
@@ -830,6 +873,75 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         );
       }
 
+      // FR-59/FR-59.1 email_plus (owner go 2026-08-27): for a CHILD grant, the captain's
+      // approve is no longer the admission — it is the FR-31 affirmation plus the request
+      // for verifiable consent. Everything above validated exactly as before (lineage,
+      // acks, seasoning, capacity); admission itself moves to the guardian's emailed
+      // confirmation (`confirmParentalConsent`), where the FR-64 transaction commits
+      // consent record + guardianship + membership together. Cross-family retirement and
+      // the child's push move with it — approve must leave other captains' rows
+      // answerable, because an expired link means nothing was ever granted.
+      //
+      // Adults and `clear_new_guardian` corrections keep the immediate path below.
+      if (childDecision.kind === "grant") {
+        const guardianEmail = await resolveGuardianEmail(userId);
+        if (!guardianEmail) {
+          throw new functions.https.HttpsError(
+            "failed-precondition",
+            "Add an email address to your account to confirm consent"
+          );
+        }
+
+        const consentRequest = await createConsentRequestForApproval(db, {
+          familyId,
+          childUserId: requestData.userId,
+          joinRequestId: requestId,
+          guardianUid: userId,
+          guardianRole: memberRole,
+          guardianEmail,
+          newRole,
+          childUserName:
+            typeof targetUserData.userName === "string" ? targetUserData.userName : "",
+          expectedAgeOutYear: childFollowUp?.kind === "grant"
+            ? childFollowUp.expectedAgeOutYear
+            : undefined,
+        });
+
+        const awaitingBatch = db.batch();
+        if (currentStatus === "pending") {
+          // Answered, not resolved: no `resolvedAt`, and the FR-88 stamp stays — a
+          // family IS still deciding. Every liveness predicate reads this status as
+          // live (`LIVE_JOIN_REQUEST_STATUSES`), which is what keeps the FR-77 sweep
+          // off the child mid-consent.
+          awaitingBatch.update(requestDoc.ref, {
+            status: JOIN_REQUEST_AWAITING_GUARDIAN_STATUS,
+          });
+        }
+        for (const duplicate of duplicateRequests) {
+          awaitingBatch.update(duplicate.ref, {
+            status: JOIN_REQUEST_SUPERSEDED_STATUS,
+            resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+        await awaitingBatch.commit();
+
+        await writeAuditLog({
+          eventType: "family_join_guardian_confirmation_requested",
+          actorId: userId,
+          subjectType: "family",
+          subjectId: familyId,
+          metadata: {
+            requestId,
+            userId: requestData.userId,
+            consentRequestId: consentRequest.requestId,
+            reusedExisting: consentRequest.reusedExisting,
+          },
+          clientMetadata,
+        });
+
+        return { success: true, awaitingGuardianConfirmation: true };
+      }
+
       // Add member
       const memberData: Record<string, unknown> = {
         role: newRole,
@@ -840,9 +952,10 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         joinedAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       };
-      if (childDecision.kind === "grant") {
-        memberData.isChild = true; // server-written projection (§7.2)
-      } else if (childDecision.kind === "clear_new_guardian") {
+      // FR-59.1: the `grant` kind exited above into the consent-request path — this
+      // immediate-admission section serves adults and `clear_new_guardian` corrections
+      // only, so `isChild: true` can never be written here again.
+      if (childDecision.kind === "clear_new_guardian") {
         memberData.isChild = false;
       }
 
@@ -857,21 +970,8 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
       const grantUpdate = familyMembershipGrantUserUpdate({
         familyId,
         isRetiredGeneral: !!targetUserData.isRetiredGeneral,
-        isChild:
-          childDecision.kind === "grant"
-            ? true
-            : childDecision.kind === "clear_new_guardian"
-              ? false
-              : undefined,
+        isChild: childDecision.kind === "clear_new_guardian" ? false : undefined,
       });
-      if (childDecision.kind === "grant") {
-        const linkedPlatforms = sanitizedChildLinkedPlatforms(
-          targetUserData.linkedPlatforms
-        );
-        if (linkedPlatforms && linkedPlatforms.changed) {
-          grantUpdate.linkedPlatforms = linkedPlatforms.sanitized;
-        }
-      }
       // FR-60(c): admission CLOSES the redemption window, so the marker that opened it goes
       // with the same batch. Belt-and-braces with `wasEverInFamily` (also set here): the
       // transient-account sweep can only see accounts that still carry this stamp, so an
@@ -1011,6 +1111,35 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         status: "declined",
         resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
+      // FR-59.1: declining an awaiting-guardian row also cancels the outstanding consent
+      // request, so a lapsed captain decision cannot be resurrected by a stale email link
+      // — the confirmation endpoint re-reads the request's status inside its transaction
+      // and a superseded request refuses to commit. Best-effort here (the decline itself
+      // must not fail on it); the expiry sweep is the backstop.
+      if (currentStatus === JOIN_REQUEST_AWAITING_GUARDIAN_STATUS) {
+        try {
+          const liveConsentRequests = await db
+            .collection(CONSENT_REQUESTS_COLLECTION)
+            .where("familyId", "==", familyId)
+            .where("childUserId", "==", requestData.userId)
+            .where("status", "==", "pending")
+            .limit(5)
+            .get();
+          for (const consentDoc of liveConsentRequests.docs) {
+            batch.update(consentDoc.ref, {
+              status: "superseded",
+              resolvedAtMillis: Date.now(),
+              guardianEmail: admin.firestore.FieldValue.delete(),
+            });
+          }
+        } catch (error) {
+          functions.logger.error(
+            "consent-request cancellation on decline failed; expiry sweep will retire it",
+            { familyId, requestId, error }
+          );
+        }
+      }
 
       // FR-88, AND THE BUG THIS WHOLE FIELD EXISTS FOR. A decline used to clear nothing on
       // the child's side: the device's "waiting for your family's approval" flag is cleared

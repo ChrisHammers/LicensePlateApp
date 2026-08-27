@@ -490,6 +490,14 @@ export interface ConsentGrantedMetadataInput {
   method: string;
   expectedAgeOutYear?: number;
   removedFriendEdgeCount?: number;
+  /** FR-59.2/FR-108: the assurance level of the method that produced this capture. */
+  assuranceLevel?: number;
+  /**
+   * AGEOUT FR-110(b): required on email_plus captures (the FR-64 transaction refuses to
+   * commit without it). Optional here only so the legacy `family_admission` writer keeps
+   * compiling until it is deleted with the F-17 cutover.
+   */
+  ageOutYearMonth?: number;
 }
 
 /** GRANTED — a verifiable-parental-consent capture (FR-1 / FR-2 set-true / FR-25). */
@@ -508,6 +516,8 @@ export function buildConsentGrantedMetadata(
     method: input.method,
     expectedAgeOutYear: input.expectedAgeOutYear,
     removedFriendEdgeCount: input.removedFriendEdgeCount,
+    assuranceLevel: input.assuranceLevel,
+    ageOutYearMonth: input.ageOutYearMonth,
   });
 }
 
@@ -558,10 +568,16 @@ export function buildConsentRevokedMetadata(
 /** DECLARED — self-declaration at the neutral age screen (FR-27); protective only. */
 export function buildChildRegistrationDeclaredMetadata(input: {
   childUserId: string;
+  /** AGEOUT FR-110(c): the F-14b marker rides the declaration row when the client has it. */
+  ageOutYearMonth?: number;
 }): Record<string, unknown> {
-  return {
+  const metadata: Record<string, unknown> = {
     childUserId: input.childUserId,
     policyVersions: { ...CONSENT_POLICY_VERSIONS },
     method: "self_declared",
   };
+  if (typeof input.ageOutYearMonth === "number") {
+    metadata.ageOutYearMonth = input.ageOutYearMonth;
+  }
+  return metadata;
 }

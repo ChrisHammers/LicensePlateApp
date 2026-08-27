@@ -129,7 +129,7 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
             let linked = try await FamilyCallable.bounded(name: "fetchPendingRequests") {
                 [deps, familyId] in try await deps.fetchPendingRequests(familyId)
             }
-            pendingRequests = linked.filter { $0.statusEnum == .pending }
+            pendingRequests = linked.filter { $0.statusEnum.isLiveOnApprovalSurface }
         } catch {
             loadPendingRequests()
         }
@@ -416,7 +416,7 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
 
     private func loadPendingRequests() {
         pendingRequests = familyRepository.getPendingRequests(familyId: familyId)
-            .filter { $0.statusEnum == .pending }
+            .filter { $0.statusEnum.isLiveOnApprovalSurface }
     }
 
     private func startObservingPendingRequests() {

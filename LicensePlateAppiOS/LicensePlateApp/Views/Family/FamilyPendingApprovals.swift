@@ -45,6 +45,7 @@ struct FamilyPendingApprovals: View {
                                 isApproveBusy: viewModel.isBusy(requestId: request.requestId, kind: .approve),
                                 isDeclineBusy: viewModel.isBusy(requestId: request.requestId, kind: .decline),
                                 isDisabled: viewModel.isRowDisabled(requestId: request.requestId),
+                                isAwaitingGuardian: request.statusEnum == .awaitingGuardian,
                                 onIsChildChange: { viewModel.setIsChild($0, for: request) },
                                 onConsentAcknowledgedChange: {
                                     viewModel.setConsentAcknowledged($0, for: request)
@@ -125,6 +126,11 @@ struct PendingApprovalRow: View {
     let isApproveBusy: Bool
     let isDeclineBusy: Bool
     let isDisabled: Bool
+    /// FR-59.1: the captain approved and the guardian's email confirmation is out.
+    /// Nothing here is approvable any more — the outstanding action is in the
+    /// guardian's inbox — so the approve controls and the consent acks give way to a
+    /// waiting state. Decline stays: it is the cancel.
+    var isAwaitingGuardian: Bool = false
     let onIsChildChange: (Bool) -> Void
     let onConsentAcknowledgedChange: (Bool) -> Void
     let onGuardianAffirmedChange: (Bool) -> Void
@@ -168,20 +174,67 @@ struct PendingApprovalRow: View {
 
                 Spacer(minLength: 8)
 
-                approvalButtons
-                    .layoutPriority(1)
+                if isAwaitingGuardian {
+                    awaitingGuardianButtons
+                        .layoutPriority(1)
+                } else {
+                    approvalButtons
+                        .layoutPriority(1)
+                }
             }
             .accessibilityElement(children: .contain)
             .accessibilityLabel(pendingApprovalAccessibilityLabel)
 
-            expiryLine
+            if isAwaitingGuardian {
+                awaitingGuardianLine
+            } else {
+                expiryLine
 
-            childDeclarationSection
+                childDeclarationSection
+            }
         }
         .padding(.vertical, 8)
         .task(id: request.userId) {
             await resolveUserIfNeeded()
         }
+    }
+
+    /// FR-59.1 awaiting state: icon + text, never colour alone; the copy names the
+    /// outstanding action (the captain-guardian's own inbox).
+    private var awaitingGuardianLine: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "envelope.badge")
+                .font(.system(size: 12, weight: .semibold))
+                .accessibleDecorative()
+            Text("family.approval.awaiting_guardian_subtitle".localized)
+                .font(.system(.caption, design: .rounded))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(Color.Theme.softBrown)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("family.approval.awaiting_guardian_subtitle".localized)
+    }
+
+    private var awaitingGuardianButtons: some View {
+        Button {
+            Task {
+                guard !isDisabled else { return }
+                _ = await onDecline()
+            }
+        } label: {
+            InviteActionLabel(
+                title: "Cancel".localized,
+                isBusy: isDeclineBusy,
+                busyKind: .decline
+            )
+            .fixedSize(horizontal: true, vertical: false)
+        }
+        .buttonStyle(.bordered)
+        .disabled(isDisabled)
+        .accessibleButton(
+            label: "family.a11y.cancel_guardian_confirmation".localized,
+            hint: "family.approval.awaiting_guardian_subtitle".localized
+        )
     }
 
     /// The decision window. Terminal state carries an icon as well as a colour — state is never

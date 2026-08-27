@@ -29,6 +29,7 @@ import {
   purgeDocumentsOlderThan,
 } from "./retentionCore";
 import { currentRevenueCatApiKey } from "./accountDeletion";
+import { sweepExpiredConsentRequests } from "./consentRequests";
 import {
   PROVISIONAL_CHILD_REDEMPTION_WINDOW_DAYS,
   provisionalChildDeletionCutoffMillis,
@@ -106,6 +107,25 @@ export const purgeExpiredProvisionalChildAccounts = functions
       result,
     });
 
+    return null;
+  });
+
+/**
+ * FR-59.1 / §312.5(c)(1): expire lapsed consent requests — "consent not obtained within a
+ * reasonable time." Request → expired, join-request row retired (which lifts the FR-77
+ * veto), guardian email purged, and the provisional child deleted INLINE (owner ruling
+ * 2026-08-27: a refused-by-silence child's footprint does not linger). Daily rather than
+ * the 5-minute pass on that pass's own rule — deletion machinery stays out of it; the
+ * confirmation endpoint enforces expiry in real time regardless, so the daily lag only
+ * delays cleanup, never admits on a stale link.
+ */
+export const expireLapsedConsentRequests = functions
+  .runWith({ timeoutSeconds: RETENTION_TIMEOUT_SECONDS })
+  .pubsub.schedule(RETENTION_SCHEDULE)
+  .timeZone(RETENTION_TIME_ZONE)
+  .onRun(async () => {
+    const result = await sweepExpiredConsentRequests(db, Date.now());
+    functions.logger.info("retention: expired lapsed consent requests", { result });
     return null;
   });
 

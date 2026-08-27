@@ -651,7 +651,9 @@ class FamilyDashboardViewModel: ObservableObject {
     /// Count of pending member requests (for creators/captains to approve)
     var pendingMemberRequestsCount: Int {
         guard canManageFamily else { return 0 }
-        return pendingRequests.filter { $0.statusEnum == .pending }.count
+        // Awaiting-guardian rows stay counted: the captain-guardian's own email click is
+        // the outstanding action, and the badge is what points them at it.
+        return pendingRequests.filter { $0.statusEnum.isLiveOnApprovalSurface }.count
     }
     
     /// Computed property for share code button text

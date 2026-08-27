@@ -44,6 +44,7 @@ vi.mock("firebase-admin", async () => {
 });
 
 import type { FakeFirestore } from "./testSupport/fakeFirestore";
+import { confirmGuardianConsent } from "./testSupport/consentTestHelpers";
 import {
   approveFamilyJoinRequest_CaptainStep,
   createFamily,
@@ -116,11 +117,15 @@ beforeEach(() => {
   holder.deletedAuthUsers.length = 0;
 
   db().seed("users/parent", { userName: "Parent" });
+  // FR-59.1: the guardian's email for the consent-request path.
+  db().seed("users/parent/private/contact", { email: "parent@example.com" });
   // Provisioned at share-code entry: declared, stamped, nothing else.
+  // `ageOutYearMonth` per FR-110(b): the consent record refuses to commit without it.
   db().seed("users/kid", {
     userName: "Kid",
     isChildAccount: true,
     [CHILD_DECLARED_AT_FIELD]: Date.now(),
+    ageOutYearMonth: 203703,
   });
   // Consented once, then revoked. Identical to `kid` on the FR-28 fields.
   db().seed("users/revokedkid", {
@@ -270,6 +275,13 @@ describe("FR-60(c): admission clears the redemption-window marker", () => {
       consentAcknowledged: true,
       guardianAffirmed: true,
     });
+    // FR-59.1: admission (and with it the marker delete) commits at the guardian's
+    // emailed confirmation, not at the captain's tap.
+    const outcome = await confirmGuardianConsent(db(), {
+      familyId,
+      childUserId: "kid",
+    });
+    expect(outcome.committed).toBe(true);
 
     const kid = db().store.get("users/kid")!;
     // `FakeFirestore` stores the delete sentinel verbatim rather than removing the key (the
@@ -298,6 +310,11 @@ describe("FR-60(c): admission clears the redemption-window marker", () => {
       consentAcknowledged: true,
       guardianAffirmed: true,
     });
+    const outcome = await confirmGuardianConsent(db(), {
+      familyId,
+      childUserId: "kid",
+    });
+    expect(outcome.committed).toBe(true);
 
     const kid = db().store.get("users/kid")!;
     expect(kid.entitlementTags).toEqual({ __arrayUnion__: ["signedUpEquivalent"] });

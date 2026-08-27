@@ -25,9 +25,18 @@ final class PendingJoinRequest {
 
     enum RequestStatus: String, Codable, CaseIterable {
         case pending
+        /// FR-59.1: the captain approved; the guardian's emailed confirmation is
+        /// outstanding. Still LIVE — the decision is in flight, not resolved.
+        case awaitingGuardian = "awaiting_guardian"
         case approved
         case declined
         case expired
+
+        /// Rows the approvals surface must show and count: undecided, or decided but
+        /// awaiting the guardian's email confirmation.
+        var isLiveOnApprovalSurface: Bool {
+            self == .pending || self == .awaitingGuardian
+        }
     }
     
     enum RequestMethod: String, Codable, CaseIterable {

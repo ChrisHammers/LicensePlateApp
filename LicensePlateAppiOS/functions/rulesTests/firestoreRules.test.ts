@@ -156,6 +156,54 @@ describe("FR-7: users diff-guard protects isChildAccount and entitlementTags", (
     );
   });
 
+  /**
+   * AGEOUT FR-110(a)/(c) (2026-08-27): `ageOutYearMonth` is stamped at declaration and
+   * drives age-out detection. A client that could write it could fake an age; one that
+   * could clear it could make a child undetectable at 13. Server-controlled, both twins.
+   */
+  it("denies clients writing or clearing ageOutYearMonth (FR-110)", async () => {
+    await seed({
+      "users/marked": { userName: "Kid", isChildAccount: true, ageOutYearMonth: 203703 },
+    });
+    await assertFails(
+      updateDoc(doc(registered("marked"), "users/marked"), { ageOutYearMonth: 209912 })
+    );
+    // Full set omitting the key = clearing it via affectedKeys.
+    await assertFails(
+      setDoc(doc(registered("marked"), "users/marked"), { userName: "Kid v2" })
+    );
+    await assertFails(
+      setDoc(doc(registered("fresh4"), "users/fresh4"), {
+        userName: "F4",
+        ageOutYearMonth: 203703,
+      })
+    );
+  });
+
+  /**
+   * FR-59.1 (2026-08-27): consent_requests carry the guardian's email and the hashed
+   * confirmation nonce. Server-only, full stop — the GUARDIAN's own client included
+   * (their credential is the emailed link, never a Firestore read).
+   */
+  it("denies every client read and write of consent_requests", async () => {
+    await seed({
+      "consent_requests/req1": {
+        familyId: "fam1",
+        childUserId: "kid",
+        guardianUid: "adult",
+        status: "pending",
+      },
+    });
+    await assertFails(getDoc(doc(registered("adult"), "consent_requests/req1")));
+    await assertFails(getDoc(doc(registered("kid"), "consent_requests/req1")));
+    await assertFails(
+      updateDoc(doc(registered("adult"), "consent_requests/req1"), { status: "confirmed" })
+    );
+    await assertFails(
+      setDoc(doc(registered("adult"), "consent_requests/req2"), { status: "pending" })
+    );
+  });
+
   it("allows a benign profile update that leaves both fields untouched", async () => {
     await assertSucceeds(
       updateDoc(doc(registered("kid"), "users/kid"), { userName: "Kid v2" })

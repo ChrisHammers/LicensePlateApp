@@ -113,7 +113,11 @@ export async function writeChildMembershipRevocation(
 
 export async function writeChildRegistrationDeclared(
   db: Firestore,
-  input: { childUserId: string; clientMetadata: ClientMetadata | null }
+  input: {
+    childUserId: string;
+    ageOutYearMonth?: number;
+    clientMetadata: ClientMetadata | null;
+  }
 ): Promise<void> {
   await writeAuditLogTo(db, {
     eventType: AUDIT_CHILD_REGISTRATION_DECLARED,
@@ -121,7 +125,10 @@ export async function writeChildRegistrationDeclared(
     subjectType: "user",
     subjectId: input.childUserId,
     metadata: assertUidOnly(
-      buildChildRegistrationDeclaredMetadata({ childUserId: input.childUserId })
+      buildChildRegistrationDeclaredMetadata({
+        childUserId: input.childUserId,
+        ageOutYearMonth: input.ageOutYearMonth,
+      })
     ),
     clientMetadata: input.clientMetadata,
   });

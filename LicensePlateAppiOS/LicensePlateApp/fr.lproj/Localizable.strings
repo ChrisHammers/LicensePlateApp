@@ -1190,6 +1190,8 @@
 
 /* Friends & Family accessibility (quality-bar Step 2) */
 "family.a11y.pending_invites" = "Invitations familiales en attente, %d";
+"family.approval.awaiting_guardian_subtitle" = "Courriel de confirmation envoyé — consultez votre courriel pour terminer l'ajout de ce membre.";
+"family.a11y.cancel_guardian_confirmation" = "Annuler cette demande de membre";
 "family.a11y.pending_approvals" = "Approbations d’adhésion en attente, %d";
 "family.a11y.opens_pending_invites" = "Ouvre les invitations familiales en attente";
 "family.a11y.opens_pending_approvals" = "Ouvre les approbations d’adhésion en attente";

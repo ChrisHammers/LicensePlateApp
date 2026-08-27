@@ -94,6 +94,8 @@ import {
   buildPendingRequestIdentity,
 } from "./familyJoinRequestIntegrity";
 import { deleteProvisionalChildAccountIfNeverConsented } from "./provisionalChildAccounts";
+import { confirmGuardianConsent } from "./testSupport/consentTestHelpers";
+import { JOIN_REQUEST_AWAITING_GUARDIAN_STATUS } from "./consentRequestsCore";
 
 function db(): FakeFirestore {
   return holder.db as FakeFirestore;
@@ -213,12 +215,16 @@ beforeEach(() => {
   holder.cleanupCalls.length = 0;
 
   db().seed("users/captain", { userName: "Captain" });
+  // FR-59.1: the guardian's email for the consent-request path.
+  db().seed("users/captain/private/contact", { email: "captain@example.com" });
   // The child as the local-first path leaves them: flagged, no family, never in one.
+  // `ageOutYearMonth` per FR-110(b): the consent record refuses to commit without it.
   db().seed("users/kid", {
     userName: "Speedy",
     avatarId: "scout_otter",
     isChildAccount: true,
     childDeclaredAt: Date.now(),
+    ageOutYearMonth: 203703,
   });
 });
 
@@ -317,6 +323,18 @@ describe("F-44 (b/c): approve with a duplicate present", () => {
       guardianAffirmed: true,
     });
 
+    // FR-59.1: approve no longer admits — it opens the guardian confirmation.
+    expect(db().store.get(`families/${familyId}/members/kid`)).toBeUndefined();
+    expect(db().store.get(`families/${familyId}/pending/${requestIds[0]}`)?.status).toBe(
+      JOIN_REQUEST_AWAITING_GUARDIAN_STATUS
+    );
+
+    const outcome = await confirmGuardianConsent(db(), {
+      familyId,
+      childUserId: "kid",
+    });
+    expect(outcome.committed).toBe(true);
+
     expect(db().store.get(`families/${familyId}/members/kid`)?.isChild).toBe(true);
     expect(db().store.get(`families/${familyId}/pending/${requestIds[0]}`)?.status).toBe(
       "approved"
@@ -340,7 +358,9 @@ describe("F-44 (b/c): approve with a duplicate present", () => {
       guardianAffirmed: true,
     });
 
-    // The spy, not the leftovers: the approval path must not even reach the cleanup.
+    await confirmGuardianConsent(db(), { familyId, childUserId: "kid" });
+
+    // The spy, not the leftovers: neither approval nor confirmation may reach the cleanup.
     expect(holder.cleanupCalls).toEqual([]);
     expect(holder.deletedAuthUsers).toEqual([]);
     expect(db().store.get("users/kid")).toBeDefined();
@@ -369,6 +389,9 @@ describe("F-44 (b/c): approve with a duplicate present", () => {
         consentAcknowledged: true,
         guardianAffirmed: true,
       });
+      // The child's push moved to the confirmation step (FR-59.1); the throwing
+      // token must not undo the committed admission there either.
+      await confirmGuardianConsent(db(), { familyId, childUserId: "kid" });
       expect(db().store.get(`families/${familyId}/members/kid`)).toBeDefined();
     } finally {
       (admin as { messaging: unknown }).messaging = original;
@@ -386,6 +409,14 @@ describe("F-44 (b/c): approve with a duplicate present", () => {
     };
 
     await run.approve("captain", payload);
+    // Awaiting-guardian re-tap: idempotent, reuses the live request (no second email).
+    await expect(run.approve("captain", payload)).resolves.toMatchObject({
+      success: true,
+      awaitingGuardianConfirmation: true,
+    });
+
+    await confirmGuardianConsent(db(), { familyId, childUserId: "kid" });
+    // Approved-row re-tap: still the F-44 idempotent success.
     await expect(run.approve("captain", payload)).resolves.toMatchObject({
       success: true,
     });

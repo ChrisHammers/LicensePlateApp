@@ -51,6 +51,7 @@ vi.mock("firebase-admin", async () => {
 });
 
 import type { FakeFirestore } from "./testSupport/fakeFirestore";
+import { confirmGuardianConsent } from "./testSupport/consentTestHelpers";
 import { FakeWriteBatch } from "./testSupport/fakeFirestore";
 import {
   approveFamilyJoinRequest_CaptainStep,
@@ -167,12 +168,16 @@ beforeEach(() => {
   holder.deletedAuthUsers.length = 0;
 
   db().seed("users/captain", { userName: "Captain" });
+  // FR-59.1: the guardian's email for the consent-request path.
+  db().seed("users/captain/private/contact", { email: "captain@example.com" });
   // The child as the local-first path leaves them: flagged, no family, never in one.
+  // `ageOutYearMonth` per FR-110(b): the consent record refuses to commit without it.
   db().seed("users/kid", {
     userName: "Speedy",
     avatarId: "scout_otter",
     isChildAccount: true,
     childDeclaredAt: Date.now(),
+    ageOutYearMonth: 203703,
   });
 });
 
@@ -287,6 +292,12 @@ describe("FR-88: every resolution clears the stamp", () => {
       consentAcknowledged: true,
       guardianAffirmed: true,
     });
+    // FR-59.1: the stamp STAYS through awaiting-guardian — a family is still deciding,
+    // and clearing it early would blank the child's "waiting" state mid-consent.
+    expect(stampOn("kid")).toMatchObject({ familyId, requestId });
+
+    const outcome = await confirmGuardianConsent(db(), { familyId, childUserId: "kid" });
+    expect(outcome.committed).toBe(true);
 
     expect(stampOn("kid")).toBe("__delete__");
     expect(db().store.get("users/kid")?.activeFamilyId).toBe(familyId);
@@ -363,9 +374,16 @@ describe("FR-88: every resolution clears the stamp", () => {
         consentAcknowledged: true,
         guardianAffirmed: true,
       });
+      // The duplicate retires at APPROVE (it is a duplicate of this same decision);
+      // the stamp clear rides the guardian confirmation with the admission itself.
       expect(
         db().store.get(`families/${familyId}/pending/legacy-dupe`)?.status
       ).toBe("expired");
+      const outcome = await confirmGuardianConsent(db(), {
+        familyId,
+        childUserId: "kid",
+      });
+      expect(outcome.committed).toBe(true);
       expect(stampOn("kid")).toBe("__delete__");
     } else {
       await run.decline("captain", { familyId, requestId });

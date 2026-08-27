@@ -37,6 +37,7 @@
 
 import * as admin from "firebase-admin";
 import { isUnconsentedChildUserData } from "./childAccountCore";
+import { LIVE_JOIN_REQUEST_STATUSES } from "./consentRequestsCore";
 import {
   executeAccountDeletionForUser,
   type AccountDeletionDeps,
@@ -147,13 +148,23 @@ async function hasLiveJoinRequest(
   userId: string
 ): Promise<boolean> {
   try {
-    const snapshot = await db
-      .collectionGroup("pending")
-      .where("userId", "==", userId)
-      .where("status", "==", "pending")
-      .limit(1)
-      .get();
-    return !snapshot.empty;
+    // FR-59.1 (2026-08-27): "live" now has TWO statuses — `pending` (captain undecided)
+    // and `awaiting_guardian` (captain approved, guardian confirmation outstanding). A
+    // child mid-consent-confirmation is the LAST account this sweep may touch; missing
+    // the second status here would delete them the night their guardian's email sat
+    // unread. Two queries because the fake (and rules-test) harness has no `in` support;
+    // same shape as `liveFamilyInvitesFor`.
+    const snapshots = await Promise.all(
+      LIVE_JOIN_REQUEST_STATUSES.map((status) =>
+        db
+          .collectionGroup("pending")
+          .where("userId", "==", userId)
+          .where("status", "==", status)
+          .limit(1)
+          .get()
+      )
+    );
+    return snapshots.some((snapshot) => !snapshot.empty);
   } catch (error) {
     console.error(
       `FR-60(c): could not check live join requests for ${userId}; skipping deletion`,

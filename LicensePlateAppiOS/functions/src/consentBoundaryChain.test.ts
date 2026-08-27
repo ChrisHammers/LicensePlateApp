@@ -54,6 +54,7 @@ vi.mock("firebase-admin", async () => {
 });
 
 import type { FakeFirestore } from "./testSupport/fakeFirestore";
+import { confirmGuardianConsent } from "./testSupport/consentTestHelpers";
 import {
   approveFamilyJoinRequest_CaptainStep,
   createFamily,
@@ -140,8 +141,15 @@ beforeEach(() => {
   // The throwaway "adult". Nothing distinguishes it from a real adult at creation time —
   // that is precisely why the boundary cannot rest on who holds the captain role.
   db().seed("users/attackerAdult", { userName: "Grownup" });
+  // FR-59.1: the guardian's email for the consent-request path.
+  db().seed("users/attackerAdult/private/contact", { email: "grownup@example.com" });
   // The real account, already flagged (sticky, per FR-1).
-  db().seed("users/attackerChild", { userName: "Kid", isChildAccount: true });
+  // `ageOutYearMonth` per FR-110(b): the consent record refuses to commit without it.
+  db().seed("users/attackerChild", {
+    userName: "Kid",
+    isChildAccount: true,
+    ageOutYearMonth: 203703,
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -281,6 +289,12 @@ describe("CB-7 link (b): the flag clear is not attestation-free", () => {
       consentAcknowledged: true,
       guardianAffirmed: true,
     });
+    // FR-59.1: admission now completes at the guardian's emailed confirmation.
+    const outcome = await confirmGuardianConsent(db(), {
+      familyId,
+      childUserId: "attackerChild",
+    });
+    expect(outcome.committed).toBe(true);
 
     expect(childFlagOf("attackerChild")).toBe(true);
     expect(db().store.get(`families/${familyId}/members/attackerChild`)?.isChild).toBe(true);

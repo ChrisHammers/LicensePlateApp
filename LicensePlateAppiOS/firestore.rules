@@ -122,14 +122,14 @@ service cloud.firestore {
     // consent request in progress, and one that could clear it could hide a real one.
     function userDocPreservesServerControlledFields() {
       return !request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(["entitlementTags", "isChildAccount", "childDeclaredAt", "pendingFamilyRequest"]);
+        .hasAny(["entitlementTags", "isChildAccount", "childDeclaredAt", "pendingFamilyRequest", "ageOutYearMonth"]);
     }
 
     // Create-time twin of the diff-guard: a brand-new user doc cannot smuggle any of the
     // keys in (there is no `resource.data` to diff against on create).
     function userDocCreateOmitsServerControlledFields() {
       return !request.resource.data.keys()
-        .hasAny(["entitlementTags", "isChildAccount", "childDeclaredAt", "pendingFamilyRequest"]);
+        .hasAny(["entitlementTags", "isChildAccount", "childDeclaredAt", "pendingFamilyRequest", "ageOutYearMonth"]);
     }
 
     // FR-28 (COPPA F-5a): an unconsented child — `isChildAccount == true` with no active
@@ -548,6 +548,17 @@ service cloud.firestore {
     match /app_config/{docId} {
       allow read: if isSignedIn();
       allow write: if false;
+    }
+
+    // FR-59/FR-59.1 email_plus consent requests (server-only, full stop). The document
+    // carries the guardian's email and the HASHED confirmation nonce; the emailed link is
+    // the only credential, and no client — guardian's included — may read or write here.
+    // AGEOUT FR-110's `ageOutYearMonth` joined the user-doc server-controlled key guard
+    // above in the same change: it is stamped at declaration and drives age-out detection,
+    // so a client that could write it could fake an age, and one that could clear it could
+    // make a child undetectable.
+    match /consent_requests/{requestId} {
+      allow read, write: if false;
     }
 
     // AUDIT LOGS
