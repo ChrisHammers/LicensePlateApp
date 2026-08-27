@@ -271,9 +271,12 @@ describe("F-44 (a): double redemption yields ONE live pending row", () => {
       context("kid")
     );
 
+    // 2026-08-27 (owner ruling): a child's self-decline now runs FR-60(c) inline, which
+    // deletes the account AND every invite naming it — so the re-accept meets "not-found"
+    // where it used to meet "already responded to". Same guarantee, stronger mechanism:
+    // a declined invite cannot be revived because it no longer exists.
     await expect(run.acceptInvite("kid", inviteId)).rejects.toMatchObject({
-      code: "failed-precondition",
-      message: "Invite already responded to",
+      code: "not-found",
     });
     expect(liveRowsIn(familyId)).toHaveLength(0);
   });
@@ -633,5 +636,87 @@ describe("FR-86: the pending row identifies the requester", () => {
         phoneNumber: "+15555550123",
       })
     ).toEqual({ userName: "Speedy", avatarId: "scout_otter" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FR-60(c) extended 2026-08-27 (owner ruling): a CHILD's own decline deletes the
+// never-consented provisional account inline — the 7-day backstop window was
+// footprint with no decision left to serve. Mirrors the captain-decline branch;
+// the helper's guards must hold from this second call site too.
+// ---------------------------------------------------------------------------
+
+describe("FR-60(c): a child's own decline deletes the provisional account", () => {
+  const declineInvite = (uid: string, inviteId: string) =>
+    (respondToFamilyInvite_UserStep as unknown as Runnable).run(
+      { inviteId, response: "decline" },
+      context(uid)
+    );
+
+  it("deletes the never-consented child inline, Firestore and Auth both", async () => {
+    const { familyId } = await run.createFamily("captain", "Hammers");
+    const { code } = await run.createShareCode("captain", familyId);
+    const { inviteId } = await run.redeemShareCode("kid", code);
+
+    await declineInvite("kid", inviteId);
+
+    expect(holder.cleanupCalls).toContain("kid");
+    expect(db().store.get("users/kid")).toBeUndefined();
+    expect(holder.deletedAuthUsers).toContain("kid");
+    // The FR-60(c) machinery deletes every invite naming the uid along with the account —
+    // the declined invite is GONE, not merely declined. No stamped identity survives.
+    expect(db().store.get(`invites/${inviteId}`)).toBeUndefined();
+  });
+
+  it("leaves an ADULT untouched — the cleanup is asked and refuses", async () => {
+    db().seed("users/grownup", { userName: "Grown" });
+    const { familyId } = await run.createFamily("captain", "Hammers");
+    const { code } = await run.createShareCode("captain", familyId);
+    const { inviteId } = (await (redeemShareCode as unknown as Runnable).run(
+      { code, expectedType: "family" },
+      context("grownup")
+    )) as { inviteId: string };
+
+    await declineInvite("grownup", inviteId);
+
+    expect(db().store.get("users/grownup")).toBeDefined();
+    expect(holder.deletedAuthUsers).toEqual([]);
+  });
+
+  it("leaves a STICKY post-revocation child untouched (FR-28/OD-3)", async () => {
+    db().seed("users/kid", {
+      userName: "Speedy",
+      avatarId: "scout_otter",
+      isChildAccount: true,
+      wasEverInFamily: true,
+    });
+    const { familyId } = await run.createFamily("captain", "Hammers");
+    const { code } = await run.createShareCode("captain", familyId);
+    const { inviteId } = await run.redeemShareCode("kid", code);
+
+    await declineInvite("kid", inviteId);
+
+    expect(db().store.get("users/kid")).toBeDefined();
+    expect(holder.deletedAuthUsers).toEqual([]);
+  });
+
+  it("leaves a child with a live pending row in ANOTHER family untouched", async () => {
+    // Family B's row is a decision still coming; declining family A's invite must not
+    // delete the account that row is waiting on — the F-44 carve-out, from this site too.
+    db().seed("users/captainB", { userName: "CaptainB" });
+    const { familyId: familyB } = await run.createFamily("captainB", "Bakers");
+    const { code: codeB } = await run.createShareCode("captainB", familyB);
+    const acceptedB = await run.redeemShareCode("kid", codeB);
+    await run.acceptInvite("kid", acceptedB.inviteId);
+
+    const { familyId: familyA } = await run.createFamily("captain", "Hammers");
+    const { code: codeA } = await run.createShareCode("captain", familyA);
+    const declinedA = await run.redeemShareCode("kid", codeA);
+
+    await declineInvite("kid", declinedA.inviteId);
+
+    expect(db().store.get("users/kid")).toBeDefined();
+    expect(holder.deletedAuthUsers).toEqual([]);
+    expect(liveRowsIn(familyB)).toHaveLength(1);
   });
 });

@@ -562,6 +562,38 @@ export const respondToFamilyInvite_UserStep = enforcedCallable(
 
     await batch.commit();
 
+    // FR-60(c), extended 2026-08-27 (owner ruling): a CHILD's own decline deletes their
+    // never-consented provisional account inline, exactly as the captain's decline does —
+    // "7 days of being able to see the child" (the FR-77 backstop's window) is footprint
+    // with no decision left to serve. The helper's guards make this safe to call from a
+    // second site: no-op for adults, consented children, sticky post-revocation children
+    // (FR-28/OD-3), and anyone with a live pending row in ANY family — so declining one
+    // invite while an accepted request awaits another captain deletes nothing. Runs AFTER
+    // `batch.commit()` (the helper's documented contract: the predicate must see the
+    // decision already applied), and non-fatally: the decline itself has committed, and a
+    // failure here leaves the account for the same 7-day backstop that always existed.
+    //
+    // The caller IS the account being deleted. That is the designed FR-60(c) shape — the
+    // device keeps its age answer and ratchet, the vanished-session machinery returns it
+    // to a local-first child, and a later share code re-provisions cleanly (see
+    // `provisionalChildAccounts.ts` header). The captain-decline path has produced this
+    // exact client state since wave 6; nothing new lands on the device side.
+    if (response === "decline") {
+      try {
+        await deleteProvisionalChildAccountIfNeverConsented(db, {
+          userId,
+          actorId: userId,
+          clientMetadata,
+          revenueCatApiKey: currentRevenueCatApiKey(),
+        });
+      } catch (error) {
+        functions.logger.error(
+          "FR-60(c): provisional child cleanup after self-decline failed; backstop sweep will retry",
+          { childUserId: userId, error }
+        );
+      }
+    }
+
     // Notify creators/captains that a join request needs approval (Family pref gated).
     if (response === "accept" && familyId && pendingRequestId) {
       await notifyFamilyManagersOfJoinRequest({

@@ -1428,6 +1428,16 @@ struct FR26StickyChildReadmissionTests {
     /// population structurally excluded from the window that makes re-admission legible to a
     /// captain. The input is now `isSeekingConsentNow`, and this is the row that proves the
     /// difference.
+    /// SRS §3.1.1 item 3 (owner ruling 2026-08-26): the window serves ADMISSION, never
+    /// refusal. A decline must not provision, publish, or open the window — §312.5(c)(1)
+    /// covers identity collected in pursuit of consent, and a refusal pursues nothing.
+    /// The policy is what `FamilyInviteDetailViewModel` switches on; pinning it here means
+    /// re-wrapping the decline path cannot happen without failing this test.
+    @Test func aDeclineNeverEntersTheConsentSeekingWindow() {
+        #expect(ChildConsentRedemptionPolicy.inviteResponseSeeksConsent(accept: true))
+        #expect(!ChildConsentRedemptionPolicy.inviteResponseSeeksConsent(accept: false))
+    }
+
     @Test func theWindowOpensForASeekingChildWhoIsNotBeingProvisioned() {
         // No mint, no pending request — and the window is OPEN, because the child is pursuing
         // admission right now. Under the wave-6 reading this was `true` (held).

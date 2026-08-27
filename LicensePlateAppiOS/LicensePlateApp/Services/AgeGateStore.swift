@@ -684,6 +684,14 @@ enum ChildConsentRedemptionPolicy {
         hasFirebaseUid && !isDeclarationOutstanding
     }
 
+    /// SRS §3.1.1 item 3 (owner ruling 2026-08-26): only an ACCEPT pursues admission, so
+    /// only an accept may run inside the consent-seeking window. §312.5(c)(1) covers
+    /// pre-consent identity collection solely for the purpose of obtaining consent — a
+    /// child REFUSING an invite is doing the opposite, so a decline must never provision,
+    /// publish a profile, or open the window. Wave 8 briefly wrapped both paths; this
+    /// policy is what keeps that from coming back unnoticed.
+    static func inviteResponseSeeksConsent(accept: Bool) -> Bool { accept }
+
     // MARK: - What the consent exit does with the session in front of it
 
     /// FR-26/FR-28f (device pass 2026-08-17, wave 8). Re-admission is one of the two exits a

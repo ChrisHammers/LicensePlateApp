@@ -111,14 +111,24 @@ final class FamilyInviteDetailViewModel: ObservableObject {
         Task { @MainActor in
             defer { processingAction = nil }
             do {
-                // COPPA FR-60(b)/FR-26: this is the SECOND consent exit, and for a child it is
-                // the call that actually creates the pending row the captain sees — so it is
-                // the moment FR-86's identity stamp is read off `users/{uid}`, and the moment a
-                // sticky post-revocation child most needs their identity recovered if its
-                // session died. It ran bare while `redeemShareCode` got the whole sequence,
-                // which left the two exits FR-26 names as equals behaving differently. A no-op
-                // for adults and for a decline that needs no identity work.
-                try await authService.withConsentSeekingRedemption {
+                // COPPA FR-60(b)/FR-26: ACCEPT is the SECOND consent exit — the call that
+                // creates the pending row the captain sees, so it is the moment FR-86's
+                // identity stamp is read off `users/{uid}`, and the moment a sticky
+                // post-revocation child most needs their identity recovered. A no-op for
+                // adults.
+                //
+                // DECLINE runs BARE, deliberately (owner ruling 2026-08-26, SRS §3.1.1
+                // item 3). The window's meaning is "this child is pursuing admission right
+                // now", and §312.5(c)(1) covers pre-consent identity collection only for
+                // the purpose of obtaining consent — a child REFUSING an invite is doing
+                // the opposite, so nothing may mint a uid or publish a profile on their
+                // behalf here. Wave 8 wrapped both paths; that swept a pure refusal into
+                // the sanctioned-write window and made the window lie.
+                if ChildConsentRedemptionPolicy.inviteResponseSeeksConsent(accept: accept) {
+                    try await authService.withConsentSeekingRedemption {
+                        try await familyRepository.respondToFamilyInvite(inviteId: inviteId, accept: accept)
+                    }
+                } else {
                     try await familyRepository.respondToFamilyInvite(inviteId: inviteId, accept: accept)
                 }
 

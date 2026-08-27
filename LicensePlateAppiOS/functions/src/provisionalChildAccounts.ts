@@ -7,9 +7,13 @@
  * child nobody has consented for. That window is measured in minutes to days, and FR-60(c)
  * requires it to close by DELETION rather than by aging into the general child population:
  *
- *   - declined  → `approveFamilyJoinRequest_CaptainStep`'s decline branch deletes inline;
+ *   - declined by the captain → `approveFamilyJoinRequest_CaptainStep`'s decline branch
+ *     deletes inline;
+ *   - declined by the CHILD → `respondToFamilyInvite`'s decline branch deletes inline
+ *     (owner ruling 2026-08-27: the backstop's 7-day window was footprint with no decision
+ *     left to serve);
  *   - expired   → `expireInvitesAndCodes` deletes when the family invite times out unaccepted;
- *   - anything the two inline paths missed → the 7-day scheduled backstop in `retention.ts`.
+ *   - anything the inline paths missed → the 7-day scheduled backstop in `retention.ts`.
  *
  * THE ONE ACCOUNT THIS MUST NEVER TOUCH is the sticky post-revocation child (FR-28): a child
  * who WAS consented and then had it revoked keeps `isChildAccount: true` with no
