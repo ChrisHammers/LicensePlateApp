@@ -1186,6 +1186,58 @@ struct FR60UnconsentedChildCloudFootprintTests {
     /// window open while the server has not answered (offline mid-consent must not silently
     /// drop the child's edits), and a server ABSENT closes it again — which is the same
     /// self-heal that unsticks the declined child's banner.
+    /// SRS §3.1.1 item 5 (owner device find 2026-08-26): a reinstall wipes every
+    /// device-local child marker while the Keychain restores the child's uid, so the
+    /// launch's login-timestamp write raced a blind hold and stamped an unconsented
+    /// child's doc. The backstop: an ANONYMOUS session whose server child flag is
+    /// UNRESOLVED (nil) this process writes no launch bookkeeping — FR-19's "nil is
+    /// never 'not child'", finally applied to the write side.
+    @Test func anUnresolvedAnonymousSessionWritesNoLaunchBookkeeping() {
+        // The reinstall shape: Keychain uid restored, nobody has classified it yet.
+        #expect(
+            UnconsentedChildCloudWritePolicy.isUnresolvedAnonymousLaunchWriteHeld(
+                isAnonymousSession: true,
+                resolvedIsChildAccount: nil
+            )
+        )
+        // Once the server answers, this term steps aside — false lets the adult guest
+        // write, and true hands the decision to `isWriteHeld`, which owns the child rule.
+        #expect(
+            !UnconsentedChildCloudWritePolicy.isUnresolvedAnonymousLaunchWriteHeld(
+                isAnonymousSession: true,
+                resolvedIsChildAccount: false
+            )
+        )
+        #expect(
+            !UnconsentedChildCloudWritePolicy.isUnresolvedAnonymousLaunchWriteHeld(
+                isAnonymousSession: true,
+                resolvedIsChildAccount: true
+            )
+        )
+        // Registered sessions authenticated with credentials; they are never held here,
+        // resolved or not.
+        for resolution in [true, false, nil] as [Bool?] {
+            #expect(
+                !UnconsentedChildCloudWritePolicy.isUnresolvedAnonymousLaunchWriteHeld(
+                    isAnonymousSession: false,
+                    resolvedIsChildAccount: resolution
+                )
+            )
+        }
+    }
+
+    /// The resolved-true anonymous session must then actually be held by the main rule —
+    /// the two policies compose so no gap opens between "server says child" and "hold".
+    @Test func aResolvedChildHandsOffToTheMainHoldWithNoGap() {
+        #expect(
+            UnconsentedChildCloudWritePolicy.isWriteHeld(
+                isUnconsentedChild: true,
+                isFamilyApprovalPending: false,
+                isSeekingConsentNow: false
+            )
+        )
+    }
+
     @Test func theWindowClosesWhenTheServerSaysNobodyIsDeciding() {
         let unanswered = FamilyApprovalPendingPolicy.isPending(
             serverPendingFamilyRequest: nil, hasLocalOptimisticFlag: true

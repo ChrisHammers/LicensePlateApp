@@ -134,6 +134,35 @@ struct RootView: View {
             await remoteConfig.fetchAndActivate()
             appUpdateGate.refresh(remoteConfig: remoteConfig)
 
+            // SRS §3.1.1 item 5 (2026-08-27): this wiring MUST precede `initializeAuthState`,
+            // and the order is load-bearing. The bootstrap's restore path ends in
+            // `updateLoginTracking()`, whose unconsented-child hold asks
+            // `ChildRestrictedModeService` — and an unconfigured service answers through
+            // default providers that know no uid and no server flag, i.e. "not a child".
+            // On a reinstall every device-local child marker (age answer, ratchet,
+            // ChildSignalCache) is gone while the Keychain still restores the child's uid,
+            // so that blind first answer was the WHOLE hold — and the launch's
+            // login-timestamp write landed on an unconsented child's users/{uid}.
+            // `configure` only stores closures (evaluated at call time, so `currentUser`
+            // being nil HERE is fine), and the hydrate inside `initializeAuthState` ingests
+            // the server child flag before the tracking write runs — wired first, the hold
+            // sees it.
+            ChildRestrictedModeService.shared.configure(
+                currentUserIdProvider: { authService.currentUser?.firebaseUID },
+                activeFamilyIdProvider: { authService.currentUser?.activeFamilyId },
+                // Server-resolved child truth: keeps the restriction classified from
+                // `users/{uid}` even after a manager correction wiped the device's
+                // age-gate markers (correct → re-grant → remove) or on a device that
+                // never ran the gate for this account.
+                resolvedIsChildAccountProvider: { UserRepository.shared.isChildAccount(for: $0) },
+                // FR-88: server truth for "a family is deciding about me". Tri-state, and
+                // the nil case matters — an unanswered projection keeps the device's
+                // optimistic redemption flag in charge instead of retiring it.
+                serverPendingFamilyRequestProvider: {
+                    UserRepository.shared.hasPendingFamilyRequest(for: $0)
+                }
+            )
+
             await authService.initializeAuthState(modelContext: modelContext)
             FriendshipRepository.shared.setModelContext(modelContext)
             InviteRepository.shared.setModelContext(modelContext)
@@ -163,30 +192,18 @@ struct RootView: View {
             syncCoordinator.setGameplaySyncOnlineProvider { authService.isOnline }
             // F-6 (FR-28): unconsented-child restriction — gameplay uploads hold until
             // family admission; the restriction is keyed to the declared identity.
-            // F-18 (FR-60(a)): the uid provider is deliberately `firebaseUID` ONLY — not the
-            // `?? id` fallback used elsewhere for the play identity. An under-13 player now
-            // has no uid for the whole time they play locally, and feeding the local UUID in
-            // here sends `childSessionState` down its signed-in branch, where the UUID
-            // matches no declared/pending uid and no server flag, and the session classifies
-            // `.notChild`. That would take away the FR-28 banner — the child's only route to
-            // share-code entry — from exactly the population it exists for. A nil uid instead
-            // reaches the pre-uid provisional branch below it, which reads the epoch's
-            // under-13 answer and correctly returns `.unconsentedChild`.
-            ChildRestrictedModeService.shared.configure(
-                currentUserIdProvider: { authService.currentUser?.firebaseUID },
-                activeFamilyIdProvider: { authService.currentUser?.activeFamilyId },
-                // Server-resolved child truth: keeps the restriction classified from
-                // `users/{uid}` even after a manager correction wiped the device's
-                // age-gate markers (correct → re-grant → remove) or on a device that
-                // never ran the gate for this account.
-                resolvedIsChildAccountProvider: { UserRepository.shared.isChildAccount(for: $0) },
-                // FR-88: server truth for "a family is deciding about me". Tri-state, and
-                // the nil case matters — an unanswered projection keeps the device's
-                // optimistic redemption flag in charge instead of retiring it.
-                serverPendingFamilyRequestProvider: {
-                    UserRepository.shared.hasPendingFamilyRequest(for: $0)
-                }
-            )
+            // F-18 (FR-60(a)): the uid provider above is deliberately `firebaseUID` ONLY —
+            // not the `?? id` fallback used elsewhere for the play identity. An under-13
+            // player has no uid for the whole time they play locally, and feeding the local
+            // UUID in would send `childSessionState` down its signed-in branch, where the
+            // UUID matches no declared/pending uid and no server flag, and the session
+            // classifies `.notChild`. That would take away the FR-28 banner — the child's
+            // only route to share-code entry — from exactly the population it exists for.
+            // A nil uid instead reaches the pre-uid provisional branch, which reads the
+            // epoch's under-13 answer and correctly returns `.unconsentedChild`.
+            //
+            // The `ChildRestrictedModeService.configure(...)` call itself moved ABOVE
+            // `initializeAuthState` (SRS §3.1.1 item 5) — see the comment there.
             syncCoordinator.setGameplayCloudSyncHoldProvider {
                 ChildRestrictedModeService.shared.isGameplayCloudSyncPaused
             }

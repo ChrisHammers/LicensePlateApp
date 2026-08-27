@@ -2194,6 +2194,15 @@ class FirebaseAuthService: ObservableObject {
             // FR-60(b) sanctions — including the mint path's own, since that path routes here.
             // The store is the authority (same read every other hold now uses).
             isSeekingConsentNow: AgeGateStore.shared.isSeekingConsent(userId: user.firebaseUID)
+        ) && !UnconsentedChildCloudWritePolicy.isUnresolvedAnonymousLaunchWriteHeld(
+            // SRS §3.1.1 item 5: a reinstall restores the Keychain uid with every device
+            // child marker wiped, so the hold above can be blind on the process's first
+            // answer. Tri-state server resolution is the backstop — an anonymous session
+            // nobody has classified yet writes nothing (FR-19: nil is never "not child").
+            isAnonymousSession: auth.currentUser?.isAnonymous ?? false,
+            resolvedIsChildAccount: user.firebaseUID.flatMap {
+                UserRepository.shared.isChildAccount(for: $0)
+            }
         )
         if isOnline, ageGateAllowsWrite, let firebaseUID = user.firebaseUID {
             Task {

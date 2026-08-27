@@ -621,6 +621,29 @@ enum UnconsentedChildCloudWritePolicy {
         guard isUnconsentedChild else { return false }
         return !isFamilyApprovalPending && !isSeekingConsentNow
     }
+
+    /// FR-19's asymmetric trust applied to the WRITE side (SRS §3.1.1 item 5, owner device
+    /// find 2026-08-26): an ANONYMOUS session whose server child flag is UNRESOLVED this
+    /// process may not write launch bookkeeping (login timestamps).
+    ///
+    /// `UserRepository.isChildAccount(for:)`'s own contract says "nil is NEVER treated as
+    /// 'not child' for gating" — and the launch write was doing exactly that. A reinstall
+    /// wipes every device-local child marker (age answer, ratchet, `ChildSignalCache`)
+    /// while the Keychain still restores the child's uid, so the first hold answer of the
+    /// process was blind and the login-timestamp merge landed on an unconsented child's
+    /// `users/{uid}`. Resolve first, write after: on the ordinary online launch the
+    /// hydrate ingests the flag BEFORE the tracking write runs, so an adult guest loses
+    /// nothing — only a session nobody has classified yet is held, and only until the
+    /// server answers.
+    ///
+    /// Registered (non-anonymous) sessions are exempt: they authenticated with
+    /// credentials, and child registered accounts are governed by their own holds.
+    static func isUnresolvedAnonymousLaunchWriteHeld(
+        isAnonymousSession: Bool,
+        resolvedIsChildAccount: Bool?
+    ) -> Bool {
+        isAnonymousSession && resolvedIsChildAccount == nil
+    }
 }
 
 // MARK: - Consent-seeking redemption sequence (FR-60(b) acceptance seam)
