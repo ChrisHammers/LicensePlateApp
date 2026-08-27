@@ -105,7 +105,7 @@ export type ChildConsentRevocationReason =
 /** Roles allowed to set/clear child status and request child data deletion (OQ-1). */
 export const CHILD_STATUS_MANAGER_ROLES: readonly string[] = ["creator", "captain"];
 
-/** expectedAgeOutYear sanity window: a child is under 13 today (FR-26). */
+/** expectedAgeOutYearMonth sanity window: a child is under 13 today (FR-26). */
 const MAX_AGE_OUT_YEARS_AHEAD = 13;
 
 // ---------------------------------------------------------------------------
@@ -197,36 +197,47 @@ function reject(
 }
 
 export type ExpectedAgeOutYearResult =
-  | { ok: true; year: number | undefined }
+  | { ok: true; yearMonth: number | undefined }
   | { ok: false; message: string };
 
-/** Optional, parent-supplied, year-only (FR-26). Must be plausible for an under-13 child. */
-export function validateExpectedAgeOutYear(
+/**
+ * Optional, parent-supplied, MONTH + YEAR as one comparable integer `YYYYMM` (owner
+ * ruling 2026-08-27: "year they turn 13 should now have the full month and year").
+ * Supersedes the year-only form outright (pre-release delete rule; AGEOUT's naming note
+ * forbids month-granular data hiding in a "...Year" field). Distinct from the
+ * device-derived `ageOutYearMonth` by name AND provenance: this one is guardian-typed
+ * attestation, that one is gate-derived protection state — never conflate them.
+ */
+export function validateExpectedAgeOutYearMonth(
   value: unknown,
   nowYear: number
 ): ExpectedAgeOutYearResult {
   if (value === undefined || value === null) {
-    return { ok: true, year: undefined };
+    return { ok: true, yearMonth: undefined };
   }
+  const month = typeof value === "number" ? value % 100 : 0;
+  const year = typeof value === "number" ? Math.floor(value / 100) : 0;
   if (
     typeof value !== "number" ||
     !Number.isInteger(value) ||
-    value < nowYear ||
-    value > nowYear + MAX_AGE_OUT_YEARS_AHEAD
+    month < 1 ||
+    month > 12 ||
+    year < nowYear ||
+    year > nowYear + MAX_AGE_OUT_YEARS_AHEAD
   ) {
     return {
       ok: false,
-      message: `expectedAgeOutYear must be an integer year between ${nowYear} and ${
+      message: `expectedAgeOutYearMonth must be YYYYMM with a year between ${nowYear} and ${
         nowYear + MAX_AGE_OUT_YEARS_AHEAD
       }`,
     };
   }
-  return { ok: true, year: value };
+  return { ok: true, yearMonth: value };
 }
 
 export type SetChildStatusDecision =
   | ChildStatusRejection
-  | { kind: "set"; expectedAgeOutYear: number | undefined }
+  | { kind: "set"; expectedAgeOutYearMonth: number | undefined }
   | { kind: "clear"; correctionReason: string };
 
 /**
@@ -243,7 +254,7 @@ export function validateSetChildStatusInput(input: {
   correctionReason: unknown;
   consentAcknowledged: unknown;
   guardianAffirmed: unknown;
-  expectedAgeOutYear: unknown;
+  expectedAgeOutYearMonth: unknown;
   nowYear: number;
 }): SetChildStatusDecision {
   if (!input.actorRole || !CHILD_STATUS_MANAGER_ROLES.includes(input.actorRole)) {
@@ -269,11 +280,14 @@ export function validateSetChildStatusInput(input: {
         "Marking a member as a child requires consentAcknowledged and guardianAffirmed"
       );
     }
-    const year = validateExpectedAgeOutYear(input.expectedAgeOutYear, input.nowYear);
-    if (!year.ok) {
-      return reject("invalid-argument", year.message);
+    const yearMonth = validateExpectedAgeOutYearMonth(
+      input.expectedAgeOutYearMonth,
+      input.nowYear
+    );
+    if (!yearMonth.ok) {
+      return reject("invalid-argument", yearMonth.message);
     }
-    return { kind: "set", expectedAgeOutYear: year.year };
+    return { kind: "set", expectedAgeOutYearMonth: yearMonth.yearMonth };
   }
 
   if (
@@ -293,7 +307,7 @@ export function validateSetChildStatusInput(input: {
 export type ApprovalChildDecision =
   | ChildStatusRejection
   | { kind: "none" }
-  | { kind: "grant"; expectedAgeOutYear: number | undefined }
+  | { kind: "grant"; expectedAgeOutYearMonth: number | undefined }
   | { kind: "clear_new_guardian"; correctionReason: string };
 
 /**
@@ -318,7 +332,7 @@ export function evaluateApprovalChildDeclaration(input: {
   consentAcknowledged: unknown;
   guardianAffirmed: unknown;
   correctionReason: unknown;
-  expectedAgeOutYear: unknown;
+  expectedAgeOutYearMonth: unknown;
   targetIsChildAccount: boolean;
   nowYear: number;
 }): ApprovalChildDecision {
@@ -345,11 +359,14 @@ export function evaluateApprovalChildDeclaration(input: {
         "Approving a child requires consentAcknowledged and guardianAffirmed"
       );
     }
-    const year = validateExpectedAgeOutYear(input.expectedAgeOutYear, input.nowYear);
-    if (!year.ok) {
-      return reject("invalid-argument", year.message);
+    const yearMonth = validateExpectedAgeOutYearMonth(
+      input.expectedAgeOutYearMonth,
+      input.nowYear
+    );
+    if (!yearMonth.ok) {
+      return reject("invalid-argument", yearMonth.message);
     }
-    return { kind: "grant", expectedAgeOutYear: year.year };
+    return { kind: "grant", expectedAgeOutYearMonth: yearMonth.yearMonth };
   }
 
   if (!input.targetIsChildAccount) {
@@ -488,7 +505,7 @@ export interface ConsentGrantedMetadataInput {
   childUserId: string;
   actorRole: string;
   method: string;
-  expectedAgeOutYear?: number;
+  expectedAgeOutYearMonth?: number;
   removedFriendEdgeCount?: number;
   /** FR-59.2/FR-108: the assurance level of the method that produced this capture. */
   assuranceLevel?: number;
@@ -514,7 +531,7 @@ export function buildConsentGrantedMetadata(
     affirmationVersion: AFFIRMATION_VERSION,
     guardianAffirmed: true,
     method: input.method,
-    expectedAgeOutYear: input.expectedAgeOutYear,
+    expectedAgeOutYearMonth: input.expectedAgeOutYearMonth,
     removedFriendEdgeCount: input.removedFriendEdgeCount,
     assuranceLevel: input.assuranceLevel,
     ageOutYearMonth: input.ageOutYearMonth,

@@ -169,8 +169,13 @@ struct FamilyChildPrivacyView: View {
                     .foregroundStyle(Color.Theme.softBrown)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let year = record.expectedAgeOutYear {
-                Text("family.child.consent_age_out".localized(String(year)))
+            if let yearMonth = record.expectedAgeOutYearMonth,
+               let month = ExpectedAgeOutYearOptions.month(of: yearMonth) {
+                Text(
+                    "family.child.consent_age_out".localized(
+                        "\(LocalizationHelper.monthName(month)) \(String(yearMonth / 100))"
+                    )
+                )
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
             }
@@ -193,7 +198,7 @@ struct FamilyChildPrivacyView: View {
                     createdAt: Date(timeIntervalSince1970: 1_770_000_000),
                     correctionReason: nil,
                     guardianAffirmed: nil,
-                    expectedAgeOutYear: nil
+                    expectedAgeOutYearMonth: nil
                 ),
                 ParentalConsentRecord(
                     id: "2",
@@ -202,7 +207,7 @@ struct FamilyChildPrivacyView: View {
                     createdAt: Date(timeIntervalSince1970: 1_770_600_000),
                     correctionReason: nil,
                     guardianAffirmed: true,
-                    expectedAgeOutYear: 2031
+                    expectedAgeOutYearMonth: 2031
                 )
             ])
         }

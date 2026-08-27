@@ -57,14 +57,9 @@ final class AgeGateViewModel: ObservableObject {
         selectedBirthYear != nil && selectedBirthMonth != nil
     }
 
-    /// Localized month name for the picker, in the app's selected language — the
-    /// formatter's symbols, so no per-month strings ship in the three catalogs.
+    /// Localized month name for the picker — shared helper, one implementation.
     func monthName(_ month: Int) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: LocalizationHelper.currentAppLanguage.localeCode)
-        let symbols = formatter.standaloneMonthSymbols ?? formatter.monthSymbols ?? []
-        guard month >= 1, month <= symbols.count else { return String(month) }
-        return symbols[month - 1]
+        LocalizationHelper.monthName(month)
     }
 
     /// Logs the funnel "shown" event once (screen-shown only — no age data, SRS §12).

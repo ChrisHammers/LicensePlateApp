@@ -18,7 +18,7 @@ final class MockFamilyChildStatusService: FamilyChildStatusManaging {
         var consentAcknowledged: Bool
         var guardianAffirmed: Bool
         var correctionReason: ChildStatusCorrectionReason?
-        var expectedAgeOutYear: Int?
+        var expectedAgeOutYearMonth: Int?
     }
 
     struct DeletionCall: Equatable {
@@ -42,7 +42,7 @@ final class MockFamilyChildStatusService: FamilyChildStatusManaging {
         consentAcknowledged: Bool,
         guardianAffirmed: Bool,
         correctionReason: ChildStatusCorrectionReason?,
-        expectedAgeOutYear: Int?
+        expectedAgeOutYearMonth: Int?
     ) async throws {
         setChildStatusCalls.append(
             SetChildStatusCall(
@@ -52,7 +52,7 @@ final class MockFamilyChildStatusService: FamilyChildStatusManaging {
                 consentAcknowledged: consentAcknowledged,
                 guardianAffirmed: guardianAffirmed,
                 correctionReason: correctionReason,
-                expectedAgeOutYear: expectedAgeOutYear
+                expectedAgeOutYearMonth: expectedAgeOutYearMonth
             )
         )
         if let setChildStatusError { throw setChildStatusError }

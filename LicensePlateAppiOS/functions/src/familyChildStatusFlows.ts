@@ -120,7 +120,7 @@ export async function setFamilyMemberChildStatusFlow(
     correctionReason?: unknown;
     consentAcknowledged?: unknown;
     guardianAffirmed?: unknown;
-    expectedAgeOutYear?: unknown;
+    expectedAgeOutYearMonth?: unknown;
     clientMetadata: ClientMetadata | null;
   },
   deps: ChildStatusFlowDeps = defaultDeps
@@ -145,7 +145,7 @@ export async function setFamilyMemberChildStatusFlow(
     correctionReason: input.correctionReason,
     consentAcknowledged: input.consentAcknowledged,
     guardianAffirmed: input.guardianAffirmed,
-    expectedAgeOutYear: input.expectedAgeOutYear,
+    expectedAgeOutYearMonth: input.expectedAgeOutYearMonth,
     nowYear: new Date().getUTCFullYear(),
   });
   if (decision.kind === "reject") {
@@ -190,7 +190,7 @@ export async function setFamilyMemberChildStatusFlow(
       actorId,
       actorRole,
       method: "manager_set",
-      expectedAgeOutYear: decision.expectedAgeOutYear,
+      expectedAgeOutYearMonth: decision.expectedAgeOutYearMonth,
       removedFriendEdgeCount: cleanup.removedFriendEdgeCount,
       clientMetadata,
     });
@@ -401,7 +401,7 @@ export interface ParentalConsentStatusRecord {
   consentTextVersion?: string;
   affirmationVersion?: string;
   guardianAffirmed?: boolean;
-  expectedAgeOutYear?: number;
+  expectedAgeOutYearMonth?: number;
 }
 
 export interface ParentalConsentStatusResult {
@@ -485,8 +485,8 @@ export async function getParentalConsentStatusFlow(
       if (typeof metadata.guardianAffirmed === "boolean") {
         record.guardianAffirmed = metadata.guardianAffirmed;
       }
-      if (typeof metadata.expectedAgeOutYear === "number") {
-        record.expectedAgeOutYear = metadata.expectedAgeOutYear;
+      if (typeof metadata.expectedAgeOutYearMonth === "number") {
+        record.expectedAgeOutYearMonth = metadata.expectedAgeOutYearMonth;
       }
       return record;
     })

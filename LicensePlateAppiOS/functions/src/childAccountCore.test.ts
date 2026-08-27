@@ -17,7 +17,7 @@ import {
   isChildAccountUserData,
   isUnconsentedChildUserData,
   sanitizedChildLinkedPlatforms,
-  validateExpectedAgeOutYear,
+  validateExpectedAgeOutYearMonth,
   validateSetChildStatusInput,
 } from "./childAccountCore";
 import { AUDIT_RETENTION_EXEMPT_EVENT_TYPES } from "./retentionCore";
@@ -72,24 +72,31 @@ describe("child flag predicates", () => {
   });
 });
 
-describe("validateExpectedAgeOutYear", () => {
-  it("accepts absent, rejects out-of-range and non-integers", () => {
-    expect(validateExpectedAgeOutYear(undefined, NOW_YEAR)).toEqual({
+describe("validateExpectedAgeOutYearMonth", () => {
+  it("accepts absent, rejects out-of-range months/years and non-integers", () => {
+    expect(validateExpectedAgeOutYearMonth(undefined, NOW_YEAR)).toEqual({
       ok: true,
-      year: undefined,
+      yearMonth: undefined,
     });
-    expect(validateExpectedAgeOutYear(null, NOW_YEAR)).toEqual({
+    expect(validateExpectedAgeOutYearMonth(null, NOW_YEAR)).toEqual({
       ok: true,
-      year: undefined,
+      yearMonth: undefined,
     });
-    expect(validateExpectedAgeOutYear(NOW_YEAR + 5, NOW_YEAR)).toEqual({
+    // Owner ruling 2026-08-27: full month + year, one YYYYMM integer.
+    expect(validateExpectedAgeOutYearMonth((NOW_YEAR + 5) * 100 + 3, NOW_YEAR)).toEqual({
       ok: true,
-      year: NOW_YEAR + 5,
+      yearMonth: (NOW_YEAR + 5) * 100 + 3,
     });
-    expect(validateExpectedAgeOutYear(NOW_YEAR - 1, NOW_YEAR).ok).toBe(false);
-    expect(validateExpectedAgeOutYear(NOW_YEAR + 14, NOW_YEAR).ok).toBe(false);
-    expect(validateExpectedAgeOutYear(2030.5, NOW_YEAR).ok).toBe(false);
-    expect(validateExpectedAgeOutYear("2030", NOW_YEAR).ok).toBe(false);
+    // Year window unchanged from the year-only rule.
+    expect(validateExpectedAgeOutYearMonth((NOW_YEAR - 1) * 100 + 6, NOW_YEAR).ok).toBe(false);
+    expect(validateExpectedAgeOutYearMonth((NOW_YEAR + 14) * 100 + 6, NOW_YEAR).ok).toBe(false);
+    // Month bounds.
+    expect(validateExpectedAgeOutYearMonth(NOW_YEAR * 100, NOW_YEAR).ok).toBe(false);
+    expect(validateExpectedAgeOutYearMonth(NOW_YEAR * 100 + 13, NOW_YEAR).ok).toBe(false);
+    // A bare year (the superseded shape) no longer validates — its "month" is 30.
+    expect(validateExpectedAgeOutYearMonth(NOW_YEAR + 5, NOW_YEAR).ok).toBe(false);
+    expect(validateExpectedAgeOutYearMonth(203006.5, NOW_YEAR).ok).toBe(false);
+    expect(validateExpectedAgeOutYearMonth("203006", NOW_YEAR).ok).toBe(false);
   });
 });
 
@@ -103,7 +110,7 @@ describe("validateSetChildStatusInput (FR-2)", () => {
     correctionReason: undefined,
     consentAcknowledged: true,
     guardianAffirmed: true,
-    expectedAgeOutYear: undefined,
+    expectedAgeOutYearMonth: undefined,
     nowYear: NOW_YEAR,
   };
 
@@ -141,16 +148,19 @@ describe("validateSetChildStatusInput (FR-2)", () => {
     }
   });
 
-  it("set-true carries a validated expectedAgeOutYear through", () => {
+  it("set-true carries a validated expectedAgeOutYearMonth through", () => {
     const decision = validateSetChildStatusInput({
       ...base,
-      expectedAgeOutYear: NOW_YEAR + 3,
+      expectedAgeOutYearMonth: (NOW_YEAR + 3) * 100 + 9,
     });
-    expect(decision).toEqual({ kind: "set", expectedAgeOutYear: NOW_YEAR + 3 });
+    expect(decision).toEqual({
+      kind: "set",
+      expectedAgeOutYearMonth: (NOW_YEAR + 3) * 100 + 9,
+    });
 
     const invalid = validateSetChildStatusInput({
       ...base,
-      expectedAgeOutYear: NOW_YEAR - 2,
+      expectedAgeOutYearMonth: (NOW_YEAR - 2) * 100 + 9,
     });
     expect(invalid.kind === "reject" && invalid.code).toBe("invalid-argument");
   });
@@ -183,7 +193,7 @@ describe("evaluateApprovalChildDeclaration (FR-1 / FR-25)", () => {
     consentAcknowledged: undefined as unknown,
     guardianAffirmed: undefined as unknown,
     correctionReason: undefined as unknown,
-    expectedAgeOutYear: undefined as unknown,
+    expectedAgeOutYearMonth: undefined as unknown,
     targetIsChildAccount: false,
     nowYear: NOW_YEAR,
   };
@@ -223,10 +233,10 @@ describe("evaluateApprovalChildDeclaration (FR-1 / FR-25)", () => {
           payloadIsChild: true,
           consentAcknowledged: true,
           guardianAffirmed: true,
-          expectedAgeOutYear: NOW_YEAR + 4,
+          expectedAgeOutYearMonth: (NOW_YEAR + 4) * 100 + 2,
           targetIsChildAccount,
         })
-      ).toEqual({ kind: "grant", expectedAgeOutYear: NOW_YEAR + 4 });
+      ).toEqual({ kind: "grant", expectedAgeOutYearMonth: (NOW_YEAR + 4) * 100 + 2 });
     }
   });
 
@@ -354,7 +364,7 @@ describe("consent metadata (§11.1) — uid-only, no PII ever", () => {
     childUserId: "kid",
     actorRole: "creator",
     method: "manager_set",
-    expectedAgeOutYear: 2031,
+    expectedAgeOutYearMonth: 2031,
     removedFriendEdgeCount: 2,
   });
 
@@ -370,7 +380,7 @@ describe("consent metadata (§11.1) — uid-only, no PII ever", () => {
         "affirmationVersion",
         "guardianAffirmed",
         "method",
-        "expectedAgeOutYear",
+        "expectedAgeOutYearMonth",
         "removedFriendEdgeCount",
       ].sort()
     );
@@ -385,7 +395,7 @@ describe("consent metadata (§11.1) — uid-only, no PII ever", () => {
       actorRole: "creator",
       method: "family_admission",
     });
-    expect(minimal).not.toHaveProperty("expectedAgeOutYear");
+    expect(minimal).not.toHaveProperty("expectedAgeOutYearMonth");
     expect(minimal).not.toHaveProperty("removedFriendEdgeCount");
   });
 

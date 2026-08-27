@@ -126,14 +126,14 @@ struct FamilyPendingApprovalsChildDeclarationTests {
         vm.setGuardianAffirmed(true, for: harness.request)
         #expect(vm.canApprove(request: harness.request))
 
-        vm.setExpectedAgeOutYear(2031, for: harness.request)
+        vm.setExpectedAgeOutYearMonth(2031, for: harness.request)
         _ = await vm.approve(request: harness.request)
 
         let declaration = try #require(harness.world.respondCalls.last?.declaration)
         #expect(declaration.isChild == true)
         #expect(declaration.consent.consentAcknowledged)
         #expect(declaration.consent.guardianAffirmed)
-        #expect(declaration.consent.expectedAgeOutYear == 2031)
+        #expect(declaration.consent.expectedAgeOutYearMonth == 2031)
     }
 
     @Test func approveIsARefusedNoOpWhileTheDeclarationIsIncomplete() async throws {

@@ -190,7 +190,7 @@ describe("setFamilyMemberChildStatusFlow", () => {
 
     const result = await setFamilyMemberChildStatusFlow(
       asFirestore(db),
-      { ...baseInput, expectedAgeOutYear: new Date().getUTCFullYear() + 3 },
+      { ...baseInput, expectedAgeOutYearMonth: (new Date().getUTCFullYear() + 3) * 100 + 7 },
       stubDeps(purges)
     );
     expect(result.success).toBe(true);
@@ -236,7 +236,7 @@ describe("setFamilyMemberChildStatusFlow", () => {
     expect(metadata.method).toBe("manager_set");
     expect(metadata.actorRole).toBe("creator");
     expect(metadata.removedFriendEdgeCount).toBe(1);
-    expect(metadata.expectedAgeOutYear).toBe(new Date().getUTCFullYear() + 3);
+    expect(metadata.expectedAgeOutYearMonth).toBe((new Date().getUTCFullYear() + 3) * 100 + 7);
     expect(metadata).not.toHaveProperty("email");
     expect(metadata).not.toHaveProperty("name");
     expect(metadata).not.toHaveProperty("birthdate");
@@ -474,7 +474,7 @@ describe("getParentalConsentStatusFlow (FR-29)", () => {
         guardianAffirmed: true,
         consentTextVersion: "2026-08.1",
         affirmationVersion: "2026-08.1",
-        expectedAgeOutYear: 2031,
+        expectedAgeOutYearMonth: 2031,
       },
       clientMetadata: CLIENT_METADATA,
     });
@@ -507,7 +507,7 @@ describe("getParentalConsentStatusFlow (FR-29)", () => {
     )!;
     expect(granted.method).toBe("family_admission");
     expect(granted.guardianAffirmed).toBe(true);
-    expect(granted.expectedAgeOutYear).toBe(2031);
+    expect(granted.expectedAgeOutYearMonth).toBe(2031);
     // Curated shape only — no actor uid, no clientMetadata.
     expect(granted).not.toHaveProperty("actorId");
     expect(granted).not.toHaveProperty("clientMetadata");

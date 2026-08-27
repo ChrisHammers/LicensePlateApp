@@ -42,8 +42,10 @@ enum ChildStatusCorrectionReason: String, CaseIterable, Identifiable, Sendable {
 struct ChildConsentDraft: Equatable, Sendable {
     var consentAcknowledged: Bool = false
     var guardianAffirmed: Bool = false
-    /// Optional, year-only parent attestation (FR-26). `nil` = not supplied.
-    var expectedAgeOutYear: Int?
+    /// Optional parent attestation of when the child turns 13, as one `YYYYMM` integer
+    /// (owner ruling 2026-08-27: full month + year). `nil` = not supplied. Distinct by
+    /// name AND provenance from the gate-derived `ageOutYearMonth` — never conflate.
+    var expectedAgeOutYearMonth: Int?
 
     /// FR-31: consent is captured only when BOTH boxes are checked.
     var isComplete: Bool {
@@ -59,13 +61,35 @@ struct ChildConsentDraft: Equatable, Sendable {
 /// (`childAccountCore.ts`): a child is under 13 today, so they turn 13 within 13 years.
 enum ExpectedAgeOutYearOptions {
     static let maxYearsAhead = 13
+    static let monthOptions = Array(1...12)
 
     static func options(currentYear: Int) -> [Int] {
         Array(currentYear...(currentYear + maxYearsAhead))
     }
 
-    static func isValid(_ year: Int?, currentYear: Int) -> Bool {
-        guard let year else { return true }
+    /// Compose the `YYYYMM` value from two picker selections; `nil` until both are chosen.
+    static func compose(month: Int?, year: Int?) -> Int? {
+        guard let month, let year, monthOptions.contains(month) else { return nil }
+        return year * 100 + month
+    }
+
+    static func month(of yearMonth: Int?) -> Int? {
+        guard let yearMonth else { return nil }
+        let month = yearMonth % 100
+        return monthOptions.contains(month) ? month : nil
+    }
+
+    static func year(of yearMonth: Int?) -> Int? {
+        yearMonth.map { $0 / 100 }
+    }
+
+    /// Mirrors the server's `validateExpectedAgeOutYearMonth` window.
+    static func isValid(_ yearMonth: Int?, currentYear: Int) -> Bool {
+        guard let yearMonth else { return true }
+        guard let month = month(of: yearMonth), monthOptions.contains(month) else {
+            return false
+        }
+        let year = yearMonth / 100
         return year >= currentYear && year <= currentYear + maxYearsAhead
     }
 }
@@ -197,8 +221,8 @@ enum FamilyChildStatusPayload {
             "consentAcknowledged": consent.consentAcknowledged,
             "guardianAffirmed": consent.guardianAffirmed
         ]
-        if let year = consent.expectedAgeOutYear {
-            payload["expectedAgeOutYear"] = year
+        if let yearMonth = consent.expectedAgeOutYearMonth {
+            payload["expectedAgeOutYearMonth"] = yearMonth
         }
         return payload
     }
@@ -258,8 +282,8 @@ enum FamilyChildStatusPayload {
         }
         payload["consentAcknowledged"] = declaration.consent.consentAcknowledged
         payload["guardianAffirmed"] = declaration.consent.guardianAffirmed
-        if let year = declaration.consent.expectedAgeOutYear {
-            payload["expectedAgeOutYear"] = year
+        if let yearMonth = declaration.consent.expectedAgeOutYearMonth {
+            payload["expectedAgeOutYearMonth"] = yearMonth
         }
         return payload
     }
@@ -311,7 +335,7 @@ protocol FamilyChildStatusManaging: AnyObject {
         consentAcknowledged: Bool,
         guardianAffirmed: Bool,
         correctionReason: ChildStatusCorrectionReason?,
-        expectedAgeOutYear: Int?
+        expectedAgeOutYearMonth: Int?
     ) async throws
 
     func requestChildDataDeletion(familyId: String, childUserId: String) async throws
@@ -386,7 +410,7 @@ struct ParentalConsentRecord: Identifiable, Equatable, Sendable {
     let createdAt: Date?
     let correctionReason: String?
     let guardianAffirmed: Bool?
-    let expectedAgeOutYear: Int?
+    let expectedAgeOutYearMonth: Int?
 
     var localizedTitle: String {
         eventType?.localizedTitle ?? "family.child.consent_event.unknown".localized
@@ -429,7 +453,7 @@ struct ParentalConsentStatus: Equatable, Sendable {
                 createdAt: millis.map { Date(timeIntervalSince1970: $0 / 1000) },
                 correctionReason: row["reason"] as? String,
                 guardianAffirmed: row["guardianAffirmed"] as? Bool,
-                expectedAgeOutYear: (row["expectedAgeOutYear"] as? NSNumber)?.intValue
+                expectedAgeOutYearMonth: (row["expectedAgeOutYearMonth"] as? NSNumber)?.intValue
             )
         }
         return ParentalConsentStatus(records: records)

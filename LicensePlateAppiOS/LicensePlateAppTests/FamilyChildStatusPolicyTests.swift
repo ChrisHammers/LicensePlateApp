@@ -26,13 +26,24 @@ struct ChildConsentDraftTests {
     }
 
     @Test func expectedAgeOutYearWindowMatchesTheServer() {
-        // `validateExpectedAgeOutYear`: nowYear ... nowYear + 13, integers only.
+        // `validateExpectedAgeOutYearMonth` (owner ruling 2026-08-27: full month + year
+        // as one YYYYMM integer): month 1–12, year nowYear ... nowYear + 13.
         #expect(ExpectedAgeOutYearOptions.isValid(nil, currentYear: 2026))
-        #expect(ExpectedAgeOutYearOptions.isValid(2026, currentYear: 2026))
-        #expect(ExpectedAgeOutYearOptions.isValid(2039, currentYear: 2026))
-        #expect(!ExpectedAgeOutYearOptions.isValid(2025, currentYear: 2026))
-        #expect(!ExpectedAgeOutYearOptions.isValid(2040, currentYear: 2026))
+        #expect(ExpectedAgeOutYearOptions.isValid(202601, currentYear: 2026))
+        #expect(ExpectedAgeOutYearOptions.isValid(203912, currentYear: 2026))
+        #expect(!ExpectedAgeOutYearOptions.isValid(202506, currentYear: 2026))
+        #expect(!ExpectedAgeOutYearOptions.isValid(204001, currentYear: 2026))
+        // Month bounds — and a bare year (the superseded shape) no longer validates.
+        #expect(!ExpectedAgeOutYearOptions.isValid(202600, currentYear: 2026))
+        #expect(!ExpectedAgeOutYearOptions.isValid(202613, currentYear: 2026))
+        #expect(!ExpectedAgeOutYearOptions.isValid(2031, currentYear: 2026))
         #expect(ExpectedAgeOutYearOptions.options(currentYear: 2026).count == 14)
+        // The two-picker composition round-trips.
+        #expect(ExpectedAgeOutYearOptions.compose(month: 3, year: 2031) == 203103)
+        #expect(ExpectedAgeOutYearOptions.compose(month: nil, year: 2031) == nil)
+        #expect(ExpectedAgeOutYearOptions.compose(month: 3, year: nil) == nil)
+        #expect(ExpectedAgeOutYearOptions.month(of: 203103) == 3)
+        #expect(ExpectedAgeOutYearOptions.year(of: 203103) == 2031)
     }
 
     @Test func correctionReasonsAreExactlyTheTwoServerSlugs() {
@@ -211,7 +222,7 @@ struct FamilyChildStatusPayloadTests {
             consent: ChildConsentDraft(
                 consentAcknowledged: true,
                 guardianAffirmed: true,
-                expectedAgeOutYear: 2031
+                expectedAgeOutYearMonth: 2031
             )
         )
         #expect(payload["familyId"] as? String == "fam-1")
@@ -219,7 +230,7 @@ struct FamilyChildStatusPayloadTests {
         #expect(payload["isChild"] as? Bool == true)
         #expect(payload["consentAcknowledged"] as? Bool == true)
         #expect(payload["guardianAffirmed"] as? Bool == true)
-        #expect(payload["expectedAgeOutYear"] as? Int == 2031)
+        #expect(payload["expectedAgeOutYearMonth"] as? Int == 2031)
         #expect(payload["correctionReason"] == nil)
     }
 
@@ -229,7 +240,7 @@ struct FamilyChildStatusPayloadTests {
             memberUserId: "child-1",
             consent: ChildConsentDraft(consentAcknowledged: true, guardianAffirmed: true)
         )
-        #expect(payload["expectedAgeOutYear"] == nil)
+        #expect(payload["expectedAgeOutYearMonth"] == nil)
     }
 
     @Test func clearChildPayloadIsCorrectionOnly() {
@@ -308,7 +319,7 @@ struct FamilyChildStatusPayloadTests {
         #expect(payload["consentAcknowledged"] as? Bool == true)
         #expect(payload["guardianAffirmed"] as? Bool == true)
         // The capture-only field never rides along on a clear.
-        #expect(payload["expectedAgeOutYear"] == nil)
+        #expect(payload["expectedAgeOutYearMonth"] == nil)
     }
 
     @Test func approvalPayloadSendsConsentFieldsWithTrue() {
@@ -321,14 +332,14 @@ struct FamilyChildStatusPayloadTests {
                 consent: ChildConsentDraft(
                     consentAcknowledged: true,
                     guardianAffirmed: true,
-                    expectedAgeOutYear: 2030
+                    expectedAgeOutYearMonth: 2030
                 )
             )
         )
         #expect(payload["isChild"] as? Bool == true)
         #expect(payload["consentAcknowledged"] as? Bool == true)
         #expect(payload["guardianAffirmed"] as? Bool == true)
-        #expect(payload["expectedAgeOutYear"] as? Int == 2030)
+        #expect(payload["expectedAgeOutYearMonth"] as? Int == 2030)
     }
 
     @Test func declineNeverCarriesAChildDeclaration() {
@@ -425,7 +436,7 @@ struct ParentalConsentStatusParsingTests {
                     "eventType": "AUDIT_PARENTAL_CONSENT_GRANTED",
                     "createdAtMillis": 1_770_000_000_000,
                     "guardianAffirmed": true,
-                    "expectedAgeOutYear": 2031
+                    "expectedAgeOutYearMonth": 2031
                 ],
                 [
                     "eventType": "AUDIT_PARENTAL_CONSENT_CORRECTED",
@@ -439,7 +450,7 @@ struct ParentalConsentStatusParsingTests {
         #expect(status.records.count == 2)
         #expect(status.records[0].eventType == .granted)
         #expect(status.records[0].guardianAffirmed == true)
-        #expect(status.records[0].expectedAgeOutYear == 2031)
+        #expect(status.records[0].expectedAgeOutYearMonth == 2031)
         #expect(status.records[0].createdAt != nil)
         #expect(status.records[1].eventType == .corrected)
         #expect(status.records[1].localizedCorrectionReason != nil)

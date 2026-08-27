@@ -305,7 +305,7 @@ describe("FR-64: the guardian's click commits everything together", () => {
       guardianUid: "captain",
       guardianRole: "creator",
       newRole: "scout",
-      expectedAgeOutYear: null,
+      expectedAgeOutYearMonth: null,
       assuranceLevel: 1,
     };
     const again = await commitGuardianConfirmation(

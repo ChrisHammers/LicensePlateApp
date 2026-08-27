@@ -798,7 +798,7 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
     // COPPA FR-25: child follow-ons that must run only after the membership batch
     // commits (index purge, invite/friend cleanup, consent record).
     let childFollowUp:
-      | { kind: "grant"; expectedAgeOutYear?: number; targetUserData: Record<string, unknown> }
+      | { kind: "grant"; expectedAgeOutYearMonth?: number; targetUserData: Record<string, unknown> }
       | { kind: "clear_new_guardian"; correctionReason: string }
       | null = null;
 
@@ -832,7 +832,7 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         consentAcknowledged: data?.consentAcknowledged,
         guardianAffirmed: data?.guardianAffirmed,
         correctionReason: data?.correctionReason,
-        expectedAgeOutYear: data?.expectedAgeOutYear,
+        expectedAgeOutYearMonth: data?.expectedAgeOutYearMonth,
         targetIsChildAccount: targetUserData.isChildAccount === true,
         nowYear: new Date().getUTCFullYear(),
       });
@@ -842,7 +842,7 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
       if (childDecision.kind === "grant") {
         childFollowUp = {
           kind: "grant",
-          expectedAgeOutYear: childDecision.expectedAgeOutYear,
+          expectedAgeOutYearMonth: childDecision.expectedAgeOutYearMonth,
           targetUserData,
         };
       } else if (childDecision.kind === "clear_new_guardian") {
@@ -902,8 +902,8 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
           newRole,
           childUserName:
             typeof targetUserData.userName === "string" ? targetUserData.userName : "",
-          expectedAgeOutYear: childFollowUp?.kind === "grant"
-            ? childFollowUp.expectedAgeOutYear
+          expectedAgeOutYearMonth: childFollowUp?.kind === "grant"
+            ? childFollowUp.expectedAgeOutYearMonth
             : undefined,
         });
 
@@ -1304,7 +1304,7 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         actorId: userId,
         actorRole: memberRole,
         method: "family_admission",
-        expectedAgeOutYear: childFollowUp.expectedAgeOutYear,
+        expectedAgeOutYearMonth: childFollowUp.expectedAgeOutYearMonth,
         removedFriendEdgeCount: cleanup.removedFriendEdgeCount,
         clientMetadata,
       });

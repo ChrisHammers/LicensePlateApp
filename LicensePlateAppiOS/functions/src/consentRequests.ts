@@ -67,7 +67,7 @@ export interface CreateConsentRequestInput {
   guardianEmail: string;
   newRole: string;
   childUserName: string;
-  expectedAgeOutYear?: number;
+  expectedAgeOutYearMonth?: number;
   nowMillis?: number;
 }
 
@@ -125,7 +125,7 @@ export async function createConsentRequestForApproval(
     // `noticeFamilyName`, not `familyName`: the auditRedaction lint bans that key
     // source-wide (audit-row protection); this copy exists solely for the NP-1 email.
     noticeFamilyName,
-    expectedAgeOutYear: input.expectedAgeOutYear ?? null,
+    expectedAgeOutYearMonth: input.expectedAgeOutYearMonth ?? null,
     nonceHash: hashConsentNonce(nonce),
     status: CONSENT_REQUEST_STATUS.pending,
     attempts: 0,
@@ -260,7 +260,7 @@ export interface ConfirmableRequest {
   guardianUid: string;
   guardianRole: string;
   newRole: string;
-  expectedAgeOutYear: number | null;
+  expectedAgeOutYearMonth: number | null;
   assuranceLevel: number;
 }
 
@@ -347,7 +347,7 @@ export async function commitGuardianConfirmation(
       childUserId: request.childUserId,
       actorRole: request.guardianRole,
       method: "email_plus",
-      expectedAgeOutYear: request.expectedAgeOutYear ?? undefined,
+      expectedAgeOutYearMonth: request.expectedAgeOutYearMonth ?? undefined,
       assuranceLevel: request.assuranceLevel,
       ageOutYearMonth: ageOutYearMonth as number,
     });
@@ -531,8 +531,8 @@ export const confirmParentalConsent = functions.https.onRequest(async (req, res)
       guardianUid: data.guardianUid,
       guardianRole: data.guardianRole ?? "captain",
       newRole: data.newRole ?? "scout",
-      expectedAgeOutYear:
-        typeof data.expectedAgeOutYear === "number" ? data.expectedAgeOutYear : null,
+      expectedAgeOutYearMonth:
+        typeof data.expectedAgeOutYearMonth === "number" ? data.expectedAgeOutYearMonth : null,
       assuranceLevel:
         typeof data.assuranceLevel === "number"
           ? data.assuranceLevel

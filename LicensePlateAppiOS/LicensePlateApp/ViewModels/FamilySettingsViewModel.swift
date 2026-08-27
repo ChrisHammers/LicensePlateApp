@@ -263,7 +263,7 @@ class FamilySettingsViewModel: ObservableObject {
     var canConfirmMarkAsChild: Bool {
         childConsentDraft.isComplete
             && ExpectedAgeOutYearOptions.isValid(
-                childConsentDraft.expectedAgeOutYear,
+                childConsentDraft.expectedAgeOutYearMonth,
                 currentYear: currentYearProvider()
             )
     }
@@ -280,8 +280,8 @@ class FamilySettingsViewModel: ObservableObject {
         logConsentAcknowledged(wasComplete: wasComplete)
     }
 
-    func setChildExpectedAgeOutYear(_ year: Int?) {
-        childConsentDraft.expectedAgeOutYear = year
+    func setChildExpectedAgeOutYearMonth(_ year: Int?) {
+        childConsentDraft.expectedAgeOutYearMonth = year
     }
 
     /// SRS §12: one parent-instance event per completed consent capture, no parameters.
@@ -308,7 +308,7 @@ class FamilySettingsViewModel: ObservableObject {
                     consentAcknowledged: draft.consentAcknowledged,
                     guardianAffirmed: draft.guardianAffirmed,
                     correctionReason: nil,
-                    expectedAgeOutYear: draft.expectedAgeOutYear
+                    expectedAgeOutYearMonth: draft.expectedAgeOutYearMonth
                 )
                 analytics.log(
                     .familyChildStatusSet(source: FamilyChildStatusAnalyticsSource.familySettings.rawValue)
@@ -353,7 +353,7 @@ class FamilySettingsViewModel: ObservableObject {
                     consentAcknowledged: false,
                     guardianAffirmed: false,
                     correctionReason: reason,
-                    expectedAgeOutYear: nil
+                    expectedAgeOutYearMonth: nil
                 )
                 analytics.log(.familyChildStatusCorrected(reason: reason.rawValue))
                 isSavingChildStatus = false

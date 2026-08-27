@@ -24,11 +24,40 @@ struct FamilyChildConsentBlock: View {
     let yearOptions: [Int]
     let onConsentAcknowledgedChange: (Bool) -> Void
     let onGuardianAffirmedChange: (Bool) -> Void
-    let onExpectedAgeOutYearChange: (Int?) -> Void
+    let onExpectedAgeOutYearMonthChange: (Int?) -> Void
 
     /// The document a parent tapped through to, presented over this block so consent is
     /// never abandoned to go read it.
     @State private var presentedPolicyLink: ChildConsentPolicyLink?
+
+    /// Partial month/year selections while the parent is mid-pick; the composed YYYYMM
+    /// reaches the draft only when both halves exist (and clears when either clears).
+    @State private var selectedMonth: Int?
+    @State private var selectedYear: Int?
+
+    private var monthSelection: Binding<Int?> {
+        Binding(
+            get: { selectedMonth },
+            set: { newValue in
+                selectedMonth = newValue
+                onExpectedAgeOutYearMonthChange(
+                    ExpectedAgeOutYearOptions.compose(month: newValue, year: selectedYear)
+                )
+            }
+        )
+    }
+
+    private var yearSelection: Binding<Int?> {
+        Binding(
+            get: { selectedYear },
+            set: { newValue in
+                selectedYear = newValue
+                onExpectedAgeOutYearMonthChange(
+                    ExpectedAgeOutYearOptions.compose(month: selectedMonth, year: newValue)
+                )
+            }
+        )
+    }
 
     /// The policy summary with its two citations rendered as links. The markdown is
     /// parsed at runtime (the string is already localized, so `LocalizedStringKey`'s
@@ -72,24 +101,48 @@ struct FamilyChildConsentBlock: View {
             )
 
             VStack(alignment: .leading, spacing: 4) {
-                Picker(
-                    "family.child.age_out_label".localized,
-                    selection: Binding(
-                        get: { draft.expectedAgeOutYear },
-                        set: { onExpectedAgeOutYearChange($0) }
-                    )
-                ) {
-                    Text("family.child.age_out_none".localized).tag(Int?.none)
-                    ForEach(yearOptions, id: \.self) { year in
-                        Text(verbatim: String(year)).tag(Int?.some(year))
+                // Owner ruling 2026-08-27: full MONTH + YEAR ("since we track that").
+                // Two pickers compose one YYYYMM value; the draft holds `nil` until both
+                // are chosen, and choosing "Not specified" on either clears the pair.
+                Text("family.child.age_out_label".localized)
+                    .font(.system(.footnote, design: .rounded))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+
+                HStack(spacing: 12) {
+                    Picker(
+                        "family.child.age_out_label".localized,
+                        selection: monthSelection
+                    ) {
+                        Text("family.child.age_out_none".localized).tag(Int?.none)
+                        ForEach(ExpectedAgeOutYearOptions.monthOptions, id: \.self) { month in
+                            Text(verbatim: LocalizationHelper.monthName(month))
+                                .tag(Int?.some(month))
+                        }
                     }
+                    .font(.system(.footnote, design: .rounded))
+                    .accessibilityLabel("family.child.age_out_label".localized)
+                    .accessibilityValue(
+                        selectedMonth.map { LocalizationHelper.monthName($0) }
+                            ?? "family.child.age_out_none".localized
+                    )
+                    .accessibilityHint("family.child.age_out_hint".localized)
+
+                    Picker(
+                        "family.child.age_out_label".localized,
+                        selection: yearSelection
+                    ) {
+                        Text("family.child.age_out_none".localized).tag(Int?.none)
+                        ForEach(yearOptions, id: \.self) { year in
+                            Text(verbatim: String(year)).tag(Int?.some(year))
+                        }
+                    }
+                    .font(.system(.footnote, design: .rounded))
+                    .accessibilityLabel("family.child.age_out_label".localized)
+                    .accessibilityValue(
+                        selectedYear.map { String($0) } ?? "family.child.age_out_none".localized
+                    )
+                    .accessibilityHint("family.child.age_out_hint".localized)
                 }
-                .font(.system(.footnote, design: .rounded))
-                .accessibilityLabel("family.child.age_out_label".localized)
-                .accessibilityValue(
-                    draft.expectedAgeOutYear.map { String($0) } ?? "family.child.age_out_none".localized
-                )
-                .accessibilityHint("family.child.age_out_hint".localized)
 
                 Text("family.child.age_out_hint".localized)
                     .font(.system(.caption2, design: .rounded))
@@ -99,6 +152,10 @@ struct FamilyChildConsentBlock: View {
             }
         }
         .accessibilityElement(children: .contain)
+        .onAppear {
+            selectedMonth = ExpectedAgeOutYearOptions.month(of: draft.expectedAgeOutYearMonth)
+            selectedYear = ExpectedAgeOutYearOptions.year(of: draft.expectedAgeOutYearMonth)
+        }
         // Intercept our own citation links; anything else goes to the system unchanged.
         .environment(\.openURL, OpenURLAction { url in
             guard let link = ChildConsentPolicyLink.from(url: url) else { return .systemAction }
@@ -273,7 +330,7 @@ struct FamilyChildCorrectionBlock: View {
         yearOptions: Array(2026...2039),
         onConsentAcknowledgedChange: { _ in },
         onGuardianAffirmedChange: { _ in },
-        onExpectedAgeOutYearChange: { _ in }
+        onExpectedAgeOutYearMonthChange: { _ in }
     )
     .padding()
 }
@@ -283,12 +340,12 @@ struct FamilyChildCorrectionBlock: View {
         draft: ChildConsentDraft(
             consentAcknowledged: true,
             guardianAffirmed: true,
-            expectedAgeOutYear: 2031
+            expectedAgeOutYearMonth: 203103
         ),
         yearOptions: Array(2026...2039),
         onConsentAcknowledgedChange: { _ in },
         onGuardianAffirmedChange: { _ in },
-        onExpectedAgeOutYearChange: { _ in }
+        onExpectedAgeOutYearMonthChange: { _ in }
     )
     .padding()
     .preferredColorScheme(.dark)
@@ -301,7 +358,7 @@ struct FamilyChildCorrectionBlock: View {
             yearOptions: Array(2026...2039),
             onConsentAcknowledgedChange: { _ in },
             onGuardianAffirmedChange: { _ in },
-            onExpectedAgeOutYearChange: { _ in }
+            onExpectedAgeOutYearMonthChange: { _ in }
         )
         .padding()
     }

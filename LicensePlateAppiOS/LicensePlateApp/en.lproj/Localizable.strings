@@ -1473,7 +1473,7 @@
 "family.child.policy_links_hint" = "Use the links rotor to open the Terms of Service or Privacy Policy";
 "family.child.guardian_affirmation" = "I confirm I am this child's parent or legal guardian and I am at least 18.";
 "family.child.guardian_affirmation_hint" = "Required to give parental consent";
-"family.child.age_out_label" = "Year they turn 13 (optional)";
+"family.child.age_out_label" = "When they turn 13 (optional)";
 "family.child.age_out_none" = "Not specified";
 "family.child.age_out_hint" = "Optional. Kept as a reminder for you — nothing changes automatically.";
 "family.child.toggle_title" = "This member is a child (under 13)";

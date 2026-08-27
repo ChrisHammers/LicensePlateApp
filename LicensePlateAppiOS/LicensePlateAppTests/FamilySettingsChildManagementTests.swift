@@ -195,11 +195,11 @@ struct FamilySettingsChildManagementTests {
         vm.beginMarkAsChild(target("scout"))
         vm.setChildConsentAcknowledged(true)
         vm.setChildGuardianAffirmed(true)
-        vm.setChildExpectedAgeOutYear(2031)
+        vm.setChildExpectedAgeOutYearMonth(203103)
         #expect(vm.expectedAgeOutYearOptions.first == 2026)
         vm.confirmMarkAsChild()
         try await Task.sleep(nanoseconds: 50_000_000)
-        #expect(harness.service.setChildStatusCalls.first?.expectedAgeOutYear == 2031)
+        #expect(harness.service.setChildStatusCalls.first?.expectedAgeOutYearMonth == 203103)
     }
 
     @Test func markAsChildIsRefusedForNonManageableTargets() {
@@ -463,7 +463,7 @@ struct FamilySettingsChildManagementTests {
                 createdAt: Date(timeIntervalSince1970: 100),
                 correctionReason: nil,
                 guardianAffirmed: true,
-                expectedAgeOutYear: nil
+                expectedAgeOutYearMonth: nil
             )
         ])
 
@@ -488,12 +488,12 @@ struct FamilyChildPrivacyViewModelTests {
         let older = ParentalConsentRecord(
             id: "1", eventType: .declared, rawEventType: "AUDIT_CHILD_REGISTRATION_DECLARED",
             createdAt: Date(timeIntervalSince1970: 100), correctionReason: nil,
-            guardianAffirmed: nil, expectedAgeOutYear: nil
+            guardianAffirmed: nil, expectedAgeOutYearMonth: nil
         )
         let newer = ParentalConsentRecord(
             id: "2", eventType: .granted, rawEventType: "AUDIT_PARENTAL_CONSENT_GRANTED",
             createdAt: Date(timeIntervalSince1970: 900), correctionReason: nil,
-            guardianAffirmed: true, expectedAgeOutYear: nil
+            guardianAffirmed: true, expectedAgeOutYearMonth: nil
         )
         let viewModel = FamilyChildPrivacyViewModel(
             loadConsentHistory: { _ in ParentalConsentStatus(records: [older, newer]) }

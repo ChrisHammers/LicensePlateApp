@@ -1443,7 +1443,7 @@
 "family.child.policy_links_hint" = "Utilisez le rotor de liens pour ouvrir les Conditions d'utilisation ou la Politique de confidentialité";
 "family.child.guardian_affirmation" = "Je confirme que je suis le parent ou le tuteur légal de cet enfant et que j'ai au moins 18 ans.";
 "family.child.guardian_affirmation_hint" = "Obligatoire pour donner le consentement parental";
-"family.child.age_out_label" = "Année de ses 13 ans (facultatif)";
+"family.child.age_out_label" = "Date de ses 13 ans (facultatif)";
 "family.child.age_out_none" = "Non précisé";
 "family.child.age_out_hint" = "Facultatif. Conservé comme rappel pour vous : rien ne change automatiquement.";
 "family.child.toggle_title" = "Ce membre est un enfant (moins de 13 ans)";

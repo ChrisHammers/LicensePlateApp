@@ -40,7 +40,7 @@ describe("childConsent writers", () => {
       actorId: "parent",
       actorRole: "creator",
       method: "manager_set",
-      expectedAgeOutYear: 2031,
+      expectedAgeOutYearMonth: 2031,
       removedFriendEdgeCount: 1,
       clientMetadata: CLIENT_METADATA,
     });

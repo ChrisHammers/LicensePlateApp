@@ -53,7 +53,7 @@ export const setFamilyMemberChildStatus = enforcedCallable(async (data, context)
     correctionReason: data?.correctionReason,
     consentAcknowledged: data?.consentAcknowledged,
     guardianAffirmed: data?.guardianAffirmed,
-    expectedAgeOutYear: data?.expectedAgeOutYear,
+    expectedAgeOutYearMonth: data?.expectedAgeOutYearMonth,
     clientMetadata,
   });
 });

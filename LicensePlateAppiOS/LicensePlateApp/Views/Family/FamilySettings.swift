@@ -434,7 +434,7 @@ private struct FamilyChildConsentSheet: View {
                             yearOptions: viewModel.expectedAgeOutYearOptions,
                             onConsentAcknowledgedChange: { viewModel.setChildConsentAcknowledged($0) },
                             onGuardianAffirmedChange: { viewModel.setChildGuardianAffirmed($0) },
-                            onExpectedAgeOutYearChange: { viewModel.setChildExpectedAgeOutYear($0) }
+                            onExpectedAgeOutYearMonthChange: { viewModel.setChildExpectedAgeOutYearMonth($0) }
                         )
                     }
                     .listRowBackground(Color.Theme.cardBackground)

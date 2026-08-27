@@ -21,6 +21,17 @@ extension String {
 }
 
 struct LocalizationHelper {
+    /// Localized standalone month name in the app's selected language — formatter
+    /// symbols, so no per-month strings ship in the catalogs. Shared by the age gate
+    /// and the guardian's turns-13 picker.
+    static func monthName(_ month: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: currentAppLanguage.localeCode)
+        let symbols = formatter.standaloneMonthSymbols ?? formatter.monthSymbols ?? []
+        guard month >= 1, month <= symbols.count else { return String(month) }
+        return symbols[month - 1]
+    }
+
     /// Get the current app language from UserDefaults
     static var currentAppLanguage: AppLanguage {
         let appLanguageRaw = UserDefaults.standard.string(forKey: "appLanguage") ?? AppLanguage.english.rawValue
