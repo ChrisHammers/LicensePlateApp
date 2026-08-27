@@ -342,3 +342,104 @@ describe("FR-66(d): createShareCode is bound to the caller's own family", () => 
     expect(result.code).toHaveLength(6);
   });
 });
+
+// ---------------------------------------------------------------------------
+// FR-86 extended to invites (device pass 2026-08-26) — the invitee's identity is
+// stamped onto the invite doc at redemption, because the captain's "Waiting for
+// response" row renders the invitee and FR-12 denies the captain the users/{uid}
+// read. Same pinned two-field pair as the pending row (§312.5(c)(1)).
+// ---------------------------------------------------------------------------
+
+describe("FR-86: redemption stamps the invitee onto the family invite", () => {
+  it("stamps userName and avatarId from the redeemer's profile", async () => {
+    db().seed("users/kid", {
+      userName: "Speedy",
+      avatarId: "scout_otter",
+      isChildAccount: true,
+    });
+
+    const { inviteId } = (await redeem("kid", "FAM111", "family")) as {
+      inviteId: string;
+    };
+    const invite = db().store.get(`invites/${inviteId}`)!;
+    expect(invite.userName).toBe("Speedy");
+    expect(invite.avatarId).toBe("scout_otter");
+  });
+
+  it("carries NO contact field — exhaustive keys, same boundary as the pending row", async () => {
+    db().seed("users/kid", {
+      userName: "Speedy",
+      avatarId: "scout_otter",
+      isChildAccount: true,
+      email: "kid@example.com",
+      phoneNumber: "+15555550123",
+      fcmToken: "device-token",
+      searchableEmail: "kid@example.com",
+    });
+
+    const { inviteId } = (await redeem("kid", "FAM111", "family")) as {
+      inviteId: string;
+    };
+    const invite = db().store.get(`invites/${inviteId}`)!;
+    expect(Object.keys(invite).sort()).toEqual(
+      [
+        "avatarId",
+        "codeId",
+        "createdAt",
+        "expiresAt",
+        "familyId",
+        "familyName",
+        "fromUserId",
+        "method",
+        "status",
+        "toUserId",
+        "type",
+        "userName",
+      ].sort()
+    );
+  });
+
+  it("re-stamps current values on the F-44 reuse-refresh path", async () => {
+    db().seed("users/kid", {
+      userName: "Speedy",
+      avatarId: "scout_otter",
+      isChildAccount: true,
+    });
+
+    const first = (await redeem("kid", "FAM111", "family")) as { inviteId: string };
+
+    db().seed("users/kid", {
+      ...db().store.get("users/kid")!,
+      userName: "Speedy2",
+      avatarId: "navigator_raccoon",
+    });
+
+    const second = (await redeem("kid", "FAM111", "family")) as { inviteId: string };
+    expect(second.inviteId).toBe(first.inviteId);
+    expect(invitePaths()).toHaveLength(1);
+
+    const invite = db().store.get(`invites/${first.inviteId}`)!;
+    expect(invite.userName).toBe("Speedy2");
+    expect(invite.avatarId).toBe("navigator_raccoon");
+  });
+
+  it("omits absent fields so the client keeps its Pending User fallback", async () => {
+    db().seed("users/kid", { isChildAccount: true });
+
+    const { inviteId } = (await redeem("kid", "FAM111", "family")) as {
+      inviteId: string;
+    };
+    const invite = db().store.get(`invites/${inviteId}`)!;
+    expect("userName" in invite).toBe(false);
+    expect("avatarId" in invite).toBe(false);
+  });
+
+  it("does not stamp friend invites — no read, no fields", async () => {
+    const { inviteId } = (await redeem("outsider", "FRD222", "friend")) as {
+      inviteId: string;
+    };
+    const invite = db().store.get(`invites/${inviteId}`)!;
+    expect("userName" in invite).toBe(false);
+    expect("avatarId" in invite).toBe(false);
+  });
+});

@@ -1253,6 +1253,7 @@
 "family.awaiting_approval.actions_locked" = "Create and Join are unavailable until this request is resolved.";
 "family.a11y.outgoing_invite" = "Outgoing family invite to %@, @%@, waiting for response";
 "family.a11y.outgoing_invite_unknown" = "Outgoing family invite, waiting for response";
+"family.a11y.outgoing_invite_stamped" = "Outgoing family invite to %@, waiting for response";
 "Pending invite already exists." = "Pending invite already exists.";
 
 /* Role permission — family leave / remove + trip passenger management */

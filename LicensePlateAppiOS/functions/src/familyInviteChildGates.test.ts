@@ -117,6 +117,25 @@ describe("FR-15: family invites aimed at a child", () => {
     const result = (await invite("parent", "adult")) as { inviteId: string };
     expect(result.inviteId).toBeTruthy();
   });
+
+  /**
+   * FR-86 extended to invites (2026-08-26): the invitee's identity rides the invite doc so
+   * the family's "Waiting for response" row can render a child whose users/{uid} the
+   * members cannot read (FR-12). `targetUserData` is already in hand for the FR-15 gate —
+   * the stamp adds no read.
+   */
+  it("stamps the invitee's userName and avatarId onto the invite doc", async () => {
+    db().seed("users/lonekid", {
+      userName: "LoneKid",
+      avatarId: "scout_otter",
+      isChildAccount: true,
+    });
+    const result = (await invite("parent", "lonekid")) as { inviteId: string };
+    expect(db().store.get(`invites/${result.inviteId}`)).toMatchObject({
+      userName: "LoneKid",
+      avatarId: "scout_otter",
+    });
+  });
 });
 
 describe("FR-24: children cannot send family invites or found families", () => {

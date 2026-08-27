@@ -26,6 +26,15 @@ class InviteRepository: ObservableObject {
     @Published var invites: [Invite] = []
     /// Pending + historical family invites for `listeningFamilyId` (member-visible).
     @Published var familyInvites: [Invite] = []
+    /// FR-86 render projection for OUTGOING family invites, mirroring
+    /// `FamilyRepository.pendingIdentityStamps` one-to-one: the INVITEE identity the server
+    /// stamped onto `invites/{id}` (`userName`/`avatarId`), keyed familyId → inviteId, so the
+    /// captain's "Waiting for response" row can render a child the captain is forbidden
+    /// (FR-12) from resolving via `users/{uid}`. Lives OUTSIDE the `Invite` @Model
+    /// deliberately: both VersionedSchemas are frozen, and a `@Transient` would be nil on
+    /// every store-fetched row — which is every row the dashboard renders (the exact trap
+    /// documented on `PendingJoinRequest`).
+    @Published private(set) var inviteIdentityStamps: [String: [String: PendingIdentityStamp]] = [:]
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -135,6 +144,16 @@ class InviteRepository: ObservableObject {
         guard let snapshot = snapshot, let modelContext = modelContext else { return }
 
         upsertInvites(from: snapshot, into: modelContext)
+        // Capture the FR-86 invitee stamps off the RAW docs before the row publish below —
+        // the same snapshot that writes the stamps republishes the rows immediately after,
+        // so the row publish is already the render trigger (the ordering argument documented
+        // at `FamilyDashboardViewModel.identityStamp(for:)`).
+        applyInviteIdentityStamps(
+            Self.parseInviteIdentityStamps(
+                documents: snapshot.documents.map { ($0.documentID, $0.data()) }
+            ),
+            familyId: familyId
+        )
         try? modelContext.save()
         refreshFamilyInvitesFromCache(familyId: familyId)
 
@@ -198,6 +217,35 @@ class InviteRepository: ObservableObject {
         familyListeners.removeAll()
         listeningFamilyId = nil
         familyInvites = []
+        inviteIdentityStamps = [:]
+    }
+
+    // MARK: - FR-86 invitee identity stamps (outgoing invites)
+
+    /// The stamped invitee identity for one outgoing invite, or `nil` when the server
+    /// stamped nothing (or the rows came from the SwiftData cache without a decode this
+    /// session). Consumers keep their "Pending User" + placeholder fallback for `nil`.
+    func inviteIdentityStamp(familyId: String, inviteId: String) -> PendingIdentityStamp? {
+        inviteIdentityStamps[familyId]?[inviteId]
+    }
+
+    /// Test seam mirroring `FamilyRepository.applyPendingIdentityStamps`: one write point
+    /// that does not require a live Firestore snapshot.
+    func applyInviteIdentityStamps(_ stamps: [String: PendingIdentityStamp], familyId: String) {
+        inviteIdentityStamps[familyId] = stamps
+    }
+
+    /// Parses the FR-86 stamps out of a raw invites snapshot. Split out so the decode is
+    /// testable without the network — the reinstall shape (cold store, fresh decode) is
+    /// exactly what this has to get right.
+    static func parseInviteIdentityStamps(
+        documents: [(inviteId: String, data: [String: Any])]
+    ) -> [String: PendingIdentityStamp] {
+        var stamps: [String: PendingIdentityStamp] = [:]
+        for document in documents {
+            stamps[document.inviteId] = PendingIdentityStamp(firestoreData: document.data)
+        }
+        return stamps
     }
 
     /// Hard sign-out: wipe all cached invites and clear published state.
@@ -207,6 +255,7 @@ class InviteRepository: ObservableObject {
         listeningFamilyId = nil
         invites = []
         familyInvites = []
+        inviteIdentityStamps = [:]
         errorMessage = nil
         guard let modelContext else { return }
         try modelContext.delete(model: Invite.self)

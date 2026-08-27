@@ -137,7 +137,10 @@ struct FamilyDashboard: View {
                         if !viewModel.outgoingPendingInvites.isEmpty {
                             Section("Waiting for response".localized) {
                                 ForEach(viewModel.outgoingPendingInvites) { invite in
-                                    FamilyOutgoingInviteRow(invite: invite)
+                                    FamilyOutgoingInviteRow(
+                                        invite: invite,
+                                        stamp: viewModel.identityStamp(for: invite)
+                                    )
                                 }
                             }
                             .listRowBackground(Color.Theme.cardBackground)
@@ -548,11 +551,20 @@ struct FamilyMemberRow: View {
 
 private struct FamilyOutgoingInviteRow: View {
     let invite: Invite
+    /// FR-86 stamp for the INVITEE, read off the invite doc itself (server-stamped at
+    /// creation) — the only identity source that can succeed for a child invitee, since
+    /// FR-12 rightly denies this device the `users/{uid}` read `resolveUserIfNeeded`
+    /// attempts below. `nil` keeps the "Pending User" + placeholder fallback.
+    var stamp: PendingIdentityStamp?
     @State private var resolvedUser: AppUser?
 
     private var displayUser: AppUser? {
         resolvedUser
     }
+
+    private var stampedDisplayName: String? { stamp?.userName }
+
+    private var stampedAvatarId: String? { stamp?.avatarId }
 
     private var inviteeUserId: String? {
         invite.toUserId
@@ -571,9 +583,11 @@ private struct FamilyOutgoingInviteRow: View {
                 .accessibilityLabel(outgoingInviteAccessibilityLabel)
             } else {
                 HStack {
-                    AvatarImageView(avatarId: nil, size: 50)
+                    // Unknown/absent id falls back to the standard placeholder icon —
+                    // same catalog lookup roster rows use (AvatarImageView(avatarId:)).
+                    AvatarImageView(avatarId: stampedAvatarId, size: 50)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Pending User".localized)
+                        Text(stampedDisplayName ?? "Pending User".localized)
                             .font(.system(.body, design: .rounded))
                             .fontWeight(.semibold)
                             .foregroundStyle(Color.Theme.primaryBlue)
@@ -597,6 +611,12 @@ private struct FamilyOutgoingInviteRow: View {
     private var outgoingInviteAccessibilityLabel: String {
         if let user = displayUser {
             return "family.a11y.outgoing_invite".localized(user.displayName, user.userName)
+        }
+        // Stamped child invitee (FR-86): name the invitee even though their user doc is
+        // unreadable. A real format key, not concatenation, so VoiceOver keeps the
+        // "outgoing family invite" framing its sibling branches announce, per locale.
+        if let name = stampedDisplayName {
+            return "family.a11y.outgoing_invite_stamped".localized(name)
         }
         return "family.a11y.outgoing_invite_unknown".localized
     }

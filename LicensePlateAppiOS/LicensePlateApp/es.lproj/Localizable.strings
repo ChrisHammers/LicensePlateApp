@@ -1222,6 +1222,7 @@
 "family.awaiting_approval.actions_locked" = "Crear y Unirse no están disponibles hasta que se resuelva esta solicitud.";
 "family.a11y.outgoing_invite" = "Invitación familiar enviada a %@, @%@, esperando respuesta";
 "family.a11y.outgoing_invite_unknown" = "Invitación familiar enviada, esperando respuesta";
+"family.a11y.outgoing_invite_stamped" = "Invitación familiar enviada a %@, esperando respuesta";
 "Pending invite already exists." = "Ya existe una invitación pendiente.";
 
 /* Role permission — family leave / remove + trip passenger management */

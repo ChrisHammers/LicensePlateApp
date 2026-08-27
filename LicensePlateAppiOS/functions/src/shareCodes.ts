@@ -10,7 +10,10 @@ import {
 import { assertCallerIsNotChild, isChildAccount } from "./childAccessGuards";
 import { CHILD_TARGET_NOT_SEARCHABLE_MESSAGE } from "./childAccountCore";
 import { consumeInviteRateLimit } from "./inviteRateLimit";
-import { timestampToMillis } from "./familyJoinRequestIntegrity";
+import {
+  buildPendingRequestIdentity,
+  timestampToMillis,
+} from "./familyJoinRequestIntegrity";
 import { loadFamilyName } from "./familyInviteDisplay";
 
 const db = admin.firestore();
@@ -258,6 +261,21 @@ export const redeemShareCode = enforcedCallable(
     const expiresAtInvite = new Date();
     expiresAtInvite.setMinutes(expiresAtInvite.getMinutes() + 15);
 
+    // FR-86, extended to the invite itself (2026-08-26): the captain's "Waiting for
+    // response" row renders the INVITEE, and FR-12 rightly denies the captain a read of a
+    // non-family child's `users/{uid}` — so the identity has to travel ON the invite,
+    // stamped server-side, exactly as `families/{id}/pending` rows are stamped at accept.
+    // The consent-seeking flow (wave 8) awaits the child's own profile write before this
+    // callable runs, so the read below sees it; a missing profile simply omits the fields
+    // and the client keeps its "Pending User" fallback. Fields are pinned to
+    // PENDING_REQUEST_IDENTITY_FIELDS (§312.5(c)(1) — identity for the purpose of
+    // obtaining consent). The stamp always describes `toUserId`, never the sender.
+    let inviteeIdentity = {};
+    if (codeData.type === "family") {
+      const redeemerDoc = await db.collection("users").doc(userId).get();
+      inviteeIdentity = buildPendingRequestIdentity(redeemerDoc.data());
+    }
+
     // F-44: ONE live family invite per (family, recipient).
     //
     // Device pass 2026-08-16: the owner entered the same family code twice from one child
@@ -290,6 +308,9 @@ export const redeemShareCode = enforcedCallable(
           method: "code",
           codeId: codeDoc.id,
           expiresAt: admin.firestore.Timestamp.fromDate(expiresAtInvite),
+          // Re-stamp the invitee's CURRENT identity (FR-86 comment above): a retry after a
+          // rename must not leave the captain reading a stale name off the reused invite.
+          ...inviteeIdentity,
         };
         const familyName = await loadFamilyName(codeData.familyId);
         if (familyName) {
@@ -336,6 +357,8 @@ export const redeemShareCode = enforcedCallable(
         if (familyName) {
           inviteData.familyName = familyName;
         }
+        // FR-86 invitee identity — see the comment above `inviteeIdentity`.
+        Object.assign(inviteData, inviteeIdentity);
       }
     }
 

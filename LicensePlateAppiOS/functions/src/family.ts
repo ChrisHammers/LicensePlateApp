@@ -322,6 +322,13 @@ export const sendFamilyInvite = enforcedCallable(
       method: method || "search",
       expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      // FR-86, extended to invites (2026-08-26): stamp the INVITEE's identity so the
+      // captain's "Waiting for response" row can render a child the captain is forbidden
+      // (FR-12) from resolving via users/{uid}. Same pinned two-field pair as the pending
+      // row (§312.5(c)(1)); `targetUserData` was already read above for the FR-15 gate,
+      // so this adds no read. Absent fields are omitted — the client keeps its
+      // "Pending User" fallback.
+      ...buildPendingRequestIdentity(targetUserData),
     };
 
     if (familyName) {

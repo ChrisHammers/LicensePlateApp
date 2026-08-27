@@ -543,6 +543,15 @@ class FamilyDashboardViewModel: ObservableObject {
         )
     }
 
+    /// FR-86 render projection for OUTGOING invite rows ("Waiting for response") — the same
+    /// read-through shape as `identityStamp(for request:)` above, for the same reason: the
+    /// stamps are only ever written by the decode that republishes `familyInvites`
+    /// immediately afterwards, so the row publish is already the render trigger.
+    func identityStamp(for invite: Invite) -> PendingIdentityStamp? {
+        guard let familyId = invite.familyId else { return nil }
+        return inviteRepository?.inviteIdentityStamp(familyId: familyId, inviteId: invite.inviteId)
+    }
+
     private func refreshOutgoingPendingInvites(familyId: String? = nil) {
         let resolvedFamilyId = familyId ?? family?.familyId
         guard let resolvedFamilyId,
@@ -623,16 +632,20 @@ class FamilyDashboardViewModel: ObservableObject {
         return role == .creator || role == .captain
     }
     
-    /// Count of pending family invites received by the current user
+    /// Count of pending family invites received by the current user.
+    ///
+    /// Derived through `SocialInboxBadgeCounts` — the same pure filter the Settings badge
+    /// renders — so the badge and this dashboard's entry-point gates can never disagree
+    /// (device pass 2026-08-26: a count computed twice is a count that diverges).
     var pendingFamilyInvitesCount: Int {
         guard let userId = authService.currentUser?.firebaseUID ?? authService.currentUser?.id,
               let inviteRepository = inviteRepository else {
             return 0
         }
-        let familyInvites = inviteRepository.getFamilyInvites(for: userId)
-        return familyInvites.filter { 
-            $0.toUserId == userId && $0.statusEnum == .pending 
-        }.count
+        return SocialInboxBadgeCounts.counts(
+            from: inviteRepository.getInvites(for: userId),
+            userId: userId
+        ).family
     }
     
     /// Count of pending member requests (for creators/captains to approve)

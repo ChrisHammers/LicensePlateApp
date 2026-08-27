@@ -265,12 +265,24 @@ struct ChildAccountGateView: View {
         /// banner's hourglass so the two surfaces read as one status, and so the state has a
         /// non-textual cue that is not a color.
         var iconOverride: String?
+        /// Device pass 2026-08-26: badge > 0 must imply a reachable entry point. The
+        /// Settings "Family" row badges pending invites for EVERY session, but an
+        /// unconsented child routes HERE, not to `FamilyDashboard` — so the envelope the
+        /// dashboard would have shown never renders, and the child sees a red badge they
+        /// cannot open. This surface therefore lists the invites itself whenever any exist.
+        /// Invites only, never approvals: approvals belong to captains, and a no-family
+        /// child can have none.
+        var showsPendingInvitesButton: Bool = false
     }
 
     static func presentation(
         state: GateState,
-        isFamilyApprovalPending: Bool
+        isFamilyApprovalPending: Bool,
+        pendingFamilyInvitesCount: Int = 0
     ) -> Presentation {
+        // FR-28f's never-stranded rule extends to invites: whichever unconsented variant is
+        // showing, an addressed invite is a route into a family and must stay reachable.
+        let showsPendingInvites = pendingFamilyInvitesCount > 0
         switch state {
         case .unconsented where isFamilyApprovalPending:
             return Presentation(
@@ -283,25 +295,29 @@ struct ChildAccountGateView: View {
                 // ("You can enter a different family code if you need to").
                 bodyKey: "auth_status.child.pending_guidance_body",
                 showsJoinFamilyButton: true,
-                iconOverride: "hourglass"
+                iconOverride: "hourglass",
+                showsPendingInvitesButton: showsPendingInvites
             )
         case .unconsented:
             return Presentation(
                 titleKey: "child_gate.screen.join_title",
                 bodyKey: "child_gate.screen.join_body",
                 showsJoinFamilyButton: true,
-                iconOverride: nil
+                iconOverride: nil,
+                showsPendingInvitesButton: showsPendingInvites
             )
         case .consented:
             // A consented child has a family, so there is nothing to wait for — the pending
             // flag is cleared the moment membership arrives. Ignoring it here means a flag
             // that somehow outlived its own clear cannot put "waiting" on top of a session
-            // that is already in.
+            // that is already in. Same for invites: this session reaches FamilyDashboard
+            // (`.content`), which has its own envelope.
             return Presentation(
                 titleKey: "child_gate.screen.friends_title",
                 bodyKey: "child_gate.screen.friends_body",
                 showsJoinFamilyButton: false,
-                iconOverride: nil
+                iconOverride: nil,
+                showsPendingInvitesButton: false
             )
         }
     }
@@ -309,30 +325,51 @@ struct ChildAccountGateView: View {
     let feature: FriendsFamilyGateFeature
     let state: GateState
 
+    /// Carried through to the pending-invites sheet, whose Accept path is the FR-60 second
+    /// consent exit. `RegisteredAccountGate`'s environment already provides it.
+    @EnvironmentObject private var authService: FirebaseAuthService
+
     /// Observed, not snapshotted: `revision` is bumped on every mutation of the flag, so the
     /// gate flips to the waiting copy the moment a code is redeemed from the sheet this very
     /// screen presents — and back again when membership arrives — without a navigation
     /// round-trip. This is the same live-update seam the home banner uses.
     @ObservedObject private var childRestrictedMode: ChildRestrictedModeService
 
+    /// Same live badge the Settings "Family" row renders — observing the one authority is
+    /// what makes badge > 0 ⟹ entry-point-visible an invariant instead of a coincidence
+    /// (`HomeSettingsAvatarButton` precedent).
+    @ObservedObject private var socialInboxBadges = SocialInboxBadgeService.shared
+
+    /// Preview / test override. Production passes `nil` so the button observes
+    /// `SocialInboxBadgeService` (same seam as `HomeNavigationToolbar`).
+    private let pendingInviteBadgeCountOverride: Int?
+
     @State private var showJoinFamilySheet = false
+    @State private var showPendingInvitesSheet = false
 
     /// The service is injectable for previews only; production always gets the singleton
     /// every other child surface reads, so there is still exactly one pending flag.
     init(
         feature: FriendsFamilyGateFeature,
         state: GateState,
-        childRestrictedMode: ChildRestrictedModeService = .shared
+        childRestrictedMode: ChildRestrictedModeService = .shared,
+        pendingInviteBadgeCountOverride: Int? = nil
     ) {
         self.feature = feature
         self.state = state
         _childRestrictedMode = ObservedObject(wrappedValue: childRestrictedMode)
+        self.pendingInviteBadgeCountOverride = pendingInviteBadgeCountOverride
+    }
+
+    private var pendingFamilyInvitesCount: Int {
+        pendingInviteBadgeCountOverride ?? socialInboxBadges.pendingFamilyInvitesCount
     }
 
     private var presentation: Presentation {
         Self.presentation(
             state: state,
-            isFamilyApprovalPending: childRestrictedMode.isFamilyApprovalPending
+            isFamilyApprovalPending: childRestrictedMode.isFamilyApprovalPending,
+            pendingFamilyInvitesCount: pendingFamilyInvitesCount
         )
     }
 
@@ -390,6 +427,35 @@ struct ChildAccountGateView: View {
                             hint: "child_gate.screen.join_button_hint".localized
                         )
                     }
+
+                    if presentation.showsPendingInvitesButton {
+                        Button {
+                            showPendingInvitesSheet = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "envelope.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .accessibleDecorative()
+                                Text("Pending Invites".localized)
+                                    .font(.system(.body, design: .rounded))
+                                    .fontWeight(.semibold)
+                                Spacer()
+                                BadgeView(count: pendingFamilyInvitesCount)
+                                    .accessibilityHidden(true)
+                            }
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.Theme.cardBackground)
+                            )
+                        }
+                        .accessibleButton(
+                            label: "family.a11y.pending_invites".localized(pendingFamilyInvitesCount),
+                            hint: "family.a11y.opens_pending_invites".localized
+                        )
+                    }
                 }
                 .padding(.horizontal, 24)
                 .accessibilityElement(children: .contain)
@@ -402,6 +468,13 @@ struct ChildAccountGateView: View {
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showJoinFamilySheet) {
             JoinFamilySheet()
+        }
+        .sheet(isPresented: $showPendingInvitesSheet) {
+            // Belt-and-braces explicit injection: the sheet's Accept path runs
+            // `respondToFamilyInvite`, the FR-60 second consent exit, which needs the same
+            // auth service every other consent surface uses.
+            FamilyInvitesView()
+                .environmentObject(authService)
         }
     }
 }
@@ -463,6 +536,17 @@ private func previewPendingChildRestrictedMode() -> ChildRestrictedModeService {
             feature: .family,
             state: .unconsented,
             childRestrictedMode: previewPendingChildRestrictedMode()
+        )
+        .environmentObject(FirebaseAuthService())
+    }
+}
+
+#Preview("Child gate — pending invite waiting") {
+    NavigationStack {
+        ChildAccountGateView(
+            feature: .family,
+            state: .unconsented,
+            pendingInviteBadgeCountOverride: 1
         )
         .environmentObject(FirebaseAuthService())
     }

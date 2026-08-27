@@ -272,4 +272,83 @@ struct ChildShareCodeEntryReachabilityTests {
             )
         )
     }
+
+    // MARK: - Badge ⇒ entry-point parity (device pass 2026-08-26)
+    //
+    // The owner's repro, encoded: a child scanned a family QR, never tapped Accept, and had
+    // a red Family badge (Settings row, via SocialInboxBadgeCounts) with NO surface offering
+    // the invite — because the unconsented child routes to the gate, not to FamilyDashboard,
+    // and the gate had no invites entry. The invariant these tests pin: any state that
+    // renders a nonzero family badge must put a pending-invites entry point on the surface
+    // that session actually reaches.
+
+    /// THE REGRESSION TEST: the exact repro state — one pending family invite addressed to
+    /// a no-family child — badges, routes to the child gate, and the gate now shows the
+    /// Pending Invites button in BOTH unconsented variants (the redeem may have marked
+    /// approval-pending even though Accept was never tapped, so both variants are live states
+    /// for this child).
+    @Test func aNonzeroFamilyBadgeReachesAnEntryPointOnTheChildGate() {
+        let invite = Invite(
+            inviteId: "inv-badge-1",
+            type: .family,
+            fromUserId: "captain-1",
+            toUserId: "child-1",
+            familyId: "fam-1",
+            method: .code,
+            expiresAt: Date().addingTimeInterval(900)
+        )
+        let counts = SocialInboxBadgeCounts.counts(from: [invite], userId: "child-1")
+        #expect(counts.family == 1)
+        #expect(counts.familyInbox > 0)
+
+        #expect(
+            FriendsFamilyGateRouting.destination(
+                isGuestLike: false,
+                childState: .unconsentedChild,
+                feature: .family
+            ) == .childGate(.unconsented)
+        )
+
+        for pending in [true, false] {
+            let presentation = ChildAccountGateView.presentation(
+                state: .unconsented,
+                isFamilyApprovalPending: pending,
+                pendingFamilyInvitesCount: counts.family
+            )
+            #expect(presentation.showsPendingInvitesButton)
+        }
+    }
+
+    /// No invites → no button, in every variant; and the consented variant never shows it
+    /// regardless of count, because that session reaches FamilyDashboard's own envelope.
+    @Test func aZeroCountKeepsThePendingInvitesButtonHidden() {
+        for pending in [true, false] {
+            #expect(
+                ChildAccountGateView.presentation(
+                    state: .unconsented,
+                    isFamilyApprovalPending: pending,
+                    pendingFamilyInvitesCount: 0
+                ).showsPendingInvitesButton == false
+            )
+        }
+        #expect(
+            ChildAccountGateView.presentation(
+                state: .consented,
+                isFamilyApprovalPending: false,
+                pendingFamilyInvitesCount: 3
+            ).showsPendingInvitesButton == false
+        )
+    }
+
+    /// FR-28f extended: with an approval waiting AND an invite pending, both routes into a
+    /// family stay reachable at once — share-code entry and the invite list.
+    @Test func theWaitingVariantKeepsBothRoutesReachable() {
+        let presentation = ChildAccountGateView.presentation(
+            state: .unconsented,
+            isFamilyApprovalPending: true,
+            pendingFamilyInvitesCount: 1
+        )
+        #expect(presentation.showsJoinFamilyButton)
+        #expect(presentation.showsPendingInvitesButton)
+    }
 }

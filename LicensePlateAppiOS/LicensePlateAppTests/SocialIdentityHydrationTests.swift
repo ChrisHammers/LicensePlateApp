@@ -294,4 +294,143 @@ struct SocialIdentityHydrationTests {
         #expect(stamps["req-c"] == nil)
         #expect(stamps.count == 2)
     }
+
+    // MARK: - FR-86 extended to OUTGOING invites (device pass 2026-08-26)
+    //
+    // The captain's "Waiting for response" row renders the INVITEE, whose users/{uid} the
+    // captain is forbidden (FR-12) from reading — so the identity travels on the invite doc,
+    // server-stamped, and projects through InviteRepository exactly as the pending-row
+    // stamps project through FamilyRepository. These tests are the owner's ghost-row repro
+    // (child entered a code, never tapped Accept → captain saw "Pending User" + blank
+    // avatar forever) encoded, per the 2026-08-26 instruction that repro steps land in tests.
+
+    private func rawInviteDocument(
+        familyId: String,
+        toUserId: String,
+        userName: String? = nil,
+        avatarId: String? = nil
+    ) -> [String: Any] {
+        var data: [String: Any] = [
+            "type": "family",
+            "fromUserId": "captain-1",
+            "toUserId": toUserId,
+            "familyId": familyId,
+            "status": "pending",
+            "method": "code",
+            "expiresAt": Timestamp(date: Date().addingTimeInterval(900)),
+            "createdAt": Timestamp(date: Date()),
+        ]
+        if let userName { data["userName"] = userName }
+        if let avatarId { data["avatarId"] = avatarId }
+        return data
+    }
+
+    /// THE GHOST-ROW REGRESSION TEST. A stamped invite read back off a COLD store — the
+    /// reinstall/fresh-launch shape, where no cached AppUser exists and the user-doc read is
+    /// denied — still projects the invitee's name and avatar.
+    @Test func aStampedOutgoingInviteProjectsTheInviteeAcrossAColdStoreFetch() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let familyId = "family-invite-stamp-1"
+        let inviteId = "invite-stamp-1"
+
+        let data = rawInviteDocument(
+            familyId: familyId,
+            toUserId: "child-invitee-1",
+            userName: "pending_pat",
+            avatarId: "scout_otter"
+        )
+
+        context.insert(
+            Invite(
+                inviteId: inviteId,
+                type: .family,
+                fromUserId: "captain-1",
+                toUserId: "child-invitee-1",
+                familyId: familyId,
+                method: .code,
+                expiresAt: Date().addingTimeInterval(900)
+            )
+        )
+        try context.save()
+
+        let inviteRepository = InviteRepository.shared
+        inviteRepository.setModelContext(context)
+        inviteRepository.applyInviteIdentityStamps(
+            InviteRepository.parseInviteIdentityStamps(
+                documents: [(inviteId: inviteId, data: data)]
+            ),
+            familyId: familyId
+        )
+
+        // Read back the way the dashboard does — a store fetch, not the decoded array.
+        let rows = inviteRepository.getPendingFamilyInvites(familyId: familyId)
+        #expect(rows.count == 1)
+
+        let stamp = try #require(
+            inviteRepository.inviteIdentityStamp(familyId: familyId, inviteId: inviteId)
+        )
+        #expect(stamp.userName == "pending_pat")
+        #expect(stamp.avatarId == "scout_otter")
+    }
+
+    /// An unstamped invite (pre-stamp rows, or a child whose best-effort profile publish
+    /// failed) resolves to `nil`, so the row's "Pending User" + placeholder fallback stays
+    /// the rendered state — degraded, never wrong.
+    @Test func anUnstampedOutgoingInviteFallsBackToThePlaceholder() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let familyId = "family-invite-stamp-2"
+        let inviteId = "invite-stamp-2"
+
+        context.insert(
+            Invite(
+                inviteId: inviteId,
+                type: .family,
+                fromUserId: "captain-1",
+                toUserId: "child-invitee-2",
+                familyId: familyId,
+                method: .code,
+                expiresAt: Date().addingTimeInterval(900)
+            )
+        )
+        try context.save()
+
+        let inviteRepository = InviteRepository.shared
+        inviteRepository.setModelContext(context)
+        inviteRepository.applyInviteIdentityStamps(
+            InviteRepository.parseInviteIdentityStamps(
+                documents: [(
+                    inviteId: inviteId,
+                    data: rawInviteDocument(familyId: familyId, toUserId: "child-invitee-2")
+                )]
+            ),
+            familyId: familyId
+        )
+
+        #expect(inviteRepository.getPendingFamilyInvites(familyId: familyId).count == 1)
+        #expect(inviteRepository.inviteIdentityStamp(familyId: familyId, inviteId: inviteId) == nil)
+    }
+
+    /// Stamps are keyed per invite, so two invitees stay distinguishable and one unstamped
+    /// invite cannot blank out another — the same guarantee the pending-row projection makes.
+    @Test func inviteStampsAreKeyedPerInviteSoInviteesStayDistinguishable() {
+        let stamps = InviteRepository.parseInviteIdentityStamps(documents: [
+            (
+                inviteId: "inv-a",
+                data: ["userName": "pending_pat", "avatarId": "scout_otter"]
+            ),
+            (
+                inviteId: "inv-b",
+                data: ["userName": "pending_sam", "avatarId": "navigator_raccoon"]
+            ),
+            (inviteId: "inv-c", data: [:])
+        ])
+
+        #expect(stamps["inv-a"]?.userName == "pending_pat")
+        #expect(stamps["inv-b"]?.userName == "pending_sam")
+        #expect(stamps["inv-b"]?.avatarId == "navigator_raccoon")
+        #expect(stamps["inv-c"] == nil)
+        #expect(stamps.count == 2)
+    }
 }
