@@ -524,6 +524,30 @@ export async function runPostConfirmationFollowUps(
   } catch (error) {
     functions.logger.error("post-confirmation push failed (non-fatal)", { error });
   }
+
+  // The guardian's device learns about the admission OUT-OF-BAND — the click happened
+  // in a mail client, not in the app, so no callable return refreshes the captain UI
+  // (owner device pass 2026-08-27: stale badge + awaiting card until relaunch). This
+  // push is both the confirmation beat and the client's refresh trigger (the arrival
+  // re-arms the family listeners; the tap deep-links to the family). Deliberately
+  // name-free: the child's username stays off the push channel.
+  try {
+    const guardianToken = await getFCMTokenForSocialPush(request.guardianUid, "family");
+    if (guardianToken) {
+      await sendPushNotification(
+        guardianToken,
+        "Consent Confirmed",
+        "Your player is now part of your family",
+        {
+          type: "family_consent_confirmed",
+          familyId: request.familyId,
+          deepLink: `roadtrip-royale://family/${request.familyId}`,
+        }
+      );
+    }
+  } catch (error) {
+    functions.logger.error("post-confirmation guardian push failed (non-fatal)", { error });
+  }
 }
 
 /**

@@ -169,4 +169,17 @@ final class SocialInboxBadgeCountsTests: XCTestCase {
         XCTAssertEqual(counts.familyInbox, 2)
         XCTAssertEqual(counts.total, 3)
     }
+
+    // §3.1.2 step-4 follow-up (owner device pass 2026-08-27): family-state pushes re-arm
+    // the family listeners on ARRIVAL — email_plus admission completes out-of-band, so
+    // this policy is what keeps the captain surface from rendering a stale row.
+    func testFamilyStatePushPolicyReassertsOnFamilyStateTypesOnly() {
+        XCTAssertTrue(FamilyStatePushPolicy.shouldReassertFamilyState(typeValue: "family_consent_confirmed"))
+        XCTAssertTrue(FamilyStatePushPolicy.shouldReassertFamilyState(typeValue: "family_join_approved"))
+        XCTAssertTrue(FamilyStatePushPolicy.shouldReassertFamilyState(typeValue: "family_join_request"))
+        XCTAssertFalse(FamilyStatePushPolicy.shouldReassertFamilyState(typeValue: "friend_invite"))
+        XCTAssertFalse(FamilyStatePushPolicy.shouldReassertFamilyState(typeValue: "trip_invite"))
+        XCTAssertFalse(FamilyStatePushPolicy.shouldReassertFamilyState(typeValue: nil))
+        XCTAssertFalse(FamilyStatePushPolicy.shouldReassertFamilyState(typeValue: 42))
+    }
 }

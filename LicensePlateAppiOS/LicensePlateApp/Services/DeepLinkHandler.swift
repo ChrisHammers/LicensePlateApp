@@ -180,6 +180,15 @@ class DeepLinkHandler: ObservableObject {
                 params: ["familyId": familyId, "source": "notification"]
             ))
             return .familyHome(familyId: familyId)
+        case "family_consent_confirmed":
+            // The guardian's out-of-band confirmation landed; tapping opens the family
+            // they just admitted the player into.
+            guard let familyId else { return nil }
+            AnalyticsService.shared.log(.deepLinkOpened(
+                type: "family_home",
+                params: ["familyId": familyId, "source": "notification"]
+            ))
+            return .familyHome(familyId: familyId)
         case "plate_found", "trip_ended":
             let tripSessionId = stringValue(userInfo["tripSessionId"]) ?? stringValue(userInfo["trip_session_id"])
             guard let tripSessionId, !tripSessionId.isEmpty else { return nil }

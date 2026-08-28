@@ -315,6 +315,10 @@ class UserRepository: ObservableObject {
     ///   fresh SERVER read (see `ChildFlagIngestPolicy`). Only then may it resolve the
     ///   child projection; profile fields merge either way.
     func mergeRemoteUserDocument(userId: String, data: [String: Any], isServerResolved: Bool) async throws {
+        // §3.1.1 item 7 (2026-08-28): the profile listener's twin of the `cacheUsers`
+        // guard — its first delivery is routinely the CACHED pre-deletion document, and
+        // merging it re-attaches the retired identity the residue teardown cleared.
+        guard !AgeGateStore.shared.isIdentityDetached(userId) else { return }
         try await mergeRemoteProfileIntoCache(userId: userId, data: data, isServerResolved: isServerResolved)
         postUserProfilesMergedIfNeeded([userId])
     }
@@ -573,8 +577,20 @@ class UserRepository: ObservableObject {
     /// Cache users in SwiftData for offline access
     private func cacheUsers(_ users: [AppUser]) {
         guard let modelContext = modelContext else { return }
-        
+
         for user in users {
+            // §3.1.1 item 7 (2026-08-28): never re-cache a DETACHED identity. The remote
+            // read that produced `user` can be served from the Firestore CLIENT CACHE
+            // (rules are not re-checked for cache reads), which still holds the
+            // pre-deletion document — and this upsert would faithfully re-attach
+            // `activeFamilyId` and re-fill the nil'd `firebaseUID` the residue teardown
+            // just cleared. The retired row belongs to the LOCAL player now; no remote
+            // snapshot may dress it back up.
+            let ratchet = AgeGateStore.shared
+            if ratchet.isIdentityDetached(user.id)
+                || user.firebaseUID.map({ ratchet.isIdentityDetached($0) }) == true {
+                continue
+            }
             let searchId = user.id
             let searchFirebase = user.firebaseUID ?? ""
             let idDescriptor = FetchDescriptor<AppUser>(

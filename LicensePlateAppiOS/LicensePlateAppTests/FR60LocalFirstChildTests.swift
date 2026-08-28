@@ -15,6 +15,7 @@
 //
 
 import Foundation
+import FirebaseAuth
 import Testing
 @testable import LicensePlateApp
 
@@ -621,6 +622,63 @@ struct FR60DetachedIdentityTests {
         #expect(DetachedIdentityDetectionPolicy.requiresDetach(
             isAnonymousSession: false, documentStatus: .confirmedAbsent, wasDeclaredByThisDevice: true
         ) == false)
+    }
+
+    // §3.1.1 item 7 (2026-08-28, owner device pass): the Auth server's own death verdict
+    // (forced-refresh failure with a definitive code) ends the limbo a lapsed JWT leaves —
+    // and it needs NO delivered-declaration corroboration, because it is the server itself
+    // answering about the IDENTITY, not an inference from a missing document.
+    @Test func theAuthServersDeathVerdictDetachesWithoutCorroboration() {
+        #expect(DetachedIdentityDetectionPolicy.requiresDetach(
+            isAnonymousSession: true, documentStatus: .deadIdentity, wasDeclaredByThisDevice: true
+        ) == true)
+        // Stronger than absence: no declared-gate needed.
+        #expect(DetachedIdentityDetectionPolicy.requiresDetach(
+            isAnonymousSession: true, documentStatus: .deadIdentity, wasDeclaredByThisDevice: false
+        ) == true)
+        // Registered accounts keep their sign-in route; never detached here.
+        #expect(DetachedIdentityDetectionPolicy.requiresDetach(
+            isAnonymousSession: false, documentStatus: .deadIdentity, wasDeclaredByThisDevice: true
+        ) == false)
+    }
+
+    // §3.1.1 item 7 (2026-08-28, wedged-sim forensics): the teardown is a STATE to
+    // converge to — a ratcheted uid with ANY residue (row firebaseUID, activeFamilyId,
+    // or local family rows) re-runs the teardown; a converged device no-ops.
+    @Test func residueUnderARatchetedUidReRunsTheTeardown() {
+        // The owner's wedge: ratcheted, row still fully attached.
+        #expect(DetachedIdentityDetectionPolicy.requiresResidueTeardown(
+            isDetachedUid: true, rowFirebaseUidPresent: true,
+            rowActiveFamilyIdPresent: true, hasLocalFamilyRows: true
+        ) == true)
+        // Any single residue is enough.
+        #expect(DetachedIdentityDetectionPolicy.requiresResidueTeardown(
+            isDetachedUid: true, rowFirebaseUidPresent: false,
+            rowActiveFamilyIdPresent: false, hasLocalFamilyRows: true
+        ) == true)
+        #expect(DetachedIdentityDetectionPolicy.requiresResidueTeardown(
+            isDetachedUid: true, rowFirebaseUidPresent: false,
+            rowActiveFamilyIdPresent: true, hasLocalFamilyRows: false
+        ) == true)
+        // Converged: ratcheted but clean — no-op forever.
+        #expect(DetachedIdentityDetectionPolicy.requiresResidueTeardown(
+            isDetachedUid: true, rowFirebaseUidPresent: false,
+            rowActiveFamilyIdPresent: false, hasLocalFamilyRows: false
+        ) == false)
+        // A live (un-ratcheted) identity with a family is just a normal member.
+        #expect(DetachedIdentityDetectionPolicy.requiresResidueTeardown(
+            isDetachedUid: false, rowFirebaseUidPresent: true,
+            rowActiveFamilyIdPresent: true, hasLocalFamilyRows: true
+        ) == false)
+    }
+
+    // §3.1.1 item 7 (2026-08-28): the retired uid on `AppUser.id` re-derives on every
+    // launch; local rows may resolve through it, cloud channels never bind with it.
+    @Test func aDetachedUidNeverKeysACloudChannel() {
+        #expect(DetachedIdentityDetectionPolicy.cloudChannelUserId("live-uid") { _ in false } == "live-uid")
+        #expect(DetachedIdentityDetectionPolicy.cloudChannelUserId("dead-uid") { _ in true } == nil)
+        #expect(DetachedIdentityDetectionPolicy.cloudChannelUserId(nil) { _ in false } == nil)
+        #expect(DetachedIdentityDetectionPolicy.cloudChannelUserId("") { _ in false } == nil)
     }
 
     /// Why the existing hold never covered this — the answer to "the `UserDocumentWritePolicy`
@@ -1644,5 +1702,40 @@ struct FR26StickyChildReadmissionTests {
             isChildSession: true,
             category: .under13
         ) == .settleThenProvision)
+    }
+}
+
+// §3.1.1 item 7 (2026-08-28): the refresh-failure classifier behind `.deadIdentity`.
+// A forced token refresh consults the Auth server; only these verdicts may end a
+// session — anything network-shaped must stay indistinguishable from offline.
+struct IdentityRefreshVerdictTests {
+
+    @Test func definitiveDeathCodesAreExactlyTheTerminalAuthVerdicts() {
+        for code in [
+            AuthErrorCode.userNotFound.rawValue,
+            AuthErrorCode.userDisabled.rawValue,
+            AuthErrorCode.userTokenExpired.rawValue,
+            AuthErrorCode.invalidUserToken.rawValue,
+        ] {
+            #expect(IdentityRefreshVerdict.isDefinitiveIdentityDeath(
+                domain: AuthErrorDomain, code: code
+            ) == true)
+        }
+    }
+
+    @Test func networkShapedAndForeignFailuresNeverEndASession() {
+        #expect(IdentityRefreshVerdict.isDefinitiveIdentityDeath(
+            domain: AuthErrorDomain, code: AuthErrorCode.networkError.rawValue
+        ) == false)
+        #expect(IdentityRefreshVerdict.isDefinitiveIdentityDeath(
+            domain: AuthErrorDomain, code: AuthErrorCode.internalError.rawValue
+        ) == false)
+        #expect(IdentityRefreshVerdict.isDefinitiveIdentityDeath(
+            domain: AuthErrorDomain, code: AuthErrorCode.tooManyRequests.rawValue
+        ) == false)
+        // The right code in the wrong domain is somebody else's error.
+        #expect(IdentityRefreshVerdict.isDefinitiveIdentityDeath(
+            domain: "SomeOtherDomain", code: AuthErrorCode.userNotFound.rawValue
+        ) == false)
     }
 }

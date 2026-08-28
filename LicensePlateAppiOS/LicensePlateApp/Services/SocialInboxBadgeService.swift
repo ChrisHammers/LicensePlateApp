@@ -8,6 +8,25 @@
 import Foundation
 import Combine
 
+/// §3.1.2 step-4 follow-up (owner device pass 2026-08-27): push types that mean family
+/// membership/approval state changed SERVER-SIDE while this device may hold a stale
+/// projection — the email_plus admission completes out-of-band in a mail client, so no
+/// callable return refreshes the captain UI. ARRIVAL of one of these (not just a tap)
+/// re-arms the family listeners so badges and the approvals surface reconcile live,
+/// including after a permission-error teardown stopped the repository listeners.
+enum FamilyStatePushPolicy {
+    static let refreshingTypes: Set<String> = [
+        "family_consent_confirmed",
+        "family_join_approved",
+        "family_join_request",
+    ]
+
+    static func shouldReassertFamilyState(typeValue: Any?) -> Bool {
+        guard let type = typeValue as? String else { return false }
+        return refreshingTypes.contains(type)
+    }
+}
+
 @MainActor
 final class SocialInboxBadgeService: ObservableObject {
     static let shared = SocialInboxBadgeService()

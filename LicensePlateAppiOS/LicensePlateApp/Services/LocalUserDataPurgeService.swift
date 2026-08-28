@@ -34,6 +34,36 @@ final class LocalUserDataPurgeService {
         resetInMemoryServices()
     }
 
+    /// §3.1.1 item 7 (2026-08-28): teardown for a DETACHED identity — the account behind
+    /// the session is gone but the PLAYER keeps their device. Two halves, both required:
+    /// stop every uid-keyed cloud channel (they can only bounce off rules or resurrect
+    /// server state the deletion just removed), and wipe the SOCIAL projections that
+    /// would otherwise keep rendering a family the server dissolved (owner device pass:
+    /// a removed-and-deleted child's app showed "part of the team" from purely local
+    /// rows, launch after launch). Gameplay rows are deliberately KEPT — FR-28h carries
+    /// local history across the consent boundary, resolved by the retired uid on
+    /// `AppUser.id`. Best-effort on the disk wipes: a failed cache delete must not stop
+    /// the detach that is protecting the session.
+    func purgeSocialStateForDetachedIdentity() {
+        TripInviteRepository.shared.stopListening()
+        FriendshipRepository.shared.stopListening()
+        InviteRepository.shared.stopListening()
+        FamilyRepository.shared.stopListening()
+        UserProgressionRepository.shared.stopListening()
+        XpGrantRemoteRepository.shared.stopListening()
+        UserAchievementRemoteRepository.shared.stopListening()
+        UserProfileListenCoordinator.shared.stopAll()
+        TripCanonicalRemoteSyncService.shared.removeAllIncrementalListeners()
+        PublicLifetimeStatsRepository.shared.stopAllListeners()
+        SocialInboxBadgeService.shared.stopObserving()
+        NotificationRoutingService.shared.stopObserving()
+
+        try? TripInviteRepository.shared.deleteAllLocal()
+        try? FriendshipRepository.shared.deleteAllLocal()
+        try? InviteRepository.shared.deleteAllLocal()
+        try? FamilyRepository.shared.deleteAllLocal()
+    }
+
     // MARK: - Freeze
 
     private func freezeIO() {

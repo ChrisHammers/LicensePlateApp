@@ -42,6 +42,26 @@ class NetworkMonitor: ObservableObject {
 /// 1. On app startup: Create default user, sign in anonymously if online
 /// 2. User can upgrade anonymous account by linking credentials (email/password, OAuth)
 @MainActor
+/// §3.1.1 item 7 (2026-08-28): classifies a TOKEN REFRESH failure. A refresh consults
+/// the Auth server (unlike the stateless ID-token JWT, which keeps authenticating for
+/// its remaining hour after a server-side deletion), so these few codes are a definitive
+/// verdict that the identity no longer exists or can never sign in again — for an
+/// ANONYMOUS session there is no re-authentication, so all four are terminal. Everything
+/// else (network, throttling, internal) is indistinguishable from offline and must never
+/// cost a session.
+enum IdentityRefreshVerdict {
+    nonisolated static let definitiveDeathCodes: Set<Int> = [
+        AuthErrorCode.userNotFound.rawValue,      // deleted server-side
+        AuthErrorCode.userDisabled.rawValue,      // administratively dead
+        AuthErrorCode.userTokenExpired.rawValue,  // refresh token invalidated
+        AuthErrorCode.invalidUserToken.rawValue,
+    ]
+
+    nonisolated static func isDefinitiveIdentityDeath(domain: String, code: Int) -> Bool {
+        domain == AuthErrorDomain && definitiveDeathCodes.contains(code)
+    }
+}
+
 class FirebaseAuthService: ObservableObject {
     @Published var currentUser: AppUser?
     @Published var isAuthenticated = false
@@ -167,8 +187,14 @@ class FirebaseAuthService: ObservableObject {
                 currentUser = existingUser
                 isAuthenticated = true
                 
-                // If online and user has firebaseUID, try to restore Firebase session
-                if isOnline, let firebaseUID = existingUser.firebaseUID {
+                // If online and user has firebaseUID, try to restore Firebase session.
+                // §3.1.1 item 7 (2026-08-28): never for a DETACHED uid — the hydration is
+                // served from the Firestore CLIENT CACHE (rules are not re-checked for
+                // cache reads), so it re-writes the pre-deletion row back over the residue
+                // teardown, resurrecting the retired identity every launch. The residue
+                // sweep below converges the row instead.
+                if isOnline, let firebaseUID = existingUser.firebaseUID,
+                   !AgeGateStore.shared.isIdentityDetached(firebaseUID) {
                     // Try to load from Firestore
                     Task {
                         try? await loadUserDataFromFirestore(userId: firebaseUID)
@@ -281,6 +307,13 @@ class FirebaseAuthService: ObservableObject {
     /// Debounced, because `scenePhase` flips on every notification-centre pull. A read failure
     /// is never actionable (`.unknown`), so an offline foreground costs nothing but a no-op.
     func verifyAnonymousChildIdentityIfNeeded(force: Bool = false) async {
+        // §3.1.1 item 7 (2026-08-28): converge residue from a prior detach that ran
+        // without `modelContext` — checked before everything, because a wedged device
+        // has no auth session and no verification to run, only state to finish tearing
+        // down. Both callers of this method run after context exists, which is the
+        // property the original detach lacked.
+        await enforceDetachedIdentityResidueTeardownIfNeeded()
+
         // Device pass 2026-08-17 (bug 1): the no-session case is checked FIRST, because it used
         // to be the early return. `guard let firebaseUser = auth.currentUser else { return }`
         // reads as "nothing to verify", but a local player still naming a uid with no Auth
@@ -314,6 +347,43 @@ class FirebaseAuthService: ObservableObject {
         ) else { return }
 
         await detachAnonymousIdentityLocally(uid: uid, reason: .serverDeletedIdentity)
+    }
+
+    /// §3.1.1 item 7 (2026-08-28, wedged-simulator forensics): the detach teardown is a
+    /// STATE, not an event. The ratchet said "detached" while the row still carried the
+    /// retired firebaseUID + activeFamilyId and the local family rows survived — because
+    /// the original detach fired before `modelContext` existed and every row mutation
+    /// was a silent `try?` no-op. Re-running the full teardown here is safe (all of it
+    /// is idempotent: re-mark, sign-out already-signed-out, nil nils, purge empties) and
+    /// converges the device no matter which build the one-shot originally fired on.
+    private func enforceDetachedIdentityResidueTeardownIfNeeded() async {
+        guard let user = currentUser else { return }
+        let store = AgeGateStore.shared
+        let candidates = [user.firebaseUID, user.id].compactMap { $0 }
+        guard let retiredUid = candidates.first(where: { store.isIdentityDetached($0) }) else {
+            return
+        }
+        let familyRowCount =
+            (try? modelContext?.fetchCount(FetchDescriptor<Family>())) ?? 0
+        guard DetachedIdentityDetectionPolicy.requiresResidueTeardown(
+            isDetachedUid: true,
+            rowFirebaseUidPresent: user.firebaseUID != nil,
+            rowActiveFamilyIdPresent: user.activeFamilyId != nil,
+            hasLocalFamilyRows: familyRowCount > 0
+        ) else { return }
+
+        // The sweep can run at bootstrap, before any ViewModel has injected contexts
+        // into the social repositories — and their `deleteAllLocal` degrades to a
+        // published-state-only reset without one, leaving the DISK rows to re-render
+        // next launch. Wire this service's context in first so the purge is durable.
+        if let context = modelContext {
+            FamilyRepository.shared.setModelContext(context)
+            InviteRepository.shared.setModelContext(context)
+            FriendshipRepository.shared.setModelContext(context)
+            TripInviteRepository.shared.setModelContext(context)
+        }
+
+        await detachAnonymousIdentityLocally(uid: retiredUid, reason: .residualStateAfterDetach)
     }
 
     /// Foreground checks must not turn a notification-centre pull into a Firestore read storm.
@@ -436,6 +506,13 @@ class FirebaseAuthService: ObservableObject {
             try? createFreshLocalGuestUser()
         }
 
+        // §3.1.1 item 7 (2026-08-28, owner device pass): the row reset above is not
+        // enough — the local FAMILY projection and every uid-keyed cloud listener
+        // survive it, so the app kept rendering "part of the team" from local rows and
+        // re-bouncing dead-uid channels off rules, launch after launch. The projections
+        // and channels die WITH the identity; gameplay rows stay (FR-28h).
+        LocalUserDataPurgeService.shared.purgeSocialStateForDetachedIdentity()
+
         #if DEBUG
         print("F-18: detached local identity \(uid) (\(reason))")
         #endif
@@ -455,10 +532,11 @@ class FirebaseAuthService: ObservableObject {
         }
     }
 
-    /// Fresh SERVER read of the caller's own `users/{uid}`, reduced to the tri-state the
+    /// Fresh SERVER read of the caller's own `users/{uid}`, reduced to the states the
     /// detach decision needs. `.server` on purpose: the offline cache would happily report a
     /// document that the server deleted, and a stale "present" is the failure this whole
-    /// guard exists to end. Any read failure is `.unknown`, which is never actionable.
+    /// guard exists to end. A read failure is `.unknown` (never actionable) — EXCEPT when
+    /// the follow-up probe gets a definitive death verdict from the Auth server.
     private func selfUserDocumentStatus(
         userId: String
     ) async -> DetachedIdentityDetectionPolicy.SelfDocumentStatus {
@@ -471,7 +549,35 @@ class FirebaseAuthService: ObservableObject {
             #if DEBUG
             print("⚠️ Self user-document read failed for \(userId): \(error)")
             #endif
+            // §3.1.1 item 7 (2026-08-28, owner device pass): once a server-deleted
+            // identity's JWT lapses, EVERY doc read lands here — the SDK's silent token
+            // refresh fails against the Auth server and surfaces as a read failure
+            // indistinguishable from a network blip, so `.unknown` becomes a permanent
+            // limbo that relaunch cannot escape. The probe asks the Auth server directly;
+            // only its definitive death codes act, so offline still reads `.unknown`.
+            if auth.currentUser?.uid == userId, await confirmedIdentityDeathBySelfProbe() {
+                return .deadIdentity
+            }
             return .unknown
+        }
+    }
+
+    /// Forces a token refresh and answers whether the Auth server DEFINITIVELY declared
+    /// the current identity dead. Unlike the stateless ID-token JWT (which authenticates
+    /// for its remaining hour after a server-side deletion), a refresh consults the Auth
+    /// server itself. False on success and on anything network-shaped — the `.unknown`
+    /// discipline, applied to the probe.
+    private func confirmedIdentityDeathBySelfProbe() async -> Bool {
+        guard let firebaseUser = auth.currentUser else { return false }
+        do {
+            _ = try await firebaseUser.getIDTokenResult(forcingRefresh: true)
+            return false
+        } catch {
+            let nsError = error as NSError
+            return IdentityRefreshVerdict.isDefinitiveIdentityDeath(
+                domain: nsError.domain,
+                code: nsError.code
+            )
         }
     }
 
@@ -2538,6 +2644,11 @@ class FirebaseAuthService: ObservableObject {
     /// - Returns: profile when the document exists; `nil` only when it is confirmed absent.
     /// - Throws: on Firestore/network/read failures (callers must not treat throws as "missing").
     private func loadUserDataFromFirestore(userId: String) async throws -> AppUser? {
+        // §3.1.1 item 7 (2026-08-28): entry-level twin of the bootstrap gate — this read
+        // is cache-tolerant, and the client cache still holds the pre-deletion document
+        // for a retired identity. Hydrating from it resurrects the row the residue
+        // teardown just converged. All callers refuse a detached uid here.
+        guard !AgeGateStore.shared.isIdentityDetached(userId) else { return nil }
         let docRef = db.collection("users").document(userId)
         let document = try await docRef.getDocument()
         
@@ -2613,6 +2724,22 @@ class FirebaseAuthService: ObservableObject {
             || store.isIdentityDetached(user.id) {
             user.needsSync = false
             try? modelContext?.save()
+            return
+        }
+
+        // §3.1.1 item 7 (2026-08-28): the resurrection seal. A captain's remove-and-delete
+        // happens OUT-OF-BAND on this device — the two holds around this line can't see it
+        // (the uid is not yet detached and the client still believes itself consented), and
+        // the stateless JWT keeps authenticating, so this very write would RECREATE the
+        // `users/{uid}` the server just deleted, reaper-proof. A forced refresh consults
+        // the Auth server; a definitive death verdict routes to the detach instead of the
+        // write. Scoped to declared-child anonymous sessions — the only population an
+        // out-of-band deletion can orphan — so every other save pays nothing.
+        if auth.currentUser?.isAnonymous == true,
+           auth.currentUser?.uid == syncUserId,
+           store.isDeclaredChildUserId(syncUserId),
+           await confirmedIdentityDeathBySelfProbe() {
+            await detachAnonymousIdentityLocally(uid: syncUserId, reason: .serverDeletedIdentity)
             return
         }
 

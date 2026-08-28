@@ -207,6 +207,15 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        // A family-state push arriving while foregrounded means the server changed
+        // membership/approval state this screen may be rendering stale (email_plus
+        // admission happens out-of-band) — re-arm the listeners on arrival, not tap.
+        let userInfo = notification.request.content.userInfo
+        if FamilyStatePushPolicy.shouldReassertFamilyState(typeValue: userInfo["type"]) {
+            Task { @MainActor in
+                SocialInboxBadgeService.shared.reassertBoundFamilyListening()
+            }
+        }
         completionHandler([.banner, .sound, .badge])
     }
 

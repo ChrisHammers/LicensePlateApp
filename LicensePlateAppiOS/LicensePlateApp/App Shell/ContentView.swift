@@ -590,6 +590,15 @@ struct ContentView: View {
 
     /// Keep invite listeners + badge projection aligned with the signed-in user / active family.
     private func ensureSocialInboxListening(userId: String?, activeFamilyId: String?) {
+        // §3.1.1 item 7 (2026-08-28): a detached uid never keys a cloud channel — and
+        // binding one here is WORSE than a rules bounce: the listener's first delivery
+        // is a CACHED snapshot (cache reads never re-check rules), which re-creates the
+        // exact local rows the residue teardown just purged. Gating the funnel gates
+        // all six call sites; a nil bind also stops family listening in the badge
+        // service regardless of the (possibly stale) activeFamilyId.
+        let userId = DetachedIdentityDetectionPolicy.cloudChannelUserId(userId) {
+            AgeGateStore.shared.isIdentityDetached($0)
+        }
         if let userId, !userId.isEmpty {
             FriendshipRepository.shared.startListening(userId: userId)
             InviteRepository.shared.startListening(userId: userId)

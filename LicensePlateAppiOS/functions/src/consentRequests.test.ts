@@ -23,6 +23,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 const holder = vi.hoisted(() => ({
   db: undefined as any,
   deletedAuthUsers: [] as string[],
+  sentPushes: [] as Array<Record<string, any>>,
 }));
 
 vi.mock("firebase-admin", async () => {
@@ -45,7 +46,12 @@ vi.mock("firebase-admin", async () => {
       holder.deletedAuthUsers.push(uid);
     },
   });
-  const messaging: any = () => ({ send: async () => "sent" });
+  const messaging: any = () => ({
+    send: async (message: Record<string, any>) => {
+      holder.sentPushes.push(message);
+      return "sent";
+    },
+  });
   return { default: { firestore, auth, messaging }, firestore, auth, messaging };
 });
 
@@ -150,6 +156,7 @@ beforeEach(() => {
   db().store.clear();
   db().writeCount = 0;
   holder.deletedAuthUsers.length = 0;
+  holder.sentPushes.length = 0;
 
   db().seed("users/captain", { userName: "Captain" });
   db().seed("users/captain/private/contact", { email: "captain@example.com" });
@@ -284,6 +291,27 @@ describe("FR-64: the guardian's click commits everything together", () => {
     )!;
     expect(request[1].status).toBe("confirmed");
     expect(request[1].guardianEmail).toBe("captain@example.com");
+  });
+
+  it("confirmation notifies the GUARDIAN's device — the admission happened out-of-band", async () => {
+    // Owner device pass 2026-08-27: the click happens in a mail client, so no callable
+    // return refreshes the captain UI. The push is the refresh trigger.
+    db().seed("users/captain/private/fcm", { token: "captain-device-token" });
+    const { familyId } = await childAwaiting();
+
+    expect(
+      (await confirmGuardianConsent(db(), { familyId, childUserId: "kid" })).committed
+    ).toBe(true);
+
+    const guardianPushes = holder.sentPushes.filter(
+      (m) => m.data?.type === "family_consent_confirmed"
+    );
+    expect(guardianPushes).toHaveLength(1);
+    expect(guardianPushes[0].token).toBe("captain-device-token");
+    expect(guardianPushes[0].data.familyId).toBe(familyId);
+    expect(guardianPushes[0].data.deepLink).toBe(`roadtrip-royale://family/${familyId}`);
+    // Name-free by design: the child's username stays off the push channel.
+    expect(JSON.stringify(guardianPushes[0])).not.toContain("Speedy");
   });
 
   it("AGEOUT FR-110(b): a child doc without the marker refuses to commit — nothing admits", async () => {

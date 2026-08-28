@@ -509,6 +509,13 @@ enum DetachedIdentityDetectionPolicy {
         /// The read failed (offline, transport, App Check). Never actionable — a network
         /// blip must not cost a live account its session.
         case unknown
+        /// §3.1.1 item 7 (2026-08-28): the AUTH SERVER itself answered that this user no
+        /// longer exists (a forced token refresh failed with a definitive death code).
+        /// Stronger than `confirmedAbsent` — a missing doc needs the delivered-declaration
+        /// corroboration to prove deletion, but the Auth server's own verdict needs none.
+        /// This is what ends the limbo a lapsed JWT otherwise leaves: every doc read fails
+        /// as `.unknown` forever while the local store keeps rendering a dead identity.
+        case deadIdentity
     }
 
     /// True when a session must be dropped because the account behind it is gone.
@@ -523,8 +530,43 @@ enum DetachedIdentityDetectionPolicy {
         documentStatus: SelfDocumentStatus,
         wasDeclaredByThisDevice: Bool
     ) -> Bool {
-        guard isAnonymousSession, wasDeclaredByThisDevice else { return false }
+        guard isAnonymousSession else { return false }
+        // The Auth server's own death verdict is definitive without corroboration — the
+        // declared-gate below exists to make doc-ABSENCE provable, and this is stronger.
+        if documentStatus == .deadIdentity { return true }
+        guard wasDeclaredByThisDevice else { return false }
         return documentStatus == .confirmedAbsent
+    }
+
+    /// §3.1.1 item 7 (2026-08-28, wedged-simulator forensics): the teardown is a STATE
+    /// the device converges to, not a one-shot event. The original detach can run before
+    /// `modelContext` exists (observed: F-18 at launch with every row mutation a silent
+    /// `try?` no-op), and the one-way ratchet then blocks a natural retry — so a row can
+    /// carry a retired firebaseUID, an activeFamilyId, and local family rows FOREVER
+    /// unless something re-checks. True whenever the uid is ratcheted and any residue
+    /// remains; the caller re-runs the full teardown, which is idempotent.
+    static func requiresResidueTeardown(
+        isDetachedUid: Bool,
+        rowFirebaseUidPresent: Bool,
+        rowActiveFamilyIdPresent: Bool,
+        hasLocalFamilyRows: Bool
+    ) -> Bool {
+        guard isDetachedUid else { return false }
+        return rowFirebaseUidPresent || rowActiveFamilyIdPresent || hasLocalFamilyRows
+    }
+
+    /// §3.1.1 item 7 (2026-08-28): a DETACHED uid still resolves LOCAL rows — that is
+    /// exactly why the teardown leaves it on `AppUser.id` — but it must NEVER key a
+    /// cloud channel again: its listeners can only bounce off rules, and its writes can
+    /// only resurrect state the server deleted. This is the single tiebreak between the
+    /// two uses of `firebaseUID ?? id`, so a launch that re-derives the retired uid
+    /// binds nothing.
+    static func cloudChannelUserId(
+        _ resolvedUserId: String?,
+        isDetached: (String) -> Bool
+    ) -> String? {
+        guard let resolvedUserId, !resolvedUserId.isEmpty else { return nil }
+        return isDetached(resolvedUserId) ? nil : resolvedUserId
     }
 
     /// Whether this session is even worth a server round-trip — the pre-network half of
@@ -615,6 +657,11 @@ enum IdentityDetachReason: String {
     case alreadyDetachedIdentity
     /// A local player naming a uid with no Auth session left (`requiresLocalOnlyDetach`).
     case sessionLostBeforeRedemption
+    /// §3.1.1 item 7 (2026-08-28): a PRIOR detach ran before `modelContext` existed, so
+    /// its row mutations silently no-oped while the one-way ratchet stuck — leaving a row
+    /// that still carries the retired identity. This re-run converges the device to the
+    /// detached state the ratchet already recorded.
+    case residualStateAfterDetach
 
     /// True when the local player must NOT keep the retired account's identity fields.
     /// Only the restored-identity case: there the account belongs to a different answer,

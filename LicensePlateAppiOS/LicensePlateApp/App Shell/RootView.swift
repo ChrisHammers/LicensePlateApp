@@ -75,15 +75,21 @@ struct RootView: View {
             XpGrantReconcileService.shared.resetForSignOut()
             AchievementUnlockCelebrationService.shared.resetForSignOut()
             XpGainToastService.shared.resetForSignOut()
-            if let newUserId, !newUserId.isEmpty {
-                FriendshipRepository.shared.startListening(userId: newUserId)
-                InviteRepository.shared.startListening(userId: newUserId)
+            // §3.1.1 item 7 (2026-08-28): `firebaseUID ?? id` re-derives a RETIRED uid on
+            // every launch after a detach (the teardown leaves it on `id` so local rows
+            // resolve). Local-scoped services above may keep it; cloud channels never.
+            let cloudUserId = DetachedIdentityDetectionPolicy.cloudChannelUserId(newUserId) {
+                AgeGateStore.shared.isIdentityDetached($0)
+            }
+            if let cloudUserId, !cloudUserId.isEmpty {
+                FriendshipRepository.shared.startListening(userId: cloudUserId)
+                InviteRepository.shared.startListening(userId: cloudUserId)
                 SocialInboxBadgeService.shared.bind(
-                    userId: newUserId,
+                    userId: cloudUserId,
                     activeFamilyId: authService.currentUser?.activeFamilyId
                 )
-                UserProgressionRepository.shared.startListening(userId: newUserId)
-                XpGrantRemoteRepository.shared.startListening(userId: newUserId)
+                UserProgressionRepository.shared.startListening(userId: cloudUserId)
+                XpGrantRemoteRepository.shared.startListening(userId: cloudUserId)
                 TripActivityEventRecordingService.shared.setProgressionAppendObserver(ProgressionAppendObserverChain.shared)
                 Task {
                     await FirebaseMessagingService.shared.refreshAndPersistTokenIfPossible()
@@ -91,7 +97,7 @@ struct RootView: View {
                 if authService.isOnline {
                     Task {
                         _ = await XpGrantReconcileService.shared.reconcileIfNeeded(
-                            userId: newUserId,
+                            userId: cloudUserId,
                             isOnline: authService.isOnline
                         )
                     }
@@ -112,6 +118,12 @@ struct RootView: View {
                 FirstSessionAnalyticsService.shared.recordOnboardingAbandoned(flowVariant: variant)
             }
             guard newPhase == .active else { return }
+            // §3.1.2 step-4 follow-up (owner device pass 2026-08-27): admission can
+            // complete out-of-band (guardian confirms from a mail client on this same
+            // phone), so a foreground return re-arms the family listeners and recounts —
+            // the repository listener may have been torn down while the pending row's
+            // status changed underneath a stale surface.
+            SocialInboxBadgeService.shared.reassertBoundFamilyListening()
             if authService.isOnline {
                 Task { await SyncCoordinator.shared.processPendingSyncItems() }
             }
