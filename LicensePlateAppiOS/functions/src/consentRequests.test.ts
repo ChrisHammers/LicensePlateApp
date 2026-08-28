@@ -76,7 +76,9 @@ import {
   CONSENT_REQUESTS_COLLECTION,
   CONSENT_REQUEST_TTL_MS,
   JOIN_REQUEST_AWAITING_GUARDIAN_STATUS,
+  buildConsentInterstitialPage,
   buildConsentPlusNoticeEmailContent,
+  consentEndpointAction,
   decideConsentConfirmation,
   hashConsentNonce,
   isPlusNoticeDue,
@@ -410,6 +412,31 @@ describe("the confirmation gate is uniform and single-use", () => {
     expect(decideConsentConfirmation({ ...base, attempts: 20 })).toEqual({
       kind: "refused",
     });
+  });
+
+  // Finding 2026-08-28: mail scanners follow GET links (observed live — three
+  // valid-link hits in four seconds, no human). The commit therefore lives on POST
+  // only; GET serves a form and may touch NOTHING a robot could consume or observe.
+  it("the endpoint commits only on POST; GET serves the form; other methods are refused", () => {
+    expect(consentEndpointAction("GET")).toBe("serve_form");
+    expect(consentEndpointAction("HEAD")).toBe("serve_form"); // scanners often probe HEAD
+    expect(consentEndpointAction("get")).toBe("serve_form");
+    expect(consentEndpointAction("POST")).toBe("process");
+    expect(consentEndpointAction("PUT")).toBe("method_not_allowed");
+    expect(consentEndpointAction("DELETE")).toBe("method_not_allowed");
+    expect(consentEndpointAction(undefined)).toBe("method_not_allowed");
+  });
+
+  it("the interstitial posts the token back and stays generic — no names, no oracle", () => {
+    const token = `abc123.${"ab".repeat(16)}`;
+    const page = buildConsentInterstitialPage({ token, envLabel: "DEV" });
+    expect(page).toContain(`method="post"`);
+    expect(page).toContain(`name="t" value="${token}"`);
+    expect(page).toContain("I consent");
+    // Generic by construction: the builder takes no child or family input, and the
+    // page must never embed anything beyond the token the caller already holds.
+    expect(page).not.toContain("Speedy");
+    expect(page).not.toContain("Hammers");
   });
 
   it("token parsing rejects malformed shapes outright", () => {

@@ -317,6 +317,57 @@ export function buildConsentRequestEmailContent(
 }
 
 // ---------------------------------------------------------------------------
+// Confirmation endpoint: method routing + the GET interstitial
+// ---------------------------------------------------------------------------
+
+/**
+ * Finding 2026-08-28 (live): mail security scanners and preview proxies follow GET
+ * links automatically — observed as three valid-link hits in four seconds with no
+ * human involved. A consent COMMIT on GET therefore lets a robot grant §312.5
+ * consent while the request is pending. The commit moves to POST (scanners follow
+ * links; they do not submit forms); GET serves a form and touches NOTHING — no doc
+ * read, no attempt count, no state oracle.
+ */
+export type ConsentEndpointAction = "serve_form" | "process" | "method_not_allowed";
+
+export function consentEndpointAction(method: unknown): ConsentEndpointAction {
+  switch (typeof method === "string" ? method.toUpperCase() : "") {
+    case "GET":
+    case "HEAD":
+      return "serve_form";
+    case "POST":
+      return "process";
+    default:
+      return "method_not_allowed";
+  }
+}
+
+/**
+ * The interstitial is deliberately GENERIC: it is served for any shape-valid token
+ * WITHOUT verifying the nonce (verification costs an attempt and answers questions —
+ * both belong to the POST), so it must not read the request document or name the
+ * child or family. The guardian just read those names in the email that carried the
+ * link; this page only asks for the human act the method requires.
+ */
+export function buildConsentInterstitialPage(input: {
+  token: string;
+  envLabel: string;
+}): string {
+  const prefix = input.envLabel ? `[${input.envLabel}] ` : "";
+  return [
+    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${prefix}Confirm parental consent</title></head>`,
+    `<body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:48px auto;padding:0 24px;color:#1c1c1e;">`,
+    `<h2 style="color:#1d4ed8;">One more step</h2>`,
+    `<p>You followed a parental-consent link from a RoadTrip Royale email. To confirm your consent and activate the player's account, press the button below.</p>`,
+    `<form method="post"><input type="hidden" name="t" value="${escapeHtml(input.token)}">`,
+    `<button type="submit" style="background:#1d4ed8;color:#ffffff;padding:12px 24px;border-radius:10px;border:none;font-size:16px;font-weight:600;cursor:pointer;">I consent — activate this account</button>`,
+    `</form>`,
+    `<p style="font-size:13px;color:#6b7280;margin-top:24px;">Nothing happens without the button. If you did not expect this page, you can simply close it.</p>`,
+    `</body></html>`,
+  ].join("");
+}
+
+// ---------------------------------------------------------------------------
 // The "plus" notice email (delayed confirmation + revocation path)
 // ---------------------------------------------------------------------------
 

@@ -38,8 +38,10 @@ import {
   CONSENT_REQUEST_TTL_MS,
   ConsentAssurancePolicy,
   JOIN_REQUEST_AWAITING_GUARDIAN_STATUS,
+  buildConsentInterstitialPage,
   buildConsentPlusNoticeEmailContent,
   buildConsentRequestEmailContent,
+  consentEndpointAction,
   decideConsentConfirmation,
   formatConsentToken,
   hashConsentNonce,
@@ -533,6 +535,14 @@ export async function runPostConfirmationFollowUps(
   // name-free: the child's username stays off the push channel.
   try {
     const guardianToken = await getFCMTokenForSocialPush(request.guardianUid, "family");
+    if (!guardianToken) {
+      // Owner device passes 2026-08-28: the push was not SEEN on two watched runs and
+      // the send is otherwise silent-on-success — this line is the discriminator
+      // between never-sent (no token/prefs; logged here) and sent-but-undelivered.
+      functions.logger.info("guardian consent push skipped: no deliverable token/prefs", {
+        guardianUid: request.guardianUid,
+      });
+    }
     if (guardianToken) {
       await sendPushNotification(
         guardianToken,
@@ -557,9 +567,34 @@ export async function runPostConfirmationFollowUps(
  */
 export const confirmParentalConsent = functions.https.onRequest(async (req, res) => {
   try {
-    const parsed = parseConsentToken(req.query.t ?? req.query.token);
+    // Finding 2026-08-28: the commit lives on POST only. Mail scanners and preview
+    // proxies follow the emailed GET link automatically (observed live: three
+    // valid-link hits in four seconds, no human) — a GET commit would let a robot
+    // grant consent while a request is pending. GET serves the interstitial and
+    // touches NOTHING: no doc read, no attempt count, no state oracle.
+    const action = consentEndpointAction(req.method);
+    if (action === "method_not_allowed") {
+      res.set("Allow", "GET, POST").status(405).send(PAGES.refused);
+      return;
+    }
+
+    const rawToken =
+      (req.body && typeof req.body === "object" ? (req.body as Record<string, unknown>).t : undefined) ??
+      req.query.t ??
+      req.query.token;
+    const parsed = parseConsentToken(rawToken);
     if (!parsed) {
       res.status(400).send(PAGES.refused);
+      return;
+    }
+
+    if (action === "serve_form") {
+      res.status(200).send(
+        buildConsentInterstitialPage({
+          token: formatConsentToken(parsed.requestId, parsed.nonce),
+          envLabel: consentEmailEnvLabel.value(),
+        })
+      );
       return;
     }
     const db = admin.firestore();
