@@ -284,3 +284,43 @@ struct FamilyCallableStallTests {
         #expect(!viewModel.isProcessing)
     }
 }
+
+// Bug B, 2026-08-29 (server-pinned live): a failed LIMITED-USE token fetch makes the
+// SDK send a non-JWT placeholder, the server 401s ("Decoding App Check token failed"),
+// and the provider failure persists per-process — observed as removeFamilyMember ×2
+// and redeemShareCode ×3 rejections healed only by relaunch. The wrapper now retries
+// ONCE through the standard cached-token path on exactly that shape; this suite pins
+// the decision so the retry can never widen into re-entering hangs.
+struct FamilyCallableRetryPolicyTests {
+
+    @Test("An App Check enforcement rejection (unauthenticated) earns the one standard-token retry")
+    func unauthenticatedRetries() {
+        let rejection = NSError(
+            domain: FunctionsErrorDomain,
+            code: FunctionsErrorCode.unauthenticated.rawValue
+        )
+        #expect(FamilyCallableRetryPolicy.shouldRetryWithStandardToken(error: rejection))
+    }
+
+    @Test("Our own synthesized stall NEVER retries — a hang is the wedge, not a rejection")
+    func stalledNeverRetries() {
+        let stalled = FamilyCallable.stalledError(name: "approveFamilyJoinRequest_CaptainStep")
+        #expect(!FamilyCallableRetryPolicy.shouldRetryWithStandardToken(error: stalled))
+    }
+
+    @Test("Server deadlines, internal errors, and foreign domains propagate untouched")
+    func everythingElsePropagates() {
+        #expect(!FamilyCallableRetryPolicy.shouldRetryWithStandardToken(error: NSError(
+            domain: FunctionsErrorDomain,
+            code: FunctionsErrorCode.deadlineExceeded.rawValue
+        )))
+        #expect(!FamilyCallableRetryPolicy.shouldRetryWithStandardToken(error: NSError(
+            domain: FunctionsErrorDomain,
+            code: FunctionsErrorCode.internal.rawValue
+        )))
+        #expect(!FamilyCallableRetryPolicy.shouldRetryWithStandardToken(error: NSError(
+            domain: "SomeOtherDomain",
+            code: FunctionsErrorCode.unauthenticated.rawValue
+        )))
+    }
+}

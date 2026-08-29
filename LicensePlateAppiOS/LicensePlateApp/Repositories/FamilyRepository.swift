@@ -83,6 +83,21 @@ private final class FirstSettleBox<T>: @unchecked Sendable {
 /// live invite) except `createShareCode`, where the cost is one extra code that the 15-minute
 /// sweep revokes. That is strictly cheaper than a surface wedged until relaunch.
 @MainActor
+/// Bug B fallback decision (2026-08-29), pure and pinned. An App Check enforcement
+/// rejection surfaces to the client as UNAUTHENTICATED; the standard-token retry is
+/// worth exactly one attempt there. Everything else — including our own synthesized
+/// stall (deadlineExceeded), which means the provider HUNG rather than failed —
+/// propagates untouched: retrying a hang re-enters the wedge the limited-use path
+/// exists to avoid.
+enum FamilyCallableRetryPolicy {
+    nonisolated static func shouldRetryWithStandardToken(error: Error) -> Bool {
+        let nsError = error as NSError
+        guard nsError.domain == FunctionsErrorDomain else { return false }
+        guard nsError.userInfo[FamilyCallable.stalledUserInfoKey] == nil else { return false }
+        return nsError.code == FunctionsErrorCode.unauthenticated.rawValue
+    }
+}
+
 enum FamilyCallable {
     /// 25s: ~4x the slowest invocation ever recorded server-side (6.7s), and far enough under
     /// the SDK's own ~60-70s timer that the CLIENT is what gives up, deliberately and with a
@@ -122,13 +137,35 @@ enum FamilyCallable {
     /// The pre-warm is gone with it: `try?` catches errors, not hangs, so it could spend the
     /// whole 25s budget inside the very promise this change exists to stop entering.
     static func call(_ name: String, _ payload: [String: Any]) async throws -> HTTPSCallableResult {
-        try await bounded(name: name) {
-            let callable = Functions.functions().httpsCallable(
-                name,
-                options: HTTPSCallableOptions(requireLimitedUseAppCheckTokens: true)
-            )
-            callable.timeoutInterval = deadline
-            return try await callable.call(payload)
+        do {
+            return try await bounded(name: name) {
+                let callable = Functions.functions().httpsCallable(
+                    name,
+                    options: HTTPSCallableOptions(requireLimitedUseAppCheckTokens: true)
+                )
+                callable.timeoutInterval = deadline
+                return try await callable.call(payload)
+            }
+        } catch {
+            // Bug B, 2026-08-29 (server-pinned live): when the LIMITED-USE token fetch fails
+            // on-device, the SDK sends a non-JWT PLACEHOLDER ({"error":…}) and the server
+            // 401s with "Decoding App Check token failed" — and the provider failure
+            // persists per-process, so in-process retries of the same path 401 forever
+            // (observed: removeFamilyMember ×2, redeemShareCode ×3, healed only by
+            // relaunch). The limited-use path hits the provider FRESH on every call by
+            // design; the STANDARD path serves the process's cached token, minted while
+            // the provider was healthy — so one fallback retry through it heals the
+            // wedge without relaunching. Bounded by the same deadline, so the historical
+            // memoized-promise stall the limited-use fix avoids costs at most ONE
+            // deadline here, on a call that had already failed.
+            guard FamilyCallableRetryPolicy.shouldRetryWithStandardToken(error: error) else {
+                throw error
+            }
+            return try await bounded(name: name) {
+                let callable = Functions.functions().httpsCallable(name)
+                callable.timeoutInterval = deadline
+                return try await callable.call(payload)
+            }
         }
     }
 
