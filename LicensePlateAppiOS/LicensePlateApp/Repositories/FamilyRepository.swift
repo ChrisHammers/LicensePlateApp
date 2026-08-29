@@ -1337,6 +1337,39 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         }
     }
 
+    /// FR-61: the live parental review inventory (guardianship-gated server-side).
+    func getChildDataInventory(familyId: String, childUserId: String) async throws -> ChildDataInventory? {
+        try requireRegisteredAccount()
+
+        let payload = FamilyChildStatusPayload.childDataInventory(
+            familyId: familyId,
+            childUserId: childUserId
+        )
+        do {
+            let result = try await FamilyCallable.call(
+                "getChildDataInventory",
+                payload.addingClientMetadata()
+            )
+            return ChildDataInventory.parse(result.data)
+        } catch {
+            throw Self.childStatusCallableError(error)
+        }
+    }
+
+    /// FR-61 ex-member entry: self-scoped, no target to authorize.
+    func listGuardedChildren() async throws -> [GuardedChildSummary] {
+        try requireRegisteredAccount()
+        do {
+            let result = try await FamilyCallable.call(
+                "listGuardedChildren",
+                [String: Any]().addingClientMetadata()
+            )
+            return GuardedChildSummary.parseList(result.data)
+        } catch {
+            throw Self.childStatusCallableError(error)
+        }
+    }
+
     /// Localized, non-leaky mapping for the child-status callables. The server's own
     /// messages are English-only and describe states this UI already prevents, so they
     /// are replaced rather than surfaced.

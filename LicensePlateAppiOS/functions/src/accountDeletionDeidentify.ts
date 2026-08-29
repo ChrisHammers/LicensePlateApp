@@ -89,8 +89,10 @@ async function commitWrites(db: Firestore, writes: PendingWrite[]): Promise<void
   }
 }
 
-/** Session ids reachable from every queryable signal the user leaves behind. */
-async function discoverAffectedSessionIds(
+/** Session ids reachable from every queryable signal the user leaves behind.
+ *  Exported for FR-61: the review inventory discovers a child's trips with the SAME
+ *  queries the deletion sweep uses, so review coverage can never lag deletion's. */
+export async function discoverAffectedSessionIds(
   db: Firestore,
   userId: string
 ): Promise<string[]> {

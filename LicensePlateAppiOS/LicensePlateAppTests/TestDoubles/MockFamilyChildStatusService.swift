@@ -71,4 +71,31 @@ final class MockFamilyChildStatusService: FamilyChildStatusManaging {
         if let consentStatusError { throw consentStatusError }
         return consentStatusResult
     }
+
+    private(set) var inventoryCalls: [DeletionCall] = []
+    var inventoryError: Error?
+    var inventoryResult: ChildDataInventory? = ChildDataInventory(
+        accountExists: true,
+        viaGuardianship: false,
+        generatedAt: nil
+    )
+
+    func getChildDataInventory(
+        familyId: String,
+        childUserId: String
+    ) async throws -> ChildDataInventory? {
+        inventoryCalls.append(DeletionCall(familyId: familyId, childUserId: childUserId))
+        if let inventoryError { throw inventoryError }
+        return inventoryResult
+    }
+
+    private(set) var listGuardedChildrenCallCount = 0
+    var guardedChildrenError: Error?
+    var guardedChildrenResult: [GuardedChildSummary] = []
+
+    func listGuardedChildren() async throws -> [GuardedChildSummary] {
+        listGuardedChildrenCallCount += 1
+        if let guardedChildrenError { throw guardedChildrenError }
+        return guardedChildrenResult
+    }
 }

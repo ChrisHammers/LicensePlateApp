@@ -105,6 +105,29 @@ struct FamilySettings: View {
                     }
 
                     
+                    // FR-61/FR-62: children this account consented for who are no
+                    // longer on the roster — review and deletion rights survive the
+                    // child's removal. Personal to the guardian, so outside the
+                    // captain-only blocks.
+                    if !viewModel.pastGuardedChildren.isEmpty {
+                        Section {
+                            ForEach(viewModel.pastGuardedChildren) { row in
+                                GuardedChildRowView(
+                                    row: row,
+                                    isBusy: viewModel.isChildDataDeletionInFlight,
+                                    isDeleting: viewModel.isDeletingChildData(memberId: row.childUserId),
+                                    onOpenPrivacy: { viewModel.openGuardedChildPrivacy(row) },
+                                    onDeleteData: { viewModel.beginDeleteDataForGuardedChild(row) }
+                                )
+                            }
+                        } header: {
+                            Text("family.guardianship.section_title".localized)
+                        } footer: {
+                            Text("family.guardianship.section_footer".localized)
+                        }
+                        .listRowBackground(Color.Theme.cardBackground)
+                    }
+
                     // Leave Family (All members except creator)
                     if !viewModel.isCreator {
                         Section {
@@ -183,6 +206,8 @@ struct FamilySettings: View {
                 // once per session and caches it — this forces a fresh read so avatar/
                 // username edits made elsewhere stop being stuck on the old copy.
                 viewModel.refreshMemberIdentitiesIfNeeded()
+                // FR-61 ex-member entry: the guardian's past children, server-fed.
+                viewModel.refreshGuardedChildren()
             }
             .onChange(of: viewModel.didLeaveOrDelete) { _, didLeave in
                 if didLeave { dismiss() }
@@ -273,13 +298,19 @@ private struct FamilyChildManagementPresentations: ViewModifier {
             .sheet(item: $viewModel.childConsentTarget) { target in
                 FamilyChildConsentSheet(target: target, viewModel: viewModel)
             }
-            // FR-29: read-only review.
+            // FR-29/FR-61: read-only review with the live inventory. An EX-member row
+            // has no roster entry, but it is only reachable from the guarded-children
+            // section — always a child — so the roster miss defaults to child.
             .sheet(item: $viewModel.childPrivacyTarget) { target in
                 FamilyChildPrivacyView(
                     target: target,
-                    isChild: viewModel.isChildMember(memberId: target.memberUserId),
+                    isChild: viewModel.isChildMember(memberId: target.memberUserId)
+                        || !viewModel.members.contains(where: { $0.userId == target.memberUserId }),
                     loadConsentHistory: { childUserId in
                         try await viewModel.loadConsentHistory(childUserId: childUserId)
+                    },
+                    loadInventory: { childUserId in
+                        try await viewModel.loadChildDataInventory(childUserId: childUserId)
                     }
                 )
             }
@@ -426,6 +457,93 @@ struct FamilyChildManageControls: View {
             label: "\(isBusy ? (busyTitle ?? title) : title), \(target.displayName)",
             hint: hint
         )
+    }
+}
+
+/// FR-61/FR-62: one past child the account is the recorded guardian for — review and
+/// delete rights that survived the child's removal. Delete routes into the SAME
+/// outcome-named final confirmation as the roster paths.
+struct GuardedChildRowView: View {
+    let row: GuardedChildSummary
+    let isBusy: Bool
+    let isDeleting: Bool
+    let onOpenPrivacy: () -> Void
+    let onDeleteData: () -> Void
+
+    private static let endedDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        return formatter
+    }()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.childUserName ?? "Member".localized)
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(Color.Theme.primaryBlue)
+                Text(endedSubtitle)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+
+            Button(action: onOpenPrivacy) {
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.shield")
+                        .font(.system(size: 13))
+                        .accessibleDecorative()
+                    Text("family.guardianship.review".localized)
+                        .font(.system(.footnote, design: .rounded))
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(Color.Theme.primaryBlue)
+                .frame(minHeight: 44, alignment: .center)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibleButton(
+                label: "\("family.guardianship.review".localized), \(row.childUserName ?? "Member".localized)",
+                hint: "family.guardianship.review_hint".localized
+            )
+
+            Button(action: onDeleteData) {
+                HStack(spacing: 8) {
+                    if isDeleting {
+                        ProgressView().scaleEffect(0.8)
+                        Text("Deleting...".localized)
+                            .font(.system(.footnote, design: .rounded))
+                    } else {
+                        Image(systemName: "trash")
+                            .font(.system(size: 13))
+                            .accessibleDecorative()
+                        Text("family.guardianship.delete_data".localized)
+                            .font(.system(.footnote, design: .rounded))
+                    }
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(Color.red)
+                .frame(minHeight: 44, alignment: .center)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(isBusy)
+            .accessibleButton(
+                label: "\("family.guardianship.delete_data".localized), \(row.childUserName ?? "Member".localized)",
+                hint: "family.guardianship.delete_data_hint".localized
+            )
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var endedSubtitle: String {
+        if let endedAt = row.endedAt {
+            return "family.guardianship.ended_subtitle".localized(
+                Self.endedDateFormatter.string(from: endedAt)
+            )
+        }
+        return "family.guardianship.not_in_family".localized
     }
 }
 

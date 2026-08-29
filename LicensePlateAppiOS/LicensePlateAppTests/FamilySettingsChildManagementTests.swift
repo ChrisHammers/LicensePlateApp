@@ -513,12 +513,101 @@ struct FamilySettingsChildManagementTests {
         #expect(status.records.count == 1)
         #expect(harness.service.consentStatusCalls.first?.familyId == "fam-1")
     }
+
+    // MARK: - Guarded children (FR-61 ex-member entry; FR-62 rights survive removal)
+
+    @Test func pastGuardedChildrenFiltersToThisFamilysExRosterChildren() async throws {
+        let harness = try makeHarness(
+            viewerId: "captain",
+            viewerRole: .captain,
+            childMemberIds: ["scout"]
+        )
+        let vm = harness.viewModel
+        harness.service.guardedChildrenResult = [
+            // Current member — the roster's own controls cover them.
+            GuardedChildSummary(
+                childUserId: "scout", familyId: "fam-1", childUserName: "Live",
+                accountExists: true, grantedAt: nil, endedAt: nil, endedReason: nil
+            ),
+            // Ex-member of THIS family — the row the section exists for.
+            GuardedChildSummary(
+                childUserId: "gone-kid", familyId: "fam-1", childUserName: "Gone",
+                accountExists: true, grantedAt: nil,
+                endedAt: Date(timeIntervalSince1970: 1), endedReason: "parent_removed_child"
+            ),
+            // Another family's record — not this screen's scope.
+            GuardedChildSummary(
+                childUserId: "other-fam-kid", familyId: "fam-2", childUserName: "Else",
+                accountExists: true, grantedAt: nil, endedAt: nil, endedReason: nil
+            ),
+            // Deleted account — nothing left to review or delete.
+            GuardedChildSummary(
+                childUserId: "deleted-kid", familyId: "fam-1", childUserName: nil,
+                accountExists: false, grantedAt: nil, endedAt: nil, endedReason: nil
+            ),
+        ]
+
+        vm.refreshGuardedChildren()
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        #expect(vm.pastGuardedChildren.map(\.childUserId) == ["gone-kid"])
+    }
+
+    @Test func guardedChildRowOpensPrivacyAndArmsTheOutcomeNamedFinalConfirm() async throws {
+        let harness = try makeHarness(viewerId: "captain", viewerRole: .captain)
+        let vm = harness.viewModel
+        let row = GuardedChildSummary(
+            childUserId: "gone-kid", familyId: "fam-1", childUserName: "Gone",
+            accountExists: true, grantedAt: nil, endedAt: nil,
+            endedReason: "parent_removed_child"
+        )
+
+        vm.openGuardedChildPrivacy(row)
+        #expect(vm.childPrivacyTarget?.memberUserId == "gone-kid")
+        vm.childPrivacyTarget = nil
+
+        // FR-63's "delete their data later", delivered: the ex-member delete goes
+        // straight to the FINAL outcome-named confirm, and the existing confirm
+        // machinery runs the callable (the server authorizes the recorded guardian).
+        vm.beginDeleteDataForGuardedChild(row)
+        #expect(vm.childDeletionFinalTarget?.memberUserId == "gone-kid")
+
+        vm.confirmChildDataDeletion()
+        try await Task.sleep(nanoseconds: 50_000_000)
+        #expect(harness.service.deletionCalls == [
+            MockFamilyChildStatusService.DeletionCall(familyId: "fam-1", childUserId: "gone-kid")
+        ])
+    }
 }
 
 // MARK: - Child privacy view model (FR-29 graceful degradation)
 
 @MainActor
 struct FamilyChildPrivacyViewModelTests {
+
+    private func sampleInventory() -> ChildDataInventory {
+        var inventory = ChildDataInventory(
+            accountExists: true,
+            viaGuardianship: false,
+            generatedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        inventory.profile = .init(userName: "KidRacer", avatarId: "fox", ageOutYearMonth: 203107)
+        var gameplay = ChildDataInventory.Gameplay()
+        gameplay.sessionCount = 1
+        gameplay.trips = [
+            ChildInventoryTripSummary(
+                tripName: "Summer trip",
+                status: "ended",
+                createdAt: nil,
+                endedAt: nil,
+                authoredEventCountsByKind: ["region_found": 3],
+                attributedEventCount: 3,
+                anyLocationPayload: false
+            )
+        ]
+        inventory.gameplay = gameplay
+        return inventory
+    }
 
     @Test func loadsAndSortsHistoryNewestFirst() async {
         let older = ParentalConsentRecord(
@@ -532,21 +621,25 @@ struct FamilyChildPrivacyViewModelTests {
             guardianAffirmed: true, expectedAgeOutYearMonth: nil
         )
         let viewModel = FamilyChildPrivacyViewModel(
-            loadConsentHistory: { _ in ParentalConsentStatus(records: [older, newer]) }
+            loadConsentHistory: { _ in ParentalConsentStatus(records: [older, newer]) },
+            loadInventory: { _ in nil }
         )
 
-        await viewModel.load(childUserId: "child-1")
+        await viewModel.load(childUserId: "child-1", displayName: "Sam")
         #expect(viewModel.historyState == .loaded([older, newer]))
         #expect(viewModel.recordsNewestFirst.map(\.id) == ["2", "1"])
     }
 
     @Test func aCallableFailureDegradesInsteadOfBlockingReview() async {
         let viewModel = FamilyChildPrivacyViewModel(
-            loadConsentHistory: { _ in throw NSError(domain: "test", code: 7) }
+            loadConsentHistory: { _ in throw NSError(domain: "test", code: 7) },
+            loadInventory: { _ in throw NSError(domain: "test", code: 7) }
         )
-        await viewModel.load(childUserId: "child-1")
+        await viewModel.load(childUserId: "child-1", displayName: "Sam")
         #expect(viewModel.historyState == .unavailable)
+        #expect(viewModel.inventoryState == .unavailable)
         #expect(viewModel.recordsNewestFirst.isEmpty)
+        #expect(viewModel.exportText(childDisplayName: "Sam") == nil)
     }
 
     @Test func loadRunsOnlyOnce() async {
@@ -555,10 +648,216 @@ struct FamilyChildPrivacyViewModelTests {
             loadConsentHistory: { _ in
                 calls += 1
                 return ParentalConsentStatus(records: [])
+            },
+            loadInventory: { _ in nil }
+        )
+        await viewModel.load(childUserId: "child-1", displayName: "Sam")
+        await viewModel.load(childUserId: "child-1", displayName: "Sam")
+        #expect(calls == 1)
+    }
+
+    // FR-61: one failing half never blocks the other — the review right degrades
+    // per-section, and the export exists exactly when the inventory loaded.
+    @Test func inventoryLoadsIndependentlyOfHistoryAndFeedsTheExport() async throws {
+        let inventory = sampleInventory()
+        let viewModel = FamilyChildPrivacyViewModel(
+            loadConsentHistory: { _ in throw NSError(domain: "test", code: 7) },
+            loadInventory: { _ in inventory }
+        )
+
+        await viewModel.load(childUserId: "child-1", displayName: "Sam")
+        #expect(viewModel.historyState == .unavailable)
+        #expect(viewModel.inventoryState == .loaded(inventory))
+
+        let export = viewModel.exportText(childDisplayName: "Sam")
+        let text = try #require(export)
+        #expect(text.contains("Sam"))
+        #expect(text.contains("KidRacer"))
+        #expect(text.contains("Summer trip"))
+    }
+
+    // A parseable-but-nil server answer (unexpected shape) degrades the same way a
+    // thrown error does.
+    @Test func aNilInventoryParseDegradesToUnavailable() async {
+        let viewModel = FamilyChildPrivacyViewModel(
+            loadConsentHistory: { _ in ParentalConsentStatus(records: []) },
+            loadInventory: { _ in nil }
+        )
+        await viewModel.load(childUserId: "child-1", displayName: "Sam")
+        #expect(viewModel.inventoryState == .unavailable)
+        #expect(viewModel.exportFileURL == nil)
+    }
+
+    // Owner finding 2026-08-29: the share sheet needs a default file name — the export
+    // is written as a named temp file once the inventory loads.
+    @Test func exportFileIsWrittenWithTheChildNamedFileName() async throws {
+        let inventory = sampleInventory()
+        let viewModel = FamilyChildPrivacyViewModel(
+            loadConsentHistory: { _ in ParentalConsentStatus(records: []) },
+            loadInventory: { _ in inventory }
+        )
+        await viewModel.load(childUserId: "child-1", displayName: "Sam")
+
+        let url = try #require(viewModel.exportFileURL)
+        #expect(url.lastPathComponent.contains("Sam"))
+        #expect(url.pathExtension == "txt")
+        let contents = try String(contentsOf: url, encoding: .utf8)
+        #expect(contents.contains("KidRacer"))
+    }
+
+    // Owner finding 2026-08-29: a process-level callable wedge shows as "unavailable"
+    // — retry must reset both halves and actually reload.
+    @Test func retryResetsAndReloadsAfterAFailedFirstAttempt() async {
+        var attempts = 0
+        let inventory = sampleInventory()
+        let viewModel = FamilyChildPrivacyViewModel(
+            loadConsentHistory: { _ in ParentalConsentStatus(records: []) },
+            loadInventory: { _ in
+                attempts += 1
+                if attempts == 1 { throw NSError(domain: "test", code: 7) }
+                return inventory
             }
         )
-        await viewModel.load(childUserId: "child-1")
-        await viewModel.load(childUserId: "child-1")
-        #expect(calls == 1)
+
+        await viewModel.load(childUserId: "child-1", displayName: "Sam")
+        #expect(viewModel.inventoryState == .unavailable)
+
+        await viewModel.retry(childUserId: "child-1", displayName: "Sam")
+        #expect(viewModel.inventoryState == .loaded(inventory))
+        #expect(viewModel.exportFileURL != nil)
+    }
+}
+
+// MARK: - FR-61 inventory parsing (server payload → model)
+
+@MainActor
+struct ChildDataInventoryParsingTests {
+
+    private func serverPayload() -> [String: Any] {
+        [
+            "accountExists": true,
+            "viaGuardianship": true,
+            "generatedAtMillis": 1_787_000_000_000,
+            "sections": [
+                "user_profile": [
+                    "present": true,
+                    "userName": "KidRacer",
+                    "avatarId": "fox",
+                    "ageOutYearMonth": 203107,
+                ],
+                "private_subcollection": [
+                    "present": true,
+                    "pushTokenPresent": true,
+                    "contact": ["hasEmail": true, "hasPhoneNumber": false],
+                    "guardianship": ["grantedAtMillis": 1_000, "endedAtMillis": 2_000, "endedReason": "parent_removed_child"],
+                ],
+                "search_indexes": [
+                    "present": false,
+                    "usernameIndexed": false,
+                    "emailIndexed": false,
+                    "phoneIndexed": false,
+                ],
+                "friend_edges": ["present": false, "edgeCount": 0],
+                "family_membership": ["present": false],
+                "progression": ["present": true, "totalXp": 320, "level": 4, "xpGrantCount": 2],
+                "achievements": ["present": true, "unlockedCount": 5],
+                "public_lifetime_stats": ["present": true, "totals": ["platesFound": 12]],
+                "invite_rate_limits": ["present": true, "counterCount": 1],
+                "gameplay_residue": [
+                    "present": true,
+                    "sessionCount": 3,
+                    "summarizedSessionCount": 1,
+                    "truncated": true,
+                    "authoredEventTotal": 9,
+                    "attributedEventTotal": 11,
+                    "anyLocationPayloadExists": true,
+                    "tripInvitesSent": 0,
+                    "tripInvitesReceived": 2,
+                    "shareCodesCreated": 1,
+                    "pendingNotifyBufferCount": 0,
+                    "trips": [
+                        [
+                            "tripName": "Summer trip",
+                            "status": "ended",
+                            "createdAtMillis": 5_000,
+                            "authoredEventCountsByKind": ["region_found": 9],
+                            "attributedEventCount": 11,
+                            "anyLocationPayload": true,
+                        ],
+                    ],
+                ],
+                "revenuecat_vendor": ["present": false, "configured": true],
+                "analytics_vendor": ["present": false],
+            ],
+        ]
+    }
+
+    @Test func parsesTheFullServerShape() throws {
+        let inventory = ChildDataInventory.parse(serverPayload())
+        let parsed = try #require(inventory)
+
+        #expect(parsed.accountExists)
+        #expect(parsed.viaGuardianship)
+        #expect(parsed.profile?.userName == "KidRacer")
+        #expect(parsed.profile?.ageOutYearMonth == 203107)
+        #expect(parsed.privateData?.hasEmail == true)
+        #expect(parsed.privateData?.hasPhoneNumber == false)
+        #expect(parsed.privateData?.pushTokenPresent == true)
+        #expect(parsed.privateData?.guardianshipEndedReason == "parent_removed_child")
+        #expect(parsed.searchIndexes?.anyIndexed == false)
+        #expect(parsed.totalXp == 320)
+        #expect(parsed.xpGrantCount == 2)
+        #expect(parsed.achievementCount == 5)
+        #expect(parsed.statsTotals == ["platesFound": 12])
+        #expect(parsed.rateLimitCounterCount == 1)
+        #expect(parsed.revenueCatConfigured)
+
+        let gameplay = try #require(parsed.gameplay)
+        #expect(gameplay.sessionCount == 3)
+        #expect(gameplay.truncated)
+        #expect(gameplay.anyLocationPayloadExists)
+        #expect(gameplay.trips.count == 1)
+        #expect(gameplay.trips.first?.tripName == "Summer trip")
+        #expect(gameplay.trips.first?.authoredEventCountsByKind == ["region_found": 9])
+    }
+
+    @Test func aMissingTopLevelShapeParsesToNil() {
+        #expect(ChildDataInventory.parse(nil) == nil)
+        #expect(ChildDataInventory.parse(["records": []]) == nil)
+        #expect(ChildDataInventory.parse("garbage") == nil)
+    }
+
+    @Test func malformedSectionsDegradeToDefaultsNotFailure() throws {
+        let inventory = ChildDataInventory.parse([
+            "accountExists": true,
+            "sections": [
+                "user_profile": "garbage",
+                "gameplay_residue": ["present": true, "trips": "garbage"],
+            ],
+        ])
+        let parsed = try #require(inventory)
+        #expect(parsed.profile == nil)
+        #expect(parsed.gameplay?.trips.isEmpty == true)
+    }
+
+    @Test func guardedChildListParsesAndSkipsMalformedRows() {
+        let rows = GuardedChildSummary.parseList([
+            "children": [
+                [
+                    "childUserId": "kid-1",
+                    "familyId": "fam-1",
+                    "childUserName": "KidRacer",
+                    "accountExists": true,
+                    "grantedAtMillis": 1_000,
+                    "endedAtMillis": 2_000,
+                    "endedReason": "parent_removed_child",
+                ],
+                ["familyId": "fam-1"],
+            ],
+        ])
+        #expect(rows.count == 1)
+        #expect(rows.first?.childUserId == "kid-1")
+        #expect(rows.first?.endedReason == "parent_removed_child")
+        #expect(GuardedChildSummary.parseList(nil).isEmpty)
     }
 }

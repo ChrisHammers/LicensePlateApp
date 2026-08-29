@@ -117,6 +117,28 @@ export interface AccountDeletionResult {
 }
 
 /**
+ * FR-61 parity half: the per-uid data locations `executeAccountDeletionForUser` below
+ * actually touches, one key per phase, plus the FR-78(b) analytics posture it documents.
+ * Declared HERE, beside the sweep, so a new deletion phase is added next to its key —
+ * and the parity test fails until the review inventory covers the same key. Keep in the
+ * sweep's own order.
+ */
+export const DELETION_SWEEP_LOCATION_KEYS = [
+  "friend_edges", // removeAllFriendEdgesForUser
+  "family_membership", // remove_member / inactivate_family branches
+  "search_indexes", // clearSearchIndexes
+  "private_subcollection", // users/{uid}/private/*
+  "progression", // user_progression/{uid} + xp_grants
+  "achievements", // user_achievements/{uid} + achievements
+  "public_lifetime_stats",
+  "invite_rate_limits", // FR-47 counters
+  "gameplay_residue", // deidentifyUserResidue (sessions, events, invites, codes, buffers)
+  "user_profile", // users/{uid} itself
+  "revenuecat_vendor", // FR-78(a)
+  "analytics_vendor", // FR-78(b) documented decision
+] as const;
+
+/**
  * Deletes `userId`'s personal cloud data (everything except the Firebase Auth user —
  * the caller deletes that last so a failed cleanup stays retryable).
  *

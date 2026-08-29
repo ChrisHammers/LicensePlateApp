@@ -38,6 +38,8 @@ export {
   declareChildRegistration,
   requestChildDataDeletion,
   getParentalConsentStatus,
+  getChildDataInventory,
+  listGuardedChildren,
 } from "./familyChildStatus";
 export { expireInvitesAndCodes } from "./expiration";
 export {

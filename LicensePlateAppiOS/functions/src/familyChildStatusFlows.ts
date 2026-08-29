@@ -70,7 +70,7 @@ function throwRejection(rejection: ChildStatusRejection): never {
  * message matches the membership deny (FR-24: no oracle distinguishing "no such
  * family role" from "not the recorded guardian").
  */
-async function authorizeParentalRights(
+export async function authorizeParentalRights(
   db: Firestore,
   input: { actorId: string; familyId: string; childUserId: string }
 ): Promise<{ actorRole: string; viaGuardianship: boolean }> {

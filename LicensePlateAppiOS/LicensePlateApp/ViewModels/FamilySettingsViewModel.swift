@@ -48,8 +48,11 @@ class FamilySettingsViewModel: ObservableObject {
     /// FR-30 final confirmation — the second deliberate step after the §312.6(a)(2)
     /// removal choice (FR-63(a)); the only state the irreversible delete fires from.
     @Published var childDeletionFinalTarget: FamilyChildMemberTarget?
-    /// Read-only child-privacy detail (FR-29).
+    /// Read-only child-privacy detail (FR-29/FR-61).
     @Published var childPrivacyTarget: FamilyChildMemberTarget?
+    /// FR-61 ex-member entry: children this account is the recorded guardian for
+    /// (server-fed via `listGuardedChildren`; filtered to past members for display).
+    @Published private(set) var guardedChildren: [GuardedChildSummary] = []
     @Published private(set) var isSavingChildStatus = false
     /// F-8 device pass wave 2 (2026-08-16): scoped per-member. Wave 1 wired a single
     /// Bool into every row's manage controls, so deleting one child's data spun a
@@ -412,6 +415,9 @@ class FamilySettingsViewModel: ObservableObject {
                 familyRepository.removeLocalMember(familyId: familyId, memberUserId: target.memberUserId)
                 deletingChildDataMemberId = nil
                 refreshMembers()
+                // FR-61: deletion removes the guardianship record with the account —
+                // drop the past-children row in the same motion.
+                refreshGuardedChildren()
             } catch {
                 deletingChildDataMemberId = nil
                 presentReconcilingMembershipLoss(error, memberId: target.memberUserId)
@@ -430,6 +436,57 @@ class FamilySettingsViewModel: ObservableObject {
         try await childStatusService.getParentalConsentStatus(
             familyId: familyId,
             childUserId: childUserId
+        )
+    }
+
+    /// FR-61: the live review inventory for the privacy surface.
+    func loadChildDataInventory(childUserId: String) async throws -> ChildDataInventory? {
+        try await childStatusService.getChildDataInventory(
+            familyId: familyId,
+            childUserId: childUserId
+        )
+    }
+
+    // MARK: - Guarded children (FR-61 ex-member entry; FR-62 rights survive removal)
+
+    /// Rows for THIS family whose child is no longer on the roster but whose account
+    /// still exists — the "children you've consented for" surface. Current members'
+    /// rows are covered by the live roster's own controls.
+    var pastGuardedChildren: [GuardedChildSummary] {
+        guardedChildren.filter { row in
+            row.familyId == familyId
+                && row.accountExists
+                && !members.contains(where: { $0.userId == row.childUserId })
+        }
+    }
+
+    /// Best-effort refresh; a failure leaves the previous rows (the section simply
+    /// doesn't appear on a cold failure — rights remain reachable next load).
+    func refreshGuardedChildren() {
+        Task { [weak self] in
+            guard let self else { return }
+            if let rows = try? await self.childStatusService.listGuardedChildren() {
+                self.guardedChildren = rows
+            }
+        }
+    }
+
+    /// Review for an EX-member. Authority is the server's guardianship gate (FR-62);
+    /// this row only exists because the server said we are the recorded guardian.
+    func openGuardedChildPrivacy(_ row: GuardedChildSummary) {
+        childPrivacyTarget = FamilyChildMemberTarget(
+            memberUserId: row.childUserId,
+            displayName: row.childUserName ?? "Member".localized
+        )
+    }
+
+    /// FR-63's "delete their data later", delivered: an ex-member deletion arms the
+    /// SAME outcome-named final confirmation; the server authorizes the recorded
+    /// guardian and the membership-exit half no-ops (FR-62).
+    func beginDeleteDataForGuardedChild(_ row: GuardedChildSummary) {
+        childDeletionFinalTarget = FamilyChildMemberTarget(
+            memberUserId: row.childUserId,
+            displayName: row.childUserName ?? "Member".localized
         )
     }
 

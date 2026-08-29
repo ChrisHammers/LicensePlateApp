@@ -18,6 +18,10 @@ import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
 import { assertAuthenticated, assertRegisteredAccount } from "./callableAuth";
 import { isValidAgeOutYearMonth } from "./consentRequestsCore";
+import {
+  buildChildDataInventoryFlow,
+  listGuardedChildrenFlow,
+} from "./childDataInventory";
 import { currentRevenueCatApiKey } from "./accountDeletion";
 import {
   declareChildRegistrationFlow,
@@ -131,4 +135,31 @@ export const getParentalConsentStatus = enforcedCallable(async (data, context) =
     familyId,
     childUserId,
   });
+});
+
+/**
+ * FR-61: the live parental review inventory. Same FR-62 authorization ladder as the
+ * deletion right (live manager, else recorded guardian) — review survives removal.
+ */
+export const getChildDataInventory = enforcedCallable(async (data, context) => {
+  const actorId = assertRegisteredAccount(context);
+
+  const familyId = requireString(data?.familyId, "familyId");
+  const childUserId = requireString(data?.childUserId, "childUserId");
+
+  return buildChildDataInventoryFlow(admin.firestore(), {
+    actorId,
+    familyId,
+    childUserId,
+  });
+});
+
+/**
+ * FR-61 ex-member entry point: the children the caller is the recorded guardian for
+ * (live or ended). Self-scoped — no target parameter, so there is nothing to authorize
+ * beyond the registered account itself.
+ */
+export const listGuardedChildren = enforcedCallable(async (_data, context) => {
+  const actorId = assertRegisteredAccount(context);
+  return listGuardedChildrenFlow(admin.firestore(), { actorId });
 });

@@ -260,6 +260,11 @@ enum FamilyChildStatusPayload {
         ["familyId": familyId, "childUserId": childUserId]
     }
 
+    /// `getChildDataInventory` (FR-61).
+    static func childDataInventory(familyId: String, childUserId: String) -> [String: Any] {
+        ["familyId": familyId, "childUserId": childUserId]
+    }
+
     /// `approveFamilyJoinRequest_CaptainStep` (FR-1/FR-25). The child fields ride the
     /// existing approval payload; an unanswered draft omits `isChild` entirely, which is
     /// legal only for targets the server sees as non-child.
@@ -350,6 +355,13 @@ protocol FamilyChildStatusManaging: AnyObject {
     func requestChildDataDeletion(familyId: String, childUserId: String) async throws
 
     func getParentalConsentStatus(familyId: String, childUserId: String) async throws -> ParentalConsentStatus
+
+    /// FR-61: the live review inventory. nil means the server answered with an
+    /// unparseable shape — the surface degrades, never blocks.
+    func getChildDataInventory(familyId: String, childUserId: String) async throws -> ChildDataInventory?
+
+    /// FR-61 ex-member entry: children this account is the recorded guardian for.
+    func listGuardedChildren() async throws -> [GuardedChildSummary]
 }
 
 // MARK: - Server rejection mapping
@@ -466,6 +478,241 @@ struct ParentalConsentStatus: Equatable, Sendable {
             )
         }
         return ParentalConsentStatus(records: records)
+    }
+}
+
+// MARK: - FR-61: live parental review inventory
+
+/// One trip the child participated in, as the server summarized it. Enumerated
+/// positionally in the view (the server response carries no per-trip id on purpose).
+struct ChildInventoryTripSummary: Equatable, Sendable {
+    var tripName: String?
+    var status: String?
+    var createdAt: Date?
+    var endedAt: Date?
+    var authoredEventCountsByKind: [String: Int]
+    var attributedEventCount: Int
+    var anyLocationPayload: Bool
+}
+
+/// FR-61: the server-assembled inventory of everything held for one child.
+/// Tolerant parser in the `ParentalConsentStatus.parse` style: a malformed section
+/// degrades to its empty default; only a missing top-level shape yields nil
+/// (renders the "unavailable" row, never blocks the review surface).
+struct ChildDataInventory: Equatable, Sendable {
+    struct Profile: Equatable, Sendable {
+        var userName: String?
+        var avatarId: String?
+        var ageOutYearMonth: Int?
+        var createdAt: Date?
+        var lastDateLoggedIn: Date?
+    }
+
+    struct PrivateData: Equatable, Sendable {
+        var hasEmail = false
+        var hasPhoneNumber = false
+        var pushTokenPresent = false
+        var guardianshipGrantedAt: Date?
+        var guardianshipEndedAt: Date?
+        var guardianshipEndedReason: String?
+    }
+
+    struct SearchIndexes: Equatable, Sendable {
+        var usernameIndexed = false
+        var emailIndexed = false
+        var phoneIndexed = false
+        var anyIndexed: Bool { usernameIndexed || emailIndexed || phoneIndexed }
+    }
+
+    struct Gameplay: Equatable, Sendable {
+        var sessionCount = 0
+        var truncated = false
+        var trips: [ChildInventoryTripSummary] = []
+        var authoredEventTotal = 0
+        var attributedEventTotal = 0
+        var anyLocationPayloadExists = false
+        var tripInvitesSent = 0
+        var tripInvitesReceived = 0
+        var shareCodesCreated = 0
+        var pendingNotifyBufferCount = 0
+    }
+
+    var accountExists: Bool
+    var viaGuardianship: Bool
+    var generatedAt: Date?
+    var profile: Profile?
+    var privateData: PrivateData?
+    var searchIndexes: SearchIndexes?
+    var friendEdgeCount = 0
+    var membershipPresent = false
+    var membershipRole: String?
+    var totalXp: Int?
+    var level: Int?
+    var xpGrantCount = 0
+    var achievementCount = 0
+    var statsTotals: [String: Int] = [:]
+    var rateLimitCounterCount = 0
+    var gameplay: Gameplay?
+    var revenueCatConfigured = false
+
+    private static func date(fromMillis value: Any?) -> Date? {
+        guard let millis = (value as? NSNumber)?.doubleValue else { return nil }
+        return Date(timeIntervalSince1970: millis / 1000)
+    }
+
+    private static func int(_ value: Any?) -> Int? {
+        (value as? NSNumber)?.intValue
+    }
+
+    static func parse(_ data: Any?) -> ChildDataInventory? {
+        guard let dict = data as? [String: Any],
+              let sections = dict["sections"] as? [String: Any] else {
+            return nil
+        }
+
+        var inventory = ChildDataInventory(
+            accountExists: dict["accountExists"] as? Bool ?? false,
+            viaGuardianship: dict["viaGuardianship"] as? Bool ?? false,
+            generatedAt: date(fromMillis: dict["generatedAtMillis"])
+        )
+
+        if let profile = sections["user_profile"] as? [String: Any],
+           profile["present"] as? Bool == true {
+            inventory.profile = Profile(
+                userName: profile["userName"] as? String,
+                avatarId: profile["avatarId"] as? String,
+                ageOutYearMonth: int(profile["ageOutYearMonth"]),
+                createdAt: date(fromMillis: profile["createdAtMillis"]),
+                lastDateLoggedIn: date(fromMillis: profile["lastDateLoggedInMillis"])
+            )
+        }
+
+        if let priv = sections["private_subcollection"] as? [String: Any],
+           priv["present"] as? Bool == true {
+            var privateData = PrivateData(
+                pushTokenPresent: priv["pushTokenPresent"] as? Bool ?? false
+            )
+            if let contact = priv["contact"] as? [String: Any] {
+                privateData.hasEmail = contact["hasEmail"] as? Bool ?? false
+                privateData.hasPhoneNumber = contact["hasPhoneNumber"] as? Bool ?? false
+            }
+            if let guardianship = priv["guardianship"] as? [String: Any] {
+                privateData.guardianshipGrantedAt = date(fromMillis: guardianship["grantedAtMillis"])
+                privateData.guardianshipEndedAt = date(fromMillis: guardianship["endedAtMillis"])
+                privateData.guardianshipEndedReason = guardianship["endedReason"] as? String
+            }
+            inventory.privateData = privateData
+        }
+
+        if let search = sections["search_indexes"] as? [String: Any] {
+            inventory.searchIndexes = SearchIndexes(
+                usernameIndexed: search["usernameIndexed"] as? Bool ?? false,
+                emailIndexed: search["emailIndexed"] as? Bool ?? false,
+                phoneIndexed: search["phoneIndexed"] as? Bool ?? false
+            )
+        }
+
+        if let friends = sections["friend_edges"] as? [String: Any] {
+            inventory.friendEdgeCount = int(friends["edgeCount"]) ?? 0
+        }
+
+        if let membership = sections["family_membership"] as? [String: Any] {
+            inventory.membershipPresent = membership["present"] as? Bool ?? false
+            inventory.membershipRole = membership["role"] as? String
+        }
+
+        if let progression = sections["progression"] as? [String: Any] {
+            inventory.totalXp = int(progression["totalXp"])
+            inventory.level = int(progression["level"])
+            inventory.xpGrantCount = int(progression["xpGrantCount"]) ?? 0
+        }
+
+        if let achievements = sections["achievements"] as? [String: Any] {
+            inventory.achievementCount = int(achievements["unlockedCount"]) ?? 0
+        }
+
+        if let stats = sections["public_lifetime_stats"] as? [String: Any],
+           let totals = stats["totals"] as? [String: Any] {
+            inventory.statsTotals = totals.compactMapValues { int($0) }
+        }
+
+        if let rateLimits = sections["invite_rate_limits"] as? [String: Any] {
+            inventory.rateLimitCounterCount = int(rateLimits["counterCount"]) ?? 0
+        }
+
+        if let gameplay = sections["gameplay_residue"] as? [String: Any] {
+            var section = Gameplay(
+                sessionCount: int(gameplay["sessionCount"]) ?? 0,
+                truncated: gameplay["truncated"] as? Bool ?? false,
+                authoredEventTotal: int(gameplay["authoredEventTotal"]) ?? 0,
+                attributedEventTotal: int(gameplay["attributedEventTotal"]) ?? 0,
+                anyLocationPayloadExists: gameplay["anyLocationPayloadExists"] as? Bool ?? false,
+                tripInvitesSent: int(gameplay["tripInvitesSent"]) ?? 0,
+                tripInvitesReceived: int(gameplay["tripInvitesReceived"]) ?? 0,
+                shareCodesCreated: int(gameplay["shareCodesCreated"]) ?? 0,
+                pendingNotifyBufferCount: int(gameplay["pendingNotifyBufferCount"]) ?? 0
+            )
+            let rows = gameplay["trips"] as? [[String: Any]] ?? []
+            section.trips = rows.map { row in
+                ChildInventoryTripSummary(
+                    tripName: row["tripName"] as? String,
+                    status: row["status"] as? String,
+                    createdAt: date(fromMillis: row["createdAtMillis"]),
+                    endedAt: date(fromMillis: row["endedAtMillis"]),
+                    authoredEventCountsByKind:
+                        (row["authoredEventCountsByKind"] as? [String: Any])?
+                            .compactMapValues { int($0) } ?? [:],
+                    attributedEventCount: int(row["attributedEventCount"]) ?? 0,
+                    anyLocationPayload: row["anyLocationPayload"] as? Bool ?? false
+                )
+            }
+            inventory.gameplay = section
+        }
+
+        if let revenueCat = sections["revenuecat_vendor"] as? [String: Any] {
+            inventory.revenueCatConfigured = revenueCat["configured"] as? Bool ?? false
+        }
+
+        return inventory
+    }
+}
+
+/// FR-61 ex-member entry point: one child this account is the recorded guardian for.
+struct GuardedChildSummary: Equatable, Sendable, Identifiable {
+    let childUserId: String
+    let familyId: String
+    let childUserName: String?
+    let accountExists: Bool
+    let grantedAt: Date?
+    let endedAt: Date?
+    let endedReason: String?
+
+    var id: String { childUserId }
+
+    static func parseList(_ data: Any?) -> [GuardedChildSummary] {
+        guard let dict = data as? [String: Any],
+              let rows = dict["children"] as? [[String: Any]] else {
+            return []
+        }
+        return rows.compactMap { row in
+            guard let childUserId = row["childUserId"] as? String, !childUserId.isEmpty,
+                  let familyId = row["familyId"] as? String else {
+                return nil
+            }
+            func date(_ value: Any?) -> Date? {
+                guard let millis = (value as? NSNumber)?.doubleValue else { return nil }
+                return Date(timeIntervalSince1970: millis / 1000)
+            }
+            return GuardedChildSummary(
+                childUserId: childUserId,
+                familyId: familyId,
+                childUserName: row["childUserName"] as? String,
+                accountExists: row["accountExists"] as? Bool ?? false,
+                grantedAt: date(row["grantedAtMillis"]),
+                endedAt: date(row["endedAtMillis"]),
+                endedReason: row["endedReason"] as? String
+            )
+        }
     }
 }
 
