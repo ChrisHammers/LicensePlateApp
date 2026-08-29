@@ -199,10 +199,8 @@ struct FamilySettingsStaleRosterRecoveryTests {
         let (viewModel, service, _) = try makeHarness()
         service.deletionError = notFound()
 
-        viewModel.beginRemoveAndDeleteChildData(
-            FamilyChildMemberTarget(memberUserId: "child-1", displayName: "Sam")
-        )
-        viewModel.advanceToFinalDeletionConfirmation()
+        viewModel.confirmRemoveMember(memberId: "child-1")
+        viewModel.chooseDeletionForPendingRemoval()
         viewModel.confirmChildDataDeletion()
         try await Task.sleep(nanoseconds: 60_000_000)
 
@@ -213,10 +211,8 @@ struct FamilySettingsStaleRosterRecoveryTests {
     @Test func aSuccessfulDeletionDropsTheMemberImmediately() async throws {
         let (viewModel, _, _) = try makeHarness()
 
-        viewModel.beginRemoveAndDeleteChildData(
-            FamilyChildMemberTarget(memberUserId: "child-1", displayName: "Sam")
-        )
-        viewModel.advanceToFinalDeletionConfirmation()
+        viewModel.confirmRemoveMember(memberId: "child-1")
+        viewModel.chooseDeletionForPendingRemoval()
         viewModel.confirmChildDataDeletion()
         try await Task.sleep(nanoseconds: 60_000_000)
 

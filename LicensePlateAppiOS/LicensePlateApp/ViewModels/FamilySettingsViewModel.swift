@@ -45,8 +45,8 @@ class FamilySettingsViewModel: ObservableObject {
     @Published var childConsentDraft = ChildConsentDraft()
     /// Correction dialog (FR-5): the two enumerated reasons, nothing else.
     @Published var childCorrectionTarget: FamilyChildMemberTarget?
-    /// Remove-and-delete (FR-30) — deliberately two steps.
-    @Published var childDeletionTarget: FamilyChildMemberTarget?
+    /// FR-30 final confirmation — the second deliberate step after the §312.6(a)(2)
+    /// removal choice (FR-63(a)); the only state the irreversible delete fires from.
     @Published var childDeletionFinalTarget: FamilyChildMemberTarget?
     /// Read-only child-privacy detail (FR-29).
     @Published var childPrivacyTarget: FamilyChildMemberTarget?
@@ -194,7 +194,8 @@ class FamilySettingsViewModel: ObservableObject {
         return member.roleEnum == .creator
     }
 
-    var canRemoveMembers: Bool { isCreator }
+    /// Whether the viewer can remove SOMEONE (server-mirrored: creator or captain).
+    var canRemoveMembers: Bool { isCreator || isCaptainOrCreator }
 
     var isCaptainOrCreator: Bool {
         guard let userId = currentUserId,
@@ -205,9 +206,15 @@ class FamilySettingsViewModel: ObservableObject {
     }
 
     func canRemove(memberId: String) -> Bool {
-        guard canRemoveMembers else { return false }
-        guard let userId = currentUserId else { return false }
-        return memberId != userId
+        guard let member = members.first(where: { $0.userId == memberId }) else { return false }
+        return FamilyMemberRemovalPolicy.canRemove(
+            actorIsCreator: isCreator,
+            actorIsCaptainOrCreator: isCaptainOrCreator,
+            currentUserId: currentUserId,
+            memberUserId: memberId,
+            familyCreatorId: family?.creatorId,
+            memberRole: member.roleEnum
+        )
     }
 
     // MARK: - Child status projection & gating (FR-2 / FR-20)
@@ -380,34 +387,10 @@ class FamilySettingsViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Remove and delete child's data (FR-30)
-
-    func beginRemoveAndDeleteChildData(_ target: FamilyChildMemberTarget) {
-        guard canManageChildStatus(memberId: target.memberUserId) else { return }
-        guard isChildMember(memberId: target.memberUserId) else { return }
-        childDeletionTarget = target
-    }
-
-    /// Second, deliberate confirmation before an irreversible deletion.
-    func advanceToFinalDeletionConfirmation() {
-        guard let target = childDeletionTarget else { return }
-        childDeletionTarget = nil
-        childDeletionFinalTarget = target
-    }
+    // MARK: - Remove and delete child's data (FR-63(a) choice → FR-30 final confirm)
 
     func cancelChildDataDeletion() {
-        childDeletionTarget = nil
         childDeletionFinalTarget = nil
-    }
-
-    /// Step-1 alert dismissal callback ONLY. SwiftUI runs the tapped button's action
-    /// and THEN sets `isPresented = false` — for the "Continue" tap that dismissal
-    /// arrives right after `advanceToFinalDeletionConfirmation()` has armed the final
-    /// target, so a full `cancelChildDataDeletion()` here would clear it and the
-    /// second alert would never present (the FR-30 flow silently dead-ends). Explicit
-    /// Cancel buttons keep calling the full cancel.
-    func dismissInitialDeletionConfirmation() {
-        childDeletionTarget = nil
     }
 
     func confirmChildDataDeletion() {
@@ -561,19 +544,22 @@ class FamilySettingsViewModel: ObservableObject {
         memberIdPendingRemoval.map(isChildMember(memberId:)) ?? false
     }
 
-    /// FR-63(a): the parent picked deletion in the removal dialog — route into the
-    /// existing FR-30 two-step confirmation (removal + deletion happen together
-    /// server-side; the second, deliberate confirm for an irreversible delete stays).
+    /// FR-63(a): the parent picked deletion in the removal choice. The choice dialog is
+    /// the first deliberate step, so this arms the FR-30 FINAL confirmation directly —
+    /// the second confirm for an irreversible delete stays, its buttons naming both
+    /// outcomes (removal + deletion happen together server-side).
     func chooseDeletionForPendingRemoval() {
         guard let memberId = memberIdPendingRemoval else { return }
         memberIdPendingRemoval = nil
+        guard canManageChildStatus(memberId: memberId) else { return }
+        guard isChildMember(memberId: memberId) else { return }
         guard let member = members.first(where: { $0.userId == memberId }) else { return }
-        beginRemoveAndDeleteChildData(childMemberTarget(for: member))
+        childDeletionFinalTarget = childMemberTarget(for: member)
     }
 
     func removeMember(memberId: String) {
         guard canRemove(memberId: memberId) else {
-            errorMessage = "Only the family creator can remove members.".localized
+            errorMessage = "family.member.remove_not_allowed".localized
             showErrorAlert = true
             return
         }

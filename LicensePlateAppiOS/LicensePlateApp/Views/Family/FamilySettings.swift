@@ -87,12 +87,15 @@ struct FamilySettings: View {
                                         // Fix 2 (2026-08-16): every row disables while ANY
                                         // deletion is in flight, but only the matching row
                                         // spins — see `isDeletingChildData(memberId:)`.
-                                        isBusy: viewModel.isSavingChildStatus || viewModel.isChildDataDeletionInFlight,
+                                        isBusy: viewModel.isSavingChildStatus || viewModel.isChildDataDeletionInFlight || viewModel.isRemovingMember,
                                         isDeletingChildData: viewModel.isDeletingChildData(memberId: member.userId),
                                         onMarkAsChild: { viewModel.beginMarkAsChild($0) },
                                         onCorrect: { viewModel.beginCorrectChildStatus($0) },
                                         onOpenPrivacy: { viewModel.openChildPrivacy($0) },
-                                        onRemoveAndDelete: { viewModel.beginRemoveAndDeleteChildData($0) }
+                                        // FR-63(a): the manage control routes into the SAME
+                                        // removal choice as swipe-Remove — never straight
+                                        // into deletion.
+                                        onRemove: { viewModel.confirmRemoveMember(memberId: $0.memberUserId) }
                                     )
                                 }
                             }
@@ -206,6 +209,8 @@ struct FamilySettings: View {
                     // FR-63(a): removing a child is a consent revocation — §312.6(a)(2)
                     // requires the explicit choice between stopping collection (account
                     // kept restricted, rights retained) and deleting the data now.
+                    // BOTH entry surfaces land here: swipe-Remove and the manage
+                    // control's "Remove from family…".
                     Button("family.child.remove_keep_data".localized) {
                         viewModel.removePendingMember()
                     }
@@ -256,8 +261,9 @@ struct FamilySettings: View {
 }
 
 /// COPPA F-8 presentation layer, split out so `FamilySettings.body` stays inside the
-/// type checker's budget. Sheets present through `item:` (identity preserved per member)
-/// and both destructive paths keep their own confirmation step.
+/// type checker's budget. Sheets present through `item:` (identity preserved per member).
+/// Deletion is two deliberate steps: the FR-63(a) removal choice (on `FamilySettings`,
+/// shared with swipe-Remove) arms the FR-30 final confirmation presented here.
 private struct FamilyChildManagementPresentations: ViewModifier {
     @ObservedObject var viewModel: FamilySettingsViewModel
 
@@ -298,26 +304,10 @@ private struct FamilyChildManagementPresentations: ViewModifier {
             } message: {
                 Text("family.child.correction_dialog_message".localized)
             }
-            // FR-30 step 1 of 2. The dismissal callback must NOT be the full cancel:
-            // SwiftUI fires it after the "Continue" action too, which would clear the
-            // just-armed final target and step 2 would never present.
-            .alert(
-                "family.child.remove_delete_title".localized,
-                isPresented: Binding(
-                    get: { viewModel.childDeletionTarget != nil },
-                    set: { if !$0 { viewModel.dismissInitialDeletionConfirmation() } }
-                )
-            ) {
-                Button("Cancel".localized, role: .cancel) {
-                    viewModel.cancelChildDataDeletion()
-                }
-                Button("Continue".localized, role: .destructive) {
-                    viewModel.advanceToFinalDeletionConfirmation()
-                }
-            } message: {
-                Text("family.child.remove_delete_message".localized)
-            }
-            // FR-30 step 2 of 2 — the irreversible one.
+            // FR-30 final confirm — the irreversible one, reached only through the
+            // FR-63(a) removal choice (both entry surfaces). Buttons name their
+            // outcomes (owner finding 2026-08-29): the cancel role keeps the child in
+            // the family, because nothing has been requested yet.
             .alert(
                 "family.child.remove_delete_final_title".localized,
                 isPresented: Binding(
@@ -325,10 +315,10 @@ private struct FamilyChildManagementPresentations: ViewModifier {
                     set: { if !$0 { viewModel.cancelChildDataDeletion() } }
                 )
             ) {
-                Button("Cancel".localized, role: .cancel) {
+                Button("family.child.remove_delete_keep_family".localized, role: .cancel) {
                     viewModel.cancelChildDataDeletion()
                 }
-                Button("family.child.remove_delete_confirm".localized, role: .destructive) {
+                Button("family.child.remove_delete_permanently".localized, role: .destructive) {
                     viewModel.confirmChildDataDeletion()
                 }
             } message: {
@@ -351,7 +341,7 @@ struct FamilyChildManageControls: View {
     let onMarkAsChild: (FamilyChildMemberTarget) -> Void
     let onCorrect: (FamilyChildMemberTarget) -> Void
     let onOpenPrivacy: (FamilyChildMemberTarget) -> Void
-    let onRemoveAndDelete: (FamilyChildMemberTarget) -> Void
+    let onRemove: (FamilyChildMemberTarget) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -370,15 +360,18 @@ struct FamilyChildManageControls: View {
                 ) {
                     onCorrect(target)
                 }
+                // FR-63(a): the FIRST step is the §312.6(a)(2) choice — this control
+                // opens the same removal dialog as swipe-Remove (keep data / delete /
+                // cancel), never a delete-only flow.
                 controlButton(
-                    title: "family.child.manage_remove_delete".localized,
-                    systemImage: "trash",
-                    hint: "family.child.manage_remove_delete_hint".localized,
+                    title: "family.child.manage_remove".localized,
+                    systemImage: "person.fill.xmark",
+                    hint: "family.child.manage_remove_hint".localized,
                     isDestructive: true,
                     isBusy: isDeletingChildData,
                     busyTitle: "Deleting...".localized
                 ) {
-                    onRemoveAndDelete(target)
+                    onRemove(target)
                 }
             } else {
                 controlButton(
@@ -624,7 +617,7 @@ struct FamilyMemberSettingsRow: View {
             onMarkAsChild: { _ in },
             onCorrect: { _ in },
             onOpenPrivacy: { _ in },
-            onRemoveAndDelete: { _ in }
+            onRemove: { _ in }
         )
     }
 }
@@ -639,7 +632,7 @@ struct FamilyMemberSettingsRow: View {
             onMarkAsChild: { _ in },
             onCorrect: { _ in },
             onOpenPrivacy: { _ in },
-            onRemoveAndDelete: { _ in }
+            onRemove: { _ in }
         )
     }
 }
@@ -653,7 +646,7 @@ struct FamilyMemberSettingsRow: View {
             onMarkAsChild: { _ in },
             onCorrect: { _ in },
             onOpenPrivacy: { _ in },
-            onRemoveAndDelete: { _ in }
+            onRemove: { _ in }
         )
     }
     .preferredColorScheme(.dark)
@@ -668,7 +661,7 @@ struct FamilyMemberSettingsRow: View {
             onMarkAsChild: { _ in },
             onCorrect: { _ in },
             onOpenPrivacy: { _ in },
-            onRemoveAndDelete: { _ in }
+            onRemove: { _ in }
         )
     }
     .environment(\.dynamicTypeSize, .accessibility2)

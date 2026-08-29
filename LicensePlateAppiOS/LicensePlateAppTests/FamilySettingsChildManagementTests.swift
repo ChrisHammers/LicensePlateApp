@@ -276,9 +276,14 @@ struct FamilySettingsChildManagementTests {
         #expect(harness.service.setChildStatusCalls.isEmpty)
     }
 
-    // MARK: - Remove and delete child's data (FR-30)
+    // MARK: - Remove a child: FR-63(a) choice → FR-30 final confirm
 
-    @Test func deletionRequiresTwoDeliberateConfirmations() async throws {
+    /// FR-63(a), owner finding 2026-08-29: the manage control was delete-only while
+    /// §312.6(a)(2) requires offering stop-collection-without-deletion on every
+    /// revocation surface a parent actually uses. Its entry now routes through
+    /// `confirmRemoveMember` — the SAME three-way choice swipe-Remove presents —
+    /// with captain authority included (server-mirrored removal policy).
+    @Test func manageControlEntryArmsTheSameRemovalChoiceAsSwipe() throws {
         let harness = try makeHarness(
             viewerId: "captain",
             viewerRole: .captain,
@@ -286,17 +291,33 @@ struct FamilySettingsChildManagementTests {
         )
         let vm = harness.viewModel
 
-        vm.beginRemoveAndDeleteChildData(target("scout"))
-        #expect(vm.childDeletionTarget != nil)
+        #expect(vm.canRemove(memberId: "scout"))
+        vm.confirmRemoveMember(memberId: "scout")
+        #expect(vm.memberIdPendingRemoval == "scout")
+        #expect(vm.pendingRemovalIsChild)
+        // The choice alone arms no deletion — keep-their-data stays a plain removal.
+        #expect(vm.childDeletionFinalTarget == nil)
+    }
+
+    @Test func deletionRequiresTheChoiceAndTheFinalConfirmation() async throws {
+        let harness = try makeHarness(
+            viewerId: "captain",
+            viewerRole: .captain,
+            childMemberIds: ["scout"]
+        )
+        let vm = harness.viewModel
+
+        vm.confirmRemoveMember(memberId: "scout")
+        #expect(vm.pendingRemovalIsChild)
         #expect(vm.childDeletionFinalTarget == nil)
 
-        // Confirming at step one must not delete anything.
+        // Confirming while only the choice dialog is up must not delete anything.
         vm.confirmChildDataDeletion()
         try await Task.sleep(nanoseconds: 30_000_000)
         #expect(harness.service.deletionCalls.isEmpty)
 
-        vm.advanceToFinalDeletionConfirmation()
-        #expect(vm.childDeletionTarget == nil)
+        vm.chooseDeletionForPendingRemoval()
+        #expect(vm.memberIdPendingRemoval == nil)
         #expect(vm.childDeletionFinalTarget != nil)
 
         vm.confirmChildDataDeletion()
@@ -308,13 +329,14 @@ struct FamilySettingsChildManagementTests {
         #expect(vm.childDeletionFinalTarget == nil)
     }
 
-    /// Owner regression (2026-08-12 step-8 retest): SwiftUI dismisses an alert AFTER
-    /// running the tapped button's action — so right after "Continue" arms the final
-    /// target, the step-1 alert's `isPresented` binding fires `set(false)`. The shipped
-    /// wiring routed that to the FULL cancel, which cleared the just-armed final target:
-    /// the second alert never presented, no callable ever fired, nothing was removed.
-    /// This walks the exact UI callback sequence against the dismissal-only handler.
-    @Test func step1DismissalAfterContinueDoesNotKillTheFinalConfirmation() async throws {
+    /// Owner regression class (2026-08-12 step-8 retest, re-pinned for the FR-63(a)
+    /// shape): SwiftUI dismisses an alert AFTER running the tapped button's action — so
+    /// right after the choice's delete button arms the final target, the choice alert's
+    /// `isPresented` binding fires `set(false)`, which routes to `cancelRemoveMember()`.
+    /// That dismissal must clear only its own pending-removal state, never the
+    /// just-armed final confirmation, or the second alert silently never presents.
+    /// This walks the exact UI callback sequence.
+    @Test func choiceDismissalAfterPickingDeleteDoesNotKillTheFinalConfirmation() async throws {
         let harness = try makeHarness(
             viewerId: "captain",
             viewerRole: .captain,
@@ -322,13 +344,13 @@ struct FamilySettingsChildManagementTests {
         )
         let vm = harness.viewModel
 
-        vm.beginRemoveAndDeleteChildData(target("scout"))
-        // User taps "Continue": action runs first…
-        vm.advanceToFinalDeletionConfirmation()
-        // …then SwiftUI dismisses alert 1 via the isPresented binding.
-        vm.dismissInitialDeletionConfirmation()
+        vm.confirmRemoveMember(memberId: "scout")
+        // User taps "Remove & delete their data": action runs first…
+        vm.chooseDeletionForPendingRemoval()
+        // …then SwiftUI dismisses the choice alert via the isPresented binding.
+        vm.cancelRemoveMember()
 
-        // The final confirmation must still be armed (alert 2 presents).
+        // The final confirmation must still be armed (the second alert presents).
         #expect(vm.childDeletionFinalTarget != nil)
 
         vm.confirmChildDataDeletion()
@@ -346,12 +368,15 @@ struct FamilySettingsChildManagementTests {
         )
         let vm = harness.viewModel
 
-        vm.beginRemoveAndDeleteChildData(target("scout"))
-        vm.cancelChildDataDeletion()
-        #expect(vm.childDeletionTarget == nil)
+        vm.confirmRemoveMember(memberId: "scout")
+        vm.cancelRemoveMember()
+        #expect(vm.memberIdPendingRemoval == nil)
+        #expect(vm.childDeletionFinalTarget == nil)
 
-        vm.beginRemoveAndDeleteChildData(target("scout"))
-        vm.advanceToFinalDeletionConfirmation()
+        // "Keep them in the family" on the final confirm: the child stays — nothing
+        // was requested yet.
+        vm.confirmRemoveMember(memberId: "scout")
+        vm.chooseDeletionForPendingRemoval()
         vm.cancelChildDataDeletion()
         #expect(vm.childDeletionFinalTarget == nil)
 
@@ -360,11 +385,16 @@ struct FamilySettingsChildManagementTests {
         #expect(harness.service.deletionCalls.isEmpty)
     }
 
-    @Test func deletionIsOnlyOfferedForFlaggedChildren() {
-        // FR-30 targets `isChildAccount == true` members; the server rejects anyone else.
+    @Test func deletionIsOnlyArmedForFlaggedChildren() {
+        // FR-30 targets `isChildAccount == true` members; the server rejects anyone
+        // else. An adult's removal dialog is plain Remove — a stray delete-choice call
+        // arms nothing and just closes the dialog.
         let harness = try? makeHarness(viewerId: "captain", viewerRole: .captain)
-        harness?.viewModel.beginRemoveAndDeleteChildData(target("scout"))
-        #expect(harness?.viewModel.childDeletionTarget == nil)
+        harness?.viewModel.confirmRemoveMember(memberId: "scout")
+        #expect(harness?.viewModel.pendingRemovalIsChild == false)
+        harness?.viewModel.chooseDeletionForPendingRemoval()
+        #expect(harness?.viewModel.childDeletionFinalTarget == nil)
+        #expect(harness?.viewModel.memberIdPendingRemoval == nil)
     }
 
     @Test func deletionFailureSurfacesAnErrorAndKeepsTheMember() async throws {
@@ -376,8 +406,8 @@ struct FamilySettingsChildManagementTests {
         harness.service.deletionError = NSError(
             domain: "test", code: 1, userInfo: [NSLocalizedDescriptionKey: "nope"]
         )
-        harness.viewModel.beginRemoveAndDeleteChildData(target("scout"))
-        harness.viewModel.advanceToFinalDeletionConfirmation()
+        harness.viewModel.confirmRemoveMember(memberId: "scout")
+        harness.viewModel.chooseDeletionForPendingRemoval()
         harness.viewModel.confirmChildDataDeletion()
         try await Task.sleep(nanoseconds: 50_000_000)
 
@@ -401,8 +431,8 @@ struct FamilySettingsChildManagementTests {
         )
         let vm = harness.viewModel
 
-        vm.beginRemoveAndDeleteChildData(target("scout"))
-        vm.advanceToFinalDeletionConfirmation()
+        vm.confirmRemoveMember(memberId: "scout")
+        vm.chooseDeletionForPendingRemoval()
         vm.confirmChildDataDeletion()
 
         // Synchronous, pre-Task state: `deletingChildDataMemberId` is set before the
@@ -434,13 +464,13 @@ struct FamilySettingsChildManagementTests {
         )
         let vm = harness.viewModel
 
-        vm.beginRemoveAndDeleteChildData(target("scout"))
-        vm.advanceToFinalDeletionConfirmation()
+        vm.confirmRemoveMember(memberId: "scout")
+        vm.chooseDeletionForPendingRemoval()
         vm.confirmChildDataDeletion()
         #expect(vm.isDeletingChildData(memberId: "scout"))
 
-        vm.beginRemoveAndDeleteChildData(target("scout2"))
-        vm.advanceToFinalDeletionConfirmation()
+        vm.confirmRemoveMember(memberId: "scout2")
+        vm.chooseDeletionForPendingRemoval()
         vm.confirmChildDataDeletion()
 
         // Refused: the in-flight member id is unchanged, and scout2 never shows busy.

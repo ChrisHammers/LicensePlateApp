@@ -488,3 +488,26 @@ enum FamilyChildManagePolicy {
         return memberRole != .creator
     }
 }
+
+/// Mirrors the server's `canRemoveFamilyMember` (functions/src/familyMemberRemovalPolicy.ts)
+/// so the Remove control appears exactly where the callable would allow it: creators remove
+/// anyone, captains remove non-captains. Two server cells are deliberately NOT surfaced:
+/// self-removal (Leave Family is its own surface) and the legacy captain-may-remove-creator
+/// rule (no UI should offer removing the creator).
+enum FamilyMemberRemovalPolicy {
+    static func canRemove(
+        actorIsCreator: Bool,
+        actorIsCaptainOrCreator: Bool,
+        currentUserId: String?,
+        memberUserId: String,
+        familyCreatorId: String?,
+        memberRole: FamilyMember.FamilyRole
+    ) -> Bool {
+        guard actorIsCreator || actorIsCaptainOrCreator else { return false }
+        guard let currentUserId, !currentUserId.isEmpty else { return false }
+        guard memberUserId != currentUserId else { return false }
+        if actorIsCreator { return true }
+        guard memberUserId != familyCreatorId else { return false }
+        return memberRole != .creator && memberRole != .captain
+    }
+}

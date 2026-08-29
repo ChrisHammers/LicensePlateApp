@@ -63,7 +63,7 @@ struct FamilySettingsViewModelTests {
         #expect(!vm.canRemove(memberId: "creator"))
     }
 
-    @Test func nonCreatorCannotRemoveMembers() throws {
+    @Test func nonManagerCannotRemoveMembers() throws {
         let vm = try makeViewModel(
             viewerId: "scout",
             creatorId: "creator",
@@ -77,7 +77,26 @@ struct FamilySettingsViewModelTests {
 
         vm.removeMember(memberId: "creator")
         #expect(vm.showErrorAlert)
-        #expect(vm.errorMessage == "Only the family creator can remove members.".localized)
+        #expect(vm.errorMessage == "family.member.remove_not_allowed".localized)
+    }
+
+    /// FR-63(a) authority: captains are the parents who naturally manage children, so
+    /// the client mirrors the server's `canRemoveFamilyMember` — captains remove
+    /// non-captains. Never captains, never the creator (the server's legacy
+    /// captain-may-remove-creator cell is deliberately not surfaced), never self.
+    @Test func captainCanRemoveNonCaptainsButNeverCaptainsOrCreator() throws {
+        let vm = try makeViewModel(
+            viewerId: "captain",
+            creatorId: "creator",
+            extraMembers: [("captain", .captain), ("captain2", .captain), ("scout", .scout)]
+        )
+
+        #expect(!vm.isCreator)
+        #expect(vm.canRemoveMembers)
+        #expect(vm.canRemove(memberId: "scout"))
+        #expect(!vm.canRemove(memberId: "captain2"))
+        #expect(!vm.canRemove(memberId: "creator"))
+        #expect(!vm.canRemove(memberId: "captain"))
     }
 
     @Test func nonCreatorIsNotCreatorForLeaveVsDeleteGates() throws {
