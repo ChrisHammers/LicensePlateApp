@@ -402,3 +402,51 @@ describe("FR-48: searchUsers honors the username searchability opt-out end to en
     expect(prefix.results.map((hit) => hit.userId)).toEqual(["findable"]);
   });
 });
+
+describe("§3.1.1 item 9: a stale sync execution can never resurrect a deleted user doc", () => {
+  // The deletion flow's own users-doc writes (deletion-intent marker, membership exit)
+  // each enqueue a trigger execution; Firestore gives no cross-event ordering guarantee,
+  // so one can be processed AFTER executeAccountDeletionForUser removed `users/{uid}`.
+  // Observed live 2026-08-29: the stamp's old set(merge:true) recreated the deleted doc
+  // as exactly `{userNameLower}` — reaper-blind (no child flag survives) and matchable
+  // by the userNameLower fallback query. These pin: a missing doc STAYS missing.
+
+  it("a stale child-branch event processed after account deletion does not recreate users/{uid}", async () => {
+    seedStaleIndexResidue("kid");
+    const staleAfter = {
+      userName: "KidRacer",
+      isRegistered: true,
+      isChildAccount: true,
+      email: "kid@example.com",
+      phoneNumber: "+12035551111",
+    };
+    await fireProfileWrite("kid", staleAfter, staleAfter);
+
+    expect(db().store.has("users/kid")).toBe(false);
+    // The stale index rows are still cleaned — refusing to resurrect must not
+    // weaken the FR-11 removal the child branch exists for.
+    expect(indexRows()).toEqual([]);
+  });
+
+  it("a stale registered-adult event processed after deletion does not recreate users/{uid} either", async () => {
+    const staleAfter = { userName: "GoneAdult", isRegistered: true };
+    await fireProfileWrite("gone", staleAfter, staleAfter);
+    expect(db().store.has("users/gone")).toBe(false);
+  });
+
+  it("a child's live doc never receives the userNameLower stamp (children are never findable)", async () => {
+    const child = { userName: "KidRacer", isRegistered: true, isChildAccount: true };
+    db().seed("users/kid", child);
+    await fireProfileWrite("kid", null, child);
+    expect(db().store.get("users/kid")).not.toHaveProperty("userNameLower");
+  });
+
+  it("a registered adult's live doc still gets the stamp (update path, doc present)", async () => {
+    const adult = { userName: "RoadKing", isRegistered: true };
+    db().seed("users/adult", adult);
+    await fireProfileWrite("adult", null, adult);
+    expect(
+      (db().store.get("users/adult") as Record<string, unknown>).userNameLower
+    ).toBe("roadking");
+  });
+});

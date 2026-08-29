@@ -38,6 +38,19 @@ export function buildContactFields(
 }
 
 /**
+ * Firestore `update()` on a missing document: the admin SDK throws gRPC code 5
+ * ("No document to update"); the test fake throws "update() on missing document".
+ * Both mean the same thing to a stamper: the account is mid-deletion or gone, and
+ * the correct outcome is no write at all.
+ */
+function isMissingDocumentUpdateError(error: unknown): boolean {
+  const code = (error as { code?: unknown })?.code;
+  if (code === 5 || code === "not-found" || code === "NOT_FOUND") return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return /no document to update|missing document/i.test(message);
+}
+
+/**
  * Sync username index + userNameLower for a user doc.
  * Deletes username / contact lookup indexes when not registered.
  */
@@ -60,11 +73,21 @@ export async function syncUsernameSearchIndex(params: {
   const batch = firestore.batch();
   const userRef = firestore.collection("users").doc(userId);
 
-  if (userNameLower) {
-    writes.push(() =>
-      batch.set(userRef, { userNameLower }, { merge: true })
-    );
-  }
+  // §3.1.1 item 9 + FR-11: the `userNameLower` stamp exists only so REGISTERED
+  // accounts are findable by the fallback/prefix scans — children and anonymous
+  // accounts are never searchable, so they never get the stamp. And it must be an
+  // update(), never set(merge): the old create-if-missing stamp let a stale trigger
+  // execution RECREATE a deleted child's `users/{uid}` as `{userNameLower}` after
+  // account deletion (observed live 2026-08-29). A missing doc stays missing.
+  const stampUserNameLower = async () => {
+    if (!isRegistered || !userNameLower) return;
+    try {
+      await userRef.update({ userNameLower });
+    } catch (error) {
+      if (isMissingDocumentUpdateError(error)) return;
+      throw error;
+    }
+  };
 
   if (!isRegistered) {
     if (previous) {
@@ -108,9 +131,11 @@ export async function syncUsernameSearchIndex(params: {
     }
   }
 
-  if (writes.length === 0) return;
-  writes.forEach((w) => w());
-  await batch.commit();
+  if (writes.length > 0) {
+    writes.forEach((w) => w());
+    await batch.commit();
+  }
+  await stampUserNameLower();
 }
 
 /**
