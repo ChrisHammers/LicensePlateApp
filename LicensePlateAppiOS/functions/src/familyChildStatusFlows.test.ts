@@ -10,6 +10,7 @@ import {
 } from "./familyChildStatusFlows";
 import { consentMetadataPiiViolations } from "./childAccountCore";
 import { confirmGuardianConsent } from "./testSupport/consentTestHelpers";
+import { writeChildMembershipRevocation } from "./childConsent";
 import type { ClientMetadata } from "./clientMetadata";
 import type { SearchIndexHints } from "./userResidueCleanup";
 
@@ -427,6 +428,114 @@ describe("requestChildDataDeletionFlow (FR-30)", () => {
     db.seed("user_progression/kid", { totalXp: 100 });
     db.seed("public_lifetime_stats/kid", { platesFound: 5 });
   }
+
+  // FR-62 (2026-08-29): parental rights are keyed to DURABLE GUARDIANSHIP. The parent
+  // who consented keeps §312.6 review/deletion after the child's removal; a stranger
+  // never gains them; ending the guardianship record never deletes it.
+  it("FR-62: the recorded guardian keeps deletion + review after the child was removed", async () => {
+    const db = new FakeFirestore();
+    seedFamily(db);
+    // The removed shape: sticky child flag, NO activeFamilyId, NO member doc.
+    db.seed("users/kid", {
+      isChildAccount: true,
+      wasEverInFamily: true,
+      userName: "KidUser",
+      userNameLower: "kiduser",
+    });
+    db.seed("users/kid/private/guardianship", {
+      guardianUid: "parent",
+      familyId: "fam1",
+      method: "email_plus",
+      assuranceLevel: 1,
+      grantedAtMillis: 1_000,
+      endedAtMillis: 2_000,
+      endedReason: "parent_removed_child",
+    });
+    db.seed("audit_logs/g1", {
+      eventType: "AUDIT_PARENTAL_CONSENT_GRANTED",
+      subjectType: "user",
+      subjectId: "kid",
+      metadata: { method: "email_plus", assuranceLevel: 1 },
+    });
+
+    // Review survives removal…
+    const status = await getParentalConsentStatusFlow(asFirestore(db), {
+      actorId: "parent",
+      familyId: "fam1",
+      childUserId: "kid",
+    });
+    expect(status.records.length).toBeGreaterThan(0);
+
+    // …and so does deletion, via the guardianship path (no membership anywhere).
+    const purges: RecordedPurge[] = [];
+    const result = await requestChildDataDeletionFlow(
+      asFirestore(db),
+      {
+        actorId: "parent",
+        familyId: "fam1",
+        childUserId: "kid",
+        clientMetadata: CLIENT_METADATA,
+      },
+      stubDeps(purges)
+    );
+    expect(result.success).toBe(true);
+    expect(db.store.has("users/kid")).toBe(false);
+
+    // A never-guardian stranger with no membership gets nothing.
+    db.seed("users/victim", { isChildAccount: true, userName: "V" });
+    db.seed("users/victim/private/guardianship", {
+      guardianUid: "someoneElse",
+      familyId: "fam1",
+      grantedAtMillis: 1_000,
+    });
+    await expect(
+      getParentalConsentStatusFlow(asFirestore(db), {
+        actorId: "stranger",
+        familyId: "fam1",
+        childUserId: "victim",
+      })
+    ).rejects.toMatchObject({ code: "permission-denied" });
+  });
+
+  it("FR-62: revocation ENDS the guardianship record — first end wins, never deleted", async () => {
+    const db = new FakeFirestore();
+    db.seed("users/kid", { isChildAccount: true });
+    db.seed("users/kid/private/guardianship", {
+      guardianUid: "parent",
+      familyId: "fam1",
+      method: "email_plus",
+      grantedAtMillis: 1_000,
+    });
+
+    await writeChildMembershipRevocation(asFirestore(db), {
+      familyId: "fam1",
+      childUserId: "kid",
+      actorId: "parent",
+      actorRole: "creator",
+      method: "remove_family_member",
+      reason: "parent_removed_child",
+      clientMetadata: null,
+    });
+
+    const ended = db.store.get("users/kid/private/guardianship")!;
+    expect(typeof ended.endedAtMillis).toBe("number");
+    expect(ended.endedReason).toBe("parent_removed_child");
+    const firstStamp = ended.endedAtMillis;
+
+    // A second exit path must not restamp — the FIRST end is the historical truth.
+    await writeChildMembershipRevocation(asFirestore(db), {
+      familyId: "fam1",
+      childUserId: "kid",
+      actorId: "kid",
+      actorRole: "scout",
+      method: "leave_family",
+      reason: "member_left_family",
+      clientMetadata: null,
+    });
+    const after = db.store.get("users/kid/private/guardianship")!;
+    expect(after.endedAtMillis).toBe(firstStamp);
+    expect(after.endedReason).toBe("parent_removed_child");
+  });
 
   it("rejects non-managers, self-targets, and non-child targets", async () => {
     const db = new FakeFirestore();

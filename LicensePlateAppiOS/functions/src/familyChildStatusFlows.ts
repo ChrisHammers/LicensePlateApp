@@ -60,6 +60,54 @@ function throwRejection(rejection: ChildStatusRejection): never {
   throw new functions.https.HttpsError(rejection.code, rejection.message);
 }
 
+/**
+ * FR-62: parental rights are keyed to DURABLE GUARDIANSHIP, not live membership.
+ * Ladder: (1) a live manager of the family authorizes exactly as before (precedence);
+ * (2) otherwise, the actor authorizes as the child's RECORDED guardian for this family
+ * — ended or not: the guardian who consented retains §312.6 review/deletion after the
+ * child's removal, self-leave, or family inactivation. A newer grant supersedes the
+ * record wholesale, so the single doc IS the "most recent guardianship". The deny
+ * message matches the membership deny (FR-24: no oracle distinguishing "no such
+ * family role" from "not the recorded guardian").
+ */
+async function authorizeParentalRights(
+  db: Firestore,
+  input: { actorId: string; familyId: string; childUserId: string }
+): Promise<{ actorRole: string; viaGuardianship: boolean }> {
+  const actorMemberDoc = await db
+    .collection(`families/${input.familyId}/members`)
+    .doc(input.actorId)
+    .get();
+  if (actorMemberDoc.exists) {
+    const role = actorMemberDoc.data()?.role;
+    if (typeof role === "string" && CHILD_STATUS_MANAGER_ROLES.includes(role)) {
+      return { actorRole: role, viaGuardianship: false };
+    }
+    // A LIVE member with an insufficient role gets the actionable answer (they can
+    // see the roster anyway); only the outside-both-paths deny below stays uniform.
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "Only Captains can manage child status"
+    );
+  }
+
+  const guardianship = await db
+    .collection("users")
+    .doc(input.childUserId)
+    .collection("private")
+    .doc("guardianship")
+    .get();
+  const data = guardianship.data();
+  if (
+    guardianship.exists &&
+    data?.guardianUid === input.actorId &&
+    data?.familyId === input.familyId
+  ) {
+    return { actorRole: "guardian", viaGuardianship: true };
+  }
+  throw new functions.https.HttpsError("permission-denied", "Not a family member");
+}
+
 async function loadManagerRole(
   db: Firestore,
   familyId: string,
@@ -343,13 +391,13 @@ export async function requestChildDataDeletionFlow(
 ): Promise<RequestChildDataDeletionResult> {
   const { actorId, familyId, childUserId, clientMetadata } = input;
 
-  const actorRole = await loadManagerRole(db, familyId, actorId);
-  if (!CHILD_STATUS_MANAGER_ROLES.includes(actorRole)) {
-    throw new functions.https.HttpsError(
-      "permission-denied",
-      "Only Captains can request child data deletion"
-    );
-  }
+  // FR-62: live managers and the recorded guardian both authorize — the parent who
+  // consented keeps the deletion right after the child leaves the family.
+  const { actorRole } = await authorizeParentalRights(db, {
+    actorId,
+    familyId,
+    childUserId,
+  });
   if (actorId === childUserId) {
     throw new functions.https.HttpsError(
       "failed-precondition",
@@ -357,12 +405,12 @@ export async function requestChildDataDeletionFlow(
     );
   }
 
+  // A LIVE member gets the creator guard; an already-removed child has no member doc
+  // and no membership to exit — the batch below no-ops its delete and the deletion
+  // machinery runs the same either way (FR-62: rights survive removal).
   const childMemberRef = db.collection(`families/${familyId}/members`).doc(childUserId);
   const childMemberDoc = await childMemberRef.get();
-  if (!childMemberDoc.exists) {
-    throw new functions.https.HttpsError("not-found", "Member not found");
-  }
-  if (childMemberDoc.data()?.role === "creator") {
+  if (childMemberDoc.exists && childMemberDoc.data()?.role === "creator") {
     throw new functions.https.HttpsError(
       "failed-precondition",
       "The family creator cannot be deleted this way"
@@ -456,21 +504,9 @@ export async function getParentalConsentStatusFlow(
 ): Promise<ParentalConsentStatusResult> {
   const { actorId, familyId, childUserId } = input;
 
-  const actorRole = await loadManagerRole(db, familyId, actorId);
-  if (!CHILD_STATUS_MANAGER_ROLES.includes(actorRole)) {
-    throw new functions.https.HttpsError(
-      "permission-denied",
-      "Only Captains can view consent status"
-    );
-  }
-
-  const childMemberDoc = await db
-    .collection(`families/${familyId}/members`)
-    .doc(childUserId)
-    .get();
-  if (!childMemberDoc.exists) {
-    throw new functions.https.HttpsError("not-found", "Member not found");
-  }
+  // FR-62: live managers and the recorded guardian both authorize — review survives
+  // the child's removal, and a removed child has no member doc to demand.
+  await authorizeParentalRights(db, { actorId, familyId, childUserId });
 
   const childUserDoc = await db.collection("users").doc(childUserId).get();
   if (!isChildAccountUserData(childUserDoc.data())) {

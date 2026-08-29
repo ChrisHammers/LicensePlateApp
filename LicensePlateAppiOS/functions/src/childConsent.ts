@@ -93,6 +93,35 @@ export async function writeChildMembershipRevocation(
     clientMetadata: ClientMetadata | null;
   }
 ): Promise<void> {
+  // FR-62: the guardianship record is ENDED here — never deleted — because this writer
+  // is the one chokepoint every membership-end path already calls (FR-6). An ended
+  // record still authorizes the recorded guardian's §312.6 review/deletion rights; a
+  // later re-grant supersedes it wholesale (the grant transaction overwrites the doc).
+  // First end wins: a second exit path racing this one must not restamp the timestamp.
+  // Best-effort by design — a guardianship bookkeeping failure must not block the
+  // revocation record itself.
+  try {
+    const guardianshipRef = db
+      .collection("users")
+      .doc(input.childUserId)
+      .collection("private")
+      .doc("guardianship");
+    const guardianship = await guardianshipRef.get();
+    const data = guardianship.data();
+    if (
+      guardianship.exists &&
+      data?.familyId === input.familyId &&
+      data?.endedAtMillis === undefined
+    ) {
+      await guardianshipRef.update({
+        endedAtMillis: Date.now(),
+        endedReason: input.reason,
+      });
+    }
+  } catch (error) {
+    console.error("FR-62: ending guardianship record failed (non-fatal)", error);
+  }
+
   await writeAuditLogTo(db, {
     eventType: AUDIT_PARENTAL_CONSENT_REVOKED,
     actorId: input.actorId,
