@@ -181,6 +181,38 @@ describe("FR-7: users diff-guard protects isChildAccount and entitlementTags", (
   });
 
   /**
+   * FR-63(b) (2026-08-29): `pendingDeletionRequestedBy` is the deletion-intent marker
+   * a retry authorizes off after a partial failure. A client that could write it could
+   * forge a parent's deletion request; one that could clear it could strand a
+   * half-deleted account unresumable. Server-controlled, both twins.
+   */
+  it("denies clients writing or clearing the deletion-intent marker (FR-63)", async () => {
+    await seed({
+      // Deliberately NO other server-controlled keys: the clear-twin below must be
+      // denied by THIS key alone, not masked by isChildAccount's own guard.
+      "users/pending": {
+        userName: "Kid",
+        pendingDeletionRequestedBy: "parentUid",
+      },
+    });
+    await assertFails(
+      updateDoc(doc(registered("pending"), "users/pending"), {
+        pendingDeletionRequestedBy: "attacker",
+      })
+    );
+    // Full set omitting the key = clearing it via affectedKeys.
+    await assertFails(
+      setDoc(doc(registered("pending"), "users/pending"), { userName: "Kid v2" })
+    );
+    await assertFails(
+      setDoc(doc(registered("fresh5"), "users/fresh5"), {
+        userName: "F5",
+        pendingDeletionRequestedAtMillis: 1,
+      })
+    );
+  });
+
+  /**
    * FR-59.1 (2026-08-27): consent_requests carry the guardian's email and the hashed
    * confirmation nonce. Server-only, full stop — the GUARDIAN's own client included
    * (their credential is the emailed link, never a Firestore read).

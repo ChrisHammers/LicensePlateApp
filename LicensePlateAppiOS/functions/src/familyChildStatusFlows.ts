@@ -391,18 +391,29 @@ export async function requestChildDataDeletionFlow(
 ): Promise<RequestChildDataDeletionResult> {
   const { actorId, familyId, childUserId, clientMetadata } = input;
 
-  // FR-62: live managers and the recorded guardian both authorize — the parent who
-  // consented keeps the deletion right after the child leaves the family.
-  const { actorRole } = await authorizeParentalRights(db, {
-    actorId,
-    familyId,
-    childUserId,
-  });
   if (actorId === childUserId) {
     throw new functions.https.HttpsError(
       "failed-precondition",
       "Use account deletion to delete your own account"
     );
+  }
+
+  // FR-62: live managers and the recorded guardian both authorize — the parent who
+  // consented keeps the deletion right after the child leaves the family.
+  // FR-63(b): a standing deletion-intent marker ALSO authorizes its own requester —
+  // a partial failure may have already ended membership and mangled context, and the
+  // marker (server-written, client-unwritable per rules) is the durable proof this
+  // exact parent already lawfully asked.
+  const existingMarker = (
+    await db.collection("users").doc(childUserId).get()
+  ).data()?.pendingDeletionRequestedBy;
+  let actorRole: string;
+  if (existingMarker === actorId) {
+    actorRole = "guardian";
+  } else {
+    actorRole = (
+      await authorizeParentalRights(db, { actorId, familyId, childUserId })
+    ).actorRole;
   }
 
   // A LIVE member gets the creator guard; an already-removed child has no member doc
@@ -426,7 +437,16 @@ export async function requestChildDataDeletionFlow(
     );
   }
 
-  // Membership exit first, with the FR-30 reason. The deletion machinery below then
+  // FR-63(b): the deletion-intent marker lands BEFORE membership exit. If anything
+  // below dies, the marker survives on the user doc (deletion removes the whole doc,
+  // so success cleans it inherently) and a retry authorizes off it and resumes.
+  const memberExistedAtEntry = childMemberDoc.exists;
+  await childUserRef.update({
+    pendingDeletionRequestedBy: actorId,
+    pendingDeletionRequestedAtMillis: Date.now(),
+  });
+
+  // Membership exit next, with the FR-30 reason. The deletion machinery below then
   // sees no remaining membership and cannot double-write a generic exit record.
   const batch = db.batch();
   batch.delete(childMemberRef);
@@ -438,15 +458,20 @@ export async function requestChildDataDeletionFlow(
   );
   await batch.commit();
 
-  await writeChildMembershipRevocation(db, {
-    familyId,
-    childUserId,
-    actorId,
-    actorRole,
-    method: "request_child_data_deletion",
-    reason: "parent_requested_deletion",
-    clientMetadata,
-  });
+  // Exactly one REVOKED per membership end: only the pass that actually ended a live
+  // membership writes it. A retry (member already gone) and an ex-member deletion
+  // (their removal wrote its own row) both skip.
+  if (memberExistedAtEntry) {
+    await writeChildMembershipRevocation(db, {
+      familyId,
+      childUserId,
+      actorId,
+      actorRole,
+      method: "request_child_data_deletion",
+      reason: "parent_requested_deletion",
+      clientMetadata,
+    });
+  }
 
   const deletion = await executeAccountDeletionForUser(
     db,

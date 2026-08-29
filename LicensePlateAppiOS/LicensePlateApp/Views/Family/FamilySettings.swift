@@ -202,11 +202,27 @@ struct FamilySettings: View {
                 Button("Cancel".localized, role: .cancel) {
                     viewModel.cancelRemoveMember()
                 }
-                Button("Remove".localized, role: .destructive) {
-                    viewModel.removePendingMember()
+                if viewModel.pendingRemovalIsChild {
+                    // FR-63(a): removing a child is a consent revocation — §312.6(a)(2)
+                    // requires the explicit choice between stopping collection (account
+                    // kept restricted, rights retained) and deleting the data now.
+                    Button("family.child.remove_keep_data".localized) {
+                        viewModel.removePendingMember()
+                    }
+                    Button("family.child.remove_and_delete".localized, role: .destructive) {
+                        viewModel.chooseDeletionForPendingRemoval()
+                    }
+                } else {
+                    Button("Remove".localized, role: .destructive) {
+                        viewModel.removePendingMember()
+                    }
                 }
             } message: {
-                Text("They will be removed from this family and must be invited again to rejoin.".localized)
+                if viewModel.pendingRemovalIsChild {
+                    Text("family.child.remove_choice_message".localized)
+                } else {
+                    Text("They will be removed from this family and must be invited again to rejoin.".localized)
+                }
             }
             .alert("Error".localized, isPresented: $viewModel.showErrorAlert) {
                 Button("OK".localized) {
@@ -223,7 +239,16 @@ struct FamilySettings: View {
                     viewModel.deleteFamily()
                 }
             } message: {
-                Text("Are you sure you want to delete this family? This will permanently remove the family and all its members. This action cannot be undone.".localized)
+                if viewModel.childMemberIds.isEmpty {
+                    Text("Are you sure you want to delete this family? This will permanently remove the family and all its members. This action cannot be undone.".localized)
+                } else {
+                    // FR-63(a), family-teardown variant: the child outcome is stated
+                    // explicitly — accounts stay protected and paused, and each child's
+                    // data can be deleted from their row before (or reviewed after)
+                    // the teardown. Per-child deletion at teardown time itself is
+                    // deliberately NOT offered here (one dialog, N children).
+                    Text("family.child.delete_family_children_message".localized)
+                }
             }
             .modifier(FamilyChildManagementPresentations(viewModel: viewModel))
         }

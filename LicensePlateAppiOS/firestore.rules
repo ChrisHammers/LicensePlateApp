@@ -122,14 +122,14 @@ service cloud.firestore {
     // consent request in progress, and one that could clear it could hide a real one.
     function userDocPreservesServerControlledFields() {
       return !request.resource.data.diff(resource.data).affectedKeys()
-        .hasAny(["entitlementTags", "isChildAccount", "childDeclaredAt", "pendingFamilyRequest", "ageOutYearMonth"]);
+        .hasAny(["entitlementTags", "isChildAccount", "childDeclaredAt", "pendingFamilyRequest", "ageOutYearMonth", "pendingDeletionRequestedBy", "pendingDeletionRequestedAtMillis"]);
     }
 
     // Create-time twin of the diff-guard: a brand-new user doc cannot smuggle any of the
     // keys in (there is no `resource.data` to diff against on create).
     function userDocCreateOmitsServerControlledFields() {
       return !request.resource.data.keys()
-        .hasAny(["entitlementTags", "isChildAccount", "childDeclaredAt", "pendingFamilyRequest", "ageOutYearMonth"]);
+        .hasAny(["entitlementTags", "isChildAccount", "childDeclaredAt", "pendingFamilyRequest", "ageOutYearMonth", "pendingDeletionRequestedBy", "pendingDeletionRequestedAtMillis"]);
     }
 
     // FR-28 (COPPA F-5a): an unconsented child — `isChildAccount == true` with no active

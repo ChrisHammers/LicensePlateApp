@@ -1446,6 +1446,10 @@
 "family.child.age_out_label" = "Date de ses 13 ans (facultatif)";
 "family.child.age_out_label_required" = "Date de ses 13 ans";
 "family.member.consent_pending_subtitle" = "En attente de votre confirmation par courriel";
+"family.child.remove_keep_data" = "Retirer en conservant ses données";
+"family.child.remove_and_delete" = "Retirer et supprimer ses données";
+"family.child.remove_choice_message" = "Retirer cet enfant arrête toute collecte. Son compte reste protégé et en pause, et vous conservez le droit de consulter ou de supprimer ses données plus tard — ou vous pouvez les supprimer maintenant, ce qui est irréversible.";
+"family.child.delete_family_children_message" = "Voulez-vous vraiment supprimer cette famille? Cette action est irréversible. Les comptes des enfants sont conservés, protégés et en pause; vous conservez le droit de consulter ou de supprimer les données de chaque enfant depuis sa ligne de membre avant de supprimer la famille.";
 "family.child.age_out_none" = "Non précisé";
 "family.child.age_out_hint" = "Facultatif. Conservé comme rappel pour vous : rien ne change automatiquement.";
 "family.child.toggle_title" = "Ce membre est un enfant (moins de 13 ans)";

@@ -554,6 +554,23 @@ class FamilySettingsViewModel: ObservableObject {
         removeMember(memberId: memberId)
     }
 
+    /// Whether the removal dialog must present the §312.6(a)(2) choice (FR-63(a)):
+    /// removing a CHILD is a consent revocation, and the parent chooses between
+    /// stop-collection-keep-restricted and delete-the-data-now.
+    var pendingRemovalIsChild: Bool {
+        memberIdPendingRemoval.map(isChildMember(memberId:)) ?? false
+    }
+
+    /// FR-63(a): the parent picked deletion in the removal dialog — route into the
+    /// existing FR-30 two-step confirmation (removal + deletion happen together
+    /// server-side; the second, deliberate confirm for an irreversible delete stays).
+    func chooseDeletionForPendingRemoval() {
+        guard let memberId = memberIdPendingRemoval else { return }
+        memberIdPendingRemoval = nil
+        guard let member = members.first(where: { $0.userId == memberId }) else { return }
+        beginRemoveAndDeleteChildData(childMemberTarget(for: member))
+    }
+
     func removeMember(memberId: String) {
         guard canRemove(memberId: memberId) else {
             errorMessage = "Only the family creator can remove members.".localized

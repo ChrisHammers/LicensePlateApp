@@ -429,6 +429,60 @@ describe("requestChildDataDeletionFlow (FR-30)", () => {
     db.seed("public_lifetime_stats/kid", { platesFound: 5 });
   }
 
+  // FR-63(b) (2026-08-29): deletion is RESUMABLE. The intent marker lands before
+  // membership exit; a partial failure leaves it standing; the retry authorizes off
+  // it, skips the second revocation row, and finishes the job.
+  it("FR-63: a deletion killed mid-flow resumes off the intent marker, idempotently", async () => {
+    const db = new FakeFirestore();
+    seedFlaggedChild(db);
+
+    // First pass dies INSIDE the deletion machinery (after marker + membership exit).
+    const failingDeps = {
+      clearSearchIndexes: async () => {
+        throw new Error("injected: search-index purge outage");
+      },
+    };
+    await expect(
+      requestChildDataDeletionFlow(
+        asFirestore(db),
+        {
+          actorId: "parent",
+          familyId: "fam1",
+          childUserId: "kid",
+          clientMetadata: CLIENT_METADATA,
+        },
+        failingDeps
+      )
+    ).rejects.toThrow();
+
+    // The partial-failure shape: marker standing, membership gone, account NOT deleted,
+    // exactly one revocation already written.
+    const partial = db.store.get("users/kid")!;
+    expect(partial.pendingDeletionRequestedBy).toBe("parent");
+    expect(db.store.has("families/fam1/members/kid")).toBe(false);
+    expect(auditRowsOfType(db, "AUDIT_PARENTAL_CONSENT_REVOKED")).toHaveLength(1);
+
+    // Retry: same parent, healthy deps — and to prove the MARKER is what authorizes,
+    // the parent's own membership (and with it the live-manager path) is gone too,
+    // and no guardianship record exists in this seed. Only the marker remains.
+    db.store.delete("families/fam1/members/parent");
+    const purges: RecordedPurge[] = [];
+    const retry = await requestChildDataDeletionFlow(
+      asFirestore(db),
+      {
+        actorId: "parent",
+        familyId: "fam1",
+        childUserId: "kid",
+        clientMetadata: CLIENT_METADATA,
+      },
+      stubDeps(purges)
+    );
+    expect(retry.success).toBe(true);
+    expect(db.store.has("users/kid")).toBe(false); // marker cleaned WITH the account
+    expect(auditRowsOfType(db, "AUDIT_PARENTAL_CONSENT_REVOKED")).toHaveLength(1);
+    expect(auditRowsOfType(db, "AUDIT_ACCOUNT_DELETED")).toHaveLength(1);
+  });
+
   // FR-62 (2026-08-29): parental rights are keyed to DURABLE GUARDIANSHIP. The parent
   // who consented keeps §312.6 review/deletion after the child's removal; a stranger
   // never gains them; ending the guardianship record never deletes it.

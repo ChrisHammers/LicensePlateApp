@@ -1476,6 +1476,10 @@
 "family.child.age_out_label" = "When they turn 13 (optional)";
 "family.child.age_out_label_required" = "When they turn 13";
 "family.member.consent_pending_subtitle" = "Awaiting your email confirmation";
+"family.child.remove_keep_data" = "Remove, keep their data";
+"family.child.remove_and_delete" = "Remove & delete their data";
+"family.child.remove_choice_message" = "Removing this child stops all collection. Their account stays protected and paused, and you keep the right to review or delete their data later — or you can delete it now, which cannot be undone.";
+"family.child.delete_family_children_message" = "Are you sure you want to delete this family? This cannot be undone. Children's accounts are kept, protected and paused — you keep the right to review or delete each child's data from their member row before deleting the family.";
 "family.child.age_out_none" = "Not specified";
 "family.child.age_out_hint" = "Optional. Kept as a reminder for you — nothing changes automatically.";
 "family.child.toggle_title" = "This member is a child (under 13)";

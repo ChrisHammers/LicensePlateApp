@@ -1446,6 +1446,10 @@
 "family.child.age_out_label" = "Cuándo cumple 13 (opcional)";
 "family.child.age_out_label_required" = "Cuándo cumple 13";
 "family.member.consent_pending_subtitle" = "Esperando tu confirmación por correo";
+"family.child.remove_keep_data" = "Quitar y conservar sus datos";
+"family.child.remove_and_delete" = "Quitar y eliminar sus datos";
+"family.child.remove_choice_message" = "Al quitar a este menor se detiene toda la recopilación. Su cuenta queda protegida y en pausa, y conservas el derecho de revisar o eliminar sus datos más adelante; o puedes eliminarlos ahora, lo cual no se puede deshacer.";
+"family.child.delete_family_children_message" = "¿Seguro que quieres eliminar esta familia? Esto no se puede deshacer. Las cuentas de los menores se conservan, protegidas y en pausa; conservas el derecho de revisar o eliminar los datos de cada menor desde su fila de miembro antes de eliminar la familia.";
 "family.child.age_out_none" = "Sin especificar";
 "family.child.age_out_hint" = "Opcional. Se guarda como recordatorio para ti: nada cambia automáticamente.";
 "family.child.toggle_title" = "Este miembro es un menor (menos de 13 años)";
