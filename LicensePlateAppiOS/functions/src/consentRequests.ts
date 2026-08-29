@@ -28,20 +28,22 @@ import * as admin from "firebase-admin";
 import { defineSecret, defineString } from "firebase-functions/params";
 import { sendTransactionalEmail } from "./utils/email";
 import { redactEmailAddresses } from "./welcomeEmailCore";
-import { loadFamilyName } from "./familyInviteDisplay";
 import { AUDIT_LOG_COLLECTION } from "./retentionCore";
 import {
   CONSENT_PLUS_NOTICE_MAX_SEND_ATTEMPTS,
   CONSENT_PLUS_NOTICE_OVERDUE_MS,
   CONSENT_REQUESTS_COLLECTION,
+  CONSENT_REQUEST_KIND,
   CONSENT_REQUEST_STATUS,
   CONSENT_REQUEST_TTL_MS,
   ConsentAssurancePolicy,
+  type ConsentRequestKind,
   JOIN_REQUEST_AWAITING_GUARDIAN_STATUS,
   buildConsentInterstitialPage,
   buildConsentPlusNoticeEmailContent,
   buildConsentRequestEmailContent,
   consentEndpointAction,
+  consentRequestKind,
   decideConsentConfirmation,
   formatConsentToken,
   hashConsentNonce,
@@ -57,7 +59,11 @@ import {
   consentMetadataPiiViolations,
   sanitizedChildLinkedPlatforms,
 } from "./childAccountCore";
-import { familyMembershipGrantUserUpdate } from "./wasEverInFamilyUserUpdates";
+import {
+  familyMembershipGrantUserUpdate,
+  familyMembershipLeaveUserUpdate,
+} from "./wasEverInFamilyUserUpdates";
+import { writeChildMembershipRevocation } from "./childConsent";
 import { CHILD_DECLARED_AT_FIELD, deleteProvisionalChildAccountIfNeverConsented } from "./provisionalChildAccounts";
 import { PENDING_FAMILY_REQUEST_FIELD, findLivePendingJoinRequestsInOtherFamilies } from "./familyJoinRequestIntegrity";
 import { stageJoinRequestRetirement } from "./pendingJoinRequestExpiry";
@@ -110,13 +116,17 @@ export async function resolveGuardianEmailByUid(
 export interface CreateConsentRequestInput {
   familyId: string;
   childUserId: string;
-  joinRequestId: string;
+  /** join_admission only — a member_flag request has no join-request row. */
+  joinRequestId?: string;
   guardianUid: string;
   guardianRole: string;
   guardianEmail: string;
-  newRole: string;
+  /** join_admission only. */
+  newRole?: string;
   childUserName: string;
   expectedAgeOutYearMonth?: number;
+  /** Defaults to join_admission (every pre-existing caller and document). */
+  kind?: ConsentRequestKind;
   nowMillis?: number;
 }
 
@@ -163,24 +173,31 @@ export async function createConsentRequestForApproval(
   }
 
   const nonce = mintConsentNonce();
-  const noticeFamilyName = (await loadFamilyName(input.familyId)) ?? "your family";
+  // Through the PASSED handle, not `loadFamilyName` (which binds the global
+  // `admin.firestore()`): this creator now also runs under db-parameterized flows.
+  const familyDoc = await db.collection("families").doc(input.familyId).get();
+  const rawFamilyName = familyDoc.data()?.name;
+  const noticeFamilyName =
+    typeof rawFamilyName === "string" && rawFamilyName.trim().length > 0
+      ? rawFamilyName.trim()
+      : "your family";
+  const kind = input.kind ?? CONSENT_REQUEST_KIND.joinAdmission;
 
   const requestRef = db.collection(CONSENT_REQUESTS_COLLECTION).doc();
-  await requestRef.set({
+  const requestDoc: Record<string, unknown> = {
     familyId: input.familyId,
     childUserId: input.childUserId,
-    joinRequestId: input.joinRequestId,
     guardianUid: input.guardianUid,
     guardianRole: input.guardianRole,
     // §312.5(c)(1): the parent's own contact information, collected to obtain consent.
     // Server-only document (rules deny all client access); never copied into audit rows.
     guardianEmail: input.guardianEmail,
-    newRole: input.newRole,
     childUserName: input.childUserName,
     // `noticeFamilyName`, not `familyName`: the auditRedaction lint bans that key
     // source-wide (audit-row protection); this copy exists solely for the NP-1 email.
     noticeFamilyName,
     expectedAgeOutYearMonth: input.expectedAgeOutYearMonth ?? null,
+    kind,
     nonceHash: hashConsentNonce(nonce),
     status: CONSENT_REQUEST_STATUS.pending,
     attempts: 0,
@@ -193,9 +210,40 @@ export async function createConsentRequestForApproval(
     // deletes it the moment the send is claimed. It never outlives delivery, so no
     // durable copy of the credential exists server-side.
     pendingLinkNonce: nonce,
-  });
+  };
+  if (kind === CONSENT_REQUEST_KIND.joinAdmission) {
+    requestDoc.joinRequestId = input.joinRequestId;
+    requestDoc.newRole = input.newRole;
+  }
+  await requestRef.set(requestDoc);
 
   return { requestId: requestRef.id, reusedExisting: false };
+}
+
+/**
+ * Owner ruling 2026-08-28: mid-membership flagging obtains consent through the SAME
+ * pipeline. The child is already a member — protections were applied at flag time —
+ * so the request carries no join-request row and confirmation writes the record
+ * rather than admitting. Idempotent reuse is shared with the join shape: one live
+ * request per (family, child), whichever lifecycle opened it.
+ */
+export async function createMemberFlagConsentRequest(
+  db: Firestore,
+  input: {
+    familyId: string;
+    childUserId: string;
+    guardianUid: string;
+    guardianRole: string;
+    guardianEmail: string;
+    childUserName: string;
+    expectedAgeOutYearMonth: number;
+    nowMillis?: number;
+  }
+): Promise<CreateConsentRequestResult> {
+  return createConsentRequestForApproval(db, {
+    ...input,
+    kind: CONSENT_REQUEST_KIND.memberFlag,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -249,6 +297,7 @@ export const onConsentRequestCreatedSendEmail = functions
       )}`,
       envLabel: consentEmailEnvLabel.value(),
       ttlHours: Math.round(CONSENT_REQUEST_TTL_MS / 3_600_000),
+      kind: consentRequestKind(data.kind),
     });
 
     try {
@@ -311,12 +360,14 @@ const PAGES = {
 export interface ConfirmableRequest {
   familyId: string;
   childUserId: string;
+  /** join_admission only. */
   joinRequestId: string;
   guardianUid: string;
   guardianRole: string;
   newRole: string;
   expectedAgeOutYearMonth: number | null;
   assuranceLevel: number;
+  kind: ConsentRequestKind;
 }
 
 /**
@@ -332,6 +383,9 @@ export async function commitGuardianConfirmation(
   request: ConfirmableRequest,
   nowMillis: number
 ): Promise<{ committed: boolean; reason?: string }> {
+  if (request.kind === CONSENT_REQUEST_KIND.memberFlag) {
+    return commitMemberFlagConfirmation(db, requestRef, request, nowMillis);
+  }
   const childRef = db.collection("users").doc(request.childUserId);
   const rowRef = db
     .collection(`families/${request.familyId}/pending`)
@@ -448,11 +502,142 @@ export async function commitGuardianConfirmation(
   });
 }
 
+/**
+ * The member_flag twin of the FR-64 transaction (owner ruling 2026-08-28). The child is
+ * ALREADY a member with protections applied at flag time, so confirmation writes what
+ * flag time deliberately withheld: the GRANTED consent record (with the guardian's
+ * attestation as the age-out marker — a mid-membership child never passed the age gate,
+ * so no gate-derived `ageOutYearMonth` exists or ever will; recorded exception to the
+ * AGEOUT never-conflate rule, documented in the SRS) + the guardianship record + the
+ * member row's pending marker cleared. No membership creation, no join-row, no
+ * cross-family retirement — none of those states exist in this lifecycle.
+ */
+async function commitMemberFlagConfirmation(
+  db: Firestore,
+  requestRef: admin.firestore.DocumentReference,
+  request: ConfirmableRequest,
+  nowMillis: number
+): Promise<{ committed: boolean; reason?: string }> {
+  const childRef = db.collection("users").doc(request.childUserId);
+  const memberRef = db
+    .collection(`families/${request.familyId}/members`)
+    .doc(request.childUserId);
+  const guardianshipRef = childRef.collection("private").doc("guardianship");
+  const auditRef = db.collection("audit_logs").doc();
+
+  return db.runTransaction(async (tx) => {
+    const [childDoc, memberDoc, freshRequest] = await Promise.all([
+      tx.get(childRef),
+      tx.get(memberRef),
+      tx.get(requestRef),
+    ]);
+
+    if (freshRequest.data()?.status !== CONSENT_REQUEST_STATUS.pending) {
+      return { committed: false, reason: "request_not_pending" };
+    }
+    if (!childDoc.exists) {
+      return { committed: false, reason: "child_gone" };
+    }
+    // The membership this consent covers must still exist — a removal between flag
+    // and confirmation ends the lifecycle (the stale link refuses; nothing to grant).
+    if (!memberDoc.exists || childDoc.data()?.activeFamilyId !== request.familyId) {
+      return { committed: false, reason: "member_gone" };
+    }
+    // The validator made the attestation REQUIRED at flag time; a request without it
+    // is corrupt, and a record without an age-out marker violates FR-110(b).
+    const attestedAgeOut = request.expectedAgeOutYearMonth;
+    if (!isValidAgeOutYearMonth(attestedAgeOut)) {
+      return { committed: false, reason: "missing_age_out_marker" };
+    }
+
+    const consentMetadata = buildConsentGrantedMetadata({
+      familyId: request.familyId,
+      childUserId: request.childUserId,
+      actorRole: request.guardianRole,
+      method: "email_plus",
+      expectedAgeOutYearMonth: attestedAgeOut,
+      assuranceLevel: request.assuranceLevel,
+      ageOutYearMonth: attestedAgeOut,
+    });
+    const piiViolations = consentMetadataPiiViolations(consentMetadata);
+    if (piiViolations.length > 0) {
+      throw new Error(`consent metadata must be uid-only: ${piiViolations.join("; ")}`);
+    }
+
+    tx.update(childRef, { ageOutYearMonth: attestedAgeOut });
+    tx.update(memberRef, {
+      consentPending: admin.firestore.FieldValue.delete(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    tx.update(requestRef, {
+      status: CONSENT_REQUEST_STATUS.confirmed,
+      confirmedAtMillis: nowMillis,
+      // Retained for the plus notice, exactly like the join shape — see the file header.
+    });
+    tx.set(guardianshipRef, {
+      guardianUid: request.guardianUid,
+      familyId: request.familyId,
+      method: "email_plus",
+      assuranceLevel: request.assuranceLevel,
+      grantedAtMillis: nowMillis,
+    });
+    tx.set(auditRef, {
+      eventType: AUDIT_PARENTAL_CONSENT_GRANTED,
+      actorId: request.guardianUid,
+      subjectType: "user",
+      subjectId: request.childUserId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      metadata: consentMetadata,
+    });
+
+    return { committed: true };
+  });
+}
+
+/**
+ * The guardian's device learns about the confirmation OUT-OF-BAND — the click happened
+ * in a mail client — so this push is both the confirmation beat and the client's
+ * refresh trigger (owner device pass 2026-08-27). Shared by both request kinds.
+ * Deliberately name-free: the child's username stays off the push channel.
+ */
+async function sendGuardianConfirmationPush(request: ConfirmableRequest): Promise<void> {
+  try {
+    const guardianToken = await getFCMTokenForSocialPush(request.guardianUid, "family");
+    if (!guardianToken) {
+      // Owner device passes 2026-08-28: the push was not SEEN on two watched runs and
+      // the send is otherwise silent-on-success — this line is the discriminator
+      // between never-sent (no token/prefs; logged here) and sent-but-undelivered.
+      functions.logger.info("guardian consent push skipped: no deliverable token/prefs", {
+        guardianUid: request.guardianUid,
+      });
+      return;
+    }
+    await sendPushNotification(
+      guardianToken,
+      "Consent Confirmed",
+      "Your player is now part of your family",
+      {
+        type: "family_consent_confirmed",
+        familyId: request.familyId,
+        deepLink: `roadtrip-royale://family/${request.familyId}`,
+      }
+    );
+  } catch (error) {
+    functions.logger.error("post-confirmation guardian push failed (non-fatal)", { error });
+  }
+}
+
 /** Post-commit, non-fatal follow-ups — the admission is already true. */
 export async function runPostConfirmationFollowUps(
   db: Firestore,
   request: ConfirmableRequest
 ): Promise<void> {
+  if (request.kind === CONSENT_REQUEST_KIND.memberFlag) {
+    // The child was already a member: no invites to expire, no rival rows to retire,
+    // no admission push (its copy describes joining). The guardian's beat still fires.
+    await sendGuardianConfirmationPush(request);
+    return;
+  }
   try {
     const batch = db.batch();
     const skip = new Set<string>([db.collection("users").doc(request.childUserId).path]);
@@ -527,37 +712,7 @@ export async function runPostConfirmationFollowUps(
     functions.logger.error("post-confirmation push failed (non-fatal)", { error });
   }
 
-  // The guardian's device learns about the admission OUT-OF-BAND — the click happened
-  // in a mail client, not in the app, so no callable return refreshes the captain UI
-  // (owner device pass 2026-08-27: stale badge + awaiting card until relaunch). This
-  // push is both the confirmation beat and the client's refresh trigger (the arrival
-  // re-arms the family listeners; the tap deep-links to the family). Deliberately
-  // name-free: the child's username stays off the push channel.
-  try {
-    const guardianToken = await getFCMTokenForSocialPush(request.guardianUid, "family");
-    if (!guardianToken) {
-      // Owner device passes 2026-08-28: the push was not SEEN on two watched runs and
-      // the send is otherwise silent-on-success — this line is the discriminator
-      // between never-sent (no token/prefs; logged here) and sent-but-undelivered.
-      functions.logger.info("guardian consent push skipped: no deliverable token/prefs", {
-        guardianUid: request.guardianUid,
-      });
-    }
-    if (guardianToken) {
-      await sendPushNotification(
-        guardianToken,
-        "Consent Confirmed",
-        "Your player is now part of your family",
-        {
-          type: "family_consent_confirmed",
-          familyId: request.familyId,
-          deepLink: `roadtrip-royale://family/${request.familyId}`,
-        }
-      );
-    }
-  } catch (error) {
-    functions.logger.error("post-confirmation guardian push failed (non-fatal)", { error });
-  }
+  await sendGuardianConfirmationPush(request);
 }
 
 /**
@@ -649,6 +804,7 @@ export const confirmParentalConsent = functions.https.onRequest(async (req, res)
         typeof data.assuranceLevel === "number"
           ? data.assuranceLevel
           : ConsentAssurancePolicy.level("email_plus"),
+      kind: consentRequestKind(data.kind),
     };
 
     const outcome = await commitGuardianConfirmation(db, requestRef, request, Date.now());
@@ -874,6 +1030,25 @@ export async function reconcileConsentRecords(
     }
   }
 
+  // Owner ruling 2026-08-28: a member_flag child is IN the family (activeFamilyId set)
+  // while their consent request is still pending — a designed window, not a defect.
+  // The live-request veto spares them from the missing-record flag, exactly like the
+  // FR-77 sweep's veto spares awaiting join rows.
+  const pendingRequests = await db
+    .collection(CONSENT_REQUESTS_COLLECTION)
+    .where("status", "==", CONSENT_REQUEST_STATUS.pending)
+    .get();
+  const pendingMemberFlagChildUids = new Set<string>();
+  for (const doc of pendingRequests.docs) {
+    const data = doc.data();
+    if (
+      consentRequestKind(data.kind) === CONSENT_REQUEST_KIND.memberFlag &&
+      typeof data.childUserId === "string"
+    ) {
+      pendingMemberFlagChildUids.add(data.childUserId);
+    }
+  }
+
   const children = await db
     .collection("users")
     .where("isChildAccount", "==", true)
@@ -881,6 +1056,7 @@ export async function reconcileConsentRecords(
   for (const doc of children.docs) {
     const activeFamilyId = doc.data().activeFamilyId;
     if (typeof activeFamilyId !== "string" || activeFamilyId.length === 0) continue;
+    if (pendingMemberFlagChildUids.has(doc.id)) continue;
     result.consentedChildren += 1;
     const best = bestLevelByChild.get(doc.id);
     if (best === undefined) {
@@ -939,6 +1115,45 @@ export async function sweepExpiredConsentRequests(
       continue;
     }
     expired += 1;
+
+    if (consentRequestKind(data.kind) === CONSENT_REQUEST_KIND.memberFlag) {
+      // Owner ruling 2026-08-28: refusal-by-silence on a mid-membership flag REMOVES
+      // the member — the account survives as a sticky restricted child (protections
+      // were applied at flag time and `isChildAccount` never lifts here), matching
+      // FR-60(c)'s refusal semantics without deleting an established account.
+      const batch = db.batch();
+      batch.update(doc.ref, {
+        status: CONSENT_REQUEST_STATUS.expired,
+        resolvedAtMillis: nowMillis,
+        guardianEmail: admin.firestore.FieldValue.delete(),
+      });
+      batch.delete(
+        db.collection(`families/${data.familyId}/members`).doc(data.childUserId)
+      );
+      batch.update(
+        db.collection("users").doc(data.childUserId),
+        familyMembershipLeaveUserUpdate({ isRetiredGeneral: false })
+      );
+      await batch.commit();
+
+      try {
+        await writeChildMembershipRevocation(db, {
+          familyId: data.familyId,
+          childUserId: data.childUserId,
+          actorId: "system_consent_expiry",
+          actorRole: "system",
+          method: "member_flag_consent_expiry",
+          reason: "consent_not_obtained",
+          clientMetadata: null,
+        });
+      } catch (error) {
+        functions.logger.error(
+          "member_flag expiry: revocation audit write failed (non-fatal)",
+          { childUserId: data.childUserId, error }
+        );
+      }
+      continue;
+    }
 
     const batch = db.batch();
     batch.update(doc.ref, {

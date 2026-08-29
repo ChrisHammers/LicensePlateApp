@@ -52,6 +52,15 @@ struct ChildConsentDraft: Equatable, Sendable {
         consentAcknowledged && guardianAffirmed
     }
 
+    /// Owner ruling 2026-08-28 (manager_set → email_plus): flagging an EXISTING member
+    /// additionally requires the turns-13 attestation — the only possible age-out
+    /// source for someone who never passed the child age gate, and the server refuses
+    /// without it. The join-approve flow keeps `isComplete` (there the gate-derived
+    /// marker exists and the attestation stays optional).
+    var isCompleteForMemberFlag: Bool {
+        isComplete && expectedAgeOutYearMonth != nil
+    }
+
     mutating func reset() {
         self = ChildConsentDraft()
     }

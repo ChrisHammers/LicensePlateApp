@@ -78,6 +78,7 @@ import {
   JOIN_REQUEST_AWAITING_GUARDIAN_STATUS,
   buildConsentInterstitialPage,
   buildConsentPlusNoticeEmailContent,
+  buildConsentRequestEmailContent,
   consentEndpointAction,
   decideConsentConfirmation,
   hashConsentNonce,
@@ -557,6 +558,109 @@ describe("the expiry sweep closes a lapsed request per FR-60(c)", () => {
     expect(stale.guardianEmail).toBe("__delete__");
     const fresh = findLiveConsentRequest(db(), { familyId, childUserId: "kid" })!;
     expect(fresh.requestId).not.toBe(first.requestId);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5b. member_flag lifecycle edges (owner ruling 2026-08-28): expiry removes the
+//     member (account survives, sticky protections); the reconcile spares the window.
+// ---------------------------------------------------------------------------
+
+describe("member_flag: refusal-by-silence removes the member, never the account", () => {
+  function seedFlaggedMember(expiresAtMillis: number): void {
+    db().seed("users/flagged", {
+      userName: "Flagged",
+      isChildAccount: true,
+      activeFamilyId: "famM",
+      ageOutYearMonth: 203801,
+    });
+    db().seed("families/famM/members/flagged", {
+      role: "scout",
+      isChild: true,
+      consentPending: true,
+    });
+    db().seed(`${CONSENT_REQUESTS_COLLECTION}/mf1`, {
+      kind: "member_flag",
+      familyId: "famM",
+      childUserId: "flagged",
+      guardianUid: "captain",
+      guardianEmail: "captain@example.com",
+      childUserName: "Flagged",
+      noticeFamilyName: "The Ms",
+      expectedAgeOutYearMonth: 203801,
+      status: "pending",
+      attempts: 0,
+      requestedAtMillis: 1_000,
+      expiresAtMillis,
+      method: "email_plus",
+      assuranceLevel: 1,
+      nonceHash: hashConsentNonce("cc".repeat(16)),
+    });
+  }
+
+  it("expiry: member removed, address purged, REVOKED written — the account SURVIVES", async () => {
+    seedFlaggedMember(5_000);
+
+    const result = await sweepExpiredConsentRequests(db() as never, 10_000);
+    expect(result.expired).toBe(1);
+
+    const request = db().store.get(`${CONSENT_REQUESTS_COLLECTION}/mf1`)!;
+    expect(request.status).toBe("expired");
+    expect(request.guardianEmail).toBe("__delete__");
+
+    // The membership ends; the person does not.
+    expect(db().store.get("families/famM/members/flagged")).toBeUndefined();
+    const user = db().store.get("users/flagged")!;
+    expect(user.activeFamilyId).toBe("__delete__");
+    expect(user.wasEverInFamily).toBe(true);
+    expect(user.isChildAccount).toBe(true); // sticky — protections never lift here
+    expect(holder.deletedAuthUsers).toEqual([]);
+
+    const revoked = [...db().store.entries()].filter(
+      ([path, data]) =>
+        path.startsWith("audit_logs/") &&
+        data.eventType === "AUDIT_PARENTAL_CONSENT_REVOKED"
+    );
+    expect(revoked).toHaveLength(1);
+    expect((revoked[0][1].metadata as Record<string, unknown>).reason).toBe(
+      "consent_not_obtained"
+    );
+  });
+
+  it("the FR-64 reconcile spares the pending window and counts nobody twice", async () => {
+    seedFlaggedMember(Date.now() + 60_000); // live request
+
+    const pending = await reconcileConsentRecords(db() as never, { nowMillis: Date.now() });
+    expect(pending.missingRecord).toEqual([]); // the window is designed, not a defect
+    expect(pending.consentedChildren).toBe(0); // excluded, not silently passed
+
+    // Once the request dies without confirmation, the removal (above) clears
+    // activeFamilyId, so the child leaves the reconcile's population entirely.
+    db().store.set(`${CONSENT_REQUESTS_COLLECTION}/mf1`, {
+      ...db().store.get(`${CONSENT_REQUESTS_COLLECTION}/mf1`)!,
+      status: "expired",
+    });
+    db().store.set("users/flagged", {
+      ...db().store.get("users/flagged")!,
+      activeFamilyId: undefined,
+    });
+    const after = await reconcileConsentRecords(db() as never, { nowMillis: Date.now() });
+    expect(after.missingRecord).toEqual([]);
+  });
+
+  it("the consent email speaks the member_flag lifecycle: continue, and removal on silence", () => {
+    const content = buildConsentRequestEmailContent({
+      familyDisplayName: "The Ms",
+      childUserName: "Flagged",
+      confirmUrl: "https://example.test/confirm?t=x.y",
+      envLabel: "",
+      ttlHours: 72,
+      kind: "member_flag",
+    });
+    expect(content.subject).toContain("to continue in");
+    expect(content.text).toContain("marked the family member");
+    expect(content.text).toContain("removed from the family");
+    expect(content.text).not.toContain("pending account information is deleted");
   });
 });
 

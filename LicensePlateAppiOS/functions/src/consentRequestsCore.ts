@@ -84,6 +84,30 @@ export const CONSENT_REQUEST_STATUS = {
 } as const;
 
 /**
+ * Owner ruling 2026-08-28: mid-membership child flagging (`setFamilyMemberChildStatus`)
+ * routes through the SAME email_plus machinery instead of granting inline. The request
+ * document carries which lifecycle it belongs to:
+ *  - `join_admission`: the original shape — confirmation ADMITS (membership + record).
+ *  - `member_flag`: the child is ALREADY a member; protections applied at flag time;
+ *    confirmation writes the consent record and clears the pending marker; expiry
+ *    REMOVES the member (the account survives as a sticky restricted child).
+ * Absent field reads as `join_admission` (every pre-existing request).
+ */
+export const CONSENT_REQUEST_KIND = {
+  joinAdmission: "join_admission",
+  memberFlag: "member_flag",
+} as const;
+
+export type ConsentRequestKind =
+  (typeof CONSENT_REQUEST_KIND)[keyof typeof CONSENT_REQUEST_KIND];
+
+export function consentRequestKind(value: unknown): ConsentRequestKind {
+  return value === CONSENT_REQUEST_KIND.memberFlag
+    ? CONSENT_REQUEST_KIND.memberFlag
+    : CONSENT_REQUEST_KIND.joinAdmission;
+}
+
+/**
  * The join-request row state while a guardian confirmation is outstanding. The captain
  * ANSWERED (so the 7-day unanswered sweep must not touch it) but admission has not
  * happened (so it is still a LIVE decision every liveness predicate must honor —
@@ -271,6 +295,8 @@ export interface ConsentRequestEmailInput {
   confirmUrl: string;
   envLabel: string;
   ttlHours: number;
+  /** Which lifecycle the notice describes; the lede and the refusal consequence differ. */
+  kind?: ConsentRequestKind;
 }
 
 /**
@@ -286,10 +312,20 @@ export function buildConsentRequestEmailContent(
   const family = escapeHtml(input.familyDisplayName);
   const child = escapeHtml(input.childUserName);
   const subjectPrefix = input.envLabel ? `[${input.envLabel}] ` : "";
-  const subject = `${subjectPrefix}Confirm your consent for ${input.childUserName} to join ${input.familyDisplayName} on RoadTrip Royale`;
+  const isMemberFlag = input.kind === CONSENT_REQUEST_KIND.memberFlag;
+  const subject = isMemberFlag
+    ? `${subjectPrefix}Confirm your consent for ${input.childUserName} to continue in ${input.familyDisplayName} on RoadTrip Royale`
+    : `${subjectPrefix}Confirm your consent for ${input.childUserName} to join ${input.familyDisplayName} on RoadTrip Royale`;
+
+  const lede = isMemberFlag
+    ? `You (or another manager of the "${input.familyDisplayName}" family) marked the family member "${input.childUserName}" in RoadTrip Royale as under 13. Their account is already protected; U.S. law (COPPA) requires your verifiable consent for them to continue playing as part of your family.`
+    : `You (or another manager of the "${input.familyDisplayName}" family) approved a request from the player "${input.childUserName}" to join your family in RoadTrip Royale. Because this player indicated they are under 13, U.S. law (COPPA) requires your verifiable consent before their account becomes active.`;
+  const refusalConsequence = isMemberFlag
+    ? `If you do not consent, do nothing: the request expires and this player is removed from the family. Their account is kept, protected and paused, and they can rejoin later with your consent. You can withdraw consent at any time from Family settings in the app, which stops collection and lets you delete their data.`
+    : `If you do not consent, do nothing: the request expires and the player's pending account information is deleted. You can withdraw consent at any time from Family settings in the app, which stops collection and lets you delete their data.`;
 
   const noticeText = [
-    `You (or another manager of the "${input.familyDisplayName}" family) approved a request from the player "${input.childUserName}" to join your family in RoadTrip Royale. Because this player indicated they are under 13, U.S. law (COPPA) requires your verifiable consent before their account becomes active.`,
+    lede,
     ``,
     `What we collect if you consent: a nickname chosen in the app, a cartoon avatar selection, gameplay activity (license-plate finds, scores, trip participation), and an internal account identifier. We do not collect their real name, photos, contact information, or precise location, and there is no chat or messaging.`,
     `Who can see it: only members of your family group, which you control. Nothing is public, and children cannot be found or contacted by other users.`,
@@ -298,18 +334,22 @@ export function buildConsentRequestEmailContent(
     `To give your consent, open this link within ${input.ttlHours} hours:`,
     input.confirmUrl,
     ``,
-    `If you do not consent, do nothing: the request expires and the player's pending account information is deleted. You can withdraw consent at any time from Family settings in the app, which stops collection and lets you delete their data.`,
+    refusalConsequence,
   ].join("\n");
+
+  const ledeHtml = isMemberFlag
+    ? `<p>You (or another manager of the <strong>${family}</strong> family) marked the family member <strong>${child}</strong> in RoadTrip Royale as under 13. Their account is already protected; U.S. law (COPPA) requires your verifiable consent for them to continue playing as part of your family.</p>`
+    : `<p>You (or another manager of the <strong>${family}</strong> family) approved a request from the player <strong>${child}</strong> to join your family in RoadTrip Royale. Because this player indicated they are under 13, U.S. law (COPPA) requires your verifiable consent before their account becomes active.</p>`;
 
   const html = [
     `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1c1c1e;">`,
     `<h2 style="color:#1d4ed8;">Confirm your consent</h2>`,
-    `<p>You (or another manager of the <strong>${family}</strong> family) approved a request from the player <strong>${child}</strong> to join your family in RoadTrip Royale. Because this player indicated they are under 13, U.S. law (COPPA) requires your verifiable consent before their account becomes active.</p>`,
+    ledeHtml,
     `<p><strong>What we collect if you consent:</strong> a nickname chosen in the app, a cartoon avatar selection, gameplay activity (license-plate finds, scores, trip participation), and an internal account identifier. We do not collect their real name, photos, contact information, or precise location, and there is no chat or messaging.</p>`,
     `<p><strong>Who can see it:</strong> only members of your family group, which you control. Nothing is public, and children cannot be found or contacted by other users.</p>`,
     `<p><strong>How it is used:</strong> to run the game and sync your family's shared trips. It is never used for advertising and never sold.</p>`,
     `<p style="text-align:center;margin:32px 0;"><a href="${escapeHtml(input.confirmUrl)}" style="background:#1d4ed8;color:#ffffff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:600;">I consent — activate this account</a></p>`,
-    `<p style="font-size:13px;color:#6b7280;">This link works once and expires in ${input.ttlHours} hours. If you do not consent, do nothing: the request expires and the player's pending account information is deleted. You can withdraw consent at any time from Family settings in the app, which stops collection and lets you delete their data.</p>`,
+    `<p style="font-size:13px;color:#6b7280;">This link works once and expires in ${input.ttlHours} hours. ${escapeHtml(refusalConsequence)}</p>`,
     `</div>`,
   ].join("");
 

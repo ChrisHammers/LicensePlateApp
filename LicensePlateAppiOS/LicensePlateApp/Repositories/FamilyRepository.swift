@@ -217,6 +217,9 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
     /// SwiftData schema is frozen (§7.4) — so it lives beside the model rows exactly the
     /// way `UserRepository.entitlementTagsByUserId` does. familyId -> (userId -> isChild).
     @Published private(set) var childMemberFlags: [String: [String: Bool]] = [:]
+    /// familyId → member uids whose email_plus consent is still awaiting the guardian
+    /// (owner ruling 2026-08-28). Raw-doc projection; the frozen schema never sees it.
+    @Published private(set) var memberConsentPendingUserIds: [String: Set<String>] = [:]
     /// FR-86 identity stamps for pending rows — familyId -> (requestId -> stamp). Same
     /// arrangement as `childMemberFlags` and for the same reason: `PendingJoinRequest` sits
     /// in the frozen V1 schema, so the stamp cannot be a stored property, and (device pass
@@ -383,6 +386,7 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
             }
         }
         applyChildMemberFlags(Self.parseChildMemberFlags(documents: snapshot.documents), familyId: familyId)
+        applyMemberConsentPending(Self.parseMemberConsentPending(documents: snapshot.documents), familyId: familyId)
 
         // Sync members to SwiftData
         for member in members {
@@ -604,6 +608,7 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
             familyMembers = [:]
             pendingRequests = [:]
             childMemberFlags = [:]
+            memberConsentPendingUserIds = [:]
             errorMessage = nil
             return
         }
@@ -616,6 +621,7 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         familyMembers = [:]
         pendingRequests = [:]
         childMemberFlags = [:]
+        memberConsentPendingUserIds = [:]
         errorMessage = nil
     }
 
@@ -734,6 +740,7 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
             }
         }
         applyChildMemberFlags(Self.parseChildMemberFlags(documents: snapshot.documents), familyId: familyId)
+        applyMemberConsentPending(Self.parseMemberConsentPending(documents: snapshot.documents), familyId: familyId)
 
         // Sync members to SwiftData
         for member in members {
@@ -864,11 +871,27 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         return flags
     }
 
+    /// Owner ruling 2026-08-28 (manager_set → email_plus): server-written marker on the
+    /// member doc while a mid-membership child's consent request awaits the guardian's
+    /// email confirmation. Same raw-doc projection as `parseChildMemberFlags` — the
+    /// frozen `FamilyMember` schema never carries it.
+    static func parseMemberConsentPending(documents: [QueryDocumentSnapshot]) -> Set<String> {
+        Set(
+            documents
+                .filter { ($0.data()["consentPending"] as? Bool) == true }
+                .map(\.documentID)
+        )
+    }
+
     /// Publishes a parsed projection for one family. The snapshot handlers are the
     /// production callers; keeping it a named method (rather than an inline assignment)
     /// gives the projection a single write point.
     func applyChildMemberFlags(_ flags: [String: Bool], familyId: String) {
         childMemberFlags[familyId] = flags
+    }
+
+    func applyMemberConsentPending(_ userIds: Set<String>, familyId: String) {
+        memberConsentPendingUserIds[familyId] = userIds
     }
 
     /// Child user ids in a family — the badge/manage surfaces' single source. View

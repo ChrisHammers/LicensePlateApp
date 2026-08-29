@@ -9,6 +9,7 @@ import {
   setFamilyMemberChildStatusFlow,
 } from "./familyChildStatusFlows";
 import { consentMetadataPiiViolations } from "./childAccountCore";
+import { confirmGuardianConsent } from "./testSupport/consentTestHelpers";
 import type { ClientMetadata } from "./clientMetadata";
 import type { SearchIndexHints } from "./userResidueCleanup";
 
@@ -121,6 +122,7 @@ function seedChildSocialResidue(db: FakeFirestore): void {
 }
 
 describe("setFamilyMemberChildStatusFlow", () => {
+  const ATTESTED = (new Date().getUTCFullYear() + 3) * 100 + 7;
   const baseInput = {
     actorId: "parent",
     familyId: "fam1",
@@ -128,8 +130,16 @@ describe("setFamilyMemberChildStatusFlow", () => {
     isChild: true as unknown,
     consentAcknowledged: true as unknown,
     guardianAffirmed: true as unknown,
+    // Owner ruling 2026-08-28: required for set-true — the only age-out source.
+    expectedAgeOutYearMonth: ATTESTED as unknown,
     clientMetadata: CLIENT_METADATA,
   };
+
+  function consentRequestRows(db: FakeFirestore): Array<Record<string, unknown>> {
+    return db
+      .docPathsMatching((path) => path.startsWith("consent_requests/"))
+      .map((path) => db.store.get(path)!);
+  }
 
   it("rejects non-member and non-manager actors, self-targets, and creator targets", async () => {
     const db = new FakeFirestore();
@@ -182,15 +192,16 @@ describe("setFamilyMemberChildStatusFlow", () => {
     ).rejects.toThrow(/correctionReason/);
   });
 
-  it("set-true: FR-4 batch + follow-ons + GRANTED record", async () => {
+  it("set-true: FR-4 batch + follow-ons + awaiting email_plus (no inline GRANTED)", async () => {
     const db = new FakeFirestore();
     seedFamily(db);
     seedChildSocialResidue(db);
+    db.seed("users/parent/private/contact", { email: "parent@example.com" });
     const purges: RecordedPurge[] = [];
 
     const result = await setFamilyMemberChildStatusFlow(
       asFirestore(db),
-      { ...baseInput, expectedAgeOutYearMonth: (new Date().getUTCFullYear() + 3) * 100 + 7 },
+      baseInput,
       stubDeps(purges)
     );
     expect(result.success).toBe(true);
@@ -224,28 +235,61 @@ describe("setFamilyMemberChildStatusFlow", () => {
     expect(db.store.has("friends/edge1")).toBe(false);
     expect(db.store.get("users/stranger")!.friendCount).toBe(2);
 
-    // GRANTED record: uid-only metadata + clientMetadata sibling.
+    // Owner ruling 2026-08-28: NO inline GRANTED — the flag opens an email_plus
+    // request (kind member_flag) and the member row carries the awaiting projection.
+    expect(auditRowsOfType(db, "AUDIT_PARENTAL_CONSENT_GRANTED")).toHaveLength(0);
+    expect(db.store.get("families/fam1/members/kid")!.consentPending).toBe(true);
+    const requests = consentRequestRows(db);
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({
+      kind: "member_flag",
+      familyId: "fam1",
+      childUserId: "kid",
+      guardianUid: "parent",
+      guardianEmail: "parent@example.com",
+      expectedAgeOutYearMonth: ATTESTED,
+      status: "pending",
+      method: "email_plus",
+    });
+    expect(requests[0]).not.toHaveProperty("joinRequestId");
+
+    // The guardian's click writes what flag time withheld: the level-1 record, the
+    // attestation stamped as the account's age-out marker, the pending flag cleared.
+    const outcome = await confirmGuardianConsent(db, {
+      familyId: "fam1",
+      childUserId: "kid",
+    });
+    expect(outcome.committed).toBe(true);
+
     const granted = auditRowsOfType(db, "AUDIT_PARENTAL_CONSENT_GRANTED");
     expect(granted).toHaveLength(1);
-    const row = granted[0];
-    expect(row.actorId).toBe("parent");
-    expect(row.subjectId).toBe("kid");
-    expect(row.clientMetadata).toEqual(CLIENT_METADATA);
-    const metadata = row.metadata as Record<string, unknown>;
+    const metadata = granted[0].metadata as Record<string, unknown>;
     expect(consentMetadataPiiViolations(metadata)).toEqual([]);
-    expect(metadata.method).toBe("manager_set");
-    expect(metadata.actorRole).toBe("creator");
-    expect(metadata.removedFriendEdgeCount).toBe(1);
-    expect(metadata.expectedAgeOutYearMonth).toBe((new Date().getUTCFullYear() + 3) * 100 + 7);
+    expect(metadata.method).toBe("email_plus");
+    expect(metadata.assuranceLevel).toBe(1);
+    expect(metadata.ageOutYearMonth).toBe(ATTESTED);
+    expect(metadata.expectedAgeOutYearMonth).toBe(ATTESTED);
     expect(metadata).not.toHaveProperty("email");
     expect(metadata).not.toHaveProperty("name");
     expect(metadata).not.toHaveProperty("birthdate");
+
+    expect(db.store.get("users/kid")!.ageOutYearMonth).toBe(ATTESTED);
+    expect(db.store.get("families/fam1/members/kid")!.consentPending).not.toBe(true);
+    expect(db.store.get("users/kid/private/guardianship")).toMatchObject({
+      guardianUid: "parent",
+      familyId: "fam1",
+      method: "email_plus",
+      assuranceLevel: 1,
+    });
+    // Membership was never re-created — the child was already a member.
+    expect(db.store.get("users/kid")!.activeFamilyId).toBe("fam1");
   });
 
-  it("set-true is retry-safe: a second run finds nothing left to clean", async () => {
+  it("set-true is retry-safe: a second run finds nothing left to clean and reuses the request", async () => {
     const db = new FakeFirestore();
     seedFamily(db);
     seedChildSocialResidue(db);
+    db.seed("users/parent/private/contact", { email: "parent@example.com" });
 
     await setFamilyMemberChildStatusFlow(asFirestore(db), baseInput, stubDeps([]));
     const second = await setFamilyMemberChildStatusFlow(
@@ -255,6 +299,22 @@ describe("setFamilyMemberChildStatusFlow", () => {
     );
     expect(second.removedFriendEdgeCount).toBe(0);
     expect(db.store.get("users/kid")!.isChildAccount).toBe(true);
+    // Idempotent request reuse: a captain tapping twice must not spam the guardian.
+    expect(consentRequestRows(db)).toHaveLength(1);
+  });
+
+  it("a mail-less captain is refused BEFORE any mutation", async () => {
+    const db = new FakeFirestore();
+    seedFamily(db);
+    seedChildSocialResidue(db);
+    // No users/parent/private/contact and no Auth email in this harness.
+
+    await expect(
+      setFamilyMemberChildStatusFlow(asFirestore(db), baseInput, stubDeps([]))
+    ).rejects.toMatchObject({ code: "failed-precondition" });
+    expect(db.store.get("users/kid")!.isChildAccount).not.toBe(true);
+    expect(db.store.get("families/fam1/members/kid")!.consentPending).not.toBe(true);
+    expect(consentRequestRows(db)).toHaveLength(0);
   });
 
   it("clear: correction sets both fields false and writes CORRECTED with the reason", async () => {

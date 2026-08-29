@@ -156,6 +156,12 @@ struct FamilySettingsChildManagementTests {
         #expect(!vm.canConfirmMarkAsChild)
 
         vm.setChildGuardianAffirmed(true)
+        // Owner ruling 2026-08-28 (manager_set → email_plus): both boxes are no longer
+        // enough — an existing member's only age-out source is the turns-13 attestation,
+        // so Confirm stays disabled until it is chosen.
+        #expect(!vm.canConfirmMarkAsChild)
+
+        vm.setChildExpectedAgeOutYearMonth(203107)
         #expect(vm.canConfirmMarkAsChild)
 
         // FR-31: the acknowledgment pair is a single parent-instance event.

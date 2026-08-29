@@ -1474,6 +1474,8 @@
 "family.child.guardian_affirmation" = "I confirm I am this child's parent or legal guardian and I am at least 18.";
 "family.child.guardian_affirmation_hint" = "Required to give parental consent";
 "family.child.age_out_label" = "When they turn 13 (optional)";
+"family.child.age_out_label_required" = "When they turn 13";
+"family.member.consent_pending_subtitle" = "Awaiting your email confirmation";
 "family.child.age_out_none" = "Not specified";
 "family.child.age_out_hint" = "Optional. Kept as a reminder for you — nothing changes automatically.";
 "family.child.toggle_title" = "This member is a child (under 13)";

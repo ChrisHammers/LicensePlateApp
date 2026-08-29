@@ -37,6 +37,9 @@ class FamilySettingsViewModel: ObservableObject {
     /// §7.2 projection mirror, refreshed from the repository — never a stored property
     /// on `FamilyMember` (frozen SwiftData schema, §7.4).
     @Published private(set) var childMemberIds: Set<String> = []
+    /// Owner ruling 2026-08-28: members whose email_plus consent still awaits the
+    /// guardian's email confirmation (server `consentPending` projection).
+    @Published private(set) var consentPendingMemberIds: Set<String> = []
     /// Set-as-child sheet (consent capture, FR-2 set-true / FR-31).
     @Published var childConsentTarget: FamilyChildMemberTarget?
     @Published var childConsentDraft = ChildConsentDraft()
@@ -63,6 +66,7 @@ class FamilySettingsViewModel: ObservableObject {
     private let userRepository: UserRepository
     private var authService: FirebaseAuthService
     private var childProjectionObservation: AnyCancellable?
+    private var consentPendingObservation: AnyCancellable?
     private(set) var familyId: String = ""
     private var lastSavedFamilyName: String = ""
     /// Fix 3 (2026-08-16) re-entrancy guard — see `refreshMemberIdentitiesIfNeeded()`.
@@ -99,6 +103,7 @@ class FamilySettingsViewModel: ObservableObject {
         family = familyRepository.getFamily(familyId: familyId)
         members = familyRepository.getMembers(familyId: familyId)
         childMemberIds = familyRepository.childMemberIds(familyId: familyId)
+        consentPendingMemberIds = familyRepository.memberConsentPendingUserIds[familyId] ?? []
         observeChildProjection(familyId: familyId)
 
         if let family = family {
@@ -153,6 +158,12 @@ class FamilySettingsViewModel: ObservableObject {
                 self.childMemberIds = Set((flagsByFamily[familyId] ?? [:]).filter { $0.value }.keys)
                 self.publishRefreshedMembers(self.familyRepository.getMembers(familyId: familyId))
             }
+        consentPendingObservation?.cancel()
+        consentPendingObservation = familyRepository.$memberConsentPendingUserIds
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] pendingByFamily in
+                self?.consentPendingMemberIds = pendingByFamily[familyId] ?? []
+            }
     }
 
     /// The one write point for a roster RE-READ on this sheet. See `FamilyRosterPublishPolicy`
@@ -203,6 +214,10 @@ class FamilySettingsViewModel: ObservableObject {
 
     func isChildMember(memberId: String) -> Bool {
         childMemberIds.contains(memberId)
+    }
+
+    func isConsentPendingMember(memberId: String) -> Bool {
+        consentPendingMemberIds.contains(memberId)
     }
 
     /// Fix 2 (2026-08-16): the row whose deletion is actually in flight — this is the
@@ -261,7 +276,7 @@ class FamilySettingsViewModel: ObservableObject {
 
     /// FR-31: both acknowledgments gate the callable. The server re-checks them.
     var canConfirmMarkAsChild: Bool {
-        childConsentDraft.isComplete
+        childConsentDraft.isCompleteForMemberFlag
             && ExpectedAgeOutYearOptions.isValid(
                 childConsentDraft.expectedAgeOutYearMonth,
                 currentYear: currentYearProvider()

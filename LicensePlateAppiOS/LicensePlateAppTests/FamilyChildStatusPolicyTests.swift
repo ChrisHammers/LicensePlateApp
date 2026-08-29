@@ -25,6 +25,23 @@ struct ChildConsentDraftTests {
         )
     }
 
+    // Owner ruling 2026-08-28 (manager_set → email_plus): flagging an EXISTING member
+    // additionally requires the turns-13 attestation — the only age-out source for
+    // someone who never passed the age gate. The approve flow keeps plain `isComplete`.
+    @Test func memberFlagAdditionallyRequiresTheAttestation() {
+        let boxesOnly = ChildConsentDraft(consentAcknowledged: true, guardianAffirmed: true)
+        #expect(boxesOnly.isComplete == true)
+        #expect(boxesOnly.isCompleteForMemberFlag == false)
+
+        var withAttestation = boxesOnly
+        withAttestation.expectedAgeOutYearMonth = 203107
+        #expect(withAttestation.isCompleteForMemberFlag == true)
+
+        var attestationOnly = ChildConsentDraft()
+        attestationOnly.expectedAgeOutYearMonth = 203107
+        #expect(attestationOnly.isCompleteForMemberFlag == false)
+    }
+
     @Test func expectedAgeOutYearWindowMatchesTheServer() {
         // `validateExpectedAgeOutYearMonth` (owner ruling 2026-08-27: full month + year
         // as one YYYYMM integer): month 1–12, year nowYear ... nowYear + 13.

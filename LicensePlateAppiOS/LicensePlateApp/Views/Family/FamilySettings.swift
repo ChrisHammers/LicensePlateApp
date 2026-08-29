@@ -62,7 +62,8 @@ struct FamilySettings: View {
                                 FamilyMemberSettingsRow(
                                     member: member,
                                     familyCreatorId: viewModel.family?.creatorId,
-                                    isChild: viewModel.isChildMember(memberId: member.userId)
+                                    isChild: viewModel.isChildMember(memberId: member.userId),
+                                    isConsentPending: viewModel.isConsentPendingMember(memberId: member.userId)
                                 )
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                     if viewModel.canRemove(memberId: member.userId) {
@@ -432,6 +433,9 @@ private struct FamilyChildConsentSheet: View {
                         FamilyChildConsentBlock(
                             draft: viewModel.childConsentDraft,
                             yearOptions: viewModel.expectedAgeOutYearOptions,
+                            // Owner ruling 2026-08-28: an existing member's only age-out
+                            // source is this attestation — required here, optional at approve.
+                            attestationRequired: true,
                             onConsentAcknowledgedChange: { viewModel.setChildConsentAcknowledged($0) },
                             onGuardianAffirmedChange: { viewModel.setChildGuardianAffirmed($0) },
                             onExpectedAgeOutYearMonthChange: { viewModel.setChildExpectedAgeOutYearMonth($0) }
@@ -471,6 +475,9 @@ struct FamilyMemberSettingsRow: View {
     /// COPPA FR-20 projection (`families/{id}/members/{uid}.isChild`), passed in by the
     /// view model. The row never derives it.
     var isChild: Bool = false
+    /// Owner ruling 2026-08-28: the member's email_plus consent is still awaiting the
+    /// guardian's email confirmation (`consentPending` server projection).
+    var isConsentPending: Bool = false
     @EnvironmentObject private var authService: FirebaseAuthService
 
     private var rolePresentation: FamilyMemberRolePresentation {
@@ -538,6 +545,14 @@ struct FamilyMemberSettingsRow: View {
                 Text(rolePresentation.roleText)
                     .font(.system(.caption2, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+
+                if isConsentPending {
+                    // FR-22 discipline: text, never a color-only cue.
+                    Text("family.member.consent_pending_subtitle".localized)
+                        .font(.system(.caption2, design: .rounded))
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Spacer()
@@ -554,7 +569,10 @@ struct FamilyMemberSettingsRow: View {
 
     private var settingsMemberAccessibilityLabel: String {
         // FR-22: child status reaches VoiceOver as text, never as a color-only cue.
-        let childSuffix = isChild ? ", \("family.child.a11y.badge".localized)" : ""
+        var childSuffix = isChild ? ", \("family.child.a11y.badge".localized)" : ""
+        if isConsentPending {
+            childSuffix += ", \("family.member.consent_pending_subtitle".localized)"
+        }
         if let user = member.user {
             return "\(decoratedMemberName(for: user)), @\(user.userName), \(rolePresentation.accessibilityText)\(childSuffix)"
         }

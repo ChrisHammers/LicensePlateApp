@@ -15,6 +15,7 @@ import {
 import {
   CONSENT_REQUESTS_COLLECTION,
   ConsentAssurancePolicy,
+  consentRequestKind,
 } from "../consentRequestsCore";
 import type { FakeFirestore } from "./fakeFirestore";
 
@@ -57,6 +58,7 @@ export async function confirmGuardianConsent(
       typeof data.assuranceLevel === "number"
         ? data.assuranceLevel
         : ConsentAssurancePolicy.level("email_plus"),
+    kind: consentRequestKind(data.kind),
   };
   const requestRef = db
     .collection(CONSENT_REQUESTS_COLLECTION)

@@ -22,9 +22,19 @@ import SwiftUI
 struct FamilyChildConsentBlock: View {
     let draft: ChildConsentDraft
     let yearOptions: [Int]
+    /// Owner ruling 2026-08-28: true in the mark-existing-member-as-child context,
+    /// where the attestation is the only possible age-out source and the server
+    /// refuses without it — the label drops "(optional)" and the confirm gate
+    /// (`isCompleteForMemberFlag`) requires the pick. Approve-flow callers keep the
+    /// default (there the gate-derived marker exists).
+    var attestationRequired: Bool = false
     let onConsentAcknowledgedChange: (Bool) -> Void
     let onGuardianAffirmedChange: (Bool) -> Void
     let onExpectedAgeOutYearMonthChange: (Int?) -> Void
+
+    private var ageOutLabelKey: String {
+        attestationRequired ? "family.child.age_out_label_required" : "family.child.age_out_label"
+    }
 
     /// The document a parent tapped through to, presented over this block so consent is
     /// never abandoned to go read it.
@@ -104,13 +114,13 @@ struct FamilyChildConsentBlock: View {
                 // Owner ruling 2026-08-27: full MONTH + YEAR ("since we track that").
                 // Two pickers compose one YYYYMM value; the draft holds `nil` until both
                 // are chosen, and choosing "Not specified" on either clears the pair.
-                Text("family.child.age_out_label".localized)
+                Text(ageOutLabelKey.localized)
                     .font(.system(.footnote, design: .rounded))
                     .foregroundStyle(Color.Theme.primaryBlue)
 
                 HStack(spacing: 12) {
                     Picker(
-                        "family.child.age_out_label".localized,
+                        ageOutLabelKey.localized,
                         selection: monthSelection
                     ) {
                         Text("family.child.age_out_none".localized).tag(Int?.none)
@@ -120,7 +130,7 @@ struct FamilyChildConsentBlock: View {
                         }
                     }
                     .font(.system(.footnote, design: .rounded))
-                    .accessibilityLabel("family.child.age_out_label".localized)
+                    .accessibilityLabel(ageOutLabelKey.localized)
                     .accessibilityValue(
                         selectedMonth.map { LocalizationHelper.monthName($0) }
                             ?? "family.child.age_out_none".localized
@@ -128,7 +138,7 @@ struct FamilyChildConsentBlock: View {
                     .accessibilityHint("family.child.age_out_hint".localized)
 
                     Picker(
-                        "family.child.age_out_label".localized,
+                        ageOutLabelKey.localized,
                         selection: yearSelection
                     ) {
                         Text("family.child.age_out_none".localized).tag(Int?.none)
@@ -137,7 +147,7 @@ struct FamilyChildConsentBlock: View {
                         }
                     }
                     .font(.system(.footnote, design: .rounded))
-                    .accessibilityLabel("family.child.age_out_label".localized)
+                    .accessibilityLabel(ageOutLabelKey.localized)
                     .accessibilityValue(
                         selectedYear.map { String($0) } ?? "family.child.age_out_none".localized
                     )
@@ -328,6 +338,18 @@ struct FamilyChildCorrectionBlock: View {
     FamilyChildConsentBlock(
         draft: ChildConsentDraft(),
         yearOptions: Array(2026...2039),
+        onConsentAcknowledgedChange: { _ in },
+        onGuardianAffirmedChange: { _ in },
+        onExpectedAgeOutYearMonthChange: { _ in }
+    )
+    .padding()
+}
+
+#Preview("Consent block — attestation required (member flag)") {
+    FamilyChildConsentBlock(
+        draft: ChildConsentDraft(),
+        yearOptions: Array(2026...2039),
+        attestationRequired: true,
         onConsentAcknowledgedChange: { _ in },
         onGuardianAffirmedChange: { _ in },
         onExpectedAgeOutYearMonthChange: { _ in }

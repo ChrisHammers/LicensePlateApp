@@ -123,9 +123,21 @@ describe("validateSetChildStatusInput (FR-2)", () => {
   });
 
   it("allows captain actors", () => {
-    expect(validateSetChildStatusInput({ ...base, actorRole: "captain" }).kind).toBe(
-      "set"
-    );
+    expect(
+      validateSetChildStatusInput({
+        ...base,
+        actorRole: "captain",
+        expectedAgeOutYearMonth: (NOW_YEAR + 3) * 100 + 7,
+      }).kind
+    ).toBe("set");
+  });
+
+  // Owner ruling 2026-08-28 (manager_set → email_plus): the attestation is the ONLY
+  // possible age-out source for a mid-membership child, so set-true REQUIRES it —
+  // unlike the join-approve path, where the gate-derived marker exists.
+  it("set-true without the turns-13 attestation is refused", () => {
+    const decision = validateSetChildStatusInput(base); // base carries no attestation
+    expect(decision.kind === "reject" && decision.code).toBe("invalid-argument");
   });
 
   it("rejects self-targets and creator targets", () => {
@@ -446,6 +458,8 @@ describe("consent metadata (§11.1) — uid-only, no PII ever", () => {
         "member_account_deleted",
         "auth_user_deleted",
         "parent_requested_deletion",
+        // member_flag email_plus request lapsed unconfirmed (owner ruling 2026-08-28).
+        "consent_not_obtained",
       ].sort()
     );
   });

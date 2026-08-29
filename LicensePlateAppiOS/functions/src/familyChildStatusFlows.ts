@@ -32,10 +32,13 @@ import {
 } from "./childAccountCore";
 import {
   writeChildConsentCorrected,
-  writeChildConsentGranted,
   writeChildMembershipRevocation,
   writeChildRegistrationDeclared,
 } from "./childConsent";
+import {
+  createMemberFlagConsentRequest,
+  resolveGuardianEmailByUid,
+} from "./consentRequests";
 import { familyMembershipLeaveUserUpdate } from "./wasEverInFamilyUserUpdates";
 import {
   executeAccountDeletionForUser,
@@ -160,6 +163,20 @@ export async function setFamilyMemberChildStatusFlow(
   const targetUserData = targetUserDoc.data() ?? {};
 
   if (decision.kind === "set") {
+    // Owner ruling 2026-08-28: manager_set no longer grants consent inline (the bypass
+    // the FR-64 reconcile flags). The guardian's email is resolved BEFORE any mutation
+    // so a mail-less captain is refused with nothing half-done — same order as the
+    // approve path — and the consent record arrives only through the email_plus
+    // confirmation. The PROTECTIONS still apply immediately below: flagging is
+    // protective and must not wait on a mail round-trip.
+    const guardianEmail = await resolveGuardianEmailByUid(db, actorId);
+    if (!guardianEmail) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Add an email address to your account to confirm consent"
+      );
+    }
+
     // FR-4: one batched write — authoritative flag + member projection + FR-35(b) strip.
     const userUpdate: Record<string, unknown> = { isChildAccount: true };
     const linkedPlatforms = sanitizedChildLinkedPlatforms(targetUserData.linkedPlatforms);
@@ -171,6 +188,9 @@ export async function setFamilyMemberChildStatusFlow(
     batch.update(targetUserRef, userUpdate);
     batch.update(targetMemberRef, {
       isChild: true,
+      // The client's awaiting badge reads this projection; the confirmation
+      // transaction (or the expiry removal) clears it.
+      consentPending: true,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     await batch.commit();
@@ -184,15 +204,18 @@ export async function setFamilyMemberChildStatusFlow(
       deps
     );
 
-    await writeChildConsentGranted(db, {
+    const targetUserName =
+      typeof targetUserData.userName === "string" && targetUserData.userName.length > 0
+        ? targetUserData.userName
+        : "your family's player";
+    await createMemberFlagConsentRequest(db, {
       familyId,
       childUserId: targetUserId,
-      actorId,
-      actorRole,
-      method: "manager_set",
+      guardianUid: actorId,
+      guardianRole: actorRole,
+      guardianEmail,
+      childUserName: targetUserName,
       expectedAgeOutYearMonth: decision.expectedAgeOutYearMonth,
-      removedFriendEdgeCount: cleanup.removedFriendEdgeCount,
-      clientMetadata,
     });
 
     return {

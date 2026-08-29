@@ -97,6 +97,9 @@ export const CHILD_CONSENT_REVOCATION_REASONS: readonly string[] = [
   "member_account_deleted",
   "auth_user_deleted",
   "parent_requested_deletion",
+  // Owner ruling 2026-08-28: a mid-membership child flag whose email_plus request
+  // lapsed unconfirmed — refusal by silence removes the member (account survives).
+  "consent_not_obtained",
 ];
 
 export type ChildConsentRevocationReason =
@@ -237,7 +240,9 @@ export function validateExpectedAgeOutYearMonth(
 
 export type SetChildStatusDecision =
   | ChildStatusRejection
-  | { kind: "set"; expectedAgeOutYearMonth: number | undefined }
+  // Required, not optional (owner ruling 2026-08-28): the attestation is the only
+  // possible age-out source for a mid-membership child — the validator enforces it.
+  | { kind: "set"; expectedAgeOutYearMonth: number }
   | { kind: "clear"; correctionReason: string };
 
 /**
@@ -286,6 +291,17 @@ export function validateSetChildStatusInput(input: {
     );
     if (!yearMonth.ok) {
       return reject("invalid-argument", yearMonth.message);
+    }
+    // Owner ruling 2026-08-28 (manager_set → email_plus): a mid-membership child never
+    // passed the age gate, so the guardian's turns-13 attestation is the ONLY possible
+    // age-out source — without it the consent record could never satisfy FR-110(b) and
+    // the AGEOUT machinery could never release them. Required here; the join-approve
+    // path keeps it optional (there the gate-derived marker exists).
+    if (yearMonth.yearMonth === undefined) {
+      return reject(
+        "invalid-argument",
+        "Marking an existing member as a child requires the month and year they turn 13"
+      );
     }
     return { kind: "set", expectedAgeOutYearMonth: yearMonth.yearMonth };
   }
