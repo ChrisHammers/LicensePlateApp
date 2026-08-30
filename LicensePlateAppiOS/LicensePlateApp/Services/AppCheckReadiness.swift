@@ -11,10 +11,53 @@ import FirebaseAppCheck
 #endif
 
 enum AppCheckReadiness {
-    /// Warm App Check after Firebase configure so the first callable is less likely to race token fetch.
+    /// Warm App Check after Firebase configure so the first callable doesn't race a cold
+    /// provider. DETACHED and never awaited — nothing user-facing spends time in here.
+    ///
+    /// Bug B deep cause (2026-08-30): the old body called `ensureCallablePrerequisites`,
+    /// which throws BEFORE touching App Check whenever `Auth.auth().currentUser` is nil —
+    /// and on the FIRST process after a fresh install the Keychain session has not
+    /// restored yet (or doesn't exist), so App Check never warmed on exactly the process
+    /// where every physical-device wedge occurred; the `FamilyCallable` standard-path
+    /// fallback then had an empty cache and re-sent the SDK's placeholder (the observed
+    /// double-401). App Check has NO dependency on Auth; the coupling was incidental.
+    /// This warms the token directly, with bounded retries for the fast-failure modes
+    /// (cold DeviceCheck at first launch — the placeholder class). A HANGING attempt
+    /// still pins the SDK's memoized promise for the process (GACAppCheck TODO(#42):
+    /// retries and forced refreshes join the stuck promise), so retries deliberately
+    /// can't help that class — it is unrecoverable per-process by any client means, and
+    /// the FamilyCallable limited-use path is unaffected by the pinned promise anyway.
     static func warmUp() {
-        Task {
-            try? await ensureCallablePrerequisites()
+        Task.detached(priority: .utility) {
+            await warmStandardTokenWithRetries()
+        }
+    }
+
+    /// Delay before each warm-up attempt; the run stops on the first success.
+    static let warmupAttemptDelaysSeconds: [Double] = [0, 10, 60]
+
+    /// Test seam: `fetch` replaces the live App Check token request; `attemptDelaysSeconds`
+    /// replaces the real backoff.
+    static func warmStandardTokenWithRetries(
+        attemptDelaysSeconds: [Double] = warmupAttemptDelaysSeconds,
+        fetch: (() async throws -> Void)? = nil
+    ) async {
+        for delaySeconds in attemptDelaysSeconds {
+            if delaySeconds > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
+            }
+            do {
+                if let fetch {
+                    try await fetch()
+                } else {
+                    #if canImport(FirebaseAppCheck)
+                    _ = try await AppCheck.appCheck().token(forcingRefresh: false)
+                    #endif
+                }
+                return
+            } catch {
+                continue
+            }
         }
     }
 

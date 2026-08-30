@@ -134,8 +134,11 @@ enum FamilyCallable {
     /// AppAttest), the server only sets `enforceAppCheck: true` and never `consumeAppCheckToken`,
     /// and a limited-use token satisfies enforcement without consumption.
     ///
-    /// The pre-warm is gone with it: `try?` catches errors, not hangs, so it could spend the
-    /// whole 25s budget inside the very promise this change exists to stop entering.
+    /// The IN-CALL-PATH pre-warm is gone with it: `try?` catches errors, not hangs, so it
+    /// could spend the whole 25s budget inside the very promise this change exists to stop
+    /// entering. (The LAUNCH-TIME warm-up in `AppCheckReadiness.warmUp` is a different
+    /// beast — detached, never awaited, and existing precisely so the standard-path
+    /// fallback below has a cached token on a first-process fresh install.)
     static func call(_ name: String, _ payload: [String: Any]) async throws -> HTTPSCallableResult {
         do {
             return try await bounded(name: name) {
