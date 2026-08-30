@@ -24,10 +24,38 @@ enum TripRouteSummaryBuilder {
     /// Simplified polyline never exceeds this many points.
     static let maxSimplifiedPoints = 200
 
+    /// FR-101(b) (v4 F-61): OD-12 endpoint-privacy radius (proposed 1.5 km implemented
+    /// as the default; owner-adjustable constant). A road-trip trail must not begin in
+    /// the family's driveway.
+    static let endpointTrimRadiusMeters: Double = 1_500
+
     // MARK: - Build (points → metadata)
 
-    /// nil when there aren't enough points to describe a route.
-    static func locationMetadata(from points: [CLLocation]) -> [String: String]? {
+    /// FR-101(b): drops the contiguous run of points within the radius of the FIRST
+    /// recorded point and the contiguous run within the radius of the LAST, so the
+    /// drawn polyline starts and ends at the trimmed boundary. Deliberately contiguous:
+    /// a mid-trip pass NEAR the start point is trip shape, not an endpoint, and stays.
+    static func endpointTrimmed(_ points: [CLLocation]) -> [CLLocation] {
+        guard let first = points.first, let last = points.last else { return [] }
+        var startIndex = 0
+        while startIndex < points.count,
+              points[startIndex].distance(from: first) <= endpointTrimRadiusMeters {
+            startIndex += 1
+        }
+        var endIndex = points.count - 1
+        while endIndex >= 0,
+              points[endIndex].distance(from: last) <= endpointTrimRadiusMeters {
+            endIndex -= 1
+        }
+        guard startIndex <= endIndex else { return [] }
+        return Array(points[startIndex...endIndex])
+    }
+
+    /// nil when there aren't enough points to describe a route — including the
+    /// FR-101(b) degenerate case (whole trip inside the trim radius): no route
+    /// section at all rather than a stub.
+    static func locationMetadata(from rawPoints: [CLLocation]) -> [String: String]? {
+        let points = endpointTrimmed(rawPoints)
         guard points.count >= 2 else { return nil }
 
         let distance = zip(points, points.dropFirst()).reduce(0.0) { total, pair in
@@ -51,7 +79,7 @@ enum TripRouteSummaryBuilder {
             MetadataKey.routePolyline: polylineJSON,
             MetadataKey.routeDistanceMeters: String(Int(distance.rounded())),
             MetadataKey.routeDurationSeconds: String(Int(max(0, duration).rounded())),
-            MetadataKey.routePointCount: String(points.count)
+            MetadataKey.routePointCount: String(rawPoints.count)
         ]
     }
 
@@ -139,5 +167,20 @@ enum TripRouteSummaryBuilder {
 
     private static func round5(_ value: Double) -> Double {
         (value * 100_000).rounded() / 100_000
+    }
+}
+
+/// FR-101(a) (v4 F-61): the recap's route section is STRUCTURALLY gated — the
+/// child-restriction resolver term decides, never data presence alone, so route rows
+/// recorded before an under-13 answer (or on a device whose posture later flipped)
+/// can never render for a restricted session.
+enum TripRouteRecapPolicy {
+    static func showsRouteSection(
+        locationMetadata: [String: String]?,
+        isChildRestricted: Bool
+    ) -> Bool {
+        guard !isChildRestricted else { return false }
+        guard let metadata = locationMetadata, !metadata.isEmpty else { return false }
+        return true
     }
 }

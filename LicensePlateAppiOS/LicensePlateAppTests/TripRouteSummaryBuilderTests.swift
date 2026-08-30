@@ -28,26 +28,32 @@ struct TripRouteSummaryBuilderTests {
     }
 
     @Test func metadataRoundTripsCoordinatesAndStats() throws {
+        // FR-101(b) (v4 F-61): the endpoint trim removes everything within the OD-12
+        // radius of the trip's first and last recorded points — including those points
+        // themselves — so the round-trip expectations describe the TRIMMED route:
+        // p0 and p3 are the driveway ends; p1 and p2 are the surviving boundary.
         let points = [
             fix(lat: 39.7500, lon: -104.9900, at: 1_000),
             fix(lat: 39.7600, lon: -104.9000, at: 1_600),
-            fix(lat: 39.7500, lon: -104.8000, at: 2_200)
+            fix(lat: 39.7500, lon: -104.8000, at: 2_200),
+            fix(lat: 39.7450, lon: -104.7000, at: 2_800)
         ]
         let metadata = try #require(TripRouteSummaryBuilder.locationMetadata(from: points))
 
         let coordinates = TripRouteSummaryBuilder.coordinates(from: metadata)
         #expect(coordinates.count >= 2)
-        #expect(abs(coordinates.first!.latitude - 39.75) < 0.001)
+        #expect(abs(coordinates.first!.latitude - 39.76) < 0.001)
         #expect(abs(coordinates.last!.longitude - (-104.80)) < 0.001)
 
         let duration = try #require(TripRouteSummaryBuilder.durationSeconds(from: metadata))
-        #expect(duration == 1_200)
+        #expect(duration == 600)
 
         let distance = try #require(TripRouteSummaryBuilder.distanceMeters(from: metadata))
-        // Two legs of roughly 7.7 km + 8.5 km; sanity-band the sum.
-        #expect(distance > 10_000 && distance < 25_000)
+        // One surviving leg of roughly 8.6 km; sanity-band it.
+        #expect(distance > 7_000 && distance < 11_000)
 
-        #expect(metadata[TripRouteSummaryBuilder.MetadataKey.routePointCount] == "3")
+        // Raw captured count is honest telemetry and stays the untrimmed total.
+        #expect(metadata[TripRouteSummaryBuilder.MetadataKey.routePointCount] == "4")
     }
 
     @Test func douglasPeuckerDropsCollinearMiddlePoints() {

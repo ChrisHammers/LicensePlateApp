@@ -20,6 +20,10 @@ struct TripSummaryView: View {
     @State private var showAllDiscoveryHighlights = false
     @State private var isPreparingShare = false
 
+    /// FR-101(a) (v4 F-61): the child-restriction signal for the route section's
+    /// STRUCTURAL gate — same live projection the FR-75a resolver reads.
+    @ObservedObject private var childPostures = ChildSessionPostureCoordinator.shared
+
     private let dateFormatter = TripSummaryDateRangeFormatter.mediumDateFormatter()
 
     /// Collapsed row count for discovery highlights (expand via control below).
@@ -47,7 +51,14 @@ struct TripSummaryView: View {
                     if !summary.xpRecapLines.isEmpty {
                         xpRecapSection
                     }
-                    if summary.locationMetadata != nil && !summary.locationMetadata!.isEmpty {
+                    // FR-101(a) (v4 F-61): structurally gated, not data-presence
+                    // gated — a child-restricted session renders no route section
+                    // regardless of stored rows (rows recorded before an under-13
+                    // answer, or on a device whose posture later flipped).
+                    if TripRouteRecapPolicy.showsRouteSection(
+                        locationMetadata: summary.locationMetadata,
+                        isChildRestricted: childPostures.isLocationRestrictedForCurrentFlow
+                    ) {
                         routeRecapSection
                     }
                 }
