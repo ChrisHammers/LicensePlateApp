@@ -97,7 +97,8 @@ export interface ProvisionalChildCleanupDeps {
   accountDeletionDeps?: AccountDeletionDeps;
 }
 
-const liveDeps: ProvisionalChildCleanupDeps = {
+/** Exported for the OD-3 revoked-child sweep — same auth-deletion tolerance, one place. */
+export const liveProvisionalChildCleanupDeps: ProvisionalChildCleanupDeps = {
   deleteAuthUser: async (userId: string) => {
     try {
       await admin.auth().deleteUser(userId);
@@ -143,7 +144,9 @@ export interface ProvisionalChildCleanupResult {
  * be one" and skip the deletion. The FR-77 backstop re-attempts later, and the decline and
  * expiry callers already treat a skip as non-fatal.
  */
-async function hasLiveJoinRequest(
+/** Exported for the OD-3 revoked-child sweep (revokedChildRetention.ts), which owes the
+ *  same veto: a child mid-consent-confirmation is the last account any sweep may touch. */
+export async function hasLiveJoinRequest(
   db: Firestore,
   userId: string
 ): Promise<boolean> {
@@ -198,7 +201,7 @@ export async function deleteProvisionalChildAccountIfNeverConsented(
     clientMetadata: ClientMetadata | null;
     revenueCatApiKey?: string | null;
   },
-  deps: ProvisionalChildCleanupDeps = liveDeps
+  deps: ProvisionalChildCleanupDeps = liveProvisionalChildCleanupDeps
 ): Promise<ProvisionalChildCleanupResult> {
   const snapshot = await db.collection("users").doc(input.userId).get();
   if (!snapshot.exists) {
@@ -271,7 +274,7 @@ export async function sweepExpiredProvisionalChildAccounts(
     maxScanned?: number;
     pageSize?: number;
   },
-  deps: ProvisionalChildCleanupDeps = liveDeps
+  deps: ProvisionalChildCleanupDeps = liveProvisionalChildCleanupDeps
 ): Promise<ProvisionalChildSweepResult> {
   const maxDeletes = options.maxDeletes ?? PROVISIONAL_CHILD_SWEEP_MAX_DELETES;
   const maxScanned = options.maxScanned ?? PROVISIONAL_CHILD_SWEEP_MAX_SCANNED;

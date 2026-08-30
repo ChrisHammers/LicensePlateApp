@@ -35,6 +35,11 @@ import {
   provisionalChildDeletionCutoffMillis,
   sweepExpiredProvisionalChildAccounts,
 } from "./provisionalChildAccounts";
+import {
+  revokedChildDeletionCutoffMillis,
+  revokedChildRetentionDays,
+  sweepAbandonedRevokedChildAccounts,
+} from "./revokedChildRetention";
 
 const db = admin.firestore();
 
@@ -103,6 +108,37 @@ export const purgeExpiredProvisionalChildAccounts = functions
 
     functions.logger.info("retention: swept redemption-window child accounts", {
       windowDays: PROVISIONAL_CHILD_REDEMPTION_WINDOW_DAYS,
+      cutoff: new Date(cutoffMillis).toISOString(),
+      result,
+    });
+
+    return null;
+  });
+
+/**
+ * FR-63(c) / FR-77 second class — OD-3 (owner 2026-08-30): 12 months. Deletes
+ * revoked-and-abandoned child accounts (guardianship ENDED longer ago than the window;
+ * no live membership, no live join request) through the shared deletion machinery.
+ * The parent's own FR-63(a) deletion offer stays the primary path; this is the
+ * walked-away backstop §312.10 requires once keep-data exists.
+ */
+export const purgeAbandonedRevokedChildAccounts = functions
+  .runWith({ timeoutSeconds: RETENTION_TIMEOUT_SECONDS })
+  .pubsub.schedule(RETENTION_SCHEDULE)
+  .timeZone(RETENTION_TIME_ZONE)
+  .onRun(async () => {
+    const windowDays = revokedChildRetentionDays();
+    const cutoffMillis = revokedChildDeletionCutoffMillis(Date.now(), windowDays);
+
+    const result = await sweepAbandonedRevokedChildAccounts(db, {
+      cutoffMillis,
+      // Uid-only audit actor: no parent authorised this, the OD-3 schedule did.
+      actorId: "system_retention",
+      revenueCatApiKey: currentRevenueCatApiKey(),
+    });
+
+    functions.logger.info("retention: OD-3 swept abandoned revoked child accounts", {
+      windowDays,
       cutoff: new Date(cutoffMillis).toISOString(),
       result,
     });

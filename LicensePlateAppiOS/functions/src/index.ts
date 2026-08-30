@@ -48,6 +48,7 @@ export {
   purgeExpiredProvisionalChildAccounts,
   expireLapsedConsentRequests,
   reconcileParentalConsentRecords,
+  purgeAbandonedRevokedChildAccounts,
 } from "./retention";
 export { onAuthUserDeleted } from "./auth";
 export { deleteAccount } from "./accountDeletion";
