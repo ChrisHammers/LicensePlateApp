@@ -171,6 +171,20 @@ class UserRepository: ObservableObject {
     /// outside the child's family, and a pending join requester is not a member yet.
     /// Callers MUST treat `nil` as "unresolved" and demand an explicit declaration —
     /// never as "not a child".
+    /// FR-100 (v4 F-60): ensure a THIS-SESSION resolution exists for each id before a
+    /// share card renders. The export identity policy only trusts fresh server
+    /// resolutions, and the cache-first name hydration never creates one — which
+    /// neutral-labeled every already-cached ADULT co-participant (owner finding
+    /// 2026-08-30). Reads only ids the session hasn't resolved; an unreadable or
+    /// cache-served doc leaves the id unresolved, which renders neutral — the safe
+    /// direction (a child's doc outside the sharer's family is rules-denied and lands
+    /// there too, which is exactly right).
+    func resolveChildAccountFlags(forUserIds ids: Set<String>) async {
+        for id in ids where !id.isEmpty && childResolutionByUserId[id] == nil {
+            _ = await fetchIsChildAccount(userId: id)
+        }
+    }
+
     func fetchIsChildAccount(userId: String) async -> Bool? {
         guard !userId.isEmpty else { return nil }
         do {

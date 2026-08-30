@@ -905,6 +905,8 @@
 "trip_summary.end_date %@" = "Date de fin : %@";
 "trip_summary.share.a11y_label" = "Partager le voyage";
 "trip_summary.share.a11y_hint" = "Partage une image de marque de ce voyage";
+"trip_summary.share.neutral_player %d" = "Joueur %d";
+"trip_setup.child_name_hint" = "Le nom du voyage peut apparaître sur les images de récap partagées — choisissez-en un sans vrais noms ni lieux que vous voulez garder privés.";
 "trip_summary.share.no_games" = "Aucun jeu sur ce voyage";
 "trip_summary.share.participant_score %@ %@" = "%@ trouvés · %@";
 "trip_summary.share.winner %@ %@" = "Gagnant : %@ (%@)";

@@ -22,7 +22,10 @@ private enum TripSummaryShareCardPalette {
 struct TripSummaryShareCardView: View {
     let summary: TripSummary
     let currentUserId: String?
-    let participantDisplayNames: [String: String]
+    /// FR-100 (v4 F-60): uid → EXPORT-RESOLVED display string, produced by
+    /// `ShareCardIdentityResolver` — adults' usernames, everyone else the neutral
+    /// positional label. The card renders tokens; it never resolves identity itself.
+    let exportDisplayNames: [String: String]
 
     private let dateFormatter = TripSummaryDateRangeFormatter.shareCardDateFormatter()
 
@@ -250,12 +253,23 @@ struct TripSummaryShareCardView: View {
     }
 
     private func displayName(for participantId: String) -> String {
-        let raw = participantDisplayNames[participantId] ?? participantId
+        // FR-100: every ranked participant has a resolver entry; the last resort is
+        // the neutral token — NEVER the raw participantId (the pre-FR-100 fallback
+        // printed a uid on the exported image whenever a name failed to hydrate).
+        let token = exportDisplayNames[participantId]
+            ?? IdentityRenderPolicy.neutralLabel(position: rankedPosition(of: participantId))
         return ParticipantDisplayName.decorated(
-            raw,
+            token,
             userId: participantId,
             currentUserId: currentUserId
         )
+    }
+
+    private func rankedPosition(of participantId: String) -> Int {
+        let index = summary.rankedParticipants.firstIndex {
+            $0.contribution.participantId == participantId
+        }
+        return (index ?? 0) + 1
     }
 }
 
@@ -271,10 +285,18 @@ enum TripSummaryShareImageRenderer {
         currentUserId: String?,
         participantDisplayNames: [String: String]
     ) -> UIImage? {
+        // FR-100 (v4 F-60): identity resolution happens HERE, at the export choke
+        // point — hydrated names go in, export-safe tokens come out, and the card
+        // below only ever sees tokens.
+        let exportNames = ShareCardIdentityResolver.exportDisplayNames(
+            summary: summary,
+            currentUserId: currentUserId,
+            hydratedDisplayNames: participantDisplayNames
+        )
         let view = TripSummaryShareCardView(
             summary: summary,
             currentUserId: currentUserId,
-            participantDisplayNames: participantDisplayNames
+            exportDisplayNames: exportNames
         )
         let renderer = ImageRenderer(content: view)
         renderer.scale = exportScale
@@ -287,7 +309,7 @@ enum TripSummaryShareImageRenderer {
     TripSummaryShareCardView(
         summary: PreviewSummaryFixtures.tripSummarySolo(),
         currentUserId: PreviewConstants.userId1,
-        participantDisplayNames: [PreviewConstants.userId1: "Alex"]
+        exportDisplayNames: [PreviewConstants.userId1: "Alex"]
     )
 }
 
@@ -295,9 +317,22 @@ enum TripSummaryShareImageRenderer {
     TripSummaryShareCardView(
         summary: PreviewSummaryFixtures.tripSummaryCompetitiveTied(),
         currentUserId: PreviewConstants.userId1,
-        participantDisplayNames: [
+        exportDisplayNames: [
             PreviewConstants.userId1: "Alex",
             PreviewConstants.userId2: "Blake"
+        ]
+    )
+}
+
+#Preview("Share card — child participant renders the neutral label") {
+    // FR-100(a): the second-ranked participant is a child (or unresolved — the two
+    // render IDENTICALLY by design); the winner line and row both show "Player 2".
+    TripSummaryShareCardView(
+        summary: PreviewSummaryFixtures.tripSummaryCompetitiveTied(),
+        currentUserId: PreviewConstants.userId1,
+        exportDisplayNames: [
+            PreviewConstants.userId1: "Alex",
+            PreviewConstants.userId2: IdentityRenderPolicy.neutralLabel(position: 2)
         ]
     )
 }

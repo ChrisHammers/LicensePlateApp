@@ -102,6 +102,16 @@ struct TripSetupView: View {
                     .accessibilityLabel("Trip Name".localized)
                     .accessibilityHint("Enter a name for your trip, or leave blank to use date and time".localized)
                     .accessibilityValue(viewModel.tripName.isEmpty ? "Will use date and time".localized : viewModel.tripName)
+
+                // FR-100(e) (v4 F-60): trip names survive onto the exported share
+                // card, so child sessions get the FR-80-style shareability hint.
+                // Heuristic guidance only — no validation (recorded as such).
+                if childPostures.isLocationForcedOffForChildSession {
+                    Text("trip_setup.child_name_hint".localized)
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 16)

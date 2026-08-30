@@ -119,6 +119,10 @@ struct TripSummaryView: View {
             }
         }
         participantDisplayNames = await UserRepository.shared.displayNames(forUserIds: ids)
+        // FR-100 (v4 F-60): the share card's identity policy only names participants
+        // with a THIS-SESSION server resolution; the cache-first hydration above never
+        // creates one, so resolve them here — before the share button can render.
+        await UserRepository.shared.resolveChildAccountFlags(forUserIds: ids)
     }
 
     /// Region or discovery display name for a target id (e.g. "us-ca" -> "California").
