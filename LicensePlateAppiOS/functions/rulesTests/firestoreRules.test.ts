@@ -155,7 +155,7 @@ describe("FR-7: users diff-guard protects isChildAccount and entitlementTags", (
 
   it("denies removing the flag via full set (affectedKeys catches deletes)", async () => {
     await assertFails(
-      setDoc(doc(registered("kid"), "users/kid"), { userName: "Kid v2" })
+      setDoc(doc(registered("kid"), "users/kid"), { userName: "Kid_v2" })
     );
   });
 
@@ -179,11 +179,11 @@ describe("FR-7: users diff-guard protects isChildAccount and entitlementTags", (
     );
     // Full set omitting the key = clearing it via affectedKeys.
     await assertFails(
-      setDoc(doc(registered("marked"), "users/marked"), { userName: "Kid v2" })
+      setDoc(doc(registered("marked"), "users/marked"), { userName: "Kid_v2" })
     );
     await assertFails(
       setDoc(doc(registered("fresh4"), "users/fresh4"), {
-        userName: "F4",
+        userName: "Fresh4",
         ageOutYearMonth: 203703,
       })
     );
@@ -211,11 +211,11 @@ describe("FR-7: users diff-guard protects isChildAccount and entitlementTags", (
     );
     // Full set omitting the key = clearing it via affectedKeys.
     await assertFails(
-      setDoc(doc(registered("pending"), "users/pending"), { userName: "Kid v2" })
+      setDoc(doc(registered("pending"), "users/pending"), { userName: "Kid_v2" })
     );
     await assertFails(
       setDoc(doc(registered("fresh5"), "users/fresh5"), {
-        userName: "F5",
+        userName: "Fresh5",
         pendingDeletionRequestedAtMillis: 1,
       })
     );
@@ -247,25 +247,25 @@ describe("FR-7: users diff-guard protects isChildAccount and entitlementTags", (
 
   it("allows a benign profile update that leaves both fields untouched", async () => {
     await assertSucceeds(
-      updateDoc(doc(registered("kid"), "users/kid"), { userName: "Kid v2" })
+      updateDoc(doc(registered("kid"), "users/kid"), { userName: "Kid_v2" })
     );
   });
 
   it("denies creates that smuggle either server-controlled key in", async () => {
     await assertFails(
       setDoc(doc(registered("fresh1"), "users/fresh1"), {
-        userName: "F1",
+        userName: "Fresh1",
         isChildAccount: false,
       })
     );
     await assertFails(
       setDoc(doc(registered("fresh2"), "users/fresh2"), {
-        userName: "F2",
+        userName: "Fresh2",
         entitlementTags: ["family_plus"],
       })
     );
     await assertSucceeds(
-      setDoc(doc(registered("fresh3"), "users/fresh3"), { userName: "F3" })
+      setDoc(doc(registered("fresh3"), "users/fresh3"), { userName: "Fresh3" })
     );
   });
 
@@ -284,18 +284,18 @@ describe("FR-7: users diff-guard protects isChildAccount and entitlementTags", (
       updateDoc(doc(registered("provisional"), "users/provisional"), { childDeclaredAt: 5000 })
     );
     await assertFails(
-      setDoc(doc(registered("provisional"), "users/provisional"), { userName: "Kid v2" })
+      setDoc(doc(registered("provisional"), "users/provisional"), { userName: "Kid_v2" })
     );
     await assertFails(
       setDoc(doc(registered("fresh4"), "users/fresh4"), {
-        userName: "F4",
+        userName: "Fresh4",
         childDeclaredAt: 1000,
       })
     );
 
     // The child's own ordinary profile sync, which never touches the key, still lands.
     await assertSucceeds(
-      updateDoc(doc(registered("provisional"), "users/provisional"), { userName: "Kid v2" })
+      updateDoc(doc(registered("provisional"), "users/provisional"), { userName: "Kid_v2" })
     );
   });
 
@@ -330,19 +330,19 @@ describe("FR-7: users diff-guard protects isChildAccount and entitlementTags", (
     );
     // Clear it by omission on a full set (affectedKeys catches deletes).
     await assertFails(
-      setDoc(doc(registered("waiting"), "users/waiting"), { userName: "Kid v2" })
+      setDoc(doc(registered("waiting"), "users/waiting"), { userName: "Kid_v2" })
     );
     // Smuggle it in on create, forging a request in flight from the first write.
     await assertFails(
       setDoc(doc(registered("fresh5"), "users/fresh5"), {
-        userName: "F5",
+        userName: "Fresh5",
         pendingFamilyRequest: { familyId: "fam1", requestId: "req1", createdAt: 1000 },
       })
     );
 
     // The child's own ordinary profile sync, which never touches the key, still lands.
     await assertSucceeds(
-      updateDoc(doc(registered("waiting"), "users/waiting"), { userName: "Kid v2" })
+      updateDoc(doc(registered("waiting"), "users/waiting"), { userName: "Kid_v2" })
     );
   });
 });
@@ -1493,8 +1493,138 @@ describe("F-6 rework: users docs reject firstName/lastName", () => {
       updateDoc(doc(registered("named"), "users/named"), {
         firstName: deleteField(),
         lastName: deleteField(),
-        userName: "Named v2",
+        userName: "Named_v2",
       })
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FR-80 (F-36, fresh-audit finding M-2) — username content policy is enforced
+// server-side, not just by the client's `UsernameProfanityFilter` /
+// `UsernameValidation` (Core/Utilities/UsernameProfanityFilter.swift). Every real
+// write goes through `FirebaseAuthService.saveUserDataToFirestore`'s direct
+// `setData(merge:true)` — there is no callable in this path — so this rules block
+// is the only boundary a modified client cannot bypass.
+//
+// The profanity check mirrors the client filter's blocklist, single-valued leet
+// substitution, and separator-stripping tolerance -- but deliberately no stronger
+// (FR-80's no-multi-candidate-expansion decision, owner-reaffirmed 2026-08-26): a
+// known client-side gap like "f4ck" (the leet map has no substitute for 'u', so it
+// normalizes to "fack", not "fuck") is preserved here on purpose, and is pinned by
+// a test below so nobody "fixes" the server without the client agreeing first.
+// ---------------------------------------------------------------------------
+
+describe("FR-80: username format is validated server-side on write", () => {
+  it("denies create with a username under 3 characters", async () => {
+    await assertFails(
+      setDoc(doc(registered("shortu"), "users/shortu"), { userName: "ab" })
+    );
+  });
+
+  it("denies create with a username over 24 characters", async () => {
+    await assertFails(
+      setDoc(doc(registered("longu"), "users/longu"), { userName: "a".repeat(25) })
+    );
+  });
+
+  it("allows create at the 3-character and 24-character boundaries", async () => {
+    await assertSucceeds(
+      setDoc(doc(registered("minlen"), "users/minlen"), { userName: "abc" })
+    );
+    await assertSucceeds(
+      setDoc(doc(registered("maxlen"), "users/maxlen"), { userName: "a".repeat(24) })
+    );
+  });
+
+  it("denies create with characters outside the allowed charset", async () => {
+    await assertFails(
+      setDoc(doc(registered("spacey"), "users/spacey"), { userName: "cool name" })
+    );
+    await assertFails(
+      setDoc(doc(registered("atsign"), "users/atsign"), { userName: "kid@example.com" })
+    );
+    await assertFails(
+      setDoc(doc(registered("emoji1"), "users/emoji1"), { userName: "roadtrip🚗fan" })
+    );
+  });
+
+  it("denies create with a bare-digit phone-shaped username", async () => {
+    await assertFails(
+      setDoc(doc(registered("phone1"), "users/phone1"), { userName: "5551234567" })
+    );
+  });
+
+  it("denies create with a separator-grouped phone-shaped username", async () => {
+    await assertFails(
+      setDoc(doc(registered("phone2"), "users/phone2"), { userName: "555-123-4567" })
+    );
+  });
+
+  it("allows create with a short numeric username that is not phone-shaped", async () => {
+    await assertSucceeds(
+      setDoc(doc(registered("num1"), "users/num1"), { userName: "123" })
+    );
+  });
+
+  it("denies create with a plain blocked term, case-insensitively", async () => {
+    await assertFails(
+      setDoc(doc(registered("prof1"), "users/prof1"), { userName: "fuck" })
+    );
+    await assertFails(
+      setDoc(doc(registered("prof2"), "users/prof2"), { userName: "xFUCKx" })
+    );
+  });
+
+  it("denies create with a leet-obfuscated blocked term (client-filter parity)", async () => {
+    await assertFails(
+      setDoc(doc(registered("prof3"), "users/prof3"), { userName: "assh0le" })
+    );
+  });
+
+  it("denies create with a separator-broken blocked term (client-filter parity)", async () => {
+    await assertFails(
+      setDoc(doc(registered("prof4"), "users/prof4"), { userName: "s-h-i-t" })
+    );
+  });
+
+  it("allows the known leet gap the client filter also allows (no-expansion pin, owner-reaffirmed 2026-08-26)", async () => {
+    await assertSucceeds(
+      setDoc(doc(registered("gap1"), "users/gap1"), { userName: "f4ckable" })
+    );
+  });
+
+  it("allows create with an ordinary valid username", async () => {
+    await assertSucceeds(
+      setDoc(doc(registered("good1"), "users/good1"), { userName: "RoadTripper_42" })
+    );
+  });
+
+  it("denies update changing username to an invalid value", async () => {
+    await seed({ "users/renamer": { userName: "Valid1" } });
+    await assertFails(
+      updateDoc(doc(registered("renamer"), "users/renamer"), { userName: "@@" })
+    );
+  });
+
+  it("allows update changing username to a new valid value", async () => {
+    await seed({ "users/renamer2": { userName: "Valid1" } });
+    await assertSucceeds(
+      updateDoc(doc(registered("renamer2"), "users/renamer2"), { userName: "Valid2" })
+    );
+  });
+
+  it("allows an unrelated update without re-validating a pre-existing non-conforming username (pre-release: no migration)", async () => {
+    await seed({ "users/legacy1": { userName: "x", avatarId: "old-avatar" } });
+    await assertSucceeds(
+      updateDoc(doc(registered("legacy1"), "users/legacy1"), { avatarId: "new-avatar" })
+    );
+  });
+
+  it("allows resaving a pre-existing non-conforming username unchanged (grandfathered)", async () => {
+    await seed({ "users/legacy2": { userName: "x" } });
+    await assertSucceeds(
+      setDoc(doc(registered("legacy2"), "users/legacy2"), { userName: "x", lastUpdated: new Date() }, { merge: true })
     );
   });
 });

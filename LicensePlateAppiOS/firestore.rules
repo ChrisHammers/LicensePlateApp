@@ -237,13 +237,64 @@ service cloud.firestore {
       return isFamilyMember(familyId) && familyMemberRole(familyId, uid()) == "captain";
     }
 
-    // USERS
+    // FR-80 (COPPA F-36, fresh-audit finding M-2): usernames cannot silently carry a
+    // child's real identity. `UsernameProfanityFilter` / `UsernameValidation`
+    // (Core/Utilities/UsernameProfanityFilter.swift) run client-side only, and every
+    // userName write reaches this collection via a direct client SDK
+    // `setData(merge:true)` (`FirebaseAuthService.saveUserDataToFirestore` — there is no
+    // callable in this path), so a modified client can send any string here today. This
+    // is the actual enforcement boundary; the Swift filter stays for UX only.
+    //
+    // Charset is deliberately ASCII-only (no `\p{L}` Unicode class): every allowed
+    // character is exactly one code unit, so the `{3,24}` bound here and any future
+    // `.size()` check agree with no Unicode-counting ambiguity — in a regex engine this
+    // change cannot be executed against outside the coordinator-run emulator (SRS §2).
+    // Revisit if the owner wants accented nicknames for es/fr.
+    //
+    // '@' is not in the allowed charset, so an email shape (`local@domain`) is
+    // structurally impossible; '(' ')' '+' are excluded too. The two digit-shape checks
+    // below reject a bare run and the common NANP-grouped form. Per FR-80's own framing,
+    // this is heuristic hardening, not PII detection — not a guarantee no identity
+    // fragment can ever be encoded in 3-24 characters.
+    function isValidUserNameFormat(name) {
+      return name is string
+        && name.matches('^[A-Za-z0-9_.-]{3,24}$')
+        && !name.matches('^[0-9]{7,24}$')
+        && !name.matches('^[0-9]{3}[.-]?[0-9]{3}[.-]?[0-9]{4}$')
+        && !name.lower().matches('.*([a@4][_.-]?[s5$][_.-]?[s5$][_.-]?h[_.-]?[o0][_.-]?l[_.-]?[e3]|b[_.-]?[a@4][_.-]?[s5$][_.-]?[t7][_.-]?[a@4][_.-]?r[_.-]?d|b[_.-]?[i1!][_.-]?[t7][_.-]?c[_.-]?h|b[_.-]?[o0][_.-]?l[_.-]?l[_.-]?[o0][_.-]?c[_.-]?k[_.-]?[s5$]|c[_.-]?[o0][_.-]?c[_.-]?k[_.-]?[s5$][_.-]?u[_.-]?c[_.-]?k[_.-]?[e3][_.-]?r|c[_.-]?u[_.-]?n[_.-]?[t7]|f[_.-]?u[_.-]?c[_.-]?k|m[_.-]?[o0][_.-]?[t7][_.-]?h[_.-]?[e3][_.-]?r[_.-]?f[_.-]?u[_.-]?c[_.-]?k[_.-]?[e3][_.-]?r|p[_.-]?[i1!][_.-]?[s5$][_.-]?[s5$]|p[_.-]?u[_.-]?[s5$][_.-]?[s5$][_.-]?y|[s5$][_.-]?h[_.-]?[i1!][_.-]?[t7]|[s5$][_.-]?l[_.-]?u[_.-]?[t7]|[t7][_.-]?[i1!][_.-]?[t7][_.-]?[s5$]|[t7][_.-]?w[_.-]?[a@4][_.-]?[t7]|w[_.-]?[a@4][_.-]?n[_.-]?k[_.-]?[e3][_.-]?r|w[_.-]?h[_.-]?[o0][_.-]?r[_.-]?[e3]|c[_.-]?[a@4][_.-]?b[_.-]?r[_.-]?[o0][_.-]?n|c[_.-]?[a@4][_.-]?r[_.-]?[a@4][_.-]?j[_.-]?[o0]|c[_.-]?[o0][_.-]?j[_.-]?[o0][_.-]?n[_.-]?[e3][_.-]?[s5$]|c[_.-]?[o0][_.-]?n[_.-]?[o0]|g[_.-]?[i1!][_.-]?l[_.-]?[i1!][_.-]?p[_.-]?[o0][_.-]?l[_.-]?l[_.-]?[a@4][_.-]?[s5$]|j[_.-]?[o0][_.-]?d[_.-]?[e3][_.-]?r|m[_.-]?[a@4][_.-]?r[_.-]?[i1!][_.-]?c[_.-]?[o0][_.-]?n|m[_.-]?[i1!][_.-]?[e3][_.-]?r[_.-]?d[_.-]?[a@4]|p[_.-]?[e3][_.-]?n[_.-]?d[_.-]?[e3][_.-]?j[_.-]?[o0]|p[_.-]?[o0][_.-]?l[_.-]?l[_.-]?[a@4]|p[_.-]?u[_.-]?[t7][_.-]?[a@4]|p[_.-]?u[_.-]?[t7][_.-]?[o0]|v[_.-]?[e3][_.-]?r[_.-]?g[_.-]?[a@4]|z[_.-]?[o0][_.-]?r[_.-]?r[_.-]?[a@4]|b[_.-]?[i1!][_.-]?[t7][_.-]?[e3]|b[_.-]?[o0][_.-]?r[_.-]?d[_.-]?[e3][_.-]?l|c[_.-]?h[_.-]?[i1!][_.-]?[a@4][_.-]?[s5$][_.-]?[s5$][_.-]?[e3]|c[_.-]?[o0][_.-]?n[_.-]?n[_.-]?[a@4][_.-]?r[_.-]?d|c[_.-]?[o0][_.-]?n[_.-]?n[_.-]?[a@4][_.-]?[s5$][_.-]?[s5$][_.-]?[e3]|c[_.-]?[o0][_.-]?u[_.-]?[i1!][_.-]?l[_.-]?l[_.-]?[e3]|[e3][_.-]?n[_.-]?c[_.-]?u[_.-]?l[_.-]?[e3]|f[_.-]?[o0][_.-]?u[_.-]?[t7][_.-]?r[_.-]?[e3]|m[_.-]?[e3][_.-]?r[_.-]?d[_.-]?[e3]|n[_.-]?[i1!][_.-]?q[_.-]?u[_.-]?[e3]|p[_.-]?u[_.-]?[t7][_.-]?[a@4][_.-]?[i1!][_.-]?n|p[_.-]?u[_.-]?[t7][_.-]?[e3]|[s5$][_.-]?[a@4][_.-]?l[_.-]?[o0][_.-]?p[_.-]?[e3]).*');
+    }
+    // The blocklist above is the SAME English/Spanish/French list as
+    // `UsernameProfanityFilter.blockedTerms`, with the SAME single-valued leet
+    // substitution (each letter's bracket class also accepts the ONE leet character
+    // the Swift filter maps onto it: a/@/4, e/3, i/1/!, o/0, s/5/$, t/7) and the same
+    // separator-stripping tolerance (an optional '_' / '.' / '-' between every letter —
+    // the only punctuation `isValidUserNameFormat` admits, so nothing else can be used
+    // to break a word up). This is a DELIBERATE parity choice, not an oversight: FR-80's
+    // no-multi-candidate-expansion decision (owner-reaffirmed 2026-08-26) means a known
+    // client-side gap like "f4ck" (the leet map has no substitute for 'u', so it
+    // normalizes to "fack", not "fuck") is preserved here on purpose. The server's job
+    // is to reject exactly what the client's own filter would already reject — no
+    // stronger — so a modified client cannot reach a result a stock client couldn't.
+    // Generated from the exact same term list and self-tested against Python's `re`
+    // (equivalent semantics for this construct set — character classes, alternation,
+    // `?`, `.*`; no lookaround or backreferences anywhere, so RE2 agrees) rather than
+    // the Firestore emulator, which this change cannot execute against; unexecuted
+    // against RE2 itself pending the coordinator's emulator run (SRS §2).
     match /users/{userId} {
       allow read: if isSignedIn() && isDiscoverableUserProfile(userId);
       allow create: if isSignedIn() && uid() == userId && userDocHasNoPrivateFields()
-        && userDocCreateOmitsServerControlledFields();
+        && userDocCreateOmitsServerControlledFields()
+        && (!('userName' in request.resource.data) || isValidUserNameFormat(request.resource.data.userName));
+      // FR-80: only a CHANGING userName is gated on update. Every profile write
+      // re-sends the current value (`firestoreDataFromAppUser` always includes it),
+      // so validating unconditionally would lock any pre-existing account whose
+      // username predates this rule out of every future write — including ones that
+      // never touch userName — breaking FR-80's own "existing dev usernames
+      // unaffected (pre-release: no migration)" acceptance line.
       allow update: if isSignedIn() && uid() == userId && userDocHasNoPrivateFields()
-        && userDocPreservesServerControlledFields();
+        && userDocPreservesServerControlledFields()
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['userName'])
+            || isValidUserNameFormat(request.resource.data.get('userName', '')));
       allow delete: if false; // handle via backend flows if needed
     }
 
