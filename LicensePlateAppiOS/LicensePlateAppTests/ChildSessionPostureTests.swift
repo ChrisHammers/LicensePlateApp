@@ -484,6 +484,8 @@ struct ChildSessionPostureCoordinatorTests {
         var under13FlowAnswer = false
         var ageResolved = true
         var ratcheted = false
+        var adultDeviceAnswer = false
+        var credentialed = false
         var events: [String] = []
         var notificationEvents: [Bool] = []
         var objectWillChangeCount = 0
@@ -518,6 +520,8 @@ struct ChildSessionPostureCoordinatorTests {
                     return self.declaredUids.contains(uid) || self.pendingDeclarationUids.contains(uid)
                 },
                 isUnder13FlowAnswer: { [weak self] in self?.under13FlowAnswer ?? false },
+                isAdultDeviceAnswer: { [weak self] in self?.adultDeviceAnswer ?? false },
+                isCredentialedSession: { [weak self] in self?.credentialed ?? false },
                 isAgeResolved: { [weak self] in self?.ageResolved ?? false },
                 isDeviceRatcheted: { [weak self] in self?.ratcheted ?? false },
                 engageDeviceRatchet: { [weak self] in
@@ -1506,5 +1510,143 @@ struct ChildSessionAnalyticsAndEntitlementTests {
         let service = EntitlementService(revenueCatBridge: nil)
         #expect(service.isUnlocked(avatar: founderAvatar, entitlement: entitlement) == true)
         #expect(entitlement.familyPassUnlocked == true)
+    }
+}
+
+// MARK: - OD-14 (owner, 2026-09-07): adults keep location offline
+
+/// While the posture is `.unresolved` (no fresh server read this session — every offline
+/// launch), the device's own adult evidence carries LOCATION: a 13+ answer for this epoch,
+/// or a registered session. Nothing else relaxes; child evidence of any kind still wins.
+struct AdultDeviceEvidenceLocationTests {
+    private func unresolved(
+        adultAnswer: Bool = false,
+        registered: Bool = false,
+        cached: Bool? = nil,
+        explicitCache: Bool = false,
+        ratcheted: Bool = false,
+        declared: Bool = false,
+        outstanding: Bool = false,
+        cachedTrueAnywhere: Bool = false,
+        under13Flow: Bool = false
+    ) -> ChildLocationTrustPolicy.Inputs {
+        .init(
+            posture: .unresolved,
+            cachedIsChildAccount: cached,
+            isCachedValueServerExplicit: explicitCache,
+            isDeviceRatcheted: ratcheted,
+            hasDeclaredChildHistory: declared,
+            hasOutstandingChildDeclaration: outstanding,
+            hasAnyCachedChildTrue: cachedTrueAnywhere,
+            isUnder13FlowAnswer: under13Flow,
+            isAdultDeviceAnswer: adultAnswer,
+            isCredentialedSession: registered
+        )
+    }
+
+    @Test func aThirteenPlusAnswerOnACleanDeviceKeepsLocationWhileUnresolved() {
+        let inputs = unresolved(adultAnswer: true)
+        #expect(ChildLocationTrustPolicy.trustsDeviceAdultForLocation(inputs))
+        #expect(ChildLocationTrustPolicy.isLocationRestricted(inputs) == false)
+        #expect(ChildLocationTrustPolicy.isRestrictionChildEvidenced(inputs) == false)
+    }
+
+    @Test func aRegisteredSessionOnACleanDeviceKeepsLocationWhileUnresolved() {
+        let inputs = unresolved(registered: true)
+        #expect(ChildLocationTrustPolicy.trustsDeviceAdultForLocation(inputs))
+        #expect(ChildLocationTrustPolicy.isLocationRestricted(inputs) == false)
+    }
+
+    @Test func noAdultEvidenceStaysHeldExactlyAsBefore() {
+        // The reinstall / rebirth residual OD-8 named: nothing local to trust either way.
+        let inputs = unresolved()
+        #expect(ChildLocationTrustPolicy.trustsDeviceAdultForLocation(inputs) == false)
+        #expect(ChildLocationTrustPolicy.isLocationRestricted(inputs))
+    }
+
+    @Test func anyChildEvidenceOutranksTheAdultAnswer() {
+        for inputs in [
+            unresolved(adultAnswer: true, cached: true, explicitCache: true, cachedTrueAnywhere: true),
+            unresolved(adultAnswer: true, ratcheted: true),
+            unresolved(adultAnswer: true, declared: true),
+            unresolved(adultAnswer: true, outstanding: true),
+            unresolved(adultAnswer: true, cachedTrueAnywhere: true),
+            unresolved(adultAnswer: true, under13Flow: true),
+            unresolved(registered: true, cached: true, explicitCache: true, cachedTrueAnywhere: true),
+        ] {
+            #expect(ChildLocationTrustPolicy.trustsDeviceAdultForLocation(inputs) == false)
+            #expect(ChildLocationTrustPolicy.isLocationRestricted(inputs))
+        }
+    }
+
+    @Test func theBranchIsUnresolvedOnly() {
+        for posture in [ChildSessionPosture.childDirected, .ratchetedAnonymous] {
+            let inputs = ChildLocationTrustPolicy.Inputs(posture: posture, isAdultDeviceAnswer: true, isCredentialedSession: true)
+            #expect(ChildLocationTrustPolicy.trustsDeviceAdultForLocation(inputs) == false)
+            #expect(ChildLocationTrustPolicy.isLocationRestricted(inputs))
+        }
+        let confirmed = ChildLocationTrustPolicy.Inputs(posture: .confirmedNonChild)
+        #expect(ChildLocationTrustPolicy.isLocationRestricted(confirmed) == false)
+    }
+
+    @Test func onlyLocationRelaxes() {
+        // The posture itself is untouched: ads, purchases and exits stay on asymmetric trust.
+        #expect(ChildSessionPosture.unresolved.isAdDisplayEligible == false)
+        #expect(ChildSessionPosture.unresolved.suppressesPurchases)
+        #expect(ChildSessionPosture.unresolved.suppressesUnmanagedExits)
+    }
+}
+
+// MARK: - OD-14 at the coordinator (owner, 2026-09-07): adults keep location offline
+
+/// The pre-OD-14 tests above keep pinning the residual — a session with NO adult evidence
+/// (the harness's non-anonymous, non-credentialed identity is exactly a custom-token
+/// session, which is how FR-84 signs a transferred child in) stays held. These pin the
+/// ruling itself: adult evidence on the device carries location, and only location.
+@MainActor
+struct AdultEvidenceLocationCoordinatorTests {
+    @Test func aCredentialedAdultOfflineKeepsLocationWhileUnresolved() {
+        let world = ChildSessionPostureCoordinatorTests.World()
+        world.identity = ("adult1", false)
+        world.credentialed = true
+        let coordinator = world.makeCoordinator()
+        coordinator.applyPostures(trigger: .launch)
+        #expect(coordinator.currentPosture == .unresolved)
+        #expect(coordinator.isLocationRestrictedForCurrentFlow == false)
+        // Location only: the posture-level capabilities keep FR-19's asymmetric trust.
+        #expect(coordinator.isAdDisplayEligible == false)
+        #expect(coordinator.arePurchasesSuppressed == true)
+    }
+
+    @Test func aGuestWithAThirteenPlusAnswerOfflineKeepsLocationWhileUnresolved() {
+        let world = ChildSessionPostureCoordinatorTests.World()
+        world.identity = ("guest1", true)
+        world.adultDeviceAnswer = true
+        let coordinator = world.makeCoordinator()
+        coordinator.applyPostures(trigger: .launch)
+        #expect(coordinator.currentPosture == .unresolved)
+        #expect(coordinator.isLocationRestrictedForCurrentFlow == false)
+        #expect(coordinator.isLocationRestrictionChildEvidenced == false)
+    }
+
+    @Test func deviceChildHistoryStillOutranksTheAdultAnswer() {
+        let world = ChildSessionPostureCoordinatorTests.World()
+        world.identity = ("guest1", true)
+        world.adultDeviceAnswer = true
+        world.ratcheted = true
+        let coordinator = world.makeCoordinator()
+        coordinator.applyPostures(trigger: .launch)
+        #expect(coordinator.isLocationRestrictedForCurrentFlow == true)
+        #expect(coordinator.isLocationRestrictionChildEvidenced == true)
+    }
+
+    @Test func aCustomTokenSessionIsNotAdultEvidence() {
+        // Non-anonymous but no credential provider: FR-84's transferred child. Held.
+        let world = ChildSessionPostureCoordinatorTests.World()
+        world.identity = ("child1", false)
+        world.credentialed = false
+        let coordinator = world.makeCoordinator()
+        coordinator.applyPostures(trigger: .launch)
+        #expect(coordinator.isLocationRestrictedForCurrentFlow == true)
     }
 }

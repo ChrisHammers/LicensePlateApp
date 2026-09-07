@@ -251,6 +251,13 @@ enum ChildLocationTrustPolicy {
         var hasOutstandingChildDeclaration: Bool
         var hasAnyCachedChildTrue: Bool
         var isUnder13FlowAnswer: Bool
+        /// OD-14 (owner, 2026-09-07): the device's own ADULT evidence — a 13+ answer for this
+        /// identity epoch — may carry LOCATION while the session is still `.unresolved`.
+        var isAdultDeviceAnswer: Bool
+        /// OD-14: a CREDENTIALED session (password/OAuth provider attached) is adult evidence
+        /// too — sign-in never asks the age question (D-17), so the credential is the adult
+        /// claim there. Anonymous and custom-token sessions are not.
+        var isCredentialedSession: Bool
 
         init(
             posture: ChildSessionPosture,
@@ -260,7 +267,9 @@ enum ChildLocationTrustPolicy {
             hasDeclaredChildHistory: Bool = false,
             hasOutstandingChildDeclaration: Bool = false,
             hasAnyCachedChildTrue: Bool = false,
-            isUnder13FlowAnswer: Bool = false
+            isUnder13FlowAnswer: Bool = false,
+            isAdultDeviceAnswer: Bool = false,
+            isCredentialedSession: Bool = false
         ) {
             self.posture = posture
             self.cachedIsChildAccount = cachedIsChildAccount
@@ -270,6 +279,8 @@ enum ChildLocationTrustPolicy {
             self.hasOutstandingChildDeclaration = hasOutstandingChildDeclaration
             self.hasAnyCachedChildTrue = hasAnyCachedChildTrue
             self.isUnder13FlowAnswer = isUnder13FlowAnswer
+            self.isAdultDeviceAnswer = isAdultDeviceAnswer
+            self.isCredentialedSession = isCredentialedSession
         }
     }
 
@@ -300,10 +311,34 @@ enum ChildLocationTrustPolicy {
         return !inputs.isUnder13FlowAnswer
     }
 
-    /// Posture-scoped answer: FR-75(c)'s hold, with the OD-8 branch subtracted.
+    /// The OD-14 branch (owner, 2026-09-07: "I do not want location turned off for adults
+    /// when we are offline — that's a very important part of the game"). While the posture
+    /// is still `.unresolved` — no fresh server read THIS session, which is every offline
+    /// launch — the device's own adult evidence carries LOCATION, and only location:
+    ///  1. `.unresolved` only — every other posture is decided by its own evidence.
+    ///  2. adult evidence on the device: a 13+ answer for this epoch, or a registered
+    ///     (credentialed) session — sign-in never asks the age question, so the credential
+    ///     IS the adult claim there.
+    ///  3. nothing cached says child (a cached `true` is child evidence, and wins).
+    ///  4. zero child history on the device (ratchet / declared / pending / cached-true).
+    ///  5. the current epoch's age answer is not under-13.
+    /// Residual, accepted with the ruling: a child who lied at the neutral age screen keeps
+    /// location offline exactly as they would online (an age screen is not verification),
+    /// and an account a captain flags as child while the device is offline regains child
+    /// treatment at the next server read — D-11's rewrite then persists it. Ads, purchases,
+    /// analytics and TFCD keep strict asymmetric trust; this relaxes location alone.
+    static func trustsDeviceAdultForLocation(_ inputs: Inputs) -> Bool {
+        guard inputs.posture == .unresolved else { return false }
+        guard inputs.isAdultDeviceAnswer || inputs.isCredentialedSession else { return false }
+        guard inputs.cachedIsChildAccount != true else { return false }
+        guard !hasDeviceChildHistory(inputs) else { return false }
+        return !inputs.isUnder13FlowAnswer
+    }
+
+    /// Posture-scoped answer: FR-75(c)'s hold, with the OD-8 and OD-14 branches subtracted.
     static func forcesLocationOff(_ inputs: Inputs) -> Bool {
         guard inputs.posture.forcesLocationOff else { return false }
-        return !trustsCachedAdultForLocation(inputs)
+        return !trustsCachedAdultForLocation(inputs) && !trustsDeviceAdultForLocation(inputs)
     }
 
     /// Flow-scoped answer (FR-33): the same hold, widened by an under-13 answer recorded
@@ -446,6 +481,13 @@ final class ChildSessionPostureCoordinator: ObservableObject {
         /// epoch, valid even before the uid is provisioned/declared and before any
         /// posture trigger has re-run (sign-out clears it with the epoch).
         var isUnder13FlowAnswer: () -> Bool
+        /// OD-14: the current epoch's answer is 13+. Fail-closed default for an unwired
+        /// harness — absence of adult evidence keeps location held, never releases it.
+        var isAdultDeviceAnswer: () -> Bool = { false }
+        /// OD-14: a CREDENTIALED session — a password/OAuth provider is attached. Anonymous
+        /// sessions and custom-token sessions (how FR-84 signs a transferred CHILD in) have
+        /// no provider and are never adult evidence. Fail-closed default.
+        var isCredentialedSession: () -> Bool = { false }
         var isAgeResolved: () -> Bool
         var isDeviceRatcheted: () -> Bool
         var engageDeviceRatchet: () -> Void
@@ -517,6 +559,11 @@ final class ChildSessionPostureCoordinator: ObservableObject {
                     return store.hasPendingChildDeclaration || store.category == .under13
                 },
                 isUnder13FlowAnswer: { AgeGateStore.shared.category == .under13 },
+                isAdultDeviceAnswer: { AgeGateStore.shared.category == .teenAdult },
+                isCredentialedSession: {
+                    guard let user = Auth.auth().currentUser else { return false }
+                    return !user.isAnonymous && !user.providerData.isEmpty
+                },
                 isAgeResolved: { AgeGateStore.shared.isResolved },
                 isDeviceRatcheted: { ChildSignalCache.shared.isDeviceRatcheted },
                 engageDeviceRatchet: { ChildSignalCache.shared.engageDeviceRatchet() },
@@ -604,7 +651,9 @@ final class ChildSessionPostureCoordinator: ObservableObject {
             hasDeclaredChildHistory: deps.hasDeclaredChildHistory(),
             hasOutstandingChildDeclaration: deps.hasOutstandingChildDeclaration(),
             hasAnyCachedChildTrue: deps.hasAnyCachedChildTrue(),
-            isUnder13FlowAnswer: deps.isUnder13FlowAnswer()
+            isUnder13FlowAnswer: deps.isUnder13FlowAnswer(),
+            isAdultDeviceAnswer: deps.isAdultDeviceAnswer(),
+            isCredentialedSession: deps.isCredentialedSession()
         )
     }
 
