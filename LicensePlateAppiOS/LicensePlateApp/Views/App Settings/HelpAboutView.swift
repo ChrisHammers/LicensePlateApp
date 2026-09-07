@@ -11,7 +11,9 @@ import UIKit
 
 struct HelpAboutView: View {
     @Environment(\.dismiss) private var dismiss
-    
+    // F-35(a): child sessions get no unmanaged exit (mailto/App Store) from these rows.
+    @ObservedObject private var childPostures = ChildSessionPostureCoordinator.shared
+
     @State private var showAbout = false
     @State private var showAcknowledgements = false
     @State private var showFAQ = false
@@ -65,6 +67,13 @@ struct HelpAboutView: View {
                           
                             Divider()
                             
+                            if childPostures.suppressesUnmanagedExits {
+                                childGateRow(
+                                    icon: "ladybug",
+                                    title: "Report a Bug".localized,
+                                    subtitle: "help_about.child_gate.contact_support".localized
+                                )
+                            } else {
                             Button {
                                 sendEmail(to: "support@roadtriproyale.com", subject: "RoadTrip Royale Bug Report")
                             } label: {
@@ -100,9 +109,17 @@ struct HelpAboutView: View {
                             .accessibilityLabel("Report a Bug".localized)
                             .accessibilityHint("Opens email to report a bug".localized)
                             .accessibilityAddTraits(.isButton)
-                            
+                            }
+
                             Divider()
-                            
+
+                            if childPostures.suppressesUnmanagedExits {
+                                childGateRow(
+                                    icon: "lightbulb",
+                                    title: "Suggest a Feature".localized,
+                                    subtitle: "help_about.child_gate.contact_support".localized
+                                )
+                            } else {
                             Button {
                                 sendEmail(to: "support@roadtriproyale.com", subject: "RoadTrip Royale Feature Suggestion")
                             } label: {
@@ -138,9 +155,17 @@ struct HelpAboutView: View {
                             .accessibilityLabel("Suggest a Feature".localized)
                             .accessibilityHint("Opens email to suggest a new feature".localized)
                             .accessibilityAddTraits(.isButton)
-                            
+                            }
+
                             Divider()
-                            
+
+                            if childPostures.suppressesUnmanagedExits {
+                                childGateRow(
+                                    icon: "star.fill",
+                                    title: "Rate RoadTrip Royale".localized,
+                                    subtitle: "help_about.child_gate.rate_app".localized
+                                )
+                            } else {
                             Button {
                                 openRateApp()
                             } label: {
@@ -176,9 +201,17 @@ struct HelpAboutView: View {
                             .accessibilityLabel("Rate RoadTrip Royale".localized)
                             .accessibilityHint("Opens the App Store so you can leave a review".localized)
                             .accessibilityAddTraits(.isButton)
-                            
+                            }
+
                             Divider()
-                            
+
+                            if childPostures.suppressesUnmanagedExits {
+                                childGateRow(
+                                    icon: "envelope",
+                                    title: "Contact Support".localized,
+                                    subtitle: "help_about.child_gate.contact_support".localized
+                                )
+                            } else {
                             Button {
                                 sendEmail(to: "support@roadtriproyale.com", subject: "RoadTrip Royale Support Issue")
                             } label: {
@@ -214,7 +247,8 @@ struct HelpAboutView: View {
                             .accessibilityLabel("Contact Support".localized)
                             .accessibilityHint("Opens email to contact support".localized)
                             .accessibilityAddTraits(.isButton)
-                            
+                            }
+
                             Divider()
                             
                             // App Version and Legal
@@ -311,6 +345,41 @@ struct HelpAboutView: View {
         }
     
     
+    /// F-35(a): the non-interactive stand-in a child session sees instead of a
+    /// mailto/App Store exit. Same visual chrome as the buttons it replaces; the
+    /// guidance lives in the subtitle so it is always visible, and the row carries
+    /// no button traits — there is nothing to activate.
+    private func childGateRow(icon: String, title: String, subtitle: String) -> some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundStyle(Color.Theme.softBrown)
+                .frame(width: 24)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(.body, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(Color.Theme.softBrown)
+
+                Text(subtitle)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Color.Theme.cardBackground)
+        )
+        .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
+        .accessibilityElement(children: .combine)
+    }
+
     private func sendEmail(to email: String, subject: String) {
         let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
         if let url = URL(string: "mailto:\(email)?subject=\(encodedSubject)") {
@@ -1046,6 +1115,12 @@ struct PrivacyView: View {
     NavigationStack {
         HelpAboutView()
     }
+}
+
+// F-35(a): the shared coordinator's fail-closed default posture is `.unresolved`,
+// which suppresses unmanaged exits — so a plain preview renders the child-gated rows.
+#Preview("Help & About — child session") {
+    HelpAboutView()
 }
 
 #Preview("Acknowledgements") {

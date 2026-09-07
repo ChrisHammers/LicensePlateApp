@@ -119,4 +119,35 @@ struct AccountStateAndSavedTripAccessPolicyTests {
     @Test func guestContinuationCreatesFreshSessionOnlyWhenSignedIn() {
         #expect(GuestContinuationPolicy.shouldCreateFreshAnonymousSession(accountState: .signedIn))
     }
+
+    // F-35(c): the locked saved-trips row's message variant. The child check must win
+    // over the anonymous check — a `.ratchetedAnonymous` session is both at once.
+    @Test func childGateWinsEvenWhenAlsoAnonymous() {
+        #expect(
+            SavedTripLimitMessagePolicy.variant(
+                purchasesSuppressed: true, isAnonymous: true, hiddenCount: 4
+            ) == .childGate
+        )
+        #expect(
+            SavedTripLimitMessagePolicy.variant(
+                purchasesSuppressed: true, isAnonymous: false, hiddenCount: 4
+            ) == .childGate
+        )
+    }
+
+    @Test func anonymousAdultGetsSignUpUpsell() {
+        #expect(
+            SavedTripLimitMessagePolicy.variant(
+                purchasesSuppressed: false, isAnonymous: true, hiddenCount: 2
+            ) == .signUpUpsell(hiddenCount: 2)
+        )
+    }
+
+    @Test func registeredAdultGetsUpgradeUpsell() {
+        #expect(
+            SavedTripLimitMessagePolicy.variant(
+                purchasesSuppressed: false, isAnonymous: false, hiddenCount: 7
+            ) == .upgradeUpsell(hiddenCount: 7)
+        )
+    }
 }

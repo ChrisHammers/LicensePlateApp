@@ -1472,6 +1472,15 @@
 "child_gate.premium.intro_body" = "Premium unlocks more active trips, more saved trips, and special avatars.";
 "child_gate.premium.avatar_inline" = "Upgrades are handled by your parent or family captain. If your captain has Gold or Royale, these avatars unlock for you automatically.";
 "child_gate.saved_trips.body" = "Your account shows a set number of saved trips. Older trips are hidden, not deleted.";
+/* F-35: child-session gates on unmanaged exits (Help & About, saved-trip row hint, trip-summary share) */
+"help_about.child_gate.contact_support" = "Ask a parent to contact support.";
+"help_about.child_gate.rate_app" = "Ask a parent to rate the app.";
+"savedTrips.a11yHint.childGate" = "Shows why older saved trips are hidden.";
+"trip_summary.share.child_save.a11y_hint" = "Saves this trip card to your Photos";
+"trip_summary.share.child_save.saved_title" = "Saved to Photos";
+"trip_summary.share.child_save.saved_message" = "Your trip card is in your Photos. Ask a parent if you want to send it to someone.";
+"trip_summary.share.child_save.failed_title" = "Couldn't save";
+"trip_summary.share.child_save.failed_message" = "Ask a parent to allow Photos access for RoadTrip Royale in Settings.";
 
 // COPPA F-8 — Family child management & parent rights (FR-1/2/5/20-22/25/29/30/31)
 // The guardian affirmation below is CONSENT EVIDENCE. Any wording change in ANY locale

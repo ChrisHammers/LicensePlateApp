@@ -1441,6 +1441,15 @@
 "child_gate.premium.intro_body" = "Premium desbloquea más viajes activos, más viajes guardados y avatares especiales.";
 "child_gate.premium.avatar_inline" = "Las mejoras las maneja tu papá, tu mamá o el capitán de tu familia. Si tu capitán tiene Gold o Royale, estos avatares se desbloquean automáticamente para ti.";
 "child_gate.saved_trips.body" = "Tu cuenta muestra una cantidad fija de viajes guardados. Los viajes más antiguos se ocultan, no se eliminan.";
+/* F-35: child-session gates on unmanaged exits (Help & About, saved-trip row hint, trip-summary share) */
+"help_about.child_gate.contact_support" = "Pídele a tu papá o mamá que contacte a soporte.";
+"help_about.child_gate.rate_app" = "Pídele a tu papá o mamá que califique la app.";
+"savedTrips.a11yHint.childGate" = "Muestra por qué se ocultan los viajes guardados anteriores.";
+"trip_summary.share.child_save.a11y_hint" = "Guarda esta tarjeta del viaje en tus Fotos";
+"trip_summary.share.child_save.saved_title" = "Guardado en Fotos";
+"trip_summary.share.child_save.saved_message" = "Tu tarjeta del viaje está en tus Fotos. Pídele a tu papá o mamá si quieres enviársela a alguien.";
+"trip_summary.share.child_save.failed_title" = "No se pudo guardar";
+"trip_summary.share.child_save.failed_message" = "Pídele a tu papá o mamá que permita el acceso a Fotos para RoadTrip Royale en Configuración.";
 
 // COPPA F-8 — Gestión de cuentas infantiles y derechos de los padres (FR-1/2/5/20-22/25/29/30/31)
 // La afirmación del tutor es EVIDENCIA DE CONSENTIMIENTO. Cualquier cambio de texto en

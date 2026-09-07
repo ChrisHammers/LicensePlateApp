@@ -115,6 +115,17 @@ extension ChildSessionPosture {
     var suppressesPurchases: Bool {
         self != .confirmedNonChild
     }
+
+    /// FR-79 (F-35): every posture except a fresh-confirmed adult loses the app's
+    /// unmanaged contact and commercial exits — Help & About's support `mailto:`/
+    /// rate-app rows, the review-prompt request, and the trip-share action. Same
+    /// asymmetric trust as ads and purchases (FR-19): a session that has not proven it
+    /// is an adult does not get an unsupervised door out of the app. Explicitly
+    /// `nonisolated`: this is a pure value-type predicate with no MainActor state, and
+    /// the module's default actor isolation is MainActor.
+    nonisolated var suppressesUnmanagedExits: Bool {
+        self != .confirmedNonChild
+    }
 }
 
 /// Inputs snapshot for posture derivation. Pure and synchronous so the matrix is
@@ -552,6 +563,9 @@ final class ChildSessionPostureCoordinator: ObservableObject {
     /// `ChildLocationTrustPolicy`.
     var isAdDisplayEligible: Bool { currentPosture.isAdDisplayEligible }
     var arePurchasesSuppressed: Bool { currentPosture.suppressesPurchases }
+    /// FR-79 (F-35): Help & About's contact/rate-app rows, the review-prompt request,
+    /// and the trip-share action all read this one projection.
+    var suppressesUnmanagedExits: Bool { currentPosture.suppressesUnmanagedExits }
 
     /// Posture-scoped location hold (FR-75c), narrowed by OD-8's trusted-adult-cache
     /// branch. Views that replace their location toggles read this.

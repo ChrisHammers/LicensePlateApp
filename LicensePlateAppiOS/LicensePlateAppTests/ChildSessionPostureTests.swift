@@ -190,6 +190,16 @@ struct ChildSessionPosturePolicyTests {
         #expect(adult.forcesLocationOff == false)
         #expect(adult.suppressesPurchases == false)
     }
+
+    /// FR-79 (F-35): Help & About's contact/rate-app rows, the review prompt, and the
+    /// trip-share action get the SAME asymmetric trust as ads and purchases — only a
+    /// fresh-confirmed adult keeps an unmanaged exit out of the app.
+    @Test func onlyConfirmedNonChildKeepsUnmanagedExits() {
+        for posture in [ChildSessionPosture.childDirected, .ratchetedAnonymous, .unresolved] {
+            #expect(posture.suppressesUnmanagedExits == true, "\(posture.rawValue) must suppress unmanaged exits")
+        }
+        #expect(ChildSessionPosture.confirmedNonChild.suppressesUnmanagedExits == false)
+    }
 }
 
 // MARK: - Location trust (FR-75 amendment, owner decision OD-8)

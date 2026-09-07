@@ -205,14 +205,21 @@ struct TravelLogView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Older saved trips are locked".localized)
         .accessibilityValue(savedTripLimitMessage)
-        .accessibilityHint("Shows upgrade options for older saved trips".localized)
+        .accessibilityHint(savedTripLimitVariant.localizedAccessibilityHint)
+    }
+
+    // F-35(c): one policy decides the row's message and its accessibility hint,
+    // so a child session can never see purchase copy in either channel.
+    private var savedTripLimitVariant: SavedTripLimitMessagePolicy {
+        SavedTripLimitMessagePolicy.variant(
+            purchasesSuppressed: childPostures.arePurchasesSuppressed,
+            isAnonymous: viewModel.isCurrentUserAnonymous,
+            hiddenCount: viewModel.hiddenSavedTripCount
+        )
     }
 
     private var savedTripLimitMessage: String {
-        if viewModel.isCurrentUserAnonymous {
-            return "savedTrips.hiddenCount.signUp".localized(viewModel.hiddenSavedTripCount)
-        }
-        return "savedTrips.hiddenCount.upgrade".localized(viewModel.hiddenSavedTripCount)
+        savedTripLimitVariant.localizedMessage
     }
 
     private func accessibilityLabel(for entry: TravelLogEntry) -> String {

@@ -7,6 +7,7 @@
 
 import SwiftUI
 import MapKit
+import Photos
 import UIKit
 
 struct TripSummaryView: View {
@@ -19,6 +20,11 @@ struct TripSummaryView: View {
     @State private var participantDisplayNames: [String: String] = [:]
     @State private var showAllDiscoveryHighlights = false
     @State private var isPreparingShare = false
+    /// F-35(d) (owner-ruled 2026-09-01): a child session's share tap saves the card
+    /// to Photos instead of opening the share sheet — the child keeps the card, the
+    /// session never leaves the app.
+    @State private var showsChildShareSaved = false
+    @State private var showsChildShareSaveFailed = false
 
     /// FR-101(a) (v4 F-61): the child-restriction signal for the route section's
     /// STRUCTURAL gate — same live projection the FR-75a resolver reads.
@@ -80,25 +86,99 @@ struct TripSummaryView: View {
             if onShare != nil {
                 ToolbarItem(placement: .primaryAction) {
                     Button {
-                        shareTripSummary()
+                        handleShareButtonTap()
                     } label: {
                         Image(systemName: "square.and.arrow.up")
                     }
                     .disabled(isPreparingShare)
                     .foregroundStyle(Color.Theme.primaryBlue)
                     .accessibilityLabel("trip_summary.share.a11y_label".localized)
-                    .accessibilityHint("trip_summary.share.a11y_hint".localized)
+                    .accessibilityHint(
+                        childPostures.suppressesUnmanagedExits
+                            ? "trip_summary.share.child_save.a11y_hint".localized
+                            : "trip_summary.share.a11y_hint".localized
+                    )
                 }
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Trip summary".localized)
+        // F-35(d), owner-ruled 2026-09-01: a child session's share saves the card to
+        // Photos and never opens the share sheet (FR-100 owns what the card contains —
+        // it is already PI-free; this owns where a child session can send it: nowhere
+        // outside the device). The share sheet cannot be reliably restricted to
+        // Save Image only — its exclusion list cannot name third-party extensions —
+        // so the child path calls the Photos add-only API directly instead.
+        .alert(
+            "trip_summary.share.child_save.saved_title".localized,
+            isPresented: $showsChildShareSaved
+        ) {
+            Button("OK".localized, role: .cancel) {}
+        } message: {
+            Text("trip_summary.share.child_save.saved_message".localized)
+        }
+        .alert(
+            "trip_summary.share.child_save.failed_title".localized,
+            isPresented: $showsChildShareSaveFailed
+        ) {
+            Button("OK".localized, role: .cancel) {}
+        } message: {
+            Text("trip_summary.share.child_save.failed_message".localized)
+        }
         .task { await loadParticipantDisplayNames() }
+    }
+
+    private func handleShareButtonTap() {
+        FeedbackService.shared.buttonTap()
+        guard !childPostures.suppressesUnmanagedExits else {
+            saveCardToPhotosForChildSession()
+            return
+        }
+        shareTripSummary()
+    }
+
+    /// F-35(d): the child-session share path. Renders the SAME card the adult flow
+    /// renders (`.export` identity strictness, no location) and writes it to the photo
+    /// library with ADD-ONLY access — the app can save the card but read nothing back,
+    /// and the session never leaves the app. Silent analytics-wise (FR-21: no event
+    /// that fires only for child sessions).
+    private func saveCardToPhotosForChildSession() {
+        guard !isPreparingShare else { return }
+        isPreparingShare = true
+        guard let image = TripSummaryShareImageRenderer.render(
+            summary: summary,
+            currentUserId: currentUserId,
+            participantDisplayNames: participantDisplayNames
+        ) else {
+            isPreparingShare = false
+            showsChildShareSaveFailed = true
+            return
+        }
+        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+            guard status == .authorized || status == .limited else {
+                Task { @MainActor in
+                    isPreparingShare = false
+                    showsChildShareSaveFailed = true
+                }
+                return
+            }
+            PHPhotoLibrary.shared().performChanges({
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            }) { success, _ in
+                Task { @MainActor in
+                    isPreparingShare = false
+                    if success {
+                        showsChildShareSaved = true
+                    } else {
+                        showsChildShareSaveFailed = true
+                    }
+                }
+            }
+        }
     }
 
     private func shareTripSummary() {
         guard !isPreparingShare else { return }
-        FeedbackService.shared.buttonTap()
         isPreparingShare = true
         defer { isPreparingShare = false }
         guard let image = TripSummaryShareImageRenderer.render(
@@ -641,6 +721,20 @@ struct TripSummaryView: View {
 #Preview("Solo summary") {
     NavigationStack {
         TripSummaryView(summary: PreviewSummaryFixtures.tripSummarySolo(), currentUserId: nil, onDismiss: nil)
+    }
+}
+
+// F-35(d): the coordinator's fail-closed default posture (`.unresolved`) suppresses
+// unmanaged exits, so this preview's share button takes the save-to-Photos path.
+// Existing previews never pass `onShare`, so none exercised the button at all.
+#Preview("Solo summary — share, child session") {
+    NavigationStack {
+        TripSummaryView(
+            summary: PreviewSummaryFixtures.tripSummarySolo(),
+            currentUserId: nil,
+            onShare: { _ in },
+            onDismiss: nil
+        )
     }
 }
 
