@@ -31,6 +31,16 @@ enum AgeGateStoreKeys {
     /// history — deliberately NOT cleared by `clearAnswer()` or a correction, because the
     /// inputs that produced it are discarded and can never be backfilled.
     static let ageOutYearMonth = "ageGate.ageOutYearMonth"
+    /// FR-74 (F-30) retry-deterrence marker: the instant an under-13 answer's cooldown
+    /// lapses, as `timeIntervalSince1970`. Armed by `clearAnswer()` when the answer it
+    /// ends was `under13` — i.e. an under-13 answer leaves protective residue behind on
+    /// the DEVICE even after the epoch that gave it is over.
+    ///
+    /// Placement is deliberate (SRS v3.1 note): this is NOT a fourth ad-hoc device store.
+    /// It lives in `AgeGateStore`'s existing key family beside the epoch answer, the
+    /// declared-uid history and the detached-uid ratchet, so the whole precedence surface
+    /// stays one document. Device-local, never synced, never written to Firestore.
+    static let under13CooldownUntil = "ageGate.under13CooldownUntil"
 }
 
 /// UserDefaults-backed age-gate state (no SwiftData; follows `FirstSessionState` idiom).
@@ -110,6 +120,32 @@ final class AgeGateStore: ObservableObject {
     /// True once the neutral age screen has been answered on this device.
     var isResolved: Bool {
         category != nil
+    }
+
+    // MARK: - FR-74 retry deterrence (F-30)
+
+    /// The instant this device's under-13 retry cooldown lapses, or `nil` when no
+    /// under-13 answer has ever been ended here. See `AgeGateRetryCooldownPolicy`.
+    var under13CooldownUntil: Date? {
+        let interval = defaults.double(forKey: AgeGateStoreKeys.under13CooldownUntil)
+        return interval > 0 ? Date(timeIntervalSince1970: interval) : nil
+    }
+
+    /// FR-74: whether the deterrence window is open right now. Time-bounded by
+    /// construction — an expired marker reads inactive without being rewritten, so an
+    /// offline device cannot be held past the window by a missed cleanup pass.
+    func isUnder13RetryCooldownActive(now: Date = .now) -> Bool {
+        AgeGateRetryCooldownPolicy.isCooldownActive(until: under13CooldownUntil, now: now)
+    }
+
+    /// FR-74(b): a 13+ answer given while the deterrence window is open. The account
+    /// still provisions; the SESSION posture is held at the `.ratchetedAnonymous`
+    /// equivalent until the window lapses (`ChildSessionPosturePolicy`).
+    func isUnder13RetryCooldownHeld(now: Date = .now) -> Bool {
+        AgeGateRetryCooldownPolicy.holdsSessionPosture(
+            category: category,
+            isCooldownActive: isUnder13RetryCooldownActive(now: now)
+        )
     }
 
     /// True while the CURRENT identity epoch carries an under-13 answer, i.e. every uid
@@ -375,10 +411,39 @@ final class AgeGateStore: ObservableObject {
     /// account. Dropping it at sign-out would leave a declared child account with no
     /// child evidence on the device and none on the server, and its next profile write
     /// would sail through as an adult.
-    func clearAnswer() {
+    ///
+    /// FR-74 (F-30): ending an `under13` answer ARMS the device retry-deterrence marker
+    /// (`ageGate.under13CooldownUntil`). That is the whole point of the requirement — an
+    /// under-13 answer must not be launderable by signing out and immediately re-answering
+    /// 13+, so some protective residue survives the epoch it was given in. The marker only
+    /// ever extends (`AgeGateRetryCooldownPolicy.cooldownDeadline`); a later `teenAdult`
+    /// clear can neither shorten nor erase it.
+    func clearAnswer(now: Date = .now) {
+        let endedCategory = category
         defaults.removeObject(forKey: AgeGateStoreKeys.category)
         defaults.removeObject(forKey: AgeGateStoreKeys.answeredAt)
         defaults.removeObject(forKey: AgeGateStoreKeys.pendingChildDeclaration)
+        if let deadline = AgeGateRetryCooldownPolicy.cooldownDeadline(
+            clearedCategory: endedCategory,
+            existingDeadline: under13CooldownUntil,
+            now: now
+        ) {
+            defaults.set(deadline.timeIntervalSince1970, forKey: AgeGateStoreKeys.under13CooldownUntil)
+        }
+        revision += 1
+    }
+
+    /// FR-74: the deterrence marker lifts under the existing FR-39 correction valve
+    /// conditions as well — a manager-authorized correction that retires the device's
+    /// whole child lineage has more authority than a retry-deterrence timer, and leaving
+    /// the marker armed would keep restricting a device the correction just cleared.
+    ///
+    /// Called ONLY from the correction path (`ChildDeviceCorrectionPolicy.liftsDeviceMarkers`
+    /// ⇒ `liftDeviceChildMarkers`). Nothing else may clear it: a self-service clear would
+    /// hand the child exactly the escape the marker exists to close.
+    func clearUnder13RetryCooldownAfterCorrection() {
+        guard under13CooldownUntil != nil else { return }
+        defaults.removeObject(forKey: AgeGateStoreKeys.under13CooldownUntil)
         revision += 1
     }
 }
@@ -439,6 +504,166 @@ enum GuestProvisioningPolicy {
     /// Whether the current session must pass the age screen before guest provisioning.
     static func requiresAgeGate(hasFirebaseUid: Bool, isResolved: Bool) -> Bool {
         !hasFirebaseUid && !isResolved
+    }
+}
+
+// MARK: - FR-74 (F-30): age-gate retry deterrence
+
+/// **An under-13 answer cannot be laundered through sign-out.**
+///
+/// §16's "answer-shopping" row closed re-answering on the SAME identity (`recordAnswer`
+/// refuses to overwrite `under13` with `teenAdult`), and FR-39's device ratchet closed the
+/// anonymous rebirth. What both left open — R-11, amended into this FR — is sign-out
+/// followed by a fresh *registration*: a registered sign-in is exempt from the ratchet by
+/// design, so a truthful under-13 answer left no residue against an immediate retry.
+///
+/// The residue is one device-local deadline. Ending an `under13` answer arms it
+/// (`AgeGateStore.clearAnswer`); while it is armed:
+///
+///  * **(a) re-answering under-13 → the normal child flow, always allowed.** Nothing here
+///    can ever refuse a child; the protective answer is never the one being deterred.
+///  * **(b) answering 13+ → the account still provisions, but the SESSION is held** at the
+///    `.ratchetedAnonymous` equivalent (no ads, no analytics, no location, no purchases,
+///    no RevenueCat) until the deadline passes, then normal on the next resolution.
+///
+/// Fail-closed for the child-retry case, and it only ever DELAYS a genuine adult on a
+/// shared device — they play immediately, restricted, and are unrestricted after OD-5's
+/// window. Device-local, never synced.
+enum AgeGateRetryCooldownPolicy {
+    /// OD-5 (owner, defaults acceptable): 24 hours.
+    nonisolated static let defaultDuration: TimeInterval = 24 * 60 * 60
+
+    /// The marker to persist when an epoch answer ends.
+    ///
+    /// Two rules, both load-bearing:
+    ///  * only an `under13` answer arms anything — ending a `teenAdult` answer has no
+    ///    protective residue to leave;
+    ///  * the deadline only ever EXTENDS. A later `teenAdult` clear (sign-out from the very
+    ///    session the hold is restricting) must not be able to shorten or erase a live
+    ///    window, or the hold would be escapable by signing out twice.
+    nonisolated static func cooldownDeadline(
+        clearedCategory: AgeGateCategory?,
+        existingDeadline: Date?,
+        now: Date,
+        duration: TimeInterval = defaultDuration
+    ) -> Date? {
+        guard clearedCategory == .under13 else { return existingDeadline }
+        let armed = now.addingTimeInterval(duration)
+        guard let existingDeadline else { return armed }
+        return max(existingDeadline, armed)
+    }
+
+    /// Strictly time-bounded: an elapsed deadline is inactive without anything having to
+    /// run to retire it, so a device that was offline (or never relaunched) through the
+    /// window is not held a moment longer than the window.
+    nonisolated static func isCooldownActive(until: Date?, now: Date) -> Bool {
+        guard let until else { return false }
+        return until > now
+    }
+
+    /// FR-74(b), stated exactly: the hold attaches to a 13+ ANSWER given inside the
+    /// window, not to the device and not to an identity.
+    ///
+    /// An `under13` answer is NOT held here — it is `.childDirected` by its own evidence,
+    /// which is strictly stronger; and an UNANSWERED epoch is not held here either, because
+    /// it has nothing to be trusted about yet and FR-19/FR-39 already keep it `.unresolved`
+    /// or `.ratchetedAnonymous`. Sign-IN is untouched (D-17: sign-in never asks), so a
+    /// session that gave no answer is not restricted by this rule.
+    nonisolated static func holdsSessionPosture(
+        category: AgeGateCategory?,
+        isCooldownActive: Bool
+    ) -> Bool {
+        isCooldownActive && category == .teenAdult
+    }
+}
+
+// MARK: - FR-74(a′) / OD-9: account provenance as age evidence
+
+/// OD-9 (owner, 2026-08-14): *"Guest accounts ARE in the cloud, only children accounts are
+/// local… No one should ever be in an unresolved state other than kids' accounts."*
+///
+/// Under FR-60 the act of PROVISIONING is itself the age evidence: an under-13 epoch cannot
+/// mint a cloud account except through the declare-first redemption path, which sets
+/// `isChildAccount = true` BEFORE the first profile write (and holds that write when the
+/// declaration fails, so no flagless child document can exist). Therefore a **flagless
+/// `users/{uid}` document structurally means "born from a 13+ answer."**
+///
+/// So a fresh, ingest-gated server read of an EXISTING self document satisfies the epoch
+/// half of the age test in place of the device answer — which is what un-bricks the
+/// keychain-restored guest whose UserDefaults a reinstall wiped (ads, purchases, location).
+///
+/// STRICT SCOPE, per OD-8's resolution note: read-provenance answers the epoch/location
+/// trust question ONLY. The FR-39 device-marker CORRECTION path still demands a literal
+/// server-written `false` (`ChildDeviceCorrectionPolicy`), because there an absent key
+/// genuinely is absence of evidence and trusting it would erase a real child's protections
+/// irreversibly. Do not widen this into that path.
+///
+/// Accepted residuals (OD-9(v)): an offline reinstalled guest holds until first
+/// connectivity, and a tampered client minting a flagless document is equivalent to lying
+/// at the neutral screen.
+enum AgeGateAccountProvenancePolicy {
+    /// - Parameter freshChildAccountResolution: `UserRepository.isChildAccount(for:)` for
+    ///   the CURRENT auth uid. Its tri-state is exactly the signal this needs: an entry
+    ///   exists only when THIS session read `users/{uid}` from the server, ungated by cache
+    ///   or pending writes (`ChildFlagIngestPolicy`), AND the document existed — every
+    ///   ingest site skips an absent document. `nil` therefore means "no such evidence",
+    ///   never "adult".
+    /// - Parameter isRetryCooldownActive: FR-74 wins over OD-9 where they meet. A device
+    ///   inside the deterrence window has child history by definition, and OD-9(iv) is
+    ///   explicit that device child history overrides in all cases — so provenance may not
+    ///   resolve an epoch there.
+    nonisolated static func resolvesEpoch(
+        freshChildAccountResolution: Bool?,
+        isRetryCooldownActive: Bool = false
+    ) -> Bool {
+        guard !isRetryCooldownActive else { return false }
+        return freshChildAccountResolution != nil
+    }
+}
+
+// MARK: - FR-74(b′) / OD-9(ii): the immediate rebirth ask
+
+/// *"A session must never reach gameplay UI age-unasked."*
+///
+/// D-17's incident was not that the age question was asked — it was that it was asked
+/// 10–20 seconds late, after gameplay UI had already rendered. OD-9(ii) settles it: a
+/// post-sign-out rebirth (a NEW guest with genuinely no information) is asked **at session
+/// start, before the first interactive frame**, and that boundary is the sanctioned one.
+///
+/// D-17's no-mid-session-prompt rule is untouched and is why the caller must evaluate this
+/// ONCE per process, at the splash→root transition. A hard sign-out that happens mid-session
+/// must NOT raise this screen under the player's hands; that rebirth stays a restricted
+/// local guest (option B) until the next launch, which is where this fires.
+enum AgeGateSessionStartPolicy {
+    /// - Parameters:
+    ///   - hasCompletedOnboarding: before onboarding completes, the in-flow asks own the
+    ///     question (quick-start's play tap, legacy onboarding's `.ageVerification`,
+    ///     sign-up's in-form ask). This gate exists only for sessions that would otherwise
+    ///     go straight to gameplay.
+    ///   - hasProvisionedIdentity / hasLiveAuthSession: OD-9's own discriminator between its
+    ///     two halves. A session that HOLDS an identity is (i) — the keychain-restored guest
+    ///     — and resolves through `AgeGateAccountProvenancePolicy` on its first server read,
+    ///     or holds until connectivity (OD-9(v)); asking it would contradict that and would
+    ///     also drop an under-13 answer onto a restored identity (`RestoredIdentityAgeAnswerPolicy`,
+    ///     SRS §3.1.1 items 6/8). Only a session with NO uid and NO Auth session is (ii)'s
+    ///     "genuinely no information" rebirth.
+    ///   - isRegisteredIdentity: defence in depth. FR-27/D-17 forbid the age answer touching
+    ///     a registered account at all; a soft sign-out leaves credentials on the row.
+    ///   - hasDeviceChildHistory: OD-9(iv) — device child history overrides in all cases.
+    ///     Those devices route through FR-74's cooldown, **never a clean re-ask**.
+    nonisolated static func requiresImmediateAsk(
+        hasCompletedOnboarding: Bool,
+        isAgeAnswered: Bool,
+        hasProvisionedIdentity: Bool,
+        hasLiveAuthSession: Bool,
+        isRegisteredIdentity: Bool,
+        hasDeviceChildHistory: Bool
+    ) -> Bool {
+        guard hasCompletedOnboarding else { return false }
+        guard !isAgeAnswered else { return false }
+        guard !hasProvisionedIdentity, !hasLiveAuthSession else { return false }
+        guard !isRegisteredIdentity else { return false }
+        return !hasDeviceChildHistory
     }
 }
 

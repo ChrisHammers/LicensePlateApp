@@ -1049,9 +1049,22 @@ struct ChildAccountCreationGuidanceView: View {
                         .foregroundStyle(Color.Theme.primaryBlue)
                 }
                 .padding(.top, 4)
-                .padding(.bottom, 32)
+
+                // FR-74(c′), owner-ruled 2026-09-07: the mis-answer recovery is INFORMATION,
+                // not a control. A reinstall already clears every device marker for anyone,
+                // so telling the mistaken adult so hands a child nothing new — and there is
+                // no in-app re-ask left to deter. Quiet and last, on purpose.
+                Text("child_gate.signup.wrong_birthday_info".localized)
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundStyle(Color.Theme.softBrown)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .supportsDynamicType()
+                    .padding(.horizontal, 24)
+                    .padding(.top, 12)
             }
             .frame(maxWidth: .infinity)
+            .padding(.bottom, 32)
         }
         .sheet(isPresented: $showJoinFamilySheet) {
             JoinFamilySheet()
@@ -1122,3 +1135,4 @@ struct OAuthButton: View {
     .environment(\.dynamicTypeSize, .accessibility2)
     .environmentObject(FirebaseAuthService())
 }
+

@@ -62,11 +62,21 @@ enum DeferredSDKStartupPolicy {
     /// Neither half implies the other. A ratcheted-anonymous session (FR-39) has a
     /// posture but no age answer; a signed-in session can have an age answer while its
     /// `users/{uid}` read is still outstanding.
+    /// FR-74(a′) / OD-9 amends the FIRST half only: **account provenance stands in for the
+    /// device epoch answer.** A keychain-restored guest's UserDefaults died with the
+    /// reinstall while their cloud account did not, and under FR-60 that account's mere
+    /// existence is age evidence (`AgeGateAccountProvenancePolicy`). Without this the
+    /// restored guest is age-unresolved forever and every deferred SDK stays held — the
+    /// "permanent no-ads install" consequence OD-9 explicitly supersedes.
+    ///
+    /// The SECOND half is untouched: `.unresolved` still blocks, so provenance can never
+    /// start an SDK for a session whose child signal has not landed.
     static func isAgeResolutionComplete(
         isAgeGateResolved: Bool,
+        hasAccountProvenance: Bool = false,
         posture: ChildSessionPosture
     ) -> Bool {
-        isAgeGateResolved && posture != .unresolved
+        (isAgeGateResolved || hasAccountProvenance) && posture != .unresolved
     }
 
     /// The gate is retractable, not a latch: sign-out clears the epoch answer (F-6), so
@@ -75,11 +85,26 @@ enum DeferredSDKStartupPolicy {
     /// previous account's open gate.
     static func plan(
         isAgeGateResolved: Bool,
+        hasAccountProvenance: Bool = false,
+        isUnder13RetryCooldownHeld: Bool = false,
         posture: ChildSessionPosture,
         isFirebaseConfigured: Bool,
         hasPurchasesAPIKey: Bool
     ) -> DeferredSDKStartupPlan {
-        guard isAgeResolutionComplete(isAgeGateResolved: isAgeGateResolved, posture: posture) else {
+        // FR-74(b) (F-30): a 13+ answer inside the under-13 deterrence window is "held at
+        // the `.ratchetedAnonymous` equivalent — no ads, no analytics, no location, no
+        // purchases, no RevenueCat". The posture alone gets four of the five (ads and
+        // purchases via `isAdDisplayEligible`/`suppressesPurchases`, location via
+        // `forcesLocationOff`), but NOT analytics collection: a genuine
+        // `.ratchetedAnonymous` session is age-UNRESOLVED, which is what keeps its
+        // collection off today, and the held session has an answer. Deferring everything
+        // is what makes "equivalent" literally true rather than nearly true.
+        guard !isUnder13RetryCooldownHeld else { return .allDeferred }
+        guard isAgeResolutionComplete(
+            isAgeGateResolved: isAgeGateResolved,
+            hasAccountProvenance: hasAccountProvenance,
+            posture: posture
+        ) else {
             return .allDeferred
         }
         return DeferredSDKStartupPlan(
@@ -114,6 +139,13 @@ final class DeferredSDKStartupService {
         var isAgeGateResolved: () -> Bool
         var hasPurchasesAPIKey: () -> Bool
         var currentAuthUserId: () -> String?
+        /// FR-74(a′) / OD-9. Derived through the SAME pure policy the posture routine
+        /// uses (`AgeGateAccountProvenancePolicy`), so "what counts as provenance" has
+        /// exactly one definition. Fail-closed default for unwired harnesses.
+        var hasAccountProvenance: () -> Bool = { false }
+        /// FR-74(b): the retry-deterrence hold. Fail-open default (`false` = not held) —
+        /// an unwired harness must not manufacture a restriction no device state supports.
+        var isUnder13RetryCooldownHeld: () -> Bool = { false }
         var setMessagingAutoInitEnabled: (Bool) -> Void
         var configureMessaging: () -> Void
         var setAnalyticsCollectionEnabled: (Bool) -> Void
@@ -128,6 +160,14 @@ final class DeferredSDKStartupService {
                 isAgeGateResolved: { AgeGateStore.shared.isResolved },
                 hasPurchasesAPIKey: { RevenueCatEntitlementBridge.shared.hasAPIKey },
                 currentAuthUserId: { Auth.auth().currentUser?.uid },
+                hasAccountProvenance: {
+                    guard let uid = Auth.auth().currentUser?.uid, !uid.isEmpty else { return false }
+                    return AgeGateAccountProvenancePolicy.resolvesEpoch(
+                        freshChildAccountResolution: UserRepository.shared.isChildAccount(for: uid),
+                        isRetryCooldownActive: AgeGateStore.shared.isUnder13RetryCooldownActive()
+                    )
+                },
+                isUnder13RetryCooldownHeld: { AgeGateStore.shared.isUnder13RetryCooldownHeld() },
                 setMessagingAutoInitEnabled: {
                     FirebaseMessagingService.shared.setAutoInitEnabled($0)
                 },
@@ -182,6 +222,8 @@ final class DeferredSDKStartupService {
         applyPlan(
             DeferredSDKStartupPolicy.plan(
                 isAgeGateResolved: deps.isAgeGateResolved(),
+                hasAccountProvenance: deps.hasAccountProvenance(),
+                isUnder13RetryCooldownHeld: deps.isUnder13RetryCooldownHeld(),
                 posture: posture,
                 isFirebaseConfigured: isFirebaseConfigured,
                 hasPurchasesAPIKey: deps.hasPurchasesAPIKey()

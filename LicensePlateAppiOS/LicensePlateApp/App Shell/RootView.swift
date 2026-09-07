@@ -21,11 +21,22 @@ struct RootView: View {
 
     @AppStorage("boundariesLoaded") private var boundariesLoaded = false
     @State private var showSoftUpdateSheet = false
+    /// COPPA F-30 (FR-74(b′) / OD-9(ii)): the session-start age ask, LATCHED.
+    ///
+    /// Decided exactly once, in `leaveSplashWhenReady`, and never re-derived — that is
+    /// what keeps D-17's no-mid-session-prompt rule intact. A hard sign-out or account
+    /// deletion mid-session ends the epoch answer, but the reborn guest stays a restricted
+    /// local guest for the rest of that session (option B) rather than having the age
+    /// screen appear under their hands; the next launch is where the ask happens.
+    @State private var requiresSessionStartAgeAsk = false
 
     private var deepLinkSheetBinding: Binding<DeepLinkDestination?> {
         Binding(
             get: {
                 guard appCoordinator.rootView == .main,
+                      // FR-74(b′): nothing interactive may render over an unanswered age
+                      // screen — a deep-linked family surface least of all.
+                      !requiresSessionStartAgeAsk,
                       authService.currentUser != nil else {
                     return nil
                 }
@@ -60,8 +71,28 @@ struct RootView: View {
                 )
                 .transition(.opacity)
             case .main:
-                ContentView(appCoordinator: appCoordinator)
+                if requiresSessionStartAgeAsk {
+                    // COPPA F-30 (FR-74(b′) / OD-9(ii)): a post-sign-out rebirth with
+                    // genuinely no information is asked BEFORE the first interactive
+                    // frame — "a session must never reach gameplay UI age-unasked".
+                    // Rendering only; the decision was made by
+                    // `AgeGateSessionStartPolicy` at the splash transition.
+                    OnboardingContainerBackground {
+                        AgeGateView(source: .launch) {
+                            requiresSessionStartAgeAsk = false
+                            Task { @MainActor in
+                                // Same post-answer step the quick-start gate runs: an
+                                // adult answer provisions the deferred guest; an under-13
+                                // answer provisions nothing (FR-60 local-first).
+                                await authService.completeDeferredGuestProvisioningIfNeeded()
+                            }
+                        }
+                    }
                     .transition(.opacity)
+                } else {
+                    ContentView(appCoordinator: appCoordinator)
+                        .transition(.opacity)
+                }
             }
         }
         .animation(.easeInOut(duration: 0.3), value: appCoordinator.rootView)
@@ -360,6 +391,14 @@ struct RootView: View {
             appCoordinator.showForceUpdate()
             return
         }
+
+        // COPPA F-30 (FR-74(b′) / OD-9(ii)): decided HERE and only here — after
+        // `initializeAuthState` has settled the identity, and before the first
+        // interactive frame renders. Evaluating it anywhere reactive would turn a
+        // mid-session rebirth into the mid-session prompt D-17 forbids.
+        requiresSessionStartAgeAsk = authService.requiresSessionStartAgeAsk(
+            hasCompletedOnboarding: appCoordinator.hasSeenOnboarding
+        )
 
         appCoordinator.transitionFromSplash(quickSoloEnabled: remoteConfig.quickSoloFirstSessionEnabled)
         if appUpdateGate.shouldPresentSoftPrompt {

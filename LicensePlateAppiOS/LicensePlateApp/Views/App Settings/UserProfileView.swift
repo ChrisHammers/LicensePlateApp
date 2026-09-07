@@ -1300,6 +1300,14 @@ private struct ChildAccountSectionGuidance: View {
                     hint: "child_gate.screen.join_button_hint".localized
                 )
             }
+
+            // FR-74(c′), owner-ruled 2026-09-07: the mis-answer recovery is information,
+            // not a control — same line `ChildAccountCreationGuidanceView` shows. For a
+            // local child who answered at launch, this card is the only place they look.
+            Text("child_gate.signup.wrong_birthday_info".localized)
+                .font(.system(.caption, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .sheet(isPresented: $showJoinFamilySheet) {
             JoinFamilySheet()

@@ -1428,6 +1428,8 @@
 "child_gate.signup.body" = "You don't need an account. Your trips, plates and points are saved right here on this device. When you're ready to play with your family, ask a parent for a family share code.";
 "child_gate.signup.keep_playing" = "Keep Playing";
 "child_gate.signup.keep_playing_hint" = "Closes this screen and returns to the game";
+/* FR-74(c'), owner-ruled 2026-09-07: the mis-answer recovery is information, not a control. */
+"child_gate.signup.wrong_birthday_info" = "Picked the wrong birthday? Delete and reinstall the app to start over. Trips saved only on this device will be lost.";
 "child_gate.join.setup_incomplete" = "We couldn't finish setting that up. Please check your connection and try the code again.";
 "child_gate.screen.join_title" = "Join your family to play together";
 "child_gate.screen.join_body" = "Ask a parent to add you to their family with a share code. Family features unlock once you join.";

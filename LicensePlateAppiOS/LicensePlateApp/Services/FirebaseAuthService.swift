@@ -112,7 +112,43 @@ class FirebaseAuthService: ObservableObject {
             isResolved: AgeGateStore.shared.isResolved
         )
     }
-    
+
+    /// FR-74(b′) / OD-9(ii): whether THIS session must be asked the neutral age question
+    /// at session start, before the first interactive frame.
+    ///
+    /// D-17's incident was the 10–20-second LAZY ask, not the ask — a post-sign-out
+    /// rebirth reached gameplay UI age-unasked, and option B then left it that way for
+    /// the whole session. OD-9 supersedes that: the immediate ask at session start IS the
+    /// sanctioned boundary, and D-17's no-mid-session-prompt rule is preserved by WHERE
+    /// this is called, not by what it answers — `RootView` evaluates it exactly once, at
+    /// the splash→root transition. A hard sign-out mid-session must never raise the
+    /// screen under the player's hands.
+    ///
+    /// Every input is device-local and synchronous, so the answer is available before the
+    /// first frame with no network and no await.
+    func requiresSessionStartAgeAsk(hasCompletedOnboarding: Bool) -> Bool {
+        let store = AgeGateStore.shared
+        let cache = ChildSignalCache.shared
+        // OD-9(iv): "device child history overrides in all cases" — the same union
+        // `ChildLocationTrustPolicy.hasDeviceChildHistory` uses, plus FR-74's own marker,
+        // which is exactly the residue an under-13 answer leaves after its epoch ends.
+        let hasDeviceChildHistory = cache.isDeviceRatcheted
+            || cache.hasAnyCachedChildTrue
+            || store.hasDeclaredChildHistory
+            || store.hasOutstandingChildDeclaration
+            || store.isUnder13RetryCooldownActive()
+        return AgeGateSessionStartPolicy.requiresImmediateAsk(
+            hasCompletedOnboarding: hasCompletedOnboarding,
+            isAgeAnswered: store.isResolved,
+            hasProvisionedIdentity: currentUser?.firebaseUID != nil,
+            hasLiveAuthSession: auth.currentUser != nil,
+            isRegisteredIdentity: currentUser.map {
+                !$0.linkedPlatforms.isEmpty || $0.email != nil
+            } ?? false,
+            hasDeviceChildHistory: hasDeviceChildHistory
+        )
+    }
+
     init() {
         isNetworkReachable = networkMonitor.isConnected
         // Observe auth state changes

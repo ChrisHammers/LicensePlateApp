@@ -134,15 +134,35 @@ struct ChildSessionSignal: Equatable {
     /// F-6 age gate answered for this identity epoch.
     var isAgeResolved: Bool
     var isDeviceRatcheted: Bool
+    /// FR-74(b) (F-30): a 13+ answer given inside this device's under-13 retry-deterrence
+    /// window. `AgeGateStore.isUnder13RetryCooldownHeld`.
+    var isUnder13RetryCooldownHeld: Bool = false
+    /// FR-74(a′) / OD-9: this session made a fresh, ingest-gated SERVER read of an
+    /// EXISTING `users/{uid}` for the current identity, which under FR-60 is itself age
+    /// evidence. `AgeGateAccountProvenancePolicy.resolvesEpoch`.
+    var hasAccountProvenance: Bool = false
 }
 
 enum ChildSessionPosturePolicy {
     static func posture(for signal: ChildSessionSignal) -> ChildSessionPosture {
         // The child signal always wins, from any source (fail-closed, protective).
+        // FR-74(a) rides on this unchanged: re-answering under-13 during a cooldown is
+        // the normal child flow, always allowed — a protective answer is never deterred.
         if signal.freshIsChildAccount == true
             || signal.cachedIsChildAccount == true
             || signal.isDeclaredChildIdentity {
             return .childDirected
+        }
+        // FR-74(b) (F-30), and it must sit ABOVE the FR-39 branch below rather than
+        // inside it. R-11 amended FR-39 precisely because its ratchet exempts registered
+        // sign-ins, which left "sign out → fresh registration" as a clean escape from a
+        // truthful under-13 answer. The hold attaches to the 13+ ANSWER, so it reaches the
+        // registered account that answer went on to provision — that IS the amendment.
+        // Held at the `.ratchetedAnonymous` equivalent, not `.childDirected`: this session
+        // is not evidenced as a child, so it must not rewrite stored location preferences
+        // (`rewritesStoredLocationFlagsOff`, D-11) — it is merely not trusted yet.
+        if signal.isUnder13RetryCooldownHeld {
+            return .ratchetedAnonymous
         }
         // FR-39: the ratchet governs anonymous/signed-out sessions regardless of
         // their own doc; a registered (non-anonymous) sign-in is exempt.
@@ -151,9 +171,13 @@ enum ChildSessionPosturePolicy {
         }
         guard signal.hasCurrentUser else { return .unresolved }
         // Anonymous identities carry no registered credentials; their age truth is
-        // this device's gate answer. An unanswered epoch (e.g. keychain-restored
-        // guest after reinstall) stays held — child-equivalent (F-6 option B).
-        if signal.isAnonymousOrSignedOut, !signal.isAgeResolved {
+        // this device's gate answer — OR, per FR-74(a′)/OD-9, the provenance of the
+        // account they are already running on: a reinstall wipes the epoch answer while
+        // the Keychain restores the uid, and holding that guest forever was the
+        // "permanent no-ads install" consequence OD-9 supersedes. Provenance can only
+        // ever get the session PAST this hold; it never confers `.confirmedNonChild` on
+        // its own, because the line below still demands this session's fresh `false`.
+        if signal.isAnonymousOrSignedOut, !signal.isAgeResolved, !signal.hasAccountProvenance {
             return .unresolved
         }
         // FR-19 asymmetric trust: only this session's fresh read confirms not-child.
@@ -442,6 +466,15 @@ final class ChildSessionPostureCoordinator: ObservableObject {
         /// existing constructions stay source-compatible and an unwired harness cannot
         /// accidentally opt into the trusted branch.
         var isCachedChildFlagServerExplicit: (String) -> Bool = { _ in false }
+        /// FR-74(b) (F-30): a 13+ answer inside this device's under-13 retry-deterrence
+        /// window. Fail-OPEN default (`false` = not held) is correct here and is the only
+        /// safe direction for an unwired harness: the default must not manufacture a
+        /// restriction no device state supports. Real state comes from `AgeGateStore`.
+        var isUnder13RetryCooldownHeld: () -> Bool = { false }
+        /// FR-74 (F-30): whether this device's deterrence window is open at all,
+        /// independent of the current answer. Read by the OD-9 provenance branch, which
+        /// FR-74 outranks (OD-9(iv): device child history overrides in all cases).
+        var isUnder13RetryCooldownActive: () -> Bool = { false }
 
         @MainActor static func live() -> Dependencies {
             Dependencies(
@@ -490,6 +523,11 @@ final class ChildSessionPostureCoordinator: ObservableObject {
                 liftDeviceChildMarkers: {
                     ChildSignalCache.shared.disengageDeviceRatchet()
                     AgeGateStore.shared.clearUnder13AnswerAfterCorrection()
+                    // FR-74: "the marker … lifts under the existing FR-39 correction
+                    // valve conditions as well". A manager correction that retires the
+                    // device's whole child lineage outranks a retry-deterrence timer;
+                    // leaving it armed would keep restricting a corrected device.
+                    AgeGateStore.shared.clearUnder13RetryCooldownAfterCorrection()
                 },
                 applyChildDirectedTreatment: { AdMobService.shared.applyChildDirectedTreatment($0) },
                 setAdPersonalizationSignalsDisabled: {
@@ -497,7 +535,9 @@ final class ChildSessionPostureCoordinator: ObservableObject {
                 },
                 setLocationForcedOff: { LocationSettingsService.shared.setChildSessionForcedOff($0) },
                 releaseDeferredSDKStartups: { DeferredSDKStartupService.shared.apply(posture: $0) },
-                isCachedChildFlagServerExplicit: { ChildSignalCache.shared.isCachedValueServerExplicit(for: $0) }
+                isCachedChildFlagServerExplicit: { ChildSignalCache.shared.isCachedValueServerExplicit(for: $0) },
+                isUnder13RetryCooldownHeld: { AgeGateStore.shared.isUnder13RetryCooldownHeld() },
+                isUnder13RetryCooldownActive: { AgeGateStore.shared.isUnder13RetryCooldownActive() }
             )
         }
     }
@@ -621,6 +661,17 @@ final class ChildSessionPostureCoordinator: ObservableObject {
             deps.engageDeviceRatchet()
         }
 
+        // FR-74(a′) / OD-9: `fresh` is non-nil exactly when THIS session resolved
+        // `users/{uid}` from a server read that passed `ChildFlagIngestPolicy` AND the
+        // document existed — every ingest site skips an absent document. That is the
+        // "fresh server-resolved read of an existing users/{uid}" OD-9 names, and it is
+        // scoped to the CURRENT auth identity by construction (a detached uid has no auth
+        // session, so it never reaches here as `uid`).
+        let hasAccountProvenance = AgeGateAccountProvenancePolicy.resolvesEpoch(
+            freshChildAccountResolution: fresh,
+            isRetryCooldownActive: deps.isUnder13RetryCooldownActive()
+        )
+
         let posture = ChildSessionPosturePolicy.posture(for: ChildSessionSignal(
             hasCurrentUser: uid != nil,
             isAnonymousOrSignedOut: isAnonymousOrSignedOut || uid == nil,
@@ -628,7 +679,9 @@ final class ChildSessionPostureCoordinator: ObservableObject {
             cachedIsChildAccount: cached,
             isDeclaredChildIdentity: declared,
             isAgeResolved: deps.isAgeResolved(),
-            isDeviceRatcheted: deps.isDeviceRatcheted()
+            isDeviceRatcheted: deps.isDeviceRatcheted(),
+            isUnder13RetryCooldownHeld: deps.isUnder13RetryCooldownHeld(),
+            hasAccountProvenance: hasAccountProvenance
         ))
         let previous = currentPosture
 
