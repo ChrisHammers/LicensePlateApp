@@ -50,8 +50,8 @@ drift, the functions suite fails.
 | 8 | **Shared gameplay records** (trips, discoveries, scores involving other players) | The shared trip history belongs to every participant | Other participants' legitimate access to their own trip history | On account deletion, the departing player's identifying references are **de-identified in place** (tombstoned), never left keyed to the deleted account; the trip survives for the remaining participants | `deidentifyUserResidue` inside every deletion — ENFORCED |
 | 9 | **Third-party data (RevenueCat purchases)** | Subscription entitlement | None once the account is deleted | Vendor customer record deleted **in the same cascade** as account deletion | `executeAccountDeletionForUser` FR-78(a) phase — ENFORCED (inert until the production API key is provisioned; recorded no-op meanwhile) |
 | 10 | **Third-party data (Google Analytics)** | Aggregate product analytics | None per-user; no account identifier is ever sent (child sessions send nothing pre-consent) | Device-side analytics data **reset at account deletion**; server-side data ages out under Google's configured GA4 retention window | Client `resetAnalyticsData()` at deletion + GA4 retention setting — documented mechanism (FR-78(b) decision) |
-| 11 | **Inactive accounts** | Providing the service | Road-trip play is episodic by nature — a year between family trips is normal use, not abandonment — and a child's account holds their side of the family's shared trip history, with the parent's review and deletion rights live the entire time | **36 months** without authenticated activity, all ages (owner-decided 2026-08-30; a bounded window with a parent in control throughout is not indefinite retention) | ADOPTED — automated job ships with the remaining FR-77 work before launch |
-| 12 | **Location payloads on ended-trip events** (coarse find locations; adult accounts only — child events never carry location) | Showing where a discovery happened during the trip's life | The place-trail's value decays; the trip history itself (names, discoveries, scores) is the product's purpose and is retained with the account | Location keys stripped from events older than **36 months** (owner-decided 2026-08-30); gameplay bookkeeping untouched | ADOPTED — automated job ships with the remaining FR-77 work before launch |
+| 11 | **Inactive accounts** | Providing the service | Road-trip play is episodic by nature — a year between family trips is normal use, not abandonment — and a child's account holds their side of the family's shared trip history, with the parent's review and deletion rights live the entire time | **36 months** without authenticated activity, all ages (owner-decided 2026-08-30; a bounded window with a parent in control throughout is not indefinite retention) | `purgeInactiveAccounts` (nightly) — ENFORCED |
+| 12 | **Location payloads on ended-trip events** (coarse find locations; adult accounts only — child events never carry location) | Showing where a discovery happened during the trip's life | The place-trail's value decays; the trip history itself (names, discoveries, scores) is the product's purpose and is retained with the account | Location keys stripped from events older than **36 months** (owner-decided 2026-08-30); gameplay bookkeeping untouched | `ageEndedTripLocationPayloads` (nightly) — ENFORCED |
 
 Never-consented children who never enter a share code have **no server-side data at
 all** under the local-first model — there is nothing to schedule.
@@ -68,9 +68,12 @@ change.
 
 *Draft notes (strip before publication): row 12's window is owner-decided (36
 months, 2026-08-30 — deliberately long so it can be shortened later if it matters);
-row 11 is owner-decided too (36 months all ages, 2026-08-30, with the episodic-use rationale stated in the row). Both are adopted here as policy but
-not yet automated — their jobs are the remaining FR-77
-build items and must land before launch or these rows must be removed from the
-published text. Row 9's vendor deletion is live code behind an unprovisioned
-production API key (see `currentRevenueCatApiKey`). The parity test pins rows 1–5's
-numbers to the shipped constants; rows 11–12 join it when their constants exist.*
+row 11 is owner-decided too (36 months all ages, 2026-08-30, with the episodic-use
+rationale stated in the row). Both were adopted-but-unbuilt at first drafting;
+**both are now automated (2026-08-30) — `purgeInactiveAccounts` and
+`ageEndedTripLocationPayloads` in `functions/src/retention.ts`, backed by
+`inactiveAccountRetention.ts` and `locationPayloadAging.ts`** — so the launch
+condition they carried (build the jobs or delete the rows) is discharged. Row 9's
+vendor deletion is live code behind an unprovisioned production API key (see
+`currentRevenueCatApiKey`). The parity test pins rows 1–5 and 11–12 to the shipped
+constants.*

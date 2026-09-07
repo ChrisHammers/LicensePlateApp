@@ -4,6 +4,7 @@ import {
   sweepUnansweredJoinRequests,
   unansweredJoinRequestCutoffMillis,
 } from "./pendingJoinRequestExpiry";
+import { flipExpiredDocuments } from "./retentionCore";
 
 const db = admin.firestore();
 
@@ -50,6 +51,12 @@ const db = admin.firestore();
  * `pendingJoinRequestExpiry.ts` for why the redemption window is the wrong clock for a decision
  * awaiting a human. What it guarantees is that every pending row has exactly ONE owner of its
  * terminal state, so none is left orphaned by the invite sweep above.
+ *
+ * FR-77 (closes audit L-7), 2026-08-30: all three status flips now go through
+ * `flipExpiredDocuments`, so each is paged and bounded like every `retentionCore` sweep. They
+ * used to be unbounded `.get()`s staged into a single `WriteBatch` — which is capped at 500
+ * operations, so the 501st expired row would have thrown and wedged the whole pass. See that
+ * function for the self-quenching argument.
  */
 export const expireInvitesAndCodes = functions.pubsub
   .schedule("every 5 minutes")
@@ -59,52 +66,34 @@ export const expireInvitesAndCodes = functions.pubsub
     // Expire pending invites past expiresAt. Every invite type now carries a finite
     // expiry — friend invites included, see FRIEND_INVITE_EXPIRY_DAYS in retentionCore.ts
     // (FR-49b) — so this no longer filters by type.
-    const invitesSnapshot = await db
-      .collection("invites")
-      .where("status", "==", "pending")
-      .where("expiresAt", "<", now)
-      .get();
-
-    const inviteBatch = db.batch();
-    invitesSnapshot.forEach((doc) => {
-      inviteBatch.update(doc.ref, {
-        status: "expired",
-      });
+    const invitesResult = await flipExpiredDocuments(db, {
+      collection: "invites",
+      match: { field: "status", value: "pending" },
+      timestampField: "expiresAt",
+      cutoff: now,
+      update: { status: "expired" },
     });
-
-    await inviteBatch.commit();
 
     // Expire pending trip invites past expiresAt
-    const tripInvitesSnapshot = await db
-      .collection("trip_invites")
-      .where("status", "==", "pending")
-      .where("expiresAt", "<", now)
-      .get();
-
-    const tripInviteBatch = db.batch();
-    tripInvitesSnapshot.forEach((doc) => {
-      tripInviteBatch.update(doc.ref, {
+    const tripInvitesResult = await flipExpiredDocuments(db, {
+      collection: "trip_invites",
+      match: { field: "status", value: "pending" },
+      timestampField: "expiresAt",
+      cutoff: now,
+      update: {
         status: "expired",
         respondedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      },
     });
-    await tripInviteBatch.commit();
 
     // Expire share codes (mark as revoked)
-    const codesSnapshot = await db
-      .collection("share_codes")
-      .where("isRevoked", "==", false)
-      .where("expiresAt", "<", now)
-      .get();
-
-    const codeBatch = db.batch();
-    codesSnapshot.forEach((doc) => {
-      codeBatch.update(doc.ref, {
-        isRevoked: true,
-      });
+    const codesResult = await flipExpiredDocuments(db, {
+      collection: "share_codes",
+      match: { field: "isRevoked", value: false },
+      timestampField: "expiresAt",
+      cutoff: now,
+      update: { isRevoked: true },
     });
-
-    await codeBatch.commit();
 
     // Unanswered join requests, on their own 7-day clock. Deliberately NOT followed by an
     // inline FR-60(c) cleanup of the children whose rows just retired: `inactivateFamily` set
@@ -116,10 +105,15 @@ export const expireInvitesAndCodes = functions.pubsub
       cutoffMillis: unansweredJoinRequestCutoffMillis(now.toMillis()),
     });
 
+    const truncated =
+      invitesResult.truncated ||
+      tripInvitesResult.truncated ||
+      codesResult.truncated ||
+      joinRequestSweep.truncated;
     console.log(
-      `Expired ${invitesSnapshot.size} invites, ${tripInvitesSnapshot.size} trip invites, ` +
-        `${codesSnapshot.size} codes, and ${joinRequestSweep.retired} unanswered join requests` +
-        `${joinRequestSweep.truncated ? " (truncated; next run resumes)" : ""}`
+      `Expired ${invitesResult.flipped} invites, ${tripInvitesResult.flipped} trip invites, ` +
+        `${codesResult.flipped} codes, and ${joinRequestSweep.retired} unanswered join requests` +
+        `${truncated ? " (truncated; next run resumes)" : ""}`
     );
 
     return null;

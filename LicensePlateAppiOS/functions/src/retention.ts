@@ -1,7 +1,9 @@
 /**
  * Scheduled retention jobs — COPPA remediation FR-49 (audit G1).
  *
- * Two daily passes, both deterministic and idempotent:
+ * Every pass below is deterministic, idempotent, and bounded; each maps to one row of the
+ * NP-3 schedule in `RETENTION_POLICY.md`, and `retentionPolicyParity.test.ts` fails the suite
+ * if a window here and the written policy ever disagree. Two of them:
  *  - `purgeExpiredInvitesAndCodes` hard-deletes transient invite / share-code rows whose
  *    expiry passed more than the grace period ago.
  *  - `purgeExpiredAuditLogs` deletes aged `audit_logs` rows except the permanently retained
@@ -40,6 +42,16 @@ import {
   revokedChildRetentionDays,
   sweepAbandonedRevokedChildAccounts,
 } from "./revokedChildRetention";
+import {
+  inactiveAccountDeletionCutoffMillis,
+  inactiveAccountRetentionDays,
+  sweepInactiveAccounts,
+} from "./inactiveAccountRetention";
+import {
+  ageLocationPayloadsOnEndedTrips,
+  locationPayloadAgingCutoffMillis,
+  locationPayloadRetentionDays,
+} from "./locationPayloadAging";
 
 const db = admin.firestore();
 
@@ -138,6 +150,62 @@ export const purgeAbandonedRevokedChildAccounts = functions
     });
 
     functions.logger.info("retention: OD-3 swept abandoned revoked child accounts", {
+      windowDays,
+      cutoff: new Date(cutoffMillis).toISOString(),
+      result,
+    });
+
+    return null;
+  });
+
+/**
+ * FR-77 / NP-3 row 11 — OD-3 (owner 2026-08-30): 36 months, ALL AGES. Deletes accounts with
+ * no authenticated activity since the window, through the shared deletion machinery. Skips
+ * anything with no login stamp (absent evidence), a parent-directed deletion already in
+ * flight, or a live consent decision. See `inactiveAccountRetention.ts` for why the window is
+ * measured per ACCOUNT and never per family.
+ */
+export const purgeInactiveAccounts = functions
+  .runWith({ timeoutSeconds: RETENTION_TIMEOUT_SECONDS })
+  .pubsub.schedule(RETENTION_SCHEDULE)
+  .timeZone(RETENTION_TIME_ZONE)
+  .onRun(async () => {
+    const windowDays = inactiveAccountRetentionDays();
+    const cutoffMillis = inactiveAccountDeletionCutoffMillis(Date.now(), windowDays);
+
+    const result = await sweepInactiveAccounts(db, {
+      cutoffMillis,
+      // Uid-only audit actor: no parent or user authorised this, the OD-3 schedule did.
+      actorId: "system_retention",
+      revenueCatApiKey: currentRevenueCatApiKey(),
+    });
+
+    functions.logger.info("retention: OD-3 swept inactive accounts", {
+      windowDays,
+      cutoff: new Date(cutoffMillis).toISOString(),
+      result,
+    });
+
+    return null;
+  });
+
+/**
+ * FR-77 / NP-3 row 12 — OD-3 (owner 2026-08-30): 36 months. Strips the location payload keys
+ * from `activity_events` on trips that ended longer ago than the window. The trip itself —
+ * names, discoveries, scores — is retained with the account; only the place-trail ages out,
+ * and the FR-28h server-stamped replay bookkeeping is preserved untouched.
+ */
+export const ageEndedTripLocationPayloads = functions
+  .runWith({ timeoutSeconds: RETENTION_TIMEOUT_SECONDS })
+  .pubsub.schedule(RETENTION_SCHEDULE)
+  .timeZone(RETENTION_TIME_ZONE)
+  .onRun(async () => {
+    const windowDays = locationPayloadRetentionDays();
+    const cutoffMillis = locationPayloadAgingCutoffMillis(Date.now(), windowDays);
+
+    const result = await ageLocationPayloadsOnEndedTrips(db, { cutoffMillis });
+
+    functions.logger.info("retention: OD-3 aged ended-trip location payloads", {
       windowDays,
       cutoff: new Date(cutoffMillis).toISOString(),
       result,

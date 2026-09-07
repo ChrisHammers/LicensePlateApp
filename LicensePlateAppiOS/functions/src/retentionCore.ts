@@ -144,6 +144,113 @@ export function auditRetentionCutoffMillis(
   return cutoff.getTime();
 }
 
+/**
+ * Rows status-flipped per page by `flipExpiredDocuments`. Under Firestore's 500-op batch cap
+ * with headroom, so one page is always one batch.
+ */
+export const EXPIRY_FLIP_PAGE_SIZE = 400;
+
+/**
+ * Upper bound on rows flipped per invocation. The flip pass runs every 5 minutes, so a
+ * backlog drains in minutes; this only exists so one run cannot blow the function timeout.
+ */
+export const EXPIRY_FLIP_MAX_PER_RUN = 2000;
+
+export interface ExpiryFlipOptions {
+  /** Top-level collection to flip. */
+  collection: string;
+  /**
+   * Equality filter selecting the rows that have NOT been flipped yet. `update` MUST clear
+   * it — that is what makes the sweep self-quenching (see the note on the function).
+   */
+  match: { field: string; value: unknown };
+  /** Timestamp field the cutoff is compared against. */
+  timestampField: string;
+  /**
+   * Comparand for the range filter — a Firestore `Timestamp` in production. Passed in rather
+   * than built here so this module stays free of `admin.firestore` at call time.
+   */
+  cutoff: unknown;
+  /** Fields written onto every matched row. Must clear `match`. */
+  update: Record<string, unknown>;
+  pageSize?: number;
+  maxFlips?: number;
+}
+
+export interface ExpiryFlipResult {
+  collection: string;
+  /** Documents read. */
+  scanned: number;
+  /** Documents whose status was flipped. */
+  flipped: number;
+  /** True when the per-run bound stopped the sweep early; the next run resumes the backlog. */
+  truncated: boolean;
+}
+
+/**
+ * Bounded, paged status flip — the write half of `expiration.ts` (FR-77, closes audit L-7).
+ *
+ * The pass it replaces read its whole match set with one unbounded `.get()` and staged every
+ * result into ONE `WriteBatch`. Both halves fail at scale, and the second fails hard: a batch
+ * is capped at 500 operations, so the 501st expired invite would have thrown and left the
+ * entire pass — every collection in it — permanently wedged. Nothing bounded the read either,
+ * so a backlog was a timeout.
+ *
+ * SELF-QUENCHING rather than cursor-paged, matching `sweepUnansweredJoinRequests`: each
+ * committed page moves its rows out of the `match` filter, so re-running the same query from
+ * the start strictly shrinks the matching set. That is simpler than a cursor and, unlike one,
+ * cannot skip a row written while the sweep was mid-scan. Idempotent by the same property —
+ * a second run over a clean collection reads one empty page and writes nothing.
+ *
+ * The `match` + range + `orderBy` shape is served by the composite indexes these three
+ * collections already carry in `firestore.indexes.json`; no new index is required.
+ */
+export async function flipExpiredDocuments(
+  db: admin.firestore.Firestore,
+  options: ExpiryFlipOptions
+): Promise<ExpiryFlipResult> {
+  const pageSize = options.pageSize ?? EXPIRY_FLIP_PAGE_SIZE;
+  const maxFlips = options.maxFlips ?? EXPIRY_FLIP_MAX_PER_RUN;
+
+  let scanned = 0;
+  let flipped = 0;
+  let truncated = false;
+
+  for (;;) {
+    if (flipped >= maxFlips) {
+      truncated = true;
+      break;
+    }
+    const pageLimit = Math.min(pageSize, maxFlips - flipped);
+
+    const snapshot = await db
+      .collection(options.collection)
+      .where(options.match.field, "==", options.match.value)
+      .where(options.timestampField, "<", options.cutoff)
+      .orderBy(options.timestampField, "asc")
+      .limit(pageLimit)
+      .get();
+
+    if (snapshot.empty) {
+      break;
+    }
+    scanned += snapshot.size;
+
+    const batch = db.batch();
+    for (const doc of snapshot.docs) {
+      batch.update(doc.ref, options.update);
+    }
+    await batch.commit();
+    flipped += snapshot.size;
+
+    if (snapshot.size < pageLimit) {
+      break;
+    }
+  }
+
+  return { collection: options.collection, scanned, flipped, truncated };
+}
+
 export interface PurgeOptions {
   /** Top-level collection to sweep. */
   collection: string;

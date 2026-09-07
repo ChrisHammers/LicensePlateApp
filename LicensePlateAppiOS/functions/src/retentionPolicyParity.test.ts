@@ -4,8 +4,8 @@
  * written policy changing — or vice versa — this fails the suite.
  *
  * Reads `RETENTION_POLICY.md` at the repo root and asserts each ENFORCED class's row
- * states the window the shipped constant enforces. The adopted-but-unbuilt rows
- * (11–12) join this test when their constants exist.
+ * states the window the shipped constant enforces. Rows 11–12 were adopted-but-unbuilt
+ * at first drafting and joined this test on 2026-08-30 when their jobs landed.
  */
 
 import { describe, it, expect } from "vitest";
@@ -14,6 +14,8 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PROVISIONAL_CHILD_REDEMPTION_WINDOW_DAYS } from "./provisionalChildAccounts";
 import { REVOKED_CHILD_RETENTION_DAYS_DEFAULT } from "./revokedChildRetention";
+import { INACTIVE_ACCOUNT_RETENTION_DAYS_DEFAULT } from "./inactiveAccountRetention";
+import { LOCATION_PAYLOAD_RETENTION_DAYS_DEFAULT } from "./locationPayloadAging";
 import { CONSENT_REQUEST_TTL_MS } from "./consentRequestsCore";
 import {
   AUDIT_LOG_RETENTION_MONTHS,
@@ -54,6 +56,30 @@ describe("NP-3 ↔ code parity (FR-77 acceptance)", () => {
     // recorded equivalence — a change to either side must touch both.
     expect(REVOKED_CHILD_RETENTION_DAYS_DEFAULT).toBe(365);
     expect(scheduleRow("Revoked-but-retained child accounts")).toContain("**12 months**");
+  });
+
+  it("inactive-account retention states the OD-3 thirty-six months, enforced as 1095 days", () => {
+    // The policy speaks months; the sweep counts days. 36 months ⇔ 1095 days is the
+    // recorded equivalence — a change to either side must touch both.
+    expect(INACTIVE_ACCOUNT_RETENTION_DAYS_DEFAULT).toBe(1095);
+    const row = scheduleRow("Inactive accounts");
+    expect(row).toContain("**36 months**");
+    // ALL AGES is the load-bearing half of the OD-3 ruling; a child-only carve-out added to
+    // the code without amending this sentence is exactly the drift this test exists to catch.
+    expect(row).toContain("all ages");
+    // The row must keep naming the job that actually enforces it.
+    expect(row).toContain("purgeInactiveAccounts");
+    expect(row).toContain("ENFORCED");
+  });
+
+  it("location-payload aging states the OD-3 thirty-six months, enforced as 1095 days", () => {
+    expect(LOCATION_PAYLOAD_RETENTION_DAYS_DEFAULT).toBe(1095);
+    const row = scheduleRow("Location payloads on ended-trip events");
+    expect(row).toContain("**36 months**");
+    // The FR-77 constraint, stated in the policy as well as pinned in the job's own tests.
+    expect(row).toContain("gameplay bookkeeping untouched");
+    expect(row).toContain("ageEndedTripLocationPayloads");
+    expect(row).toContain("ENFORCED");
   });
 
   it("invite/share-code grace states the shipped 30 days", () => {
