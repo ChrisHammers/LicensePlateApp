@@ -1459,7 +1459,7 @@
 // COPPA F-7 — Child session postures (FR-33 location toggles)
 "child_gate.location_disabled" = "Location options are turned off for child accounts.";
 // FR-75 amendment (OD-8): held for want of a fresh session check, not because of a child account.
-"child_gate.location_unverified" = "Location is paused until your session is verified.";
+"child_gate.location_unverified" = "Location is paused until your account is verified. That needs an internet connection.";
 
 // COPPA F-29 — FR-73(b): no push token for an unconsented child, so the OS notification
 // permission is neither shown nor requested. Non-punitive, and names the way out (joining a

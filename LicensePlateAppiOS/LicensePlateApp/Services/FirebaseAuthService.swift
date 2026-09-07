@@ -1435,7 +1435,9 @@ class FirebaseAuthService: ObservableObject {
             throw AuthError.noModelContext
         }
         
-        if isOnline {
+        // §3.1.1 item 8 (2026-09-07): Firebase sign-out is LOCAL — never gate it on
+        // connectivity, or an offline sign-out leaves the session to be re-adopted on relaunch.
+        do {
             do {
                 try auth.signOut()
             } catch {
@@ -1497,7 +1499,9 @@ class FirebaseAuthService: ObservableObject {
         // signs in to an existing account.
         AgeGateStore.shared.clearAnswer()
 
-        if isOnline {
+        // §3.1.1 item 8 (2026-09-07): Firebase sign-out is LOCAL — never gate it on
+        // connectivity, or an offline sign-out leaves the session to be re-adopted on relaunch.
+        do {
             do {
                 try auth.signOut()
             } catch {
@@ -1578,6 +1582,17 @@ class FirebaseAuthService: ObservableObject {
         user.phoneNumber = nil
         user.firebaseUID = nil
         user.userImageURL = nil
+        // §3.1.1 item 8: the avatar is identity too — a fresh guest gets a fresh one.
+        user.avatarId = AvatarCatalog.randomGuestAvatarId()
+        // §3.1.1 item 8 ROOT CAUSE (2026-09-07): cloud-backed rows carry `id == firebaseUID`.
+        // Stripping the row in place left it addressable by the OLD account's uid, and
+        // `UserRepository.cacheUsers` upserts by id — so the next peer-profile refresh that
+        // included that account (a family roster, a trip's participants) rewrote this
+        // "fresh guest" back into the account it had just declined. A fresh guest gets a
+        // fresh local id, exactly as `createFreshLocalGuestUser` mints one; the old uid is
+        // then only ever a peer-cache row again. (Same reassignment `signInAnonymously`
+        // performs when a uid lands.)
+        user.id = UUID().uuidString
         user.isUsernameManuallyChanged = false
         user.linkedPlatforms = []
         user.lastDateLoggedIn = nil
