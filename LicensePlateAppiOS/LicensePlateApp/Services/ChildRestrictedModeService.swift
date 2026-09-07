@@ -94,6 +94,51 @@ enum FamilyApprovalPendingPolicy {
     }
 }
 
+// MARK: - Push restrictions (COPPA F-29 / FR-73, pure policy)
+
+/// FR-73(b) and (c) — the two child-scoped push surfaces, as one testable matrix.
+///
+/// These are the RENDER-side twins of `PushTokenEligibilityPolicy` (which decides whether a
+/// token may exist at all). Keeping them separate is deliberate: eligibility is about a
+/// persistent identifier, these are about what a child is shown and offered.
+enum ChildPushRestrictionPolicy {
+
+    /// FR-73(b): the OS notification permission is neither shown nor requested while the
+    /// session may hold no push token. Scoped to UNCONSENTED children only — a CONSENTED
+    /// child still receives the bounded family-trip categories (FR-38), so denying them the
+    /// OS prompt would break a capability parental consent explicitly covers.
+    ///
+    /// The second term is the same no-gap property `isLocationRestrictedForCurrentFlow` has
+    /// (FR-33): an under-13 answer recorded for the current flow counts even before a uid
+    /// exists. It is sound rather than merely cautious — with no provisioned identity there
+    /// is no `activeFamilyId` and no consent record that could exist, so an under-13 answer
+    /// in that window is necessarily an unconsented child.
+    static func restrictsNotificationPermission(
+        isUnconsentedChild: Bool,
+        isUnder13FlowAnswer: Bool,
+        hasProvisionedIdentity: Bool
+    ) -> Bool {
+        if isUnconsentedChild { return true }
+        return isUnder13FlowAnswer && !hasProvisionedIdentity
+    }
+
+    /// FR-73(c): the marketing category is not offered to a child at ALL — consented or not.
+    ///
+    /// Wider than (b) on purpose, and the asymmetry is the requirement, not an oversight:
+    /// parental consent covers the bounded family-trip categories, but nothing a parent
+    /// consented to reaches promotional contact, and the amended §312.5(c)(7) internal-
+    /// operations exception may not be used to prompt or encourage use of the service.
+    /// `getFCMTokenForPush` refuses the category server-side regardless of what is stored
+    /// (FR-73(c)'s "belt and braces"); hiding the toggle is what stops a child being asked
+    /// to opt in to something that would never be delivered.
+    static func hidesMarketingPushToggle(
+        isChildAccountSession: Bool,
+        isUnder13FlowAnswer: Bool
+    ) -> Bool {
+        isChildAccountSession || isUnder13FlowAnswer
+    }
+}
+
 enum ChildRestrictedModeKeys {
     static let hasPresentedFullFamilyPrompt = "childGate.hasPresentedFullFamilyPrompt"
     /// F-8 device testing (2026-08-15): uid a share-code redemption is awaiting the
@@ -229,6 +274,26 @@ final class ChildRestrictedModeService: ObservableObject {
     /// that exists to undo a restriction they were never under.
     var isChildAccountSession: Bool {
         childSessionState != .notChild
+    }
+
+    // MARK: - Push surfaces (COPPA F-29 / FR-73)
+
+    /// FR-73(b): render this instead of the notification permission row, and never trigger
+    /// the OS prompt. Views read this projection; the policy above is where the rule lives.
+    var isPushPermissionRestrictedForCurrentFlow: Bool {
+        ChildPushRestrictionPolicy.restrictsNotificationPermission(
+            isUnconsentedChild: isRestrictedUnconsentedChild,
+            isUnder13FlowAnswer: ageGateStore.category == .under13,
+            hasProvisionedIdentity: (currentUserIdProvider()?.isEmpty == false)
+        )
+    }
+
+    /// FR-73(c): whether the "Promotion & News" toggle is hidden for this session.
+    var isMarketingPushToggleHidden: Bool {
+        ChildPushRestrictionPolicy.hidesMarketingPushToggle(
+            isChildAccountSession: isChildAccountSession,
+            isUnder13FlowAnswer: ageGateStore.category == .under13
+        )
     }
 
     /// F-7 consumption surface (option B): true while this device's identity epoch has

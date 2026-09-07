@@ -1,5 +1,7 @@
 import * as admin from "firebase-admin";
+import { isChildAccountUserData } from "../childAccountCore";
 import {
+  isPushCategoryAllowedForChild,
   isPushEnabled,
   notificationPrefsFromUserData,
   PushCategory,
@@ -97,6 +99,14 @@ export async function getFCMToken(userId: string): Promise<string | null> {
 /**
  * FCM token gated by `users/{uid}.notificationPrefs` for any push category.
  * Missing prefs default per `isPushEnabled`. Prefs and token are read in parallel.
+ *
+ * FR-73(c) adds a child gate ABOVE the preference gate: a child account is never sent a
+ * marketing/engagement category, whatever its stored prefs say. This is the one chokepoint
+ * every gated sender already routes through (`family`, `tripInvite`, `tripEnded`,
+ * `plateFoundBy*`, `friend`), so the suppression binds any future sender for free — the
+ * "belt and braces" half of FR-73(c), whose other half is the client hiding the toggle.
+ * The child flag is read off the `users/{uid}` snapshot this function already fetched, so
+ * the gate costs no extra document read.
  */
 export async function getFCMTokenForPush(
   userId: string,
@@ -104,6 +114,9 @@ export async function getFCMTokenForPush(
 ): Promise<string | null> {
   const { userData, fcmData } = await readUserAndFCMDocs(userId);
   if (!userData) {
+    return null;
+  }
+  if (isChildAccountUserData(userData) && !isPushCategoryAllowedForChild(category)) {
     return null;
   }
   if (!isPushEnabled(notificationPrefsFromUserData(userData), category)) {

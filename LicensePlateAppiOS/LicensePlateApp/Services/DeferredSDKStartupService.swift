@@ -191,11 +191,21 @@ final class DeferredSDKStartupService {
     }
 
     private func applyPlan(_ plan: DeferredSDKStartupPlan, posture: ChildSessionPosture) {
+        // COPPA F-29 (FR-73): `currentPlan` is no longer a diagnostic — it is one of the two
+        // inputs `PushTokenEligibilityPolicy` reads at the moment a token is handed over, and
+        // `configureMessaging()` below triggers exactly such a fetch. Publishing the new plan
+        // BEFORE any delta action runs is what stops that fetch observing a stale
+        // `startsMessaging: false` for the very plan that just released it (a self-inflicted
+        // suppression, not a leak, but a real one). Deltas are computed against the local
+        // `previous`, so the emit-only-changes behaviour is byte-for-byte unchanged.
+        let previous = applied
+        applied = plan
+
         // FCM. Auto-init is toggled in both directions; `configure` (APNs registration +
         // delegate + first token fetch) is a one-time bootstrap — re-registering on every
         // later transition would be pointless network work, and sign-out token clearing
         // is already owned by `FirebaseAuthService`.
-        if plan.startsMessaging != applied.startsMessaging {
+        if plan.startsMessaging != previous.startsMessaging {
             deps.setMessagingAutoInitEnabled(plan.startsMessaging)
             if plan.startsMessaging, !hasConfiguredMessaging {
                 hasConfiguredMessaging = true
@@ -206,7 +216,7 @@ final class DeferredSDKStartupService {
         // Analytics collection. FR-32's ad-personalization property was already applied
         // by the posture routine's earlier step, so collection can never be enabled
         // before a child session's posture is in place.
-        if plan.startsAnalyticsCollection != applied.startsAnalyticsCollection {
+        if plan.startsAnalyticsCollection != previous.startsAnalyticsCollection {
             deps.setAnalyticsCollectionEnabled(plan.startsAnalyticsCollection)
         }
 
@@ -241,7 +251,5 @@ final class DeferredSDKStartupService {
             hasStartedAds = true
             deps.startAds(posture)
         }
-
-        applied = plan
     }
 }

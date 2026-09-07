@@ -28,6 +28,14 @@ struct PrivacyPermissionsView: View {
     /// explanation. Rendered projection only — the forcing happens in
     /// `LocationSettingsService` via the posture seam, never here.
     @ObservedObject private var childPostures = ChildSessionPostureCoordinator.shared
+    /// COPPA F-29 (FR-73b/c): an unconsented child may hold no FCM token (permission row
+    /// replaced by a notice), and NO child — consented or not — is offered the marketing
+    /// category. Rendered projections only; the rules live in `ChildPushRestrictionPolicy`
+    /// and the server refuses the category regardless of what is stored.
+    @ObservedObject private var childRestrictedMode = ChildRestrictedModeService.shared
+    /// Observed so an under-13 answer recorded in this flow re-renders the push surfaces
+    /// immediately, exactly as it does for location (FR-33's no-gap window).
+    @ObservedObject private var ageGateStore = AgeGateStore.shared
     @State private var microphonePermission: AVAudioSession.RecordPermission = .undetermined
     @State private var speechRecognitionPermission: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     @State private var cameraPermission: AVAuthorizationStatus = .notDetermined
@@ -149,15 +157,23 @@ struct PrivacyPermissionsView: View {
                     // Notifications Section
                     Section {
                         VStack(spacing: 12) {
-                            PermissionRow(
-                                title: "Notifications".localized,
-                                description: "Get notified about plates found and more".localized,
-                                icon: "bell.fill",
-                                status: notificationPermissionStatus,
-                                statusColor: notificationPermissionColor,
-                                onTap: handleNotificationTap
-                            )
-                            
+                            // COPPA F-29 (FR-73b): an unconsented child may hold no FCM
+                            // token, so the OS permission is neither shown nor requested.
+                            // The per-category toggles below stay: they are stored prefs
+                            // that take effect the moment consent arrives.
+                            if childRestrictedMode.isPushPermissionRestrictedForCurrentFlow {
+                                ChildPushDisabledNotice()
+                            } else {
+                                PermissionRow(
+                                    title: "Notifications".localized,
+                                    description: "Get notified about plates found and more".localized,
+                                    icon: "bell.fill",
+                                    status: notificationPermissionStatus,
+                                    statusColor: notificationPermissionColor,
+                                    onTap: handleNotificationTap
+                                )
+                            }
+
                             SettingToggleRow(
                                 title: "Friend notifications".localized,
                                 description: "Friend requests and other friend alerts".localized,
@@ -200,11 +216,22 @@ struct PrivacyPermissionsView: View {
                                 isOn: $notificationSettings.inactiveTripReminder
                             )
 
-                            SettingToggleRow(
-                                title: "Promotion & News".localized,
-                                description: "Receive promotional offers and app news".localized,
-                                isOn: $notificationSettings.promotionsAndNews
-                            )
+                            // COPPA F-29 (FR-73c): the marketing category is not offered to
+                            // a child at all — consented or not. Consent covers the bounded
+                            // family-trip categories above; nothing a parent consented to
+                            // reaches promotional contact, and the amended §312.5(c)(7)
+                            // internal-operations exception may not be used to prompt or
+                            // encourage use of the service. `getFCMTokenForPush` refuses the
+                            // category server-side regardless of what is stored; hiding the
+                            // toggle is what stops a child being asked to opt in to
+                            // something that would never be delivered.
+                            if !childRestrictedMode.isMarketingPushToggleHidden {
+                                SettingToggleRow(
+                                    title: "Promotion & News".localized,
+                                    description: "Receive promotional offers and app news".localized,
+                                    isOn: $notificationSettings.promotionsAndNews
+                                )
+                            }
                         }
                         .padding(.horizontal, 16)
                         .padding(.vertical, 16)
@@ -525,6 +552,10 @@ struct PrivacyPermissionsView: View {
     }
     
     private func handleNotificationTap() {
+        // FR-73(b): the row is not rendered for a restricted session, so this is
+        // unreachable — kept because "the prompt is never triggered" is the requirement,
+        // and a future caller of this handler should inherit the gate, not re-open it.
+        guard !childRestrictedMode.isPushPermissionRestrictedForCurrentFlow else { return }
         switch notificationPermission {
         case .authorized, .provisional, .ephemeral:
             if let url = URL(string: UIApplication.openSettingsURLString) {

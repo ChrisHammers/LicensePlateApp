@@ -302,9 +302,30 @@ service cloud.firestore {
     // via the Admin SDK); `contact` holds email/phone + linked-platform contact.
     // `lastLoginLocationData` is intentionally NOT allowed: the silent login-location
     // flow was removed (F-1). Leftover dev docs are deleted by scripts/deleteLoginLocationData.ts.
+    // FR-73 / v2.1 FR-53(a): the server-side backstop on the push token. An FCM token is a
+    // persistent identifier, so an UNCONSENTED child (provisional inside the FR-60
+    // redemption window, or sticky after a revocation) may not have one — the client
+    // eligibility guard is the first line, this is what a tampered or stale client cannot
+    // get past.
+    //
+    // Scoped to CREATE/UPDATE of `fcm` only, and every other operation is left exactly as it
+    // was, for three reasons that are each load-bearing:
+    //   1. DELETE stays open — `clearFCMToken` (sign-out) and any client-side cleanup must
+    //      still be able to REMOVE a token a session is no longer entitled to. Denying
+    //      delete would strand the very document this rule exists to keep from existing.
+    //   2. READ stays open — a child reading their own routing doc collects nothing new, and
+    //      denying it would break the owner-only read `private/` exists to provide.
+    //   3. `contact` is untouched — FR-73 is about the push identifier, and re-gating the
+    //      contact doc here would silently change an unrelated F-5a surface.
+    // Cost: one user-doc get() on token writes only, which happen at most once per session.
     match /users/{userId}/private/{docId} {
-      allow read, write: if isSignedIn() && uid() == userId &&
+      allow read: if isSignedIn() && uid() == userId &&
         (docId == "contact" || docId == "fcm");
+      allow delete: if isSignedIn() && uid() == userId &&
+        (docId == "contact" || docId == "fcm");
+      allow create, update: if isSignedIn() && uid() == userId &&
+        (docId == "contact" ||
+         (docId == "fcm" && !callerIsUnconsentedChild()));
     }
 
     // Email/phone lookup indexes — Admin SDK / Cloud Functions only

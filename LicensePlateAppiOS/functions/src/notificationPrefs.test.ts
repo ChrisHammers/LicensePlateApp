@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
+  CHILD_SUPPRESSED_PUSH_CATEGORIES,
+  isPushCategoryAllowedForChild,
   isPushEnabled,
   isSocialPushEnabled,
   notificationPrefsFromUserData,
@@ -71,5 +73,49 @@ describe("isSocialPushEnabled", () => {
     expect(isSocialPushEnabled(null, "family")).toBe(true);
     expect(isSocialPushEnabled({ friend: false }, "friend")).toBe(false);
     expect(isSocialPushEnabled({ family: true }, "family")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FR-73(c) — which categories a child may never be sent
+// ---------------------------------------------------------------------------
+
+describe("FR-73(c): isPushCategoryAllowedForChild", () => {
+  it("blocks the marketing category", () => {
+    expect(isPushCategoryAllowedForChild("promotionsAndNews")).toBe(false);
+  });
+
+  /**
+   * The bounded family-trip set parental consent covers (FR-38 / v3 §5 R-15). Listed
+   * explicitly rather than derived, so a category added to `PushCategory` without a
+   * decision about children fails this test instead of silently defaulting to allowed.
+   */
+  it("allows every transactional and family-state category", () => {
+    for (const category of [
+      "friend",
+      "family",
+      "tripInvite",
+      "tripEnded",
+      "plateFoundByOpponent",
+      "plateFoundByCoPilots",
+      "inactiveTripReminder",
+      "returnStreakReminder",
+    ] as const) {
+      expect(isPushCategoryAllowedForChild(category)).toBe(true);
+    }
+  });
+
+  /**
+   * v3 §5 R-15 pin: the suppressed set is EXACTLY the marketing category. The declined
+   * engagement-defaults half stays declined; widening this list is an owner decision.
+   */
+  it("suppresses exactly one category", () => {
+    expect([...CHILD_SUPPRESSED_PUSH_CATEGORIES]).toEqual(["promotionsAndNews"]);
+  });
+
+  /** The child gate is independent of preferences — neither one can re-enable the other. */
+  it("is orthogonal to the preference gate", () => {
+    expect(isPushEnabled({ promotionsAndNews: true }, "promotionsAndNews")).toBe(true);
+    expect(isPushCategoryAllowedForChild("promotionsAndNews")).toBe(false);
   });
 });

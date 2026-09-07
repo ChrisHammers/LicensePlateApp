@@ -128,3 +128,110 @@ describe("childConsent writers", () => {
     expect(auditRows(db)).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// FR-73 / v2.1 FR-53(b) — the push token dies with the consent that covered it
+// ---------------------------------------------------------------------------
+
+describe("FR-73: REVOKED deletes the child's push routing doc", () => {
+  const FCM_PATH = "users/kid/private/fcm";
+
+  async function revoke(
+    db: FakeFirestore,
+    reason: (typeof CHILD_CONSENT_REVOCATION_REASONS)[number] = "parent_removed_child"
+  ): Promise<void> {
+    await writeChildMembershipRevocation(asFirestore(db), {
+      familyId: "fam1",
+      childUserId: "kid",
+      actorId: "parent",
+      actorRole: "captain",
+      method: "remove_family_member",
+      reason,
+      clientMetadata: null,
+    });
+  }
+
+  it("deletes users/{uid}/private/fcm on revocation", async () => {
+    const db = new FakeFirestore();
+    db.store.set(FCM_PATH, { token: "child-token", updatedAt: 1 });
+
+    await revoke(db);
+
+    expect(db.store.has(FCM_PATH)).toBe(false);
+  });
+
+  /**
+   * The revocation record is the §312.5 evidence and must still land — the token deletion
+   * rides along, it does not gate.
+   */
+  it("still writes the REVOKED audit row", async () => {
+    const db = new FakeFirestore();
+    db.store.set(FCM_PATH, { token: "child-token" });
+
+    await revoke(db);
+
+    const rows = auditRows(db);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].eventType).toBe("AUDIT_PARENTAL_CONSENT_REVOKED");
+    expect(rows[0].subjectId).toBe("kid");
+  });
+
+  /** Most revocations have no token to remove (the FR-73 guard kept one from existing). */
+  it("is a no-op when no token doc exists", async () => {
+    const db = new FakeFirestore();
+
+    await revoke(db);
+
+    expect(db.store.has(FCM_PATH)).toBe(false);
+    expect(auditRows(db)).toHaveLength(1);
+  });
+
+  /**
+   * `writeChildMembershipRevocation` is the chokepoint EVERY membership-exit path calls
+   * (family removal, family inactivation, account deletion, the OD-3 sweep), which is the
+   * whole reason the deletion lives here rather than in one caller. Pinning every enumerated
+   * reason is what stops a new exit path shipping without the token cleanup.
+   */
+  it("removes the token on every enumerated exit reason", async () => {
+    for (const reason of CHILD_CONSENT_REVOCATION_REASONS) {
+      const db = new FakeFirestore();
+      db.store.set(FCM_PATH, { token: "child-token" });
+
+      await revoke(db, reason);
+
+      expect(db.store.has(FCM_PATH)).toBe(false);
+    }
+  });
+
+  /** Only the revoked child's doc — a sibling's routing must survive untouched. */
+  it("does not touch another user's token", async () => {
+    const db = new FakeFirestore();
+    db.store.set(FCM_PATH, { token: "child-token" });
+    db.store.set("users/sibling/private/fcm", { token: "sibling-token" });
+
+    await revoke(db);
+
+    expect(db.store.has(FCM_PATH)).toBe(false);
+    expect(db.store.get("users/sibling/private/fcm")).toEqual({ token: "sibling-token" });
+  });
+
+  /**
+   * FR-62's guardianship end and FR-73's token deletion share this writer; neither may
+   * displace the other.
+   */
+  it("ends the guardianship record and deletes the token in the same pass", async () => {
+    const db = new FakeFirestore();
+    db.store.set(FCM_PATH, { token: "child-token" });
+    db.store.set("users/kid/private/guardianship", {
+      familyId: "fam1",
+      guardianUid: "parent",
+    });
+
+    await revoke(db);
+
+    expect(db.store.has(FCM_PATH)).toBe(false);
+    const guardianship = db.store.get("users/kid/private/guardianship")!;
+    expect(typeof guardianship.endedAtMillis).toBe("number");
+    expect(guardianship.endedReason).toBe("parent_removed_child");
+  });
+});

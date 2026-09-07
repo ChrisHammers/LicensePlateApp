@@ -601,6 +601,156 @@ describe("FR-28: unconsented children cannot write friends or share_codes", () =
 });
 
 // ---------------------------------------------------------------------------
+// FR-73 / v2.1 FR-53(a) — the push token is not writable by an unconsented child
+// ---------------------------------------------------------------------------
+
+/**
+ * An FCM token is a persistent identifier and therefore personal information, so an
+ * UNCONSENTED child — provisional inside the FR-60 redemption window, or sticky after a
+ * revocation — may not have one. The client eligibility guard
+ * (`PushTokenEligibilityPolicy`) is the first line; this block is the server-side backstop
+ * a tampered or stale client cannot get past.
+ *
+ * The gate is scoped to CREATE/UPDATE of `fcm`, and the three things it deliberately leaves
+ * open are each pinned below, because getting any of them wrong breaks a path FR-53 needs:
+ * DELETE (so `clearFCMToken` can still remove a token), READ (owner-only reads are what
+ * `private/` is for), and the `contact` doc (an unrelated F-5a surface).
+ *
+ * Children are ANONYMOUS accounts under FR-60/FR-85, so the child callers here are too.
+ */
+describe("FR-73(a): private/fcm writes are barred to unconsented children", () => {
+  beforeEach(async () => {
+    await seed({
+      // Unconsented: flag true, no activeFamilyId (provisional, or sticky post-revocation).
+      "users/lonekid": { userName: "LoneKid", isChildAccount: true },
+      "users/lonekid/private/fcm": { token: "stale-token" },
+      "users/lonekid/private/contact": { email: "parent@example.com" },
+      // Consented: flag true WITH an active family.
+      "users/famkid": { userName: "FamKid", isChildAccount: true, activeFamilyId: "fam1" },
+      "users/famkid/private/fcm": { token: "famkid-token" },
+      "users/adult": { userName: "Grown" },
+      "users/adult/private/fcm": { token: "adult-token" },
+    });
+  });
+
+  it("denies an unconsented child CREATING a token doc", async () => {
+    // The redemption-window shape: `provisionalChildAccounts` has provisioned the uid and
+    // written `isChildAccount: true`, and no family has admitted them yet.
+    await seed({ "users/newkid": { userName: "NewKid", isChildAccount: true } });
+    await assertFails(
+      setDoc(doc(anonymous("newkid"), "users/newkid/private/fcm"), { token: "t" })
+    );
+  });
+
+  /**
+   * `callerIsUnconsentedChild()` reads "a missing doc or missing flag means adult" — the
+   * standing convention in this file (see FR-24's doc-less case), and not negotiable here:
+   * `get()` on a missing document error-denies, so a doc-less DENY would break every
+   * legitimate first write.
+   *
+   * That is not a hole in FR-73, because the two layers cover disjoint populations. Under
+   * FR-60 a never-consented child has no uid at all, and the moment one exists
+   * `declareChildRegistration` / `provisionalChildAccounts` has already written the flag —
+   * so a uid with NO user doc is an age-UNKNOWN guest, not a known child, and that session
+   * is held by the CLIENT gate instead (`DeferredSDKStartupPlan.startsMessaging` is false
+   * until age resolution, per FR-46). Rules catch the flagged child; the client catches the
+   * unresolved one. Pinned so the division of labour is deliberate rather than discovered.
+   */
+  it("treats a caller with no user doc as an adult (documented convention)", async () => {
+    await assertSucceeds(
+      setDoc(doc(anonymous("newkid"), "users/newkid/private/fcm"), { token: "t" })
+    );
+  });
+
+  it("denies an unconsented child UPDATING an existing token doc", async () => {
+    await assertFails(
+      updateDoc(doc(anonymous("lonekid"), "users/lonekid/private/fcm"), {
+        token: "fresh-token",
+      })
+    );
+    await assertFails(
+      setDoc(
+        doc(anonymous("lonekid"), "users/lonekid/private/fcm"),
+        { token: "fresh-token" },
+        { merge: true }
+      )
+    );
+  });
+
+  /**
+   * Load-bearing: `clearFCMToken` runs on sign-out, and a sticky post-revocation child is
+   * precisely the session that most needs to be able to drop a token it should not hold.
+   * Denying delete would strand the very document this rule exists to prevent.
+   */
+  it("still lets an unconsented child DELETE their token doc", async () => {
+    await assertSucceeds(
+      deleteDoc(doc(anonymous("lonekid"), "users/lonekid/private/fcm"))
+    );
+  });
+
+  it("still lets an unconsented child READ their own token doc", async () => {
+    await assertSucceeds(getDoc(doc(anonymous("lonekid"), "users/lonekid/private/fcm")));
+  });
+
+  /**
+   * FR-53(c): the family-trip categories stay available to a CONSENTED child, which means
+   * their device must be able to register a token. If this ever fails, consent has stopped
+   * buying the child anything.
+   */
+  it("allows a CONSENTED child to write their token doc", async () => {
+    await assertSucceeds(
+      setDoc(doc(anonymous("famkid"), "users/famkid/private/fcm"), { token: "fresh" })
+    );
+  });
+
+  it("leaves adults alone (regression)", async () => {
+    await assertSucceeds(
+      setDoc(doc(registered("adult"), "users/adult/private/fcm"), { token: "fresh" })
+    );
+    // No users/{uid} doc at all: a missing flag means adult, and the guard must not
+    // error-deny on the absent document.
+    await assertSucceeds(
+      setDoc(doc(registered("docless"), "users/docless/private/fcm"), { token: "t" })
+    );
+  });
+
+  /**
+   * FR-73 is about the push identifier only. Re-gating `contact` here would silently change
+   * an unrelated F-5a surface, so the child's contact doc must behave exactly as before.
+   */
+  it("does not touch the contact doc (F-5a surface unchanged)", async () => {
+    await assertSucceeds(
+      setDoc(doc(anonymous("lonekid"), "users/lonekid/private/contact"), {
+        email: "parent2@example.com",
+      })
+    );
+    await assertSucceeds(
+      getDoc(doc(anonymous("lonekid"), "users/lonekid/private/contact"))
+    );
+  });
+
+  it("nobody writes or reads another user's token doc (regression)", async () => {
+    await assertFails(
+      setDoc(doc(registered("adult"), "users/famkid/private/fcm"), { token: "stolen" })
+    );
+    await assertFails(getDoc(doc(registered("adult"), "users/famkid/private/fcm")));
+    await assertFails(
+      deleteDoc(doc(registered("adult"), "users/lonekid/private/fcm"))
+    );
+  });
+
+  /** The `private/` allowlist is unchanged: only `contact` and `fcm` are reachable. */
+  it("keeps every other private doc id closed (regression)", async () => {
+    await assertFails(
+      setDoc(doc(registered("adult"), "users/adult/private/guardianship"), { x: 1 })
+    );
+    await assertFails(
+      setDoc(doc(registered("adult"), "users/adult/private/lastLoginLocationData"), { x: 1 })
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // FR-66(d) + FR-67 — share_codes write binding and read scoping
 // ---------------------------------------------------------------------------
 

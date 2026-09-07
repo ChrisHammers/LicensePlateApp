@@ -131,6 +131,107 @@ describe("getFCMTokenForPush", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// FR-73(c) — marketing suppression for child accounts
+// ---------------------------------------------------------------------------
+
+describe("FR-73(c): a child account is never sent the marketing category", () => {
+  /**
+   * The sharp case, and the reason the gate cannot live on the preference default: an
+   * explicit `promotionsAndNews: true` is exactly what an older client, a dev fixture, or a
+   * parent tapping the toggle before the child flag landed would leave behind. The
+   * preference gate would honour it; the child gate must not.
+   */
+  it("refuses the promo category even when the pref is explicitly ON", async () => {
+    store.user = {
+      userName: "Kid",
+      isChildAccount: true,
+      notificationPrefs: { promotionsAndNews: true },
+    };
+    store.privateFcm = { token: "private-token" };
+
+    await expect(getFCMTokenForPush("u1", "promotionsAndNews")).resolves.toBeNull();
+  });
+
+  /**
+   * FR-73(c)'s scope, pinned in both directions: consent covers the bounded family-trip
+   * categories (FR-38), so a CONSENTED child keeps every transactional push. If this ever
+   * goes null the suppression has over-reached and children have silently lost the pushes
+   * their parents consented to.
+   */
+  it("leaves a consented child's transactional categories untouched", async () => {
+    store.user = {
+      userName: "Kid",
+      isChildAccount: true,
+      activeFamilyId: "fam1",
+    };
+    store.privateFcm = { token: "private-token" };
+
+    for (const category of ["family", "tripInvite", "tripEnded"] as const) {
+      await expect(getFCMTokenForPush("u1", category)).resolves.toBe("private-token");
+    }
+  });
+
+  /**
+   * v3 §5 R-15: the per-category engagement defaults for consented children were considered
+   * and DECLINED, and FR-73(c) narrows to the marketing category only. This pins that
+   * boundary so a later widening is a deliberate owner decision rather than a silent drift.
+   */
+  it("does NOT suppress the engagement reminder categories (R-15 stands)", async () => {
+    store.user = { userName: "Kid", isChildAccount: true, activeFamilyId: "fam1" };
+    store.privateFcm = { token: "private-token" };
+
+    await expect(getFCMTokenForPush("u1", "inactiveTripReminder")).resolves.toBe(
+      "private-token"
+    );
+    await expect(getFCMTokenForPush("u1", "returnStreakReminder")).resolves.toBe(
+      "private-token"
+    );
+  });
+
+  it("still delivers the marketing category to an adult who opted in", async () => {
+    store.user = { userName: "Ada", notificationPrefs: { promotionsAndNews: true } };
+    store.privateFcm = { token: "private-token" };
+
+    await expect(getFCMTokenForPush("u1", "promotionsAndNews")).resolves.toBe(
+      "private-token"
+    );
+  });
+
+  /**
+   * An explicit `false` is what a manager CORRECTION writes (`familyChildStatusFlows.ts`),
+   * so a corrected account must get its marketing category back rather than staying
+   * suppressed on a stale reading of the flag.
+   */
+  it("restores the marketing category to an explicitly corrected account", async () => {
+    store.user = {
+      userName: "WasKid",
+      isChildAccount: false,
+      notificationPrefs: { promotionsAndNews: true },
+    };
+    store.privateFcm = { token: "private-token" };
+
+    await expect(getFCMTokenForPush("u1", "promotionsAndNews")).resolves.toBe(
+      "private-token"
+    );
+  });
+
+  /**
+   * The legacy top-level token is a second source `resolveFCMToken` still honours, so the
+   * child gate has to sit ABOVE resolution rather than beside the private-doc read.
+   */
+  it("refuses the promo category for a child on the legacy token path too", async () => {
+    store.user = {
+      userName: "Kid",
+      isChildAccount: true,
+      fcmToken: "legacy-token",
+      notificationPrefs: { promotionsAndNews: true },
+    };
+
+    await expect(getFCMTokenForPush("u1", "promotionsAndNews")).resolves.toBeNull();
+  });
+});
+
 describe("getFCMToken", () => {
   it("reads the private doc without pref gating", async () => {
     store.user = { notificationPrefs: { friend: false } };

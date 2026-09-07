@@ -23,6 +23,11 @@ struct OnboardingPermissionsView: View {
     /// before the uid is provisioned (no gap window).
     @ObservedObject private var childPostures = ChildSessionPostureCoordinator.shared
     @ObservedObject private var ageGateStore = AgeGateStore.shared
+    /// COPPA F-29 (FR-73b): an unconsented child may hold no FCM token, so the notification
+    /// permission is neither shown nor requested for them. Same rendered-projection rule as
+    /// location above — `ageGateStore` is already observed, which is what re-renders this
+    /// step the moment the under-13 answer is recorded, before any uid exists.
+    @ObservedObject private var childRestrictedMode = ChildRestrictedModeService.shared
     @State private var microphonePermission: AVAudioSession.RecordPermission = .undetermined
     @State private var speechPermission: SFSpeechRecognizerAuthorizationStatus = .notDetermined
     @State private var cameraPermission: AVAuthorizationStatus = .notDetermined
@@ -93,14 +98,26 @@ struct OnboardingPermissionsView: View {
                             onTap: handleCameraTap
                         )
                         
-                        OnboardingPermissionRow(
-                            title: "Notifications".localized,
-                            description: "Get notified about plates found and more".localized,
-                            icon: "bell.fill",
-                            status: notificationPermissionStatus,
-                            statusColor: notificationPermissionColor,
-                            onTap: handleNotificationTap
-                        )
+                        // COPPA F-29 (FR-73b): for an unconsented child (including the
+                        // answered-but-not-yet-provisioned window) the notification
+                        // permission is neither shown nor requested — no token may exist
+                        // for them, so the OS prompt would ask for a capability the app
+                        // will not use. A CONSENTED child keeps the row: family-trip
+                        // pushes (FR-38) are what their parent consented to.
+                        if childRestrictedMode.isPushPermissionRestrictedForCurrentFlow {
+                            ChildPushDisabledNotice()
+                                .padding()
+                                .background(Color.Theme.cardBackground, in: RoundedRectangle(cornerRadius: 16))
+                        } else {
+                            OnboardingPermissionRow(
+                                title: "Notifications".localized,
+                                description: "Get notified about plates found and more".localized,
+                                icon: "bell.fill",
+                                status: notificationPermissionStatus,
+                                statusColor: notificationPermissionColor,
+                                onTap: handleNotificationTap
+                            )
+                        }
                     }
                     .padding(.horizontal)
                 }
@@ -386,6 +403,10 @@ struct OnboardingPermissionsView: View {
     }
     
     private func handleNotificationTap() {
+        // FR-73(b): the row is not rendered for a restricted session, so this is
+        // unreachable — kept because "the prompt is never triggered" is the requirement,
+        // and a future caller of this handler should inherit the gate, not re-open it.
+        guard !childRestrictedMode.isPushPermissionRestrictedForCurrentFlow else { return }
         switch notificationPermission {
         case .authorized, .provisional, .ephemeral:
             // Perfect allowed — open Settings
