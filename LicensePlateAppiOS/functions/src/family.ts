@@ -47,7 +47,9 @@ import {
   writeChildMembershipRevocation,
 } from "./childConsent";
 import { applyChildProtectionsAfterFlagSet } from "./familyChildStatusFlows";
+import { sweepLiveTripsAfterFamilyMembershipExit } from "./childTripRosterInvariants";
 import { assertCallerIsNotChild } from "./childAccessGuards";
+import { consumeInviteRateLimit } from "./inviteRateLimit";
 import { currentRevenueCatApiKey } from "./accountDeletion";
 import {
   CHILD_DECLARED_AT_FIELD,
@@ -320,6 +322,15 @@ export const sendFamilyInvite = enforcedCallable(
         PENDING_FAMILY_INVITE_EXISTS_MESSAGE
       );
     }
+
+    // FR-71 (F-27): per-sender rate limit, consumed after every free short-circuit above
+    // (registration check, FR-24 caller gate, membership/role check, FR-15 target gate,
+    // capacity check, privacy check, duplicate-pending check) so a replayed offline send or
+    // a refused attempt never burns budget — same placement discipline as
+    // `sendFriendInvite`/`sendTripInvite` (`inviteHardening.test.ts`). The FR-24 child-caller
+    // guard ran ahead of this and keeps precedence: a child sender is refused
+    // whatever the budget.
+    await consumeInviteRateLimit(db, { scope: "family_invite", userId: fromUserId });
 
     // Create invite
     const expiresAt = new Date();
@@ -1453,6 +1464,24 @@ export const removeFamilyMember = enforcedCallable(
       });
     }
 
+    // COPPA FR-69(b): the roster this member left is not the only roster they are on. A
+    // live trip carrying this family's child now holds someone who is not family to that
+    // child (or, when the leaver IS the child, holds them with a family they no longer
+    // belong to). Re-evaluated for the leaver only; the invariant is unchanged for
+    // everyone who stayed.
+    //
+    // Non-fatal, like the other post-commit follow-ons here: the membership decision has
+    // committed and a retry of this callable would fail on the member doc that is already
+    // gone, so a sweep failure must not turn a completed removal into an error.
+    try {
+      await sweepLiveTripsAfterFamilyMembershipExit(db, memberId);
+    } catch (error) {
+      functions.logger.error(
+        "FR-69(b): live-trip roster sweep after member removal failed",
+        { familyId, removedMemberId: memberId, error }
+      );
+    }
+
     return { success: true };
   }
 );
@@ -1686,6 +1715,29 @@ export const inactivateFamily = enforcedCallable(
         reason: "family_inactivated",
         clientMetadata,
       });
+    }
+
+    // COPPA FR-69(b): the family that made a mixed live trip lawful no longer exists, so
+    // every member exits it — and any live trip still holding one of this family's children
+    // alongside anyone else is now illegal for that child.
+    //
+    // CHILDREN FIRST, deliberately: a child whose family is gone has no family, so every
+    // multi-party roster carrying them violates and it is the child who must leave. Once
+    // they are off, the adults' own sweeps find nothing to do and nobody else's trip is
+    // disturbed. Running the adults first would eject them from trips the child was about
+    // to leave anyway. Non-fatal per member — inactivation has committed.
+    const remainingMemberIds = membersSnapshot.docs
+      .map((doc) => doc.id)
+      .filter((memberId) => !childMemberIds.includes(memberId));
+    for (const exitingUserId of [...childMemberIds, ...remainingMemberIds]) {
+      try {
+        await sweepLiveTripsAfterFamilyMembershipExit(db, exitingUserId);
+      } catch (error) {
+        functions.logger.error(
+          "FR-69(b): live-trip roster sweep after family inactivation failed",
+          { familyId, exitingUserId, error }
+        );
+      }
     }
 
     await writeAuditLog({

@@ -290,8 +290,10 @@ function tripModeFromRoster(participants: unknown[]): "solo" | "multiplayer" {
   return ids.size > 1 ? "multiplayer" : "solo";
 }
 
-/** Remove one user from Firestore `canonicalParticipants` array (wire shape uses `userId`). */
-function filterCanonicalParticipantsRemoveUser(participants: unknown[], userId: string): unknown[] {
+/** Remove one user from Firestore `canonicalParticipants` array (wire shape uses `userId`).
+ *  Exported for `tripRosterWrites.ts`: the server-initiated roster removals (FR-69) must
+ *  edit the array exactly the way the kick path does, not with a second filter. */
+export function filterCanonicalParticipantsRemoveUser(participants: unknown[], userId: string): unknown[] {
   return participants.filter((p) => {
     if (p && typeof p === "object" && "userId" in p) {
       return String((p as { userId: string }).userId) !== userId;

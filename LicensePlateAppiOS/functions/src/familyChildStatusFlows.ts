@@ -39,6 +39,10 @@ import {
   createMemberFlagConsentRequest,
   resolveGuardianEmailByUid,
 } from "./consentRequests";
+import {
+  sweepChildTripsAfterFlagSet,
+  type ChildTripInvariantSweepResult,
+} from "./childTripRosterInvariants";
 import { familyMembershipLeaveUserUpdate } from "./wasEverInFamilyUserUpdates";
 import {
   executeAccountDeletionForUser,
@@ -129,6 +133,14 @@ async function loadManagerRole(
  * `family.ts`. Runs AFTER the flag-set batch has committed. Idempotent and retry-safe:
  * the purge deletes only entries it owns, the invite expiry skips already-expired rows,
  * and the edge removal finds nothing on a re-run.
+ *
+ * FR-69(a) rides here too, last: pending invites are only half the exposure a flag-set
+ * creates — a trip the child is ALREADY playing with non-family participants is the other
+ * half, and nothing used to re-check it. Placed after the other follow-ons because it is
+ * the most expensive (it discovers the child's sessions) and the least urgent of the four:
+ * search, invites and friend edges are standing surfaces, a live trip is bounded by the
+ * drive. It propagates failure like its siblings — the FR-4 discipline is that the
+ * callable retries the whole idempotent block.
  */
 export async function applyChildProtectionsAfterFlagSet(
   db: Firestore,
@@ -138,7 +150,11 @@ export async function applyChildProtectionsAfterFlagSet(
     childUserData: Record<string, unknown>;
   },
   deps: ChildStatusFlowDeps = defaultDeps
-): Promise<{ removedFriendEdgeCount: number; expiredInviteCount: number }> {
+): Promise<{
+  removedFriendEdgeCount: number;
+  expiredInviteCount: number;
+  tripSweep: ChildTripInvariantSweepResult;
+}> {
   const hints = await searchIndexHintsForUser(db, input.childUserId, input.childUserData);
   await deps.clearSearchIndexes(input.childUserId, hints);
 
@@ -149,7 +165,9 @@ export async function applyChildProtectionsAfterFlagSet(
 
   const removedFriendEdgeCount = await removeAllFriendEdgesForUser(db, input.childUserId);
 
-  return { removedFriendEdgeCount, expiredInviteCount };
+  const tripSweep = await sweepChildTripsAfterFlagSet(db, input.childUserId);
+
+  return { removedFriendEdgeCount, expiredInviteCount, tripSweep };
 }
 
 export interface SetChildStatusResult {

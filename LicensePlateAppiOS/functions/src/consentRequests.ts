@@ -68,6 +68,7 @@ import { CHILD_DECLARED_AT_FIELD, deleteProvisionalChildAccountIfNeverConsented 
 import { PENDING_FAMILY_REQUEST_FIELD, findLivePendingJoinRequestsInOtherFamilies } from "./familyJoinRequestIntegrity";
 import { stageJoinRequestRetirement } from "./pendingJoinRequestExpiry";
 import { applyChildProtectionsAfterFlagSet } from "./familyChildStatusFlows";
+import { sweepLiveTripsAfterFamilyMembershipExit } from "./childTripRosterInvariants";
 import { getFCMTokenForSocialPush, sendPushNotification } from "./utils/notifications";
 import { currentRevenueCatApiKey } from "./accountDeletion";
 
@@ -1149,6 +1150,19 @@ export async function sweepExpiredConsentRequests(
       } catch (error) {
         functions.logger.error(
           "member_flag expiry: revocation audit write failed (non-fatal)",
+          { childUserId: data.childUserId, error }
+        );
+      }
+
+      // COPPA FR-69(b): refusal-by-silence just ended this child's membership, so the
+      // family that made a shared live trip lawful is no longer theirs. Same exit sweep
+      // the explicit removal paths run; non-fatal, and the pass continues to the next
+      // lapsed request either way.
+      try {
+        await sweepLiveTripsAfterFamilyMembershipExit(db, data.childUserId);
+      } catch (error) {
+        functions.logger.error(
+          "FR-69(b): live-trip roster sweep after member_flag expiry failed",
           { childUserId: data.childUserId, error }
         );
       }

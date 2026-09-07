@@ -28,6 +28,17 @@ export function deletedUserTombstoneIdFor(userId: string): string {
 }
 
 /**
+ * True for an id minted by `deletedUserTombstoneIdFor`. Callers that read it off a roster
+ * MUST also require that `users/{id}` does not exist before treating the row as a
+ * memorial: the shape is not a valid Firebase uid, but "no account behind it" is the
+ * property that actually matters, and checking it costs nothing where the user doc has
+ * already been read (FR-69 / `tripChildParticipation.ts`).
+ */
+export function isDeletedUserTombstoneId(id: string): boolean {
+  return id.startsWith(`${DELETED_USER_TOMBSTONE_PREFIX}-`);
+}
+
+/**
  * Precise-location payload keys on `region_found` events. Mirrors
  * `TripActivityEventPayloadKey.location*` / `LocationData.payloadFields()` on iOS.
  * These are stripped outright — they are the finder's own geolocation, never

@@ -45,6 +45,7 @@ import {
   deidentifyEventFields,
   deidentifySessionFields,
 } from "./accountDeletionDeidentifyCore";
+import { endLiveTripSession, isLiveTripSessionData } from "./tripRosterWrites";
 
 /** Stay under Firestore's 500-op batch cap (mirrors accountDeletion.ts). */
 const DEIDENTIFY_BATCH_LIMIT = 450;
@@ -263,51 +264,18 @@ export async function deidentifyUserResidue(
       // session would strand every survivor. The trip_ended event doc id is
       // deterministic, so re-runs are idempotent and the members-notify trigger
       // fires exactly once; survivors get the normal remote-end + recap flow.
-      const status = String(sessionData.canonicalStatus ?? "");
+      // The write set itself lives in `tripRosterWrites.ts` — FR-69's sweeps end
+      // orphaned live trips for their own reason and must not fork a second copy.
       if (
         String(sessionData.createdBy ?? "") === userId &&
-        (status === "created" || status === "active")
+        isLiveTripSessionData(sessionData)
       ) {
-        const endWrites: PendingWrite[] = [
-          {
-            kind: "setMerge",
-            ref: sessionRef,
-            data: {
-              canonicalStatus: "ended",
-              canonicalEndedAt: admin.firestore.FieldValue.serverTimestamp(),
-              canonicalEndedBy: tombstoneId,
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-              syncVersion: admin.firestore.FieldValue.increment(1),
-            },
-          },
-          {
-            kind: "setMerge",
-            ref: sessionRef.collection("activity_events").doc(`trip-ended-${tombstoneId}`),
-            data: {
-              sessionId,
-              kind: "trip_ended",
-              timestamp: admin.firestore.FieldValue.serverTimestamp(),
-              actorId: tombstoneId,
-              payload: { reason: "owner_account_deleted" },
-              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            },
-          },
-        ];
-        // Stamp an end on games still marked open so recaps read coherently.
-        const gamesSnap = await sessionRef.collection("games").get();
-        for (const gameDoc of gamesSnap.docs) {
-          if (!gameDoc.data().endedAt) {
-            endWrites.push({
-              kind: "setMerge",
-              ref: gameDoc.ref,
-              data: {
-                endedAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-              },
-            });
-          }
-        }
-        await commitWrites(db, endWrites);
+        await endLiveTripSession(db, {
+          tripSessionId: sessionId,
+          endedBy: tombstoneId,
+          reason: "owner_account_deleted",
+          eventId: `trip-ended-${tombstoneId}`,
+        });
         summary.endedOwnedSessionCount += 1;
       }
 

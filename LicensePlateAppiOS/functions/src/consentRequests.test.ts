@@ -627,6 +627,42 @@ describe("member_flag: refusal-by-silence removes the member, never the account"
     );
   });
 
+  it("FR-69(b): expiry also takes the child off any live trip they were sharing", async () => {
+    seedFlaggedMember(5_000);
+    // Mid-trip when the guardian never answered: the family that made this roster lawful
+    // is no longer theirs the moment the membership goes.
+    db().seed("trip_sessions/tm", {
+      name: "Road trip",
+      createdBy: "captain",
+      canonicalStatus: "active",
+      canonicalParticipants: [
+        { userId: "captain", role: "owner", joinedAt: 1, leftAt: null, teamId: null },
+        { userId: "flagged", role: "member", joinedAt: 1, leftAt: null, teamId: null },
+      ],
+    });
+    db().seed("trip_sessions/tm/members/captain", { role: "owner", joinedAt: 1 });
+    db().seed("trip_sessions/tm/members/flagged", { role: "member", joinedAt: 1 });
+    db().seed("trip_sessions/tm/activity_events/join-flagged", {
+      sessionId: "tm",
+      kind: "participant_joined",
+      actorId: "flagged",
+      payload: {},
+    });
+
+    await sweepExpiredConsentRequests(db() as never, 10_000);
+
+    expect(db().store.get("trip_sessions/tm/members/flagged")).toBeUndefined();
+    expect(db().store.get("trip_sessions/tm/members/captain")).toBeTruthy();
+    expect(
+      db().store.get(
+        "trip_sessions/tm/activity_events/coppa-left-family_membership_ended-flagged"
+      )
+    ).toMatchObject({
+      kind: "participant_left",
+      payload: { participantId: "flagged", leaveReason: "family_membership_ended" },
+    });
+  });
+
   it("the FR-64 reconcile spares the pending window and counts nobody twice", async () => {
     seedFlaggedMember(Date.now() + 60_000); // live request
 

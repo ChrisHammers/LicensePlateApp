@@ -30,6 +30,7 @@
 
 import type * as admin from "firebase-admin";
 import { isChildAccountUserData } from "./childAccountCore";
+import { isDeletedUserTombstoneId } from "./accountDeletionDeidentifyCore";
 
 type Firestore = admin.firestore.Firestore;
 
@@ -69,14 +70,28 @@ export async function evaluateTripChildParticipation(
   }
   rosterIds.add(input.joiningUserId);
 
-  const orderedIds = [...rosterIds];
+  const candidateIds = [...rosterIds];
   const userSnapshots = await Promise.all(
-    orderedIds.map((id) => db.collection("users").doc(id).get())
+    candidateIds.map((id) => db.collection("users").doc(id).get())
   );
 
+  // FR-50 tombstone rows (`deleted-user-<hash>`, no `users/` document) are memorial roster
+  // entries that keep a recap's participant count honest after an account is deleted. They
+  // are nobody: they match no auth uid, so `isTripSessionMember` grants them nothing and
+  // there is no person for a child to be exposed to. Counting one as a "non-family
+  // participant" would make the FR-69 standing invariant unsatisfiable by construction —
+  // any deletion inside a family trip would permanently mark that roster illegal — so they
+  // drop out of the roster before it is evaluated. BOTH conditions are required: the id
+  // shape alone is not proof, absence of the account is.
+  const orderedIds: string[] = [];
   const childFamilyByUserId = new Map<string, string | null>();
-  orderedIds.forEach((id, index) => {
-    const data = userSnapshots[index].data() as Record<string, unknown> | undefined;
+  candidateIds.forEach((id, index) => {
+    const snapshot = userSnapshots[index];
+    if (!snapshot.exists && isDeletedUserTombstoneId(id)) {
+      return;
+    }
+    orderedIds.push(id);
+    const data = snapshot.data() as Record<string, unknown> | undefined;
     if (isChildAccountUserData(data)) {
       childFamilyByUserId.set(id, activeFamilyIdOf(data));
     }
