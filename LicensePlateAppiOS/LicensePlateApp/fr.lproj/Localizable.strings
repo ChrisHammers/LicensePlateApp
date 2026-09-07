@@ -567,6 +567,11 @@
 "OK" = "OK";
 "Username cannot be empty" = "Le nom d'utilisateur ne peut pas être vide";
 "This username contains inappropriate language. Please choose another." = "Ce nom d'utilisateur contient un langage inapproprié. Veuillez en choisir un autre.";
+/* FR-80 (F-36) client-side username format mirror — owner-found gap 2026-09-07 */
+"Usernames need at least 3 characters." = "Les noms d'utilisateur doivent avoir au moins 3 caractères.";
+"Usernames can have at most 24 characters." = "Les noms d'utilisateur peuvent avoir au plus 24 caractères.";
+"Usernames can use letters, numbers, and _ . - only — no spaces." = "Les noms d'utilisateur ne peuvent contenir que des lettres, des chiffres et _ . - — pas d'espaces.";
+"Usernames can't be all digits or look like a phone number." = "Les noms d'utilisateur ne peuvent pas être uniquement des chiffres ni ressembler à un numéro de téléphone.";
 "This username is already taken. Please choose another." = "Ce nom d'utilisateur est déjà pris. Veuillez en choisir un autre.";
 "You must be signed in to upload images. Please sign in first." = "Vous devez être connecté pour télécharger des images. Veuillez d'abord vous connecter.";
 "You must be authenticated with Firebase to upload images. Please sign in first." = "Vous devez être authentifié avec Firebase pour télécharger des images. Veuillez d'abord vous connecter.";

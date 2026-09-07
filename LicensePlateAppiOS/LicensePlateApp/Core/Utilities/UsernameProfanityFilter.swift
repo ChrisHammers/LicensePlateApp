@@ -70,8 +70,23 @@ enum UsernameProfanityFilter {
 enum UsernameValidation {
     enum Failure {
         case empty
+        case tooShort
+        case tooLong
+        case invalidCharacters
+        case looksLikePhoneNumber
         case profanity
     }
+
+    /// FR-80 (F-36): the client-side mirror of the `firestore.rules`
+    /// `isValidUserNameFormat` charset and shape rules. The two must accept and
+    /// reject the SAME set of names — the server rule was built to reject exactly
+    /// what the client rejects, no stronger — so a change to either side must touch
+    /// both (and `UsernameValidationTests` pins the parity fixtures). Owner-found
+    /// 2026-09-07: without this mirror, a spaced username passed the client, the
+    /// local-first UI kept it, and the server denied the mirror write silently.
+    private static let allowedFormat = "^[A-Za-z0-9_.-]+$"
+    private static let bareDigitRun = "^[0-9]{7,24}$"
+    private static let phoneShape = "^[0-9]{3}[.-]?[0-9]{3}[.-]?[0-9]{4}$"
 
     static func trimmed(_ raw: String) -> String {
         raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -80,6 +95,15 @@ enum UsernameValidation {
     static func failure(for raw: String) -> Failure? {
         let trimmed = trimmed(raw)
         if trimmed.isEmpty { return .empty }
+        if trimmed.count < 3 { return .tooShort }
+        if trimmed.count > 24 { return .tooLong }
+        if trimmed.range(of: allowedFormat, options: .regularExpression) == nil {
+            return .invalidCharacters
+        }
+        if trimmed.range(of: bareDigitRun, options: .regularExpression) != nil
+            || trimmed.range(of: phoneShape, options: .regularExpression) != nil {
+            return .looksLikePhoneNumber
+        }
         if UsernameProfanityFilter.containsProfanity(trimmed) { return .profanity }
         return nil
     }

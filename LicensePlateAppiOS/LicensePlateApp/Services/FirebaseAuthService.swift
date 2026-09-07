@@ -3240,6 +3240,14 @@ enum AuthError: LocalizedError {
             return "This username contains inappropriate language. Please choose another.".localized
         case .usernameValidationFailure(.empty):
             return "Username cannot be empty.".localized
+        case .usernameValidationFailure(.tooShort):
+            return "Usernames need at least 3 characters.".localized
+        case .usernameValidationFailure(.tooLong):
+            return "Usernames can have at most 24 characters.".localized
+        case .usernameValidationFailure(.invalidCharacters):
+            return "Usernames can use letters, numbers, and _ . - only — no spaces.".localized
+        case .usernameValidationFailure(.looksLikePhoneNumber):
+            return "Usernames can't be all digits or look like a phone number.".localized
         case .noModelContext:
             return "Model context is not available."
         case .emailAlreadyInUse:

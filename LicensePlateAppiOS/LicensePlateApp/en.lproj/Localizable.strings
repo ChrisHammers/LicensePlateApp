@@ -574,6 +574,11 @@
 "OK" = "OK";
 "Username cannot be empty" = "Username cannot be empty";
 "This username contains inappropriate language. Please choose another." = "This username contains inappropriate language. Please choose another.";
+/* FR-80 (F-36) client-side username format mirror — owner-found gap 2026-09-07 */
+"Usernames need at least 3 characters." = "Usernames need at least 3 characters.";
+"Usernames can have at most 24 characters." = "Usernames can have at most 24 characters.";
+"Usernames can use letters, numbers, and _ . - only — no spaces." = "Usernames can use letters, numbers, and _ . - only — no spaces.";
+"Usernames can't be all digits or look like a phone number." = "Usernames can't be all digits or look like a phone number.";
 "This username is already taken. Please choose another." = "This username is already taken. Please choose another.";
 "You must be signed in to upload images. Please sign in first." = "You must be signed in to upload images. Please sign in first.";
 "You must be authenticated with Firebase to upload images. Please sign in first." = "You must be authenticated with Firebase to upload images. Please sign in first.";
