@@ -7,6 +7,7 @@
 
 import Combine
 import Foundation
+import FirebaseAuth
 import FirebaseFirestore
 import FirebaseFunctions
 
@@ -135,6 +136,26 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     /// once consent lifts the hold. Injectable for tests.
     var cloudSyncHoldProvider: () -> Bool = { ChildRestrictedModeService.shared.isGameplayCloudSyncPaused }
 
+    /// FR-69 (F-25): the uid a session's listeners are started for, captured at
+    /// registration so a later permission-denied can be attributed to THAT identity
+    /// (`TripEvictionDetectionPolicy`). Injectable for tests.
+    var currentUserIdProvider: () -> String? = { Auth.auth().currentUser?.uid }
+
+    /// FR-69 (F-25): what to do when a live session's listeners are denied for the
+    /// identity they were started for — the only signal an evicted device ever gets.
+    /// Injectable for tests; the default applies the local eviction.
+    var evictionHandler: (UUID, String, String?) -> Void = { sessionId, listenerUserId, currentUserId in
+        do {
+            try TripParticipationService.shared.applyServerEviction(
+                sessionId: sessionId,
+                listenerUserId: listenerUserId,
+                currentUserId: currentUserId
+            )
+        } catch {
+            print("TripCanonicalRemoteSyncService: apply server eviction failed \(error)")
+        }
+    }
+
     /// Serializes concurrent `publishFullSession` for the same trip (`startTrip` vs combined setup publish).
     private var publishTailBySessionId: [UUID: (UUID, Task<Void, Error>)] = [:]
 
@@ -262,8 +283,17 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
         let db = Firestore.firestore()
         let sessionRef = db.collection("trip_sessions").document(sid)
 
+        let listenerUserId = currentUserIdProvider()
+
         let gamesReg = sessionRef.collection("games").addSnapshotListener { [weak self] snapshot, error in
-            guard let self, error == nil, let snapshot else { return }
+            guard let self else { return }
+            if let error {
+                Task { @MainActor in
+                    self.handleListenerError(error, sessionId: sessionId, listenerUserId: listenerUserId)
+                }
+                return
+            }
+            guard let snapshot else { return }
             Task { @MainActor in
                 self.applyGamesSnapshot(sessionId: sessionId, snapshot: snapshot)
             }
@@ -271,12 +301,38 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
         incrementalGameListeners[sid] = gamesReg
 
         let eventsReg = sessionRef.collection("activity_events").addSnapshotListener { [weak self] snapshot, error in
-            guard let self, error == nil, let snapshot else { return }
+            guard let self else { return }
+            if let error {
+                Task { @MainActor in
+                    self.handleListenerError(error, sessionId: sessionId, listenerUserId: listenerUserId)
+                }
+                return
+            }
+            guard let snapshot else { return }
             Task { @MainActor in
                 self.applyEventsSnapshot(sessionId: sessionId, snapshot: snapshot)
             }
         }
         incrementalEventListeners[sid] = eventsReg
+    }
+
+    /// FR-69 (F-25), owner-found 2026-09-07: a listener failing with permission-denied on
+    /// a session this device still holds as live is how a server-side roster removal
+    /// reaches the removed device — deleting `members/{uid}` revokes its read access
+    /// before the `participant_left` event could ever arrive. Both of a session's
+    /// listeners fail together; the eviction apply is idempotent, so the second one is a
+    /// no-op. Any other listener error is logged and otherwise ignored, as before.
+    private func handleListenerError(_ error: Error, sessionId: UUID, listenerUserId: String?) {
+        let nsError = error as NSError
+        let permissionDenied = nsError.domain == FirestoreErrorDomain
+            && nsError.code == FirestoreErrorCode.Code.permissionDenied.rawValue
+        guard permissionDenied, let listenerUserId else {
+            print("TripCanonicalRemoteSyncService: listener error for \(sessionId.uuidString): \(error)")
+            return
+        }
+        removeIncrementalListeners(sessionId: sessionId)
+        evictionHandler(sessionId, listenerUserId, currentUserIdProvider())
+        hydrationSubject.send(sessionId)
     }
 
     private func applyGamesSnapshot(sessionId: UUID, snapshot: QuerySnapshot) {
