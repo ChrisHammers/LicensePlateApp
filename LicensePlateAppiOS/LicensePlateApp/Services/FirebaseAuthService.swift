@@ -149,6 +149,26 @@ class FirebaseAuthService: ObservableObject {
         )
     }
 
+    /// FR-74(d′): an UNBOUND age answer does not survive a return to onboarding start.
+    ///
+    /// Composed here, beside `requiresSessionStartAgeAsk`, because "is there a provisioned
+    /// identity?" is this service's knowledge and nothing else's. `AgeGateOnboardingRestartPolicy`
+    /// owns the rule; `AgeGateStore` owns the write.
+    ///
+    /// Called exactly once per process, from `RootView`'s splash transition, BEFORE
+    /// `transitionFromSplash` picks an onboarding entry point — so both quick-start's
+    /// play-tap ask and legacy onboarding's `.ageVerification` step see the cleared state,
+    /// and neither one can be re-entered mid-session by a reactive re-evaluation.
+    ///
+    /// - Returns: true when the stale answer was cleared and the flow will ask again.
+    @discardableResult
+    func clearUnboundAgeAnswerAtOnboardingStartIfNeeded(hasCompletedOnboarding: Bool) -> Bool {
+        AgeGateStore.shared.clearUnboundAnswerAtOnboardingStartIfNeeded(
+            hasCompletedOnboarding: hasCompletedOnboarding,
+            hasProvisionedIdentity: currentUser?.firebaseUID != nil
+        )
+    }
+
     init() {
         isNetworkReachable = networkMonitor.isConnected
         // Observe auth state changes

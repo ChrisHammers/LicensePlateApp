@@ -15,6 +15,10 @@
 //         EXISTING `users/{uid}` un-bricks the keychain-restored guest.
 //    (b′) the immediate rebirth ask — a post-sign-out rebirth is asked at SESSION START.
 //    (c′) the re-ask surface doubles as the mis-answer recovery (OD-9(i) F-30 addendum).
+//         [DELETED 2026-09-07 by owner ruling (ii) — the recovery is now guidance COPY, not
+//         a control; its tests went with it.]
+//    (d′) an UNBOUND answer does not survive a return to onboarding start — asymmetrically:
+//         a `teenAdult` answer is cleared and re-asked, an `under13` answer PERSISTS.
 //
 //  The SRS demands adversarial verification in BOTH directions for this feature, so every
 //  matrix below is written to fail if the hold ever lets a child escape early AND if it
@@ -211,6 +215,71 @@ struct AgeGateSessionStartPolicyTests {
     /// handed a fresh neutral screen is exactly the laundering FR-74 exists to stop.
     @Test func deviceChildHistoryNeverGetsACleanReAsk() {
         #expect(requiresAsk(childHistory: true) == false)
+    }
+}
+
+// MARK: - (d′) The unbound answer at onboarding start
+
+struct AgeGateOnboardingRestartPolicyTests {
+
+    private func clears(
+        category: AgeGateCategory? = .teenAdult,
+        onboarded: Bool = false,
+        uid: Bool = false,
+        bound: Bool = false
+    ) -> Bool {
+        AgeGateOnboardingRestartPolicy.clearsUnboundAnswerAtOnboardingStart(
+            category: category,
+            hasCompletedOnboarding: onboarded,
+            hasProvisionedIdentity: uid,
+            hasBoundDeclarationUserIds: bound
+        )
+    }
+
+    /// The hazard, exactly as the owner found it on device (2026-08-15): an adult answers,
+    /// abandons before account creation, and nothing ever ends the epoch — because no epoch
+    /// was ever started. One unbound `teenAdult` answer, onboarding unfinished, no identity.
+    @Test func theAbandonedAdultAnswerIsCleared() {
+        #expect(clears() == true)
+    }
+
+    /// **The asymmetry, which is the whole requirement.** Clearing the protective answer
+    /// would be the answer-shopping escape — restart, answer 1990, be an adult — that FR-74
+    /// exists to close. It also covers FR-60's local-first under-13 player, who never has an
+    /// account by design and must not be re-asked at every launch forever.
+    @Test func theUnder13AnswerPersistsAcrossARestart() {
+        #expect(clears(category: .under13) == false)
+        // …and it persists no matter how unbound it is: no uid, no declaration, no
+        // completed onboarding. Every input that clears an adult leaves a child alone.
+        #expect(clears(category: .under13, onboarded: false, uid: false, bound: false) == false)
+    }
+
+    /// Nothing to clear.
+    @Test func anUnansweredDeviceIsANoOp() {
+        #expect(clears(category: nil) == false)
+    }
+
+    /// The trigger definition, stated precisely because it misfires otherwise: a user who
+    /// COMPLETED onboarding and is merely replaying a screen is NOT in scope. Their answer
+    /// is bound to a real session, and re-asking would be D-17's mid-session prompt.
+    @Test func aCompletedOnboardingReplayIsNeverInScope() {
+        #expect(clears(onboarded: true) == false)
+    }
+
+    /// "No provisioned identity" is the other half of the trigger. A uid means the answer is
+    /// bound to an epoch `clearAnswer()` ends on its own terms (sign-out, deletion); this
+    /// rule must not pre-empt it.
+    @Test func aProvisionedIdentityTakesTheAnswerOutOfScope() {
+        #expect(clears(uid: true) == false)
+    }
+
+    /// The second binding: an answer that named a uid in `pendingDeclarationUserIds` or
+    /// `declaredChildUserIds`. Out of scope, and protective in the same direction as
+    /// OD-9(iv) — a device carrying child history routes through FR-74's cooldown, never a
+    /// clean re-ask.
+    @Test func aBoundDeclarationTakesTheAnswerOutOfScope() {
+        #expect(clears(bound: true) == false)
+        #expect(clears(uid: true, bound: true) == false)
     }
 }
 
@@ -542,16 +611,200 @@ struct FR74AgeGateStoreTests {
     }
 }
 
-// MARK: - (c′) analytics silence on the child surface (FR-21 / SRS §12)
+// MARK: - (d′) the unbound answer, end to end on real UserDefaults
 
+/// The store half of FR-74(d′), plus the routing consequence the requirement's *Accept*
+/// line actually names ("is asked again" / "not re-asked"), which is
+/// `OnboardingCoordinator.stepAfterDisclaimer` reading `AgeGateStore.isResolved`.
 @MainActor
-private final class FR74AnalyticsSpy: AnalyticsLogging {
-    var events: [AnalyticsService.Event] = []
+struct FR74UnboundAnswerOnboardingRestartTests {
 
-    func log(_ event: AnalyticsService.Event) {
-        events.append(event)
+    private func makeStore(
+        suite: String = "FR74OnboardingRestartTests-\(UUID().uuidString)"
+    ) -> (AgeGateStore, UserDefaults) {
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return (AgeGateStore(defaults: defaults), defaults)
     }
 
-    func log(_ name: String, parameters: [String: Any]) {}
-    func setUserProperty(_ value: String?, forName name: String) {}
+    private let now = Date(timeIntervalSince1970: 1_700_000_000)
+    private var day: TimeInterval { AgeGateRetryCooldownPolicy.defaultDuration }
+
+    private func clear(
+        _ store: AgeGateStore,
+        onboarded: Bool = false,
+        uid: Bool = false
+    ) -> Bool {
+        store.clearUnboundAnswerAtOnboardingStartIfNeeded(
+            hasCompletedOnboarding: onboarded,
+            hasProvisionedIdentity: uid,
+            now: now
+        )
+    }
+
+    /// *Accept*, first line: adult answers → kills the app mid-onboarding → relaunch → **is
+    /// asked again**. Both onboarding entry points re-ask off the same fact — legacy
+    /// onboarding through `stepAfterDisclaimer`, quick-start through
+    /// `GuestProvisioningPolicy.requiresAgeGate` behind `requiresAgeGateForGuestProvisioning`.
+    @Test func theAbandonedAdultIsAskedAgainAtBothOnboardingEntryPoints() {
+        let (store, _) = makeStore()
+        store.recordAnswer(.teenAdult, at: now)
+        #expect(OnboardingCoordinator.stepAfterDisclaimer(
+            isAgeGateResolved: store.isResolved
+        ) == .accountCreation)
+
+        #expect(clear(store) == true)
+
+        #expect(store.category == nil)
+        #expect(store.isResolved == false)
+        #expect(OnboardingCoordinator.stepAfterDisclaimer(
+            isAgeGateResolved: store.isResolved
+        ) == .ageVerification)
+        #expect(GuestProvisioningPolicy.requiresAgeGate(
+            hasFirebaseUid: false, isResolved: store.isResolved
+        ) == true)
+    }
+
+    /// *Accept*, second line: under-13 answers → same sequence → **not re-asked, still
+    /// child-postured**. The protective answer, its `hasPendingChildDeclaration` flag, and
+    /// the FR-110 age-out marker all survive intact.
+    @Test func theUnder13AnswerAndItsRatchetStateSurviveTheRestart() {
+        let (store, _) = makeStore()
+        store.recordAnswer(.under13, ageOutYearMonth: 202703, at: now)
+
+        #expect(clear(store) == false)
+
+        #expect(store.category == .under13)
+        #expect(store.isResolved == true)
+        #expect(store.hasPendingChildDeclaration == true)
+        #expect(store.ageOutYearMonth == 202703)
+        #expect(OnboardingCoordinator.stepAfterDisclaimer(
+            isAgeGateResolved: store.isResolved
+        ) == .accountCreation)
+    }
+
+    /// *Accept*, third line: a completed-onboarding user is never re-asked. This is the
+    /// guard that keeps the rule from becoming a mid-session prompt on every launch.
+    @Test func aCompletedOnboardingUserIsNeverReAsked() {
+        let (store, _) = makeStore()
+        store.recordAnswer(.teenAdult, at: now)
+        #expect(clear(store, onboarded: true) == false)
+        #expect(store.category == .teenAdult)
+    }
+
+    /// A provisioned identity binds the answer to an epoch that `clearAnswer()` ends on its
+    /// own terms; (d′) exists only for the epoch that was never started.
+    @Test func aProvisionedIdentityKeepsItsAnswer() {
+        let (store, _) = makeStore()
+        store.recordAnswer(.teenAdult, at: now)
+        #expect(clear(store, uid: true) == false)
+        #expect(store.category == .teenAdult)
+    }
+
+    /// A `teenAdult` answer on a device that still owes a declaration for some uid. Written
+    /// straight into the suite because `bindPendingDeclaration` refuses a non-`under13`
+    /// category by design — binding it through the API would change the very input under
+    /// test. (The realistic route to this state is exercised below.)
+    @Test func anAnswerBoundToAPendingDeclarationIsUntouched() {
+        let (store, defaults) = makeStore()
+        defaults.set(["uid-pending"], forKey: AgeGateStoreKeys.pendingDeclarationUserIds)
+        store.recordAnswer(.teenAdult, at: now)
+
+        #expect(store.hasOutstandingChildDeclaration == true)
+        #expect(clear(store) == false)
+        #expect(store.category == .teenAdult)
+    }
+
+    /// Same for a DELIVERED declaration. OD-9(iv): a device carrying child history routes
+    /// through FR-74's cooldown, never a clean re-ask.
+    @Test func anAnswerOnADeviceWithDeclaredChildHistoryIsUntouched() {
+        let (store, _) = makeStore()
+        store.markChildDeclarationSent(userId: "uid-declared")
+        store.recordAnswer(.teenAdult, at: now)
+
+        #expect(store.hasDeclaredChildHistory == true)
+        #expect(clear(store) == false)
+        #expect(store.category == .teenAdult)
+    }
+
+    /// **"Never clear `pendingDeclarationUserIds` / `declaredChildUserIds`" (v2.1 FR-27/G29).**
+    /// The sets are read as evidence and never written. Pinned on a device where the clear
+    /// DOES fire, so a future implementer who "tidies up" by wiping the sets alongside the
+    /// answer fails here.
+    ///
+    /// The state is a real sequence, not a fixture: a child was declared on this device and
+    /// signed out (the pending promise and the declared history both survive that, by
+    /// `clearAnswer`'s own contract), then somebody answered 13+ and abandoned onboarding.
+    /// The declared history takes that answer out of (d′)'s scope, so the assertion is the
+    /// stronger one — nothing at all changed.
+    @Test func theDeclarationSetsAreNeverTouched() {
+        let (store, defaults) = makeStore()
+        store.recordAnswer(.under13, at: now)
+        store.bindPendingDeclaration(toUserId: "uid-pending")
+        store.markChildDeclarationSent(userId: "uid-declared")
+        store.clearAnswer(now: now)                 // sign-out ends the epoch
+        store.recordAnswer(.teenAdult, at: now)     // the next person answers 13+
+
+        _ = clear(store)
+
+        #expect(store.pendingDeclarationUserIds.isEmpty == false)
+        #expect(store.declaredChildUserIds == ["uid-declared"])
+        #expect(defaults.stringArray(forKey: AgeGateStoreKeys.declaredChildUserIds) == ["uid-declared"])
+    }
+
+    /// **The FR-74 cooldown interplay, pinned.** `clearAnswer()` arms the retry-deterrence
+    /// marker only when the ENDED answer was `under13`, and the only category (d′) can ever
+    /// end is `teenAdult` — so a re-asked adult is not silently dropped into a 24h window
+    /// they never earned. Without this, (d′) would restrict every honest adult who quits
+    /// onboarding once.
+    @Test func clearingAnAdultAnswerArmsNoCooldown() {
+        let (store, defaults) = makeStore()
+        store.recordAnswer(.teenAdult, at: now)
+
+        #expect(clear(store) == true)
+
+        #expect(store.under13CooldownUntil == nil)
+        #expect(defaults.object(forKey: AgeGateStoreKeys.under13CooldownUntil) == nil)
+        #expect(store.isUnder13RetryCooldownActive(now: now) == false)
+        #expect(store.isUnder13RetryCooldownHeld(now: now) == false)
+    }
+
+    /// The other direction of the same interplay: a live window belonging to a REAL child is
+    /// neither shortened nor extended by this path. (d′) is out of scope on such a device
+    /// anyway — declared history takes it out — so this pins the marker against the case
+    /// where the window is the only residue left, e.g. after a manager retired the lineage
+    /// but the window is still running.
+    @Test func aLiveWindowIsNeitherShortenedNorExtended() {
+        let (store, _) = makeStore()
+        store.recordAnswer(.under13, at: now)
+        store.clearAnswer(now: now)                 // arms the 24h window
+        store.recordAnswer(.teenAdult, at: now)
+        #expect(store.under13CooldownUntil == now.addingTimeInterval(day))
+
+        #expect(clear(store) == true)               // unbound adult answer: cleared
+
+        #expect(store.under13CooldownUntil == now.addingTimeInterval(day))
+        #expect(store.isUnder13RetryCooldownActive(now: now) == true)
+    }
+
+    /// Idempotent across repeated launches: once the answer is gone there is nothing left to
+    /// clear, so a relaunch loop cannot compound anything.
+    @Test func theClearIsIdempotentAcrossRelaunches() {
+        let suite = "FR74OnboardingRestartTests-relaunch-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+
+        let first = AgeGateStore(defaults: defaults)
+        first.recordAnswer(.teenAdult, at: now)
+        #expect(first.clearUnboundAnswerAtOnboardingStartIfNeeded(
+            hasCompletedOnboarding: false, hasProvisionedIdentity: false, now: now
+        ) == true)
+
+        let afterRelaunch = AgeGateStore(defaults: defaults)
+        #expect(afterRelaunch.isResolved == false)
+        #expect(afterRelaunch.clearUnboundAnswerAtOnboardingStartIfNeeded(
+            hasCompletedOnboarding: false, hasProvisionedIdentity: false, now: now
+        ) == false)
+        #expect(afterRelaunch.under13CooldownUntil == nil)
+    }
 }

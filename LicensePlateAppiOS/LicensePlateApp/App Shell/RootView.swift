@@ -392,10 +392,27 @@ struct RootView: View {
             return
         }
 
+        // COPPA F-30 (FR-74(d′), owner device find 2026-08-15): an UNBOUND age answer does
+        // not survive a return to onboarding start. An abandoned onboarding never
+        // provisions an identity, so no epoch ever ends and `clearAnswer()` never fires —
+        // an adult answer floats forever and `stepAfterDisclaimer` skips `.ageVerification`
+        // on the next run, silently handing adult treatment to whoever resumes the flow.
+        // Cleared HERE, before `transitionFromSplash` chooses an onboarding entry point, so
+        // quick-start's play-tap ask and legacy onboarding's `.ageVerification` both see
+        // the cleared state. Asymmetric on purpose: an `under13` answer PERSISTS, because
+        // clearing the protective answer is the answer-shopping escape FR-74 exists to
+        // close. The gate on `hasSeenOnboarding` is what keeps a completed user, replaying
+        // a screen, out of scope.
+        authService.clearUnboundAgeAnswerAtOnboardingStartIfNeeded(
+            hasCompletedOnboarding: appCoordinator.hasSeenOnboarding
+        )
+
         // COPPA F-30 (FR-74(b′) / OD-9(ii)): decided HERE and only here — after
         // `initializeAuthState` has settled the identity, and before the first
         // interactive frame renders. Evaluating it anywhere reactive would turn a
         // mid-session rebirth into the mid-session prompt D-17 forbids.
+        // Mutually exclusive with (d′) above by construction: (b′) requires
+        // `hasCompletedOnboarding == true`, (d′) requires false.
         requiresSessionStartAgeAsk = authService.requiresSessionStartAgeAsk(
             hasCompletedOnboarding: appCoordinator.hasSeenOnboarding
         )

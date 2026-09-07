@@ -433,6 +433,41 @@ final class AgeGateStore: ObservableObject {
         revision += 1
     }
 
+    /// FR-74(d′): applies `AgeGateOnboardingRestartPolicy` at the onboarding entry point —
+    /// an UNBOUND `teenAdult` answer does not survive a return to onboarding start, while an
+    /// `under13` answer does.
+    ///
+    /// Deliberately routed through `clearAnswer(now:)` rather than removing the keys
+    /// directly, and both reasons are load-bearing:
+    ///
+    ///  * `clearAnswer` is the ONE place an epoch answer ends, so the uid-bound state it
+    ///    preserves — `pendingDeclarationUserIds` and `declaredChildUserIds` — is preserved
+    ///    here by construction rather than by a duplicated guard that could drift.
+    ///  * its FR-74 cooldown arm keys on the ENDED category, and the only category that can
+    ///    reach it from here is `teenAdult`, which arms nothing
+    ///    (`AgeGateRetryCooldownPolicy.cooldownDeadline` returns the existing deadline
+    ///    untouched for any non-`under13` clear). That is exactly what (d′) needs: a
+    ///    re-asked adult is not silently dropped into a deterrence window they never
+    ///    earned, and a live window belonging to a real child is neither shortened nor
+    ///    extended by this path.
+    ///
+    /// - Returns: true when the answer was cleared, i.e. the flow must ask again.
+    @discardableResult
+    func clearUnboundAnswerAtOnboardingStartIfNeeded(
+        hasCompletedOnboarding: Bool,
+        hasProvisionedIdentity: Bool,
+        now: Date = .now
+    ) -> Bool {
+        guard AgeGateOnboardingRestartPolicy.clearsUnboundAnswerAtOnboardingStart(
+            category: category,
+            hasCompletedOnboarding: hasCompletedOnboarding,
+            hasProvisionedIdentity: hasProvisionedIdentity,
+            hasBoundDeclarationUserIds: hasOutstandingChildDeclaration || hasDeclaredChildHistory
+        ) else { return false }
+        clearAnswer(now: now)
+        return true
+    }
+
     /// FR-74: the deterrence marker lifts under the existing FR-39 correction valve
     /// conditions as well — a manager-authorized correction that retires the device's
     /// whole child lineage has more authority than a retry-deterrence timer, and leaving
@@ -664,6 +699,62 @@ enum AgeGateSessionStartPolicy {
         guard !hasProvisionedIdentity, !hasLiveAuthSession else { return false }
         guard !isRegisteredIdentity else { return false }
         return !hasDeviceChildHistory
+    }
+}
+
+// MARK: - FR-74(d′): an UNBOUND answer does not survive a return to onboarding start
+
+/// **An abandoned onboarding's age answer is not a lasting answer — unless it is the
+/// protective one.**
+///
+/// Owner-found in device testing 2026-08-15. FR-27 binds an age answer to the identity that
+/// gave it, and `clearAnswer()` ends the answer when that identity's epoch ends (sign-out,
+/// account deletion). An **abandoned onboarding never provisions an identity at all**, so
+/// no epoch ever ends, `clearAnswer()` never fires, the answer floats indefinitely, and
+/// `OnboardingCoordinator.stepAfterDisclaimer(isAgeGateResolved:)` skips `.ageVerification`
+/// on the next run. The hazard is D-17 incident 2's class exactly: an adult answers,
+/// abandons before account creation, hands the device to a child, who resumes onboarding
+/// and is silently treated as an adult.
+///
+/// **The asymmetry is load-bearing.** A `teenAdult` answer is cleared and re-asked; an
+/// `under13` answer PERSISTS. Clearing the protective answer would hand a child an
+/// answer-shopping escape — restart, answer 1990, be an adult — which is precisely what
+/// FR-74's cooldown exists to prevent. It mirrors `recordAnswer`'s standing refusal to
+/// overwrite `under13` with `teenAdult`, and FR-19's asymmetric cache trust.
+///
+/// **Nothing uid-bound is ever cleared here.** `pendingDeclarationUserIds` and
+/// `declaredChildUserIds` are promises this device made about SPECIFIC accounts (v2.1
+/// FR-27/G29) and outrank any restart; they are only ever READ, as evidence that the answer
+/// is bound and therefore out of scope.
+enum AgeGateOnboardingRestartPolicy {
+    /// - Parameters:
+    ///   - category: this device's stored answer. `under13` and "unanswered" are both
+    ///     no-ops — the first because it is the protective answer FR-74 refuses to help a
+    ///     child shop away (this is also why FR-60's local-first under-13 player, who has
+    ///     no account by design and never will, is never in scope), the second because
+    ///     there is nothing to clear.
+    ///   - hasCompletedOnboarding: `AppCoordinator.hasSeenOnboarding`. The trigger is the
+    ///     onboarding ENTRY POINT rendering for a user who has not finished onboarding. A
+    ///     user who completed onboarding and is merely replaying a screen is NOT in scope —
+    ///     they have an answer bound to a real session, and re-asking them would be the
+    ///     mid-session prompt D-17 forbids.
+    ///   - hasProvisionedIdentity: `AppUser.firebaseUID != nil`. An identity exists, so the
+    ///     answer is bound to an epoch that `clearAnswer()` ends on its own terms; this rule
+    ///     has nothing to add and must not pre-empt it.
+    ///   - hasBoundDeclarationUserIds: the answer named at least one uid
+    ///     (`pendingDeclarationUserIds` ∪ `declaredChildUserIds`). Out of scope for the same
+    ///     reason, and protective in the same direction as OD-9(iv) — a device carrying
+    ///     child history routes through FR-74's cooldown, never a clean re-ask.
+    nonisolated static func clearsUnboundAnswerAtOnboardingStart(
+        category: AgeGateCategory?,
+        hasCompletedOnboarding: Bool,
+        hasProvisionedIdentity: Bool,
+        hasBoundDeclarationUserIds: Bool
+    ) -> Bool {
+        guard category == .teenAdult else { return false }
+        guard !hasCompletedOnboarding else { return false }
+        guard !hasProvisionedIdentity, !hasBoundDeclarationUserIds else { return false }
+        return true
     }
 }
 
