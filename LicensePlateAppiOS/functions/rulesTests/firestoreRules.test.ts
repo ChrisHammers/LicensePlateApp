@@ -7,8 +7,9 @@
  *  - FR-14 follow-up: `friends` is client write:false;
  *  - FR-16(a) `invites` client-create denial;
  *  - FR-37 `public_lifetime_stats` child exclusion + carve-out.
- *  - FR-48 `public_lifetime_stats` + `usernames/{usernameLower}` peer reads restricted to
- *          registered (non-anonymous) accounts (self-access stays unconditional).
+ *  - FR-48 `public_lifetime_stats` peer reads restricted to registered (non-anonymous)
+ *          accounts (self-access stays unconditional). `usernames/{usernameLower}` was
+ *          also registered-only here — FR-71 below closes it to deny outright.
  *
  * F-22/F-23 (COPPA v3) add:
  *  - FR-66(a) `families/{id}/pending` client-create denial — SUPERSEDES the F-5a G-6
@@ -18,6 +19,14 @@
  *          bound to a familyId the creator belongs to;
  *  - FR-67  `share_codes` reads scoped to the creator or the named family — the collection
  *          was world-listable, which made the 6-character code space irrelevant.
+ *
+ * F-27 (COPPA v3) adds:
+ *  - FR-71 `usernames/{usernameLower}` reads move from FR-48's "any registered account" to
+ *          deny for everyone — SUPERSEDES the FR-48 usernames sub-clause above. Exact-match
+ *          lookup lives server-side in the `searchUsers` callable (Admin SDK, bypasses these
+ *          rules) and the shipped client never read this collection directly, so closing it
+ *          is zero-regression and removes an enumeration path with none of `searchUsers`'
+ *          protections (no rate limit, no audit row).
  *
  * F-5a covers:
  *  - FR-7  user-doc diff-guard: no client write may change `isChildAccount` or
@@ -954,12 +963,11 @@ describe("FR-37: public_lifetime_stats hides children from strangers", () => {
 // FR-48 (F-11) — adult discoverability controls: registered-only reads
 // ---------------------------------------------------------------------------
 
-describe("FR-48: public_lifetime_stats and usernames are registered-only for peers", () => {
+describe("FR-48: public_lifetime_stats is registered-only for peers", () => {
   beforeEach(async () => {
     await seed({
       "users/grown": { userName: "Grown" },
       "public_lifetime_stats/grown": { platesFound: 7 },
-      "usernames/grown": { userId: "grown" },
     });
   });
 
@@ -970,13 +978,30 @@ describe("FR-48: public_lifetime_stats and usernames are registered-only for pee
   it("allows a registered caller reading public_lifetime_stats for another account", async () => {
     await assertSucceeds(getDoc(doc(registered("stranger"), "public_lifetime_stats/grown")));
   });
+});
+
+// FR-71 (F-27, COPPA v3): usernames/{usernameLower} moves from FR-48's "registered-only" to
+// deny for EVERYONE — self included, anonymous included. There is no more "for peers" carve
+// -out to test; the collection has exactly one live reader now (the searchUsers callable,
+// via the Admin SDK, which never goes through these rules at all).
+describe("FR-71: usernames index is closed to every client read", () => {
+  beforeEach(async () => {
+    await seed({
+      "users/grown": { userName: "Grown" },
+      "usernames/grown": { userId: "grown" },
+    });
+  });
 
   it("denies an anonymous caller reading the usernames index", async () => {
     await assertFails(getDoc(doc(anonymous("anon1"), "usernames/grown")));
   });
 
-  it("allows a registered caller reading the usernames index", async () => {
-    await assertSucceeds(getDoc(doc(registered("stranger"), "usernames/grown")));
+  it("denies a registered caller reading the usernames index (closed by FR-71 — was allowed under FR-48)", async () => {
+    await assertFails(getDoc(doc(registered("stranger"), "usernames/grown")));
+  });
+
+  it("denies the owner's own account reading its own usernames row — no self-carve-out was ever added", async () => {
+    await assertFails(getDoc(doc(registered("grown"), "usernames/grown")));
   });
 
   it("usernames writes remain server-only, for both anonymous and registered callers", async () => {
@@ -1194,7 +1219,9 @@ describe("FR-85: consented-child capability parity", () => {
       },
     });
     const kid = FR85_CALLERS.consentedChild();
-    // usernames maps a name straight to a uid — registration stays the gate (FR-48).
+    // usernames maps a name straight to a uid — closed to every client read (FR-71; was
+    // registration-gated under FR-48 before v3, so a consented child was already excluded
+    // either way — this pin now rests on the stronger deny-all rule).
     await assertFails(getDoc(doc(kid, "usernames/parent")));
     // Invite responses are Admin-SDK only for a child; the client rule stays registered-only.
     await assertFails(updateDoc(doc(kid, "invites/inv1"), { status: "accepted" }));

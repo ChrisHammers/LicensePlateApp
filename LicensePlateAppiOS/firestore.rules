@@ -157,9 +157,11 @@ service cloud.firestore {
     // silently lost reads they are entitled to (their own roster hydrated to raw uids: the
     // exact degradation the FR-12 carve-out above exists to prevent, in the other direction).
     // This is the replacement proxy, and it is used on READ surfaces ONLY. Registration stays
-    // the gate on `families` create, `share_codes` create/update, `usernames` reads and every
-    // invite surface, where it is a genuine anti-abuse gate (children are separately barred
-    // there by `callerIsNotChildAccount()`, FR-24/FR-66(d)).
+    // the gate on `families` create, `share_codes` create/update, and every invite surface,
+    // where it is a genuine anti-abuse gate (children are separately barred there by
+    // `callerIsNotChildAccount()`, FR-24/FR-66(d)). `usernames` reads are no longer
+    // registration-gated at all — FR-71 closes them to deny for everyone, so there is no
+    // widening question there either.
     //
     // Server-verified end to end. Two of the three facts are server-written only:
     // `isChildAccount` (FR-7 diff-guard) and the member doc (FR-8, client write:false).
@@ -299,12 +301,16 @@ service cloud.firestore {
     }
 
     // USERNAME INDEX (write via Cloud Function / transaction)
-    // FR-48 (COPPA F-11): reads restricted to registered (non-anonymous) accounts — this
-    // doc maps a username straight to a uid, so an anonymous caller gets no exact-match
-    // lookup path. The shipped client never reads this collection directly (all lookups
-    // go through the `searchUsers` callable via the Admin SDK), so there is no regression.
+    // FR-71 (F-27, COPPA v3): closed to deny entirely — SUPERSEDES FR-48's "registered
+    // (non-anonymous) accounts" read rule below. This doc maps a username straight to a
+    // uid; leaving it client-readable at all let any registered caller enumerate arbitrary
+    // usernames one `get()` at a time with none of `searchUsers`' protections — no
+    // `user_search` rate limit, no audit row, no length floor. Verified zero-regression the
+    // same way FR-48 did: the shipped client never reads this collection directly (all
+    // lookups go through the `searchUsers` callable via the Admin SDK, which bypasses these
+    // rules entirely, so denying client reads here does not touch that path).
     match /usernames/{usernameLower} {
-      allow read: if isRegisteredAccount();
+      allow read: if false;
       allow write: if false; // server-only to preserve uniqueness
     }
 

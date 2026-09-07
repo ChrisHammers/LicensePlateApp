@@ -26,8 +26,8 @@ import * as admin from "firebase-admin";
 import {
   INVITE_RATE_LIMIT_COLLECTION,
   INVITE_RATE_LIMIT_MAX_PER_WINDOW,
-  INVITE_RATE_LIMITED_MESSAGE,
   INVITE_RATE_LIMITED_REASON,
+  inviteRateLimitedMessage,
   InviteRateLimitScope,
   evaluateInviteRateLimit,
   inviteRateLimitDocId,
@@ -83,7 +83,7 @@ export async function consumeInviteRateLimit(
   if (!decision.allowed) {
     throw new functions.https.HttpsError(
       "resource-exhausted",
-      INVITE_RATE_LIMITED_MESSAGE,
+      inviteRateLimitedMessage(input.scope),
       { reason: INVITE_RATE_LIMITED_REASON, retryAfterMs: decision.retryAfterMs }
     );
   }

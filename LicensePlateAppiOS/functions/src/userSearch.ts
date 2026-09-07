@@ -29,6 +29,7 @@ import {
 import { isUserSearchable } from "./utils/validation";
 import { isChildAccountUserData } from "./childAccountCore";
 import { searchIndexHintsForUser } from "./userResidueCleanup";
+import { consumeInviteRateLimit } from "./inviteRateLimit";
 
 const db = admin.firestore();
 
@@ -147,6 +148,34 @@ export const searchUsers = enforcedCallable(async (data, context) => {
   const queryRaw = typeof data?.query === "string" ? data.query : "";
   const query = queryRaw.trim();
 
+  // FR-71 (F-27): the child-caller check moves ahead of EVERYTHING else — query-length
+  // validation, `classifySearchQuery`, and the `user_search` rate-limit budget — so a child
+  // caller is short-circuited to the same empty-result shape FR-24 already established
+  // before the query string is classified or a single unit of search-specific work runs.
+  // This mirrors the "child checks stay ahead of budget" discipline already applied to
+  // `sendFamilyInvite`/`sendFriendInvite` (`childAccessGuards.ts`), extended here to cover
+  // classification too, not just the rate limit. Still audited — a child's search is a real
+  // event worth a row — but with a fixed, classification-free shape rather than the
+  // query's real `kind`/fingerprint, since `classifySearchQuery` must never see the string.
+  const callerDoc = await db.collection("users").doc(callerId).get();
+  const callerIsChild = isChildAccountUserData(callerDoc.data());
+
+  if (callerIsChild) {
+    await writeAuditLog({
+      eventType: "user_search_performed",
+      actorId: callerId,
+      subjectType: "user",
+      subjectId: callerId,
+      metadata: {
+        kind: "child_short_circuit",
+        resultCount: 0,
+        queryHash: createHash("sha256").update(query.toLowerCase()).digest("hex").slice(0, 16),
+      },
+      clientMetadata,
+    });
+    return { results: [] };
+  }
+
   if (query.length < 3) {
     throw new functions.https.HttpsError(
       "invalid-argument",
@@ -154,19 +183,16 @@ export const searchUsers = enforcedCallable(async (data, context) => {
     );
   }
 
+  // FR-71 (F-27): per-caller search budget, consumed once the caller is known not to be a
+  // child and the query is well-formed — same placement discipline as
+  // `consumeInviteRateLimit` in `sendFamilyInvite`/`sendFriendInvite`/`sendTripInvite`: after
+  // every free short-circuit, before any paid lookup work.
+  await consumeInviteRateLimit(db, { scope: "user_search", userId: callerId });
+
   const kind = classifySearchQuery(query);
-  let results: PublicSearchHit[] = [];
+  let results: PublicSearchHit[];
 
-  // FR-24 (COPPA F-5b): a child caller — consented or not — gets zero hits. Returned as a
-  // normal empty result set rather than an error so the child's own app instance behaves
-  // exactly like an adult's fruitless search (FR-21: no child-only signal on that device);
-  // the client hides the entry point entirely (F-6/F-8).
-  const callerDoc = await db.collection("users").doc(callerId).get();
-  const callerIsChild = isChildAccountUserData(callerDoc.data());
-
-  if (callerIsChild) {
-    results = [];
-  } else if (kind === "email") {
+  if (kind === "email") {
     results = await searchByEmail(query, callerId);
   } else if (kind === "phone") {
     results = await searchByPhone(query, callerId);

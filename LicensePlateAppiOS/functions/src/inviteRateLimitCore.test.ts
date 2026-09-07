@@ -17,6 +17,9 @@ import {
   inviteRateLimitDocId,
   inviteRateLimitDocIdsForUser,
   readInviteRateLimitWindow,
+  INVITE_RATE_LIMITED_MESSAGE,
+  USER_SEARCH_RATE_LIMITED_MESSAGE,
+  inviteRateLimitedMessage,
 } from "./inviteRateLimitCore";
 
 const NOW = 1_700_000_000_000;
@@ -170,6 +173,16 @@ describe("configured limits", () => {
     ]) {
       expect(Number.isInteger(limit)).toBe(true);
       expect(limit).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("inviteRateLimitedMessage (FR-71 / F-27)", () => {
+  it("names searches for the user_search scope and invites for every invite scope", () => {
+    expect(inviteRateLimitedMessage("user_search")).toBe(USER_SEARCH_RATE_LIMITED_MESSAGE);
+    expect(inviteRateLimitedMessage("user_search")).toMatch(/searches/);
+    for (const scope of ["trip_invite", "friend_invite", "family_invite"] as const) {
+      expect(inviteRateLimitedMessage(scope)).toBe(INVITE_RATE_LIMITED_MESSAGE);
     }
   });
 });

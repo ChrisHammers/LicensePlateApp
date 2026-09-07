@@ -59,12 +59,39 @@ export const FRIEND_INVITE_MAX_PER_WINDOW = 20;
  */
 export const SHARE_REDEEM_MAX_PER_WINDOW = 10;
 
-export type InviteRateLimitScope = "trip_invite" | "friend_invite" | "share_redeem";
+/**
+ * Family invites per sender per hour (FR-71 / OD-4).
+ *
+ * Sizing: matches `FRIEND_INVITE_MAX_PER_WINDOW` — OD-4 pins it to "20/hour (matches
+ * existing)" rather than deriving a family-specific number, since a family invite is the
+ * same shape of abuse (bulk stranger contact from a compromised or malicious sender) as a
+ * friend invite, just scoped to one family instead of one person's graph.
+ */
+export const FAMILY_INVITE_MAX_PER_WINDOW = 20;
+
+/**
+ * `searchUsers` calls per caller per hour (FR-71 / OD-4).
+ *
+ * Sizing: OD-4's proposed default. Search is read-only and already choke-pointed (FR-9/24
+ * child exclusion, per-modality privacy checks), so the limit exists purely to bound
+ * enumeration cost — thirty distinct lookups/hour is generous for legitimate "find my
+ * friend" usage while making a graph-walking scrape expensive across many hours.
+ */
+export const USER_SEARCH_MAX_PER_WINDOW = 30;
+
+export type InviteRateLimitScope =
+  | "trip_invite"
+  | "friend_invite"
+  | "share_redeem"
+  | "family_invite"
+  | "user_search";
 
 export const INVITE_RATE_LIMIT_MAX_PER_WINDOW: Record<InviteRateLimitScope, number> = {
   trip_invite: TRIP_INVITE_MAX_PER_WINDOW,
   friend_invite: FRIEND_INVITE_MAX_PER_WINDOW,
   share_redeem: SHARE_REDEEM_MAX_PER_WINDOW,
+  family_invite: FAMILY_INVITE_MAX_PER_WINDOW,
+  user_search: USER_SEARCH_MAX_PER_WINDOW,
 };
 
 /**
@@ -75,6 +102,15 @@ export const INVITE_RATE_LIMIT_MAX_PER_WINDOW: Record<InviteRateLimitScope, numb
  */
 export const INVITE_RATE_LIMITED_MESSAGE =
   "Too many invites sent recently. Please try again later.";
+
+/** FR-71 (F-27): the `user_search` scope is not an invite, and the client shows this
+ *  string verbatim (owner-found 2026-09-07: a search limit read "Too many invites"). */
+export const USER_SEARCH_RATE_LIMITED_MESSAGE =
+  "Too many searches recently. Please try again later.";
+
+export function inviteRateLimitedMessage(scope: InviteRateLimitScope): string {
+  return scope === "user_search" ? USER_SEARCH_RATE_LIMITED_MESSAGE : INVITE_RATE_LIMITED_MESSAGE;
+}
 
 export const INVITE_RATE_LIMITED_REASON = "invite_rate_limited";
 

@@ -13,11 +13,22 @@
  * FR-9 / FR-24 — `searchUsers` itself: a child is invisible on every modality *including*
  * the raw `userNameLower` prefix scan (which reads user docs directly and so survives index
  * removal), and a child caller gets an empty result set.
+ *
+ * FR-71 (F-27, COPPA v3) extends this file with two more properties `searchUsers` must hold:
+ *  - the `user_search` rate limit (`consumeInviteRateLimit`, same primitive as the invite
+ *    callables) — exhaustion, per-caller isolation, window recovery;
+ *  - the child-caller short-circuit runs BEFORE `classifySearchQuery` ever sees the query
+ *    string, and before the rate-limit budget is touched at all. The `./userSearchCore`
+ *    partial mock below records every `classifySearchQuery` call (delegating straight
+ *    through to the real implementation, same "spy that calls straight through" shape as
+ *    `familyJoinRequestDuplicates.test.ts`'s provisional-account mock) so that ordering is a
+ *    property of the call graph, not inferred from the (already-empty, already-pinned)
+ *    result shape.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-const holder = vi.hoisted(() => ({ db: undefined as any }));
+const holder = vi.hoisted(() => ({ db: undefined as any, classifyCalls: [] as string[] }));
 
 vi.mock("firebase-admin", async () => {
   const { FakeFirestore } = await import("./testSupport/fakeFirestore");
@@ -34,15 +45,42 @@ vi.mock("firebase-admin", async () => {
   return { default: { firestore }, firestore };
 });
 
+// FR-71: records every call `userSearch.ts` makes into `classifySearchQuery`, without
+// changing its behavior — real classification still runs via `actual`. This is the "unit
+// seam" the child-caller ordering test needs: `classifySearchQuery` never touches Firestore,
+// so there is no read/write on the FakeFirestore to observe its absence with directly.
+vi.mock("./userSearchCore", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./userSearchCore")>();
+  return {
+    ...actual,
+    classifySearchQuery: (query: string) => {
+      holder.classifyCalls.push(query);
+      return actual.classifySearchQuery(query);
+    },
+  };
+});
+
 import type { FakeFirestore } from "./testSupport/fakeFirestore";
 import {
   onUserContactSearchIndexSync,
   onUserProfileSearchIndexSync,
   searchUsers,
 } from "./userSearch";
+import {
+  USER_SEARCH_RATE_LIMITED_MESSAGE,
+  INVITE_RATE_LIMITED_REASON,
+  INVITE_RATE_LIMIT_COLLECTION,
+  INVITE_RATE_LIMIT_WINDOW_MS,
+  USER_SEARCH_MAX_PER_WINDOW,
+  inviteRateLimitDocId,
+} from "./inviteRateLimitCore";
 
 function db(): FakeFirestore {
   return holder.db as FakeFirestore;
+}
+
+function rateLimitCounter(uid: string) {
+  return db().store.get(`${INVITE_RATE_LIMIT_COLLECTION}/${inviteRateLimitDocId("user_search", uid)}`);
 }
 
 interface Snap {
@@ -114,6 +152,11 @@ function indexRows(): string[] {
 beforeEach(() => {
   db().store.clear();
   db().writeCount = 0;
+  holder.classifyCalls = [];
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("FR-11: index syncers exclude children (profile trigger)", () => {
@@ -448,5 +491,145 @@ describe("§3.1.1 item 9: a stale sync execution can never resurrect a deleted u
     expect(
       (db().store.get("users/adult") as Record<string, unknown>).userNameLower
     ).toBe("roadking");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FR-71 (F-27): the child-caller short-circuit runs ahead of classification and budget
+// ---------------------------------------------------------------------------
+
+describe("FR-71: child callers short-circuit before classifySearchQuery or the rate limit", () => {
+  beforeEach(() => {
+    db().seed("users/kid", {
+      userName: "KidRacer",
+      isRegistered: true,
+      isChildAccount: true,
+    });
+    db().seed("users/grown", { userName: "Grown", isRegistered: true });
+  });
+
+  it("never calls classifySearchQuery for a child caller", async () => {
+    const response = await runSearch("kid", "grown");
+    expect(response.results).toEqual([]);
+    expect(holder.classifyCalls).toEqual([]);
+  });
+
+  it("control: classifySearchQuery DOES run for a non-child caller (proves the spy is live)", async () => {
+    await runSearch("grown", "somebody-else");
+    expect(holder.classifyCalls).toEqual(["somebody-else"]);
+  });
+
+  it("spends no user_search rate-limit budget for a child caller", async () => {
+    await runSearch("kid", "grown");
+    expect(rateLimitCounter("kid")).toBeUndefined();
+  });
+
+  it("a child caller with an exhausted OTHER user's budget is unaffected — the gate never reaches the budget check either way", async () => {
+    // Not a realistic state (a child cannot have spent user_search budget, since it is only
+    // ever consumed past the child gate) — seeded anyway to prove the child branch does not
+    // even LOOK at the counter doc for its own uid.
+    db().seed(
+      `${INVITE_RATE_LIMIT_COLLECTION}/${inviteRateLimitDocId("user_search", "kid")}`,
+      { userId: "kid", scope: "user_search", windowStartAtMs: Date.now(), count: 999 }
+    );
+    const response = await runSearch("kid", "grown");
+    expect(response.results).toEqual([]);
+    // Untouched — still whatever nonsense was seeded, never read or rewritten by a decision.
+    expect(rateLimitCounter("kid")).toMatchObject({ count: 999 });
+  });
+
+  it("still enforces the length floor for a NON-child caller (unchanged behavior)", async () => {
+    await expect(runSearch("grown", "ab")).rejects.toMatchObject({
+      code: "invalid-argument",
+    });
+    // The length floor already ran ahead of classification before FR-71 — still true.
+    expect(holder.classifyCalls).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FR-71 (F-27): searchUsers rate limiting
+// ---------------------------------------------------------------------------
+
+describe("FR-71: searchUsers rate limiting", () => {
+  beforeEach(() => {
+    db().seed("users/seeker", { userName: "Seeker", isRegistered: true });
+  });
+
+  it("allows exactly the configured number of searches, then refuses", async () => {
+    for (let i = 0; i < USER_SEARCH_MAX_PER_WINDOW; i += 1) {
+      await expect(runSearch("seeker", "nomatchquery")).resolves.toMatchObject({
+        results: [],
+      });
+    }
+    expect(rateLimitCounter("seeker")).toMatchObject({
+      count: USER_SEARCH_MAX_PER_WINDOW,
+    });
+
+    const error = await runSearch("seeker", "nomatchquery").catch((e) => e);
+    expect(error.code).toBe("resource-exhausted");
+    // Search-scoped wording (owner-found 2026-09-07: the limit read "Too many invites").
+    expect(error.message).toBe(USER_SEARCH_RATE_LIMITED_MESSAGE);
+    expect(error.details).toMatchObject({ reason: INVITE_RATE_LIMITED_REASON });
+    expect(rateLimitCounter("seeker")).toMatchObject({
+      count: USER_SEARCH_MAX_PER_WINDOW,
+    });
+  });
+
+  it("is per-caller: exhausting one searcher does not block another", async () => {
+    db().seed(
+      `${INVITE_RATE_LIMIT_COLLECTION}/${inviteRateLimitDocId("user_search", "seeker")}`,
+      {
+        userId: "seeker",
+        scope: "user_search",
+        windowStartAtMs: Date.now(),
+        count: USER_SEARCH_MAX_PER_WINDOW,
+      }
+    );
+    await expect(runSearch("seeker", "nomatchquery")).rejects.toMatchObject({
+      code: "resource-exhausted",
+    });
+
+    db().seed("users/otherseeker", { userName: "OtherSeeker", isRegistered: true });
+    await expect(runSearch("otherseeker", "nomatchquery")).resolves.toMatchObject({
+      results: [],
+    });
+  });
+
+  it("recovers once the window lapses", async () => {
+    vi.useFakeTimers();
+    const start = new Date("2026-08-13T12:00:00Z");
+    vi.setSystemTime(start);
+
+    for (let i = 0; i < USER_SEARCH_MAX_PER_WINDOW; i += 1) {
+      await runSearch("seeker", "nomatchquery");
+    }
+    await expect(runSearch("seeker", "nomatchquery")).rejects.toMatchObject({
+      code: "resource-exhausted",
+    });
+
+    vi.setSystemTime(new Date(start.getTime() + INVITE_RATE_LIMIT_WINDOW_MS));
+    await expect(runSearch("seeker", "nomatchquery")).resolves.toMatchObject({
+      results: [],
+    });
+    expect(rateLimitCounter("seeker")).toMatchObject({ count: 1 });
+  });
+
+  it("a rate-limited search writes nothing (refusal spends no budget beyond the cap)", async () => {
+    db().seed(
+      `${INVITE_RATE_LIMIT_COLLECTION}/${inviteRateLimitDocId("user_search", "seeker")}`,
+      {
+        userId: "seeker",
+        scope: "user_search",
+        windowStartAtMs: Date.now(),
+        count: USER_SEARCH_MAX_PER_WINDOW,
+      }
+    );
+    const writesBefore = db().writeCount;
+    await runSearch("seeker", "nomatchquery").catch(() => undefined);
+    expect(db().writeCount).toBe(writesBefore);
+    expect(rateLimitCounter("seeker")).toMatchObject({
+      count: USER_SEARCH_MAX_PER_WINDOW,
+    });
   });
 });
