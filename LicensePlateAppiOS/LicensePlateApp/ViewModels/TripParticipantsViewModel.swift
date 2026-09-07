@@ -150,13 +150,15 @@ final class TripParticipantsViewModel: ObservableObject {
 
             let participantIds = Set(session.participants.map(\.userId))
             let displayNames = await displayNamesProvider(participantIds)
-            let unknown = "Unknown user".localized
             passengers = session.participants.map { participant in
                 let isOwner = participant.role == .owner
                     || (session.createdBy != nil && participant.userId == session.createdBy)
                 return PassengerDisplayRow(
                     userId: participant.userId,
-                    displayName: displayNames[participant.userId] ?? unknown,
+                    displayName: ParticipantDisplayName.resolved(
+                        displayNames[participant.userId],
+                        participantId: participant.userId
+                    ),
                     roleLabel: isOwner ? "Driver".localized : "Passenger".localized,
                     isCreator: isOwner
                 )

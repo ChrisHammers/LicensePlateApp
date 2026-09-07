@@ -118,7 +118,7 @@ final class InvitePlayersViewModel: ObservableObject {
             rows.append(
                 InviteCandidate(
                     userId: id,
-                    displayName: displayNames[id] ?? id,
+                    displayName: ParticipantDisplayName.resolved(displayNames[id], participantId: id),
                     sourceLabel: source,
                     isAlreadyParticipant: participantIds.contains(id),
                     hasPendingInvite: pendingInviteIds.contains(id)

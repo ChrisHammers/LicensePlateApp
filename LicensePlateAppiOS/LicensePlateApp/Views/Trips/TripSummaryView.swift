@@ -211,7 +211,10 @@ struct TripSummaryView: View {
     }
 
     private func displayName(for participantId: String) -> String {
-        let name = participantDisplayNames[participantId] ?? participantId
+        let name = ParticipantDisplayName.resolved(
+            participantDisplayNames[participantId],
+            participantId: participantId
+        )
         return ParticipantDisplayName.decorated(
             name,
             userId: participantId,

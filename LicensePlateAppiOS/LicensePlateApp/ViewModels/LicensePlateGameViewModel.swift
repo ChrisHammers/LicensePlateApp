@@ -412,7 +412,10 @@ final class LicensePlateGameViewModel: ObservableObject {
         let names = await UserRepository.shared.displayNames(forUserIds: [info.firstFinderParticipantId])
         let firstName = nameForParticipant(
             info.firstFinderParticipantId,
-            displayName: names[info.firstFinderParticipantId] ?? info.firstFinderParticipantId
+            displayName: ParticipantDisplayName.resolved(
+                names[info.firstFinderParticipantId],
+                participantId: info.firstFinderParticipantId
+            )
         )
         let tripName = info.tripSessionName
         let message: String
@@ -746,7 +749,10 @@ final class LicensePlateGameViewModel: ObservableObject {
                 guard !id.isEmpty, !seen.contains(id) else { return nil }
                 seen.insert(id)
                 let identity = identities[id]
-                let displayName = nameForParticipant(id, displayName: identity?.displayName ?? id)
+                let displayName = nameForParticipant(
+                    id,
+                    displayName: ParticipantDisplayName.resolved(identity?.displayName, participantId: id)
+                )
                 return FinderAvatarPresentation(
                     participantId: id,
                     displayName: displayName,

@@ -530,7 +530,10 @@ struct LicensePlateGameView: View {
     }
 
     private func competitiveDisplayName(for participantId: String) -> String {
-        let name = competitiveDisplayNames[participantId] ?? participantId
+        let name = ParticipantDisplayName.resolved(
+            competitiveDisplayNames[participantId],
+            participantId: participantId
+        )
         return ParticipantDisplayName.decorated(
             name,
             userId: participantId,
@@ -539,7 +542,10 @@ struct LicensePlateGameView: View {
     }
 
     private func progressionScoringDisplayName(for participantId: String) -> String {
-        let name = progressionScoringNames[participantId] ?? participantId
+        let name = ParticipantDisplayName.resolved(
+            progressionScoringNames[participantId],
+            participantId: participantId
+        )
         return ParticipantDisplayName.decorated(
             name,
             userId: participantId,

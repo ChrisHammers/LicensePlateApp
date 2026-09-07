@@ -911,6 +911,9 @@
 "trip_summary.share.a11y_label" = "Compartir viaje";
 "trip_summary.share.a11y_hint" = "Comparte una imagen con la marca de este viaje";
 "trip_summary.share.neutral_player %d" = "Jugador %d";
+/* In-app fallback labels for participants with no resolvable name (owner-found 2026-09-07) */
+"participant.former_player" = "Exjugador";
+"participant.unknown_player" = "Jugador";
 "trip_setup.child_name_hint" = "El nombre del viaje puede aparecer en las imágenes de resumen compartidas: elige uno que no incluya nombres reales ni lugares que quieras mantener privados.";
 "trip_summary.share.no_games" = "No hay juegos en este viaje";
 "trip_summary.share.participant_score %@ %@" = "%@ encontrados · %@";

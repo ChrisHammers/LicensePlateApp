@@ -942,6 +942,9 @@
 "trip_summary.share.a11y_label" = "Share trip";
 "trip_summary.share.a11y_hint" = "Shares a branded image of this trip";
 "trip_summary.share.neutral_player %d" = "Player %d";
+/* In-app fallback labels for participants with no resolvable name (owner-found 2026-09-07) */
+"participant.former_player" = "Former player";
+"participant.unknown_player" = "Player";
 "trip_setup.child_name_hint" = "Trip names can appear on shared recap images — pick one that doesn't include real names or places you want private.";
 "trip_summary.share.no_games" = "No games on this trip";
 "trip_summary.share.participant_score %@ %@" = "%@ found · %@";

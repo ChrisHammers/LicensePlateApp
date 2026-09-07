@@ -234,14 +234,17 @@ class UserRepository: ObservableObject {
         })
     }
 
-    /// Returns a dictionary of userId -> userName for the given IDs. Missing or failed lookups fall back to the id as the value.
+    /// Returns a dictionary of userId -> userName for the given IDs. Ids with no resolvable
+    /// name are ABSENT — never the id echoed back as a name. Owner-found 2026-09-07: the old
+    /// "fall back to the id" convenience handed every screen a deleted account's FR-50
+    /// tombstone (`deleted-user-<hash>`) as if it were a username, and no view-level fallback
+    /// could ever run because the dictionary already had a value. Callers decide the label
+    /// (`ParticipantDisplayName.resolved`).
     func displayNames(forUserIds ids: Set<String>) async -> [String: String] {
         var result: [String: String] = [:]
         for id in ids {
-            if let user = try? await getUser(userId: id) {
+            if let user = try? await getUser(userId: id), !user.userName.isEmpty {
                 result[id] = user.userName
-            } else {
-                result[id] = id
             }
         }
         return result
@@ -276,19 +279,14 @@ class UserRepository: ObservableObject {
         let missing = ids.subtracting(Set(result.keys))
         guard !missing.isEmpty else { return result }
 
+        // Unresolvable ids stay ABSENT (same contract as `displayNames(forUserIds:)` and
+        // `cachedIdentityMap`): an id is never echoed back as a display name.
         for id in missing {
             if let user = try? await getUser(userId: id) {
                 result[id] = UserIdentitySnapshot(
                     userId: id,
                     displayName: user.displayName,
                     avatarId: user.avatarId,
-                    legacyFallbackImageName: nil
-                )
-            } else {
-                result[id] = UserIdentitySnapshot(
-                    userId: id,
-                    displayName: id,
-                    avatarId: nil,
                     legacyFallbackImageName: nil
                 )
             }

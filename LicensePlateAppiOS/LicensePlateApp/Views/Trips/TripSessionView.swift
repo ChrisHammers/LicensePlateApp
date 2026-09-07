@@ -592,7 +592,7 @@ private struct TripSessionLeaderboardSection: View {
     }
 
     private func displayName(for participantId: String) -> String {
-        let name = displayNames[participantId] ?? "Unknown participant".localized
+        let name = ParticipantDisplayName.resolved(displayNames[participantId], participantId: participantId)
         return ParticipantDisplayName.decorated(
             name,
             userId: participantId,
