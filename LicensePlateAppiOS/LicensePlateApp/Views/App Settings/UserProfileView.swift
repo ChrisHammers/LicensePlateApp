@@ -86,6 +86,11 @@ struct AuthenticationStatusPresentation: Equatable, Sendable {
     /// Non-interactive child notice (`ChildPremiumInlineNotice`) where there is nothing
     /// to do.
     var childNoticeKey: String?
+    /// FR-74(c′), owner-ruled 2026-09-07: the mis-answer recovery is a line of
+    /// information, not a control. Which line depends on the state — a child with a
+    /// family is told the captain can fix it; a child without one is told to join a
+    /// family (captain fixes it) or reinstall. Nil for every non-child state.
+    var wrongBirthdayGuidanceKey: String?
 
     struct ChildGuidance: Equatable, Sendable {
         var titleKey: String
@@ -262,7 +267,8 @@ enum AuthenticationStatusPolicy {
                     titleKey: "child_gate.screen.join_title",
                     bodyKey: "child_gate.screen.join_body",
                     showsJoinFamilyButton: true
-                )
+                ),
+                wrongBirthdayGuidanceKey: "child_gate.signup.wrong_birthday_info"
             )
 
         case .transientDeclaredChild:
@@ -290,7 +296,8 @@ enum AuthenticationStatusPolicy {
                 isCloudSynced: true,
                 showsSignIn: false,
                 showsRegisteredAccountControls: false,
-                childNoticeKey: "child_gate.account.consented_notice"
+                childNoticeKey: "child_gate.account.consented_notice",
+                wrongBirthdayGuidanceKey: "child_gate.account.wrong_birthday_family"
             )
 
         case .postRevocationChild:
@@ -304,7 +311,8 @@ enum AuthenticationStatusPolicy {
                     titleKey: "child_gate.screen.join_title",
                     bodyKey: "child_gate.screen.join_body",
                     showsJoinFamilyButton: true
-                )
+                ),
+                wrongBirthdayGuidanceKey: "child_gate.signup.wrong_birthday_info"
             )
         }
     }
@@ -605,6 +613,13 @@ struct UserProfileView: View {
 
                           if let noticeKey = status.childNoticeKey {
                               ChildPremiumInlineNotice(textKey: noticeKey)
+                          }
+
+                          if let guidanceKey = status.wrongBirthdayGuidanceKey {
+                              Text(guidanceKey.localized)
+                                  .font(.system(.caption, design: .rounded))
+                                  .foregroundStyle(Color.Theme.softBrown)
+                                  .fixedSize(horizontal: false, vertical: true)
                           }
 
                           if status.showsSignIn {
@@ -1300,14 +1315,6 @@ private struct ChildAccountSectionGuidance: View {
                     hint: "child_gate.screen.join_button_hint".localized
                 )
             }
-
-            // FR-74(c′), owner-ruled 2026-09-07: the mis-answer recovery is information,
-            // not a control — same line `ChildAccountCreationGuidanceView` shows. For a
-            // local child who answered at launch, this card is the only place they look.
-            Text("child_gate.signup.wrong_birthday_info".localized)
-                .font(.system(.caption, design: .rounded))
-                .foregroundStyle(Color.Theme.softBrown)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .sheet(isPresented: $showJoinFamilySheet) {
             JoinFamilySheet()

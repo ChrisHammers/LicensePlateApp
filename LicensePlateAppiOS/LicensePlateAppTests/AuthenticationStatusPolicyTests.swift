@@ -109,6 +109,20 @@ struct AuthenticationStatusPolicyTests {
         #expect(p.showsSignIn == true)
     }
 
+    /// FR-74(c′), owner-ruled 2026-09-07: the mis-answer recovery is one line of copy, and
+    /// which line depends on whether a captain exists to fix it. Never shown to adults.
+    @Test func wrongBirthdayGuidanceDependsOnWhetherACaptainExists() {
+        #expect(presentation(.localUnconsentedChild).wrongBirthdayGuidanceKey
+                == "child_gate.signup.wrong_birthday_info")
+        #expect(presentation(.postRevocationChild).wrongBirthdayGuidanceKey
+                == "child_gate.signup.wrong_birthday_info")
+        #expect(presentation(.consentedChild).wrongBirthdayGuidanceKey
+                == "child_gate.account.wrong_birthday_family")
+        #expect(presentation(.transientDeclaredChild).wrongBirthdayGuidanceKey == nil)
+        #expect(presentation(.localAdultGuest).wrongBirthdayGuidanceKey == nil)
+        #expect(presentation(.anonymousAdult).wrongBirthdayGuidanceKey == nil)
+    }
+
     // MARK: - (4)–(7) Child states
 
     /// (4) FR-60 local-first child. The owner's fix: the header stays "Local Account" (it is

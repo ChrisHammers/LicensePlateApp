@@ -1401,7 +1401,8 @@
 "child_gate.signup.keep_playing" = "Seguir jugando";
 "child_gate.signup.keep_playing_hint" = "Cierra esta pantalla y vuelve al juego";
 /* FR-74(c'), owner-ruled 2026-09-07: the mis-answer recovery is information, not a control. */
-"child_gate.signup.wrong_birthday_info" = "¿Elegiste mal tu fecha de nacimiento? Elimina y vuelve a instalar la app para empezar de nuevo. Los viajes guardados solo en este dispositivo se perderán.";
+"child_gate.signup.wrong_birthday_info" = "¿Elegiste mal tu fecha de nacimiento? Únete a una familia y el capitán podrá corregirla, o reinstala la app para empezar de nuevo (los viajes guardados solo en este dispositivo se perderán).";
+"child_gate.account.wrong_birthday_family" = "¿Elegiste mal tu fecha de nacimiento? El capitán de tu familia puede corregirla en Ajustes de familia.";
 "child_gate.join.setup_incomplete" = "No pudimos terminar de configurar eso. Revisa tu conexión e intenta el código de nuevo.";
 "child_gate.screen.join_title" = "Únete a tu familia para jugar juntos";
 "child_gate.screen.join_body" = "Pídele a tu papá o mamá que te agregue a su familia con un código de compartir. Las funciones familiares se desbloquean cuando te unes.";

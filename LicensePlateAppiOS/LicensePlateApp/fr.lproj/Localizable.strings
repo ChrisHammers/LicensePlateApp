@@ -1401,7 +1401,8 @@
 "child_gate.signup.keep_playing" = "Continuer à jouer";
 "child_gate.signup.keep_playing_hint" = "Ferme cet écran et retourne au jeu";
 /* FR-74(c'), owner-ruled 2026-09-07: the mis-answer recovery is information, not a control. */
-"child_gate.signup.wrong_birthday_info" = "Tu t'es trompé de date de naissance ? Supprime et réinstalle l'app pour recommencer. Les voyages enregistrés uniquement sur cet appareil seront perdus.";
+"child_gate.signup.wrong_birthday_info" = "Tu t'es trompé de date de naissance ? Rejoins une famille et le capitaine pourra la corriger, ou réinstalle l'app pour recommencer (les voyages enregistrés uniquement sur cet appareil seront perdus).";
+"child_gate.account.wrong_birthday_family" = "Tu t'es trompé de date de naissance ? Le capitaine de ta famille peut la corriger dans les réglages de la famille.";
 "child_gate.join.setup_incomplete" = "Nous n'avons pas pu terminer la configuration. Vérifie ta connexion et réessaie le code.";
 "child_gate.screen.join_title" = "Rejoins ta famille pour jouer ensemble";
 "child_gate.screen.join_body" = "Demande à un parent de t'ajouter à sa famille avec un code de partage. Les fonctions familiales se débloquent quand tu rejoins ta famille.";

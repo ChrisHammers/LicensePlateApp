@@ -1432,7 +1432,8 @@
 "child_gate.signup.keep_playing" = "Keep Playing";
 "child_gate.signup.keep_playing_hint" = "Closes this screen and returns to the game";
 /* FR-74(c'), owner-ruled 2026-09-07: the mis-answer recovery is information, not a control. */
-"child_gate.signup.wrong_birthday_info" = "Picked the wrong birthday? Delete and reinstall the app to start over. Trips saved only on this device will be lost.";
+"child_gate.signup.wrong_birthday_info" = "Picked the wrong birthday? Join a family and the captain can fix it, or reinstall the app to start over (trips saved only on this device will be lost).";
+"child_gate.account.wrong_birthday_family" = "Picked the wrong birthday? Your family captain can fix it in Family Settings.";
 "child_gate.join.setup_incomplete" = "We couldn't finish setting that up. Please check your connection and try the code again.";
 "child_gate.screen.join_title" = "Join your family to play together";
 "child_gate.screen.join_body" = "Ask a parent to add you to their family with a share code. Family features unlock once you join.";
