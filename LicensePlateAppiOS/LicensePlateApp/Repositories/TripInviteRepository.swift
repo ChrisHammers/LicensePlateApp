@@ -116,6 +116,14 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
         inviteListeners.append(out)
     }
 
+    /// Stops the invite and roster listeners this repository owns — and ONLY those.
+    ///
+    /// Canonical trip listeners (`trip_sessions/{id}/games|activity_events`) belong to
+    /// `TripCanonicalRemoteSyncService`; sign-out and identity purges retire them there.
+    /// `startListening` begins with this call, so a teardown of the trip listeners from
+    /// here — deferred one main-actor hop — landed right after the launch re-assert had
+    /// registered them and silently killed every one before its first snapshot: a device on
+    /// Home never heard a remote trip end (owner regression 2026-09-07).
     nonisolated func stopListening() {
         for listener in inviteListeners {
             listener.remove()
@@ -125,9 +133,6 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
             reg.remove()
         }
         memberListeners.removeAll()
-        Task { @MainActor in
-            TripCanonicalRemoteSyncService.shared.removeAllIncrementalListeners()
-        }
     }
 
     private func handleInviteSnapshot(snapshot: QuerySnapshot?, error: Error?, userId: String) {
@@ -181,12 +186,11 @@ final class TripInviteRepository: ObservableObject, TripInviteRepositoryProtocol
             .map(\.tripSessionId)
         let sessionIds = Set(outgoingSessions + acceptedIncomingSessions)
 
+        // Only the roster listener follows the invite set; a live trip's canonical listener
+        // must outlive its invite document (see `stopListening`).
         for id in memberListeners.keys where !sessionIds.contains(id) {
             memberListeners[id]?.remove()
             memberListeners.removeValue(forKey: id)
-            if let uuid = UUID(uuidString: id) {
-                TripCanonicalRemoteSyncService.shared.removeIncrementalListeners(sessionId: uuid)
-            }
         }
 
         for sessionId in sessionIds where memberListeners[sessionId] == nil {

@@ -7,6 +7,7 @@
 
 import Combine
 import Foundation
+import os
 import FirebaseAuth
 import FirebaseFirestore
 import FirebaseFunctions
@@ -337,12 +338,20 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     @discardableResult
     func startIncrementalListeningForLocalSessions(userId: String?) -> [UUID] {
         let sessions = (try? tripSessionRepository.loadActiveSessions(userId: userId)) ?? []
+        let authenticatedUserId = currentUserIdProvider()
+        let isCloudSyncHeld = cloudSyncHoldProvider()
+        let isIdentityDetached = isIdentityDetachedProvider(userId)
         let sessionIds = LiveTripListenerEligibility.sessionIdsNeedingListeners(
             sessions: sessions,
             userId: userId,
-            authenticatedUserId: currentUserIdProvider(),
-            isCloudSyncHeld: cloudSyncHoldProvider(),
-            isIdentityDetached: isIdentityDetachedProvider(userId)
+            authenticatedUserId: authenticatedUserId,
+            isCloudSyncHeld: isCloudSyncHeld,
+            isIdentityDetached: isIdentityDetached
+        )
+        TripEndSyncDiagnostics.log(
+            "re-assert: userId=\(userId ?? "nil") authUid=\(authenticatedUserId ?? "nil") hold=\(isCloudSyncHeld) detached=\(isIdentityDetached) "
+            + "localLive=\(sessions.map { "\($0.id.uuidString.prefix(8)):\($0.status.rawValue):by=\(String(describing: $0.createdBy).prefix(12)):p=\($0.participants.count)" }) "
+            + "eligible=\(sessionIds.map { $0.uuidString.prefix(8) })"
         )
         for sessionId in sessionIds {
             startIncrementalListeningIfNeeded(sessionId: sessionId)
@@ -352,12 +361,16 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
 
     func startIncrementalListeningIfNeeded(sessionId: UUID) {
         let sid = sessionId.uuidString
-        if incrementalGameListeners[sid] != nil { return }
+        if incrementalGameListeners[sid] != nil {
+            TripEndSyncDiagnostics.log("listen: already registered \(sid.prefix(8))")
+            return
+        }
 
         let db = Firestore.firestore()
         let sessionRef = db.collection("trip_sessions").document(sid)
 
         let listenerUserId = currentUserIdProvider()
+        TripEndSyncDiagnostics.log("listen: registering \(sid.prefix(8)) as \(listenerUserId ?? "nil")")
 
         let gamesReg = sessionRef.collection("games").addSnapshotListener { [weak self] snapshot, error in
             guard let self else { return }
@@ -400,6 +413,9 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
         let nsError = error as NSError
         let permissionDenied = nsError.domain == FirestoreErrorDomain
             && nsError.code == FirestoreErrorCode.Code.permissionDenied.rawValue
+        TripEndSyncDiagnostics.log(
+            "listener error \(sessionId.uuidString.prefix(8)) as \(listenerUserId ?? "nil"): domain=\(nsError.domain) code=\(nsError.code) permissionDenied=\(permissionDenied) — \(nsError.localizedDescription)"
+        )
         guard permissionDenied, let listenerUserId else {
             print("TripCanonicalRemoteSyncService: listener error for \(sessionId.uuidString): \(error)")
             return
@@ -410,6 +426,7 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     }
 
     private func applyGamesSnapshot(sessionId: UUID, snapshot: QuerySnapshot) {
+        TripEndSyncDiagnostics.log("games snapshot \(sessionId.uuidString.prefix(8)): docs=\(snapshot.documents.count) fromCache=\(snapshot.metadata.isFromCache)")
         var changed = false
         for doc in snapshot.documents {
             guard let wire = TripCanonicalFirestoreFields.gameWire(documentId: doc.documentID, data: doc.data()) else { continue }
@@ -438,23 +455,36 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     private func applyEventsSnapshot(sessionId: UUID, snapshot: QuerySnapshot) {
         var changed = false
         var lifecycleEvents: [TripActivityEvent] = []
+        var kindCounts: [String: Int] = [:]
+        var unparsed = 0
         for doc in snapshot.documents {
             let data = doc.data()
             guard let wire = TripCanonicalFirestoreFields.eventWire(documentId: doc.documentID, data: data),
                   let event = TripCanonicalMapper.domainEvent(from: wire),
-                  event.sessionId == sessionId else { continue }
+                  event.sessionId == sessionId else {
+                unparsed += 1
+                TripEndSyncDiagnostics.log("events snapshot \(sessionId.uuidString.prefix(8)): UNPARSED doc \(doc.documentID.prefix(8)) kind=\(String(describing: data["kind"])) sessionId=\(String(describing: data["sessionId"]))")
+                continue
+            }
+            kindCounts[event.kind.rawValue, default: 0] += 1
             if event.kind == .gameStarted || event.kind == .gameEnded || event.kind == .gameCompleted {
                 lifecycleEvents.append(event)
             }
             do {
-                if try tripActivityEventRepository.reconcileRemoteActivityEvent(event) {
+                let stored = try tripActivityEventRepository.reconcileRemoteActivityEvent(event)
+                if event.kind == .tripEnded {
+                    TripEndSyncDiagnostics.log("events snapshot \(sessionId.uuidString.prefix(8)): trip_ended \(event.id.prefix(8)) by \(event.actorId ?? "nil") newlyStored=\(stored)")
+                }
+                if stored {
                     changed = true
                     if event.kind == .tripEnded {
-                        if try TripSessionLifecycleService.shared.applyRemoteTripEnded(
+                        let applied = try TripSessionLifecycleService.shared.applyRemoteTripEnded(
                             sessionId: sessionId,
                             endedBy: event.actorId,
                             endedAt: event.timestamp
-                        ) {
+                        )
+                        TripEndSyncDiagnostics.log("events snapshot \(sessionId.uuidString.prefix(8)): trip_ended applied=\(applied) → signal \(applied ? "SENT" : "not sent")")
+                        if applied {
                             tripEndedRemotelySubject.send(
                                 TripEndedRemotelyInfo(sessionId: sessionId, endedBy: event.actorId)
                             )
@@ -462,11 +492,15 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
                     }
                 }
             } catch {
+                TripEndSyncDiagnostics.log("events snapshot \(sessionId.uuidString.prefix(8)): reconcile \(event.kind.rawValue) \(event.id.prefix(8)) FAILED \(error)")
                 #if DEBUG
                 print("TripCanonicalRemoteSyncService: reconcile activity event failed \(error)")
                 #endif
             }
         }
+        TripEndSyncDiagnostics.log(
+            "events snapshot \(sessionId.uuidString.prefix(8)): docs=\(snapshot.documents.count) fromCache=\(snapshot.metadata.isFromCache) kinds=\(kindCounts) unparsed=\(unparsed) changed=\(changed)"
+        )
         for event in lifecycleEvents.sorted(by: { $0.timestamp < $1.timestamp }) {
             do {
                 if try GameInstanceLifecycleService.shared.applyRemoteGameLifecycleEvent(event) {
@@ -505,8 +539,16 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
         ] as [String: Any]).addingClientMetadata())
     }
 
+    /// True while this session holds live canonical listeners.
+    func isIncrementallyListening(sessionId: UUID) -> Bool {
+        incrementalGameListeners[sessionId.uuidString] != nil
+    }
+
     func removeIncrementalListeners(sessionId: UUID) {
         let sid = sessionId.uuidString
+        if incrementalGameListeners[sid] != nil {
+            TripEndSyncDiagnostics.log("listen: removing \(sid.prefix(8))")
+        }
         incrementalGameListeners[sid]?.remove()
         incrementalGameListeners.removeValue(forKey: sid)
         incrementalEventListeners[sid]?.remove()
@@ -514,6 +556,7 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     }
 
     func removeAllIncrementalListeners() {
+        TripEndSyncDiagnostics.log("listen: removing ALL (\(incrementalGameListeners.count) session(s))")
         for (_, reg) in incrementalGameListeners { reg.remove() }
         incrementalGameListeners.removeAll()
         for (_, reg) in incrementalEventListeners { reg.remove() }
@@ -530,5 +573,26 @@ enum TripCanonicalRemoteSyncError: Error, LocalizedError {
         case .sessionNotFoundLocally: return "Trip session not found in local store"
         case .invalidCallableResponse: return "Unexpected response from server"
         }
+    }
+}
+
+// MARK: - Temporary diagnostics (trip-end propagation, owner regression 2026-09-07)
+
+/// DEBUG-only trace of the remote trip-end path: listener re-assert → registration →
+/// snapshot → local apply → recap host. Every line is prefixed `[TripEndSync]` in the Xcode
+/// console and carried as `subsystem com.HammersTech.LicensePlateApp / category TripEndSync`
+/// in Console.app so a device that is NOT attached to Xcode can still be read. Remove once
+/// the propagation defect is closed.
+enum TripEndSyncDiagnostics {
+    #if DEBUG
+    private static let logger = Logger(subsystem: "com.HammersTech.LicensePlateApp", category: "TripEndSync")
+    #endif
+
+    static func log(_ message: @autoclosure () -> String) {
+        #if DEBUG
+        let text = message()
+        logger.notice("\(text, privacy: .public)")
+        print("[TripEndSync] \(text)")
+        #endif
     }
 }

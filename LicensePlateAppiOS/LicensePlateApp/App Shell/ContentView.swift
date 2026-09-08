@@ -395,6 +395,7 @@ struct ContentView: View {
         // Trip-end propagation: a suspended process can lose its Firestore streams, and a trip
         // may have ended while this device was away. Re-asserting is a no-op for every session
         // that still holds a live registration.
+        TripEndSyncDiagnostics.log("trigger: foreground")
         TripCanonicalRemoteSyncService.shared.startIncrementalListeningForLocalSessions(userId: currentUserId)
         returnStreakViewModel.refresh()
         ReturnStreakReminderService.shared.logReminderOpenedIfNeeded(userId: currentUserId)
@@ -479,7 +480,11 @@ struct ContentView: View {
         )
         activeTripsListViewModel.load(userId: newUserId)
         // The launch pass runs before auth has necessarily settled; this is the edge where a
-        // newly-resolved identity gets its live trips listened to.
+        // newly-resolved identity gets its live trips listened to. Listeners capture the
+        // identity they were started for (FR-69 eviction attribution), so the previous
+        // identity's are retired first — this is also what tears them down on sign-out.
+        TripEndSyncDiagnostics.log("trigger: identity settled → \(newUserId ?? "nil")")
+        TripCanonicalRemoteSyncService.shared.removeAllIncrementalListeners()
         TripCanonicalRemoteSyncService.shared.startIncrementalListeningForLocalSessions(userId: newUserId)
         if let newUserId, !newUserId.isEmpty {
             pendingTripsViewModel.loadIfNeeded()
@@ -566,6 +571,7 @@ struct ContentView: View {
 
     private func handleTripHydrationSignal() {
         activeTripsListViewModel.load(userId: currentUserId)
+        TripEndSyncDiagnostics.log("trigger: hydration signal")
         TripCanonicalRemoteSyncService.shared.startIncrementalListeningForLocalSessions(userId: currentUserId)
     }
 
@@ -648,6 +654,7 @@ struct ContentView: View {
         // Trip-end propagation (owner regression 2026-09-07): listen to every trip this device
         // still holds as live, not just the ones the user opens. Re-asserted on foreground and
         // on identity settle below — a trip can end while this device sits on Home.
+        TripEndSyncDiagnostics.log("trigger: launch (bootstrapHomeScreen)")
         TripCanonicalRemoteSyncService.shared.startIncrementalListeningForLocalSessions(userId: currentUserId)
         returnStreakViewModel.bind(userId: currentUserId)
         await ReturnStreakReminderService.shared.refreshScheduleIfNeeded(userId: currentUserId)

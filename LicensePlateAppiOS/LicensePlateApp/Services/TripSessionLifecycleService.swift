@@ -116,7 +116,11 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         guard var session = try tripSessionRepository.session(byId: sessionId) else {
             throw TripSessionLifecycleServiceError.sessionNotFound(sessionId)
         }
-        guard session.status != .ended else { return false }
+        guard session.status != .ended else {
+            TripEndSyncDiagnostics.log("applyRemoteTripEnded \(sessionId.uuidString.prefix(8)): already ended — no-op")
+            return false
+        }
+        TripEndSyncDiagnostics.log("applyRemoteTripEnded \(sessionId.uuidString.prefix(8)): \(session.status.rawValue) → ended (by \(endedBy ?? "nil"))")
 
         session.status = .ended
         session.endedAt = endedAt ?? Date()

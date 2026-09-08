@@ -78,6 +78,7 @@ struct TripEndRecapHost<Content: View>: View {
     }
 
     private func presentRemoteTripRecap(sessionId: UUID, endedBy: String?) {
+        TripEndSyncDiagnostics.log("recap host: presenting \(sessionId.uuidString.prefix(8)) endedBy=\(endedBy ?? "nil") me=\(currentUserId() ?? "nil") scene=\(scenePhase)")
         reloadActiveTripsList()
         if let endedBy, endedBy != currentUserId() {
             let tripName = activeTripsListViewModel.session(for: sessionId)?.name ?? "Trip".localized
@@ -92,10 +93,10 @@ struct TripEndRecapHost<Content: View>: View {
     }
 
     private func reconcileAndPresentPendingTripRecaps() {
-        if let infos = try? TripSessionLifecycleService.shared.reconcileRemoteTripEndedFromEventLog(userId: currentUserId()) {
-            for info in infos {
-                presentRemoteTripRecap(sessionId: info.sessionId, endedBy: info.endedBy)
-            }
+        let infos = (try? TripSessionLifecycleService.shared.reconcileRemoteTripEndedFromEventLog(userId: currentUserId())) ?? []
+        TripEndSyncDiagnostics.log("recap host: stored-event reconcile for \(currentUserId() ?? "nil") (scene=\(scenePhase)) found \(infos.count) ended trip(s)")
+        for info in infos {
+            presentRemoteTripRecap(sessionId: info.sessionId, endedBy: info.endedBy)
         }
         travelLogViewModel.flushPendingAutoRecapPresentations()
     }

@@ -73,7 +73,19 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     /// Uploads one event. Injectable so the drain's FR-28 hold-vs-reject classification is
     /// pinned by tests without Firebase.
     private var gameplayEventAppender: (TripActivityEvent) async throws -> GameplayEventAppendOutcome = { event in
-        try await SyncCoordinator.appendEventToRemoteRespectingTimeout(event: event)
+        let traced = event.kind == .tripEnded || event.kind == .gameEnded
+        do {
+            let outcome = try await SyncCoordinator.appendEventToRemoteRespectingTimeout(event: event)
+            if traced {
+                TripEndSyncDiagnostics.log("upload \(event.kind.rawValue) \(event.id.prefix(8)) for \(event.sessionId.uuidString.prefix(8)) → \(outcome)")
+            }
+            return outcome
+        } catch {
+            if traced {
+                TripEndSyncDiagnostics.log("upload \(event.kind.rawValue) \(event.id.prefix(8)) for \(event.sessionId.uuidString.prefix(8)) FAILED \(error)")
+            }
+            throw error
+        }
     }
     private var gameplayDebouncedFlushTask: Task<Void, Never>?
     private var gameplayFlushInProgress = false
