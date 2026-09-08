@@ -103,6 +103,53 @@ private enum TripCanonicalFirestoreFields {
     }
 }
 
+// MARK: - Which locally-held sessions this device must listen to
+
+/// Trip-end propagation (owner regression 2026-09-07): which sessions this device must hold
+/// canonical listeners for, independent of which trip screen — if any — has been opened this
+/// process.
+///
+/// Live trip state, the trip END above all, reaches a device only through
+/// `trip_sessions/{id}/activity_events`. Listeners used to be registered per OPENED trip
+/// (bootstrap, publish, the trip/game screens, the recap host), so a device sitting on Home
+/// that had not opened the trip since launch heard nothing until it did. The registry is
+/// keyed per session and `startIncrementalListeningIfNeeded` is a no-op when a registration
+/// exists, so re-asserting this whole set on launch and on every foreground is free.
+nonisolated enum LiveTripListenerEligibility {
+
+    /// Sessions worth a listener: still live locally (`created`/`active`) with the current user
+    /// on the roster and not departed.
+    ///
+    /// - `authenticatedUserId` must equal `userId` — a session whose play identity is a purely
+    ///   local guest id (or a retired uid, §3.1.1 item 7) has no cloud document to listen to,
+    ///   and a listener started under an identity that is not the one Firestore will
+    ///   authenticate as would also mis-attribute an FR-69 permission-denied eviction.
+    /// - `isCloudSyncHeld` (FR-28, unconsented child) suppresses everything: gameplay cloud
+    ///   traffic is paused for that posture, and the publish path re-arms listeners on consent.
+    /// - `isIdentityDetached` (§3.1.1 item 7) likewise: `purgeSocialStateForDetachedIdentity`
+    ///   tears these listeners down on purpose, and a re-assert must not undo that.
+    static func sessionIdsNeedingListeners(
+        sessions: [TripSession],
+        userId: String?,
+        authenticatedUserId: String?,
+        isCloudSyncHeld: Bool,
+        isIdentityDetached: Bool = false
+    ) -> [UUID] {
+        guard !isCloudSyncHeld, !isIdentityDetached,
+              let userId, !userId.isEmpty,
+              let authenticatedUserId, authenticatedUserId == userId else {
+            return []
+        }
+        return sessions
+            .filter { $0.status == .active || $0.status == .created }
+            .filter { session in
+                session.createdBy == userId
+                    || session.participants.contains { $0.userId == userId && $0.leftAt == nil }
+            }
+            .map(\.id)
+    }
+}
+
 @MainActor
 protocol TripCanonicalRemoteSyncing: AnyObject {
     func publishFullSession(sessionId: UUID) async throws
@@ -140,6 +187,11 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     /// registration so a later permission-denied can be attributed to THAT identity
     /// (`TripEvictionDetectionPolicy`). Injectable for tests.
     var currentUserIdProvider: () -> String? = { Auth.auth().currentUser?.uid }
+
+    /// §3.1.1 item 7 (2026-08-28): a retired (detached) uid never keys a cloud channel — and
+    /// `purgeSocialStateForDetachedIdentity` explicitly tears these listeners down, so the
+    /// launch/foreground re-assert must not put them straight back. Injectable for tests.
+    var isIdentityDetachedProvider: (String?) -> Bool = { AgeGateStore.shared.isIdentityDetached($0) }
 
     /// FR-69 (F-25): what to do when a live session's listeners are denied for the
     /// identity they were started for — the only signal an evicted device ever gets.
@@ -274,6 +326,28 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
 
         hydrationSubject.send(sessionId)
         startIncrementalListeningIfNeeded(sessionId: sessionId)
+    }
+
+    /// Re-asserts canonical listeners for every session this device still holds as live.
+    ///
+    /// Called at launch, on every foreground, and whenever the signed-in identity settles —
+    /// this is what makes a remote trip end (and an FR-69 roster eviction) reach a device that
+    /// has not opened the trip since the process started. Idempotent per session, so repeated
+    /// calls cost one repository read and nothing else. Returns the ids it listened to.
+    @discardableResult
+    func startIncrementalListeningForLocalSessions(userId: String?) -> [UUID] {
+        let sessions = (try? tripSessionRepository.loadActiveSessions(userId: userId)) ?? []
+        let sessionIds = LiveTripListenerEligibility.sessionIdsNeedingListeners(
+            sessions: sessions,
+            userId: userId,
+            authenticatedUserId: currentUserIdProvider(),
+            isCloudSyncHeld: cloudSyncHoldProvider(),
+            isIdentityDetached: isIdentityDetachedProvider(userId)
+        )
+        for sessionId in sessionIds {
+            startIncrementalListeningIfNeeded(sessionId: sessionId)
+        }
+        return sessionIds
     }
 
     func startIncrementalListeningIfNeeded(sessionId: UUID) {

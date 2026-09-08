@@ -123,9 +123,21 @@ final class TripSessionLifecycleService: TripSessionLifecycleServiceProtocol {
         session.endedBy = endedBy
         try tripSessionRepository.save(session: session)
 
+        // Remote-apply only. `endGame` is the AUTHORING path: it mints a fresh local
+        // `game_ended` event, enqueues it for upload and republishes canonical state. Run on a
+        // peer reacting to someone else's `trip_ended`, that duplicated the owner's canonical
+        // `game_ended` under a new id — so the peer counted game-end/placement XP twice (once
+        // from the server grant keyed to the owner's event, once as local pending keyed to its
+        // own) and toasted it twice, while the republish bounced 403 "Only the Driver can
+        // publish". The owner's `game_ended` arrives on the same listener; this only closes the
+        // local row so the trip cannot sit half-ended if it has not landed yet.
+        let closedAt = session.endedAt ?? Date()
         let games = try gameInstanceRepository.fetchByTripSession(sessionId: sessionId)
         for game in games where game.endedAt == nil {
-            try gameInstanceLifecycleService.endGame(sessionId: sessionId, gameInstanceId: game.id)
+            _ = try gameInstanceLifecycleService.applyRemoteGameEnded(
+                gameInstanceId: game.id,
+                endedAt: closedAt
+            )
         }
         TripRouteTrackingService.shared.tripDidEnd(sessionId: sessionId)
         ReminderNotificationService.shared.cancelReminder(sessionId: sessionId, reason: "trip_ended")

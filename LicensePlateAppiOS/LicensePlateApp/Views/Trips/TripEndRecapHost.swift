@@ -72,8 +72,9 @@ struct TripEndRecapHost<Content: View>: View {
     }
 
     private func reloadActiveTripsList() {
-        activeTripsListViewModel.load(userId: currentUserId())
-        TripEndRecapSupport.startMultiplayerListeners(for: activeTripsListViewModel.items)
+        let userId = currentUserId()
+        activeTripsListViewModel.load(userId: userId)
+        TripCanonicalRemoteSyncService.shared.startIncrementalListeningForLocalSessions(userId: userId)
     }
 
     private func presentRemoteTripRecap(sessionId: UUID, endedBy: String?) {
@@ -97,14 +98,6 @@ struct TripEndRecapHost<Content: View>: View {
             }
         }
         travelLogViewModel.flushPendingAutoRecapPresentations()
-    }
-}
-
-enum TripEndRecapSupport {
-    static func startMultiplayerListeners(for items: [ActiveListItem]) {
-        for item in items where item.session.status == .active {
-            TripCanonicalRemoteSyncService.shared.startIncrementalListeningIfNeeded(sessionId: item.session.id)
-        }
     }
 }
 

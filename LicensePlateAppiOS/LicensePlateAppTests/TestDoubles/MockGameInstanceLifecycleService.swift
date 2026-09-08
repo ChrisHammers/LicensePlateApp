@@ -15,6 +15,8 @@ final class MockGameInstanceLifecycleService: GameInstanceLifecycleServiceProtoc
     var markGameFullClearCallCount = 0
     var resetGameCallCount = 0
     var deleteGameCallCount = 0
+    var applyRemoteGameEndedCallCount = 0
+    var lastRemoteGameEndedId: UUID?
     var lastDeleteSessionId: UUID?
     var lastDeleteGameInstanceId: UUID?
     var lastResetSessionId: UUID?
@@ -55,5 +57,13 @@ final class MockGameInstanceLifecycleService: GameInstanceLifecycleServiceProtoc
     func applyRemoteGameLifecycleEvent(_ event: TripActivityEvent) throws -> Bool {
         if shouldThrow { throw NSError(domain: "MockGameInstanceLifecycleService", code: -1, userInfo: nil) }
         return false
+    }
+
+    @discardableResult
+    func applyRemoteGameEnded(gameInstanceId: UUID, endedAt: Date) throws -> Bool {
+        if shouldThrow { throw NSError(domain: "MockGameInstanceLifecycleService", code: -1, userInfo: nil) }
+        applyRemoteGameEndedCallCount += 1
+        lastRemoteGameEndedId = gameInstanceId
+        return true
     }
 }

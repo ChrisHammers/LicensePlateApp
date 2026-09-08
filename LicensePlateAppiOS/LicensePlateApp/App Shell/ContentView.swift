@@ -392,6 +392,10 @@ struct ContentView: View {
             userId: currentUserId,
             activeFamilyId: authService.currentUser?.activeFamilyId
         )
+        // Trip-end propagation: a suspended process can lose its Firestore streams, and a trip
+        // may have ended while this device was away. Re-asserting is a no-op for every session
+        // that still holds a live registration.
+        TripCanonicalRemoteSyncService.shared.startIncrementalListeningForLocalSessions(userId: currentUserId)
         returnStreakViewModel.refresh()
         ReturnStreakReminderService.shared.logReminderOpenedIfNeeded(userId: currentUserId)
         Task {
@@ -474,6 +478,9 @@ struct ContentView: View {
             activeFamilyId: authService.currentUser?.activeFamilyId
         )
         activeTripsListViewModel.load(userId: newUserId)
+        // The launch pass runs before auth has necessarily settled; this is the edge where a
+        // newly-resolved identity gets its live trips listened to.
+        TripCanonicalRemoteSyncService.shared.startIncrementalListeningForLocalSessions(userId: newUserId)
         if let newUserId, !newUserId.isEmpty {
             pendingTripsViewModel.loadIfNeeded()
         } else {
@@ -559,7 +566,7 @@ struct ContentView: View {
 
     private func handleTripHydrationSignal() {
         activeTripsListViewModel.load(userId: currentUserId)
-        TripEndRecapSupport.startMultiplayerListeners(for: activeTripsListViewModel.items)
+        TripCanonicalRemoteSyncService.shared.startIncrementalListeningForLocalSessions(userId: currentUserId)
     }
 
     private func handleHomeOnAppear() {
@@ -638,7 +645,10 @@ struct ContentView: View {
         )
         ensureSelfProfileListening()
         pendingTripsViewModel.loadIfNeeded()
-        TripEndRecapSupport.startMultiplayerListeners(for: activeTripsListViewModel.items)
+        // Trip-end propagation (owner regression 2026-09-07): listen to every trip this device
+        // still holds as live, not just the ones the user opens. Re-asserted on foreground and
+        // on identity settle below — a trip can end while this device sits on Home.
+        TripCanonicalRemoteSyncService.shared.startIncrementalListeningForLocalSessions(userId: currentUserId)
         returnStreakViewModel.bind(userId: currentUserId)
         await ReturnStreakReminderService.shared.refreshScheduleIfNeeded(userId: currentUserId)
         for item in activeTripsListViewModel.items where item.session.status == .active {

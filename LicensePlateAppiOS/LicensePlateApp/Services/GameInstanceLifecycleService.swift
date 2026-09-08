@@ -42,6 +42,14 @@ protocol GameInstanceLifecycleServiceProtocol: AnyObject {
     /// Applies `game_started` / `game_ended` / `game_completed` from canonical activity events (multiplayer peers + bootstrap).
     @discardableResult
     func applyRemoteGameLifecycleEvent(_ event: TripActivityEvent) throws -> Bool
+    /// Closes a game the SERVER already closed, WITHOUT authoring a local `game_ended` event.
+    ///
+    /// The remote-apply counterpart of `endGame`. A peer that reacts to a remote `trip_ended`
+    /// must not mint gameplay events: the owner's own `game_ended` is already canonical, and a
+    /// second one with a fresh id is a duplicate the peer would upload, count as pending XP,
+    /// and toast a second time. Idempotent; returns true only when it changed local state.
+    @discardableResult
+    func applyRemoteGameEnded(gameInstanceId: UUID, endedAt: Date) throws -> Bool
 }
 
 @MainActor
@@ -260,16 +268,24 @@ final class GameInstanceLifecycleService: GameInstanceLifecycleServiceProtocol {
             try gameInstanceRepository.update(instance: game)
             return true
         case .gameEnded:
-            if game.commonConfig.lifecycleState == .ended {
-                return false
-            }
-            game.commonConfig.lifecycleState = .ended
-            game.endedAt = game.endedAt ?? event.timestamp
-            try gameInstanceRepository.update(instance: game)
-            return true
+            return try applyRemoteGameEnded(gameInstanceId: gameId, endedAt: event.timestamp)
         default:
             return false
         }
+    }
+
+    @discardableResult
+    func applyRemoteGameEnded(gameInstanceId: UUID, endedAt: Date) throws -> Bool {
+        guard let game = try gameInstanceRepository.instance(byId: gameInstanceId) else {
+            return false
+        }
+        guard game.commonConfig.lifecycleState != .ended else {
+            return false
+        }
+        game.commonConfig.lifecycleState = .ended
+        game.endedAt = game.endedAt ?? endedAt
+        try gameInstanceRepository.update(instance: game)
+        return true
     }
 
     private func schedulePublishCanonicalState(sessionId: UUID) {
