@@ -352,6 +352,12 @@ struct UserProfileView: View {
     /// marks the pending-approval flag or the identity settles — see `revision`.
     @ObservedObject private var childRestrictedMode = ChildRestrictedModeService.shared
     @ObservedObject private var ageGateStore = AgeGateStore.shared
+    /// FR-80 (F-36): gates the username-selection guidance caption below. Same house
+    /// pattern as `HelpAboutView`/FR-79 — every posture except a fresh-confirmed adult
+    /// sees it. This is the one username surface a child can actually reach (renaming
+    /// their generated guest name); an already-confirmed returning adult does not need
+    /// the reminder on every visit.
+    @ObservedObject private var childPostures = ChildSessionPostureCoordinator.shared
 
     // Helper function to get topmost view controller
     private func topViewController(controller: UIViewController? = nil) -> UIViewController? {
@@ -511,11 +517,16 @@ struct UserProfileView: View {
                         VStack(spacing: 12) {
                             // No name rows: real names are never collected (F-6 rework).
                             // Username - Editable
+                            // FR-80 (F-36): guidance caption shown while a child could
+                            // plausibly be the one renaming this (any posture short of a
+                            // fresh-confirmed adult) — see `childPostures` above.
                             SettingEditableTextRow(
                                 title: "Username".localized,
                                 value: $currentUserName,
                                 placeholder: "Enter username".localized,
-                                detail: nil,
+                                detail: childPostures.suppressesUnmanagedExits
+                                    ? "Pick a nickname — not your real name.".localized
+                                    : nil,
                                 isDisabled: isCheckingUsername,
                                 onSave: {
                                     saveUserName()

@@ -116,6 +116,12 @@ struct SettingInfoRow: View {
 // MARK: - Setting Editable Text Row
 
 /// Reusable editable text row with card styling
+///
+/// `detail`, when present, renders as a caption under the field (e.g. FR-80 (F-36)'s
+/// username-selection guidance copy). It is folded into the field's own accessibility
+/// hint rather than left as a separate trailing VoiceOver stop, so the caption is
+/// always read WITH the control it describes; the visual `Text(detail)` is then
+/// hidden from the accessibility tree to avoid announcing it twice.
 struct SettingEditableTextRow: View {
     let title: String
     @Binding var value: String
@@ -162,7 +168,7 @@ struct SettingEditableTextRow: View {
                         .focused($isTextFieldFocused)
                         .disabled(isDisabled)
                         .accessibilityLabel(title)
-                        .accessibilityHint("Enter \(title.lowercased())")
+                        .accessibilityHint(detail.map { "Enter \(title.lowercased()). \($0)" } ?? "Enter \(title.lowercased())")
                         .accessibilityValue(editingValue)
                     
                     Button("Save".localized) {
@@ -227,7 +233,7 @@ struct SettingEditableTextRow: View {
                     }
                     .disabled(isDisabled) //Isn't making it clear its disabled enough, so hiding.
                     .accessibilityLabel("Edit \(title)")
-                    .accessibilityHint("Double tap to edit \(title.lowercased())")
+                    .accessibilityHint(detail.map { "Double tap to edit \(title.lowercased()). \($0)" } ?? "Double tap to edit \(title.lowercased())")
                     .accessibilityAddTraits(.isButton)
                 }
                 
@@ -238,6 +244,9 @@ struct SettingEditableTextRow: View {
                 Text(detail)
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown.opacity(0.7))
+                    // Already folded into the field/edit-button accessibility hints
+                    // above — hidden here so VoiceOver doesn't announce it twice.
+                    .accessibilityHidden(true)
             }
         }
         .padding(.vertical, 12)
@@ -920,7 +929,7 @@ struct SettingNavigationRow: View {
 #Preview("Editable Row") {
     struct PreviewWrapper: View {
         @State private var username = "User123"
-        
+
         var body: some View {
             List {
                 SettingEditableTextRow(
@@ -928,6 +937,31 @@ struct SettingNavigationRow: View {
                     value: $username,
                     placeholder: "Enter username",
                     detail: nil,
+                    onSave: { print("Saved: \(username)") },
+                    onCancel: { print("Cancelled") }
+                )
+            }
+            .listStyle(.insetGrouped)
+            .background(Color.Theme.background)
+        }
+    }
+    return PreviewWrapper()
+}
+
+// FR-80 (F-36): the username-selection guidance caption, as `UserProfileView` renders
+// it via `detail`. VoiceOver: tap "Edit Username" or focus the text field while
+// editing — the caption is folded into that element's hint, not read separately.
+#Preview("Editable Row — with FR-80 caption") {
+    struct PreviewWrapper: View {
+        @State private var username = "User123"
+
+        var body: some View {
+            List {
+                SettingEditableTextRow(
+                    title: "Username",
+                    value: $username,
+                    placeholder: "Enter username",
+                    detail: "Pick a nickname — not your real name.".localized,
                     onSave: { print("Saved: \(username)") },
                     onCancel: { print("Cancelled") }
                 )

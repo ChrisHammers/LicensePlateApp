@@ -572,6 +572,8 @@
 "Usernames can have at most 24 characters." = "Los nombres de usuario pueden tener máximo 24 caracteres.";
 "Usernames can use letters, numbers, and _ . - only — no spaces." = "Los nombres de usuario solo pueden usar letras, números y _ . - — sin espacios.";
 "Usernames can't be all digits or look like a phone number." = "Los nombres de usuario no pueden ser solo números ni parecer un número de teléfono.";
+/* FR-80 (F-36) username-selection guidance caption — added 2026-09-07 */
+"Pick a nickname — not your real name." = "Elige un apodo — no tu nombre real.";
 "This username is already taken. Please choose another." = "Este nombre de usuario ya está en uso. Por favor elige otro.";
 "You must be signed in to upload images. Please sign in first." = "Debes iniciar sesión para subir imágenes. Por favor inicia sesión primero.";
 "You must be authenticated with Firebase to upload images. Please sign in first." = "Debes estar autenticado con Firebase para subir imágenes. Por favor inicia sesión primero.";

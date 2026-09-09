@@ -579,6 +579,12 @@
 "Usernames can have at most 24 characters." = "Usernames can have at most 24 characters.";
 "Usernames can use letters, numbers, and _ . - only — no spaces." = "Usernames can use letters, numbers, and _ . - only — no spaces.";
 "Usernames can't be all digits or look like a phone number." = "Usernames can't be all digits or look like a phone number.";
+/* FR-80 (F-36) username-selection guidance caption — added 2026-09-07. Shown under the
+   field on the create-account form (SignInView) and, gated on
+   ChildSessionPostureCoordinator.suppressesUnmanagedExits, the profile-edit rename
+   (UserProfileView). Deliberately informal/kid-appropriate register (matches the
+   child_gate.* voice) rather than the formal register used elsewhere in this block. */
+"Pick a nickname — not your real name." = "Pick a nickname — not your real name.";
 "This username is already taken. Please choose another." = "This username is already taken. Please choose another.";
 "You must be signed in to upload images. Please sign in first." = "You must be signed in to upload images. Please sign in first.";
 "You must be authenticated with Firebase to upload images. Please sign in first." = "You must be authenticated with Firebase to upload images. Please sign in first.";

@@ -195,7 +195,7 @@ struct SignInView: View {
                                         .font(.system(.body, design: .rounded))
                                         .fontWeight(.semibold)
                                         .foregroundStyle(Color.Theme.primaryBlue)
-                                    
+
                                     TextField("Choose a username", text: $userName)
                                         // Display name — keep .username for the email field so Strong Password pairs correctly.
                                         .textContentType(.nickname)
@@ -203,14 +203,43 @@ struct SignInView: View {
                                         .textFieldStyle(.roundedBorder)
                                         .font(.system(.body, design: .rounded))
                                         .autocapitalization(.none)
+                                        // FR-80 (F-36): the guidance caption below is folded
+                                        // into the hint (not a separate VoiceOver stop) so it
+                                        // is read together with the field.
+                                        .accessibleTextField(
+                                            label: "Username".localized,
+                                            hint: "Pick a nickname — not your real name.".localized,
+                                            value: userName
+                                        )
+
+                                    // FR-80 (F-36): username-selection guidance copy, ×3
+                                    // locales. Shown unconditionally rather than gated on
+                                    // `ChildSessionPostureCoordinator.shared.suppressesUnmanagedExits`
+                                    // (the house child-vs-adult pattern, e.g. `UserProfileView`):
+                                    // every filler of THIS form is provably not
+                                    // `.confirmedNonChild` yet (that posture requires a fresh
+                                    // server read of an existing `users/{uid}`, and no account
+                                    // exists yet during create-account entry), so the gate would
+                                    // always evaluate true here — adding it would only add an
+                                    // unnecessary observed-object dependency for a condition
+                                    // that never toggles. Hidden from accessibility because its
+                                    // text is already carried by the field's hint above.
+                                    Text("Pick a nickname — not your real name.".localized)
+                                        .font(.system(.caption, design: .rounded))
+                                        .foregroundStyle(Color.Theme.softBrown)
+                                        .accessibilityHidden(true)
                                 }
 
                                 // No name fields: real names are never collected
                                 // (owner decision, F-6 rework; FR-52 satisfied for all).
                                 //
-                                // COPPA F-18 (FR-60(e)): the under-13 advisory note that used
+                                // COPPA F-18 (FR-60(e)): the under-13 ADVISORY note that used
                                 // to sit here is gone with the form it annotated — an under-13
                                 // epoch never reaches this branch now (`isCreateModeForChild`).
+                                // The FR-80 nickname caption above is unrelated to that removed
+                                // note: it is general username-safety copy for whoever DOES
+                                // reach this form (always a non-under-13 answer, per the above),
+                                // not a child-specific carve-out.
                             }
                             
                             // Email field
