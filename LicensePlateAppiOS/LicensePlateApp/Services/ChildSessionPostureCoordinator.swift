@@ -126,6 +126,17 @@ extension ChildSessionPosture {
     nonisolated var suppressesUnmanagedExits: Bool {
         self != .confirmedNonChild
     }
+
+    /// FR-71 (F-27): every posture except a fresh-confirmed adult stops the device from
+    /// transmitting a search query at all — `UserRepository.searchUsers` returns empty
+    /// locally before any network call, mirroring `userSearch.ts`'s server-side child
+    /// short-circuit. Same asymmetric trust as ads, purchases and unmanaged exits
+    /// (FR-19): a session that has not proven it is an adult does not get to enumerate
+    /// other users. Explicitly `nonisolated`: pure value-type predicate, no MainActor
+    /// state.
+    nonisolated var suppressesUserSearch: Bool {
+        self != .confirmedNonChild
+    }
 }
 
 /// Inputs snapshot for posture derivation. Pure and synchronous so the matrix is

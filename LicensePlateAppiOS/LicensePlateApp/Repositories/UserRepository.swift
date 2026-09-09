@@ -35,13 +35,25 @@ class UserRepository: ObservableObject {
     /// session freshly read the doc, which is exactly what makes ABSENCE meaningful.
     private var pendingFamilyRequestByUserId: [String: Bool] = [:]
     private let friendsFamilyAccessPolicy: FriendsFamilyAccessPolicy
-    
+    /// FR-71 (F-27): child-session gate for `searchUsers` — only a fresh-confirmed
+    /// adult session may transmit a search query. Injectable so tests can drive
+    /// posture without touching the live `ChildSessionPostureCoordinator` singleton
+    /// (same seam as `ReviewPromptService.posture`).
+    private let posture: () -> ChildSessionPosture
+
     @Published var searchResults: [AppUser] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
 
-    init(friendsFamilyAccessPolicy: FriendsFamilyAccessPolicy = .shared) {
+    init(
+        friendsFamilyAccessPolicy: FriendsFamilyAccessPolicy = .shared,
+        posture: (() -> ChildSessionPosture)? = nil
+    ) {
         self.friendsFamilyAccessPolicy = friendsFamilyAccessPolicy
+        // Resolved in the body, not as a default argument: default-argument
+        // expressions are nonisolated, and `currentPosture` is MainActor (same
+        // reasoning as `ReviewPromptService.init`).
+        self.posture = posture ?? { ChildSessionPostureCoordinator.shared.currentPosture }
     }
 
     struct UserIdentitySnapshot: Sendable {
@@ -398,6 +410,17 @@ class UserRepository: ObservableObject {
     ///   - searchType: Retained for analytics; server classifies email/phone/username from the query
     ///   - excludeUserId: Optional user ID to exclude from results (typically current user)
     func searchUsers(query: String, searchType: SearchType, excludeUserId: String? = nil, searchingUser: AppUser? = nil) async throws -> [UserSearchResult] {
+        // FR-71 (F-27): a session that is not a fresh-confirmed adult must never
+        // TRANSMIT a search query — checked first, ahead of every other gate, so a
+        // child/ratcheted/unresolved posture never reaches the guest-like check,
+        // `AppCheckReadiness.ensureCallablePrerequisites`, or the `searchUsers`
+        // callable. No analytics event fires from this branch (FR-21: nothing may
+        // fire only for child sessions) — same silence as `ReviewPromptService`'s
+        // posture no-op.
+        guard !posture().suppressesUserSearch else {
+            return []
+        }
+
         guard friendsFamilyAccessPolicy.canUseFriendsAndFamily(for: searchingUser) else {
             return []
         }

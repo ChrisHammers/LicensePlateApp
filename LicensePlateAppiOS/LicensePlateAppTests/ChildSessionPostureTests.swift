@@ -200,6 +200,16 @@ struct ChildSessionPosturePolicyTests {
         }
         #expect(ChildSessionPosture.confirmedNonChild.suppressesUnmanagedExits == false)
     }
+
+    /// FR-71 (F-27): a device must stop TRANSMITTING search queries for any posture
+    /// short of a fresh-confirmed adult — same asymmetric trust as ads, purchases, and
+    /// unmanaged exits (FR-19). `UserRepository.searchUsers` gates on this predicate.
+    @Test func onlyConfirmedNonChildCanSearch() {
+        for posture in [ChildSessionPosture.childDirected, .ratchetedAnonymous, .unresolved] {
+            #expect(posture.suppressesUserSearch == true, "\(posture.rawValue) must suppress user search")
+        }
+        #expect(ChildSessionPosture.confirmedNonChild.suppressesUserSearch == false)
+    }
 }
 
 // MARK: - Location trust (FR-75 amendment, owner decision OD-8)
