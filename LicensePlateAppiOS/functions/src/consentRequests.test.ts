@@ -64,6 +64,8 @@ import {
 import { createShareCode, redeemShareCode } from "./shareCodes";
 import {
   commitGuardianConfirmation,
+  confirmationFailurePage,
+  confirmParentalConsent,
   reconcileConsentRecords,
   sendDueConsentPlusNotices,
   sweepExpiredConsentRequests,
@@ -81,6 +83,7 @@ import {
   buildConsentRequestEmailContent,
   consentEndpointAction,
   decideConsentConfirmation,
+  formatConsentToken,
   hashConsentNonce,
   isPlusNoticeDue,
   isValidAgeOutYearMonth,
@@ -333,6 +336,39 @@ describe("FR-64: the guardian's click commits everything together", () => {
     expect(db().store.get("users/kid")?.activeFamilyId).toBeUndefined();
   });
 
+  // The remaining `committed: false` reasons (2026-09-07 audit, alongside the confirmation
+  // page copy fix): each is reached only once the request itself is still `pending` (the
+  // endpoint's own gate already required that), so every one of these describes a state that
+  // changed OUT from under an otherwise-live link — never something a retry can fix.
+
+  it("child_gone: the child's account was deleted between approval and the guardian's click", async () => {
+    const { familyId } = await childAwaiting();
+    db().store.delete("users/kid");
+
+    const outcome = await confirmGuardianConsent(db(), { familyId, childUserId: "kid" });
+    expect(outcome).toMatchObject({ committed: false, reason: "child_gone" });
+  });
+
+  it("other_family: the child joined a different family before this guardian confirmed", async () => {
+    const { familyId } = await childAwaiting();
+    db().store.set("users/kid", {
+      ...db().store.get("users/kid")!,
+      activeFamilyId: "some-other-family",
+    });
+
+    const outcome = await confirmGuardianConsent(db(), { familyId, childUserId: "kid" });
+    expect(outcome).toMatchObject({ committed: false, reason: "other_family" });
+  });
+
+  it("row_gone: the underlying join request was cancelled while confirmation was outstanding", async () => {
+    const { familyId, requestId } = await childAwaiting();
+    const rowPath = `families/${familyId}/pending/${requestId}`;
+    db().store.set(rowPath, { ...db().store.get(rowPath)!, status: "declined" });
+
+    const outcome = await confirmGuardianConsent(db(), { familyId, childUserId: "kid" });
+    expect(outcome).toMatchObject({ committed: false, reason: "row_gone" });
+  });
+
   it("a second click cannot double-admit: the request is no longer pending", async () => {
     const { familyId } = await childAwaiting();
     const found = findLiveConsentRequest(db(), { familyId, childUserId: "kid" })!;
@@ -358,7 +394,9 @@ describe("FR-64: the guardian's click commits everything together", () => {
       request,
       Date.now()
     );
-    expect(again.committed).toBe(false);
+    // This reason is the one race commitGuardianConfirmation can still hit after the
+    // endpoint's own pending-status gate: a concurrent commit on the SAME link already won.
+    expect(again).toMatchObject({ committed: false, reason: "request_not_pending" });
   });
 
   it("a decline after approve cancels the request — the stale link refuses", async () => {
@@ -371,6 +409,71 @@ describe("FR-64: the guardian's click commits everything together", () => {
     // …so the guardian's link has nothing to confirm.
     const outcome = await confirmGuardianConsent(db(), { familyId, childUserId: "kid" });
     expect(outcome.committed).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2b. The endpoint renders the reason-specific copy for a real refusal
+// ---------------------------------------------------------------------------
+
+describe("confirmParentalConsent renders truthful, reason-specific copy on refusal", () => {
+  function fakeResponse(): {
+    res: { status: (code: number) => unknown; send: (body: string) => unknown; set: (key: string, value: string) => unknown };
+    calls: { statusCode?: number; body?: string };
+  } {
+    const calls: { statusCode?: number; body?: string } = {};
+    const res = {
+      set: () => res,
+      status(code: number) {
+        calls.statusCode = code;
+        return res;
+      },
+      send(body: string) {
+        calls.body = body;
+        return res;
+      },
+    };
+    return { res, calls };
+  }
+
+  it("missing_age_out_marker: 409 with the reinstall-and-rejoin copy, never the generic 'try again' line", async () => {
+    db().seed("users/kid", {
+      userName: "Speedy",
+      avatarId: "scout_otter",
+      isChildAccount: true,
+      childDeclaredAt: Date.now(),
+      // no ageOutYearMonth — the pre-F-14b install shape
+    });
+    const { familyId } = await childAwaiting();
+    const found = findLiveConsentRequest(db(), { familyId, childUserId: "kid" })!;
+    const rawNonce = found.data.pendingLinkNonce as string;
+    // FakeFirestore's auto-ids look like "auto_0007" — the underscore fails
+    // `parseConsentToken`'s requestId shape, which is deliberately as strict as a REAL
+    // Firestore auto-id (alphanumeric only, never underscored). Move the seeded request to
+    // a clean id so the token this test builds is shape-valid, exactly like a real one.
+    const requestId = "req1";
+    db().store.set(
+      `${CONSENT_REQUESTS_COLLECTION}/${requestId}`,
+      db().store.get(`${CONSENT_REQUESTS_COLLECTION}/${found.requestId}`)!
+    );
+    db().store.delete(`${CONSENT_REQUESTS_COLLECTION}/${found.requestId}`);
+    const token = formatConsentToken(requestId, rawNonce);
+
+    const { res, calls } = fakeResponse();
+    await confirmParentalConsent(
+      { method: "POST", body: { t: token }, query: {} } as never,
+      res as never
+    );
+
+    expect(calls.statusCode).toBe(409);
+    expect(calls.body).toBe(confirmationFailurePage("missing_age_out_marker"));
+    expect(calls.body).not.toMatch(/try again/i);
+    expect(calls.body).toContain("delete and reinstall");
+    expect(calls.body).toContain("share code");
+
+    // Nothing admitted — the refusal must not have side effects.
+    expect(db().store.get(`families/${familyId}/members/kid`)).toBeUndefined();
+    expect(db().store.get("users/kid")?.activeFamilyId).toBeUndefined();
   });
 });
 
@@ -457,6 +560,52 @@ describe("the confirmation gate is uniform and single-use", () => {
     expect(isValidAgeOutYearMonth(203713)).toBe(false); // month 13
     expect(isValidAgeOutYearMonth(190001)).toBe(false); // year 1900 < floor
     expect(isValidAgeOutYearMonth("203703")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3b. Reason-specific parent-facing copy (2026-09-07 audit)
+// ---------------------------------------------------------------------------
+
+describe("confirmationFailurePage: truthful copy per commitGuardianConfirmation reason", () => {
+  it("missing_age_out_marker tells the parent the truth in plain language — never 'try again'", () => {
+    const page = confirmationFailurePage("missing_age_out_marker");
+    expect(page).not.toMatch(/try again/i);
+    expect(page).toContain("delete and reinstall");
+    expect(page).toContain("share code");
+    expect(page).toContain("new confirmation email");
+    // Plain language: no internal field/flag names or program codenames leak into copy a
+    // parent reads.
+    expect(page).not.toContain("ageOutYearMonth");
+    expect(page).not.toContain("F-14b");
+    expect(page).not.toContain("marker");
+  });
+
+  it("child_gone, other_family, row_gone, and member_gone each get distinct, non-generic copy", () => {
+    const reasons = ["child_gone", "other_family", "row_gone", "member_gone"] as const;
+    const pages = reasons.map((reason) => confirmationFailurePage(reason));
+
+    for (const page of pages) {
+      expect(page).not.toContain("Please try the link again in a moment.");
+      expect(page).not.toMatch(/try again/i);
+    }
+    // Textually distinct from each other and from missing_age_out_marker — no accidental
+    // aliasing of one reason's copy onto another.
+    const allPages = [...pages, confirmationFailurePage("missing_age_out_marker")];
+    expect(new Set(allPages).size).toBe(allPages.length);
+  });
+
+  it("request_not_pending and an unrecognized reason fall back to the generic copy — deliberately: a retry IS the right move for a same-link confirmation race", () => {
+    const generic = confirmationFailurePage(undefined);
+    expect(generic).toContain("Please try the link again in a moment.");
+    expect(confirmationFailurePage("request_not_pending")).toBe(generic);
+    expect(confirmationFailurePage("some_future_reason_nobody_wrote_copy_for_yet")).toBe(
+      generic
+    );
+  });
+
+  it("already_member is intentionally absent from this map — the endpoint special-cases it to the 200 already-confirmed page before any failure copy is chosen", () => {
+    expect(confirmationFailurePage("already_member")).toBe(confirmationFailurePage(undefined));
   });
 });
 
@@ -697,6 +846,25 @@ describe("member_flag: refusal-by-silence removes the member, never the account"
     expect(content.text).toContain("marked the family member");
     expect(content.text).toContain("removed from the family");
     expect(content.text).not.toContain("pending account information is deleted");
+  });
+
+  it("member_gone: the child already left the family before the guardian confirmed — refuses, writes nothing", async () => {
+    seedFlaggedMember(Date.now() + 60_000); // live request
+    db().store.delete("families/famM/members/flagged");
+
+    const outcome = await confirmGuardianConsent(db(), {
+      familyId: "famM",
+      childUserId: "flagged",
+    });
+    expect(outcome).toMatchObject({ committed: false, reason: "member_gone" });
+    // Nothing admitted: no guardianship record, no consent audit row.
+    expect(db().store.get("users/flagged/private/guardianship")).toBeUndefined();
+    const consentRows = [...db().store.entries()].filter(
+      ([path, data]) =>
+        path.startsWith("audit_logs/") &&
+        data.eventType === "AUDIT_PARENTAL_CONSENT_GRANTED"
+    );
+    expect(consentRows).toHaveLength(0);
   });
 });
 

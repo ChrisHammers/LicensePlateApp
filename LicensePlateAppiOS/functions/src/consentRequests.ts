@@ -358,6 +358,65 @@ const PAGES = {
   ),
 } as const;
 
+/**
+ * Reason-specific parent-facing copy for a `commitGuardianConfirmation` refusal
+ * (`{ committed: false, reason }`). Audit finding 2026-09-07: every refusal reason used to
+ * render the generic `PAGES.error` copy above ("try the link again in a moment"), which is
+ * actively wrong for a reason that is PERMANENT for that link — a parent retrying
+ * `missing_age_out_marker` gets the identical refusal forever, no matter how many "moments"
+ * they wait. Each reason below names an unrecoverable-via-retry state and gets its own
+ * truthful line, in plain language (no field names, no internal jargon). A reason not
+ * listed here falls back to the generic copy in `confirmationFailurePage` — deliberately,
+ * for the two reasons noted next:
+ *
+ *  - `already_member` never reaches this map: the endpoint special-cases it straight to
+ *    `PAGES.alreadyConfirmed` (200) before a failure page would even be chosen — already
+ *    correct, left alone.
+ *  - `request_not_pending` is omitted on purpose. By the time `commitGuardianConfirmation`
+ *    runs, the endpoint's own gate (`decideConsentConfirmation`) has already required the
+ *    request to be `pending`, so this reason only fires from a race: a concurrent
+ *    confirmation attempt on the SAME link won (or the request lapsed) in the instant
+ *    between that check and this transaction's own re-read. The child is therefore already
+ *    admitted, or about to be, via the other attempt — "try the link again in a moment" is
+ *    actually true here, since a retry lands on the already-confirmed page.
+ *
+ * Pages are English-only, matching every other page in this file (see the NP-1 email
+ * builder in `consentRequestsCore.ts` for the same pre-existing, tracked-elsewhere
+ * limitation) — this fix does not add localization infrastructure.
+ */
+const CONFIRMATION_FAILURE_PAGES: Record<string, string> = {
+  missing_age_out_marker: htmlPage(
+    "This link can't be completed",
+    "This player's account was set up before the app started saving a detail this step now needs, so this link can't go through — trying it again won't change that. The fix: have the player delete and reinstall RoadTrip Royale, then re-enter your family's share code. You'll get a new confirmation email, and that link will work."
+  ),
+  child_gone: htmlPage(
+    "This player's account no longer exists",
+    "The player this link was for has deleted their account, or it was removed, so there is nothing left to confirm — trying the link again won't change that. If they still want to join your family, they can set up the app again and send a new request, which will send you a fresh confirmation email."
+  ),
+  other_family: htmlPage(
+    "This player already joined a different family",
+    "Since this link was sent, this player joined a different family, so this request no longer applies — trying it again won't change that. If you still want them in your family, ask them to leave their current family and send a new request to join yours."
+  ),
+  row_gone: htmlPage(
+    "This request is no longer active",
+    "The original request to join your family is no longer active — it may have been cancelled or withdrawn — so this link can't be completed, and trying it again won't change that. If you still want to add this player, have them send a new request and approve it again; you'll get a fresh confirmation email."
+  ),
+  member_gone: htmlPage(
+    "This player is no longer in your family",
+    "The player this link was for is no longer part of your family — they may have left or been removed — so there's nothing left to confirm, and trying the link again won't change that. If you still want them in your family, they will need to rejoin, which will send you a new confirmation email."
+  ),
+};
+
+/**
+ * The parent-facing page for a `committed:false` outcome, keyed by `reason`. Falls back to
+ * the generic `PAGES.error` copy for `request_not_pending`, for `already_member` (unreached
+ * in practice — see the map's doc comment), and for any future reason this map has not
+ * caught up with yet.
+ */
+export function confirmationFailurePage(reason: string | undefined): string {
+  return CONFIRMATION_FAILURE_PAGES[reason ?? ""] ?? PAGES.error;
+}
+
 export interface ConfirmableRequest {
   familyId: string;
   childUserId: string;
@@ -818,7 +877,7 @@ export const confirmParentalConsent = functions.https.onRequest(async (req, res)
         requestId: parsed.requestId,
         reason: outcome.reason,
       });
-      res.status(409).send(PAGES.error);
+      res.status(409).send(confirmationFailurePage(outcome.reason));
       return;
     }
 
