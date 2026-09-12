@@ -1657,3 +1657,15 @@
 "child_gate.transfer.field_footer" = "Ask a parent for this code. It only works for a few minutes.";
 "child_gate.transfer.a11y.field_hint" = "Six characters, letters and numbers";
 "child_gate.transfer.submit" = "Move it here";
+
+// FR-84 owner follow-up 2026-09-10: guardian one-tap "move to this device" + adult code entry
+"family.child.manage_adopt_here" = "Move to this device";
+"family.child.manage_adopt_here_hint" = "Makes this device theirs. You will be signed out of your account on this device only.";
+"family.child.adopt_here.confirm_title" = "Move %@ to this device?";
+"family.child.adopt_here.confirm_message" = "This device becomes %@'s, with all their trips, badges and points. You'll be signed out of your own account on this device only — nothing about your account changes, and their old device signs out within the hour.";
+"family.child.adopt_here.confirm_button" = "Move %@ here";
+"profile.transfer.adult_entry" = "Set up this device for a child";
+"profile.transfer.adult_entry_hint" = "Enter a transfer code from the child's parent to move their account to this device";
+"child_gate.transfer.adult.title" = "Move a child's account here";
+"child_gate.transfer.adult.explanation" = "Enter the code the child's parent created. Their account — trips, badges and points — moves to this device.";
+"child_gate.transfer.adult.old_device_notice" = "You'll be signed out of your own account on this device only. Their other device signs out within the hour.";

@@ -83,6 +83,16 @@ export const AUDIT_CHILD_DEVICE_TRANSFER_REDEEMED = "AUDIT_CHILD_DEVICE_TRANSFER
 export const DEVICE_TRANSFER_UNAVAILABLE_MESSAGE =
   "That transfer code is not available. Ask a parent for a new one.";
 
+/**
+ * The server could not sign the child's credential — an OPERATIONAL failure (the Cloud
+ * Functions runtime service account lacks `roles/iam.serviceAccountTokenCreator`, owner device
+ * test 2026-09-10), never something the parent did. Distinct from the FR-24 refusal on
+ * purpose: it names no child fact, and the code is deliberately left LIVE so the same code
+ * works once the server is fixed.
+ */
+export const DEVICE_TRANSFER_SIGNING_FAILED_MESSAGE =
+  "Transfers aren't working right now. Nothing was changed — please try again later.";
+
 /** Uppercase-normalize, matching `redeemShareCode`'s tolerance for a lowercase entry. */
 export function normalizeDeviceTransferCode(code: unknown): string | null {
   if (typeof code !== "string") return null;

@@ -1624,3 +1624,15 @@
 "child_gate.transfer.field_footer" = "Demande ce code à un parent. Il ne fonctionne que quelques minutes.";
 "child_gate.transfer.a11y.field_hint" = "Six caractères, lettres et chiffres";
 "child_gate.transfer.submit" = "Transférer ici";
+
+// FR-84 owner follow-up 2026-09-10: guardian one-tap "move to this device" + adult code entry
+"family.child.manage_adopt_here" = "Transférer sur cet appareil";
+"family.child.manage_adopt_here_hint" = "Cet appareil devient le sien. Vous serez déconnecté de votre compte sur cet appareil seulement.";
+"family.child.adopt_here.confirm_title" = "Transférer %@ sur cet appareil?";
+"family.child.adopt_here.confirm_message" = "Cet appareil devient celui de %@, avec tous ses trajets, badges et points. Vous serez déconnecté de votre propre compte sur cet appareil seulement : votre compte ne change pas, et son ancien appareil se déconnectera d'ici une heure.";
+"family.child.adopt_here.confirm_button" = "Transférer %@ ici";
+"profile.transfer.adult_entry" = "Préparer cet appareil pour un enfant";
+"profile.transfer.adult_entry_hint" = "Entrez un code de transfert créé par le parent de l'enfant pour transférer son compte sur cet appareil";
+"child_gate.transfer.adult.title" = "Transférer le compte d'un enfant ici";
+"child_gate.transfer.adult.explanation" = "Entrez le code créé par le parent de l'enfant. Son compte — trajets, badges et points — est transféré sur cet appareil.";
+"child_gate.transfer.adult.old_device_notice" = "Vous serez déconnecté de votre propre compte sur cet appareil seulement. Son autre appareil se déconnectera d'ici une heure.";

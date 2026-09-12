@@ -341,6 +341,11 @@ struct UserProfileView: View {
     @State private var showAvatarPickerSheet = false
     @State private var showLicenseWalletSheet = false
     @State private var showDeleteAccountSheet = false
+    /// FR-84 owner follow-up (2026-09-10): adult code entry for a child's transfer.
+    @State private var showAdultAdoptTransferSheet = false
+    /// FR-84: the child card's transfer sheet, hosted here so a mid-redeem identity change
+    /// (the first provisional uid) cannot dismiss it.
+    @State private var showChildAdoptTransferSheet = false
 
     @StateObject private var lifetimeStatsViewModel: LifetimeStatsProfileViewModel
     @StateObject private var xpProgressViewModel: XpProgressViewModel
@@ -617,7 +622,8 @@ struct UserProfileView: View {
                               ChildAccountSectionGuidance(
                                   title: guidance.titleKey.localized,
                                   message: guidance.bodyKey.localized,
-                                  showsJoinButton: guidance.showsJoinFamilyButton
+                                  showsJoinButton: guidance.showsJoinFamilyButton,
+                                  onAdoptTransfer: { showChildAdoptTransferSheet = true }
                               )
                               .environmentObject(authService)
                           }
@@ -658,6 +664,37 @@ struct UserProfileView: View {
                           }
 
                           if status.showsRegisteredAccountControls {
+                              // FR-84 owner follow-up (2026-09-10): an adult who is NOT the
+                              // guardian (the other parent, a grandparent) sets this device up
+                              // for a child with the code the guardian created. The guardian's
+                              // own one-tap lives on the Family screen.
+                              Button {
+                                  showAdultAdoptTransferSheet = true
+                              } label: {
+                                  HStack {
+                                      Text("profile.transfer.adult_entry".localized)
+                                          .font(.system(.body, design: .rounded))
+                                          .fontWeight(.semibold)
+
+                                      Spacer()
+
+                                      Image(systemName: "arrow.down.to.line")
+                                          .font(.system(size: 14, weight: .semibold))
+                                  }
+                                  .foregroundStyle(Color.Theme.primaryBlue)
+                                  .padding(.vertical, 12)
+                                  .padding(.horizontal, 16)
+                                  .background(
+                                      RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                          .stroke(Color.Theme.primaryBlue, lineWidth: 2)
+                                  )
+                              }
+                              .buttonStyle(.plain)
+                              .accessibleButton(
+                                  label: "profile.transfer.adult_entry".localized,
+                                  hint: "profile.transfer.adult_entry_hint".localized
+                              )
+
                               // Sign out button (only show if truly authenticated)
                               Button {
                                   Task {
@@ -929,6 +966,14 @@ struct UserProfileView: View {
             }
             .sheet(isPresented: $authService.showSignInSheet) {
                 SignInView(authService: authService, deferredSetupTouchSource: "profile")
+            }
+            .sheet(isPresented: $showChildAdoptTransferSheet) {
+                AdoptDeviceTransferSheet()
+                    .environmentObject(authService)
+            }
+            .sheet(isPresented: $showAdultAdoptTransferSheet) {
+                AdoptDeviceTransferSheet(context: .adult)
+                    .environmentObject(authService)
             }
             .sheet(isPresented: $showDeleteAccountSheet) {
                 DeleteAccountView(authService: authService)
@@ -1273,6 +1318,11 @@ private struct ChildAccountSectionGuidance: View {
     let title: String
     let message: String
     let showsJoinButton: Bool
+    /// FR-84 (owner device test 2026-09-10): the redeem path may mint the device's first uid,
+    /// which re-renders this card and would drop a sheet it hosted — the transfer looked
+    /// "accepted" while the call was still in flight. The screen owns the sheet instead; this
+    /// card only asks for it. Previews leave it nil and keep the local fallback.
+    var onAdoptTransfer: (() -> Void)? = nil
 
     @EnvironmentObject private var authService: FirebaseAuthService
     @State private var showJoinFamilySheet = false
@@ -1338,7 +1388,11 @@ private struct ChildAccountSectionGuidance: View {
                 // has never played before must not be nudged toward asking for a transfer code
                 // that cannot exist for them.
                 Button {
-                    showAdoptTransferSheet = true
+                    if let onAdoptTransfer {
+                        onAdoptTransfer()
+                    } else {
+                        showAdoptTransferSheet = true
+                    }
                 } label: {
                     Text("child_gate.transfer.entry_link".localized)
                         .font(.system(.footnote, design: .rounded))

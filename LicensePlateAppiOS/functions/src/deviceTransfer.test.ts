@@ -67,6 +67,7 @@ import {
   AUDIT_CHILD_DEVICE_TRANSFER_REDEEMED,
   DEVICE_TRANSFER_CODE_COLLECTION,
   DEVICE_TRANSFER_CODE_TTL_MS,
+  DEVICE_TRANSFER_SIGNING_FAILED_MESSAGE,
   DEVICE_TRANSFER_UNAVAILABLE_MESSAGE,
 } from "./deviceTransferCore";
 import { CHILD_CONSENT_EVENT_TYPES } from "./childAccountCore";
@@ -596,5 +597,54 @@ describe("FR-84 audit rows are uid-only and are not consent events", () => {
   it("keeps the transfer event types OUT of the consent-history vocabulary", () => {
     expect(CHILD_CONSENT_EVENT_TYPES).not.toContain(AUDIT_CHILD_DEVICE_TRANSFER_ISSUED);
     expect(CHILD_CONSENT_EVENT_TYPES).not.toContain(AUDIT_CHILD_DEVICE_TRANSFER_REDEEMED);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. The redeemer is already the target (owner device test 2026-09-10)
+// ---------------------------------------------------------------------------
+
+describe("FR-84 redeemer is already the target", () => {
+  it("refuses the child who already IS the target, leaving the code live and their tokens alone", async () => {
+    seedCode("c1", { code: "TRN111", childUserId: "kid", familyId: "fam1", createdBy: "parent" });
+
+    const error = await refusal(redeem("kid", "TRN111", "custom"));
+
+    expect(error.code).toBe("not-found");
+    expect(error.message).toBe(DEVICE_TRANSFER_UNAVAILABLE_MESSAGE);
+    expect(holder.revokeRefreshTokens).not.toHaveBeenCalled();
+    expect(holder.createCustomToken).not.toHaveBeenCalled();
+    const stored = db().store.get(`${DEVICE_TRANSFER_CODE_COLLECTION}/c1`)!;
+    expect(stored.redeemedAtMillis ?? null).toBeNull();
+    expect(stored.isRevoked).toBe(false);
+
+    // The genuine new device can still use the same code afterwards.
+    await expect(redeem("newDevice", "TRN111", "anonymous")).resolves.toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. Signing fails (runtime SA without Token Creator) — owner device test 2026-09-10
+// ---------------------------------------------------------------------------
+
+describe("FR-84 custom-token signing failure", () => {
+  it("leaves the code live and the child's tokens alone, and says so as an operational error", async () => {
+    seedCode("c1", { code: "TRN111", childUserId: "kid", familyId: "fam1", createdBy: "parent" });
+    holder.createCustomToken = vi.fn(async () => {
+      throw new Error("Permission 'iam.serviceAccounts.signBlob' denied on resource");
+    });
+
+    const error = await refusal(redeem("newDevice", "TRN111", "anonymous"));
+
+    expect(error.code).toBe("internal");
+    expect(error.message).toBe(DEVICE_TRANSFER_SIGNING_FAILED_MESSAGE);
+    expect(holder.revokeRefreshTokens).not.toHaveBeenCalled();
+    const stored = db().store.get(`${DEVICE_TRANSFER_CODE_COLLECTION}/c1`)!;
+    expect(stored.redeemedAtMillis ?? null).toBeNull();
+    expect(stored.isRevoked).toBe(false);
+
+    // Once the server is fixed, the SAME code works.
+    holder.createCustomToken = vi.fn(async (uid: string) => `custom-token-for-${uid}`);
+    await expect(redeem("newDevice", "TRN111", "anonymous")).resolves.toBeTruthy();
   });
 });

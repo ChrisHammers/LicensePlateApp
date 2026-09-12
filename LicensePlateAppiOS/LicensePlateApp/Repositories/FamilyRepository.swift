@@ -1276,6 +1276,13 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
                 (["code": code] as [String: Any]).addingClientMetadata()
             )
         } catch {
+            // An `internal` here is the server's own operational message (signing failed,
+            // nothing changed) — the shared mapper would replace it with share-code wording.
+            let nsError = error as NSError
+            if nsError.domain == FunctionsErrorDomain,
+               nsError.code == FunctionsErrorCode.internal.rawValue {
+                throw error
+            }
             throw Self.userFacingCallableError(error)
         }
 

@@ -16,8 +16,68 @@
 
 import Combine
 import Foundation
+import os
 import SwiftUI
 import UIKit
+
+// MARK: - Temporary diagnostics (device transfer, owner device test 2026-09-10)
+
+/// DEBUG-only trace of a transfer: the guardian's mint, the adopting device's redeem →
+/// custom-token sign-in → local row → hydrate, and every identity bootstrap that runs
+/// meanwhile. `[Transfer]` in the Xcode console; `subsystem com.HammersTech.LicensePlateApp /
+/// category Transfer` in Console.app. Remove once the transfer flow is owner-passed.
+enum DeviceTransferDiagnostics {
+    #if DEBUG
+    private static let logger = Logger(subsystem: "com.HammersTech.LicensePlateApp", category: "Transfer")
+    #endif
+
+    static func log(_ message: @autoclosure () -> String) {
+        #if DEBUG
+        let text = message()
+        logger.notice("\(text, privacy: .public)")
+        print("[Transfer] \(text)")
+        #endif
+    }
+}
+
+// MARK: - Live-code memory (guardian side)
+
+/// The guardian's live code for a child, remembered for the life of the process so the sheet
+/// shows the SAME code when it is reopened. Owner device test 2026-09-10: the code vanished on
+/// a screen refresh, the guardian minted again, and the two codes confused the redemption.
+/// Server truth still wins — a superseded, spent or expired code is refused there — this only
+/// stops the app from forgetting a code that is still good.
+@MainActor
+enum DeviceTransferLiveCodeCache {
+    struct Entry: Equatable {
+        let code: String
+        let expiresAt: Date
+    }
+
+    private static var entries: [String: Entry] = [:]
+
+    static func remember(code: String, expiresAt: Date, forChild childUserId: String) {
+        entries[childUserId] = Entry(code: code, expiresAt: expiresAt)
+    }
+
+    /// The remembered code while it is still live; an expired one is forgotten on read.
+    static func liveEntry(forChild childUserId: String, now: Date = .now) -> Entry? {
+        guard let entry = entries[childUserId] else { return nil }
+        guard entry.expiresAt > now else {
+            entries[childUserId] = nil
+            return nil
+        }
+        return entry
+    }
+
+    static func forget(child childUserId: String) {
+        entries[childUserId] = nil
+    }
+
+    static func forgetAll() {
+        entries.removeAll()
+    }
+}
 
 // MARK: - Guardian side
 
@@ -46,6 +106,11 @@ final class IssueDeviceTransferCodeViewModel: ObservableObject {
         self.childDisplayName = childDisplayName
         self.familyId = familyId
         self.familyRepository = familyRepository
+        // Reopening the sheet shows the code that is still good rather than minting another.
+        if let live = DeviceTransferLiveCodeCache.liveEntry(forChild: childUserId) {
+            code = live.code
+            expiresAt = live.expiresAt
+        }
     }
 
     /// Seconds left, floored at zero. `nil` until a code exists.
@@ -90,9 +155,18 @@ final class IssueDeviceTransferCodeViewModel: ObservableObject {
                 code = result.code
                 expiresAt = result.expiresAt
                 now = .now
+                DeviceTransferLiveCodeCache.remember(
+                    code: result.code,
+                    expiresAt: result.expiresAt,
+                    forChild: childUserId
+                )
+                DeviceTransferDiagnostics.log(
+                    "mint: child=\(childUserId.prefix(8)) code=\(result.code) expires=\(result.expiresAt)"
+                )
                 // Guardian's own instance — see the FR-21 note in the file header.
                 AnalyticsService.shared.log(.deviceTransferCodeIssued)
             } catch {
+                DeviceTransferDiagnostics.log("mint: FAILED — \(error)")
                 errorMessage = error.localizedDescription
                 showError = true
             }

@@ -929,6 +929,21 @@ enum DeviceTransferAdoptionPolicy {
     static func mayAdopt(transferredUserId: String, currentUserId: String?) -> Bool {
         !transferredUserId.isEmpty && transferredUserId != currentUserId
     }
+
+    /// Whether the play this device recorded BEFORE the transfer follows the child onto the
+    /// adopted account. It does when the session that held it was the child's own local-first
+    /// or provisional identity. A registered adult setting up a hand-me-down phone from their
+    /// own account (owner ruling 2, 2026-09-09) keeps their trips: re-attributing them to the
+    /// child would be a false record on both sides.
+    static func rebindsLocalPlay(
+        preRedeemSessionIsRegistered: Bool,
+        previousPlayIdentity: String,
+        adoptedUserId: String
+    ) -> Bool {
+        !preRedeemSessionIsRegistered
+            && !previousPlayIdentity.isEmpty
+            && previousPlayIdentity != adoptedUserId
+    }
 }
 
 // MARK: - Server-deleted identity detection (FR-60(c) zombie guard)

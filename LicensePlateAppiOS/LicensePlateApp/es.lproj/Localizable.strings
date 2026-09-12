@@ -1623,3 +1623,15 @@
 "child_gate.transfer.field_footer" = "Pídele este código a un adulto. Solo funciona por unos minutos.";
 "child_gate.transfer.a11y.field_hint" = "Seis caracteres, letras y números";
 "child_gate.transfer.submit" = "Pasarla aquí";
+
+// FR-84 owner follow-up 2026-09-10: guardian one-tap "move to this device" + adult code entry
+"family.child.manage_adopt_here" = "Pasar a este dispositivo";
+"family.child.manage_adopt_here_hint" = "Este dispositivo pasa a ser suyo. Tu sesión se cerrará solo en este dispositivo.";
+"family.child.adopt_here.confirm_title" = "¿Pasar a %@ a este dispositivo?";
+"family.child.adopt_here.confirm_message" = "Este dispositivo pasará a ser de %@, con todos sus viajes, insignias y puntos. Tu sesión se cerrará solo en este dispositivo: tu cuenta no cambia, y su otro dispositivo cerrará sesión en menos de una hora.";
+"family.child.adopt_here.confirm_button" = "Pasar a %@ aquí";
+"profile.transfer.adult_entry" = "Preparar este dispositivo para un niño";
+"profile.transfer.adult_entry_hint" = "Ingresa un código de transferencia del padre o madre del niño para pasar su cuenta a este dispositivo";
+"child_gate.transfer.adult.title" = "Pasar la cuenta de un niño aquí";
+"child_gate.transfer.adult.explanation" = "Ingresa el código que creó el padre o madre del niño. Su cuenta (viajes, insignias y puntos) pasa a este dispositivo.";
+"child_gate.transfer.adult.old_device_notice" = "Tu sesión se cerrará solo en este dispositivo. Su otro dispositivo cerrará sesión en menos de una hora.";

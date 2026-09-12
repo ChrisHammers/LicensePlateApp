@@ -28,6 +28,29 @@ struct AdoptDeviceTransferSheet: View {
     @EnvironmentObject private var authService: FirebaseAuthService
     @StateObject private var viewModel = AdoptDeviceTransferViewModel()
 
+    /// Who is holding the device. `.child`: the child's own new device (the original FR-84
+    /// surface). `.adult`: a registered adult who is not the guardian — the other parent, a
+    /// grandparent — setting this device up for a child with the code the guardian created
+    /// (owner follow-up 2026-09-10). Same act, different reader; only the copy changes.
+    enum Context {
+        case child
+        case adult
+    }
+
+    var context: Context = .child
+
+    private var titleKey: String {
+        context == .adult ? "child_gate.transfer.adult.title" : "child_gate.transfer.title"
+    }
+
+    private var explanationKey: String {
+        context == .adult ? "child_gate.transfer.adult.explanation" : "child_gate.transfer.explanation"
+    }
+
+    private var oldDeviceNoticeKey: String {
+        context == .adult ? "child_gate.transfer.adult.old_device_notice" : "child_gate.transfer.old_device_notice"
+    }
+
     var body: some View {
         NavigationStack {
             AppBackgroundView {
@@ -48,7 +71,7 @@ struct AdoptDeviceTransferSheet: View {
                 .scrollContentBackground(.hidden)
                 .disabled(viewModel.isRedeeming)
             }
-            .navigationTitle("child_gate.transfer.title".localized)
+            .navigationTitle(titleKey.localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -91,12 +114,12 @@ struct AdoptDeviceTransferSheet: View {
                         .foregroundStyle(Color.Theme.primaryBlue)
                         .frame(width: 24)
                         .accessibilityHidden(true)
-                    Text("child_gate.transfer.explanation".localized)
+                    Text(explanationKey.localized)
                         .font(.system(.subheadline, design: .rounded))
                         .foregroundStyle(Color.Theme.softBrown)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                Text("child_gate.transfer.old_device_notice".localized)
+                Text(oldDeviceNoticeKey.localized)
                     .font(.system(.caption, design: .rounded))
                     .foregroundStyle(Color.Theme.softBrown)
                     .fixedSize(horizontal: false, vertical: true)
@@ -133,6 +156,11 @@ struct AdoptDeviceTransferSheet: View {
 
 #Preview("Adopt transfer") {
     AdoptDeviceTransferSheet()
+        .environmentObject(FirebaseAuthService())
+}
+
+#Preview("Adult — setting this device up for a child") {
+    AdoptDeviceTransferSheet(context: .adult)
         .environmentObject(FirebaseAuthService())
 }
 

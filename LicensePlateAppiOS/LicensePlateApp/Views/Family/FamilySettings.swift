@@ -87,7 +87,7 @@ struct FamilySettings: View {
                                         // Fix 2 (2026-08-16): every row disables while ANY
                                         // deletion is in flight, but only the matching row
                                         // spins — see `isDeletingChildData(memberId:)`.
-                                        isBusy: viewModel.isSavingChildStatus || viewModel.isChildDataDeletionInFlight || viewModel.isRemovingMember,
+                                        isBusy: viewModel.isSavingChildStatus || viewModel.isChildDataDeletionInFlight || viewModel.isRemovingMember || viewModel.isAdoptingChildHere,
                                         isDeletingChildData: viewModel.isDeletingChildData(memberId: member.userId),
                                         onMarkAsChild: { viewModel.beginMarkAsChild($0) },
                                         onCorrect: { viewModel.beginCorrectChildStatus($0) },
@@ -96,7 +96,8 @@ struct FamilySettings: View {
                                         // removal choice as swipe-Remove — never straight
                                         // into deletion.
                                         onRemove: { viewModel.confirmRemoveMember(memberId: $0.memberUserId) },
-                                        onTransferDevice: { viewModel.openChildDeviceTransfer($0) }
+                                        onTransferDevice: { viewModel.openChildDeviceTransfer($0) },
+                                        onAdoptHere: { viewModel.beginAdoptChildHere($0) }
                                     )
                                 }
                             }
@@ -292,6 +293,7 @@ struct FamilySettings: View {
 /// shared with swipe-Remove) arms the FR-30 final confirmation presented here.
 private struct FamilyChildManagementPresentations: ViewModifier {
     @ObservedObject var viewModel: FamilySettingsViewModel
+    @Environment(\.dismiss) private var dismiss
 
     func body(content: Content) -> some View {
         content
@@ -310,6 +312,29 @@ private struct FamilyChildManagementPresentations: ViewModifier {
                     childDisplayName: target.displayName,
                     familyId: viewModel.familyId
                 )
+            }
+            // Owner follow-up 2026-09-10 (FR-84): the hand-me-down case — the guardian is signed
+            // in on the device that should become the child's. One confirmed tap mints and
+            // redeems; the server allows a registered adult to redeem (owner ruling 2). The
+            // screen dismisses once this device is the child's: the family it was showing
+            // belongs to the adult who is no longer signed in here.
+            .alert(
+                "family.child.adopt_here.confirm_title".localized(viewModel.childAdoptHereTarget?.displayName ?? ""),
+                isPresented: Binding(
+                    get: { viewModel.childAdoptHereTarget != nil },
+                    set: { if !$0 { viewModel.childAdoptHereTarget = nil } }
+                ),
+                presenting: viewModel.childAdoptHereTarget
+            ) { target in
+                Button("family.child.adopt_here.confirm_button".localized(target.displayName)) {
+                    viewModel.adoptChildOnThisDevice(target)
+                }
+                Button("Cancel".localized, role: .cancel) {}
+            } message: { target in
+                Text("family.child.adopt_here.confirm_message".localized(target.displayName))
+            }
+            .onChange(of: viewModel.didAdoptChildHere) { _, done in
+                if done { dismiss() }
             }
             .sheet(item: $viewModel.childPrivacyTarget) { target in
                 FamilyChildPrivacyView(
@@ -386,6 +411,8 @@ struct FamilyChildManageControls: View {
     /// FR-84 (F-41). Defaulted so the existing previews and any other call site keep
     /// compiling unchanged — the smallest diff that adds a control to this stack.
     var onTransferDevice: (FamilyChildMemberTarget) -> Void = { _ in }
+    /// Owner follow-up 2026-09-10: this device becomes the child's, in one confirmed tap.
+    var onAdoptHere: (FamilyChildMemberTarget) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -415,6 +442,16 @@ struct FamilyChildManageControls: View {
                     hint: "family.child.manage_transfer_hint".localized
                 ) {
                     onTransferDevice(target)
+                }
+                // The hand-me-down case (owner 2026-09-10): the guardian is holding the device
+                // that should become the child's. No code to read aloud, no sign-out, no
+                // relaunch — one confirmed tap, and this device is theirs.
+                controlButton(
+                    title: "family.child.manage_adopt_here".localized,
+                    systemImage: "arrow.down.to.line",
+                    hint: "family.child.manage_adopt_here_hint".localized
+                ) {
+                    onAdoptHere(target)
                 }
                 // FR-63(a): the FIRST step is the §312.6(a)(2) choice — this control
                 // opens the same removal dialog as swipe-Remove (keep data / delete /

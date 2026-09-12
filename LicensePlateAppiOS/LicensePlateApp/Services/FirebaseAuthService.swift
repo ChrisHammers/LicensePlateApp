@@ -952,12 +952,38 @@ class FirebaseAuthService: ObservableObject {
     func adoptTransferredChildIdentity(code: String) async throws -> String {
         guard isOnline else { throw AuthError.offline }
 
-        let previousPlayIdentity = currentUser.map { $0.firebaseUID ?? $0.id }
+        // The session about to be REPLACED decides the shape of the adoption. A registered adult
+        // setting up a hand-me-down phone from their own account (owner ruling 2, 2026-09-09)
+        // keeps everything that is theirs: no provisional mint, no local-play rebind, no
+        // repointed row — the ordinary bootstrap inserts the child's real profile as its own
+        // row. A local-first child's device goes through the consent-seeking wrapper exactly as
+        // before, and its own row becomes the child's.
+        let preRedeemSession = auth.currentUser
+        let preRedeemSessionIsRegistered = preRedeemSession.map {
+            !$0.isAnonymous && !$0.providerData.isEmpty
+        } ?? false
+        DeviceTransferDiagnostics.log(
+            "adopt: start session=\(Self.describeSession(preRedeemSession)) registered=\(preRedeemSessionIsRegistered) "
+            + "localRow=\(currentUser.map { "\($0.id.prefix(8))/\($0.firebaseUID?.prefix(8) ?? "-") name=\($0.userName) family=\($0.activeFamilyId ?? "-")" } ?? "nil")"
+        )
 
-        let transfer = try await withConsentSeekingRedemption {
-            try await FamilyRepository.shared.redeemDeviceTransferCode(code: code)
+        let transfer: (customToken: String, childUserId: String, familyId: String)
+        do {
+            if preRedeemSessionIsRegistered {
+                transfer = try await FamilyRepository.shared.redeemDeviceTransferCode(code: code)
+            } else {
+                transfer = try await withConsentSeekingRedemption {
+                    try await FamilyRepository.shared.redeemDeviceTransferCode(code: code)
+                }
+            }
+        } catch {
+            DeviceTransferDiagnostics.log("adopt: redeem FAILED — \(error)")
+            throw error
         }
         let childUserId = transfer.childUserId
+        DeviceTransferDiagnostics.log(
+            "adopt: redeemed → child=\(childUserId.prefix(8)) family=\(transfer.familyId.prefix(8)) sessionNow=\(Self.describeSession(auth.currentUser))"
+        )
 
         // Already signed in as this child — the code was spent, but there is nothing to move.
         // Running the adoption anyway would sign the device out of the session it is holding.
@@ -965,8 +991,14 @@ class FirebaseAuthService: ObservableObject {
             transferredUserId: childUserId,
             currentUserId: auth.currentUser?.uid
         ) else {
+            DeviceTransferDiagnostics.log("adopt: already this child — nothing to move")
             return childUserId
         }
+
+        // The play identity the device holds NOW. Captured here, after the wrapper above may have
+        // minted the provisional uid and rebound local play onto it — an earlier capture named
+        // an id no row carried any more, so the rebind below moved nothing.
+        let previousPlayIdentity = currentUser.map { $0.firebaseUID ?? $0.id }
 
         // Step 2 — before any await that could let the listener see the new uid.
         AgeGateStore.shared.adoptTransferredChildIdentity(userId: childUserId)
@@ -976,16 +1008,29 @@ class FirebaseAuthService: ObservableObject {
         var stillClaimed = true
         defer { if stillClaimed { uidsBeingProvisionedLocally.remove(childUserId) } }
 
-        let adopted = try await auth.signIn(withCustomToken: transfer.customToken).user
+        let adopted: User
+        do {
+            adopted = try await auth.signIn(withCustomToken: transfer.customToken).user
+        } catch {
+            DeviceTransferDiagnostics.log("adopt: custom-token sign-in FAILED — \(error)")
+            throw error
+        }
+        DeviceTransferDiagnostics.log("adopt: signed in as \(Self.describeSession(adopted))")
 
         // FR-60(b)/(d): carry whatever this device played locally before the transfer onto the
         // adopted uid, so the child's own trips and XP are not filtered out the moment a view
-        // re-reads `firebaseUID ?? id`. Same call, same reason, as the anonymous mint.
-        if let previousPlayIdentity, previousPlayIdentity != childUserId {
+        // re-reads `firebaseUID ?? id`. Same call, same reason, as the anonymous mint — and
+        // never for a registered adult's own play.
+        if let previousPlayIdentity,
+           DeviceTransferAdoptionPolicy.rebindsLocalPlay(
+               preRedeemSessionIsRegistered: preRedeemSessionIsRegistered,
+               previousPlayIdentity: previousPlayIdentity,
+               adoptedUserId: childUserId
+           ) {
             rebindLocalPlayIdentity(from: previousPlayIdentity, to: childUserId)
         }
 
-        if let modelContext, let localUser = currentUser {
+        if !preRedeemSessionIsRegistered, let modelContext, let localUser = currentUser {
             if localUser.id != childUserId {
                 localUser.localIDBeforeFirebase = localUser.id
                 localUser.id = childUserId
@@ -999,15 +1044,21 @@ class FirebaseAuthService: ObservableObject {
             try? modelContext.save()
             currentUser = localUser
             isAuthenticated = true
+            DeviceTransferDiagnostics.log("adopt: local row repointed to \(childUserId.prefix(8))")
+        } else {
+            DeviceTransferDiagnostics.log("adopt: registered session — the adult's row is left alone; bootstrap inserts the child's")
         }
 
         uidsBeingProvisionedLocally.remove(childUserId)
         stillClaimed = false
 
         // Step 4 — the ordinary bootstrap, which reads `users/{childUid}` and merges the real
-        // profile back onto the row. It also refuses detached uids, which is why step 2 had to
-        // release the ratchet first.
+        // profile back onto the row (or inserts it, for a registered adult's device). It also
+        // refuses detached uids, which is why step 2 had to release the ratchet first.
         await loadUserFromFirebase(adopted)
+        DeviceTransferDiagnostics.log(
+            "adopt: after hydrate currentUser=\(currentUser.map { "\($0.id.prefix(8)) name=\($0.userName) family=\($0.activeFamilyId ?? "-")" } ?? "nil") authenticated=\(isAuthenticated)"
+        )
 
         // The device now hosts a child. Re-run the seam so ads, purchases, location and the
         // unmanaged-exit gates all re-derive before anything renders.
@@ -1018,6 +1069,11 @@ class FirebaseAuthService: ObservableObject {
         #endif
 
         return childUserId
+    }
+
+    private static func describeSession(_ user: User?) -> String {
+        guard let user else { return "none" }
+        return "\(user.uid.prefix(8)) anonymous=\(user.isAnonymous) providers=\(user.providerData.count)"
     }
 
     /// The post-condition `provisionIdentityForConsentSeekingRedemptionIfNeeded` owes its
@@ -2662,6 +2718,10 @@ class FirebaseAuthService: ObservableObject {
         let action = AuthProfileSyncPolicy.bootstrapAction(
             hasLocalUser: existingUser != nil,
             load: loadStatus
+        )
+        DeviceTransferDiagnostics.log(
+            "bootstrap uid=\(firebaseUID.prefix(8)) anonymous=\(firebaseUser.isAnonymous) localRow=\(existingUser != nil) load=\(loadStatus) action=\(action) "
+            + "cloudName=\(loadedCloudUser?.userName ?? "-") cloudFamily=\(loadedCloudUser?.activeFamilyId ?? "-")"
         )
 
         switch action {

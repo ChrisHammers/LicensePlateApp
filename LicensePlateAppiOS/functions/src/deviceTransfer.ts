@@ -63,6 +63,7 @@ import {
   DEVICE_TRANSFER_CODE_COLLECTION,
   DEVICE_TRANSFER_CODE_LENGTH,
   DEVICE_TRANSFER_CODE_TTL_MS,
+  DEVICE_TRANSFER_SIGNING_FAILED_MESSAGE,
   DEVICE_TRANSFER_UNAVAILABLE_MESSAGE,
   buildDeviceTransferIssuedMetadata,
   buildDeviceTransferRedeemedMetadata,
@@ -298,6 +299,15 @@ export const redeemDeviceTransferCode = enforcedCallable(async (data, context) =
 
   const { childUserId, familyId } = decision;
 
+  // A session that already IS the target has nothing to move. Proceeding would spend the code
+  // and revoke the CALLER's own refresh tokens (owner device test 2026-09-10: a second code
+  // entered on the device that had just adopted the child). Same indistinguishable refusal as
+  // every other negative outcome (FR-24), taken before any state changes.
+  if (redeemerUserId === childUserId) {
+    functions.logger.info("device transfer refused", { refusal: "redeemer_is_target" });
+    throw transferUnavailable();
+  }
+
   // Step 3 — eligibility re-check. A child revoked, removed, or deleted since the code was
   // minted must not be re-homed onto a new device on the strength of a stale credential.
   const childUserRef = db.collection("users").doc(childUserId);
@@ -316,6 +326,19 @@ export const redeemDeviceTransferCode = enforcedCallable(async (data, context) =
 
   // Step 4 — single-use claim. The re-read inside the transaction is the whole point: two
   // devices entering the same code concurrently both passed step 1, and exactly one may win.
+  // Sign the credential BEFORE anything is spent or revoked. Signing needs the runtime service
+  // account to hold `roles/iam.serviceAccountTokenCreator`; when it does not (owner device test
+  // 2026-09-10) this used to crash AFTER the claim — the code was burnt, the child's old device
+  // was logged out, and nothing was delivered. A token minted for the loser of the claim race
+  // below is never returned, so minting first costs nothing.
+  let customToken: string;
+  try {
+    customToken = await admin.auth().createCustomToken(childUserId);
+  } catch (error) {
+    functions.logger.error("device transfer: custom token signing failed", error);
+    throw new functions.https.HttpsError("internal", DEVICE_TRANSFER_SIGNING_FAILED_MESSAGE);
+  }
+
   const codeRef = foundDoc!.ref;
   const nowMs = Date.now();
   const claimed = await db.runTransaction(async (tx) => {
@@ -346,8 +369,6 @@ export const redeemDeviceTransferCode = enforcedCallable(async (data, context) =
     deviceTransferEpochMillis: nowMs,
     lastDeviceTransferAtMillis: nowMs,
   });
-
-  const customToken = await admin.auth().createCustomToken(childUserId);
 
   // The provisional uid the new device minted purely to make this call. Best-effort by the
   // same reasoning as `childConsent.ts`'s guardianship/push cleanups: the transfer has

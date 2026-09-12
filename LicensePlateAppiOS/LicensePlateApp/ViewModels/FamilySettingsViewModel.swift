@@ -52,6 +52,16 @@ class FamilySettingsViewModel: ObservableObject {
     @Published var childPrivacyTarget: FamilyChildMemberTarget?
     /// FR-84 (F-41): the child whose account a guardian is moving to a new device.
     @Published var childDeviceTransferTarget: FamilyChildMemberTarget?
+    /// FR-84 owner follow-up (2026-09-10): the guardian is signed in on the device that should
+    /// BECOME the child's — a hand-me-down phone. Armed by the manage control, confirmed in the
+    /// alert, then `adoptChildOnThisDevice` mints and redeems in one go. The server permits a
+    /// registered adult to redeem (owner ruling 2, 2026-09-09); this is the flow that ruling
+    /// exists for.
+    @Published var childAdoptHereTarget: FamilyChildMemberTarget?
+    @Published private(set) var isAdoptingChildHere = false
+    /// Set once this device has become the child's; the screen dismisses on it — the family
+    /// view it was showing belongs to the adult who is no longer signed in here.
+    @Published private(set) var didAdoptChildHere = false
     /// FR-61 ex-member entry: children this account is the recorded guardian for
     /// (server-fed via `listGuardedChildren`; filtered to past members for display).
     @Published private(set) var guardedChildren: [GuardedChildSummary] = []
@@ -442,6 +452,38 @@ class FamilySettingsViewModel: ObservableObject {
     func openChildDeviceTransfer(_ target: FamilyChildMemberTarget) {
         guard canManageChildStatus(memberId: target.memberUserId) else { return }
         childDeviceTransferTarget = target
+    }
+
+    func beginAdoptChildHere(_ target: FamilyChildMemberTarget) {
+        guard canManageChildStatus(memberId: target.memberUserId) else { return }
+        childAdoptHereTarget = target
+    }
+
+    /// Mint a code for the child and redeem it on this very device. Both callables already
+    /// exist; chaining them is what makes "move to this device" one tap instead of a code read
+    /// aloud, a sign-out and a relaunch.
+    func adoptChildOnThisDevice(_ target: FamilyChildMemberTarget) {
+        guard !isAdoptingChildHere else { return }
+        isAdoptingChildHere = true
+        Task { @MainActor in
+            defer { isAdoptingChildHere = false }
+            do {
+                let minted = try await familyRepository.createDeviceTransferCode(
+                    childUserId: target.memberUserId,
+                    familyId: familyId
+                )
+                // Guardian's own instance — the same event the code sheet logs (FR-21).
+                analytics.log(.deviceTransferCodeIssued)
+                DeviceTransferDiagnostics.log("adopt-here: minted for \(target.memberUserId.prefix(8)), redeeming on this device")
+                _ = try await authService.adoptTransferredChildIdentity(code: minted.code)
+                DeviceTransferLiveCodeCache.forget(child: target.memberUserId)
+                didAdoptChildHere = true
+            } catch {
+                DeviceTransferDiagnostics.log("adopt-here: FAILED — \(error)")
+                errorMessage = error.localizedDescription
+                showErrorAlert = true
+            }
+        }
     }
 
     func loadConsentHistory(childUserId: String) async throws -> ParentalConsentStatus {
