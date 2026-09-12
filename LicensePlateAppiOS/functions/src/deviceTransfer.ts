@@ -326,14 +326,14 @@ export const redeemDeviceTransferCode = enforcedCallable(async (data, context) =
 
   // Step 4 — single-use claim. The re-read inside the transaction is the whole point: two
   // devices entering the same code concurrently both passed step 1, and exactly one may win.
-  // Sign the credential BEFORE anything is spent or revoked. Signing needs the runtime service
+  // PROBE the signer before anything is spent or revoked. Signing needs the runtime service
   // account to hold `roles/iam.serviceAccountTokenCreator`; when it does not (owner device test
-  // 2026-09-10) this used to crash AFTER the claim — the code was burnt, the child's old device
-  // was logged out, and nothing was delivered. A token minted for the loser of the claim race
-  // below is never returned, so minting first costs nothing.
-  let customToken: string;
+  // 2026-09-10) the mint used to crash AFTER the claim — the code was burnt, the child's old
+  // device was logged out, and nothing was delivered. The probe token is discarded: the token
+  // the device receives is minted BELOW, after `revokeRefreshTokens`, so the session it opens
+  // post-dates the revocation by construction (§3.1.1 item 13 hardening, 2026-09-11).
   try {
-    customToken = await admin.auth().createCustomToken(childUserId);
+    await admin.auth().createCustomToken(childUserId);
   } catch (error) {
     functions.logger.error("device transfer: custom token signing failed", error);
     throw new functions.https.HttpsError("internal", DEVICE_TRANSFER_SIGNING_FAILED_MESSAGE);
@@ -369,6 +369,9 @@ export const redeemDeviceTransferCode = enforcedCallable(async (data, context) =
     deviceTransferEpochMillis: nowMs,
     lastDeviceTransferAtMillis: nowMs,
   });
+
+  // The real credential — minted only now, after the revocation above.
+  const customToken = await admin.auth().createCustomToken(childUserId);
 
   // The provisional uid the new device minted purely to make this call. Best-effort by the
   // same reasoning as `childConsent.ts`'s guardianship/push cleanups: the transfer has

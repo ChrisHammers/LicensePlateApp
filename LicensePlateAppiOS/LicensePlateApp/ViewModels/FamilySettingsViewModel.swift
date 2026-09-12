@@ -59,6 +59,9 @@ class FamilySettingsViewModel: ObservableObject {
     /// exists for.
     @Published var childAdoptHereTarget: FamilyChildMemberTarget?
     @Published private(set) var isAdoptingChildHere = false
+    /// The one row whose control spins while its transfer runs (owner 2026-09-11: no busy
+    /// state was visible); every other child row only disables through `isAdoptingChildHere`.
+    @Published private(set) var adoptingChildUserId: String?
     /// Set once this device has become the child's; the screen dismisses on it — the family
     /// view it was showing belongs to the adult who is no longer signed in here.
     @Published private(set) var didAdoptChildHere = false
@@ -462,11 +465,19 @@ class FamilySettingsViewModel: ObservableObject {
     /// Mint a code for the child and redeem it on this very device. Both callables already
     /// exist; chaining them is what makes "move to this device" one tap instead of a code read
     /// aloud, a sign-out and a relaunch.
+    func isAdoptingChildHere(memberId: String) -> Bool {
+        isAdoptingChildHere && adoptingChildUserId == memberId
+    }
+
     func adoptChildOnThisDevice(_ target: FamilyChildMemberTarget) {
         guard !isAdoptingChildHere else { return }
         isAdoptingChildHere = true
+        adoptingChildUserId = target.memberUserId
         Task { @MainActor in
-            defer { isAdoptingChildHere = false }
+            defer {
+                isAdoptingChildHere = false
+                adoptingChildUserId = nil
+            }
             do {
                 let minted = try await familyRepository.createDeviceTransferCode(
                     childUserId: target.memberUserId,

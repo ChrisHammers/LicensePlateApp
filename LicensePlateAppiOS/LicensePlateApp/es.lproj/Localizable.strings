@@ -1627,6 +1627,7 @@
 // FR-84 owner follow-up 2026-09-10: guardian one-tap "move to this device" + adult code entry
 "family.child.manage_adopt_here" = "Pasar a este dispositivo";
 "family.child.manage_adopt_here_hint" = "Este dispositivo pasa a ser suyo. Tu sesión se cerrará solo en este dispositivo.";
+"family.child.adopt_here.busy" = "Pasando a este dispositivo…";
 "family.child.adopt_here.confirm_title" = "¿Pasar a %@ a este dispositivo?";
 "family.child.adopt_here.confirm_message" = "Este dispositivo pasará a ser de %@, con todos sus viajes, insignias y puntos. Tu sesión se cerrará solo en este dispositivo: tu cuenta no cambia, y su otro dispositivo cerrará sesión en menos de una hora.";
 "family.child.adopt_here.confirm_button" = "Pasar a %@ aquí";

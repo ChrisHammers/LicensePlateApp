@@ -391,7 +391,9 @@ describe("FR-84 single-use, expiry, and FR-24 indistinguishability", () => {
     db().seed("users/newDevice2", { isChildAccount: true });
     const error = await refusal(redeem("newDevice2", "TRN111", "anonymous"));
     expect(error.message).toBe(DEVICE_TRANSFER_UNAVAILABLE_MESSAGE);
-    expect(holder.createCustomToken).toHaveBeenCalledTimes(1);
+    // One probe before the claim plus the real mint after the revocation; the second
+    // redemption never reaches either.
+    expect(holder.createCustomToken).toHaveBeenCalledTimes(2);
   });
 
   it("refuses an expired code", async () => {
@@ -646,5 +648,24 @@ describe("FR-84 custom-token signing failure", () => {
     // Once the server is fixed, the SAME code works.
     holder.createCustomToken = vi.fn(async (uid: string) => `custom-token-for-${uid}`);
     await expect(redeem("newDevice", "TRN111", "anonymous")).resolves.toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 11. The credential the device keeps post-dates the revocation (§3.1.1 item 13 hardening)
+// ---------------------------------------------------------------------------
+
+describe("FR-84 token order", () => {
+  it("mints the returned token AFTER revoking the old device, with only a probe before the claim", async () => {
+    seedCode("c1", { code: "TRN111", childUserId: "kid", familyId: "fam1", createdBy: "parent" });
+
+    await redeem("newDevice", "TRN111", "anonymous");
+
+    const mints = holder.createCustomToken.mock.invocationCallOrder as number[];
+    const revokes = holder.revokeRefreshTokens.mock.invocationCallOrder as number[];
+    expect(mints).toHaveLength(2);
+    expect(revokes).toHaveLength(1);
+    expect(mints[0]).toBeLessThan(revokes[0]);
+    expect(mints[1]).toBeGreaterThan(revokes[0]);
   });
 });

@@ -1661,6 +1661,7 @@
 // FR-84 owner follow-up 2026-09-10: guardian one-tap "move to this device" + adult code entry
 "family.child.manage_adopt_here" = "Move to this device";
 "family.child.manage_adopt_here_hint" = "Makes this device theirs. You will be signed out of your account on this device only.";
+"family.child.adopt_here.busy" = "Moving to this device…";
 "family.child.adopt_here.confirm_title" = "Move %@ to this device?";
 "family.child.adopt_here.confirm_message" = "This device becomes %@'s, with all their trips, badges and points. You'll be signed out of your own account on this device only — nothing about your account changes, and their old device signs out within the hour.";
 "family.child.adopt_here.confirm_button" = "Move %@ here";

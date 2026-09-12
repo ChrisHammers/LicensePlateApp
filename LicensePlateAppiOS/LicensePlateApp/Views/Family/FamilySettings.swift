@@ -97,7 +97,8 @@ struct FamilySettings: View {
                                         // into deletion.
                                         onRemove: { viewModel.confirmRemoveMember(memberId: $0.memberUserId) },
                                         onTransferDevice: { viewModel.openChildDeviceTransfer($0) },
-                                        onAdoptHere: { viewModel.beginAdoptChildHere($0) }
+                                        onAdoptHere: { viewModel.beginAdoptChildHere($0) },
+                                        isAdoptingHere: viewModel.isAdoptingChildHere(memberId: member.userId)
                                     )
                                 }
                             }
@@ -413,6 +414,8 @@ struct FamilyChildManageControls: View {
     var onTransferDevice: (FamilyChildMemberTarget) -> Void = { _ in }
     /// Owner follow-up 2026-09-10: this device becomes the child's, in one confirmed tap.
     var onAdoptHere: (FamilyChildMemberTarget) -> Void = { _ in }
+    /// Spins this row's "Move to this device" control while its transfer runs.
+    var isAdoptingHere: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -449,7 +452,9 @@ struct FamilyChildManageControls: View {
                 controlButton(
                     title: "family.child.manage_adopt_here".localized,
                     systemImage: "arrow.down.to.line",
-                    hint: "family.child.manage_adopt_here_hint".localized
+                    hint: "family.child.manage_adopt_here_hint".localized,
+                    isBusy: isAdoptingHere,
+                    busyTitle: "family.child.adopt_here.busy".localized
                 ) {
                     onAdoptHere(target)
                 }
