@@ -6,9 +6,27 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // A caller holding a credential they could reproduce elsewhere: email/OAuth sign-in.
+    //
+    // FR-84 (F-41) added 'custom' beside 'anonymous'. Parent-initiated device transfer hands
+    // a consented child's new device an Admin-minted CUSTOM TOKEN, because a credential-less
+    // child account (FR-60(c)) has nothing to link. That session reports
+    // sign_in_provider == 'custom', so the old "!= anonymous" form would have silently
+    // reclassified every transferred child as REGISTERED — granting exactly the capability
+    // set FR-85(a) went out of its way to withhold from consented children (families create,
+    // share_codes create/update, the wider peer-read surfaces), as an invisible side effect
+    // of changing devices. Nothing minted a custom token before F-41, so this reclassifies no
+    // existing session: it is a hardening, not a widening.
+    //
+    // Keep in step with `callableAuth.ts`'s `isUncredentialedCaller` — same boundary, two
+    // halves. A consented child's LEGITIMATE reads keep flowing through
+    // `callerIsConsentedChildMemberOf()` below, which keys off the child flag and real
+    // membership and never looks at the provider, so a transfer changes nothing a child could
+    // already do.
     function isRegisteredAccount() {
       return isSignedIn()
-        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && request.auth.token.firebase.sign_in_provider != 'custom';
     }
 
     function uid() {
@@ -554,6 +572,33 @@ service cloud.firestore {
         && resource.data.createdBy == uid()
         && shareCodeFamilyIsOwned(request.resource.data);
       allow delete: if false;
+    }
+
+    // DEVICE TRANSFER CODES — FR-84 (F-41)
+    //
+    // A row here is a bearer credential for ONE named consented child's ACCOUNT: whoever
+    // presents the code to `redeemDeviceTransferCode` receives a custom token for that uid.
+    // That is a categorically heavier object than a `share_codes` row, which mints an invite
+    // somebody still has to approve — which is why these do not live in `share_codes`:
+    //
+    //  - `share_codes` reads are open to the whole named FAMILY (FR-67's
+    //    `shareCodeIsReadableBySelf`). A sibling reading their brother's live transfer code
+    //    off the collection is precisely FR-84 future-item (iii)'s child-to-child
+    //    account-sharing vector, handed out by the ruleset itself.
+    //  - `share_codes` writes are open to any registered non-child. A transfer row there
+    //    would be mintable by direct client write, bypassing the FR-62 guardianship ladder
+    //    that `createDeviceTransferCode` runs — the authorization would live only in a
+    //    callable nobody is forced to call.
+    //
+    // So: writes are server-only (Admin SDK), `get` is the minting guardian's alone (they may
+    // legitimately re-read the code they are reading aloud), and `list` is denied outright —
+    // enumeration here would hand an attacker live account credentials rather than the
+    // harvestable-invite problem FR-67 closed. The redeeming device never touches this
+    // collection: the callable is the only resolver, and it is throttled under `share_redeem`.
+    match /device_transfer_codes/{codeId} {
+      allow get: if isSignedIn() && resource.data.createdBy == uid();
+      allow list: if false;
+      allow create, update, delete: if false;
     }
 
     // FAMILIES

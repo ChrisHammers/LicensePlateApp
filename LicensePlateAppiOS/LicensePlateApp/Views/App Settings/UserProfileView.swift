@@ -1276,6 +1276,8 @@ private struct ChildAccountSectionGuidance: View {
 
     @EnvironmentObject private var authService: FirebaseAuthService
     @State private var showJoinFamilySheet = false
+    /// FR-84 (F-41): the "I already have an account on another device" route.
+    @State private var showAdoptTransferSheet = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1325,10 +1327,39 @@ private struct ChildAccountSectionGuidance: View {
                     label: "Join a Family".localized,
                     hint: "child_gate.screen.join_button_hint".localized
                 )
+
+                // FR-84 (F-41). A child on a NEW device whose account already exists reaches
+                // "Join a Family" and mints a SECOND account — losing the XP, achievements and
+                // trip history the first one holds, with no way back, because a consented
+                // child's account has no credentials to sign in with (FR-60(c)). This link is
+                // that account's only route onto this device, so it lives beside the join
+                // button rather than behind a settings screen a stranded child will not find.
+                // Secondary styling on purpose: joining is the common case, and a child who
+                // has never played before must not be nudged toward asking for a transfer code
+                // that cannot exist for them.
+                Button {
+                    showAdoptTransferSheet = true
+                } label: {
+                    Text("child_gate.transfer.entry_link".localized)
+                        .font(.system(.footnote, design: .rounded))
+                        .foregroundStyle(Color.Theme.primaryBlue)
+                        .underline()
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibleButton(
+                    label: "child_gate.transfer.entry_link".localized,
+                    hint: "child_gate.transfer.a11y.entry_hint".localized
+                )
             }
         }
         .sheet(isPresented: $showJoinFamilySheet) {
             JoinFamilySheet()
+                .environmentObject(authService)
+        }
+        .sheet(isPresented: $showAdoptTransferSheet) {
+            AdoptDeviceTransferSheet()
                 .environmentObject(authService)
         }
     }

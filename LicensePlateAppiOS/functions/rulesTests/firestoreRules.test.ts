@@ -102,6 +102,19 @@ function anonymous(uid: string): Firestore {
     .firestore() as unknown as Firestore;
 }
 
+/**
+ * Custom-token caller — FR-84 (F-41). This is what a child's session looks like AFTER a
+ * parent-initiated device transfer: `createCustomToken` is the only way to assume a
+ * credential-less child uid on a new device, and it stamps `sign_in_provider == "custom"`.
+ */
+function customToken(uid: string): Firestore {
+  return testEnv
+    .authenticatedContext(uid, {
+      firebase: { sign_in_provider: "custom" },
+    })
+    .firestore() as unknown as Firestore;
+}
+
 async function seed(fixtures: Record<string, Record<string, unknown>>): Promise<void> {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore() as unknown as Firestore;
@@ -1776,5 +1789,164 @@ describe("FR-80: username format is validated server-side on write", () => {
     await assertSucceeds(
       setDoc(doc(registered("legacy2"), "users/legacy2"), { userName: "x", lastUpdated: new Date() }, { merge: true })
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// FR-84 (F-41) — parent-initiated device transfer
+// ---------------------------------------------------------------------------
+
+/**
+ * Two boundaries, which are separate concerns that happen to arrive together.
+ *
+ * (1) `device_transfer_codes` — a row here is a BEARER CREDENTIAL for one named consented
+ *     child's account: whoever presents the code to `redeemDeviceTransferCode` receives a
+ *     custom token for that uid. So it is deliberately NOT a third `share_codes` type.
+ *     `share_codes` is readable by the whole named family (FR-67) and writable by any
+ *     registered non-child; either property applied here would be a hole, the first being
+ *     FR-84 future-item (iii)'s child-to-child account-sharing vector handed out by the
+ *     ruleset itself.
+ *
+ * (2) `isRegisteredAccount()` now excludes `custom` as well as `anonymous`. Without that, a
+ *     transfer would PROMOTE the child it moves: a `custom` session would satisfy every
+ *     registration gate FR-85(a) deliberately declined to widen for consented children. The
+ *     matrix below re-runs FR-85's own question against the new provider — a transferred child
+ *     must do exactly what an anonymous consented child could do, and nothing more.
+ */
+describe("FR-84: device transfer codes and the custom-token provider", () => {
+  beforeEach(async () => {
+    await seed({
+      "users/parent": { userName: "Parent", activeFamilyId: "fam1" },
+      "users/sibling": { userName: "Sib", isChildAccount: true, activeFamilyId: "fam1" },
+      "users/famkid": { userName: "Kid", isChildAccount: true, activeFamilyId: "fam1" },
+      "users/stranger": { userName: "Stranger" },
+      "families/fam1": { name: "Fam", creatorId: "parent", status: "active" },
+      "families/fam1/members/parent": { role: "creator" },
+      "families/fam1/members/famkid": { role: "member", isChild: true },
+      "families/fam1/members/sibling": { role: "member", isChild: true },
+      "device_transfer_codes/t1": {
+        code: "TRN111",
+        childUserId: "famkid",
+        familyId: "fam1",
+        createdBy: "parent",
+        expiresAtMillis: Date.now() + 900000,
+        isRevoked: false,
+      },
+    });
+  });
+
+  it("lets the minting guardian re-read the code they are reading aloud", async () => {
+    await assertSucceeds(getDoc(doc(registered("parent"), "device_transfer_codes/t1")));
+  });
+
+  /** The vector FR-84 future-item (iii) names, closed by the rules rather than by a callable. */
+  it("denies a SIBLING in the same family — this is not a share code", async () => {
+    await assertFails(getDoc(doc(anonymous("sibling"), "device_transfer_codes/t1")));
+  });
+
+  it("denies the child the code is FOR (they redeem through the callable, never the doc)", async () => {
+    await assertFails(getDoc(doc(anonymous("famkid"), "device_transfer_codes/t1")));
+  });
+
+  it("denies a stranger and an anonymous caller", async () => {
+    await assertFails(getDoc(doc(registered("stranger"), "device_transfer_codes/t1")));
+    await assertFails(getDoc(doc(anonymous("anon1"), "device_transfer_codes/t1")));
+  });
+
+  /**
+   * Enumeration is denied OUTRIGHT, not merely scoped as FR-67 scoped `share_codes`. There a
+   * harvest yields invites somebody still has to approve; here it would yield live account
+   * credentials, so no query shape is worth permitting — including the creator's own, which
+   * needs no listing because the mint callable returns the code.
+   */
+  it("denies listing to everyone, including the creator", async () => {
+    await assertFails(getDocs(collection(registered("parent"), "device_transfer_codes")));
+    await assertFails(
+      getDocs(
+        query(
+          collection(registered("parent"), "device_transfer_codes"),
+          where("createdBy", "==", "parent")
+        )
+      )
+    );
+    await assertFails(getDocs(collection(registered("stranger"), "device_transfer_codes")));
+  });
+
+  it("denies every client write — the callables are the only writers", async () => {
+    await assertFails(
+      setDoc(doc(registered("parent"), "device_transfer_codes/forged"), {
+        code: "FORGED",
+        childUserId: "famkid",
+        familyId: "fam1",
+        createdBy: "parent",
+        isRevoked: false,
+      })
+    );
+    await assertFails(
+      updateDoc(doc(registered("parent"), "device_transfer_codes/t1"), { isRevoked: true })
+    );
+    await assertFails(deleteDoc(doc(registered("parent"), "device_transfer_codes/t1")));
+  });
+
+  /**
+   * A child who cannot read the collection must not be able to mint into it either — the
+   * sibling's route to their brother's account, tried from the write side.
+   */
+  it("denies a consented child creating a transfer code for another child", async () => {
+    await assertFails(
+      setDoc(doc(anonymous("sibling"), "device_transfer_codes/sneaky"), {
+        code: "SNEAK1",
+        childUserId: "famkid",
+        familyId: "fam1",
+        createdBy: "sibling",
+        isRevoked: false,
+      })
+    );
+  });
+
+  describe("a transferred child gains nothing an anonymous consented child lacked", () => {
+    it("still cannot create a family", async () => {
+      await assertFails(
+        setDoc(doc(customToken("famkid"), "families/newfam"), {
+          name: "Mine",
+          creatorId: "famkid",
+          status: "active",
+        })
+      );
+    });
+
+    it("still cannot create a share code", async () => {
+      await assertFails(
+        setDoc(doc(customToken("famkid"), "share_codes/kidcode"), {
+          type: "friend",
+          createdBy: "famkid",
+          isRevoked: false,
+        })
+      );
+    });
+
+    it("still cannot read a NON-family peer's user doc", async () => {
+      await seed({ "users/outsiderAdult": { userName: "Outsider" } });
+      await assertFails(getDoc(doc(customToken("famkid"), "users/outsiderAdult")));
+    });
+
+    /**
+     * The other direction, and the one a hardening pass breaks by accident: FR-85(a)'s
+     * `callerIsConsentedChildMemberOf` keys off the child flag and real membership, never the
+     * provider, so the roster must still hydrate to names. An implementer who "fixed" the
+     * custom provider by tightening that helper instead would silently restore the raw-uid
+     * degradation FR-93 exists to prevent.
+     */
+    it("STILL reads their own family's peer docs — FR-85 is not provider-keyed", async () => {
+      await assertSucceeds(getDoc(doc(customToken("famkid"), "users/parent")));
+    });
+
+    it("still reads its own user doc", async () => {
+      await assertSucceeds(getDoc(doc(customToken("famkid"), "users/famkid")));
+    });
+
+    it("cannot read a device transfer code, even for itself", async () => {
+      await assertFails(getDoc(doc(customToken("famkid"), "device_transfer_codes/t1")));
+    });
   });
 });

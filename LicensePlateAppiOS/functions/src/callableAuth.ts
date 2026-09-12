@@ -34,14 +34,33 @@ function registeredAccountRequiredError(): functions.https.HttpsError {
   );
 }
 
-function isAnonymousCaller(context: CallableContext): boolean {
-  return context.auth?.token?.firebase?.sign_in_provider === "anonymous";
+/**
+ * Sign-in providers that carry NO credential the holder could reproduce elsewhere.
+ *
+ * `anonymous` is the original member. `custom` joined it with FR-84 (F-41): parent-initiated
+ * device transfer hands a consented child's new device an Admin-minted custom token, because
+ * a credential-less child account (FR-60(c)) offers nothing to link. The resulting session
+ * reports `sign_in_provider == "custom"`, so a predicate written as "not anonymous" would
+ * have quietly reclassified every transferred child as a REGISTERED account — granting the
+ * capability set FR-85(a) deliberately withheld from consented children, invisibly, as a side
+ * effect of changing devices. Nothing in the product minted a custom token before F-41, so
+ * adding it here reclassifies no existing session; it only refuses to let the new one be
+ * mistaken for a credentialed adult.
+ *
+ * Keep this list and `firestore.rules`' `isRegisteredAccount()` in step — they are the two
+ * halves of one boundary, and `callableAuth.test.ts` pins this half.
+ */
+const UNCREDENTIALED_SIGN_IN_PROVIDERS: readonly string[] = ["anonymous", "custom"];
+
+export function isUncredentialedCaller(context: CallableContext): boolean {
+  const provider = context.auth?.token?.firebase?.sign_in_provider;
+  return typeof provider === "string" && UNCREDENTIALED_SIGN_IN_PROVIDERS.includes(provider);
 }
 
-/** Rejects Firebase anonymous accounts; requires email/OAuth-linked sign-in. */
+/** Rejects credential-less accounts (anonymous, custom); requires email/OAuth-linked sign-in. */
 export function assertRegisteredAccount(context: CallableContext): string {
   const userId = assertAuthenticated(context);
-  if (isAnonymousCaller(context)) {
+  if (isUncredentialedCaller(context)) {
     throw registeredAccountRequiredError();
   }
   return userId;
@@ -77,7 +96,7 @@ export async function assertRegisteredAccountOrDeclaredChild(
   context: CallableContext
 ): Promise<string> {
   const userId = assertAuthenticated(context);
-  if (!isAnonymousCaller(context)) {
+  if (!isUncredentialedCaller(context)) {
     return userId;
   }
   const snapshot = await db.collection("users").doc(userId).get();

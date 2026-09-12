@@ -59,6 +59,46 @@ describe("callableAuth", () => {
       )
     ).toBe("signed-123");
   });
+
+  /**
+   * FR-84 (F-41). A transferred child's session reports `custom`, because the device swap
+   * hands the new device an Admin-minted custom token — a credential-less child account
+   * (FR-60(c)) has nothing to link. Written as "!= anonymous", this predicate would have
+   * silently reclassified every transferred child as a REGISTERED account, granting the
+   * capability set FR-85(a) deliberately withholds from consented children as an invisible
+   * side effect of changing devices. Keep in step with `firestore.rules`'
+   * `isRegisteredAccount()` — same boundary, two halves.
+   */
+  it("assertRegisteredAccount rejects CUSTOM-token sessions (FR-84 device transfer)", () => {
+    expect(() =>
+      assertRegisteredAccount(
+        makeContext({
+          uid: "transferred-kid",
+          token: { firebase: { sign_in_provider: "custom" } },
+        } as functions.https.CallableContext["auth"])
+      )
+    ).toThrowError(/registered account/i);
+  });
+
+  it("refuses a custom-token session with the SAME reply as an anonymous one (FR-24)", () => {
+    const errors = ["anonymous", "custom"].map((provider) => {
+      try {
+        assertRegisteredAccount(
+          makeContext({
+            uid: "someone",
+            token: { firebase: { sign_in_provider: provider } },
+          } as functions.https.CallableContext["auth"])
+        );
+        throw new Error("expected a rejection");
+      } catch (error) {
+        return error as functions.https.HttpsError;
+      }
+    });
+    expect(errors[0].code).toBe(errors[1].code);
+    expect(errors[0].message).toBe(REGISTERED_ACCOUNT_REQUIRED_MESSAGE);
+    expect(errors[1].message).toBe(REGISTERED_ACCOUNT_REQUIRED_MESSAGE);
+    expect(errors[1].details).toBeUndefined();
+  });
 });
 
 describe("assertRegisteredAccountOrDeclaredChild (COPPA FR-60, F-18)", () => {
@@ -108,6 +148,34 @@ describe("assertRegisteredAccountOrDeclaredChild (COPPA FR-60, F-18)", () => {
     ).rejects.toMatchObject({ code: "failed-precondition" });
     await expect(
       assertRegisteredAccountOrDeclaredChild(asFirestore(seededDb()), anonymous("nobody"))
+    ).rejects.toMatchObject({ code: "failed-precondition" });
+  });
+
+  /**
+   * FR-84 (F-41), the other half of the custom-token story. Broadening the registration
+   * predicate must not close a consent exit: a child who moved devices holds a `custom`
+   * session, and the carve-out has to reach the same conclusion it reaches for the anonymous
+   * one — pass on the server-read child flag, never on the provider. If this regressed, a
+   * transferred child could not redeem a family code, which is FR-3's standing warning about
+   * "hardening" these carve-outs, realised through a new door.
+   */
+  it("passes a CUSTOM-token declared child — a transfer must not close the exits", async () => {
+    const custom = makeContext({
+      uid: "consented-kid",
+      token: { firebase: { sign_in_provider: "custom" } },
+    } as functions.https.CallableContext["auth"]);
+    await expect(
+      assertRegisteredAccountOrDeclaredChild(asFirestore(seededDb()), custom)
+    ).resolves.toBe("consented-kid");
+  });
+
+  it("fails a CUSTOM-token caller who is not a declared child", async () => {
+    const custom = makeContext({
+      uid: "plain-anon",
+      token: { firebase: { sign_in_provider: "custom" } },
+    } as functions.https.CallableContext["auth"]);
+    await expect(
+      assertRegisteredAccountOrDeclaredChild(asFirestore(seededDb()), custom)
     ).rejects.toMatchObject({ code: "failed-precondition" });
   });
 

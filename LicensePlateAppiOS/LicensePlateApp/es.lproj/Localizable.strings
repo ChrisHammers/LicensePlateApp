@@ -1590,3 +1590,36 @@
 "family.pending.expires_in_days" = "Vence en %d días";
 "family.child.error.signed_out" = "No has iniciado sesión. Inicia sesión e inténtalo de nuevo.";
 "family.child.error.server" = "El servidor no pudo completar ese cambio. Inténtalo en un momento.";
+
+/* FR-84 (F-41) — transferencia de dispositivo iniciada por el padre o la madre. Lado del tutor. */
+"family.child.manage_transfer" = "Pasar a otro dispositivo…";
+"family.child.manage_transfer_hint" = "Crea un código de un solo uso para pasar la cuenta de este niño a otro dispositivo";
+"family.child.transfer.title" = "Pasar a otro dispositivo";
+"family.child.transfer.explanation" = "%@ juega con esta cuenta familiar. Para conservar sus viajes, insignias y puntos en un teléfono o tablet nuevo, dale el código de abajo en ese dispositivo.";
+"family.child.transfer.old_device_warning" = "Se cerrará la sesión de esta cuenta en su dispositivo anterior.";
+"family.child.transfer.code_header" = "Código de transferencia";
+"family.child.transfer.generate" = "Crear un código de transferencia";
+"family.child.transfer.a11y.generate_hint" = "Crea un código de un solo uso que vence en 15 minutos";
+"family.child.transfer.a11y.code" = "Código de transferencia %@";
+"family.child.transfer.expires_in" = "Vence en %@";
+"family.child.transfer.a11y.expires_in" = "Vence en %@ minutos y segundos";
+"family.child.transfer.expired" = "Este código venció. Crea uno nuevo.";
+"family.child.transfer.copy" = "Copiar código";
+"family.child.transfer.a11y.copy_hint" = "Copia el código de transferencia al portapapeles";
+"family.child.transfer.new_code" = "Crear un código nuevo";
+"family.child.transfer.steps_header" = "Cómo usarlo";
+"family.child.transfer.step_1" = "Abre la app en el dispositivo nuevo y responde la pregunta sobre la edad.";
+"family.child.transfer.step_2" = "En la pantalla de perfil, toca \"¿Ya tienes una cuenta en otro dispositivo?\"";
+"family.child.transfer.step_3" = "Ingresa este código. La cuenta se pasa de inmediato.";
+
+/* FR-84 (F-41) — lado del niño, en el dispositivo nuevo. */
+"child_gate.transfer.title" = "Pasa tu cuenta aquí";
+"child_gate.transfer.explanation" = "Si ya juegas en otro teléfono o tablet, un adulto puede darte un código para traer tu cuenta aquí, con todos tus viajes, insignias y puntos.";
+"child_gate.transfer.old_device_notice" = "Se cerrará la sesión de esta cuenta en tu otro dispositivo.";
+"child_gate.transfer.entry_link" = "¿Ya tienes una cuenta en otro dispositivo?";
+"child_gate.transfer.a11y.entry_hint" = "Ingresa un código de un adulto para pasar tu cuenta actual a este dispositivo";
+"child_gate.transfer.field_label" = "Código de transferencia";
+"child_gate.transfer.field_placeholder" = "Ingresa tu código";
+"child_gate.transfer.field_footer" = "Pídele este código a un adulto. Solo funciona por unos minutos.";
+"child_gate.transfer.a11y.field_hint" = "Seis caracteres, letras y números";
+"child_gate.transfer.submit" = "Pasarla aquí";

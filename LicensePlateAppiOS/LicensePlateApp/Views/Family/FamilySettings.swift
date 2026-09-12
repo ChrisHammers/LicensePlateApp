@@ -95,7 +95,8 @@ struct FamilySettings: View {
                                         // FR-63(a): the manage control routes into the SAME
                                         // removal choice as swipe-Remove — never straight
                                         // into deletion.
-                                        onRemove: { viewModel.confirmRemoveMember(memberId: $0.memberUserId) }
+                                        onRemove: { viewModel.confirmRemoveMember(memberId: $0.memberUserId) },
+                                        onTransferDevice: { viewModel.openChildDeviceTransfer($0) }
                                     )
                                 }
                             }
@@ -301,6 +302,15 @@ private struct FamilyChildManagementPresentations: ViewModifier {
             // FR-29/FR-61: read-only review with the live inventory. An EX-member row
             // has no roster entry, but it is only reachable from the guarded-children
             // section — always a child — so the roster miss defaults to child.
+            // FR-84 (F-41): the guardian mints the code here; the server re-runs the FR-62
+            // ladder and the currently-consented check, so this presentation is not authority.
+            .sheet(item: $viewModel.childDeviceTransferTarget) { target in
+                DeviceTransferCodeSheet(
+                    childUserId: target.memberUserId,
+                    childDisplayName: target.displayName,
+                    familyId: viewModel.familyId
+                )
+            }
             .sheet(item: $viewModel.childPrivacyTarget) { target in
                 FamilyChildPrivacyView(
                     target: target,
@@ -373,6 +383,9 @@ struct FamilyChildManageControls: View {
     let onCorrect: (FamilyChildMemberTarget) -> Void
     let onOpenPrivacy: (FamilyChildMemberTarget) -> Void
     let onRemove: (FamilyChildMemberTarget) -> Void
+    /// FR-84 (F-41). Defaulted so the existing previews and any other call site keep
+    /// compiling unchanged — the smallest diff that adds a control to this stack.
+    var onTransferDevice: (FamilyChildMemberTarget) -> Void = { _ in }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -390,6 +403,18 @@ struct FamilyChildManageControls: View {
                     hint: "family.child.manage_clear_hint".localized
                 ) {
                     onCorrect(target)
+                }
+                // FR-84 (F-41): the account this child plays on has no credentials by
+                // design, so a new phone would strand their XP, achievements and trip
+                // history permanently. Placed with the other non-destructive controls,
+                // deliberately above the removal one — moving a device is routine, and it
+                // must not read as a step on the way to taking the account away.
+                controlButton(
+                    title: "family.child.manage_transfer".localized,
+                    systemImage: "iphone.and.arrow.forward",
+                    hint: "family.child.manage_transfer_hint".localized
+                ) {
+                    onTransferDevice(target)
                 }
                 // FR-63(a): the FIRST step is the §312.6(a)(2) choice — this control
                 // opens the same removal dialog as swipe-Remove (keep data / delete /

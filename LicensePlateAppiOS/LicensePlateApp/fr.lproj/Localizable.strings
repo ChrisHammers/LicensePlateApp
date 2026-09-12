@@ -1591,3 +1591,36 @@
 "family.pending.expires_in_days" = "Expire dans %d jours";
 "family.child.error.signed_out" = "Vous n'êtes pas connecté. Connectez-vous et réessayez.";
 "family.child.error.server" = "Le serveur n'a pas pu terminer ce changement. Réessayez dans un moment.";
+
+/* FR-84 (F-41) — transfert d'appareil lancé par le parent. Côté tuteur. */
+"family.child.manage_transfer" = "Transférer vers un autre appareil…";
+"family.child.manage_transfer_hint" = "Crée un code à usage unique qui transfère le compte de cet enfant vers un autre appareil";
+"family.child.transfer.title" = "Transférer vers un autre appareil";
+"family.child.transfer.explanation" = "%@ joue avec ce compte familial. Pour garder ses voyages, ses badges et ses points sur un nouveau téléphone ou une nouvelle tablette, donnez-lui le code ci-dessous sur cet appareil.";
+"family.child.transfer.old_device_warning" = "Son ancien appareil sera déconnecté de ce compte.";
+"family.child.transfer.code_header" = "Code de transfert";
+"family.child.transfer.generate" = "Créer un code de transfert";
+"family.child.transfer.a11y.generate_hint" = "Crée un code à usage unique qui expire dans 15 minutes";
+"family.child.transfer.a11y.code" = "Code de transfert %@";
+"family.child.transfer.expires_in" = "Expire dans %@";
+"family.child.transfer.a11y.expires_in" = "Expire dans %@ minutes et secondes";
+"family.child.transfer.expired" = "Ce code a expiré. Créez-en un nouveau.";
+"family.child.transfer.copy" = "Copier le code";
+"family.child.transfer.a11y.copy_hint" = "Copie le code de transfert dans le presse-papiers";
+"family.child.transfer.new_code" = "Créer un nouveau code";
+"family.child.transfer.steps_header" = "Comment l'utiliser";
+"family.child.transfer.step_1" = "Ouvrez l'application sur le nouvel appareil et répondez à la question sur l'âge.";
+"family.child.transfer.step_2" = "Sur l'écran du profil, touchez « Vous avez déjà un compte sur un autre appareil? »";
+"family.child.transfer.step_3" = "Entrez ce code. Le compte est transféré tout de suite.";
+
+/* FR-84 (F-41) — côté enfant, sur le nouvel appareil. */
+"child_gate.transfer.title" = "Transfère ton compte ici";
+"child_gate.transfer.explanation" = "Si tu joues déjà sur un autre téléphone ou une autre tablette, un parent peut te donner un code pour amener ton compte ici, avec tous tes voyages, tes badges et tes points.";
+"child_gate.transfer.old_device_notice" = "Ton autre appareil sera déconnecté de ce compte.";
+"child_gate.transfer.entry_link" = "Tu as déjà un compte sur un autre appareil?";
+"child_gate.transfer.a11y.entry_hint" = "Entre un code donné par un parent pour transférer ton compte existant vers cet appareil";
+"child_gate.transfer.field_label" = "Code de transfert";
+"child_gate.transfer.field_placeholder" = "Entre ton code";
+"child_gate.transfer.field_footer" = "Demande ce code à un parent. Il ne fonctionne que quelques minutes.";
+"child_gate.transfer.a11y.field_hint" = "Six caractères, lettres et chiffres";
+"child_gate.transfer.submit" = "Transférer ici";

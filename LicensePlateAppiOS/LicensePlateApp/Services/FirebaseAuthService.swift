@@ -913,6 +913,113 @@ class FirebaseAuthService: ObservableObject {
         return try await body()
     }
 
+    // MARK: - Device transfer adoption (FR-84 / F-41)
+
+    /// Adopt a consented child's EXISTING account on this device, using a code their guardian
+    /// minted. Returns the adopted uid.
+    ///
+    /// This is the sanctioned recovery `detachAnonymousIdentityLocally`'s comment has pointed
+    /// at since F-18 — the answer to "a new device strands the account permanently" — and it is
+    /// the only place in the app that acts on a custom token.
+    ///
+    /// ORDER IS LOAD-BEARING, and every step below is a hazard this app has already been bitten
+    /// by once:
+    ///
+    ///  1. REDEEM INSIDE `withConsentSeekingRedemption`. Under FR-60 this device is a
+    ///     local-first child with no Firebase account, and the callable needs one; that wrapper
+    ///     is the mint→bind→declare sequence, reused rather than restated. The provisional uid
+    ///     it creates is thrown away server-side by the transfer itself.
+    ///  2. WRITE THE LOCAL CHILD EVIDENCE **BEFORE** SIGNING IN. Firebase fires the auth-state
+    ///     listener the instant the custom token lands, and `loadUserFromFirebase` refuses any
+    ///     uid in `detachedIdentityUserIds` outright, while the next launch would run
+    ///     `RestoredIdentityAgeAnswerPolicy` over an anonymous-shaped session under an under-13
+    ///     answer that does not own it — the one detach reason that also WIPES the profile.
+    ///     Landing the bookkeeping first is the same "bind before publishing" invariant
+    ///     `signInAnonymously` states at its own mint, for the same reason.
+    ///  3. CLAIM THE UID against the listener while the local row is repointed, exactly as
+    ///     `signInAnonymously` and `bindLocalIdentityToRegisteredAccount` do — otherwise the
+    ///     bootstrap builds a SECOND `AppUser` and the device ends up with two rows for one
+    ///     player (owner device pass 2026-08-15).
+    ///  4. HYDRATE FROM THE CLOUD, NEVER PUSH TO IT. The local row here wears this device's
+    ///     generated guest name; the child's real username and avatar live in
+    ///     `users/{childUid}`. Calling `saveUserDataToFirestore` anywhere in this flow would
+    ///     overwrite a real child's profile with a throwaway one — the transfer's most
+    ///     expensive possible bug, and the exact inverse of the FR-60(a) discard.
+    ///
+    /// Emits NO analytics: this surface exists only on a child's device (FR-21). The guardian's
+    /// side is where the typed event belongs.
+    @discardableResult
+    func adoptTransferredChildIdentity(code: String) async throws -> String {
+        guard isOnline else { throw AuthError.offline }
+
+        let previousPlayIdentity = currentUser.map { $0.firebaseUID ?? $0.id }
+
+        let transfer = try await withConsentSeekingRedemption {
+            try await FamilyRepository.shared.redeemDeviceTransferCode(code: code)
+        }
+        let childUserId = transfer.childUserId
+
+        // Already signed in as this child — the code was spent, but there is nothing to move.
+        // Running the adoption anyway would sign the device out of the session it is holding.
+        guard DeviceTransferAdoptionPolicy.mayAdopt(
+            transferredUserId: childUserId,
+            currentUserId: auth.currentUser?.uid
+        ) else {
+            return childUserId
+        }
+
+        // Step 2 — before any await that could let the listener see the new uid.
+        AgeGateStore.shared.adoptTransferredChildIdentity(userId: childUserId)
+
+        // Step 3.
+        uidsBeingProvisionedLocally.insert(childUserId)
+        var stillClaimed = true
+        defer { if stillClaimed { uidsBeingProvisionedLocally.remove(childUserId) } }
+
+        let adopted = try await auth.signIn(withCustomToken: transfer.customToken).user
+
+        // FR-60(b)/(d): carry whatever this device played locally before the transfer onto the
+        // adopted uid, so the child's own trips and XP are not filtered out the moment a view
+        // re-reads `firebaseUID ?? id`. Same call, same reason, as the anonymous mint.
+        if let previousPlayIdentity, previousPlayIdentity != childUserId {
+            rebindLocalPlayIdentity(from: previousPlayIdentity, to: childUserId)
+        }
+
+        if let modelContext, let localUser = currentUser {
+            if localUser.id != childUserId {
+                localUser.localIDBeforeFirebase = localUser.id
+                localUser.id = childUserId
+            }
+            localUser.firebaseUID = childUserId
+            // Deliberately NOT `needsSync = true`: a sync would push this row's throwaway
+            // profile over the child's real one. The hydrate below is the only direction of
+            // travel this flow permits.
+            localUser.needsSync = false
+            localUser.lastUpdated = .now
+            try? modelContext.save()
+            currentUser = localUser
+            isAuthenticated = true
+        }
+
+        uidsBeingProvisionedLocally.remove(childUserId)
+        stillClaimed = false
+
+        // Step 4 — the ordinary bootstrap, which reads `users/{childUid}` and merges the real
+        // profile back onto the row. It also refuses detached uids, which is why step 2 had to
+        // release the ratchet first.
+        await loadUserFromFirebase(adopted)
+
+        // The device now hosts a child. Re-run the seam so ads, purchases, location and the
+        // unmanaged-exit gates all re-derive before anything renders.
+        ChildSessionPostureCoordinator.shared.applyPostures(trigger: .identityTransition)
+
+        #if DEBUG
+        print("F-41: adopted transferred child identity \(childUserId)")
+        #endif
+
+        return childUserId
+    }
+
     /// The post-condition `provisionIdentityForConsentSeekingRedemptionIfNeeded` owes its
     /// callers: after it returns, a child session HAS a live Firebase session.
     ///

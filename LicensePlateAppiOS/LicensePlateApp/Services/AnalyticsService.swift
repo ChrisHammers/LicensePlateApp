@@ -77,7 +77,14 @@ class AnalyticsService: AnalyticsLogging {
         case familyChildStatusSet(source: String)
         case familyChildStatusCorrected(reason: String)
         case familyChildConsentAcknowledged
-        
+
+        /// FR-84 (F-41): a guardian minted a device-transfer code. Same FR-21 discipline as
+        /// the rows above — this fires on the GUARDIAN's instance only, and carries no
+        /// parameter at all, so neither the child's uid nor the fact that a *particular* child
+        /// moved devices is ever reported. The child's redeem side logs nothing whatsoever: an
+        /// event that could only fire from a child session is exactly what FR-21 forbids.
+        case deviceTransferCodeIssued
+
         // Codes
         case shareCodeGenerated(type: String)
         case shareCodeUsed(type: String)
@@ -399,6 +406,7 @@ class AnalyticsService: AnalyticsLogging {
             case .familyChildStatusSet: return "family_child_status_set"
             case .familyChildStatusCorrected: return "family_child_status_corrected"
             case .familyChildConsentAcknowledged: return "family_child_consent_acknowledged"
+            case .deviceTransferCodeIssued: return "device_transfer_code_issued"
             case .shareCodeGenerated: return "share_code_generated"
             case .shareCodeUsed: return "share_code_used"
             case .shareCodeExpired: return "share_code_expired"
@@ -619,6 +627,9 @@ class AnalyticsService: AnalyticsLogging {
             case .familyChildStatusCorrected(let reason):
                 return ["reason": reason]
             case .familyChildConsentAcknowledged:
+                return nil
+            // FR-84: deliberately parameterless — see the case declaration.
+            case .deviceTransferCodeIssued:
                 return nil
             case .familyCreateFailed(let error):
                 return ["error": error]

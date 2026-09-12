@@ -1204,6 +1204,95 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         return (codeId: codeId, code: code, expiresAt: expiresAt)
     }
     
+    // MARK: - Device transfer (FR-84 / F-41)
+
+    /// Mint a single-use, 15-minute code that moves ONE consented child's account to a new
+    /// device. Guardian-only: the server runs the FR-62 guardianship ladder and re-checks that
+    /// the child is currently consented in this family, so nothing here is authorization —
+    /// the client just names the child the guardian tapped.
+    func createDeviceTransferCode(
+        childUserId: String,
+        familyId: String
+    ) async throws -> (codeId: String, code: String, expiresAt: Date) {
+        try requireRegisteredAccount()
+
+        let payload: [String: Any] = [
+            "childUserId": childUserId,
+            "familyId": familyId
+        ]
+
+        let result: HTTPSCallableResult
+        do {
+            result = try await FamilyCallable.call(
+                "createDeviceTransferCode",
+                payload.addingClientMetadata()
+            )
+        } catch {
+            throw Self.userFacingCallableError(error)
+        }
+
+        guard let data = result.data as? [String: Any],
+              let codeId = data["codeId"] as? String,
+              let code = data["code"] as? String else {
+            throw NSError(
+                domain: "FamilyRepository",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid response from createDeviceTransferCode"]
+            )
+        }
+
+        // Millis, not the ISO string `createShareCode` returns: the transfer code's TTL drives
+        // a visible countdown and a numeric field cannot be mis-parsed into a silent 15-minute
+        // fallback the way an unrecognised date string can.
+        let expiresAt: Date
+        if let millis = data["expiresAtMillis"] as? Double {
+            expiresAt = Date(timeIntervalSince1970: millis / 1000)
+        } else {
+            expiresAt = Date().addingTimeInterval(15 * 60)
+        }
+
+        return (codeId: codeId, code: code, expiresAt: expiresAt)
+    }
+
+    /// Redeem a transfer code on the child's NEW device.
+    ///
+    /// Returns the custom token that assumes the child's existing uid. The caller is
+    /// `FirebaseAuthService.adoptTransferredChildIdentity`, which is the only place allowed to
+    /// act on it — a token handled anywhere else would swap the session without the local
+    /// child bookkeeping FR-84 requires the receiving device to carry.
+    ///
+    /// Uses the consent-exit gate, not the registered-account gate: under FR-60 the new device
+    /// is a local-first child holding a freshly declared anonymous uid, which is precisely the
+    /// population `assertRegisteredAccountOrDeclaredChild` exists for.
+    func redeemDeviceTransferCode(
+        code: String
+    ) async throws -> (customToken: String, childUserId: String, familyId: String) {
+        try requireRegisteredAccountOrDeclaredChild()
+
+        let result: HTTPSCallableResult
+        do {
+            result = try await FamilyCallable.call(
+                "redeemDeviceTransferCode",
+                (["code": code] as [String: Any]).addingClientMetadata()
+            )
+        } catch {
+            throw Self.userFacingCallableError(error)
+        }
+
+        guard let data = result.data as? [String: Any],
+              let customToken = data["customToken"] as? String,
+              let childUserId = data["childUserId"] as? String,
+              let familyId = data["familyId"] as? String else {
+            throw NSError(
+                domain: "FamilyRepository",
+                code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "Invalid response from redeemDeviceTransferCode"]
+            )
+        }
+
+        return (customToken: customToken, childUserId: childUserId, familyId: familyId)
+    }
+
     /// Revoke a share code
     func revokeShareCode(codeId: String) async throws {
         guard Auth.auth().currentUser != nil else {

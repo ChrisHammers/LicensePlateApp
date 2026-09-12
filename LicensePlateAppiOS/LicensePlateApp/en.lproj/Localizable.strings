@@ -1624,3 +1624,36 @@
 "family.pending.expires_in_days" = "Expires in %d days";
 "family.child.error.signed_out" = "You are not signed in. Sign in and try again.";
 "family.child.error.server" = "The server couldn't finish that change. Try again in a moment.";
+
+/* FR-84 (F-41) — parent-initiated device transfer. Guardian side. */
+"family.child.manage_transfer" = "Move to a new device…";
+"family.child.manage_transfer_hint" = "Creates a one-time code that moves this child's account to another device";
+"family.child.transfer.title" = "Move to a new device";
+"family.child.transfer.explanation" = "%@ plays on this family account. To keep their trips, badges and points on a new phone or tablet, give them the code below on that device.";
+"family.child.transfer.old_device_warning" = "Their old device will be signed out of this account.";
+"family.child.transfer.code_header" = "Transfer code";
+"family.child.transfer.generate" = "Create a transfer code";
+"family.child.transfer.a11y.generate_hint" = "Creates a one-time code that expires in 15 minutes";
+"family.child.transfer.a11y.code" = "Transfer code %@";
+"family.child.transfer.expires_in" = "Expires in %@";
+"family.child.transfer.a11y.expires_in" = "Expires in %@ minutes and seconds";
+"family.child.transfer.expired" = "This code has expired. Create a new one.";
+"family.child.transfer.copy" = "Copy code";
+"family.child.transfer.a11y.copy_hint" = "Copies the transfer code to the clipboard";
+"family.child.transfer.new_code" = "Create a new code";
+"family.child.transfer.steps_header" = "How to use it";
+"family.child.transfer.step_1" = "Open the app on the new device and answer the age question.";
+"family.child.transfer.step_2" = "On the profile screen, tap \"Already have an account on another device?\"";
+"family.child.transfer.step_3" = "Enter this code. The account moves over right away.";
+
+/* FR-84 (F-41) — child side, on the new device. */
+"child_gate.transfer.title" = "Move your account here";
+"child_gate.transfer.explanation" = "If you already play on another phone or tablet, a parent can give you a code to bring your account here — with all your trips, badges and points.";
+"child_gate.transfer.old_device_notice" = "Your other device will be signed out of this account.";
+"child_gate.transfer.entry_link" = "Already have an account on another device?";
+"child_gate.transfer.a11y.entry_hint" = "Enter a code from a parent to move your existing account to this device";
+"child_gate.transfer.field_label" = "Transfer code";
+"child_gate.transfer.field_placeholder" = "Enter your code";
+"child_gate.transfer.field_footer" = "Ask a parent for this code. It only works for a few minutes.";
+"child_gate.transfer.a11y.field_hint" = "Six characters, letters and numbers";
+"child_gate.transfer.submit" = "Move it here";

@@ -6,6 +6,10 @@ admin.firestore().settings({ ignoreUndefinedProperties: true });
 // Export all functions
 export { createShareCode, redeemShareCode } from "./shareCodes";
 export {
+  createDeviceTransferCode,
+  redeemDeviceTransferCode,
+} from "./deviceTransfer";
+export {
   sendFriendInvite,
   respondToFriendInvite,
   removeFriend,

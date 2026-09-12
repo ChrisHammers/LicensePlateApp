@@ -349,15 +349,85 @@ final class AgeGateStore: ObservableObject {
     /// account behind it is gone server-side (FR-60(c) decline/deletion cleanup) or because
     /// the session was a restored identity this device's current age answer does not own.
     ///
-    /// Never removed. A detached anonymous uid is unrecoverable by construction — it has no
-    /// credentials — so there is no future in which writing to it again is correct, and the
-    /// set stays a one-way protective ratchet like `declaredChildUserIds`.
+    /// One-way in every path except one. The original reasoning — "a detached anonymous uid is
+    /// unrecoverable by construction, it has no credentials, so there is no future in which
+    /// writing to it again is correct" — held until FR-84 (F-41) built exactly that future:
+    /// a parent-issued transfer code IS the credential path this comment said could not exist.
+    /// The single sanctioned release is `releaseDetachedIdentityAfterTransfer(userId:)` below,
+    /// which runs only on a server-verified, guardian-authorized adoption. Every other caller
+    /// still treats this as a permanent protective ratchet, like `declaredChildUserIds`.
     func markIdentityDetached(userId: String) {
         guard !userId.isEmpty else { return }
         var ids = detachedIdentityUserIds
         guard ids.insert(userId).inserted else { return }
         defaults.set(Array(ids), forKey: AgeGateStoreKeys.detachedIdentityUserIds)
         revision += 1
+    }
+
+    // MARK: - Device transfer adoption (FR-84 / F-41)
+
+    /// The ONE sanctioned exit from `detachedIdentityUserIds`, and it exists because the
+    /// ratchet's premise stops being true under FR-84.
+    ///
+    /// The ratchet was built for identities this device could never legitimately hold again:
+    /// a server-deleted account, or a Keychain-restored session belonging to a previous
+    /// player. A completed device transfer is the opposite claim, and it is made by the
+    /// SERVER after the FR-62 guardianship ladder authorized it: this uid is live, consented,
+    /// and this device is now its home. Without a release, a device that once hosted and
+    /// detached a child — §3.1.1 items 5/7/8's whole failure family, which is exactly the
+    /// population most likely to need a transfer — could never take that child back, and the
+    /// support answer would be "your account is stranded on the phone you already have".
+    ///
+    /// Deliberately NOT exposed to any other caller: nothing else in the app can produce the
+    /// server-verified fact this release rests on.
+    func releaseDetachedIdentityAfterTransfer(userId: String) {
+        guard !userId.isEmpty else { return }
+        var ids = detachedIdentityUserIds
+        guard ids.remove(userId) != nil else { return }
+        defaults.set(Array(ids), forKey: AgeGateStoreKeys.detachedIdentityUserIds)
+        revision += 1
+    }
+
+    /// Record the local child evidence for an account this device just adopted by transfer.
+    ///
+    /// The account is ALREADY a consented child server-side, so this device must end up
+    /// carrying the same evidence a device that provisioned the child itself would carry —
+    /// otherwise every client-side child hold reads a cold cache and lets an adult-shaped
+    /// session run on a child's account (§3.1.1 item 5's class, arriving through a new door).
+    /// Three writes, each answering a specific hazard:
+    ///
+    ///  1. `recordAnswer(.under13)` — the device now hosts a child, and the age answer is what
+    ///     `isLocationRestrictedForCurrentFlow`, the guest-provisioning gate and the posture
+    ///     signal all read. FR-84 says the transfer must not re-ASK the age question, and it
+    ///     does not: the answer is derived from the server's own consented-child fact, which
+    ///     is strictly better evidence than a self-report. The `recordAnswer` ratchet means
+    ///     this can only tighten the device's posture, never loosen it.
+    ///  2. release the detach ratchet — see above.
+    ///  3. mark DECLARED, not pending — `declareChildRegistration` provisions a NEW child, and
+    ///     this child was declared long ago. Landing the uid straight in `declaredChildUserIds`
+    ///     is what makes `RestoredIdentityAgeAnswerPolicy.requiresLocalDetach` return false for
+    ///     it on the very next launch. Skip that and the adopted identity looks precisely like
+    ///     a restored stranger's session under an under-13 answer — the one detach reason that
+    ///     also WIPES the profile (`IdentityDetachReason.restoredIdentityUnder13Answer`), so
+    ///     the transfer would undo itself and take the child's username and avatar with it.
+    ///
+    /// Idempotent: re-running it is a no-op on every set.
+    func adoptTransferredChildIdentity(userId: String, at date: Date = .now) {
+        guard !userId.isEmpty else { return }
+        let plan = DeviceTransferAdoptionPolicy.adoption(
+            currentCategory: category,
+            isIdentityDetached: isIdentityDetached(userId),
+            isAlreadyDeclaredChild: isDeclaredChildUserId(userId)
+        )
+        if plan.recordsUnder13Answer {
+            recordAnswer(.under13, at: date)
+        }
+        if plan.releasesDetachRatchet {
+            releaseDetachedIdentityAfterTransfer(userId: userId)
+        }
+        if plan.marksDeclaredChild {
+            markChildDeclarationSent(userId: userId)
+        }
     }
 
     // MARK: - Consent-seeking window (FR-60(b)/(d), FR-26 re-admission)
@@ -798,6 +868,66 @@ enum RestoredIdentityAgeAnswerPolicy {
         guard category == .under13 else { return false }
         guard isAnonymousSession else { return false }
         return !isBoundToCurrentAnswer
+    }
+}
+
+// MARK: - Device transfer adoption (FR-84 / F-41)
+
+/// What a device must write locally when it adopts a consented child's EXISTING account via a
+/// parent-issued transfer code.
+///
+/// Placed here, beside `RestoredIdentityAgeAnswerPolicy`, because the two policies describe
+/// the same device state from opposite sides and a reader who finds one needs the other.
+/// `RestoredIdentityAgeAnswerPolicy` detaches an anonymous session that an under-13 answer does
+/// not own — a session it assumes is a stranger's, restored from the Keychain across a
+/// reinstall. A transferred identity presents that EXACT shape: anonymous-equivalent session,
+/// under-13 answer, uid this epoch never provisioned. The difference is provenance, and
+/// provenance is invisible to the detach policy, so the adoption has to establish ownership in
+/// the store BEFORE the next launch runs the check. It does that by landing the uid in
+/// `declaredChildUserIds`, which `requiresLocalDetach` reads through `isBoundToCurrentAnswer`.
+///
+/// Get this wrong and the failure is quiet and expensive: the very next launch detaches the
+/// account the parent just transferred, with the one `IdentityDetachReason` that also discards
+/// the inherited profile — so the child loses the username and avatar as well as the session,
+/// and the parent's transfer code is already spent.
+enum DeviceTransferAdoptionPolicy {
+
+    /// The three local writes an adoption may need. Each is independently skippable so the
+    /// operation is idempotent — a retried transfer must not restamp an answer date or churn
+    /// the sets.
+    struct Adoption: Equatable {
+        /// The device's age answer is not already `under13`, so the transfer must record it.
+        /// Never a downgrade: `recordAnswer`'s own ratchet refuses `under13 → teenAdult`, and
+        /// this policy only ever asks for `under13`.
+        var recordsUnder13Answer: Bool
+        /// This device previously detached the uid it is now adopting — the §3.1.1 items 5/7/8
+        /// population, and the likeliest transfer recipient of all.
+        var releasesDetachRatchet: Bool
+        /// The uid is not yet in this device's declared-child history.
+        var marksDeclaredChild: Bool
+
+        /// True when the adoption is already fully recorded — a retry, or a redundant call.
+        var isNoOp: Bool {
+            !recordsUnder13Answer && !releasesDetachRatchet && !marksDeclaredChild
+        }
+    }
+
+    static func adoption(
+        currentCategory: AgeGateCategory?,
+        isIdentityDetached: Bool,
+        isAlreadyDeclaredChild: Bool
+    ) -> Adoption {
+        Adoption(
+            recordsUnder13Answer: currentCategory != .under13,
+            releasesDetachRatchet: isIdentityDetached,
+            marksDeclaredChild: !isAlreadyDeclaredChild
+        )
+    }
+
+    /// A transfer whose target is the session already running is nothing to do, and running the
+    /// adoption anyway would sign the device out of the account it is already holding.
+    static func mayAdopt(transferredUserId: String, currentUserId: String?) -> Bool {
+        !transferredUserId.isEmpty && transferredUserId != currentUserId
     }
 }
 

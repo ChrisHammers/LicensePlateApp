@@ -5,6 +5,7 @@ import {
   unansweredJoinRequestCutoffMillis,
 } from "./pendingJoinRequestExpiry";
 import { flipExpiredDocuments } from "./retentionCore";
+import { DEVICE_TRANSFER_CODE_COLLECTION } from "./deviceTransferCore";
 
 const db = admin.firestore();
 
@@ -95,6 +96,21 @@ export const expireInvitesAndCodes = functions.pubsub
       update: { isRevoked: true },
     });
 
+    // FR-84 (F-41): device transfer codes flip the same way, on the same 15-minute clock.
+    // Redemption does NOT depend on this pass — `evaluateDeviceTransferRedemption` reads
+    // `expiresAtMillis` inline and refuses a lapsed code whether or not the sweep has run. It
+    // exists so this collection has an owner of its terminal state like every other code
+    // collection: without it, `device_transfer_codes` would be the one place where
+    // `isRevoked == false` does not mean "live", which is exactly the shape a future query
+    // gets wrong.
+    const transferCodesResult = await flipExpiredDocuments(db, {
+      collection: DEVICE_TRANSFER_CODE_COLLECTION,
+      match: { field: "isRevoked", value: false },
+      timestampField: "expiresAt",
+      cutoff: now,
+      update: { isRevoked: true },
+    });
+
     // Unanswered join requests, on their own 7-day clock. Deliberately NOT followed by an
     // inline FR-60(c) cleanup of the children whose rows just retired: `inactivateFamily` set
     // the precedent for exactly this case and left those accounts to the daily FR-77 backstop,
@@ -109,10 +125,12 @@ export const expireInvitesAndCodes = functions.pubsub
       invitesResult.truncated ||
       tripInvitesResult.truncated ||
       codesResult.truncated ||
+      transferCodesResult.truncated ||
       joinRequestSweep.truncated;
     console.log(
       `Expired ${invitesResult.flipped} invites, ${tripInvitesResult.flipped} trip invites, ` +
-        `${codesResult.flipped} codes, and ${joinRequestSweep.retired} unanswered join requests` +
+        `${codesResult.flipped} codes, ${transferCodesResult.flipped} device transfer codes, ` +
+        `and ${joinRequestSweep.retired} unanswered join requests` +
         `${truncated ? " (truncated; next run resumes)" : ""}`
     );
 

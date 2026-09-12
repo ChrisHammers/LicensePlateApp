@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import { writeAuditLog } from "./audit";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
+import { isUncredentialedCaller } from "./callableAuth";
 import {
   FOUNDER_TAG,
   decideFounderGrant,
@@ -16,7 +17,13 @@ export const ensureFounderEntitlementIfEligible = enforcedCallable(async (data, 
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated");
   }
 
-  if (context.auth.token.firebase?.sign_in_provider === "anonymous") {
+  // FR-84 (F-41): `isUncredentialedCaller` counts a custom-token session as uncredentialed
+  // alongside anonymous. A transferred child arrives holding a custom token; without this the
+  // device swap would have quietly made them founder-eligible. Monetization behavior is
+  // therefore UNCHANGED for every population — a child was ineligible before the transfer and
+  // stays ineligible after it. The `reason` slug stays "anonymous" so the existing analytics
+  // and audit consumers keep classifying this outcome exactly as they do today.
+  if (isUncredentialedCaller(context)) {
     return { outcome: "ineligible", reason: "anonymous" };
   }
 

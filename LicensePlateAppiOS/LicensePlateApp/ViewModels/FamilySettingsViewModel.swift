@@ -50,6 +50,8 @@ class FamilySettingsViewModel: ObservableObject {
     @Published var childDeletionFinalTarget: FamilyChildMemberTarget?
     /// Read-only child-privacy detail (FR-29/FR-61).
     @Published var childPrivacyTarget: FamilyChildMemberTarget?
+    /// FR-84 (F-41): the child whose account a guardian is moving to a new device.
+    @Published var childDeviceTransferTarget: FamilyChildMemberTarget?
     /// FR-61 ex-member entry: children this account is the recorded guardian for
     /// (server-fed via `listGuardedChildren`; filtered to past members for display).
     @Published private(set) var guardedChildren: [GuardedChildSummary] = []
@@ -430,6 +432,16 @@ class FamilySettingsViewModel: ObservableObject {
     func openChildPrivacy(_ target: FamilyChildMemberTarget) {
         guard canManageChildStatus(memberId: target.memberUserId) else { return }
         childPrivacyTarget = target
+    }
+
+    // MARK: - Device transfer (FR-84 / F-41)
+
+    /// Open the transfer-code sheet for a child. The same local manage gate as every other
+    /// child control; the SERVER re-runs the FR-62 guardianship ladder and the
+    /// currently-consented check, so this is a UI affordance, never the authorization.
+    func openChildDeviceTransfer(_ target: FamilyChildMemberTarget) {
+        guard canManageChildStatus(memberId: target.memberUserId) else { return }
+        childDeviceTransferTarget = target
     }
 
     func loadConsentHistory(childUserId: String) async throws -> ParentalConsentStatus {
