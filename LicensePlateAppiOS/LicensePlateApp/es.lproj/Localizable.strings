@@ -1402,6 +1402,8 @@
 "child_gate.signup.body" = "No necesitas una cuenta. Tus viajes, placas y puntos se guardan aquí mismo, en este dispositivo. Cuando quieras jugar con tu familia, pídele a un adulto un código para unirte a la familia.";
 "child_gate.signup.keep_playing" = "Seguir jugando";
 "child_gate.signup.keep_playing_hint" = "Cierra esta pantalla y vuelve al juego";
+"child_gate.signup.start_playing" = "Empezar a jugar";
+"child_gate.signup.start_playing_hint" = "Continúa la configuración para empezar tu primer viaje";
 /* FR-74(c'), owner-ruled 2026-09-07: the mis-answer recovery is information, not a control. */
 "child_gate.signup.wrong_birthday_info" = "¿Elegiste mal tu fecha de nacimiento? Únete a una familia y el capitán podrá corregirla, o reinstala la app para empezar de nuevo (los viajes guardados solo en este dispositivo se perderán).";
 "child_gate.account.wrong_birthday_family" = "¿Elegiste mal tu fecha de nacimiento? El capitán de tu familia puede corregirla en Ajustes de familia.";

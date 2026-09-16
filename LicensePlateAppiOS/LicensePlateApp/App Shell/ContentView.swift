@@ -1135,6 +1135,9 @@ private struct PendingInviteCard: View {
 // Default Settings View for new trips
 struct DefaultSettingsView: View {
     @StateObject private var coordinator = MainSettingsCoordinator()
+    /// FR-84: the child card's transfer sheet, hosted ABOVE the identity-keyed profile view so
+    /// the provisional uid minted mid-redeem cannot dismiss it (owner 2026-09-12).
+    @State private var showChildAdoptTransferSheet = false
     
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var systemColorScheme
@@ -1145,6 +1148,30 @@ struct DefaultSettingsView: View {
     // Use @State to explicitly track color scheme and ensure view updates
     @State private var currentColorScheme: ColorScheme?
     
+    /// Split out so the destination `switch` stays type-checkable. The adopt sheet is attached
+    /// here, above `.id(user.id)`: the redeem mints a provisional uid mid-flow, which remounts
+    /// the profile view — a sheet hosted inside it died with the old identity.
+    @ViewBuilder
+    private var profileDestination: some View {
+        if let user = authService.currentUser {
+            UserProfileView(
+                user: user,
+                authService: authService,
+                onAdoptTransferRequest: { showChildAdoptTransferSheet = true }
+            )
+                // Remount when hard sign-out replaces the AppUser row.
+                .id(user.id)
+                .sheet(isPresented: $showChildAdoptTransferSheet) {
+                    AdoptDeviceTransferSheet()
+                        .environmentObject(authService)
+                }
+        } else {
+            // Brief gap during hard sign-out before guest rebirth.
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
     // Computed property to determine color scheme from preference
     private func updateColorScheme() {
       print("Current: \(appDarkModeRaw)--System: \(systemColorScheme)")
@@ -1373,15 +1400,8 @@ struct DefaultSettingsView: View {
                 Group {
                     switch destination {
                     case .profile:
-                        if let user = authService.currentUser {
-                            UserProfileView(user: user, authService: authService)
-                                // Remount when hard sign-out replaces the AppUser row.
-                                .id(user.id)
-                        } else {
-                            // Brief gap during hard sign-out before guest rebirth.
-                            ProgressView()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
+
+                        profileDestination
                     case .privacyPermissions:
                         PrivacyPermissionsView()
                     case .appPreferences:

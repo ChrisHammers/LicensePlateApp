@@ -1123,12 +1123,16 @@ enum IdentityDetachReason: String {
     /// that still carries the retired identity. This re-run converges the device to the
     /// detached state the ratchet already recorded.
     case residualStateAfterDetach
+    /// FR-84 follow-up (owner T7, 2026-09-14): the child's account moved to ANOTHER device and
+    /// the server revoked this one's session. The account is somebody's — it is now on the new
+    /// device — so this device must not keep wearing its name and avatar until a relaunch.
+    case transferredAwayIdentity
 
     /// True when the local player must NOT keep the retired account's identity fields.
     /// Only the restored-identity case: there the account belongs to a different answer,
     /// so carrying its username/avatar forward is the same mistake as carrying its uid.
     var discardsInheritedProfile: Bool {
-        self == .restoredIdentityUnder13Answer
+        self == .restoredIdentityUnder13Answer || self == .transferredAwayIdentity
     }
 }
 

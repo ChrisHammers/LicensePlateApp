@@ -19,6 +19,42 @@ struct OnboardingAccountCreationView: View {
     @State private var showGuestConfirmation = false
     
     var body: some View {
+        if isChildAnswer {
+            childAccountBranch
+        } else {
+            adultAccountBranch
+        }
+    }
+
+    /// The age step precedes this one (`OnboardingCoordinator.stepAfterDisclaimer`), so the
+    /// answer is known here. FR-60(e): an under-13 epoch has no Sign In / Create Account —
+    /// a child sees the child options, including the transfer link (owner 2026-09-12).
+    private var isChildAnswer: Bool {
+        AgeGateStore.shared.category == .under13
+    }
+
+    private var childAccountBranch: some View {
+        ChildAccountCreationGuidanceView(
+            authService: authService,
+            onKeepPlaying: { continueAsGuest() },
+            onSwitchToSignIn: {},
+            showsSignInSwitch: false,
+            onAdopted: {
+                // The device is now the child's existing account: continue as an existing
+                // account, exactly like the restored-user path, instead of a fresh setup.
+                coordinator.isExistingAccount = true
+                coordinator.didLogIn = true
+                onNext()
+            },
+            primaryActionTitleKey: "child_gate.signup.start_playing",
+            primaryActionHintKey: "child_gate.signup.start_playing_hint"
+        )
+        .onAppear {
+            DeferredProfileSetupStore.shared.markTouched(.account, source: deferredSetupTouchSource)
+        }
+    }
+
+    private var adultAccountBranch: some View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 32) {
@@ -240,7 +276,7 @@ struct OnboardingAccountCreationView: View {
     private func continueAsGuest() {
         Task {
             let accountState = FirebaseAccountStateProvider.shared.currentAccountState(for: authService.currentUser)
-            if GuestContinuationPolicy.shouldCreateFreshAnonymousSession(accountState: accountState) {
+            if GuestContinuationPolicy.shouldCreateFreshAnonymousSession(accountState: accountState, isCustomTokenSession: authService.isCustomTokenSession) {
                 try? await authService.signOutAndCreateAnonymous()
             }
             await MainActor.run {

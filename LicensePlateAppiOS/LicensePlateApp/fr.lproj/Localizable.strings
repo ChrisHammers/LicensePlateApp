@@ -1402,6 +1402,8 @@
 "child_gate.signup.body" = "Tu n'as pas besoin de compte. Tes trajets, tes plaques et tes points sont enregistrés ici même, sur cet appareil. Quand tu voudras jouer avec ta famille, demande un code de famille à un parent.";
 "child_gate.signup.keep_playing" = "Continuer à jouer";
 "child_gate.signup.keep_playing_hint" = "Ferme cet écran et retourne au jeu";
+"child_gate.signup.start_playing" = "Commencer à jouer";
+"child_gate.signup.start_playing_hint" = "Poursuit la configuration pour commencer ton premier trajet";
 /* FR-74(c'), owner-ruled 2026-09-07: the mis-answer recovery is information, not a control. */
 "child_gate.signup.wrong_birthday_info" = "Tu t'es trompé de date de naissance ? Rejoins une famille et le capitaine pourra la corriger, ou réinstalle l'app pour recommencer (les voyages enregistrés uniquement sur cet appareil seront perdus).";
 "child_gate.account.wrong_birthday_family" = "Tu t'es trompé de date de naissance ? Le capitaine de ta famille peut la corriger dans les réglages de la famille.";

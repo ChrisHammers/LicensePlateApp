@@ -548,7 +548,8 @@ final class ChildSessionPostureCoordinator: ObservableObject {
                     // returned false) has no configured app — `Auth.auth()` would trap.
                     // No identity then, and the device-local child signals still apply.
                     guard FirebaseApp.app() != nil, let user = Auth.auth().currentUser else { return nil }
-                    return (user.uid, user.isAnonymous)
+                    // Anonymous OR custom-token: both are uncredentialed (item 11 of SRS 3.1.1).
+                    return (user.uid, FirebaseAuthService.isUncredentialedSession(user))
                 },
                 freshIsChildAccount: { UserRepository.shared.isChildAccount(for: $0) },
                 isFreshChildFlagExplicit: { UserRepository.shared.isChildAccountFlagExplicit(for: $0) },
@@ -573,7 +574,7 @@ final class ChildSessionPostureCoordinator: ObservableObject {
                 isAdultDeviceAnswer: { AgeGateStore.shared.category == .teenAdult },
                 isCredentialedSession: {
                     guard let user = Auth.auth().currentUser else { return false }
-                    return !user.isAnonymous && !user.providerData.isEmpty
+                    return FirebaseAuthService.isCredentialedSession(user)
                 },
                 isAgeResolved: { AgeGateStore.shared.isResolved },
                 isDeviceRatcheted: { ChildSignalCache.shared.isDeviceRatcheted },

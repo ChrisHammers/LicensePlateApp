@@ -264,7 +264,13 @@ struct QuickSoloStartView: View {
 
     private func ensureGuestSessionForQuickSolo() async throws {
         let accountState = FirebaseAccountStateProvider.shared.currentAccountState(for: authService.currentUser)
-        guard !accountState.isGuestLike else { return }
+        // Item 11 of SRS 3.1.1: a restored custom-token session (a transferred child) is
+        // guest-like by account state but is somebody's account — quick start must leave
+        // it, exactly as "Continue as Guest" does, never play on it.
+        guard GuestContinuationPolicy.shouldCreateFreshAnonymousSession(
+            accountState: accountState,
+            isCustomTokenSession: authService.isCustomTokenSession
+        ) else { return }
         try await authService.signOut()
         try authService.resetLocalUserToGuest()
         try await authService.signInAnonymously()

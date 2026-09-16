@@ -215,7 +215,11 @@ class FirebaseAuthService: ObservableObject {
     /// Returns info about a restored Firebase user (from Keychain) if they exist and are not anonymous.
     /// Use this on onboarding to offer "Sign in as existing user" when a previous session was restored.
     var restoredUserInfo: (userName: String, email: String)? {
-        guard let firebaseUser = auth.currentUser, !firebaseUser.isAnonymous else { return nil }
+        guard let firebaseUser = auth.currentUser,
+              SavedAccountOfferPolicy.mayOfferRestoredAccount(
+                  isCredentialedSession: Self.isCredentialedSession(firebaseUser),
+                  deviceAnswer: AgeGateStore.shared.category
+              ) else { return nil }
         let userName = currentUser?.userName ?? firebaseUser.displayName ?? "User"
         let email = firebaseUser.email ?? ""
         return (userName, email)
@@ -336,7 +340,7 @@ class FirebaseAuthService: ObservableObject {
         let uid = firebaseUser.uid
         guard RestoredIdentityAgeAnswerPolicy.requiresLocalDetach(
             category: store.category,
-            isAnonymousSession: firebaseUser.isAnonymous,
+            isAnonymousSession: Self.isUncredentialedSession(firebaseUser),
             isBoundToCurrentAnswer: store.isPendingDeclaration(userId: uid)
                 || store.isDeclaredChildUserId(uid)
         ) else { return }
@@ -383,7 +387,7 @@ class FirebaseAuthService: ObservableObject {
 
         guard DetachedIdentityDetectionPolicy.requiresVerification(
             hasFirebaseUid: true,
-            isAnonymousSession: firebaseUser.isAnonymous,
+            isAnonymousSession: Self.isUncredentialedSession(firebaseUser),
             wasDeclaredByThisDevice: store.isDeclaredChildUserId(uid),
             isAlreadyDetached: store.isIdentityDetached(uid),
             isOnline: isOnline
@@ -397,7 +401,7 @@ class FirebaseAuthService: ObservableObject {
 
         let status = await selfUserDocumentStatus(userId: uid)
         guard DetachedIdentityDetectionPolicy.requiresDetach(
-            isAnonymousSession: firebaseUser.isAnonymous,
+            isAnonymousSession: Self.isUncredentialedSession(firebaseUser),
             documentStatus: status,
             wasDeclaredByThisDevice: store.isDeclaredChildUserId(uid)
         ) else { return }
@@ -960,7 +964,7 @@ class FirebaseAuthService: ObservableObject {
         // before, and its own row becomes the child's.
         let preRedeemSession = auth.currentUser
         let preRedeemSessionIsRegistered = preRedeemSession.map {
-            !$0.isAnonymous && !$0.providerData.isEmpty
+            Self.isCredentialedSession($0)
         } ?? false
         DeviceTransferDiagnostics.log(
             "adopt: start session=\(Self.describeSession(preRedeemSession)) registered=\(preRedeemSessionIsRegistered) "
@@ -1315,18 +1319,40 @@ class FirebaseAuthService: ObservableObject {
     
     // MARK: - Authentication Status
     
+    /// Item 11 of SRS 3.1.1: "registered" means credentialed — non-anonymous AND
+    /// provider-backed. A custom-token session (FR-84 transferred child) is neither anonymous
+    /// nor registered; it is uncredentialed, exactly as the rules and callables treat it.
+    nonisolated static func isCredentialedSession(_ user: User) -> Bool {
+        SessionCredentialPolicy.isCredentialed(
+            isAnonymous: user.isAnonymous,
+            providerCount: user.providerData.count
+        )
+    }
+
+    nonisolated static func isUncredentialedSession(_ user: User) -> Bool {
+        !isCredentialedSession(user)
+    }
+
+    /// Non-anonymous with no provider: the FR-84 transferred child's session. Distinct from
+    /// `isAnonymousUser` where the distinction matters — a restored custom-token session may
+    /// never be continued as a guest, while a restored anonymous one is kept (owner ruling).
+    var isCustomTokenSession: Bool {
+        guard let firebaseUser = auth.currentUser else { return false }
+        return !firebaseUser.isAnonymous && firebaseUser.providerData.isEmpty
+    }
+
     var isTrulyAuthenticated: Bool {
         guard let firebaseUser = auth.currentUser else {
             return false
         }
-        return !firebaseUser.isAnonymous
+        return Self.isCredentialedSession(firebaseUser)
     }
     
     var isAnonymousUser: Bool {
         guard let firebaseUser = auth.currentUser else {
             return currentUser?.firebaseUID != nil && !isTrulyAuthenticated
         }
-        return firebaseUser.isAnonymous
+        return Self.isUncredentialedSession(firebaseUser)
     }
 
     /// FR-60(c): true when the identity this session would address has been retired by this
@@ -1770,11 +1796,27 @@ class FirebaseAuthService: ObservableObject {
     /// No-ops when the current session is already guest-like so trips/XP keyed by UID are not orphaned.
     func signOutAndCreateAnonymous() async throws {
         let accountState = FirebaseAccountStateProvider.shared.currentAccountState(for: currentUser)
-        guard GuestContinuationPolicy.shouldCreateFreshAnonymousSession(accountState: accountState) else {
+        guard GuestContinuationPolicy.shouldCreateFreshAnonymousSession(
+            accountState: accountState,
+            isCustomTokenSession: isCustomTokenSession
+        ) else {
             return
         }
+        // Item 11 follow-up (owner T10, 2026-09-14). `signOut()` ends the age-answer epoch —
+        // right for a Profile sign-out, wrong HERE: the answer being ended was given moments
+        // ago by the person now continuing as a guest, for the guest identity about to be
+        // minted, not by the restored account being left. Dropping it left the new guest
+        // unprovisioned (a "Local Account") on a device whose child history also suppresses
+        // the session-start re-ask. Carry the answer — and its FR-110 age-out marker — across
+        // the sign-out so the guest is provisioned exactly as on a fresh device.
+        let store = AgeGateStore.shared
+        let answerToCarry = store.category
+        let ageOutMarkerToCarry = store.ageOutYearMonth
         try await signOut()
         try resetLocalUserToGuest()
+        if let answerToCarry, !store.isResolved {
+            store.recordAnswer(answerToCarry, ageOutYearMonth: ageOutMarkerToCarry)
+        }
         try await signInAnonymously()
     }
     
@@ -2539,7 +2581,7 @@ class FirebaseAuthService: ObservableObject {
             // child marker wiped, so the hold above can be blind on the process's first
             // answer. Tri-state server resolution is the backstop — an anonymous session
             // nobody has classified yet writes nothing (FR-19: nil is never "not child").
-            isAnonymousSession: auth.currentUser?.isAnonymous ?? false,
+            isAnonymousSession: auth.currentUser.map(Self.isUncredentialedSession) ?? false,
             resolvedIsChildAccount: user.firebaseUID.flatMap {
                 UserRepository.shared.isChildAccount(for: $0)
             }
@@ -2574,7 +2616,11 @@ class FirebaseAuthService: ObservableObject {
     
     private func handleAuthStateChange(_ user: User?) async {
         if let firebaseUser = user {
-            lastObservedAnonymousUid = firebaseUser.isAnonymous ? firebaseUser.uid : nil
+            // Uncredentialed, not merely anonymous: a transferred child's revoked session
+            // (their OLD device after a transfer) vanishes the same way and must settle the
+            // same way, instead of leaving a sessionless child row behind.
+            lastObservedAnonymousUid = Self.isUncredentialedSession(firebaseUser) ? firebaseUser.uid : nil
+            lastObservedUncredentialedSessionWasCustomToken = !firebaseUser.isAnonymous && firebaseUser.providerData.isEmpty
             await loadUserFromFirebase(firebaseUser)
         } else {
             // Firebase signed out
@@ -2597,6 +2643,10 @@ class FirebaseAuthService: ObservableObject {
     /// `signInAnonymously` and `ChildConsentRedemptionPolicy.requiresProvisioning`
     /// short-circuit on a non-nil uid.
     private var lastObservedAnonymousUid: String?
+    /// Whether `lastObservedAnonymousUid` was a custom-token (transferred child) session. A
+    /// vanished one is the OLD device after a transfer: the profile it wears belongs to the
+    /// account that moved, and goes with it (`IdentityDetachReason.transferredAwayIdentity`).
+    private var lastObservedUncredentialedSessionWasCustomToken = false
 
     /// Uids a provisioning flow in THIS service is currently attaching to the local player.
     ///
@@ -2627,6 +2677,8 @@ class FirebaseAuthService: ObservableObject {
     private func releaseVanishedAnonymousIdentityIfNeeded() async {
         guard let uid = lastObservedAnonymousUid else { return }
         lastObservedAnonymousUid = nil
+        let wasCustomToken = lastObservedUncredentialedSessionWasCustomToken
+        lastObservedUncredentialedSessionWasCustomToken = false
         guard auth.currentUser == nil,
               let user = currentUser,
               user.firebaseUID == uid else { return }
@@ -2638,7 +2690,10 @@ class FirebaseAuthService: ObservableObject {
         // surface that mixes those two reads renders a hybrid. `detachAnonymousIdentityLocally`
         // is the settle; the redundant `signOut()` inside it is a no-op here (Firebase already
         // signed this session out, which is why the listener fired at all).
-        await detachAnonymousIdentityLocally(uid: uid, reason: .vanishedAnonymousSession)
+        await detachAnonymousIdentityLocally(
+            uid: uid,
+            reason: wasCustomToken ? .transferredAwayIdentity : .vanishedAnonymousSession
+        )
     }
 
     private func loadUserFromFirebase(_ firebaseUser: User) async {
@@ -2702,7 +2757,7 @@ class FirebaseAuthService: ObservableObject {
         // deletion: that is also what a manager CORRECTION leaves behind, and detaching an
         // anonymous session is irreversible.
         if DetachedIdentityDetectionPolicy.requiresDetach(
-            isAnonymousSession: firebaseUser.isAnonymous,
+            isAnonymousSession: Self.isUncredentialedSession(firebaseUser),
             documentStatus: Self.selfDocumentStatus(for: loadStatus),
             wasDeclaredByThisDevice: AgeGateStore.shared.isDeclaredChildUserId(firebaseUID)
         ) {
@@ -2734,7 +2789,7 @@ class FirebaseAuthService: ObservableObject {
             AuthProfileSyncPolicy.applyCloudProfile(
                 cloud,
                 to: existingUser,
-                isAnonymous: firebaseUser.isAnonymous
+                isAnonymous: Self.isUncredentialedSession(firebaseUser)
             )
             try? modelContext.save()
             currentUser = existingUser
@@ -2757,7 +2812,7 @@ class FirebaseAuthService: ObservableObject {
             
         case .insertCloudThenTrackLogin:
             guard let cloud = loadedCloudUser else { return }
-            if firebaseUser.isAnonymous {
+            if Self.isUncredentialedSession(firebaseUser) {
                 cloud.email = nil
             }
             modelContext.insert(cloud)
@@ -2767,7 +2822,7 @@ class FirebaseAuthService: ObservableObject {
             await updateLoginTracking()
             
         case .createLocalThenTrackLogin:
-            let email = firebaseUser.isAnonymous ? nil : firebaseUser.email
+            let email = Self.isUncredentialedSession(firebaseUser) ? nil : firebaseUser.email
             await createNewUserFromFirebase(firebaseUser, email: email, userName: nil)
             await updateLoginTracking()
 
@@ -2797,7 +2852,7 @@ class FirebaseAuthService: ObservableObject {
         // out of the provisioning race entirely, but if anything else ever reaches here for a
         // local-first player, defaults must not be what gets published to their new family.
         let localPlayer = LocalPlayerPromotionPolicy.carriesLocalProfile(
-            isAnonymousSession: firebaseUser.isAnonymous,
+            isAnonymousSession: Self.isUncredentialedSession(firebaseUser),
             localPlayerHasFirebaseUid: currentUser?.firebaseUID != nil
         ) ? currentUser : nil
 
@@ -2973,7 +3028,7 @@ class FirebaseAuthService: ObservableObject {
         // the Auth server; a definitive death verdict routes to the detach instead of the
         // write. Scoped to declared-child anonymous sessions — the only population an
         // out-of-band deletion can orphan — so every other save pays nothing.
-        if auth.currentUser?.isAnonymous == true,
+        if auth.currentUser.map(Self.isUncredentialedSession) == true,
            auth.currentUser?.uid == syncUserId,
            store.isDeclaredChildUserId(syncUserId),
            await confirmedIdentityDeathBySelfProbe() {
@@ -3221,7 +3276,9 @@ class FirebaseAuthService: ObservableObject {
         }
         data["friendCount"] = user.friendCount
         data["isRetiredGeneral"] = user.isRetiredGeneral
-        data["isRegistered"] = !(Auth.auth().currentUser?.isAnonymous ?? true)
+        // Credentialed, not merely non-anonymous: a transferred child must never write
+        // `isRegistered: true` onto their own document (item 11 of SRS 3.1.1).
+        data["isRegistered"] = Auth.auth().currentUser.map(Self.isCredentialedSession) ?? false
         
         // Platform identity only; provider email/phone/displayName go to private/contact.
         // Overwriting the array also migrates legacy docs that still carry those subfields.

@@ -10,8 +10,16 @@ import Foundation
 enum GuestContinuationPolicy {
     /// Only leave a restored **signed-in** account by creating a new anonymous session.
     /// Already guest-like identities must keep their UID so local trips/XP stay visible.
-    static func shouldCreateFreshAnonymousSession(accountState: AccountState) -> Bool {
-        !accountState.isGuestLike
+    ///
+    /// Item 11 of SRS 3.1.1: a restored CUSTOM-TOKEN session (an FR-84 transferred child) is
+    /// guest-like by `AccountState`, but it is somebody's account — "Continue as Guest" over it
+    /// must leave it, never adopt it as the guest's identity. It gets the fresh session.
+    static func shouldCreateFreshAnonymousSession(
+        accountState: AccountState,
+        isCustomTokenSession: Bool = false
+    ) -> Bool {
+        if isCustomTokenSession { return true }
+        return !accountState.isGuestLike
     }
 }
 

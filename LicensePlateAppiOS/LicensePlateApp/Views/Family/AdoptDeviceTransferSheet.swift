@@ -38,6 +38,9 @@ struct AdoptDeviceTransferSheet: View {
     }
 
     var context: Context = .child
+    /// Fired once the device has become the child, before the sheet dismisses — onboarding
+    /// uses it to continue as an existing account instead of asking a fresh child to set up.
+    var onAdopted: (() -> Void)? = nil
 
     private var titleKey: String {
         context == .adult ? "child_gate.transfer.adult.title" : "child_gate.transfer.title"
@@ -100,7 +103,10 @@ struct AdoptDeviceTransferSheet: View {
                 viewModel.normalizeEnteredCode()
             }
             .onChange(of: viewModel.didAdopt) { _, adopted in
-                if adopted { dismiss() }
+                if adopted {
+                    onAdopted?()
+                    dismiss()
+                }
             }
         }
     }

@@ -998,8 +998,44 @@ struct ChildAccountCreationGuidanceView: View {
     @ObservedObject var authService: FirebaseAuthService
     let onKeepPlaying: () -> Void
     let onSwitchToSignIn: () -> Void
+    /// Onboarding's Account step hosts this view for an under-13 answer (owner 2026-09-12: the
+    /// transfer link "should be there always on a child"); there is no sign-in to switch to.
+    var showsSignInSwitch: Bool = true
+    /// Forwarded to the transfer sheet; onboarding continues as an existing account on it.
+    var onAdopted: (() -> Void)? = nil
+    /// The primary action's copy. In the sign-in sheet the child is already playing ("Keep
+    /// Playing"); in onboarding they have not started yet, and "Keep" reads as if they had
+    /// (owner 2026-09-14) — onboarding passes "Start Playing".
+    var primaryActionTitleKey: String = "child_gate.signup.keep_playing"
+    var primaryActionHintKey: String = "child_gate.signup.keep_playing_hint"
 
     @State private var showJoinFamilySheet = false
+
+    /// FR-84 / item 11 of SRS 3.1.1 (owner 2026-09-11): a reinstalled device whose child already
+
+    /// has an account must reach the transfer code HERE, in onboarding — not be offered the
+
+    /// restored account as an adult-style saved user.
+
+    @State private var showAdoptTransferSheet = false
+
+    init(
+        authService: FirebaseAuthService,
+        onKeepPlaying: @escaping () -> Void,
+        onSwitchToSignIn: @escaping () -> Void,
+        showsSignInSwitch: Bool = true,
+        onAdopted: (() -> Void)? = nil,
+        primaryActionTitleKey: String = "child_gate.signup.keep_playing",
+        primaryActionHintKey: String = "child_gate.signup.keep_playing_hint"
+    ) {
+        _authService = ObservedObject(wrappedValue: authService)
+        self.onKeepPlaying = onKeepPlaying
+        self.onSwitchToSignIn = onSwitchToSignIn
+        self.showsSignInSwitch = showsSignInSwitch
+        self.onAdopted = onAdopted
+        self.primaryActionTitleKey = primaryActionTitleKey
+        self.primaryActionHintKey = primaryActionHintKey
+    }
 
     private var title: String { "child_gate.signup.title".localized }
     private var bodyText: String { "child_gate.signup.body".localized }
@@ -1048,10 +1084,50 @@ struct ChildAccountCreationGuidanceView: View {
                         hint: "child_gate.screen.join_button_hint".localized
                     )
 
+                    // Secondary on purpose: joining is the common case, and a child who has never
+
+                    // played must not be nudged toward a code that cannot exist for them (same
+
+                    // reasoning as the profile card's link).
+
+                    Button {
+
+                        showAdoptTransferSheet = true
+
+                    } label: {
+
+                        Text("child_gate.transfer.entry_link".localized)
+
+                            .font(.system(.footnote, design: .rounded))
+
+                            .foregroundStyle(Color.Theme.primaryBlue)
+
+                            .underline()
+
+                            .frame(minHeight: 44)
+
+                    }
+
+                    .accessibleButton(
+
+                        label: "child_gate.transfer.entry_link".localized,
+
+                        hint: "child_gate.transfer.a11y.entry_hint".localized
+
+                    )
+
+                    .sheet(isPresented: $showAdoptTransferSheet) {
+
+                        AdoptDeviceTransferSheet(onAdopted: onAdopted)
+
+                            .environmentObject(authService)
+
+                    }
+
                     Button {
                         onKeepPlaying()
                     } label: {
-                        Text("child_gate.signup.keep_playing".localized)
+                        Text(primaryActionTitleKey.localized)
                             .font(.system(.body, design: .rounded))
                             .fontWeight(.semibold)
                             .frame(maxWidth: .infinity)
@@ -1062,22 +1138,26 @@ struct ChildAccountCreationGuidanceView: View {
                             .foregroundStyle(Color.Theme.primaryBlue)
                     }
                     .accessibleButton(
-                        label: "child_gate.signup.keep_playing".localized,
-                        hint: "child_gate.signup.keep_playing_hint".localized
+                        label: primaryActionTitleKey.localized,
+                        hint: primaryActionHintKey.localized
                     )
                 }
                 .padding(.horizontal, 24)
 
                 // Sign-in stays reachable: FR-27 forbids ASKING the age question at sign-in,
                 // not signing in. A child with an existing account still needs the door.
-                Button {
-                    onSwitchToSignIn()
-                } label: {
-                    Text("Already have an account? Sign in")
-                        .font(.system(.subheadline, design: .rounded))
-                        .foregroundStyle(Color.Theme.primaryBlue)
+
+                if showsSignInSwitch {
+                    Button {
+                        onSwitchToSignIn()
+                    } label: {
+                        Text("Already have an account? Sign in")
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(Color.Theme.primaryBlue)
+                    }
+                    .padding(.top, 4)
+
                 }
-                .padding(.top, 4)
 
                 // FR-74(c′), owner-ruled 2026-09-07: the mis-answer recovery is INFORMATION,
                 // not a control. A reinstall already clears every device marker for anyone,

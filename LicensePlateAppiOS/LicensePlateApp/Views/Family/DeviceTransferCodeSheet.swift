@@ -122,14 +122,23 @@ struct DeviceTransferCodeSheet: View {
                         hint: "family.child.transfer.a11y.copy_hint".localized
                     )
 
-                    if viewModel.isExpired {
+                    // Always available (owner 2026-09-12): a spent or mis-typed code, or one the
+// parent simply wants replaced, must not wait out the timer. The server
+// supersedes the previous code on every mint. Busy while the mint is in flight
+// (owner 2026-09-14: a slow request looked like a dead button).
+Group {
                         Button {
                             viewModel.generateCode()
                         } label: {
-                            Label(
-                                "family.child.transfer.new_code".localized,
-                                systemImage: "arrow.clockwise"
-                            )
+                            Label {
+                                InviteActionLabel(
+                                    title: "family.child.transfer.new_code".localized,
+                                    isBusy: viewModel.isGenerating,
+                                    busyTitle: "Creating...".localized
+                                )
+                            } icon: {
+                                Image(systemName: "arrow.clockwise")
+                            }
                             .font(.system(.subheadline, design: .rounded))
                             .frame(minHeight: 44)
                         }

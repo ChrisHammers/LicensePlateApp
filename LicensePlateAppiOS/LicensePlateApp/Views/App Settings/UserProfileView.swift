@@ -452,9 +452,16 @@ struct UserProfileView: View {
         }
     }
     
-    init(user: AppUser, authService: FirebaseAuthService) {
+    /// When set, the child card's transfer link asks the PRESENTER to show the adopt sheet.
+    /// `ContentView` keys this view on `user.id`, and the redeem mints a provisional uid
+    /// mid-flow — a sheet hosted here died with the old identity (owner 2026-09-12: sheet
+    /// dismissed, no error shown).
+    var onAdoptTransferRequest: (() -> Void)? = nil
+
+    init(user: AppUser, authService: FirebaseAuthService, onAdoptTransferRequest: (() -> Void)? = nil) {
         self.user = user
         self.authService = authService
+        self.onAdoptTransferRequest = onAdoptTransferRequest
         _currentUserName = State(initialValue: user.userName)
         let lifetimeStatsVM = LifetimeStatsProfileViewModel(userId: user.id)
         let xpProgressVM = XpProgressViewModel(userId: user.id)
@@ -623,7 +630,19 @@ struct UserProfileView: View {
                                   title: guidance.titleKey.localized,
                                   message: guidance.bodyKey.localized,
                                   showsJoinButton: guidance.showsJoinFamilyButton,
-                                  onAdoptTransfer: { showChildAdoptTransferSheet = true }
+                                  onAdoptTransfer: {
+
+                                      if let onAdoptTransferRequest {
+
+                                          onAdoptTransferRequest()
+
+                                      } else {
+
+                                          showChildAdoptTransferSheet = true
+
+                                      }
+
+                                  }
                               )
                               .environmentObject(authService)
                           }
