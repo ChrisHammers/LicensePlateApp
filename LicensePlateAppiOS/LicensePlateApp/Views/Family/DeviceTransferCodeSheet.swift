@@ -155,7 +155,7 @@ Group {
                     InviteActionLabel(
                         title: "family.child.transfer.generate".localized,
                         isBusy: viewModel.isGenerating,
-                        busyKind: .join
+                        busyTitle: "Creating...".localized
                     )
                     .frame(maxWidth: .infinity, minHeight: 44)
                 }
