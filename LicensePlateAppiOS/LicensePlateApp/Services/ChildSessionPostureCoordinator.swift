@@ -269,6 +269,12 @@ enum ChildLocationTrustPolicy {
         /// too — sign-in never asks the age question (D-17), so the credential is the adult
         /// claim there. Anonymous and custom-token sessions are not.
         var isCredentialedSession: Bool
+        /// OD-14b (owner, 2026-09-16): child evidence about the CURRENT identity — this uid was
+        /// declared a child by this device (or the pre-uid flow carries a child declaration).
+        var isCurrentIdentityDeclaredChild: Bool
+        /// OD-14b: FR-74's 24-hour under-13 retry cooldown is this epoch's own child evidence —
+        /// a 13+ re-answer inside it earns nothing.
+        var isUnder13RetryCooldownActive: Bool
 
         init(
             posture: ChildSessionPosture,
@@ -280,7 +286,9 @@ enum ChildLocationTrustPolicy {
             hasAnyCachedChildTrue: Bool = false,
             isUnder13FlowAnswer: Bool = false,
             isAdultDeviceAnswer: Bool = false,
-            isCredentialedSession: Bool = false
+            isCredentialedSession: Bool = false,
+            isCurrentIdentityDeclaredChild: Bool = false,
+            isUnder13RetryCooldownActive: Bool = false
         ) {
             self.posture = posture
             self.cachedIsChildAccount = cachedIsChildAccount
@@ -292,6 +300,8 @@ enum ChildLocationTrustPolicy {
             self.isUnder13FlowAnswer = isUnder13FlowAnswer
             self.isAdultDeviceAnswer = isAdultDeviceAnswer
             self.isCredentialedSession = isCredentialedSession
+            self.isCurrentIdentityDeclaredChild = isCurrentIdentityDeclaredChild
+            self.isUnder13RetryCooldownActive = isUnder13RetryCooldownActive
         }
     }
 
@@ -338,12 +348,27 @@ enum ChildLocationTrustPolicy {
     /// and an account a captain flags as child while the device is offline regains child
     /// treatment at the next server read — D-11's rewrite then persists it. Ads, purchases,
     /// analytics and TFCD keep strict asymmetric trust; this relaxes location alone.
+    /// OD-14b (owner, 2026-09-16: "an adult answer should always produce an adult and
+    /// therefore get location"): child evidence about the CURRENT identity. Evidence about
+    /// OTHER identities this device once hosted — the FR-39 ratchet, another uid's cached
+    /// child-true, another uid's declaration — does not outrank an explicit 13+ answer given
+    /// in this epoch. Before OD-14b, condition 4 above read device-wide history, which held
+    /// location on a parent's guest session forever once the phone had hosted a child.
+    static func currentIdentityHasChildEvidence(_ inputs: Inputs) -> Bool {
+        inputs.cachedIsChildAccount == true
+            || inputs.isUnder13FlowAnswer
+            || inputs.hasOutstandingChildDeclaration
+            || inputs.isCurrentIdentityDeclaredChild
+            || inputs.isUnder13RetryCooldownActive
+    }
+
     static func trustsDeviceAdultForLocation(_ inputs: Inputs) -> Bool {
-        guard inputs.posture == .unresolved else { return false }
+        // `.ratchetedAnonymous` is how FR-39 files an anonymous session on a device with child
+        // history; OD-14b lets this epoch's adult evidence answer for it. `.childDirected` (the
+        // server says THIS account is a child) is never in scope.
+        guard inputs.posture == .unresolved || inputs.posture == .ratchetedAnonymous else { return false }
         guard inputs.isAdultDeviceAnswer || inputs.isCredentialedSession else { return false }
-        guard inputs.cachedIsChildAccount != true else { return false }
-        guard !hasDeviceChildHistory(inputs) else { return false }
-        return !inputs.isUnder13FlowAnswer
+        return !currentIdentityHasChildEvidence(inputs)
     }
 
     /// Posture-scoped answer: FR-75(c)'s hold, with the OD-8 and OD-14 branches subtracted.
@@ -665,7 +690,9 @@ final class ChildSessionPostureCoordinator: ObservableObject {
             hasAnyCachedChildTrue: deps.hasAnyCachedChildTrue(),
             isUnder13FlowAnswer: deps.isUnder13FlowAnswer(),
             isAdultDeviceAnswer: deps.isAdultDeviceAnswer(),
-            isCredentialedSession: deps.isCredentialedSession()
+            isCredentialedSession: deps.isCredentialedSession(),
+            isCurrentIdentityDeclaredChild: deps.isDeclaredChildIdentity(uid),
+            isUnder13RetryCooldownActive: deps.isUnder13RetryCooldownHeld()
         )
     }
 

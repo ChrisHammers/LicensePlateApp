@@ -1530,6 +1530,9 @@ struct ChildSessionAnalyticsAndEntitlementTests {
 /// or a registered session. Nothing else relaxes; child evidence of any kind still wins.
 struct AdultDeviceEvidenceLocationTests {
     private func unresolved(
+        posture: ChildSessionPosture = .unresolved,
+        currentDeclared: Bool = false,
+        cooldown: Bool = false,
         adultAnswer: Bool = false,
         registered: Bool = false,
         cached: Bool? = nil,
@@ -1541,7 +1544,7 @@ struct AdultDeviceEvidenceLocationTests {
         under13Flow: Bool = false
     ) -> ChildLocationTrustPolicy.Inputs {
         .init(
-            posture: .unresolved,
+            posture: posture,
             cachedIsChildAccount: cached,
             isCachedValueServerExplicit: explicitCache,
             isDeviceRatcheted: ratcheted,
@@ -1550,7 +1553,9 @@ struct AdultDeviceEvidenceLocationTests {
             hasAnyCachedChildTrue: cachedTrueAnywhere,
             isUnder13FlowAnswer: under13Flow,
             isAdultDeviceAnswer: adultAnswer,
-            isCredentialedSession: registered
+            isCredentialedSession: registered,
+            isCurrentIdentityDeclaredChild: currentDeclared,
+            isUnder13RetryCooldownActive: cooldown
         )
     }
 
@@ -1574,14 +1579,13 @@ struct AdultDeviceEvidenceLocationTests {
         #expect(ChildLocationTrustPolicy.isLocationRestricted(inputs))
     }
 
-    @Test func anyChildEvidenceOutranksTheAdultAnswer() {
+    @Test func childEvidenceAboutTheCurrentIdentityOutranksTheAdultAnswer() {
         for inputs in [
             unresolved(adultAnswer: true, cached: true, explicitCache: true, cachedTrueAnywhere: true),
-            unresolved(adultAnswer: true, ratcheted: true),
-            unresolved(adultAnswer: true, declared: true),
             unresolved(adultAnswer: true, outstanding: true),
-            unresolved(adultAnswer: true, cachedTrueAnywhere: true),
             unresolved(adultAnswer: true, under13Flow: true),
+            unresolved(currentDeclared: true, adultAnswer: true),
+            unresolved(cooldown: true, adultAnswer: true),
             unresolved(registered: true, cached: true, explicitCache: true, cachedTrueAnywhere: true),
         ] {
             #expect(ChildLocationTrustPolicy.trustsDeviceAdultForLocation(inputs) == false)
@@ -1589,12 +1593,45 @@ struct AdultDeviceEvidenceLocationTests {
         }
     }
 
-    @Test func theBranchIsUnresolvedOnly() {
-        for posture in [ChildSessionPosture.childDirected, .ratchetedAnonymous] {
-            let inputs = ChildLocationTrustPolicy.Inputs(posture: posture, isAdultDeviceAnswer: true, isCredentialedSession: true)
-            #expect(ChildLocationTrustPolicy.trustsDeviceAdultForLocation(inputs) == false)
-            #expect(ChildLocationTrustPolicy.isLocationRestricted(inputs))
+    /// OD-14b (owner 2026-09-16). A phone that once hosted a child carries the FR-39 ratchet,
+    /// that child's cached `true`, and that child's declaration — history about ANOTHER
+    /// identity. The parent who then answers 13+ on it gets location; before OD-14b these
+    /// three held it forever ("what's the point of asking if the ratchet doesn't use the answer?").
+    @Test func otherIdentitiesHistoryDoesNotOutrankThisEpochsAdultAnswer() {
+        for inputs in [
+            unresolved(adultAnswer: true, ratcheted: true),
+            unresolved(adultAnswer: true, declared: true),
+            unresolved(adultAnswer: true, cachedTrueAnywhere: true),
+            unresolved(posture: .ratchetedAnonymous, adultAnswer: true, ratcheted: true, declared: true, cachedTrueAnywhere: true),
+            unresolved(posture: .ratchetedAnonymous, registered: true, ratcheted: true),
+        ] {
+            #expect(ChildLocationTrustPolicy.trustsDeviceAdultForLocation(inputs))
+            #expect(ChildLocationTrustPolicy.isLocationRestricted(inputs) == false)
         }
+    }
+
+    @Test func aRatchetedAnonymousSessionWithNoAdultEvidenceStaysHeld() {
+        let inputs = unresolved(posture: .ratchetedAnonymous, ratcheted: true)
+        #expect(ChildLocationTrustPolicy.trustsDeviceAdultForLocation(inputs) == false)
+        #expect(ChildLocationTrustPolicy.isLocationRestricted(inputs))
+        // FR-74: a 13+ re-answer inside the under-13 retry cooldown earns nothing.
+        let retried = unresolved(posture: .ratchetedAnonymous, cooldown: true, adultAnswer: true, ratcheted: true)
+        #expect(ChildLocationTrustPolicy.trustsDeviceAdultForLocation(retried) == false)
+    }
+
+    @Test func aChildDirectedPostureIsNeverInScope() {
+        let inputs = unresolved(posture: .childDirected, adultAnswer: true)
+        #expect(ChildLocationTrustPolicy.trustsDeviceAdultForLocation(inputs) == false)
+    }
+
+    @Test func theBranchCoversUnresolvedAndRatchetedAnonymousOnly() {
+        // OD-14b: `.ratchetedAnonymous` joined `.unresolved`; `.childDirected` (the server
+        // says THIS account is a child) never qualifies, whatever the device claims.
+        let child = ChildLocationTrustPolicy.Inputs(posture: .childDirected, isAdultDeviceAnswer: true, isCredentialedSession: true)
+        #expect(ChildLocationTrustPolicy.trustsDeviceAdultForLocation(child) == false)
+        #expect(ChildLocationTrustPolicy.isLocationRestricted(child))
+        let ratcheted = ChildLocationTrustPolicy.Inputs(posture: .ratchetedAnonymous, isDeviceRatcheted: true, isAdultDeviceAnswer: true)
+        #expect(ChildLocationTrustPolicy.trustsDeviceAdultForLocation(ratcheted))
         let confirmed = ChildLocationTrustPolicy.Inputs(posture: .confirmedNonChild)
         #expect(ChildLocationTrustPolicy.isLocationRestricted(confirmed) == false)
     }
@@ -1639,10 +1676,26 @@ struct AdultEvidenceLocationCoordinatorTests {
         #expect(coordinator.isLocationRestrictionChildEvidenced == false)
     }
 
-    @Test func deviceChildHistoryStillOutranksTheAdultAnswer() {
+    /// OD-14b (owner 2026-09-16): the phone once hosted a child (FR-39 ratchet engaged), and a
+    /// parent now answers 13+ as a guest. History about the OTHER identity no longer holds the
+    /// parent's location — before OD-14b this held it forever.
+    @Test func deviceChildHistoryNoLongerOutranksTheAdultAnswer() {
         let world = ChildSessionPostureCoordinatorTests.World()
         world.identity = ("guest1", true)
         world.adultDeviceAnswer = true
+        world.ratcheted = true
+        let coordinator = world.makeCoordinator()
+        coordinator.applyPostures(trigger: .launch)
+        #expect(coordinator.currentPosture == .ratchetedAnonymous)
+        #expect(coordinator.isLocationRestrictedForCurrentFlow == false)
+        // Location only: the ratcheted posture keeps every other capability held.
+        #expect(coordinator.isAdDisplayEligible == false)
+        #expect(coordinator.arePurchasesSuppressed == true)
+    }
+
+    @Test func aRatchetedGuestWithNoAnswerStaysHeld() {
+        let world = ChildSessionPostureCoordinatorTests.World()
+        world.identity = ("guest1", true)
         world.ratcheted = true
         let coordinator = world.makeCoordinator()
         coordinator.applyPostures(trigger: .launch)
