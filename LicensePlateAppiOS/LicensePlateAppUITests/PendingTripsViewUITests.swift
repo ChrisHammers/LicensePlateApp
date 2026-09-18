@@ -4,6 +4,9 @@
 //
 //  Step 04 — UI tests for Pending Invites and Travel Log (inline sections on main screen).
 //
+//  Every test launches with `--skipOnboarding` so a fresh simulator lands on Home instead of the
+//  age gate / onboarding, and waits out the real startup chain (see `UITestLaunchHelper.startupTimeout`).
+//
 
 import XCTest
 
@@ -16,21 +19,28 @@ final class PendingTripsViewUITests: XCTestCase {
     @MainActor
     func testMainScreenShowsPendingInvitesSection() throws {
         let app = XCUIApplication()
-        app.launch()
+        UITestLaunchHelper.launchApp(app, skipOnboarding: true)
 
-        // Pending Invites is now an inline section on the main screen
+        // Pending Invites is an inline section on the main screen (header renders in both the
+        // empty and populated states).
         let pendingInvitesHeader = app.staticTexts["Pending Invites"]
-        XCTAssertTrue(pendingInvitesHeader.waitForExistence(timeout: 8), "Pending Invites section should be visible on main screen")
+        XCTAssertTrue(
+            pendingInvitesHeader.waitForExistence(timeout: UITestLaunchHelper.startupTimeout),
+            "Pending Invites section should be visible on main screen"
+        )
     }
 
     @MainActor
     func testMainScreenShowsTravelLogSection() throws {
         let app = XCUIApplication()
-        app.launch()
+        UITestLaunchHelper.launchApp(app, skipOnboarding: true)
 
         // Open Travel Log via toolbar map button; sheet shows "Travel Log" title or empty state
         let mapButton = app.buttons["Travel Log"]
-        XCTAssertTrue(mapButton.waitForExistence(timeout: 8), "Travel Log toolbar button should exist")
+        XCTAssertTrue(
+            mapButton.waitForExistence(timeout: UITestLaunchHelper.startupTimeout),
+            "Travel Log toolbar button should exist"
+        )
         mapButton.tap()
         let travelLogTitle = app.navigationBars["Travel Log"].firstMatch
         let noTripsText = app.staticTexts["No completed trips yet"]
@@ -43,9 +53,12 @@ final class PendingTripsViewUITests: XCTestCase {
     @MainActor
     func testMainScreenShowsActiveTripsSection() throws {
         let app = XCUIApplication()
-        app.launch()
+        UITestLaunchHelper.launchApp(app, skipOnboarding: true)
 
         let activeTripsHeader = app.staticTexts["Active Trips"]
-        XCTAssertTrue(activeTripsHeader.waitForExistence(timeout: 8), "Active Trips section should be visible on main screen")
+        XCTAssertTrue(
+            activeTripsHeader.waitForExistence(timeout: UITestLaunchHelper.startupTimeout),
+            "Active Trips section should be visible on main screen"
+        )
     }
 }

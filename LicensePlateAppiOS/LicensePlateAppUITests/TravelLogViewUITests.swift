@@ -4,6 +4,9 @@
 //
 //  Step 07 — UI tests: open Travel Log from toolbar, assert sheet shows title or content.
 //
+//  Launches with `--skipOnboarding` so a fresh simulator lands on Home instead of the age gate /
+//  onboarding, and waits out the real startup chain (see `UITestLaunchHelper.startupTimeout`).
+//
 
 import XCTest
 
@@ -16,11 +19,14 @@ final class TravelLogViewUITests: XCTestCase {
     @MainActor
     func testOpeningTravelLogSheetShowsTravelLogTitle() throws {
         let app = XCUIApplication()
-        app.launch()
+        UITestLaunchHelper.launchApp(app, skipOnboarding: true)
 
         // Tap toolbar map button to open Travel Log sheet
         let mapButton = app.buttons["Travel Log"]
-        XCTAssertTrue(mapButton.waitForExistence(timeout: 8), "Toolbar map button (Travel Log) should exist")
+        XCTAssertTrue(
+            mapButton.waitForExistence(timeout: UITestLaunchHelper.startupTimeout),
+            "Toolbar map button (Travel Log) should exist"
+        )
         mapButton.tap()
 
         // Sheet should show "Travel Log" as title or empty state text

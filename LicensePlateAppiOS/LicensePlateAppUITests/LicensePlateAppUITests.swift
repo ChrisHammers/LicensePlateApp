@@ -26,20 +26,32 @@ final class LicensePlateAppUITests: XCTestCase {
     func testSkipOnboardingShowsHome() throws {
         let app = XCUIApplication()
         UITestLaunchHelper.launchApp(app, skipOnboarding: true)
-        XCTAssertTrue(app.staticTexts["RoadTrip Royale"].waitForExistence(timeout: 8))
+        // "RoadTrip Royale" is also the splash title, so it cannot prove Home was reached; the
+        // "Active Trips" section header exists only on Home (rendered in both its empty and
+        // populated states).
+        XCTAssertTrue(
+            app.staticTexts["Active Trips"].waitForExistence(timeout: UITestLaunchHelper.startupTimeout),
+            "Home should show after the splash when onboarding is skipped"
+        )
     }
 
     @MainActor
     func testLegacyOnboardingShowsWelcome() throws {
         let app = XCUIApplication()
         UITestLaunchHelper.launchApp(app, legacyOnboarding: true)
-        XCTAssertTrue(app.buttons["Get Started"].waitForExistence(timeout: 8))
+        XCTAssertTrue(
+            app.buttons["Get Started"].waitForExistence(timeout: UITestLaunchHelper.startupTimeout),
+            "Legacy onboarding should open on the Welcome step after the splash"
+        )
     }
 
     @MainActor
     func testQuickSoloStartScreenWhenForced() throws {
         let app = XCUIApplication()
         UITestLaunchHelper.launchApp(app, quickSoloFirstSession: true)
-        XCTAssertTrue(app.buttons["Start Quick Solo Trip"].waitForExistence(timeout: 8))
+        XCTAssertTrue(
+            app.buttons["Start Quick Solo Trip"].waitForExistence(timeout: UITestLaunchHelper.startupTimeout),
+            "Quick-solo start screen should show after the splash when forced"
+        )
     }
 }
