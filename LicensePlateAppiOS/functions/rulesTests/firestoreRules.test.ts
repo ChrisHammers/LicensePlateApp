@@ -1038,6 +1038,20 @@ describe("FR-12: a child's user doc is family-only", () => {
     await seed({ "users/anonTarget": { userName: "A", isRegistered: false } });
     await assertFails(getDoc(doc(registered("stranger"), "users/anonTarget")));
   });
+
+  // Owner device log 2026-09-08 ("getUser failed … Missing or insufficient permissions", one
+  // line per uid at launch): those uids were since-DELETED accounts still named by resolved
+  // rows in `families/{id}/pending`. This pins WHY a client sees that as a permission error
+  // and never as "not found": the peer branch dereferences `resource.data`, and on a missing
+  // document `resource` is null, so the rule errors — reported as PERMISSION_DENIED. A client
+  // therefore cannot tell "deleted" from "hidden" and must not read docs it has no reason to
+  // (`FamilyRepository.pendingUserIdsToHydrate`). The self clause short-circuits first, so a
+  // fresh account still reads its own not-yet-written doc — the other half of the contract.
+  it("a peer read of a uid with NO user doc is denied, not not-found (deleted requester)", async () => {
+    await assertFails(getDoc(doc(registered("parent"), "users/deletedRequester")));
+    await assertFails(getDoc(doc(registered("stranger"), "users/deletedRequester")));
+    await assertSucceeds(getDoc(doc(registered("deletedRequester"), "users/deletedRequester")));
+  });
 });
 
 // ---------------------------------------------------------------------------

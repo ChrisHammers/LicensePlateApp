@@ -496,13 +496,11 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
         guard let snapshot = snapshot, let modelContext = modelContext else { return }
 
         var requests: [PendingJoinRequest] = []
-        var userIdsToFetch: [String] = []
         var stampSources: [(requestId: String, data: [String: Any])] = []
 
         for document in snapshot.documents {
             if let request = PendingJoinRequest(from: document, familyId: familyId) {
                 requests.append(request)
-                userIdsToFetch.append(request.userId)
                 // FR-86: read the stamp off the RAW doc, here, while we still have it. It
                 // never reaches the SwiftData row (frozen schema), so this is its only
                 // capture point.
@@ -513,6 +511,15 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
             Self.parsePendingIdentityStamps(documents: stampSources),
             familyId: familyId
         )
+        // Hydration scope (owner device log 2026-09-08). This listener is UNFILTERED — it
+        // carries every row the family has ever resolved (50 on the dev family, 43 of them
+        // naming since-deleted accounts) — and every one of those uids was being read through
+        // `users/{uid}` on every snapshot. A deleted account has no doc, and FR-12's rule
+        // dereferences `resource.data`, so a missing peer doc is PERMISSION DENIED, not nil:
+        // one "getUser failed … insufficient permissions" line per dead uid, at launch and on
+        // every pending change, never cacheable. Only LIVE rows hydrate — see
+        // `pendingUserIdsToHydrate`.
+        let userIdsToFetch = Self.pendingUserIdsToHydrate(requests)
 
         // Cache complete AppUser data for pending users — deferred until after SwiftData sync
         // Sync requests to SwiftData
@@ -955,13 +962,11 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
             .getDocuments()
         
         var requests: [PendingJoinRequest] = []
-        var userIdsToFetch: [String] = []
         var stampSources: [(requestId: String, data: [String: Any])] = []
 
         for document in snapshot.documents {
             if let request = PendingJoinRequest(from: document, familyId: familyId) {
                 requests.append(request)
-                userIdsToFetch.append(request.userId)
                 // FR-86: same capture point as the listener path. This is the one that runs
                 // on a cold store after a reinstall, which is the case the device pass caught.
                 stampSources.append((requestId: request.requestId, data: document.data()))
@@ -971,6 +976,9 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
             Self.parsePendingIdentityStamps(documents: stampSources),
             familyId: familyId
         )
+        // The query above is already live-only, so this is the shared DEFINITION of the
+        // hydration scope rather than a second filter — one rule for both pending paths.
+        let userIdsToFetch = Self.pendingUserIdsToHydrate(requests)
 
         // Sync requests to SwiftData
         for request in requests {
@@ -1038,6 +1046,26 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
             stamps[document.requestId] = PendingIdentityStamp(firestoreData: document.data)
         }
         return stamps
+    }
+
+    /// The requester uids a pending-collection page may hydrate through `users/{uid}`.
+    ///
+    /// LIVE rows only (`pending`, `awaiting_guardian` — `RequestStatus.isLiveOnApprovalSurface`,
+    /// the predicate every approval surface already renders by). A resolved row is lineage
+    /// the server keeps; nothing renders it, and its requester is usually gone — on the dev
+    /// family (2026-09-11) 43 of the 50 resolved rows named accounts with an
+    /// `AUDIT_ACCOUNT_DELETED` audit row. Reading a missing peer doc is not "nil": FR-12's
+    /// rule dereferences `resource.data`, so it is PERMISSION DENIED. That was the startup
+    /// flood in the owner's 2026-09-08 device log — one line per dead uid, repeated on every
+    /// snapshot, because a doc that does not exist can never land in the cache.
+    ///
+    /// The MEMBERS path is deliberately not scoped this way: member docs are removed
+    /// server-side at every membership end, and reading each member's `users/{uid}` is the
+    /// roster hydration the FR-12 carve-out and FR-85 exist to allow.
+    static func pendingUserIdsToHydrate(_ requests: [PendingJoinRequest]) -> [String] {
+        requests
+            .filter { $0.statusEnum.isLiveOnApprovalSurface }
+            .map(\.userId)
     }
     
     // MARK: - Cloud Functions

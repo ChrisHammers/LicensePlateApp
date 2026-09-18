@@ -433,4 +433,49 @@ struct SocialIdentityHydrationTests {
         #expect(stamps["inv-c"] == nil)
         #expect(stamps.count == 2)
     }
+
+    // MARK: - Pending hydration scope (owner device log 2026-09-08)
+    //
+    // The pending listener is unfiltered: it carries every row the family has ever resolved,
+    // and the repository read `users/{uid}` for each requester on every snapshot. A resolved
+    // row's requester is usually a deleted account, and FR-12's rule turns a MISSING peer doc
+    // into PERMISSION DENIED rather than nil — one "getUser failed … insufficient permissions"
+    // line per dead uid, at launch and on every pending change, never cacheable. Only live
+    // rows may drive a user-doc read; the members path is untouched.
+
+    private func request(
+        _ id: String,
+        userId: String,
+        status: PendingJoinRequest.RequestStatus
+    ) -> PendingJoinRequest {
+        PendingJoinRequest(
+            requestId: id,
+            familyId: "family-hydration-scope",
+            userId: userId,
+            requestedBy: "captain",
+            method: .code,
+            status: status
+        )
+    }
+
+    @Test func onlyLivePendingRowsDriveAUserDocRead() {
+        let ids = FamilyRepository.pendingUserIdsToHydrate([
+            request("r1", userId: "live-pending", status: .pending),
+            request("r2", userId: "live-awaiting", status: .awaitingGuardian),
+            request("r3", userId: "deleted-approved", status: .approved),
+            request("r4", userId: "deleted-declined", status: .declined),
+            request("r5", userId: "gone-expired", status: .expired),
+        ])
+        #expect(ids == ["live-pending", "live-awaiting"])
+    }
+
+    /// The shape the dev family actually has (50 resolved rows, zero live): a page like this
+    /// must hydrate nothing, so a launch reads no dead uids at all.
+    @Test func aFullyResolvedPendingPageHydratesNothing() {
+        let ids = FamilyRepository.pendingUserIdsToHydrate([
+            request("r1", userId: "u1", status: .approved),
+            request("r2", userId: "u2", status: .declined),
+        ])
+        #expect(ids.isEmpty)
+    }
 }
