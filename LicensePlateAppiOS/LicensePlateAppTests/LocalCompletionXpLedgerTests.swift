@@ -301,6 +301,7 @@ struct LocalCompletionXpLedgerTests {
         // Sync is held: no server progression snapshot and no grants have ever arrived.
         let remote = StubToastRemoteReader()
         remote.hasReceivedInitialSnapshot = false
+        remote.boundUserId = uid
 
         let service = XpGainToastService(
             xpLedger: trip.ledger,
@@ -364,6 +365,7 @@ struct LocalCompletionXpLedgerTests {
 
         let remote = StubToastRemoteReader()
         remote.hasReceivedInitialSnapshot = false
+        remote.boundUserId = uid
         let service = XpGainToastService(
             xpLedger: trip.ledger,
             remoteReader: remote,
@@ -543,4 +545,13 @@ private struct StubRewardsConfigProvider: ProgressionRewardsConfigProviding {
 private final class StubToastRemoteReader: XpGainToastRemoteReading {
     var grants: [UserXpGrant] = []
     var hasReceivedInitialSnapshot = false
+    // §3.1.1 item 12: SEALED by default, and each test sets `boundUserId` to its own uid. Both tests
+    // below seal on the first `performImmediateRefresh()`, when `grants` is still empty, so the
+    // grants they add afterwards arrive POST-seal and keep exercising the paths they were written
+    // for — the acknowledgedLocalAwardKeys dedup, and the peer grant that must still toast. Leaving
+    // the stub unsealed (or `boundUserId` nil, under the fail-closed uid guard) would instead have
+    // those grants absorbed by the sealing transition itself.
+    var hasReceivedServerSnapshot = true
+    var bindingGeneration = 0
+    var boundUserId: String?
 }

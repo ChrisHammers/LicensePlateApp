@@ -11,6 +11,11 @@ import Testing
 private final class MockXpGainToastRemoteReader: XpGainToastRemoteReading {
     var grants: [UserXpGrant] = []
     var hasReceivedInitialSnapshot = true
+    // §3.1.1 item 12: sealed and bound to "u1" by default, because every test below configures the
+    // service for "u1". Tests that want the unsealed / rebinding / other-uid cases say so explicitly.
+    var hasReceivedServerSnapshot = true
+    var bindingGeneration = 0
+    var boundUserId: String? = "u1"
 }
 
 @MainActor
@@ -383,5 +388,367 @@ struct XpGainToastServiceTests {
                 catalog: catalog
             ) == nil
         )
+    }
+
+    // MARK: - §3.1.1 item 12 — the remote history line is the first SERVER-CONFIRMED snapshot
+
+    private func lifetimeHistory() -> [UserXpGrant] {
+        [
+            sampleGrant(
+                grantId: "g-ach-1",
+                amount: 20,
+                reason: UserXpGrantReason.achievementUnlock.rawValue,
+                achievementId: "ach-1"
+            ),
+            sampleGrant(grantId: "g-place-1", amount: 15),
+            sampleGrant(
+                grantId: "g-legacy",
+                amount: 4_785,
+                reason: UserXpGrantReason.legacyUnledgeredBalance.rawValue
+            ),
+        ]
+    }
+
+    /// THE item-12 regression: delete + reinstall, sign-in, FR-84 transfer. The 80 ms baseline runs
+    /// before the listener's first (server) snapshot, and on today's code the whole lifetime bursts.
+    @Test func remoteHistoryArrivingAfterTheFirstRefreshIsAbsorbedNotToasted() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        remote.hasReceivedInitialSnapshot = false
+        remote.hasReceivedServerSnapshot = false
+
+        let service = XpGainToastService(
+            xpLedger: ledger,
+            remoteReader: remote,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: "u1")
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        // One round trip later the server's first snapshot lands, carrying every grant ever written.
+        remote.grants = lifetimeHistory()
+        remote.hasReceivedInitialSnapshot = true
+        remote.hasReceivedServerSnapshot = true
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+    }
+
+    /// The invariant a blanket "never toast remote at launch" fix would break.
+    @Test func grantsArrivingAfterTheServerSealStillToast() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        remote.grants = [sampleGrant(grantId: "g1", amount: 15)]
+
+        let service = XpGainToastService(
+            xpLedger: ledger,
+            remoteReader: remote,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: "u1")
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        remote.grants.append(
+            sampleGrant(
+                grantId: "g2",
+                amount: 40,
+                reason: UserXpGrantReason.achievementUnlock.rawValue,
+                achievementId: "ach-2"
+            )
+        )
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.lines.count == 1)
+        #expect(service.presentation?.totalXp == 40)
+    }
+
+    /// The case a literal "the first snapshot is the watermark" gets wrong: the cache held a subset,
+    /// and the server snapshot adds OLDER documents the cache never had.
+    @Test func cachedThenServerSnapshotAddingOlderGrantsToastsNothing() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        remote.hasReceivedServerSnapshot = false
+        remote.grants = [
+            sampleGrant(grantId: "g1", amount: 15),
+            sampleGrant(grantId: "g2", amount: 15),
+        ]
+
+        let service = XpGainToastService(
+            xpLedger: ledger,
+            remoteReader: remote,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: "u1")
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        remote.grants = [
+            sampleGrant(grantId: "g0", amount: 15),
+            sampleGrant(grantId: "g1", amount: 15),
+            sampleGrant(grantId: "g2", amount: 15),
+            sampleGrant(grantId: "g3", amount: 15),
+        ]
+        remote.hasReceivedServerSnapshot = true
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+    }
+
+    /// A denied or failed listen sets `hasReceivedInitialSnapshot` and leaves the seal closed
+    /// (XpGrantRemoteRepository's error branch). It is not evidence about the server's grant set.
+    @Test func listenerErrorDoesNotSettleGrantBaseline() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        remote.hasReceivedInitialSnapshot = true
+        remote.hasReceivedServerSnapshot = false
+        remote.grants = lifetimeHistory()
+
+        let service = XpGainToastService(
+            xpLedger: ledger,
+            remoteReader: remote,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: "u1")
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        remote.grants.append(sampleGrant(grantId: "g-late", amount: 15))
+        remote.hasReceivedServerSnapshot = true
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+    }
+
+    /// Firestore raises an EMPTY from-cache snapshot as soon as it goes offline, so
+    /// `hasReceivedInitialSnapshot` can be true with `grants == []` and nothing server-confirmed.
+    @Test func offlineLaunchWithEmptyCacheAbsorbsHistoryWhenNetworkReturns() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        remote.hasReceivedInitialSnapshot = true
+        remote.hasReceivedServerSnapshot = false
+        remote.grants = []
+
+        let service = XpGainToastService(
+            xpLedger: ledger,
+            remoteReader: remote,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: "u1")
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        remote.grants = lifetimeHistory()
+        remote.hasReceivedServerSnapshot = true
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+    }
+
+    /// A stop/start re-arms the seal by construction — no `configure` needed, so the fix does not
+    /// depend on RootView's call ordering.
+    @Test func rebindingTheGrantsListenerReSealsAndAbsorbsTheNewBindingsHistory() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        remote.grants = [sampleGrant(grantId: "g1", amount: 15)]
+
+        let service = XpGainToastService(
+            xpLedger: ledger,
+            remoteReader: remote,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: "u1")
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        // The listener is torn down and rebound: a new binding generation, nothing server-confirmed.
+        remote.bindingGeneration = 2
+        remote.hasReceivedServerSnapshot = false
+        remote.grants = []
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        remote.grants = [
+            sampleGrant(grantId: "gA", amount: 15),
+            sampleGrant(
+                grantId: "gB",
+                amount: 20,
+                reason: UserXpGrantReason.achievementUnlock.rawValue,
+                achievementId: "ach-3"
+            ),
+        ]
+        remote.hasReceivedServerSnapshot = true
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+    }
+
+    /// Fail closed: while the repository is bound to a different identity its grants are neither
+    /// presented nor absorbed into this identity's acknowledged set.
+    @Test func remoteGrantsAreIgnoredWhileTheListenerIsBoundToAnotherUid() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        remote.boundUserId = "u2"
+        remote.grants = [sampleGrant(grantId: "g-u2", amount: 30)]
+
+        let service = XpGainToastService(
+            xpLedger: ledger,
+            remoteReader: remote,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: "u1")
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        // The binding catches up to this identity in the same step a fresh grant lands: everything in
+        // that first sealing view is history, not a gain. Pre-item-12 this toasted 12 XP — the first
+        // refresh had absorbed the mismatched binding's grant, leaving g-live the only unseen id —
+        // so this step is what pins the fail-closed guard against the old code.
+        remote.boundUserId = "u1"
+        remote.grants.append(sampleGrant(grantId: "g-live", amount: 12))
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        // ...and the guard is not a permanent mute.
+        remote.grants.append(sampleGrant(grantId: "g-later", amount: 7))
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == 7)
+    }
+
+    /// The offline invariant in its strongest form: nothing remote has been seen at all.
+    @Test func offlineProvisionalToastsBeforeTheServerSnapshotSeal() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        remote.hasReceivedInitialSnapshot = false
+        remote.hasReceivedServerSnapshot = false
+
+        let service = XpGainToastService(
+            xpLedger: ledger,
+            remoteReader: remote,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: "u1")
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        try? ledger.append(
+            sampleLedgerRow(
+                id: "prov-1",
+                grantKind: .provisionalDiscoveryXp,
+                reasonCode: .discoveryClaimPendingResolution,
+                status: .provisional
+            )
+        )
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.totalXp == 10)
+        #expect(service.presentation?.lines.first?.id == "discovery")
+    }
+
+    /// The ledger half of the baseline is never gated on anything remote.
+    @Test func ledgerBaselineIsEstablishedEvenWhenTheSealNeverArrives() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        remote.hasReceivedInitialSnapshot = false
+        remote.hasReceivedServerSnapshot = false
+        try? ledger.append(sampleLedgerRow())
+
+        let service = XpGainToastService(
+            xpLedger: ledger,
+            remoteReader: remote,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: "u1")
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        try? ledger.append(sampleLedgerRow(id: "row-2", itemId: "CA"))
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.lines.count == 1)
+        #expect(service.presentation?.lines.first?.id == "discovery")
+        #expect(service.presentation?.totalXp == 10)
+    }
+
+    /// A migration seal is bookkeeping, not a gain — even squarely post-seal.
+    @Test func legacyUnledgeredBalanceGrantNeverToasts() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+
+        let service = XpGainToastService(
+            xpLedger: ledger,
+            remoteReader: remote,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: "u1")
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        remote.grants = [
+            sampleGrant(
+                grantId: "g-legacy",
+                amount: 4_785,
+                reason: UserXpGrantReason.legacyUnledgeredBalance.rawValue
+            )
+        ]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+    }
+
+    @Test func eligibilityRejectsTheLegacyUnledgeredBalanceGrant() {
+        let legacy = sampleGrant(
+            grantId: "g-legacy",
+            amount: 4_785,
+            reason: UserXpGrantReason.legacyUnledgeredBalance.rawValue
+        )
+        #expect(!XpGainToastEligibility.shouldToastRemoteGrant(legacy))
+        #expect(XpGainToastSourceMapper.ingestEvent(
+            from: legacy,
+            catalog: ProgressionCatalog.bundledDefault
+        ) == nil)
+    }
+
+    /// The per-award dedup still holds in the post-seal world, rather than being masked by absorption.
+    @Test func mirroredServerGrantForALocallyToastedAwardStillDoesNotToastAfterTheSeal() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+
+        let service = XpGainToastService(
+            xpLedger: ledger,
+            remoteReader: remote,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: "u1")
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        try? ledger.append(
+            sampleLedgerRow(
+                id: "trip-1",
+                xpDelta: 30,
+                grantKind: .tripCompletion,
+                reasonCode: .tripEnded
+            )
+        )
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == 30)
+        service.dismissManually()
+
+        // The server grant mirroring the same award: same `sourceId|reason` as the local row.
+        remote.grants = [
+            UserXpGrant(
+                grantId: "g-trip-ended",
+                amount: 30,
+                reason: UserXpGrantReason.tripEnded.rawValue,
+                sourceType: "activity_event",
+                sourceId: "src-trip-1",
+                idempotencyKey: "g-trip-ended"
+            )
+        ]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
     }
 }

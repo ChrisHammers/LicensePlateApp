@@ -3,7 +3,26 @@
 //  LicensePlateApp
 //
 //  Observes local XP ledger and remote xp_grants; presents aggregated auto-dismissing toasts.
-//  Local provisional gains toast immediately offline (no remote snapshot gate).
+//
+//  TWO invariants, and neither may break the other:
+//   • LOCAL: provisional gains toast immediately offline — the ledger half of the baseline is
+//     sealed on the first refresh, with no remote gate of any kind.
+//   • REMOTE (§3.1.1 item 12, 2026-09-16): the historical line for remote grants is NOT "the first
+//     refresh" but "the first SERVER-CONFIRMED snapshot of this listener binding". Until that seal
+//     lands, every grant in view is absorbed silently; after it, every grant is a real gain.
+//     `hasReceivedInitialSnapshot` is the wrong gate and is now only traced, never obeyed: the
+//     repository sets it on an error callback too, and Firestore raises an empty from-cache snapshot
+//     as soon as it goes offline, so it means "a callback happened", not "a snapshot arrived".
+//     The seal is keyed `<uid>#<bindingGeneration>` so a rebind (reinstall, sign-in, FR-84 device
+//     transfer, sign-out/in) re-earns it, and the service fails closed while the repository is
+//     bound to another uid. The fix deliberately does NOT live at the RootView call sites:
+//     reordering startListening/configure is not a fix, because an uncached uid has no cached
+//     snapshot to win with at any ordering.
+//     Accepted loss, by design: a grant that first becomes visible INSIDE the sealing snapshot never
+//     toasts — i.e. anything written since this device's last server-confirmed snapshot: one round
+//     trip on an online launch, the whole offline stretch on an offline launch. Anything that also
+//     wrote a local ledger row toasted from the ledger anyway, so the exposure is an achievement or
+//     a peer-authored competitive placement landing in that window (its XP still counts).
 //
 
 import Combine
@@ -12,7 +31,15 @@ import Foundation
 @MainActor
 protocol XpGainToastRemoteReading: AnyObject {
     var grants: [UserXpGrant] { get }
+    /// "A callback happened." Kept because XpDisplayedTotalResolver / XpProgressViewModel /
+    /// ProgressionXpDriftAfterSyncReporter still key their verified totals off it; this service
+    /// only traces it. Deliberately given NO protocol-extension default alongside the three below —
+    /// a compile error in a future test double is the safe failure, a silently-wrong default is not.
     var hasReceivedInitialSnapshot: Bool { get }
+    /// "The server confirmed a snapshot of the CURRENT binding." The remote history line.
+    var hasReceivedServerSnapshot: Bool { get }
+    var bindingGeneration: Int { get }
+    var boundUserId: String? { get }
 }
 
 extension XpGrantRemoteRepository: XpGainToastRemoteReading {}
@@ -41,9 +68,15 @@ final class XpGainToastService: ObservableObject {
     private var acknowledgedLocalAwardKeys = Set<String>()
     private var burstEvents: [XpGainToastIngestEvent] = []
     private var rankProgressBaselineXp: Int?
-    private var hasBaseline = false
+    /// The LOCAL half of the baseline: sealed on the first refresh of an identity epoch, never
+    /// gated on anything remote (that is what keeps offline provisional gains toasting).
+    private var hasLedgerBaseline = false
+    /// The REMOTE half: `"<uid>#<bindingGeneration>"` of the binding whose server-confirmed
+    /// snapshot became this epoch's history line. `nil` means unsealed — absorb, present nothing.
+    private var remoteBaselineKey: String?
     private var timerGeneration = 0
     private let processLaunchDate: Date
+    private var configuredAt: Date?
     private var pausedForRewardPopup = false
 
     init(
@@ -93,9 +126,15 @@ final class XpGainToastService: ObservableObject {
         acknowledgedLocalAwardKeys.removeAll()
         burstEvents.removeAll()
         rankProgressBaselineXp = nil
-        hasBaseline = false
+        // A new identity epoch re-earns BOTH halves of the baseline.
+        hasLedgerBaseline = false
+        remoteBaselineKey = nil
         pausedForRewardPopup = false
+        configuredAt = Date()
         activeUserId = userId?.isEmpty == false ? userId : nil
+        XpToastDiagnostics.log(
+            "configure uid=\(XpToastDiagnostics.shortUid(activeUserId)) repoUid=\(XpToastDiagnostics.shortUid(remoteReader.boundUserId)) gen=\(remoteReader.bindingGeneration) hasInitialSnapshot=\(remoteReader.hasReceivedInitialSnapshot ? 1 : 0) sealed=\(remoteReader.hasReceivedServerSnapshot ? 1 : 0) grants=\(remoteReader.grants.count)"
+        )
         guard activeUserId != nil else { return }
         scheduleRefresh()
     }
@@ -113,8 +152,11 @@ final class XpGainToastService: ObservableObject {
         acknowledgedLocalAwardKeys.removeAll()
         burstEvents.removeAll()
         rankProgressBaselineXp = nil
-        hasBaseline = false
+        hasLedgerBaseline = false
+        remoteBaselineKey = nil
+        configuredAt = nil
         pausedForRewardPopup = false
+        XpToastDiagnostics.log("reset signOut")
     }
 
     func dismissManually() {
@@ -148,11 +190,41 @@ final class XpGainToastService: ObservableObject {
 
         let catalog = catalogProvider.current
         let ledgerRows = (try? xpLedger.ledgerEvents(userId: userId)) ?? []
-        let grants = remoteReader.hasReceivedInitialSnapshot ? remoteReader.grants : []
+        let remoteGrants = remoteReader.grants
 
-        if !hasBaseline {
-            establishBaseline(ledgerRows: ledgerRows, grants: grants)
+        XpToastDiagnostics.log(
+            "refresh gen=\(remoteReader.bindingGeneration) sealed=\(remoteBaselineKey != nil ? 1 : 0) ledgerBaseline=\(hasLedgerBaseline ? 1 : 0) ledgerRows=\(ledgerRows.count) grants=\(remoteGrants.count) ackIds=\(acknowledgedIds.count)"
+        )
+
+        if !hasLedgerBaseline {
+            establishLedgerBaseline(ledgerRows: ledgerRows)
+            hasLedgerBaseline = true
         }
+
+        // The remote half, decided before either loop runs.
+        var mayPresentGrants = true
+        let repoUserId = remoteReader.boundUserId
+        if repoUserId != userId {
+            // The repository is stopped, or bound to another identity: absorb nothing (those ids do
+            // not belong to this epoch's ack set), present nothing. Fail closed.
+            XpToastDiagnostics.log(
+                "remote.skip reason=uid_mismatch svcUid=\(XpToastDiagnostics.shortUid(userId)) repoUid=\(XpToastDiagnostics.shortUid(repoUserId))"
+            )
+            mayPresentGrants = false
+        } else {
+            let key = "\(userId)#\(remoteReader.bindingGeneration)"
+            if remoteBaselineKey != key {
+                // Pre-seal absorption: whatever is in view is history, and the seal absorbs whatever
+                // the server adds on top of a partial cache. Only a server-confirmed snapshot seals.
+                absorbRemoteGrantHistory(
+                    remoteGrants,
+                    sealKey: remoteReader.hasReceivedServerSnapshot ? key : nil,
+                    catalog: catalog
+                )
+                mayPresentGrants = false
+            }
+        }
+        let grants = mayPresentGrants ? remoteGrants : []
 
         var newEvents: [XpGainToastIngestEvent] = []
         var sourceMix = Set<String>()
@@ -200,17 +272,30 @@ final class XpGainToastService: ObservableObject {
             sourceMix.insert("remote")
         }
 
+        // Traced after the loop so the loop above stays byte-identical to the pre-item-12 code.
+        XpToastDiagnostics.logNewRemoteGrants(
+            generation: remoteReader.bindingGeneration,
+            grants: grants,
+            newEvents: newEvents
+        )
+
         guard !newEvents.isEmpty else { return }
         presentBurst(newEvents: newEvents, sourceMix: sourceMix.sorted().joined(separator: "+"))
     }
 
-    private func establishBaseline(ledgerRows: [XpLedgerEvent], grants: [UserXpGrant]) {
+    /// The ledger half of the historical baseline. Verbatim from the pre-item-12 `establishBaseline`,
+    /// including the in-process provisional carve-out; never gated on anything remote.
+    private func establishLedgerBaseline(ledgerRows: [XpLedgerEvent]) {
+        var absorbed = 0
+        var skipped = 0
         for row in ledgerRows {
             // Never absorb provisional rows created in this process into the historical baseline.
             if row.status == .provisional, row.createdAt >= processLaunchDate {
+                skipped += 1
                 continue
             }
             acknowledgedIds.insert("ledger|\(row.id)")
+            absorbed += 1
             if row.xpDelta > 0 {
                 acknowledgedScopeKeys.insert(row.xpUniquenessKey)
                 if let awardKey = XpGainToastEligibility.localAwardKey(for: row) {
@@ -218,10 +303,41 @@ final class XpGainToastService: ObservableObject {
                 }
             }
         }
+        XpToastDiagnostics.log(
+            "ledgerBaseline absorbed=\(absorbed) rows=\(ledgerRows.count) skippedInProcessProvisional=\(skipped)"
+        )
+    }
+
+    /// The remote half. Every grant in view becomes history; `sealKey` non-nil (a server-confirmed
+    /// snapshot of the CURRENT binding) closes the watermark so later grants toast.
+    private func absorbRemoteGrantHistory(
+        _ grants: [UserXpGrant],
+        sealKey: String?,
+        catalog: ProgressionCatalog
+    ) {
+        var absorbed = 0
         for grant in grants {
-            acknowledgedIds.insert("grant|\(grant.grantId)")
+            if acknowledgedIds.insert("grant|\(grant.grantId)").inserted {
+                absorbed += 1
+            }
         }
-        hasBaseline = true
+        guard let sealKey else {
+            XpToastDiagnostics.log(
+                "remote.absorb gen=\(remoteReader.bindingGeneration) sealed=0 absorbed=\(absorbed) ackTotal=\(acknowledgedIds.count)"
+            )
+            return
+        }
+        remoteBaselineKey = sealKey
+        XpToastDiagnostics.log(
+            XpToastDiagnostics.sealLine(
+                generation: remoteReader.bindingGeneration,
+                userId: activeUserId,
+                absorbed: absorbed,
+                grants: grants,
+                catalog: catalog,
+                msSinceConfigure: configuredAt.map { Int(Date().timeIntervalSince($0) * 1000) } ?? -1
+            )
+        )
     }
 
     private func presentBurst(newEvents: [XpGainToastIngestEvent], sourceMix: String) {
@@ -261,6 +377,9 @@ final class XpGainToastService: ObservableObject {
         }
 
         let groupIds = aggregated.lines.map(\.id).joined(separator: ",")
+        XpToastDiagnostics.log(
+            "present lines=\(aggregated.lines.count) total=\(aggregated.totalXp) coalesced=\(coalesced ? 1 : 0) sourceMix=\(sourceMix) groupIds=\(groupIds) newLedger=\(newEvents.filter { $0.sourceId.hasPrefix("ledger|") }.count) newGrants=\(newEvents.filter { $0.sourceId.hasPrefix("grant|") }.count)"
+        )
         AnalyticsService.shared.log(
             .xpGainToastPresented(
                 lineCount: aggregated.lines.count,
