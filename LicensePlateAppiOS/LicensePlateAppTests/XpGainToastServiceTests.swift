@@ -751,4 +751,568 @@ struct XpGainToastServiceTests {
 
         #expect(service.presentation == nil)
     }
+
+    // MARK: - §3.1.1 item 14 — a mirror never announces an award this device already announced
+    //
+    // The join is the SERVER award scope: the grant carries it as `idempotencyKey`
+    // (progressionOnActivityEvent.ts:148-156) and the local row derives it
+    // (`XpGainToastEligibility.mirroredServerScopeKey`). Id-independent by construction, so it holds
+    // when the two sides disagree about the event id.
+
+    /// A bonus ledger row exactly as `XpReconciliationService.appendLocalFindBonusesIfAbsent` writes
+    /// it: provisional, `.provisionalDiscoveryXp`, global-scope sentinels, `itemId` = the server's
+    /// scope discriminator (regionId or dayKey).
+    private func bonusRow(
+        id: String,
+        userId: String = "u1",
+        reasonCode: XpReasonCode,
+        itemId: String,
+        xpDelta: Int,
+        sourceEventId: String = "evt-1",
+        status: XpLedgerStatus = .provisional,
+        createdAt: Date = .now
+    ) -> XpLedgerEvent {
+        XpLedgerEvent(
+            id: id,
+            userId: userId,
+            sessionId: XpLedgerGlobalScope.sessionId,
+            gameInstanceId: XpLedgerGlobalScope.gameInstanceId,
+            sourceEventId: sourceEventId,
+            sourceEventType: "region_found",
+            itemId: itemId,
+            grantKind: .provisionalDiscoveryXp,
+            status: status,
+            xpDelta: xpDelta,
+            reasonCode: reasonCode,
+            xpUniquenessKey: reasonCode == .lifetimeUniqueRegion
+                ? XpReconciliationService.lifetimeUniqueRegionKey(userId: userId, regionId: itemId)
+                : XpReconciliationService.firstFindOfDayKey(userId: userId, dayKey: itemId),
+            createdAt: createdAt,
+            metadata: [XpLedgerMetadataKey.originalDiscoveryEventId: sourceEventId]
+        )
+    }
+
+    private func scopedGrant(
+        grantId: String,
+        amount: Int,
+        reason: UserXpGrantReason,
+        sourceId: String,
+        idempotencyKey: String
+    ) -> UserXpGrant {
+        UserXpGrant(
+            grantId: grantId,
+            amount: amount,
+            reason: reason.rawValue,
+            sourceType: "activity_event",
+            sourceId: sourceId,
+            idempotencyKey: idempotencyKey
+        )
+    }
+
+    private func sealedService(
+        ledger: MockXpLedgerRepository,
+        remote: MockXpGainToastRemoteReader,
+        processLaunchDate: Date = Date()
+    ) -> XpGainToastService {
+        let service = XpGainToastService(
+            xpLedger: ledger,
+            remoteReader: remote,
+            processLaunchDate: processLaunchDate,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: "u1")
+        service.performImmediateRefresh()
+        return service
+    }
+
+    /// (1) The owner's "2 first finds of the day".
+    @Test func firstFindOfDayGrantDoesNotReToastAfterTheLocalRow() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(ledger: ledger, remote: remote)
+        #expect(service.presentation == nil)
+
+        try? ledger.append(
+            bonusRow(id: "fod-1", reasonCode: .firstFindOfDay, itemId: "2026-09-18", xpDelta: 10)
+        )
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == 10)
+
+        remote.grants = [
+            scopedGrant(
+                grantId: "g-fod",
+                amount: 10,
+                reason: .firstFindOfDay,
+                sourceId: "evt-1",
+                idempotencyKey: "first_find_of_day|v1|u1|2026-09-18"
+            )
+        ]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.lines.count == 1)
+        #expect(service.presentation?.lines.first?.id == "first_of_day")
+        #expect(service.presentation?.lines.first?.title == "xp.toast.group.first_of_day.single".localized(1))
+        #expect(service.presentation?.totalXp == 10)
+    }
+
+    /// (2) The owner's "2 new plate bonuses".
+    @Test func lifetimeUniqueRegionGrantDoesNotReToastAfterTheLocalRow() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(ledger: ledger, remote: remote)
+
+        try? ledger.append(
+            bonusRow(id: "lur-1", reasonCode: .lifetimeUniqueRegion, itemId: "TX", xpDelta: 20)
+        )
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == 20)
+
+        remote.grants = [
+            scopedGrant(
+                grantId: "g-lur",
+                amount: 20,
+                reason: .lifetimeUniqueRegion,
+                sourceId: "evt-1",
+                idempotencyKey: "lifetime_unique_region|v1|u1|TX"
+            )
+        ]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.lines.count == 1)
+        #expect(service.presentation?.lines.first?.id == "lifetime_unique")
+        #expect(service.presentation?.lines.first?.title == "xp.toast.group.lifetime_unique.single".localized(1))
+        #expect(service.presentation?.totalXp == 20)
+    }
+
+    /// (3) The late-competitive variant, and the reason this dedups on the SCOPE rather than on
+    /// `sourceId|reason`: the late finder's `region_found` is never written remotely — the server
+    /// authors `srvrej_<clientEventId>` (gameplayEventResolver.ts) and grants the bonuses off THAT
+    /// document — so the two event ids never match while the scope still does.
+    ///
+    /// Deliberately the LIFETIME-UNIQUE half of that find. The first-of-day half is the known
+    /// residual the owner filed as a server item: the rejection payload carries no `xpDayKey`, so the
+    /// server bills that scope under the UTC day of its own resolution and the two scope strings can
+    /// differ. Asserting suppression there would be a false green.
+    @Test func lateCompetitiveRejectionGrantIsSuppressedDespiteTheDivergentEventId() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(ledger: ledger, remote: remote)
+
+        try? ledger.append(
+            bonusRow(
+                id: "lur-late",
+                reasonCode: .lifetimeUniqueRegion,
+                itemId: "TX",
+                xpDelta: 20,
+                sourceEventId: "evt-1"
+            )
+        )
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == 20)
+
+        remote.grants = [
+            scopedGrant(
+                grantId: "g-lur-srvrej",
+                amount: 20,
+                reason: .lifetimeUniqueRegion,
+                sourceId: "srvrej_evt-1",
+                idempotencyKey: "lifetime_unique_region|v1|u1|TX"
+            )
+        ]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.lines.count == 1)
+        #expect(service.presentation?.totalXp == 20)
+    }
+
+    /// (4) Not a blanket reason exclusion: the bonus earned on ANOTHER device of this account still
+    /// announces here exactly once, because this device has no local row to have announced it.
+    @Test func bonusGrantWithNoLocalRowStillToastsOnce() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(ledger: ledger, remote: remote)
+
+        remote.grants = [
+            scopedGrant(
+                grantId: "g-lur-other-device",
+                amount: 20,
+                reason: .lifetimeUniqueRegion,
+                sourceId: "evt-other",
+                idempotencyKey: "lifetime_unique_region|v1|u1|CA"
+            )
+        ]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.lines.count == 1)
+        #expect(service.presentation?.lines.first?.id == "lifetime_unique")
+        #expect(service.presentation?.totalXp == 20)
+    }
+
+    /// (5) The half that is easiest to forget: a bonus row written before this process launched is
+    /// absorbed by the ledger baseline and never mapped, so the scope has to be registered there too
+    /// or the grant doubles after every relaunch.
+    @Test func baselineAbsorbedBonusRowSuppressesALaterGrant() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        try? ledger.append(
+            bonusRow(
+                id: "lur-old",
+                reasonCode: .lifetimeUniqueRegion,
+                itemId: "TX",
+                xpDelta: 20,
+                createdAt: Date(timeIntervalSince1970: 1_000)
+            )
+        )
+
+        let service = sealedService(ledger: ledger, remote: remote)
+        #expect(service.presentation == nil)
+
+        remote.grants = [
+            scopedGrant(
+                grantId: "g-lur",
+                amount: 20,
+                reason: .lifetimeUniqueRegion,
+                sourceId: "evt-1",
+                idempotencyKey: "lifetime_unique_region|v1|u1|TX"
+            )
+        ]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+    }
+
+    /// (6) ...but a VOIDED row is not an announcement. `voidLocalFindBonuses` leaves `xpDelta`
+    /// positive, so the baseline's `xpDelta > 0` branch alone would register a clawed-back award and
+    /// swallow the only announcement of a genuinely later grant for the same scope.
+    @Test func voidedBaselineBonusRowDoesNotSuppressALaterGrant() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        try? ledger.append(
+            bonusRow(
+                id: "lur-voided",
+                reasonCode: .lifetimeUniqueRegion,
+                itemId: "TX",
+                xpDelta: 20,
+                status: .voided,
+                createdAt: Date(timeIntervalSince1970: 1_000)
+            )
+        )
+
+        let service = sealedService(ledger: ledger, remote: remote)
+        #expect(service.presentation == nil)
+
+        remote.grants = [
+            scopedGrant(
+                grantId: "g-lur",
+                amount: 20,
+                reason: .lifetimeUniqueRegion,
+                sourceId: "evt-1",
+                idempotencyKey: "lifetime_unique_region|v1|u1|TX"
+            )
+        ]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.totalXp == 20)
+    }
+
+    /// (7) The symmetric direction. Two devices, one account: the iPhone's find grants
+    /// `first_find_of_day|v1|u1|D` and this device announces it from the grant; a find on THIS device
+    /// later the same day mints a local row for the same scope, and the server will not pay again.
+    @Test func localRowDoesNotReAnnounceAnAwardTheGrantAlreadyAnnounced() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(ledger: ledger, remote: remote)
+
+        remote.grants = [
+            scopedGrant(
+                grantId: "g-fod",
+                amount: 10,
+                reason: .firstFindOfDay,
+                sourceId: "evt-other-device",
+                idempotencyKey: "first_find_of_day|v1|u1|2026-09-18"
+            )
+        ]
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == 10)
+        service.dismissManually()
+
+        try? ledger.append(
+            bonusRow(id: "fod-local", reasonCode: .firstFindOfDay, itemId: "2026-09-18", xpDelta: 10)
+        )
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+    }
+
+    /// (8) The same direction across the item-12 seal: history absorbed pre-seal is still proof the
+    /// server has paid the scope, so a local row minted afterwards (reinstall, device transfer) must
+    /// not announce XP that will never be granted again.
+    @Test func grantAbsorbedPreSealSuppressesALaterLocalRow() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        remote.grants = [
+            scopedGrant(
+                grantId: "g-lur-history",
+                amount: 20,
+                reason: .lifetimeUniqueRegion,
+                sourceId: "evt-history",
+                idempotencyKey: "lifetime_unique_region|v1|u1|TX"
+            )
+        ]
+
+        let service = sealedService(ledger: ledger, remote: remote)
+        #expect(service.presentation == nil)
+
+        try? ledger.append(
+            bonusRow(id: "lur-reinstall", reasonCode: .lifetimeUniqueRegion, itemId: "TX", xpDelta: 20)
+        )
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+    }
+
+    /// (9) Two devices authoring the same completion event mint two `game_ended` activity events with
+    /// different ids; the server dedups by SCOPE, so exactly one grant exists and its `sourceId` is
+    /// the winning device's event id. On the losing device the award key never matches — only the
+    /// scope does.
+    @Test func completionGrantAuthoredUnderADifferentEventIdIsSuppressed() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(ledger: ledger, remote: remote)
+
+        let sessionId = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
+        let gameInstanceId = UUID(uuidString: "66666666-7777-8888-9999-AAAAAAAAAAAA")!
+        try? ledger.append(
+            XpLedgerEvent(
+                id: "ge-local",
+                userId: "u1",
+                sessionId: sessionId,
+                gameInstanceId: gameInstanceId,
+                sourceEventId: "evt-local",
+                sourceEventType: "game_ended",
+                itemId: XpReasonCode.gameEnded.rawValue,
+                grantKind: .tripCompletion,
+                status: .provisional,
+                xpDelta: 25,
+                reasonCode: .gameEnded,
+                xpUniquenessKey: "ge-local-key"
+            )
+        )
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == 25)
+
+        remote.grants = [
+            scopedGrant(
+                grantId: "g-game-ended",
+                amount: 25,
+                reason: .gameEnded,
+                sourceId: "evt-peer",
+                idempotencyKey: "game_ended|v1|u1|\(gameInstanceId.uuidString)"
+            )
+        ]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.lines.count == 1)
+        #expect(service.presentation?.lines.first?.id == "game_ended")
+        #expect(service.presentation?.totalXp == 25)
+    }
+
+    /// (10) The pre-existing `sourceId|reason` award key is still load-bearing: a grant whose
+    /// `idempotencyKey` matches no mirrored scope (the document-id fallback) is still suppressed when
+    /// the event ids agree.
+    @Test func completionAwardKeyStillSuppressesAGrantWithNoMatchingScope() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(ledger: ledger, remote: remote)
+
+        let sessionId = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
+        try? ledger.append(
+            XpLedgerEvent(
+                id: "te-local",
+                userId: "u1",
+                sessionId: sessionId,
+                gameInstanceId: XpLedgerGlobalScope.gameInstanceId,
+                sourceEventId: "evt-trip-end",
+                sourceEventType: "trip_ended",
+                itemId: XpReasonCode.tripEnded.rawValue,
+                grantKind: .tripCompletion,
+                status: .provisional,
+                xpDelta: 30,
+                reasonCode: .tripEnded,
+                xpUniquenessKey: "te-local-key"
+            )
+        )
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == 30)
+        service.dismissManually()
+
+        remote.grants = [
+            scopedGrant(
+                grantId: "g-trip-ended-doc-id",
+                amount: 30,
+                reason: .tripEnded,
+                sourceId: "evt-trip-end",
+                idempotencyKey: "g-trip-ended-doc-id"
+            )
+        ]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+    }
+
+    /// (11) The three reason-level exclusions are untouched.
+    @Test func baseDiscoveryAndReturnStreakGrantsAreStillExcluded() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(ledger: ledger, remote: remote)
+
+        remote.grants = [
+            scopedGrant(
+                grantId: "g-base",
+                amount: 10,
+                reason: .regionFoundBaseDiscovery,
+                sourceId: "evt-1",
+                idempotencyKey: "xp_scope|v1|u1|s1|g1|TX|base_region_discovery"
+            ),
+            scopedGrant(
+                grantId: "g-streak",
+                amount: 15,
+                reason: .returnStreakDaily,
+                sourceId: "2026-09-18",
+                idempotencyKey: "return_streak_daily|v1|u1|2026-09-18"
+            ),
+        ]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+        #expect(XpGainToastEligibility.mirroredServerScopeKey(
+            for: sampleLedgerRow(reasonCode: .soloNewDiscovery)
+        ) == nil)
+    }
+
+    /// (12) The mapping itself, byte-for-byte against `functions/src/progressionCore.ts:281-316`, and
+    /// exhaustive: every `XpReasonCode` not listed here must map to `nil`.
+    @Test func mirroredServerScopeKeyMatchesTheServerFormatForEveryMappedReason() {
+        let sessionId = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
+        let gameInstanceId = UUID(uuidString: "66666666-7777-8888-9999-AAAAAAAAAAAA")!
+
+        let expected: [XpReasonCode: String] = [
+            .lifetimeUniqueRegion: "lifetime_unique_region|v1|u1|TX",
+            .firstFindOfDay: "first_find_of_day|v1|u1|2026-09-18",
+            .gameEnded: "game_ended|v1|u1|\(gameInstanceId.uuidString)",
+            .gameFullClear: "game_full_clear|v1|u1|\(gameInstanceId.uuidString)",
+            .competitiveFirstPlaceFinish: "competitive_place|1|v1|u1|\(gameInstanceId.uuidString)",
+            .competitiveSecondPlace: "competitive_place|2|v1|u1|\(gameInstanceId.uuidString)",
+            .competitiveThirdPlace: "competitive_place|3|v1|u1|\(gameInstanceId.uuidString)",
+            .tripEnded: "trip_ended|v1|u1|\(sessionId.uuidString)",
+            .tripParticipation: "trip_participation|v1|u1|\(sessionId.uuidString)",
+            .tripCompetitiveFirstPlace: "trip_competitive_first|v1|u1|\(sessionId.uuidString)",
+        ]
+
+        for reason in XpReasonCode.allCases {
+            let row = scopeProbeRow(reason: reason, sessionId: sessionId, gameInstanceId: gameInstanceId)
+            #expect(
+                XpGainToastEligibility.mirroredServerScopeKey(for: row) == expected[reason],
+                "unexpected mirrored scope for \(reason.rawValue)"
+            )
+        }
+
+        // A completion reason on a row that is not a completion row, or whose scoping id is the
+        // global sentinel, has no server award to join against.
+        let sentinelTripEnded = XpLedgerEvent(
+            id: "sentinel",
+            userId: "u1",
+            sessionId: XpLedgerGlobalScope.sessionId,
+            gameInstanceId: XpLedgerGlobalScope.gameInstanceId,
+            sourceEventId: "evt",
+            sourceEventType: "trip_ended",
+            itemId: XpReasonCode.tripEnded.rawValue,
+            grantKind: .tripCompletion,
+            status: .provisional,
+            xpDelta: 30,
+            reasonCode: .tripEnded,
+            xpUniquenessKey: "k"
+        )
+        #expect(XpGainToastEligibility.mirroredServerScopeKey(for: sentinelTripEnded) == nil)
+
+        // …and the `grantKind == .tripCompletion` guard: a completion REASON on any other kind of
+        // row is not a completion award, even with a real game id.
+        let wrongKindGameEnded = XpLedgerEvent(
+            id: "wrong-kind",
+            userId: "u1",
+            sessionId: UUID(),
+            gameInstanceId: UUID(),
+            sourceEventId: "evt",
+            sourceEventType: "game_ended",
+            itemId: XpReasonCode.gameEnded.rawValue,
+            grantKind: .provisionalDiscoveryXp,
+            status: .final,
+            xpDelta: 25,
+            reasonCode: .gameEnded,
+            xpUniquenessKey: "k2"
+        )
+        #expect(XpGainToastEligibility.mirroredServerScopeKey(for: wrongKindGameEnded) == nil)
+    }
+
+    private func scopeProbeRow(
+        reason: XpReasonCode,
+        sessionId: UUID,
+        gameInstanceId: UUID
+    ) -> XpLedgerEvent {
+        let completionReasons: Set<XpReasonCode> = [
+            .gameEnded, .gameFullClear,
+            .competitiveFirstPlaceFinish, .competitiveSecondPlace, .competitiveThirdPlace,
+            .tripEnded, .tripParticipation, .tripCompetitiveFirstPlace,
+        ]
+        let isCompletion = completionReasons.contains(reason)
+        let itemId: String
+        switch reason {
+        case .firstFindOfDay: itemId = "2026-09-18"
+        case .lifetimeUniqueRegion: itemId = "TX"
+        default: itemId = isCompletion ? reason.rawValue : "TX"
+        }
+        return XpLedgerEvent(
+            id: "probe-\(reason.rawValue)",
+            userId: "u1",
+            sessionId: isCompletion ? sessionId : XpLedgerGlobalScope.sessionId,
+            gameInstanceId: isCompletion ? gameInstanceId : XpLedgerGlobalScope.gameInstanceId,
+            sourceEventId: "evt-probe",
+            sourceEventType: "probe",
+            itemId: itemId,
+            grantKind: isCompletion ? .tripCompletion : .provisionalDiscoveryXp,
+            status: .provisional,
+            xpDelta: 10,
+            reasonCode: reason,
+            xpUniquenessKey: "probe-key-\(reason.rawValue)"
+        )
+    }
+
+    /// (13) Identity-epoch replay. `configure` starts a new epoch and drops every ack set, and
+    /// `establishLedgerBaseline` refuses to absorb provisional rows created in this process — so a
+    /// mid-session rebind (FR-60 provision-at-consent, guest → registered link, FR-84 transfer) used
+    /// to re-toast rows the user had seen seconds earlier. Row ids survive the rebind
+    /// (`LocalPlayIdentityRepository.rebindLocalPlayIdentity` rewrites `userId` and
+    /// `xpUniquenessKey` in place), so the process-lifetime presented set can carve them out.
+    @Test func provisionalRowsPresentedBeforeAnIdentityRebindAreNotRePresented() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(ledger: ledger, remote: remote)
+
+        try? ledger.append(
+            bonusRow(id: "lur-inprocess", reasonCode: .lifetimeUniqueRegion, itemId: "TX", xpDelta: 20)
+        )
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == 20)
+        service.dismissManually()
+
+        // The rebind: rows keep their ids and take the new uid.
+        for index in ledger.stored.indices where ledger.stored[index].userId == "u1" {
+            ledger.stored[index].userId = "u2"
+        }
+        remote.boundUserId = "u2"
+        service.configure(userId: "u2")
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+    }
 }

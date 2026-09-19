@@ -66,6 +66,26 @@ final class XpGainToastService: ObservableObject {
     /// server grant mirroring the same award does not toast a second time. Keyed per award rather than
     /// blanket-skipped by reason: a peer whose device never wrote the local row still gets its toast.
     private var acknowledgedLocalAwardKeys = Set<String>()
+    /// §3.1.1 item 14 — the id-INDEPENDENT half of the dedup, in the local→remote direction.
+    /// SERVER award scopes (`XpGainToastEligibility.mirroredServerScopeKey`) this device has already
+    /// announced, or absorbed into the ledger baseline, from a LOCAL row. A grant whose
+    /// `idempotencyKey` is in here is the server mirroring an award this device already showed, so it
+    /// is acked and never enters `newEvents` (which also keeps the rank band's burst gain honest:
+    /// mirror XP is already inside the displayed total).
+    private var acknowledgedMirroredScopeKeys = Set<String>()
+    /// The same join in the remote→local direction: `idempotencyKey`s of grants absorbed pre-seal,
+    /// suppressed, or toasted. A local row that mirrors one of those scopes would announce XP the
+    /// server has already paid and already told this device about (the other device / reinstall case).
+    private var acknowledgedGrantScopeKeys = Set<String>()
+    /// PROCESS-lifetime, deliberately NOT cleared by `configure` or `resetForSignOut`: ledger row ids
+    /// this process has already presented. `configure` starts a new identity epoch and drops every ack
+    /// set, while `establishLedgerBaseline` refuses to absorb provisional rows created in THIS process
+    /// — so without this, a mid-session identity change (FR-60 provision-at-consent, guest → registered
+    /// link, FR-84 device transfer) re-toasted rows the user had already seen seconds earlier. Safe to
+    /// key on `id` because an identity rebind rewrites `userId` and `xpUniquenessKey` in place and
+    /// never the row id (`Repositories/LocalPlayIdentityRepository.swift:218-232`,
+    /// `XpLedgerRepository.repairKeysRetiredByIdentityRebind`).
+    private var presentedLedgerRowIds = Set<String>()
     private var burstEvents: [XpGainToastIngestEvent] = []
     private var rankProgressBaselineXp: Int?
     /// The LOCAL half of the baseline: sealed on the first refresh of an identity epoch, never
@@ -124,6 +144,8 @@ final class XpGainToastService: ObservableObject {
         acknowledgedIds.removeAll()
         acknowledgedScopeKeys.removeAll()
         acknowledgedLocalAwardKeys.removeAll()
+        acknowledgedMirroredScopeKeys.removeAll()
+        acknowledgedGrantScopeKeys.removeAll()
         burstEvents.removeAll()
         rankProgressBaselineXp = nil
         // A new identity epoch re-earns BOTH halves of the baseline.
@@ -150,6 +172,8 @@ final class XpGainToastService: ObservableObject {
         acknowledgedIds.removeAll()
         acknowledgedScopeKeys.removeAll()
         acknowledgedLocalAwardKeys.removeAll()
+        acknowledgedMirroredScopeKeys.removeAll()
+        acknowledgedGrantScopeKeys.removeAll()
         burstEvents.removeAll()
         rankProgressBaselineXp = nil
         hasLedgerBaseline = false
@@ -228,12 +252,37 @@ final class XpGainToastService: ObservableObject {
 
         var newEvents: [XpGainToastIngestEvent] = []
         var sourceMix = Set<String>()
+        var suppressedGrants = 0
+        var suppressedRows = 0
 
         for row in ledgerRows {
             let key = "ledger|\(row.id)"
             guard !acknowledgedIds.contains(key) else { continue }
             if row.status == .voided || row.xpDelta <= 0 {
                 acknowledgedIds.insert(key)
+                continue
+            }
+            // §3.1.1 item 14. Registered for every positive, non-voided row INDEPENDENT of whether
+            // the mapper produces a line: a row whose catalog group is missing or renamed still
+            // announces nothing, and its server mirror must still not announce it twice.
+            let mirroredScope = XpGainToastEligibility.mirroredServerScopeKey(for: row)
+            if let mirroredScope, acknowledgedMirroredScopeKeys.insert(mirroredScope).inserted {
+                XpToastDiagnostics.log(
+                    "ledger.scopeAck reason=\(row.reasonCode.rawValue) scope=\(XpToastDiagnostics.redactedScope(mirroredScope)) src=live"
+                )
+            }
+            // The symmetric direction: the server already granted this award and this device already
+            // saw the grant (another device of the account, or a reinstall's absorbed history). The
+            // local row would announce XP the server will not pay again.
+            if let mirroredScope, acknowledgedGrantScopeKeys.contains(mirroredScope) {
+                acknowledgedIds.insert(key)
+                // Handled for this process, exactly like a presented row: a mid-session identity
+                // change must not re-expose it (its award was already announced from the grant).
+                presentedLedgerRowIds.insert(row.id)
+                suppressedRows += 1
+                XpToastDiagnostics.log(
+                    "ledger.dedup row=\(row.id.suffix(8)) reason=\(row.reasonCode.rawValue) via=grantScope scope=\(XpToastDiagnostics.redactedScope(mirroredScope))"
+                )
                 continue
             }
             // Final mirrors of already-toasted provisional awards must not re-toast.
@@ -251,6 +300,7 @@ final class XpGainToastService: ObservableObject {
             if let awardKey = XpGainToastEligibility.localAwardKey(for: row) {
                 acknowledgedLocalAwardKeys.insert(awardKey)
             }
+            presentedLedgerRowIds.insert(row.id)
             newEvents.append(event)
             sourceMix.insert("ledger")
         }
@@ -258,9 +308,26 @@ final class XpGainToastService: ObservableObject {
         for grant in grants {
             let key = "grant|\(grant.grantId)"
             guard !acknowledgedIds.contains(key) else { continue }
+            // §3.1.1 item 14: seen once, in whatever way — suppressed, dropped or toasted.
+            acknowledgedGrantScopeKeys.insert(grant.idempotencyKey)
             // Already toasted from this device's local provisional row for the same award.
             if acknowledgedLocalAwardKeys.contains(XpGainToastEligibility.localAwardKey(for: grant)) {
                 acknowledgedIds.insert(key)
+                suppressedGrants += 1
+                XpToastDiagnostics.log(
+                    "remote.dedup idTail=\(grant.grantId.suffix(10)) reason=\(grant.reason) via=awardKey key=\(XpGainToastEligibility.localAwardKey(for: grant))"
+                )
+                continue
+            }
+            // §3.1.1 item 14: the same award, joined on the SERVER scope rather than on either
+            // side's event id. Acked here rather than mapped, so it never reaches `newEvents` and
+            // never moves the rank band by XP that is already inside the displayed total.
+            if acknowledgedMirroredScopeKeys.contains(grant.idempotencyKey) {
+                acknowledgedIds.insert(key)
+                suppressedGrants += 1
+                XpToastDiagnostics.log(
+                    "remote.dedup idTail=\(grant.grantId.suffix(10)) reason=\(grant.reason) via=scopeKey scope=\(XpToastDiagnostics.redactedScope(grant.idempotencyKey))"
+                )
                 continue
             }
             guard let event = XpGainToastSourceMapper.ingestEvent(from: grant, catalog: catalog) else {
@@ -278,6 +345,11 @@ final class XpGainToastService: ObservableObject {
             grants: grants,
             newEvents: newEvents
         )
+        if suppressedGrants > 0 || suppressedRows > 0 {
+            XpToastDiagnostics.log(
+                "dedup suppressedGrants=\(suppressedGrants) suppressedRows=\(suppressedRows) scopeAcks=\(acknowledgedMirroredScopeKeys.count) grantScopes=\(acknowledgedGrantScopeKeys.count)"
+            )
+        }
 
         guard !newEvents.isEmpty else { return }
         presentBurst(newEvents: newEvents, sourceMix: sourceMix.sorted().joined(separator: "+"))
@@ -289,8 +361,13 @@ final class XpGainToastService: ObservableObject {
         var absorbed = 0
         var skipped = 0
         for row in ledgerRows {
-            // Never absorb provisional rows created in this process into the historical baseline.
-            if row.status == .provisional, row.createdAt >= processLaunchDate {
+            // Never absorb provisional rows created in this process into the historical baseline —
+            // unless this process already PRESENTED them (§3.1.1 item 14). A mid-session identity
+            // change re-runs `configure`, and without the carve-out's carve-out the rows the user
+            // just saw toast a second time under the new uid.
+            if row.status == .provisional,
+               row.createdAt >= processLaunchDate,
+               !presentedLedgerRowIds.contains(row.id) {
                 skipped += 1
                 continue
             }
@@ -300,6 +377,17 @@ final class XpGainToastService: ObservableObject {
                 acknowledgedScopeKeys.insert(row.xpUniquenessKey)
                 if let awardKey = XpGainToastEligibility.localAwardKey(for: row) {
                     acknowledgedLocalAwardKeys.insert(awardKey)
+                }
+                // §3.1.1 item 14. Unlike the two lines above this one checks `status`: a VOIDED bonus
+                // row (clawed back by `XpReconciliationService.voidLocalFindBonuses`) keeps a positive
+                // `xpDelta`, and registering its scope after a relaunch would swallow the only
+                // announcement of a later, genuine server grant for that same scope.
+                if row.status != .voided,
+                   let scope = XpGainToastEligibility.mirroredServerScopeKey(for: row),
+                   acknowledgedMirroredScopeKeys.insert(scope).inserted {
+                    XpToastDiagnostics.log(
+                        "ledger.scopeAck reason=\(row.reasonCode.rawValue) scope=\(XpToastDiagnostics.redactedScope(scope)) src=baseline"
+                    )
                 }
             }
         }
@@ -317,6 +405,9 @@ final class XpGainToastService: ObservableObject {
     ) {
         var absorbed = 0
         for grant in grants {
+            // §3.1.1 item 14: absorbed history is still proof the server has paid this scope, so a
+            // local row mirroring it must not announce it (the reinstall / second-device direction).
+            acknowledgedGrantScopeKeys.insert(grant.idempotencyKey)
             if acknowledgedIds.insert("grant|\(grant.grantId)").inserted {
                 absorbed += 1
             }

@@ -42,6 +42,22 @@ enum XpToastDiagnostics {
         return String(value.prefix(6))
     }
 
+    /// §3.1.1 item 14. Server award scopes embed the uid — `<name>|v1|<uid>|<discriminator>`, and
+    /// `competitive_place|<n>|v1|<uid>|<gameInstanceId>` — so the segment right after `v1` is
+    /// replaced with `shortUid` before anything is printed. Every grant the server writes carries
+    /// its scope as `idempotencyKey`; should a document ever lack it, the repository falls back to
+    /// the document id (`activity|<eventId>|<uid>|<scope…>`), which embeds the uid a second time
+    /// ahead of the `v1` segment — that shape, and anything without a `v1` segment, prints a tail.
+    static func redactedScope(_ scope: String) -> String {
+        var parts = scope.split(separator: "|", omittingEmptySubsequences: false).map(String.init)
+        guard parts.first != "activity",
+              let versionIndex = parts.firstIndex(of: "v1"), versionIndex + 1 < parts.count else {
+            return "…\(scope.suffix(12))"
+        }
+        parts[versionIndex + 1] = shortUid(parts[versionIndex + 1])
+        return parts.joined(separator: "|")
+    }
+
     static func sealLine(
         generation: Int,
         userId: String?,
@@ -84,7 +100,7 @@ enum XpToastDiagnostics {
         let fresh = grants.filter { newGrantIds.contains($0.grantId) }
         for grant in fresh.prefix(20) {
             // Grant ids embed the full uid; log a tail, like `shortUid` logs a head.
-            log("remote.new gen=\(generation) idTail=\(grant.grantId.suffix(10)) reason=\(grant.reason) amount=\(grant.amount)")
+            log("remote.new gen=\(generation) idTail=\(grant.grantId.suffix(10)) reason=\(grant.reason) amount=\(grant.amount) idem=\(redactedScope(grant.idempotencyKey))")
         }
         if fresh.count > 20 {
             log("remote.new (+\(fresh.count - 20) more)")
