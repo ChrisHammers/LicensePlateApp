@@ -496,8 +496,9 @@ struct XpGainToastServiceTests {
         #expect(service.presentation == nil)
     }
 
-    /// A denied or failed listen sets `hasReceivedInitialSnapshot` and leaves the seal closed
-    /// (XpGrantRemoteRepository's error branch). It is not evidence about the server's grant set.
+    /// A denied or failed listen leaves the seal closed — it is not evidence about the server's
+    /// grant set. (The repository no longer sets `hasReceivedInitialSnapshot` on an error either,
+    /// `ListenerRebindTests`; the service must stay indifferent to that flag regardless.)
     @Test func listenerErrorDoesNotSettleGrantBaseline() async {
         let ledger = MockXpLedgerRepository()
         let remote = MockXpGainToastRemoteReader()

@@ -10,9 +10,10 @@
 //   • REMOTE (§3.1.1 item 12, 2026-09-16): the historical line for remote grants is NOT "the first
 //     refresh" but "the first SERVER-CONFIRMED snapshot of this listener binding". Until that seal
 //     lands, every grant in view is absorbed silently; after it, every grant is a real gain.
-//     `hasReceivedInitialSnapshot` is the wrong gate and is now only traced, never obeyed: the
-//     repository sets it on an error callback too, and Firestore raises an empty from-cache snapshot
-//     as soon as it goes offline, so it means "a callback happened", not "a snapshot arrived".
+//     `hasReceivedInitialSnapshot` is the wrong gate and is now only traced, never obeyed:
+//     Firestore raises an empty from-cache snapshot as soon as it goes offline, so it means "a
+//     snapshot arrived, cache or server", not "the server confirmed it". (Until 2026-09-18 the
+//     repository also set it on an error callback; an errored listen now sets neither flag.)
 //     The seal is keyed `<uid>#<bindingGeneration>` so a rebind (reinstall, sign-in, FR-84 device
 //     transfer, sign-out/in) re-earns it, and the service fails closed while the repository is
 //     bound to another uid. The fix deliberately does NOT live at the RootView call sites:
@@ -31,9 +32,10 @@ import Foundation
 @MainActor
 protocol XpGainToastRemoteReading: AnyObject {
     var grants: [UserXpGrant] { get }
-    /// "A callback happened." Kept because XpDisplayedTotalResolver / XpProgressViewModel /
-    /// ProgressionXpDriftAfterSyncReporter still key their verified totals off it; this service
-    /// only traces it. Deliberately given NO protocol-extension default alongside the three below —
+    /// "A snapshot arrived, cache or server" — never an error callback. Kept because
+    /// XpDisplayedTotalResolver / XpProgressViewModel / ProgressionXpDriftAfterSyncReporter still
+    /// key their verified totals off it; this service only traces it.
+    /// Deliberately given NO protocol-extension default alongside the three below —
     /// a compile error in a future test double is the safe failure, a silently-wrong default is not.
     var hasReceivedInitialSnapshot: Bool { get }
     /// "The server confirmed a snapshot of the CURRENT binding." The remote history line.
