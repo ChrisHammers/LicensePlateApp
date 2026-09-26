@@ -120,6 +120,9 @@ final class LocalUserDataPurgeService {
         defaults.removeObject(forKey: Self.pendingAutoRecapDefaultsKey)
         defaults.removeObject(forKey: Self.returnStreakReminderPendingOpenKey)
         ReturnStreakService.shared.clearLocalState(forUserId: oldUserId)
+        // §3.1.1 item 15: the purge deletes the local achievement records, so leaving the
+        // already-celebrated marks behind would silence an achievement the player re-earns.
+        RewardDeliveryOutbox.shared.reset(userId: oldUserId)
     }
 
     // MARK: - Memory
@@ -129,6 +132,11 @@ final class LocalUserDataPurgeService {
         ProgressionXpDriftAfterSyncReporter.shared.resetForSignOut()
         XpGrantReconcileService.shared.resetForSignOut()
         AchievementUnlockCelebrationService.shared.resetForSignOut()
+        // §3.1.1 item 15 (2026-09-19): a purge, unlike an identity change, also deletes the local
+        // achievement rows and the uid's outbox marks — so the in-process "already shown" ledger
+        // has to go with them, or a re-earned id stays muted until the app is killed. This is the
+        // ONLY caller; `resetForSignOut` deliberately leaves the ledger alone.
+        AchievementUnlockCelebrationService.shared.resetProcessPresentationsForAccountPurge()
         AchievementUnlockSyncService.shared.resetForSignOut()
         ReturnStreakDailyXpClaimService.shared.resetForSignOut()
         ChildRestrictedDataRecoveryService.shared.resetForSignOut()

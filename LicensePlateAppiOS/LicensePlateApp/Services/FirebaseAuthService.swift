@@ -675,6 +675,13 @@ class FirebaseAuthService: ObservableObject {
             previousUserId: previousUserId,
             newUserId: newUserId
         ) else { return }
+        // §3.1.1 item 15: the celebration marks are UserDefaults keyed by uid, so they are orphaned
+        // by the rebind the same way the streak is — and an orphaned mark means the rank banner and
+        // the unlock popups the player already saw replay under the new uid. Deliberately ABOVE the
+        // `do`: it depends on nothing SwiftData does, and the one failure that matters (the
+        // `rebindLocalPlayIdentity` throw, e.g. `noModelContext`) would otherwise skip it and leave
+        // exactly the orphaned marks this line exists to prevent. Moving marks is harmless.
+        RewardDeliveryOutbox.shared.rebind(from: previousUserId, to: newUserId)
         do {
             // Same `ModelContext` this service saves the `AppUser` through, so the rebind and
             // the identity swap share one transaction boundary — and so the rebind still
