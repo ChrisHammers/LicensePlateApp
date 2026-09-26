@@ -47,7 +47,7 @@
  *     npx vitest run --config vitest.rules.config.ts
  */
 
-import { beforeAll, afterAll, beforeEach, describe, it } from "vitest";
+import { beforeAll, afterAll, beforeEach, describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
@@ -58,6 +58,7 @@ import {
 } from "@firebase/rules-unit-testing";
 import {
   collection,
+  collectionGroup,
   deleteDoc,
   deleteField,
   doc,
@@ -1962,5 +1963,189 @@ describe("FR-84: device transfer codes and the custom-token provider", () => {
     it("cannot read a device transfer code, even for itself", async () => {
       await assertFails(getDoc(doc(customToken("famkid"), "device_transfer_codes/t1")));
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// §3.1.1 item 19 — account-scoped trip discovery
+// ---------------------------------------------------------------------------
+
+/**
+ * The first recursive-wildcard block in `firestore.rules`:
+ *
+ *     match /{path=**}/members/{memberId} {
+ *       allow read: if isSignedIn() && resource.data.memberUserId == uid();
+ *       allow create, update, delete: if false;
+ *     }
+ *
+ * It authorizes exactly one query — `collectionGroup("members").where("memberUserId","==",me)`
+ * — which is how a trip finally follows an account to a second device. Three things have to
+ * stay true for that to be safe, and each has tests below:
+ *
+ *  1. THE FILTER IS THE SECURITY PROPERTY. `resource.data.memberUserId == uid()` is evaluated
+ *     per document, so an UNFILTERED collection-group query, or one naming another uid, is
+ *     denied outright. There is no enumeration.
+ *  2. THE WILDCARD IS PATH-AGNOSTIC, so it is also evaluated against
+ *     `families/{familyId}/members/{memberId}`. Family member docs carry no `memberUserId`
+ *     (`functions/src/family.ts`) and the field is deliberately NOT named `userId`, which is
+ *     the repo convention elsewhere — a family member doc carrying `userId` is still
+ *     unreadable through the block, and that is the assertion documenting the name.
+ *  3. THE WRITE SIDE MUST NEVER BE RELAXED — and this block does NOT enforce that. Firestore
+ *     rules union their allow expressions and have no deny, so the `allow create, update,
+ *     delete: if false` in the block contributes nothing against a permissive rule elsewhere.
+ *     What actually keeps the read rule safe is a standing invariant: every `members` write
+ *     path in this file is server-only, so no client can forge `memberUserId`. The write
+ *     denials below pin the invariant while it holds (on the trip path, the family path and an
+ *     arbitrary third path); they would NOT catch someone adding a permissive rule under a new
+ *     `members` collection. The second half of the invariant — that no document outside
+ *     `trip_sessions/{id}/members` may carry `memberUserId` — has an honest positive pin below:
+ *     a seeded doc at an arbitrary path carrying `memberUserId` IS readable by that uid. That
+ *     test documents the real behaviour, and it is the one that would fail loudly if anyone
+ *     came to believe the wildcard's write denials are a containment boundary.
+ */
+describe("item 19: collection-group trip discovery on members.memberUserId", () => {
+  beforeEach(async () => {
+    await seed({
+      // Two of MINE (one created, one joined) and one that is not.
+      "trip_sessions/mine1": { name: "Solo", createdBy: "me" },
+      "trip_sessions/mine1/members/me": { role: "owner", memberUserId: "me" },
+      "trip_sessions/mine2": { name: "Joined", createdBy: "other" },
+      "trip_sessions/mine2/members/me": { role: "member", memberUserId: "me" },
+      "trip_sessions/mine2/members/other": { role: "owner", memberUserId: "other" },
+      "trip_sessions/theirs": { name: "Not mine", createdBy: "other" },
+      "trip_sessions/theirs/members/other": { role: "owner", memberUserId: "other" },
+      // The other `members` collection in the database. `stranger` is NOT in fam1, so the
+      // path-scoped family rule cannot be what denies them — only the wildcard is in play.
+      "families/fam1": { name: "Fam", status: "active" },
+      "families/fam1/members/famkid": { role: "scout", userId: "stranger" },
+    });
+  });
+
+  it("allows a signed-in user to query their OWN membership across every trip", async () => {
+    const snap = await assertSucceeds(
+      getDocs(
+        query(collectionGroup(registered("me"), "members"), where("memberUserId", "==", "me"))
+      )
+    );
+    // Only their own rows come back — never a co-member's, never a family doc.
+    expect(
+      (snap as { docs: { ref: { path: string } }[] }).docs.map((d) => d.ref.path).sort()
+    ).toEqual(["trip_sessions/mine1/members/me", "trip_sessions/mine2/members/me"]);
+  });
+
+  it("denies the UNFILTERED collection-group query — the where clause IS the control", async () => {
+    await assertFails(getDocs(collectionGroup(registered("me"), "members")));
+  });
+
+  it("denies the same query filtered on ANOTHER user's uid", async () => {
+    await assertFails(
+      getDocs(
+        query(
+          collectionGroup(registered("me"), "members"),
+          where("memberUserId", "==", "other")
+        )
+      )
+    );
+  });
+
+  it("denies a direct get of a member doc that names someone else", async () => {
+    await assertFails(getDoc(doc(registered("me"), "trip_sessions/theirs/members/other")));
+  });
+
+  it("denies an anonymous-but-unauthenticated caller outright", async () => {
+    await assertFails(
+      getDocs(
+        query(
+          collectionGroup(testEnv.unauthenticatedContext().firestore() as unknown as Firestore, "members"),
+          where("memberUserId", "==", "me")
+        )
+      )
+    );
+  });
+
+  /**
+   * The assertion that documents the field NAME. `userId` is this repo's convention
+   * (participant_prefs.userId, private.userId), and had the field been called that, a family
+   * member doc carrying a `userId` would have become self-readable through this block by
+   * accident. It carries one here deliberately, and is still denied.
+   */
+  it("does not make a family member doc readable, even one carrying a userId field", async () => {
+    await assertFails(getDoc(doc(registered("stranger"), "families/fam1/members/famkid")));
+    const snap = await assertSucceeds(
+      getDocs(
+        query(
+          collectionGroup(registered("stranger"), "members"),
+          where("memberUserId", "==", "stranger")
+        )
+      )
+    );
+    expect((snap as { docs: unknown[] }).docs).toHaveLength(0);
+  });
+
+  it("denies client CREATES under any members subcollection, with or without a forged field", async () => {
+    const forged = { role: "owner", memberUserId: "me" };
+    await assertFails(setDoc(doc(registered("me"), "trip_sessions/fresh/members/me"), forged));
+    await assertFails(setDoc(doc(registered("me"), "families/fam1/members/me"), forged));
+    // An arbitrary third path. This one passes by DEFAULT DENY — no rule permits it — not
+    // because the wildcard block denies writes; rules union allows and cannot deny. It pins
+    // the standing invariant (no client write path under any `members` collection) for as long
+    // as the invariant holds, and would NOT catch a permissive rule added elsewhere later.
+    await assertFails(setDoc(doc(registered("me"), "widgets/w1/members/me"), forged));
+  });
+
+  /**
+   * THE HONEST PIN, and the counterpart to the denial test above. The wildcard is
+   * path-agnostic, so the read rule is satisfied by ANY document under ANY collection named
+   * `members` that carries `memberUserId == me` — not only by trip member docs. The denial
+   * test above passes today by DEFAULT DENY (no rule anywhere permits that create), which is
+   * the invariant that makes the feature safe; it is not something this block enforces, since
+   * rules union allow expressions and have no deny.
+   *
+   * This asserts what the rules actually do, so the invariant has to be maintained where it
+   * really lives: no rule may ever let a client write under a `members` collection, and no
+   * server code may ever stamp `memberUserId` outside `trip_sessions/{id}/members`.
+   */
+  it("DOCUMENTS THE REAL BEHAVIOUR: any doc anywhere carrying memberUserId == me is readable", async () => {
+    // Written with rules disabled — no client can create this today, which is the point.
+    await seed({ "widgets/w1/members/forged": { memberUserId: "me" } });
+
+    await assertSucceeds(getDoc(doc(registered("me"), "widgets/w1/members/forged")));
+    const snap = await assertSucceeds(
+      getDocs(
+        query(collectionGroup(registered("me"), "members"), where("memberUserId", "==", "me"))
+      )
+    );
+    expect(
+      (snap as { docs: { ref: { path: string } }[] }).docs.map((d) => d.ref.path)
+    ).toContain("widgets/w1/members/forged");
+
+    // Still scoped to the caller: the same forged doc is invisible to anyone else.
+    await assertFails(getDoc(doc(registered("stranger"), "widgets/w1/members/forged")));
+  });
+
+  it("denies client UPDATES and DELETES of an existing member doc, including one's own", async () => {
+    await assertFails(
+      updateDoc(doc(registered("me"), "trip_sessions/mine1/members/me"), {
+        memberUserId: "other",
+      })
+    );
+    await assertFails(
+      updateDoc(doc(registered("me"), "trip_sessions/mine1/members/me"), { role: "member" })
+    );
+    await assertFails(deleteDoc(doc(registered("me"), "trip_sessions/mine1/members/me")));
+  });
+
+  it("REGRESSION: the path-scoped roster read still works for a member and still fails for a stranger", async () => {
+    // What TripInviteRepository's roster listener needs. A collection-group query is NOT
+    // authorized by this block, which is why the wildcard had to be added beside it.
+    await assertSucceeds(getDoc(doc(registered("me"), "trip_sessions/mine2/members/other")));
+    await assertSucceeds(getDocs(collection(registered("me"), "trip_sessions/mine2/members")));
+    await assertFails(getDocs(collection(registered("stranger"), "trip_sessions/mine2/members")));
+  });
+
+  it("REGRESSION: trip_sessions/{id} get is unchanged — creator and member yes, stranger no", async () => {
+    await assertSucceeds(getDoc(doc(registered("other"), "trip_sessions/theirs")));
+    await assertSucceeds(getDoc(doc(registered("me"), "trip_sessions/mine2")));
+    await assertFails(getDoc(doc(registered("stranger"), "trip_sessions/mine1")));
   });
 });

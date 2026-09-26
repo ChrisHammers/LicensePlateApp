@@ -19,6 +19,7 @@ import {
   loadParticipationDefaultsForUser,
   seedParticipantPrefsIfNeeded,
 } from "./tripParticipantPrefs";
+import { tripMemberDocFields } from "./tripRosterWrites";
 
 const db = admin.firestore();
 
@@ -93,13 +94,7 @@ async function ensureOwnerMemberIfCreatorPayload(
       "Not a member of this trip session"
     );
   }
-  await memberRef.set(
-    {
-      role: "owner",
-      joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
+  await memberRef.set(tripMemberDocFields({ userId, role: "owner" }), { merge: true });
 }
 
 /**
@@ -123,13 +118,7 @@ async function ensureOwnerMemberIfTripDocCreatedByMatches(
   if (!createdBy || createdBy !== userId) {
     return;
   }
-  await memberRef.set(
-    {
-      role: "owner",
-      joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
+  await memberRef.set(tripMemberDocFields({ userId, role: "owner" }), { merge: true });
 }
 
 async function assertTripMember(sessionId: string, userId: string): Promise<void> {

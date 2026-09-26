@@ -331,6 +331,12 @@ struct ContentView: View {
                 // profile-merge handler's transition gate skips those, so the posture
                 // edge is the trigger that keeps the banner consistent with the gates.
                 refreshChildFamilyPrompt()
+                // §3.1.1 item 19: this is also the edge on which the DISCOVERY gate becomes
+                // decidable. On a cold or weak first launch the four re-assert hooks all fire
+                // while the child posture is still unresolved, discovery fails closed, and
+                // nothing re-evaluates it — the travel log would stay empty for the whole
+                // session. Re-asserting here is idempotent: a bound channel is left alone.
+                TripCanonicalRemoteSyncService.shared.reassertTripCloudChannels(userId: currentUserId)
             }
             .onChange(of: isShowingCreateSheet) { _, isShowing in
                 handleCreateSheetVisibilityChange(isShowing)
@@ -396,7 +402,7 @@ struct ContentView: View {
         // may have ended while this device was away. Re-asserting is a no-op for every session
         // that still holds a live registration.
         TripEndSyncDiagnostics.log("trigger: foreground")
-        TripCanonicalRemoteSyncService.shared.startIncrementalListeningForLocalSessions(userId: currentUserId)
+        TripCanonicalRemoteSyncService.shared.reassertTripCloudChannels(userId: currentUserId)
         returnStreakViewModel.refresh()
         ReturnStreakReminderService.shared.logReminderOpenedIfNeeded(userId: currentUserId)
         Task {
@@ -485,7 +491,7 @@ struct ContentView: View {
         // identity's are retired first — this is also what tears them down on sign-out.
         TripEndSyncDiagnostics.log("trigger: identity settled → \(newUserId ?? "nil")")
         TripCanonicalRemoteSyncService.shared.removeAllIncrementalListeners()
-        TripCanonicalRemoteSyncService.shared.startIncrementalListeningForLocalSessions(userId: newUserId)
+        TripCanonicalRemoteSyncService.shared.reassertTripCloudChannels(userId: newUserId)
         if let newUserId, !newUserId.isEmpty {
             pendingTripsViewModel.loadIfNeeded()
         } else {
@@ -545,6 +551,13 @@ struct ContentView: View {
               mergedIds.contains(currentUserId) else {
             return
         }
+        // §3.1.1 item 19: a self-profile merge is the delivery point of the fresh
+        // `users/{uid}.isChildAccount` read, i.e. the moment the DISCOVERY gate stops being
+        // "unresolved". It must be consulted BEFORE the family-transition early-return below,
+        // which skips exactly the no-family-edge resolutions (offline device coming online,
+        // fresh device) that discovery was blocked on. Idempotent and cheap: a bound channel
+        // short-circuits, a blocked one stays blocked.
+        TripCanonicalRemoteSyncService.shared.reassertTripCloudChannels(userId: currentUserId)
         // Only act on an actual change. A self-profile snapshot arrives for any write to
         // the doc, and re-asserting listeners or rewriting @State on every one of them
         // churns this view's body — which re-evaluates whatever sheet is on screen,
@@ -572,7 +585,7 @@ struct ContentView: View {
     private func handleTripHydrationSignal() {
         activeTripsListViewModel.load(userId: currentUserId)
         TripEndSyncDiagnostics.log("trigger: hydration signal")
-        TripCanonicalRemoteSyncService.shared.startIncrementalListeningForLocalSessions(userId: currentUserId)
+        TripCanonicalRemoteSyncService.shared.reassertTripCloudChannels(userId: currentUserId)
     }
 
     private func handleHomeOnAppear() {
@@ -655,7 +668,7 @@ struct ContentView: View {
         // still holds as live, not just the ones the user opens. Re-asserted on foreground and
         // on identity settle below — a trip can end while this device sits on Home.
         TripEndSyncDiagnostics.log("trigger: launch (bootstrapHomeScreen)")
-        TripCanonicalRemoteSyncService.shared.startIncrementalListeningForLocalSessions(userId: currentUserId)
+        TripCanonicalRemoteSyncService.shared.reassertTripCloudChannels(userId: currentUserId)
         returnStreakViewModel.bind(userId: currentUserId)
         await ReturnStreakReminderService.shared.refreshScheduleIfNeeded(userId: currentUserId)
         for item in activeTripsListViewModel.items where item.session.status == .active {

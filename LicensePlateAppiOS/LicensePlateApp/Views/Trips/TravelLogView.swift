@@ -76,6 +76,12 @@ struct TravelLogView: View {
                 viewModel.loadEntries()
                 viewModel.onScreenAppeared()
             }
+            // §3.1.1 item 19: account-scoped discovery can restore trips while this sheet is
+            // already open. `loadEntries` ran only from `onAppear`, so a restore in flight
+            // looked like nothing happening until the sheet was closed and reopened.
+            .onReceive(TripCanonicalRemoteSyncService.shared.hydrationSignal) { _ in
+                viewModel.loadEntries()
+            }
             .alert("Error".localized, isPresented: Binding(
                 get: { viewModel.summaryErrorMessage != nil && viewModel.presentsSummaryInTravelLog },
                 set: { if !$0 { viewModel.summaryErrorMessage = nil } }

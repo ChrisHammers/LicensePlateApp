@@ -103,6 +103,15 @@
       ]
     },
     {
+      "collectionGroup": "members",
+      "fieldPath": "memberUserId",
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" },
+        { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }
+      ]
+    },
+    {
       "collectionGroup": "participant_prefs",
       "fieldPath": "userId",
       "indexes": [

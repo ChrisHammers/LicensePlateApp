@@ -457,6 +457,57 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // ACCOUNT-SCOPED TRIP DISCOVERY (§3.1.1 item 19)
+    //
+    // `trip_sessions/{id}/members/{uid}` is the membership authority, but Firestore cannot
+    // query by document id across a collection group, so a trip could never follow an account
+    // to a second device. Member docs now carry their own id as `memberUserId`
+    // (`functions/src/tripRosterWrites.ts`), and this block authorizes exactly one query:
+    //
+    //     collectionGroup("members").where("memberUserId", "==", <my uid>)
+    //
+    // THE FILTER IS THE SECURITY PROPERTY, NOT A CONVENIENCE. `resource.data.memberUserId ==
+    // uid()` is evaluated per document, so a query WITHOUT that where-clause — or with another
+    // user's uid in it — is denied in full. There is no way to enumerate the collection group.
+    //
+    // NO READ IS WIDENED. Anyone who satisfies this block is by definition a member of that
+    // trip and could already read its entire roster under the path-scoped block above, which
+    // stays exactly as it is (it is what authorizes the invite roster listener, and a
+    // path-scoped rule does not authorize a collection-group query).
+    //
+    // THIS IS THE FIRST RECURSIVE WILDCARD IN THIS FILE, and rule matches union permissively,
+    // so it is ALSO evaluated against `families/{familyId}/members/{memberId}` below — and
+    // against any future subcollection named `members`, anywhere. Family member docs carry
+    // `{role, permissions, joinedAt, updatedAt, isChild?}` and no `memberUserId`
+    // (`functions/src/family.ts`), so the condition is unsatisfiable for them — and the field
+    // is deliberately NOT named `userId` (the repo convention elsewhere) so that a future
+    // user-id stamp on a family member doc cannot silently open it.
+    //
+    // TWO STANDING INVARIANTS KEEP THIS SAFE, AND NEITHER IS ENFORCED BY THE LINES BELOW.
+    // Firestore rules UNION their allow expressions and have no deny: a block that evaluates
+    // to false contributes nothing, so `allow create, update, delete: if false` here cannot
+    // stop a rule elsewhere from permitting a write. It is documentation of the invariant, not
+    // its enforcement. The invariants are:
+    //
+    //   (a) EVERY `members` WRITE PATH IS SERVER-ONLY. Both `members` collections in this file
+    //       are client write:false today (the path-scoped trip block above and the family block
+    //       below). If a future rule ever lets a client create a doc under a collection named
+    //       `members`, that client can mint `memberUserId == their own uid` and read it back
+    //       through this block. The read rule is only as safe as that write surface.
+    //   (b) NO DOCUMENT OUTSIDE `trip_sessions/*/members` MAY EVER CARRY `memberUserId`. Any
+    //       document that does becomes readable by the uid it names, wherever it lives. If you
+    //       are adding this field somewhere new, you are making that document self-readable.
+    //
+    // `functions/rulesTests/firestoreRules.test.ts` pins both: the write denial on the trip
+    // path, the family path and an arbitrary third path (which today is a default deny, so it
+    // pins (a) only as long as (a) holds), and — as the honest counterpart — that a document
+    // at an arbitrary path carrying `memberUserId` IS readable by that uid, which is what
+    // (b) exists to prevent.
+    match /{path=**}/members/{memberId} {
+      allow read: if isSignedIn() && resource.data.memberUserId == uid();
+      allow create, update, delete: if false;
+    }
+
     // Trip canonical games & events (read by members; writes via Cloud Functions only)
     match /trip_sessions/{sessionId}/games/{gameId} {
       allow read: if isSignedIn() && isTripSessionMember(sessionId, uid());

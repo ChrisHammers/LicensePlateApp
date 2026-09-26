@@ -11,16 +11,23 @@
  *
  * ## Query strategy
  *
- * Trip subcollections are keyed by uid (`members/{uid}`) rather than carrying a queryable uid
- * field, so there is no single query that finds every session the user touched. Instead:
+ * Trip subcollections are keyed by uid (`members/{uid}`), so for most of this module's life
+ * membership itself was un-queryable and there was no single query that found every session the
+ * user touched. §3.1.1 item 19 changed that: member docs now carry their own id as
+ * `memberUserId` (`tripRosterWrites.ts`), indexed at collection-group scope. Discovery uses it
+ * alongside the older signals rather than instead of them — the older ones still reach sessions
+ * the user has already LEFT, where no member doc survives.
  *
  * 1. **Discover** the affected session ids with collection-group queries over the fields that
- *    *are* queryable — `activity_events.actorId`, `activity_events.payload.participantId`
- *    (covers events another member wrote *about* this user, e.g. an owner kick), and
- *    `participant_prefs.userId` — plus `trip_sessions.createdBy` / `.canonicalEndedBy` and the
- *    user's `trip_invites`. Every membership path writes at least one of these: joining writes a
- *    `participant_joined` event with `actorId = uid`, and trip creation stamps `createdBy`.
- *    (Collection-group scope needs explicit `fieldOverrides` — see firestore.indexes.json.)
+ *    *are* queryable — `members.memberUserId`, `activity_events.actorId`,
+ *    `activity_events.payload.participantId` (covers events another member wrote *about* this
+ *    user, e.g. an owner kick), and `participant_prefs.userId` — plus
+ *    `trip_sessions.createdBy` / `.canonicalEndedBy` and the user's `trip_invites`. Every
+ *    membership path writes at least one of these: joining writes a `participant_joined` event
+ *    with `actorId = uid`, and trip creation stamps `createdBy`. The `members` query is what
+ *    stops that invariant from being load-bearing: once the user can SEE a trip because their
+ *    member doc names them, deletion and FR-61 review must be able to reach it by the same
+ *    fact. (Collection-group scope needs explicit `fieldOverrides` — see firestore.indexes.json.)
  * 2. **Sweep** each discovered session directly by doc id (`members/{uid}` etc.), which needs no
  *    index at all, and page its `activity_events` to rewrite the ones naming the uid.
  * 3. **Sweep** the flat collections by field equality (`invites`, `trip_invites`, `share_codes`,
@@ -45,7 +52,11 @@ import {
   deidentifyEventFields,
   deidentifySessionFields,
 } from "./accountDeletionDeidentifyCore";
-import { endLiveTripSession, isLiveTripSessionData } from "./tripRosterWrites";
+import {
+  endLiveTripSession,
+  isLiveTripSessionData,
+  TRIP_MEMBER_USER_ID_FIELD,
+} from "./tripRosterWrites";
 
 /** Stay under Firestore's 500-op batch cap (mirrors accountDeletion.ts). */
 const DEIDENTIFY_BATCH_LIMIT = 450;
@@ -99,8 +110,22 @@ export async function discoverAffectedSessionIds(
 ): Promise<string[]> {
   const ids = new Set<string>();
 
-  const [byActor, byPayloadParticipant, byPrefs, byCreator, byEnder, invitesFrom, invitesTo] =
-    await Promise.all([
+  const [
+    byMembership,
+    byActor,
+    byPayloadParticipant,
+    byPrefs,
+    byCreator,
+    byEnder,
+    invitesFrom,
+    invitesTo,
+  ] = await Promise.all([
+      // REQUIRES the `members` / `memberUserId` COLLECTION_GROUP fieldOverride in
+      // firestore.indexes.json. Without it this throws FAILED_PRECONDITION — and this
+      // function is shared by deleteAccount, the FR-61 child inventory and the FR-69 child
+      // roster sweep (incl. scheduled jobs), so DEPLOY INDEXES BEFORE FUNCTIONS and wait for
+      // the index to report Enabled. Fail-loud is deliberate: never swallow that error here.
+      db.collectionGroup("members").where(TRIP_MEMBER_USER_ID_FIELD, "==", userId).get(),
       db.collectionGroup("activity_events").where("actorId", "==", userId).get(),
       db.collectionGroup("activity_events").where("payload.participantId", "==", userId).get(),
       db.collectionGroup("participant_prefs").where("userId", "==", userId).get(),
@@ -110,6 +135,16 @@ export async function discoverAffectedSessionIds(
       db.collection("trip_invites").where("toUserId", "==", userId).get(),
     ]);
 
+  // `members` is a collection group shared with `families/{familyId}/members` (the only other
+  // one in the database). Family member docs carry no `memberUserId`, so the filter already
+  // excludes them — the path guard makes that structural rather than incidental, so a stray
+  // stamp on a family doc could never inject a familyId into a list of TRIP session ids.
+  for (const doc of byMembership.docs) {
+    const sessionDoc = doc.ref.parent.parent;
+    if (sessionDoc && sessionDoc.parent.id === "trip_sessions") {
+      ids.add(sessionDoc.id);
+    }
+  }
   for (const snap of [byActor, byPayloadParticipant, byPrefs]) {
     for (const doc of snap.docs) {
       const sessionId = doc.ref.parent.parent?.id;
@@ -233,6 +268,17 @@ export async function deidentifyUserResidue(
       // deleted user (hash-suffixed), so multiple deleted users keep distinct
       // rows on rosters and leaderboards. It never matches a real auth uid, so
       // it grants no access under isTripSessionMember.
+      //
+      // §3.1.1 item 19: this row deliberately does NOT carry `memberUserId`, which is why it
+      // does not use `tripMemberDocFields`. Two reasons, either sufficient. (1) Discovery is a
+      // "memberUserId == my uid" query, so an ABSENT field is already the correct behaviour for
+      // a row that belongs to nobody — there is nothing to gain. (2) `deletedUserTombstoneIdFor`
+      // is an UNSALTED sha256 prefix of the deleted uid; today that value exists only as a
+      // document id readable by the trip's co-members, and writing it into a
+      // collection-group-INDEXED field would make a deterministic function of a deleted user's
+      // uid queryable database-wide. Never "simplify" this to reuse the helper with the
+      // deleted user's uid — that would re-expose the very uid this function exists to erase.
+      // `tripMemberUserIdStamp.test.ts` pins the absence.
       const memberData = memberSnap.data() ?? {};
       uidKeyedWrites.push({
         kind: "setMerge",

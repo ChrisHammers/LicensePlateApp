@@ -22,6 +22,65 @@ import { filterCanonicalParticipantsRemoveUser } from "./gameplayEventResolver";
 
 type Firestore = admin.firestore.Firestore;
 
+/**
+ * The member doc's own document id, written into the document as a field (§3.1.1 item 19).
+ *
+ * `trip_sessions/{id}/members/{uid}` IS the membership authority — every server read derives
+ * the user from `doc.id`. Firestore cannot query by document id across a collection group, so
+ * that authority was un-queryable BY USER purely by construction, and a trip could never
+ * follow an account to a second device. Writing the id into the doc makes
+ * `collectionGroup("members").where("memberUserId","==",uid)` possible without adding a second
+ * roster representation: if `memberUserId != doc.id` that is a bug with one obvious fix, not a
+ * reconciliation problem.
+ *
+ * NOT named `userId`, deliberately. The rules block that authorizes the collection-group query
+ * is a recursive wildcard (`match /{path=**}/members/{memberId}`) and is therefore ALSO
+ * evaluated against `families/{familyId}/members/{memberId}`. Family member docs carry no user
+ * field today (`family.ts`), but that is an absence, not a guarantee — a name only trip member
+ * docs will ever carry makes the collision structurally impossible instead of merely absent.
+ * If you are about to stamp this field on a family member doc: don't. Read
+ * `firestore.rules`' "Account-scoped trip discovery" block first.
+ */
+export const TRIP_MEMBER_USER_ID_FIELD = "memberUserId";
+
+export type TripMemberRole = "owner" | "member";
+
+export interface TripMemberDocInput {
+  /**
+   * The uid this member doc is KEYED BY — `members/{userId}`. It is the document's own id and
+   * nothing else; never pass a caller-supplied value that is not the id being written to, and
+   * never pass a real uid when writing a de-identification TOMBSTONE row (see
+   * `accountDeletionDeidentify.ts`, which deliberately does not use this helper).
+   */
+  userId: string;
+  role: TripMemberRole;
+}
+
+/**
+ * The one place a `trip_sessions/{id}/members/{uid}` document's fields are composed.
+ *
+ * Four call sites create member docs — `ensureOwnerMemberIfCreatorPayload` and
+ * `ensureOwnerMemberIfTripDocCreatedByMatches` (tripSessionCanonical.ts), the sender/owner
+ * seed and the accept path (tripInvites.ts) — and they cannot drift apart while they all go
+ * through here. The two invite writes are plain `batch.set` with no merge, so including the
+ * field in the payload is also what keeps a re-accept from dropping it.
+ *
+ * EVERY create site must go through here, because nothing repairs an EXISTING row written
+ * without the field — the append-race path named above only creates a row that is missing
+ * entirely, it never adds the field to one already there. A member doc missing `memberUserId`
+ * is a trip permanently invisible to the very account that owns it, on every device. A new
+ * create site adds itself to this helper, never composes the fields itself.
+ * (`tripMemberUserIdStamp.test.ts` pins all four by name, and its source scan fails if a fifth
+ * writes a member doc any other way.)
+ */
+export function tripMemberDocFields(input: TripMemberDocInput): Record<string, unknown> {
+  return {
+    role: input.role,
+    joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+    [TRIP_MEMBER_USER_ID_FIELD]: input.userId,
+  };
+}
+
 /** `canonicalStatus` values that mean the trip is still being played. */
 export const LIVE_TRIP_SESSION_STATUSES: readonly string[] = ["created", "active"];
 

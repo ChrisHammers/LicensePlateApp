@@ -16,6 +16,7 @@ import { writeAuditLog } from "./audit";
 import { getFCMTokenForPush, sendPushNotification } from "./utils/notifications";
 import { KIND_PARTICIPANT_INVITED, KIND_PARTICIPANT_JOINED, PK } from "./gameplayEventResolver";
 import { syncCanonicalParticipantsFromMembers } from "./tripSessionCanonical";
+import { tripMemberDocFields } from "./tripRosterWrites";
 import { normalizeClientMetadata } from "./clientMetadata";
 import { enforcedCallable } from "./callableOptions";
 import { assertRegisteredAccount } from "./callableAuth";
@@ -183,10 +184,7 @@ export const sendTripInvite = enforcedCallable(async (data, context) => {
 
   const ownerMemberRef = sessionRef.collection("members").doc(fromUserId);
   if (!senderMemberSnap.exists) {
-    batch.set(ownerMemberRef, {
-      role: "owner",
-      joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    batch.set(ownerMemberRef, tripMemberDocFields({ userId: fromUserId, role: "owner" }));
   }
 
   const inviteRef = db.collection("trip_invites").doc();
@@ -337,10 +335,7 @@ export const respondToTripInvite = enforcedCallable(
       const tripSessionId = inviteData.tripSessionId as string;
       const sessionDocRef = db.collection("trip_sessions").doc(tripSessionId);
       const memberRef = sessionDocRef.collection("members").doc(userId);
-      batch.set(memberRef, {
-        role: "member",
-        joinedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      batch.set(memberRef, tripMemberDocFields({ userId, role: "member" }));
       batch.update(sessionDocRef, {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
