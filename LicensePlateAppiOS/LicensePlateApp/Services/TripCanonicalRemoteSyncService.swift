@@ -853,7 +853,8 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
     /// reaches the removed device — deleting `members/{uid}` revokes its read access
     /// before the `participant_left` event could ever arrive. Both of a session's
     /// listeners fail together; the eviction apply is idempotent, so the second one is a
-    /// no-op. Any other listener error is logged and otherwise ignored, as before.
+    /// no-op. Any other listener error RETIRES the session's listeners so the next re-assert
+    /// registers fresh ones (§3.1.1 item 22) — an errored Firestore listener is terminal.
     private func handleListenerError(_ error: Error, sessionId: UUID, listenerUserId: String?) {
         let nsError = error as NSError
         let permissionDenied = nsError.domain == FirestoreErrorDomain
@@ -862,7 +863,16 @@ final class TripCanonicalRemoteSyncService: ObservableObject, TripCanonicalRemot
             "listener error \(sessionId.uuidString.prefix(8)) as \(listenerUserId ?? "nil"): domain=\(nsError.domain) code=\(nsError.code) permissionDenied=\(permissionDenied) — \(nsError.localizedDescription)"
         )
         guard permissionDenied, let listenerUserId else {
-            print("TripCanonicalRemoteSyncService: listener error for \(sessionId.uuidString): \(error)")
+            // Left registered, every later re-assert would read "already registered" and this
+            // session would silently receive nothing for the rest of the process — the other
+            // device's finds, its game state, its trip end. Retire, and let the next re-assert
+            // hook (foreground, hydration signal, identity settle) register again. No backoff
+            // of its own: the cadence is the re-assert cadence, and this branch sends no
+            // hydration signal, so it cannot drive itself. Both of a session's listeners fail
+            // together — the second hop finds nothing registered and stays quiet.
+            guard isIncrementallyListening(sessionId: sessionId) else { return }
+            removeIncrementalListeners(sessionId: sessionId)
+            TripEndSyncDiagnostics.log("listener retired \(sessionId.uuidString.prefix(8)) — re-registers on the next re-assert")
             return
         }
         removeIncrementalListeners(sessionId: sessionId)

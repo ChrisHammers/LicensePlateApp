@@ -157,6 +157,8 @@ struct RootView: View {
             SocialInboxBadgeService.shared.reassertBoundFamilyListening()
             if authService.isOnline {
                 Task { await SyncCoordinator.shared.processPendingSyncItems() }
+            } else {
+                GameplaySyncDiagnostics.log("flush.skip reason=offline trigger=foreground")
             }
             if let user = authService.currentUser {
                 let entitlement = EntitlementService.shared.entitlementState(for: user)
@@ -307,6 +309,8 @@ struct RootView: View {
                 // data dropped before a restriction lifted has no other second chance.
                 // Idempotent, once per launch, and skipped entirely while restricted.
                 Task { await ChildRestrictedDataRecoveryService.shared.runLaunchRecoveryIfEligible() }
+            } else {
+                GameplaySyncDiagnostics.log("flush.skip reason=offline trigger=launch")
             }
             TripParticipationService.shared.bindAuthService(authService)
 

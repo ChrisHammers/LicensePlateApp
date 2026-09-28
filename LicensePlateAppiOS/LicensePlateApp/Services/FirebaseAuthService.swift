@@ -184,6 +184,9 @@ class FirebaseAuthService: ObservableObject {
                 guard let self else { return }
                 let wasReachable = self.isNetworkReachable
                 self.isNetworkReachable = connected
+                GameplaySyncDiagnostics.log(
+                    "reachability online=\(wasReachable ? 1 : 0)→\(connected ? 1 : 0) flushArmed=\(self.gameplaySyncFlushOnReachabilityRegainedEnabled ? 1 : 0)"
+                )
                 guard self.gameplaySyncFlushOnReachabilityRegainedEnabled else { return }
                 if !wasReachable && connected {
                     SyncCoordinator.shared.scheduleDebouncedGameplaySyncFlushIfOnline()
@@ -1685,6 +1688,11 @@ class FirebaseAuthService: ObservableObject {
             await FirebaseMessagingService.shared.clearTokenForSignOut(userId: oldUserId)
         }
 
+        // §3.1.1 item 22: the purge suspends the gameplay queue. A throw anywhere below used
+        // to leave it suspended — silently, for the rest of the process — so no find could
+        // upload until relaunch. `defer` makes the resume unconditional; the explicit call
+        // further down keeps the success-path ordering (resume before the notification).
+        defer { SyncCoordinator.shared.resumeProcessingAfterPurge() }
         try LocalUserDataPurgeService.shared.purgeAllLocalUserData(oldUserId: oldUserId)
 
         founderEntitlementAttemptedUserIds.removeAll()
@@ -1737,6 +1745,11 @@ class FirebaseAuthService: ObservableObject {
         // Server already deleted users/{uid} (incl. fcmToken); drop only the device token.
         await FirebaseMessagingService.shared.deleteDeviceTokenAfterAccountDeletion()
 
+        // §3.1.1 item 22: the purge suspends the gameplay queue. A throw anywhere below used
+        // to leave it suspended — silently, for the rest of the process — so no find could
+        // upload until relaunch. `defer` makes the resume unconditional; the explicit call
+        // further down keeps the success-path ordering (resume before the notification).
+        defer { SyncCoordinator.shared.resumeProcessingAfterPurge() }
         try LocalUserDataPurgeService.shared.purgeAllLocalUserData(oldUserId: oldUserId)
 
         founderEntitlementAttemptedUserIds.removeAll()

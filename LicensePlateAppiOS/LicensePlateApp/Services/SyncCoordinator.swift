@@ -12,9 +12,20 @@ import FirebaseFunctions
 /// Thrown when `appendTripActivityEvent` does not complete within `SyncCoordinator.gameplayAppendRemoteTimeoutNanoseconds` (wedging guard).
 private struct GameplayAppendRemoteTimedOutError: Error {}
 
-private enum GameplayAppendRaceFirst {
-    case done(Result<GameplayEventAppendOutcome, Error>)
-    case timedOut
+/// Resolves the upload-versus-timer race exactly once. Both racers hop to the main actor
+/// before claiming, so the flag needs no lock.
+@MainActor
+private final class OneShotResumeGate {
+    private var claimed = false
+    /// The timer racer, cancelled by a winning upload so it does not sleep out the bound.
+    var timer: Task<Void, Never>?
+
+    /// True for the first caller only.
+    func claim() -> Bool {
+        if claimed { return false }
+        claimed = true
+        return true
+    }
 }
 
 @MainActor
@@ -73,9 +84,11 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     /// Uploads one event. Injectable so the drain's FR-28 hold-vs-reject classification is
     /// pinned by tests without Firebase.
     private var gameplayEventAppender: (TripActivityEvent) async throws -> GameplayEventAppendOutcome = { event in
+        // The drain's [GameplaySync] verdict is authoritative; this [TripEndSync] line is
+        // written when the CALL returns, so after a timeout it can post-date the verdict.
         let traced = event.kind == .tripEnded || event.kind == .gameEnded
         do {
-            let outcome = try await SyncCoordinator.appendEventToRemoteRespectingTimeout(event: event)
+            let outcome = try await TripCanonicalRemoteSyncService.shared.appendEventToRemote(event)
             if traced {
                 TripEndSyncDiagnostics.log("upload \(event.kind.rawValue) \(event.id.prefix(8)) for \(event.sessionId.uuidString.prefix(8)) → \(outcome)")
             }
@@ -87,6 +100,8 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
             throw error
         }
     }
+    /// Bound on one upload await (see `withRemoteTimeout`); tests shorten it.
+    private var appendRemoteTimeoutNanoseconds: UInt64 = SyncCoordinator.gameplayAppendRemoteTimeoutNanoseconds
     private var gameplayDebouncedFlushTask: Task<Void, Never>?
     private var gameplayFlushInProgress = false
     private var pendingAnotherGameplayFlush = false
@@ -128,14 +143,28 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         gameplayEventAppender = appender
     }
 
+    /// Tests shorten the upload bound so a hung appender times out in milliseconds.
+    func setGameplayAppendRemoteTimeoutForTesting(nanoseconds: UInt64) {
+        appendRemoteTimeoutNanoseconds = nanoseconds
+    }
+
     func scheduleDebouncedGameplaySyncFlushIfOnline() {
-        guard !processingSuspendedForPurge else { return }
+        guard !processingSuspendedForPurge else {
+            GameplaySyncDiagnostics.log("flush.skip reason=suspended trigger=debounce")
+            return
+        }
         gameplayDebouncedFlushTask?.cancel()
         let debounce = Self.gameplaySyncDebounceNanoseconds
         gameplayDebouncedFlushTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: debounce)
             guard let self, !Task.isCancelled else { return }
-            guard self.gameplaySyncOnlineProvider() else { return }
+            guard self.gameplaySyncOnlineProvider() else {
+                // The one gate the Firestore listeners and the trip callables do NOT share:
+                // a device whose reachability reads offline keeps receiving and keeps
+                // importing while every one of its own finds waits here (§3.1.1 item 22).
+                GameplaySyncDiagnostics.log("flush.skip reason=offline trigger=debounce")
+                return
+            }
             await self.processPendingSyncItems()
         }
     }
@@ -146,7 +175,10 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     /// hour (`fetchFailedRetryDue()` filters on `nextRetryAt`). Idempotent: with no held
     /// rows this is just an ordinary flush.
     func resumeGameplaySyncAfterConsent() async {
-        guard !processingSuspendedForPurge else { return }
+        guard !processingSuspendedForPurge else {
+            GameplaySyncDiagnostics.log("flush.skip reason=suspended trigger=consent")
+            return
+        }
         try? repository.clearGameplayRetryBackoff()
         await processPendingSyncItems()
     }
@@ -177,7 +209,10 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     /// launch flush and the launch recovery as concurrent tasks.
     func resumeGameplaySyncAfterChildConsent() async {
         while true {
-            if processingSuspendedForPurge { return }
+            if processingSuspendedForPurge {
+                GameplaySyncDiagnostics.log("flush.skip reason=suspended trigger=child-consent")
+                return
+            }
             guard gameplayFlushInProgress else {
                 gameplayFlushInProgress = true
                 await runChildConsentBatteryHoldingGate()
@@ -271,6 +306,7 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     /// waiters are resumed so their tasks unwind instead of leaking; each re-checks
     /// `processingSuspendedForPurge` on wake and returns without claiming the gate.
     func suspendProcessingForPurge() {
+        GameplaySyncDiagnostics.log("queue suspended for purge")
         processingSuspendedForPurge = true
         gameplayDebouncedFlushTask?.cancel()
         gameplayDebouncedFlushTask = nil
@@ -284,6 +320,9 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     }
 
     func resumeProcessingAfterPurge() {
+        if processingSuspendedForPurge {
+            GameplaySyncDiagnostics.log("queue resumed after purge")
+        }
         processingSuspendedForPurge = false
     }
 
@@ -327,8 +366,14 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     }
 
     func processPendingSyncItems() async {
-        guard !processingSuspendedForPurge else { return }
+        guard !processingSuspendedForPurge else {
+            GameplaySyncDiagnostics.log("flush.skip reason=suspended")
+            return
+        }
         if gameplayFlushInProgress {
+            if !pendingAnotherGameplayFlush {
+                GameplaySyncDiagnostics.log("flush.skip reason=inflight — coalesced into the running flush")
+            }
             pendingAnotherGameplayFlush = true
             return
         }
@@ -378,6 +423,23 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         // FR-28: while the unconsented-child hold is on, skip the gameplay drain
         // entirely (queued events simply hold) but still run user-profile sync below.
         let gameplayHeld = gameplayCloudSyncHoldProvider()
+        GameplaySyncDiagnostics.log("flush begin held=\(gameplayHeld ? 1 : 0) online=\(gameplaySyncOnlineProvider() ? 1 : 0)")
+        var verdictCounts: [String: Int] = [:]
+        // One line per queue row, whatever happens to it. `attempts` is the count BEFORE
+        // this try. UPPER-CASE labels ended WITHOUT a server acceptance and nothing retries
+        // them for an adult; `eligibleIn` = parked until the next trigger, `retryIn` = a
+        // wake-up is scheduled. DEBUG-only in full — release builds skip the body.
+        func verdict(_ label: String, _ item: SyncQueueItem, _ event: TripActivityEvent?, _ detail: @autoclosure () -> String = "") {
+            #if DEBUG
+            verdictCounts[label, default: 0] += 1
+            let extra = detail()
+            GameplaySyncDiagnostics.log(
+                "verdict \(label) ev=\(GameplaySyncDiagnostics.short(item.payloadEventId ?? "")) "
+                + "kind=\(event?.kind.rawValue ?? "?") sid=\(GameplaySyncDiagnostics.short(item.payloadSessionId ?? "")) "
+                + "attempts=\(item.attemptCount)\(extra.isEmpty ? "" : " " + extra)"
+            )
+            #endif
+        }
         var gameplayDrainPass = 0
         while !gameplayHeld, gameplayDrainPass < Self.maxGameplayBacklogDrainPasses {
             let pending = (try? repository.fetchPending()) ?? []
@@ -388,6 +450,7 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
             if gameplayItems.isEmpty {
                 break
             }
+            GameplaySyncDiagnostics.log("drain pass=\(gameplayDrainPass + 1) rows=\(gameplayItems.count) (queue pending=\(pending.count) retryDue=\(retryDue.count))")
 
             for item in gameplayItems {
                 guard let sessionStr = item.payloadSessionId,
@@ -395,19 +458,24 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                       let sessionUUID = UUID(uuidString: sessionStr) else {
                     // Malformed payload: there is nothing to retry and nothing to recover.
                     // `rejected`, not `cancelled`, so consent recovery never picks it up.
+                    verdict("REJECTED(malformed)", item, nil)
                     try? repository.markRejected(id: item.id)
                     continue
                 }
                 do {
                     try repository.markInProgress(id: item.id)
                     guard let event = localGameplayEvent(eventId) else {
+                        verdict("completed(no-local-event)", item, nil)
                         try? repository.markCompleted(id: item.id)
                         continue
                     }
-                    let outcome = try await gameplayEventAppender(event)
+                    let outcome = try await Self.withRemoteTimeout(nanoseconds: appendRemoteTimeoutNanoseconds) { [self] in
+                        try await self.gameplayEventAppender(event)
+                    }
                     let gameIdStr = event.payload?[TripActivityEventPayloadKey.gameInstanceId] ?? ""
                     switch outcome {
                     case .accepted(let lateReplay):
+                        verdict("accepted", item, event, "lateReplay=\(lateReplay ? 1 : 0)")
                         if lateReplay {
                             // FR-28h: adopt the server's stamp locally, or this device —
                             // the finder's own — stays the only one computing unfrozen
@@ -451,6 +519,10 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                         }
                         imported.append(rejection)
                         try TripActivityEventRepository.shared.importEventsIfAbsent(imported)
+                        // After the two throwing local writes above, so a row gets ONE verdict:
+                        // a local failure falls to the catch and is reported there instead.
+                        verdict("superseded", item, event,
+                                "reason=\(rejection.payload?[TripActivityEventPayloadKey.rejectionReason] ?? "?")")
                         let tripName = (try? TripSessionRepository.shared.session(byId: sessionUUID))?.name ?? ""
                         if let info = FairnessResolutionInfo(rejection: rejection, sessionId: sessionUUID, tripSessionName: tripName) {
                             TripCanonicalRemoteSyncService.shared.publishFairnessResolution(info)
@@ -478,6 +550,7 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                         // against it would let a long-restricted child arrive at consent
                         // with a budget already spent, and the discovery would be dropped
                         // instead of uploaded.
+                        verdict("held(child-restricted)", item, resolvedEvent, "eligibleIn=3600s")
                         try? repository.markHeld(id: item.id, nextRetryAt: Date().addingTimeInterval(3600))
                         continue
                     }
@@ -488,6 +561,7 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                         Task { @MainActor in
                             try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionUUID)
                         }
+                        verdict("held(game-not-started)", item, resolvedEvent, "eligibleIn=60s republish=1")
                         try? repository.markHeld(id: item.id, nextRetryAt: Date().addingTimeInterval(60))
                         continue
                     }
@@ -496,6 +570,7 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                             Task { @MainActor in
                                 try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionUUID)
                             }
+                            verdict("failed(game-not-found)", item, resolvedEvent, "retryIn=3s republish=1 cap=\(Self.gameplayGameNotFoundMaxAttempts)")
                             let nextRetryAt = Date().addingTimeInterval(3)
                             try? repository.markFailed(id: item.id, nextRetryAt: nextRetryAt)
                             scheduleProcessPendingAfterGameplayRetryDelay()
@@ -511,6 +586,7 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                         // this event, we simply ran out of patience waiting for its game to
                         // exist. This is the sole producer of `cancelled`, and the sole
                         // thing FR-28 consent recovery is allowed to heal.
+                        verdict("CANCELLED(game-not-found-cap)", item, resolvedEvent, "msg=\(GameplaySyncDiagnostics.message(error))")
                         try? repository.markCancelled(id: item.id)
                         continue
                     }
@@ -521,6 +597,8 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                         }
                         let attempts = max(item.attemptCount, 0) + 1
                         let delaySeconds = min(pow(2.0, Double(attempts - 1)) * 30.0, 900.0)
+                        verdict("failed(membership-or-appcheck)", item, resolvedEvent,
+                                "eligibleIn=\(Int(delaySeconds))s republish=1 code=\((error as NSError).code) msg=\(GameplaySyncDiagnostics.message(error))")
                         let nextRetryAt = Date().addingTimeInterval(delaySeconds)
                         try? repository.markFailed(id: item.id, nextRetryAt: nextRetryAt)
                         continue
@@ -537,6 +615,8 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                         // A server VERDICT — invalid argument, permission denied, or a
                         // non-child failed-precondition such as a discovery that no longer
                         // exists. Terminal: consent recovery must never push this back.
+                        verdict("REJECTED(permanent)", item, resolvedEvent,
+                                "domain=\((error as NSError).domain) code=\((error as NSError).code) msg=\(GameplaySyncDiagnostics.message(error))")
                         try? repository.markRejected(id: item.id)
                     } else {
                         if error is GameplayAppendRemoteTimedOutError {
@@ -551,6 +631,8 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                         }
                         let attempts = max(item.attemptCount, 0) + 1
                         let delaySeconds = min(pow(2.0, Double(attempts - 1)) * 60.0, 3600.0)
+                        verdict(error is GameplayAppendRemoteTimedOutError ? "failed(timeout)" : "failed(transient)", item, resolvedEvent,
+                                "eligibleIn=\(Int(delaySeconds))s domain=\((error as NSError).domain) code=\((error as NSError).code) msg=\(GameplaySyncDiagnostics.message(error))")
                         let nextRetryAt = Date().addingTimeInterval(delaySeconds)
                         try? repository.markFailed(id: item.id, nextRetryAt: nextRetryAt)
                     }
@@ -570,6 +652,13 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         }
 
         let gameplayStillPending = (try? repository.hasPendingOrRetryDueGameplayItems()) ?? true
+        GameplaySyncDiagnostics.log(
+            "flush end verdicts=" + (verdictCounts.isEmpty ? "none" : verdictCounts.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))
+            + " retryDue=\(gameplayStillPending ? 1 : 0)"
+            // Parked rows (failed/held with backoff still running) are NOT retry-due, so a
+            // queue that still holds unsent finds reads retryDue=0; this is the honest count.
+            + " queuedSessions=\((try? repository.nonTerminalGameplaySessionIds().count) ?? -1)"
+        )
         if !gameplayStillPending, gameplaySyncOnlineProvider() {
             ProgressionXpDriftAfterSyncReporter.shared.scheduleEvaluationAfterSuccessfulGameplayDrain(
                 recentlyAcceptedProgressionSourceEventIds: acceptedProgressionSourceEventIds,
@@ -614,32 +703,34 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         }
     }
 
-    private static func appendEventToRemoteRespectingTimeout(event: TripActivityEvent) async throws -> GameplayEventAppendOutcome {
-        try await withThrowingTaskGroup(of: GameplayAppendRaceFirst.self) { group in
-            group.addTask {
+    /// Bounds one upload await WITHOUT ever awaiting the loser. The task-group form this
+    /// replaces drained the group after its timer fired — which meant awaiting the hung
+    /// callable — so the "timeout" never returned: `gameplayFlushInProgress` stayed true and
+    /// every later flush no-op'd, silently, for the rest of the process (§3.1.1 item 22). A
+    /// hung callable now keeps only its own task alive until the SDK gives up; the drain
+    /// marks the row failed with backoff and moves on.
+    static func withRemoteTimeout<T: Sendable>(
+        nanoseconds: UInt64,
+        _ operation: @escaping @MainActor @Sendable () async throws -> T
+    ) async throws -> T {
+        let gate = OneShotResumeGate()
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<T, Error>) in
+            let work = Task { @MainActor in
+                let result: Result<T, Error>
                 do {
-                    let outcome = try await TripCanonicalRemoteSyncService.shared.appendEventToRemote(event)
-                    return .done(.success(outcome))
+                    result = .success(try await operation())
                 } catch {
-                    return .done(.failure(error))
+                    result = .failure(error)
                 }
+                guard gate.claim() else { return }
+                gate.timer?.cancel()
+                continuation.resume(with: result)
             }
-            group.addTask {
-                try await Task.sleep(nanoseconds: Self.gameplayAppendRemoteTimeoutNanoseconds)
-                return .timedOut
-            }
-            guard let first = try await group.next() else {
-                throw GameplayAppendRemoteTimedOutError()
-            }
-            group.cancelAll()
-            while (try? await group.next()) != nil {}
-            switch first {
-            case .timedOut:
-                throw GameplayAppendRemoteTimedOutError()
-            case .done(.success(let outcome)):
-                return outcome
-            case .done(.failure(let error)):
-                throw error
+            gate.timer = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: nanoseconds)
+                guard gate.claim() else { return }
+                work.cancel()
+                continuation.resume(throwing: GameplayAppendRemoteTimedOutError())
             }
         }
     }

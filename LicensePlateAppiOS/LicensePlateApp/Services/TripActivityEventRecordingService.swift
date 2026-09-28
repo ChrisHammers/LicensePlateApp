@@ -39,6 +39,10 @@ final class TripActivityEventRecordingService: TripActivityEventRecordingProtoco
     func recordForSync(_ event: TripActivityEvent) throws {
         let didInsert = try tripActivityEventRepository.appendIfAbsent(event)
         try syncCoordinator.ensureGameplayEventEnqueued(sessionId: event.sessionId, eventId: event.id)
+        GameplaySyncDiagnostics.log(
+            "enqueue ev=\(GameplaySyncDiagnostics.short(event.id)) kind=\(event.kind.rawValue) "
+            + "sid=\(GameplaySyncDiagnostics.short(event.sessionId)) inserted=\(didInsert ? 1 : 0)"
+        )
         syncCoordinator.scheduleDebouncedGameplaySyncFlushIfOnline()
         if didInsert {
             progressionAppendObserver?.progressionDidCommitLocalActivityEvent(event)
