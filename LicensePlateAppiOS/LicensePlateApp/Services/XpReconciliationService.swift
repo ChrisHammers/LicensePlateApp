@@ -179,7 +179,10 @@ final class XpReconciliationService {
     /// Reconciliation: both rows carry the find's own `sourceEventId`, so
     /// `LedgerPendingXpTotals.isServerApplied` drops them the moment that event id appears in
     /// `appliedProgressionEvents` — the same mechanism that already retires the base award, and the
-    /// reason a late replay cannot pay twice. The keys mirror the server scopes exactly (global
+    /// reason a late replay cannot pay twice. §3.1.1 item 17: when the find is superseded the
+    /// server applies `srvrej_<eventId>` instead of the event id, and may pay these same scopes off
+    /// an entirely different event, so that retirement also matches the `srvrej_` form of the id and
+    /// the mirrored server scope (`Model/XpServerScopeKey.swift`). The keys mirror the server scopes exactly (global
     /// scope, so lifetime-unique is once per region for all time and first-of-day is once per day),
     /// which is what makes a *second* find of the same plate mint nothing locally either.
     ///
@@ -404,10 +407,21 @@ final class XpReconciliationService {
             resolvedAt: resolvedAt
         )
         if targetNet == 0 {
-            // A find that resolved to nothing keeps none of its bonuses either — otherwise a
-            // duplicate or rejected plate would leave a live local +20/+10 the server will never
-            // grant. Scoped to rows this find minted, so an earlier accepted find's first-of-day
-            // row is untouched.
+            // A find that resolved to nothing keeps none of its bonuses either. Scoped to rows this
+            // find minted, so an earlier accepted find's first-of-day row is untouched.
+            //
+            // §3.1.1 item 17 correction (2026-09-19): the previous note here claimed this covers "a
+            // live local +20/+10 the server will never grant" on a rejected plate. That was wrong
+            // about the case the owner actually plays. A LATE COMPETITIVE find does not reach this
+            // branch at all — `GameplayXpSyncSupport` maps `server_rejected_late_competitive` to
+            // `.acceptedLate`, so `targetNet == baseDiscoveryXp > 0` — and the server DOES grant
+            // both bonuses there, off its own `srvrej_<clientEventId>` rejection document
+            // (`functions/src/progressionCore.ts`, `KIND_DISCOVERY_REJECTED`). Those rows are not
+            // voided; they are retired against the server total by
+            // `LedgerPendingXpTotals.isServerApplied`. This branch only runs for outcomes that earn no
+            // XP: for the two that reach the server as rejections (invalid participant, risk)
+            // progression writes no components at all; a personal re-find is written and stamped
+            // remotely, but with no fresh components.
             voidedProvisionalXp += try voidLocalFindBonuses(
                 sourceEventId: resolution.sourceEventId,
                 resolvedAt: resolvedAt
