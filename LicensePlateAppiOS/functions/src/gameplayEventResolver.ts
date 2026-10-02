@@ -22,6 +22,7 @@ import {
   payloadCarriesCoarseLocation,
   sanitizeIncomingEventPayload,
 } from "./payloadKeys";
+import { normalizeXpDayKey, utcDayKeyFromUnixSeconds } from "./xpDayKey";
 
 const MAX_EVENTS_POLICY = 2500;
 
@@ -723,6 +724,14 @@ export async function resolveGameplayAppendTransaction(
               const existingSup = await tx.get(supRef);
               if (!existingSup.exists) {
                 const discoveredSec = Math.floor(tsToSeconds(displaced.discoveredAt));
+                // No `xpDayKey` here, deliberately. This payload's actor is the DISPLACED
+                // finder, not the caller, so `incomingPayload`'s day key would be the wrong
+                // user's day — and `previewProgressionComponentsForActivityEvent` grants
+                // nothing for `server_rejected_superseded_by_earlier_timestamp` (the
+                // displaced finder already received the find bonuses on their own
+                // `region_found`). Pinned by `rejectionDayKeyCarryover.test.ts`: if a grant
+                // path is ever added for this reason, it must stamp the displaced finder's
+                // own day from `clientClaimedAt`, not the server's rejection timestamp.
                 const supPayload: Record<string, string> = {
                   [PK.regionId]: regionId,
                   [PK.gameInstanceId]: gameInstanceId,
@@ -797,6 +806,21 @@ export async function resolveGameplayAppendTransaction(
         if (incomingPayload[PK.inputMethod]) {
           rejPayload[PK.inputMethod] = incomingPayload[PK.inputMethod];
         }
+        // OD-16 — the DEVICE's day is the truth, and this payload is built field by field
+        // (the ACCEPTED path spreads `incomingPayload`, so it keeps `xpDayKey` for free).
+        // A late-competitive rejection still pays the find bonuses, so `progressionCore`
+        // needs the day key here; without it, it falls back to the UTC day of THIS doc's
+        // server timestamp. An evening find in the Americas is then billed under tomorrow,
+        // minting a second `first_find_of_day|v1|<uid>|<day>` scope — the bonus is paid
+        // twice in one real day — and the client's toast dedup, keyed on the LOCAL day,
+        // cannot match the scope, so the first-find toast doubles as well.
+        //
+        // Validated exactly as the accepted path validates it: well-formed `yyyy-MM-dd`,
+        // else the UTC day of the CLIENT's claimed find time (`clientClaimedAt` above) —
+        // never the server clock, which for an FR-28h offline drain is days away.
+        rejPayload[PK.xpDayKey] =
+          normalizeXpDayKey(incomingPayload[PK.xpDayKey]) ??
+          utcDayKeyFromUnixSeconds(event.timestamp);
         rejPayload[PK.gameMode] = gameMode;
         rejPayload[PK.participantCount] = String(participants.length);
 

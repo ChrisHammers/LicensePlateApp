@@ -19,19 +19,21 @@ import {
   XP_PER_COMPETITIVE_FIRST_PLACE_FINISH,
 } from "./progressionXpAmounts";
 import { XP_GRANT_REASON, type XpGrantReason } from "./xpGrantLedgerCore";
+import { normalizeXpDayKey, utcDayKeyFromUnixSeconds } from "./xpDayKey";
 
 export {
   XP_PER_ACCEPTED_REGION_FOUND,
   XP_PER_COMPETITIVE_FIRST_FINDER_BONUS,
   XP_PER_COMPETITIVE_FIRST_PLACE_FINISH,
   XP_AMOUNTS,
+  // Re-exported: this module has been their import site since the XP day key existed.
+  normalizeXpDayKey,
+  utcDayKeyFromUnixSeconds,
 };
 
 export const KIND_GAME_ENDED = "game_ended";
 export const KIND_GAME_COMPLETED = "game_completed";
 export const KIND_TRIP_ENDED = "trip_ended";
-
-const DAY_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 type DiscoveryRow = {
   id: string;
@@ -317,19 +319,6 @@ export function tripCompetitiveFirstScopeKey(userId: string, sessionId: string):
 /** Idempotent XP grant scope when an achievement unlock is persisted server-side. */
 export function achievementUnlockScopeKey(userId: string, achievementId: string): string {
   return `achievement_xp|v1|${userId}|${achievementId}`;
-}
-
-export function normalizeXpDayKey(raw: string | undefined | null): string | null {
-  if (!raw || !DAY_KEY_RE.test(raw)) return null;
-  return raw;
-}
-
-export function utcDayKeyFromUnixSeconds(seconds: number): string {
-  const d = new Date(Math.floor(seconds) * 1000);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
 }
 
 function emptyDelta(): ProgressionUserDelta {
