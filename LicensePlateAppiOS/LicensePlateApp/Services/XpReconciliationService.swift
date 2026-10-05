@@ -402,9 +402,41 @@ final class XpReconciliationService {
         let targetNet = award.xpNet
         let resolvedAt = Date()
 
+        // §3.1.1 item 29e: the final row lands in the SAME save that voids the provisional one.
+        // Voiding first (its own save) and appending after meant a throw in between left the find
+        // voided with no final, the displayed total one base award lower until the server stamped
+        // (OD-17). "One final per base key" is decided before the void, which is equivalent: the
+        // void only touches `.provisional` rows and a final row is always `.final`.
+        let hasFinal = try xpLedger.ledgerEvents(forUniquenessKey: baseKey)
+            .contains { $0.status != .voided && $0.grantKind == .finalDiscoveryAward }
+        let finalEvent: XpLedgerEvent?
+        if targetNet > 0, !hasFinal {
+            finalEvent = XpLedgerEvent(
+                userId: resolution.actorUserId,
+                sessionId: resolution.sessionId,
+                gameInstanceId: resolution.gameInstanceId,
+                sourceEventId: resolution.sourceEventId,
+                sourceEventType: TripActivityEventKind.regionFound.rawValue,
+                itemId: resolution.itemId,
+                grantKind: .finalDiscoveryAward,
+                status: .final,
+                xpDelta: targetNet,
+                reasonCode: award.xpReason,
+                xpUniquenessKey: baseKey,
+                resolvedAt: resolvedAt,
+                metadata: [
+                    XpLedgerMetadataKey.resolutionId: resolution.resolutionId,
+                    XpLedgerMetadataKey.originalDiscoveryEventId: resolution.sourceEventId,
+                ]
+            )
+        } else {
+            finalEvent = nil
+        }
+
         var voidedProvisionalXp = try xpLedger.voidProvisionalRows(
             forUniquenessKey: baseKey,
-            resolvedAt: resolvedAt
+            resolvedAt: resolvedAt,
+            appending: finalEvent
         )
         if targetNet == 0 {
             // A find that resolved to nothing keeps none of its bonuses either. Scoped to rows this
@@ -426,34 +458,6 @@ final class XpReconciliationService {
                 sourceEventId: resolution.sourceEventId,
                 resolvedAt: resolvedAt
             )
-        }
-
-        let activeRows = try xpLedger.ledgerEvents(forUniquenessKey: baseKey)
-            .filter { $0.status != .voided }
-
-        if targetNet > 0 {
-            let hasFinal = activeRows.contains { $0.grantKind == .finalDiscoveryAward }
-            if !hasFinal {
-                let finalEvent = XpLedgerEvent(
-                    userId: resolution.actorUserId,
-                    sessionId: resolution.sessionId,
-                    gameInstanceId: resolution.gameInstanceId,
-                    sourceEventId: resolution.sourceEventId,
-                    sourceEventType: TripActivityEventKind.regionFound.rawValue,
-                    itemId: resolution.itemId,
-                    grantKind: .finalDiscoveryAward,
-                    status: .final,
-                    xpDelta: targetNet,
-                    reasonCode: award.xpReason,
-                    xpUniquenessKey: baseKey,
-                    resolvedAt: resolvedAt,
-                    metadata: [
-                        XpLedgerMetadataKey.resolutionId: resolution.resolutionId,
-                        XpLedgerMetadataKey.originalDiscoveryEventId: resolution.sourceEventId,
-                    ]
-                )
-                try xpLedger.append(finalEvent)
-            }
         }
 
         let rowsAfterFinal = try xpLedger.ledgerEvents(forUniquenessKey: baseKey)

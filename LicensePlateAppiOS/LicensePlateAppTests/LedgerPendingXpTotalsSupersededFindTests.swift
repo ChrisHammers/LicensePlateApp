@@ -311,7 +311,168 @@ struct LedgerPendingXpTotalsSupersededFindTests {
                 == "first_find_of_day|v1|\(Self.userId)|\(Self.deviceDayKey)"
         )
         // The base discovery award has no mirrored scope here: it retires by event id (or its
-        // `srvrej_` form), and its server mirror is excluded from toasting by reason.
+        // `srvrej_` form) or, total-only, on `baseDiscoveryTotalOnlyScope` (item 29a), and its
+        // server mirror is excluded from toasting by reason.
         #expect(XpServerScopeKey.mirrored(for: Self.finalDiscoveryRow()) == nil)
+    }
+
+    // MARK: - §3.1.1 item 29a: the base award's server scope (join 4, total-only)
+    //
+    // The same account finds the same plate in the same game on two devices. The server pays base
+    // once, under `xp_scope|…|base_region_discovery`, off whichever event lands first, and stamps the
+    // other device's event later with no increment. Device B's base row names neither event id that
+    // is applied when the scope arrives, so only the scope can retire it.
+
+    private static func baseScope(regionId: String = Self.regionId) -> String {
+        "xp_scope|v1|\(userId)|\(sessionId.uuidString)|\(gameInstanceId.uuidString)|\(regionId)|base_region_discovery"
+    }
+
+    /// Device B's base award exactly as `XpReconciliationService` mints it for a collaborative find.
+    private static func provisionalBaseRow(
+        regionId: String = Self.regionId,
+        sourceEventId: String = "find-device-b"
+    ) -> XpLedgerEvent {
+        XpLedgerEvent(
+            userId: userId,
+            sessionId: sessionId,
+            gameInstanceId: gameInstanceId,
+            sourceEventId: sourceEventId,
+            sourceEventType: "region_found",
+            itemId: regionId,
+            grantKind: .provisionalDiscoveryXp,
+            status: .provisional,
+            xpDelta: 10,
+            reasonCode: .collaborativeSharedFinder,
+            xpUniquenessKey: XpLedgerKeyBuilder.uniquenessKey(
+                userId: userId,
+                sessionId: sessionId,
+                gameInstanceId: gameInstanceId,
+                itemId: regionId,
+                xpCategory: .baseRegionDiscovery
+            ).storageString,
+            metadata: [XpLedgerMetadataKey.originalDiscoveryEventId: sourceEventId]
+        )
+    }
+
+    /// The defect: B counted the award on top of a server total that already held it, then dropped
+    /// by 10 when its own event was stamped. Now the total holds still from before A's payment,
+    /// through it (the row retires in the snapshot that adds the server copy) and through that stamp.
+    @Test func baseRowRetiresOnTheBaseScopeTheAccountsOtherDevicePaid() {
+        let rows = [Self.provisionalBaseRow()]
+        let unpaid = Self.snapshot(totalXp: 100, appliedEventIds: [], appliedScopeKeys: [])
+        let paidByDeviceA = Self.snapshot(
+            totalXp: 110,
+            appliedEventIds: ["find-device-a"],
+            appliedScopeKeys: [Self.baseScope()]
+        )
+        let deviceBStamped = Self.snapshot(
+            totalXp: 110,
+            appliedEventIds: ["find-device-a", "find-device-b"],
+            appliedScopeKeys: [Self.baseScope()]
+        )
+
+        let unpaidTotals = ProgressionDisplayTotalsResolver.resolve(
+            userId: Self.userId,
+            ledgerEvents: rows,
+            serverSnapshot: unpaid,
+            verifiedGrantSum: nil,
+            hasReceivedGrantSnapshot: false
+        )
+        let before = ProgressionDisplayTotalsResolver.resolve(
+            userId: Self.userId,
+            ledgerEvents: rows,
+            serverSnapshot: paidByDeviceA,
+            verifiedGrantSum: nil,
+            hasReceivedGrantSnapshot: false
+        )
+        let after = ProgressionDisplayTotalsResolver.resolve(
+            userId: Self.userId,
+            ledgerEvents: rows,
+            serverSnapshot: deviceBStamped,
+            verifiedGrantSum: nil,
+            hasReceivedGrantSnapshot: false
+        )
+
+        #expect(unpaidTotals.displayedTotalXp == 110)
+        #expect(before.openProvisionalXp == 0)
+        #expect(before.displayedTotalXp == 110)
+        #expect(after.displayedTotalXp == 110)
+    }
+
+    /// The scope names the plate: another plate's paid base retires nothing here.
+    @Test func baseScopeOfADifferentPlateDoesNotRetireTheRow() {
+        let open = LedgerPendingXpTotals.openProvisionalSum(
+            from: [Self.provisionalBaseRow()],
+            appliedProgressionEventIds: ["find-device-a"],
+            appliedProgressionScopeKeys: [Self.baseScope(regionId: "CA")]
+        )
+        #expect(open == 10)
+    }
+
+    /// Join 4 is base-only: the find bonuses have no base scope and keep their own joins, so a paid
+    /// base leaves an unpaid lifetime-unique / first-of-day row counting.
+    @Test func baseScopeDoesNotRetireTheFindBonusRows() {
+        #expect(XpServerScopeKey.baseDiscoveryTotalOnlyScope(for: Self.lifetimeUniqueRow()) == nil)
+        #expect(XpServerScopeKey.baseDiscoveryTotalOnlyScope(for: Self.firstFindOfDayRow()) == nil)
+
+        let open = LedgerPendingXpTotals.openProvisionalSum(
+            from: [
+                Self.provisionalBaseRow(),
+                Self.lifetimeUniqueRow(sourceEventId: "find-device-b"),
+                Self.firstFindOfDayRow(sourceEventId: "find-device-b"),
+            ],
+            appliedProgressionEventIds: ["find-device-a"],
+            appliedProgressionScopeKeys: [Self.baseScope()]
+        )
+        #expect(open == 30)
+    }
+
+    /// Negative control for the toast (item 14): the base scope is a TOTAL-only join. The string the
+    /// toast dedups on stays `nil` for every base label, so a device still announces its own find
+    /// when the account's other device got there first.
+    @Test func baseScopeIsNotTheToastMirror() {
+        let settledLate = Self.finalDiscoveryRow()
+        let pendingClaim = XpLedgerEvent(
+            userId: Self.userId,
+            sessionId: Self.sessionId,
+            gameInstanceId: Self.gameInstanceId,
+            sourceEventId: "find-device-b",
+            sourceEventType: "region_found",
+            itemId: Self.regionId,
+            grantKind: .provisionalDiscoveryXp,
+            status: .provisional,
+            xpDelta: 10,
+            reasonCode: .discoveryClaimPendingResolution,
+            xpUniquenessKey: "uk-claim"
+        )
+        for row in [Self.provisionalBaseRow(), settledLate, pendingClaim] {
+            #expect(XpServerScopeKey.baseDiscoveryTotalOnlyScope(for: row) == Self.baseScope())
+            #expect(XpServerScopeKey.mirrored(for: row) == nil)
+            #expect(XpGainToastEligibility.mirroredServerScopeKey(for: row) != Self.baseScope())
+        }
+    }
+
+    /// Pinned against `baseRegionDiscoveryScopeKey` (functions/src/progressionCore.ts): the ids are
+    /// the UPPERCASE `uuidString`s this client writes into the payload and the session document id.
+    @Test func baseScopeMatchesTheFunctionsFormat() throws {
+        let sessionId = try #require(UUID(uuidString: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"))
+        let gameId = try #require(UUID(uuidString: "11111111-2222-4333-8444-5555555555ff"))
+        let row = XpLedgerEvent(
+            userId: "uidABC",
+            sessionId: sessionId,
+            gameInstanceId: gameId,
+            sourceEventId: "e1",
+            sourceEventType: "region_found",
+            itemId: "US-CA",
+            grantKind: .finalDiscoveryAward,
+            status: .final,
+            xpDelta: 10,
+            reasonCode: .competitiveFirstFinder,
+            xpUniquenessKey: "uk"
+        )
+        #expect(
+            XpServerScopeKey.baseDiscoveryTotalOnlyScope(for: row)
+                == "xp_scope|v1|uidABC|AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE|11111111-2222-4333-8444-5555555555FF|US-CA|base_region_discovery"
+        )
     }
 }

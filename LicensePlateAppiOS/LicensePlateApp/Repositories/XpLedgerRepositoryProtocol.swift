@@ -44,4 +44,13 @@ protocol XpLedgerRepositoryProtocol: AnyObject {
     /// Returns the sum of voided provisional `xpDelta` values.
     @discardableResult
     func voidProvisionalRows(forUniquenessKey key: String, resolvedAt: Date) throws -> Int
+    /// Settlement (§3.1.1 item 29e): voids the open provisional rows for `key` AND inserts `replacement`
+    /// in ONE save, so the award can never be left voided with no final row in its place.
+    /// Returns the sum of voided provisional `xpDelta` values.
+    @discardableResult
+    func voidProvisionalRows(
+        forUniquenessKey key: String,
+        resolvedAt: Date,
+        appending replacement: XpLedgerEvent?
+    ) throws -> Int
 }

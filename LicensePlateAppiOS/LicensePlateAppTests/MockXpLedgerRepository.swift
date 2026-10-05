@@ -10,10 +10,13 @@ import SwiftData
 @MainActor
 final class MockXpLedgerRepository: XpLedgerRepositoryProtocol {
     var stored: [XpLedgerEvent] = []
+    /// When set, the standalone `append` throws it (a failed save), leaving `stored` untouched.
+    var appendError: Error?
 
     func setModelContext(_ context: ModelContext) {}
 
     func append(_ event: XpLedgerEvent) throws {
+        if let appendError { throw appendError }
         stored.append(event)
     }
 
@@ -104,6 +107,17 @@ final class MockXpLedgerRepository: XpLedgerRepositoryProtocol {
             stored[index].status = .voided
             stored[index].resolvedAt = resolvedAt
         }
+        return sum
+    }
+
+    @discardableResult
+    func voidProvisionalRows(
+        forUniquenessKey key: String,
+        resolvedAt: Date,
+        appending replacement: XpLedgerEvent?
+    ) throws -> Int {
+        let sum = try voidProvisionalRows(forUniquenessKey: key, resolvedAt: resolvedAt)
+        if let replacement { stored.append(replacement) }
         return sum
     }
 

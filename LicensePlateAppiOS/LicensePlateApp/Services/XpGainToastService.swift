@@ -57,6 +57,9 @@ final class XpGainToastService: ObservableObject {
     private let remoteReader: XpGainToastRemoteReading
     private let catalogProvider: ProgressionCatalogProviding
     private let rewardPresenter: RewardPresenter
+    /// `appliedProgressionScopes` of the current progression snapshot — the set the displayed total
+    /// retires local rows against (`LedgerPendingXpTotals`, join 3).
+    private let appliedProgressionScopeKeysProvider: () -> Set<String>
     private var cancellables = Set<AnyCancellable>()
     private var refreshWorkItem: DispatchWorkItem?
     private var dismissTask: Task<Void, Never>?
@@ -106,6 +109,7 @@ final class XpGainToastService: ObservableObject {
         remoteReader: XpGainToastRemoteReading = XpGrantRemoteRepository.shared,
         catalogProvider: ProgressionCatalogProviding = ProgressionCatalogProvider.shared,
         rewardPresenter: RewardPresenter = .shared,
+        appliedProgressionScopeKeysProvider: (() -> Set<String>)? = nil,
         processLaunchDate: Date = Date(),
         wiresLiveUpdates: Bool = true
     ) {
@@ -113,6 +117,8 @@ final class XpGainToastService: ObservableObject {
         self.remoteReader = remoteReader
         self.catalogProvider = catalogProvider
         self.rewardPresenter = rewardPresenter
+        self.appliedProgressionScopeKeysProvider = appliedProgressionScopeKeysProvider
+            ?? { UserProgressionRepository.shared.snapshot?.appliedProgressionScopeKeys ?? [] }
         self.processLaunchDate = processLaunchDate
 
         guard wiresLiveUpdates else { return }
@@ -256,12 +262,32 @@ final class XpGainToastService: ObservableObject {
         var sourceMix = Set<String>()
         var suppressedGrants = 0
         var suppressedRows = 0
+        let appliedScopes = appliedProgressionScopeKeysProvider()
 
         for row in ledgerRows {
             let key = "ledger|\(row.id)"
             guard !acknowledgedIds.contains(key) else { continue }
             if row.status == .voided || row.xpDelta <= 0 {
                 acknowledgedIds.insert(key)
+                continue
+            }
+            // §3.1.1 item 29f. The server total already holds this award (the account earned it on
+            // another device and this device has not seen that grant), so the displayed total keeps
+            // the row out on this same join — a line here would announce XP the number never shows
+            // and start the rank band that much low. Checked BEFORE the scope is registered below:
+            // the grant, when it arrives, is then the award's one announcement.
+            if let appliedScope = XpGainToastEligibility.mirroredServerScopeKey(for: row),
+               appliedScopes.contains(appliedScope) {
+                acknowledgedIds.insert(key)
+                // Handled for this process, like the grant-scope branch below: a mid-session identity
+                // change must not re-expose it. Safe because an applied scope's grant is written in the
+                // same transaction (progressionOnActivityEvent.ts:142-162), so a new epoch absorbs that
+                // grant as history before its seal.
+                presentedLedgerRowIds.insert(row.id)
+                suppressedRows += 1
+                XpToastDiagnostics.log(
+                    "ledger.dedup row=\(row.id.suffix(8)) reason=\(row.reasonCode.rawValue) via=appliedScope scope=\(XpToastDiagnostics.redactedScope(appliedScope))"
+                )
                 continue
             }
             // §3.1.1 item 14. Registered for every positive, non-voided row INDEPENDENT of whether

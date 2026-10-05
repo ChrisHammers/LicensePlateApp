@@ -295,4 +295,51 @@ struct XpLedgerRepositoryTests {
         #expect(scoped.count == 1)
         #expect(scoped[0].itemId == "CA")
     }
+
+    /// §3.1.1 item 29d. One row this build cannot decode (a reason code a build that no longer
+    /// exists wrote) used to throw out of every read, and the callers' `?? []` fallback then dropped
+    /// every pending row from the displayed total. The bad row is skipped; the rest still read.
+    @Test func undecodableRowIsSkippedAndTheRestStillRead() throws {
+        let ctx = try makeContext()
+        let sessionId = UUID()
+        let gameId = UUID()
+        ctx.insert(
+            XpLedgerEventEntity(
+                id: "bad-row",
+                userId: "u-decode",
+                sessionId: sessionId.uuidString,
+                gameInstanceId: gameId.uuidString,
+                sourceEventId: "e-bad",
+                sourceEventType: "region_found",
+                itemId: "NV",
+                grantKind: XpGrantKind.provisionalDiscoveryXp.rawValue,
+                status: XpLedgerStatus.provisional.rawValue,
+                xpDelta: 10,
+                reasonCode: "reason_code_this_build_does_not_know",
+                xpUniquenessKey: "uk-bad",
+                createdAt: Date()
+            )
+        )
+        try ctx.save()
+        try XpLedgerRepository.shared.append(
+            XpLedgerEvent(
+                id: "good-row",
+                userId: "u-decode",
+                sessionId: sessionId,
+                gameInstanceId: gameId,
+                sourceEventId: "e-good",
+                sourceEventType: "region_found",
+                itemId: "CA",
+                grantKind: .provisionalDiscoveryXp,
+                status: .provisional,
+                xpDelta: 10,
+                reasonCode: .collaborativeSharedFinder,
+                xpUniquenessKey: sampleKey(sessionId: sessionId, gameId: gameId)
+            )
+        )
+
+        let rows = try XpLedgerRepository.shared.ledgerEvents(userId: "u-decode")
+        #expect(rows.map(\.id) == ["good-row"])
+        #expect(try XpLedgerRepository.shared.ledgerEvents(sourceEventId: "e-bad").isEmpty)
+    }
 }

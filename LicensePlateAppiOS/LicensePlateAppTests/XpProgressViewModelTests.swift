@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftData
 import Testing
 @testable import LicensePlateApp
 
@@ -104,5 +105,26 @@ struct XpProgressViewModelTests {
             snapshotProvider: { 0 }
         )
         #expect(vm.ledgerProvisionalPending == 0)
+    }
+
+    /// §3.1.1 item 29b. The self licence card built with no injected XP view model (the
+    /// `UserDetailNavigationLink` path) shows the main Profile's displayed total, pending row
+    /// included, not `UserProgressionService.effectiveTotals`; another user's card still shows none.
+    @Test func selfLicenceCardWithNoInjectedViewModelShowsTheProfileDisplayedTotal() throws {
+        let schema = Schema(versionedSchema: CurrentSchema.self)
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: schema, migrationPlan: AppMigrationPlan.self, configurations: [config])
+        XpLedgerRepository.shared.setModelContext(ModelContext(container))
+        let uid = "u-29b-\(UUID().uuidString)"
+        try XpLedgerRepository.shared.append(Self.event(userId: uid, xpDelta: 10))
+
+        let profileTotal = XpProgressViewModel(userId: uid, wiresLiveUpdates: false).displayedTotalXp
+        let user = AppUser(id: uid, firebaseUID: uid)
+        let selfCard = StandardProfileViewModel(user: user, isSelfProfile: true).makeLicense(isRoyale: false)
+        let otherCard = StandardProfileViewModel(user: user, isSelfProfile: false).makeLicense(isRoyale: false)
+
+        #expect(profileTotal >= 10)
+        #expect(selfCard.xp == profileTotal)
+        #expect(otherCard.xp == 0)
     }
 }

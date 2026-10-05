@@ -57,6 +57,8 @@ enum XpGainToastEligibility {
     /// The derivation moved to Model in §3.1.1 item 17, where `LedgerPendingXpTotals` began joining
     /// on the same strings to retire ledger rows the server has already paid. ONE implementation:
     /// a toast that suppresses on a scope and a total that retires on it must never disagree.
+    /// The one documented exception is total-only (§3.1.1 item 29a):
+    /// `XpServerScopeKey.baseDiscoveryTotalOnlyScope(for:)`, which this toast deliberately never joins.
     static func mirroredServerScopeKey(for row: XpLedgerEvent) -> String? {
         XpServerScopeKey.mirrored(for: row)
     }

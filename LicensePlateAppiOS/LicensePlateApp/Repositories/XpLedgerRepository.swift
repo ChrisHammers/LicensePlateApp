@@ -8,6 +8,7 @@
 import Foundation
 import SwiftData
 import Combine
+import os
 
 enum XpLedgerRepositoryError: Error, Equatable {
     case noModelContext
@@ -82,6 +83,15 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
 
     @discardableResult
     func voidProvisionalRows(forUniquenessKey key: String, resolvedAt: Date) throws -> Int {
+        try voidProvisionalRows(forUniquenessKey: key, resolvedAt: resolvedAt, appending: nil)
+    }
+
+    @discardableResult
+    func voidProvisionalRows(
+        forUniquenessKey key: String,
+        resolvedAt: Date,
+        appending replacement: XpLedgerEvent?
+    ) throws -> Int {
         guard let ctx = modelContext else { throw XpLedgerRepositoryError.noModelContext }
         try repairKeysRetiredByIdentityRebind(matching: key)
         let descriptor = FetchDescriptor<XpLedgerEventEntity>(
@@ -97,7 +107,10 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
             row.status = XpLedgerStatus.voided.rawValue
             row.resolvedAt = resolvedAt
         }
-        guard !rows.isEmpty else { return 0 }
+        if let replacement {
+            ctx.insert(XpLedgerMapper.toEntity(replacement))
+        }
+        guard !rows.isEmpty || replacement != nil else { return 0 }
         try ctx.save()
         objectWillChange.send()
         return voidedSum
@@ -133,7 +146,7 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
             )
             rows = try ctx.fetch(descriptor)
         }
-        return try sortedDomainEvents(from: rows, statuses: statuses)
+        return sortedDomainEvents(from: rows, statuses: statuses)
     }
 
     func ledgerEvents(forUniquenessKey key: String) throws -> [XpLedgerEvent] {
@@ -143,7 +156,7 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
             predicate: #Predicate<XpLedgerEventEntity> { $0.xpUniquenessKey == key }
         )
         let rows = try ctx.fetch(descriptor)
-        return try sortedDomainEvents(from: rows, statuses: nil)
+        return sortedDomainEvents(from: rows, statuses: nil)
     }
 
     func ledgerEvents(sourceEventId: String) throws -> [XpLedgerEvent] {
@@ -152,7 +165,7 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
             predicate: #Predicate<XpLedgerEventEntity> { $0.sourceEventId == sourceEventId }
         )
         let rows = try ctx.fetch(descriptor)
-        return try sortedDomainEvents(from: rows, statuses: nil)
+        return sortedDomainEvents(from: rows, statuses: nil)
     }
 
     func ledgerEvents(userId: String) throws -> [XpLedgerEvent] {
@@ -163,7 +176,7 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
             }
         )
         let rows = try ctx.fetch(descriptor)
-        return try sortedDomainEvents(from: rows, statuses: nil)
+        return sortedDomainEvents(from: rows, statuses: nil)
     }
 
     func ledgerEvents(userId: String, sessionId: UUID) throws -> [XpLedgerEvent] {
@@ -175,7 +188,7 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
             }
         )
         let rows = try ctx.fetch(descriptor)
-        return try sortedDomainEvents(from: rows, statuses: nil)
+        return sortedDomainEvents(from: rows, statuses: nil)
     }
 
     func netXpDelta(
@@ -250,11 +263,23 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
         objectWillChange.send()
     }
 
-    private func sortedDomainEvents(from rows: [XpLedgerEventEntity], statuses: Set<XpLedgerStatus>?) throws -> [XpLedgerEvent] {
+    /// §3.1.1 item 29d: a row this build cannot decode (a `grantKind` / `status` / `reasonCode` raw
+    /// value a later or earlier build wrote — the pre-release rule deletes enum cases freely) is
+    /// skipped, not fatal. Rethrowing here failed the WHOLE read, and every caller that falls back to
+    /// `[]` on a throw (`XpProgressViewModel.displayedTotalXp`, `XpDisplayedTotalResolver`, the toast)
+    /// then dropped every pending row from the displayed total at once. The skipped row is logged
+    /// in DEBUG; it is never rewritten or deleted.
+    private func sortedDomainEvents(from rows: [XpLedgerEventEntity], statuses: Set<XpLedgerStatus>?) -> [XpLedgerEvent] {
         var mapped: [XpLedgerEvent] = []
         mapped.reserveCapacity(rows.count)
         for row in rows {
-            let domain = try XpLedgerMapper.toDomain(row)
+            let domain: XpLedgerEvent
+            do {
+                domain = try XpLedgerMapper.toDomain(row)
+            } catch {
+                Self.logUndecodableRow(row, error: error)
+                continue
+            }
             if let statuses, !statuses.contains(domain.status) { continue }
             mapped.append(domain)
         }
@@ -263,5 +288,22 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
             return $0.id < $1.id
         }
         return mapped
+    }
+
+    #if DEBUG
+    private static let logger = Logger(subsystem: "com.HammersTech.LicensePlateApp", category: "XpLedger")
+    /// Every ledger read re-maps every row, so each bad row is logged once per process, not per read.
+    private static var loggedUndecodableRowIds = Set<String>()
+    #endif
+
+    /// DEBUG-only: `[XpLedger]` in the Xcode console, category `XpLedger` in Console.app. The row id
+    /// is shortened and no uid is printed.
+    private static func logUndecodableRow(_ row: XpLedgerEventEntity, error: Error) {
+        #if DEBUG
+        guard loggedUndecodableRowIds.insert(row.id).inserted else { return }
+        let text = "skip.undecodable row=\(row.id.suffix(8)) error=\(error)"
+        logger.notice("\(text, privacy: .public)")
+        print("[XpLedger] \(text)")
+        #endif
     }
 }

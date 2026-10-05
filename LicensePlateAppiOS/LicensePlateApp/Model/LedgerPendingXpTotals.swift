@@ -74,7 +74,7 @@ struct LedgerPendingXpTotals: Equatable, Sendable {
 
     /// A row is retired when the SERVER total already contains the same award.
     ///
-    /// Three joins, in order of directness:
+    /// Four joins, in order of directness:
     ///
     /// 1. **The event id.** The normal path: the server stamps `appliedProgressionEvents[eventId]`
     ///    in the same transaction that increments `totalXp`
@@ -103,6 +103,14 @@ struct LedgerPendingXpTotals: Equatable, Sendable {
     ///    are provisional, and their scope being applied means another event — a peer's, or this
     ///    account's other device — already paid that award.
     ///
+    /// 4. **The base discovery award's server scope** (`XpServerScopeKey.baseDiscoveryTotalOnlyScope(for:)`,
+    ///    §3.1.1 item 29a). The same id-independent reasoning as join 3, for the one award join 3
+    ///    leaves out: the same account finding the same plate in the same game on two devices. The
+    ///    server pays base once under `xp_scope|…|base_region_discovery`, off whichever device's event
+    ///    lands first, so the other device's base row must retire on that scope rather than wait for
+    ///    its own event's no-increment stamp. Kept out of `mirrored(for:)` because that string is also
+    ///    the toast's dedup key, and the toast rules for base discovery are not changed here.
+    ///
     /// Join 2 is what makes the retirement robust to §3.1.1 item 18 (the server bills a rejected
     /// find's `first_find_of_day` under the UTC day of the rejection, not the device's day, so the
     /// scope in join 3 can legitimately disagree with the local row's). The `srvrej_` id carries no
@@ -120,6 +128,10 @@ struct LedgerPendingXpTotals: Equatable, Sendable {
             return true
         }
         if let scopeKey = XpServerScopeKey.mirrored(for: row),
+           appliedProgressionScopeKeys.contains(scopeKey) {
+            return true
+        }
+        if let scopeKey = XpServerScopeKey.baseDiscoveryTotalOnlyScope(for: row),
            appliedProgressionScopeKeys.contains(scopeKey) {
             return true
         }

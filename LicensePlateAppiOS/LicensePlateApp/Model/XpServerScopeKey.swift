@@ -9,6 +9,7 @@
 //  Neutral home (§3.1.1 item 17): both the XP toast (`XpGainToastEligibility`, item 14) and the
 //  displayed-total read model (`LedgerPendingXpTotals`) join on these strings, so the derivation
 //  lives in Model with exactly ONE implementation rather than being reached for across layers.
+//  The one documented exception is total-only: `baseDiscoveryTotalOnlyScope(for:)` (§3.1.1 item 29a).
 //
 
 import Foundation
@@ -115,6 +116,7 @@ enum XpServerScopeKey {
         // ---- Base discovery, in all four of its local labels. The server mirror is
         //      `region_found_base_discovery`, which `shouldToastRemoteGrant` already excludes by
         //      reason; giving these rows a scope would add a second rule for an award that has one.
+        //      (The displayed TOTAL joins them on `baseDiscoveryTotalOnlyScope(for:)` instead.)
         case .soloNewDiscovery, .collaborativeSharedFinder, .competitiveLateFinder,
              .discoveryClaimPendingResolution:
             return nil
@@ -142,6 +144,48 @@ enum XpServerScopeKey {
         case .tripCompletion, .milestoneUnlock:
             return nil
         }
+    }
+
+    /// `xp_scope|v1|<uid>|<sessionId>|<gameInstanceId>|<regionId>|base_region_discovery` — the
+    /// SERVER scope of the base find award this row mirrors, or `nil` when the row is not a base
+    /// discovery award. Byte-for-byte `baseRegionDiscoveryScopeKey` (`functions/src/progressionCore.ts`
+    /// :259-269): `uid` is the payload's `participantId` (the row's `userId`), `sessionId` is the
+    /// `trip_sessions/{id}` document id and `gameInstanceId` / `regionId` are the payload strings —
+    /// all `UUID.uuidString` (UPPERCASE) on this client, per the CASING note on `mirrored(for:)`.
+    ///
+    /// TOTAL-ONLY (§3.1.1 item 29a). `LedgerPendingXpTotals` retires a base row on this scope; the XP
+    /// toast must NOT, which is why it is deliberately not a case of `mirrored(for:)`. The toast
+    /// joins `mirrored(for:)` against every grant's `idempotencyKey`, and the server's base grant
+    /// carries this scope — so the finding device would stop announcing its own find whenever the
+    /// account's other device got there first, a toast rule this item does not change. The total
+    /// needs it because the same account can find the same plate in the same game on two devices:
+    /// the server pays the base award once, under THIS scope, off whichever event lands first, and
+    /// stamps the second event with no increment (`functions/src/progressionOnActivityEvent.ts`
+    /// :130-133). The second device's row matches neither its own event id (until that stamp) nor
+    /// the paying event's id, so without this join it counts the award a second time on top of a
+    /// server total that already holds it — and then drops by it when its own event is stamped
+    /// (OD-17: a shown number never goes down).
+    ///
+    /// The reasons are every label a base award carries locally: the provisional competitive claim
+    /// (`XpReconciliationService.handleCommittedActivityEventThrowing`) plus the four settled labels
+    /// `XpAwardRuleEngine.xpNetAndReason` gives a positive base amount. `competitive_first_finder` is
+    /// the BASE award locally (its +5 server component has a scope of its own), so it belongs here.
+    static func baseDiscoveryTotalOnlyScope(for row: XpLedgerEvent) -> String? {
+        guard row.grantKind == .provisionalDiscoveryXp || row.grantKind == .finalDiscoveryAward else {
+            return nil
+        }
+        switch row.reasonCode {
+        case .discoveryClaimPendingResolution, .soloNewDiscovery, .collaborativeSharedFinder,
+             .competitiveFirstFinder, .competitiveLateFinder:
+            break
+        default:
+            return nil
+        }
+        guard !row.itemId.isEmpty,
+              row.sessionId != XpLedgerGlobalScope.sessionId,
+              row.gameInstanceId != XpLedgerGlobalScope.gameInstanceId else { return nil }
+        return "xp_scope|v1|\(row.userId)|\(row.sessionId.uuidString)|\(row.gameInstanceId.uuidString)"
+            + "|\(row.itemId)|base_region_discovery"
     }
 
     /// `<prefix>|v1|<uid>|<gameInstanceId>` for a completion row scoped to one game instance.

@@ -35,7 +35,13 @@ final class StandardProfileViewModel: ObservableObject {
         self.isSelfProfile = isSelfProfile
         self.userId = user.firebaseUID ?? user.id
         self.lifetimeStatsViewModel = isSelfProfile ? lifetimeStatsViewModel : nil
-        self.xpProgressViewModel = isSelfProfile ? xpProgressViewModel : nil
+        // §3.1.1 item 29b: the self licence card reads the SAME displayed total as the main Profile
+        // (`XpProgressViewModel.displayedTotalXp`). A caller that injects none (`UserDetailNavigationLink`)
+        // used to fall through to `UserProgressionService.effectiveTotals.totalXp` — a second formula,
+        // lower than the Profile and able to drop on its own. Other users' cards are unchanged.
+        self.xpProgressViewModel = isSelfProfile
+            ? (xpProgressViewModel ?? XpProgressViewModel(userId: user.firebaseUID ?? user.id))
+            : nil
         self.publicLifetimeStatsRepository = publicLifetimeStatsRepository
 
         if isSelfProfile, let lifetimeStatsViewModel {
@@ -52,7 +58,7 @@ final class StandardProfileViewModel: ObservableObject {
             syncPublicStats()
         }
 
-        if isSelfProfile, let xpProgressViewModel {
+        if let xpProgressViewModel = self.xpProgressViewModel {
             xpProgressViewModel.objectWillChange
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] _ in self?.objectWillChange.send() }
@@ -77,9 +83,7 @@ final class StandardProfileViewModel: ObservableObject {
     func makeLicense(isRoyale: Bool) -> UserDriversLicense {
         let progression = UserProgressionRepository.shared.snapshot
         let effective = UserProgressionService.shared.effectiveTotals
-        let xp = isSelfProfile
-            ? (xpProgressViewModel?.displayedTotalXp ?? effective?.totalXp ?? progression?.totalXp ?? 0)
-            : 0
+        let xp = isSelfProfile ? (xpProgressViewModel?.displayedTotalXp ?? 0) : 0
         let regions = isSelfProfile
             ? (effective?.acceptedRegionFindCount ?? progression?.acceptedRegionFindCount)
             : nil

@@ -813,11 +813,13 @@ struct XpGainToastServiceTests {
     private func sealedService(
         ledger: MockXpLedgerRepository,
         remote: MockXpGainToastRemoteReader,
+        appliedScopes: Set<String> = [],
         processLaunchDate: Date = Date()
     ) -> XpGainToastService {
         let service = XpGainToastService(
             xpLedger: ledger,
             remoteReader: remote,
+            appliedProgressionScopeKeysProvider: { appliedScopes },
             processLaunchDate: processLaunchDate,
             wiresLiveUpdates: false
         )
@@ -1311,6 +1313,126 @@ struct XpGainToastServiceTests {
             ledger.stored[index].userId = "u2"
         }
         remote.boundUserId = "u2"
+        service.configure(userId: "u2")
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+    }
+
+    /// (14) §3.1.1 item 29f, the phantom toast. The account already took this plate's lifetime bonus
+    /// on another device and the progression snapshot says so, but this device has not seen that
+    /// grant. `LedgerPendingXpTotals` keeps the local row out of the displayed total on the applied
+    /// scope, so the toast must not announce it either.
+    @Test func localRowWhoseScopeIsAlreadyAppliedDoesNotToast() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(
+            ledger: ledger,
+            remote: remote,
+            appliedScopes: ["lifetime_unique_region|v1|u1|TX"]
+        )
+
+        try? ledger.append(
+            bonusRow(id: "lur-paid-elsewhere", reasonCode: .lifetimeUniqueRegion, itemId: "TX", xpDelta: 20)
+        )
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+    }
+
+    /// (15) The control for (14): the same row with the scope NOT applied is a real local gain and
+    /// toasts at once (OD-16), exactly as before.
+    @Test func localRowWhoseScopeIsNotAppliedStillToasts() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(
+            ledger: ledger,
+            remote: remote,
+            appliedScopes: ["lifetime_unique_region|v1|u1|CA"]
+        )
+
+        try? ledger.append(
+            bonusRow(id: "lur-paid-elsewhere", reasonCode: .lifetimeUniqueRegion, itemId: "TX", xpDelta: 20)
+        )
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.lines.first?.id == "lifetime_unique")
+        #expect(service.presentation?.totalXp == 20)
+    }
+
+    /// (16) The suppressed row does not claim the award's scope, so the server grant — the XP that
+    /// IS inside the displayed total — is still announced once when it arrives.
+    @Test func grantForAnAwardWhoseLocalRowWasSuppressedStillToastsOnce() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(
+            ledger: ledger,
+            remote: remote,
+            appliedScopes: ["first_find_of_day|v1|u1|2026-09-26"]
+        )
+
+        try? ledger.append(
+            bonusRow(id: "fod-paid-elsewhere", reasonCode: .firstFindOfDay, itemId: "2026-09-26", xpDelta: 10)
+        )
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        remote.grants = [
+            scopedGrant(
+                grantId: "g-fod-other-device",
+                amount: 10,
+                reason: .firstFindOfDay,
+                sourceId: "evt-other-device",
+                idempotencyKey: "first_find_of_day|v1|u1|2026-09-26"
+            )
+        ]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.lines.count == 1)
+        #expect(service.presentation?.totalXp == 10)
+    }
+
+    /// (17) A row suppressed on an applied scope is handled for this process, like (13): once the
+    /// grant has announced the award, a mid-session rebind whose new progression snapshot does not
+    /// hold the (now re-uid'd) scope yet must not re-expose the local row as a second announcement.
+    @Test func rowSuppressedOnAnAppliedScopeIsNotRePresentedAfterAnIdentityRebind() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        var appliedScopes: Set<String> = ["first_find_of_day|v1|u1|2026-09-26"]
+        let service = XpGainToastService(
+            xpLedger: ledger,
+            remoteReader: remote,
+            appliedProgressionScopeKeysProvider: { appliedScopes },
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: "u1")
+        service.performImmediateRefresh()
+
+        try? ledger.append(
+            bonusRow(id: "fod-applied", reasonCode: .firstFindOfDay, itemId: "2026-09-26", xpDelta: 10)
+        )
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        remote.grants = [
+            scopedGrant(
+                grantId: "g-fod-applied",
+                amount: 10,
+                reason: .firstFindOfDay,
+                sourceId: "evt-other-device",
+                idempotencyKey: "first_find_of_day|v1|u1|2026-09-26"
+            )
+        ]
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == 10)
+        service.dismissManually()
+
+        // The rebind: rows keep their ids and take the new uid; the new snapshot has no scope yet.
+        for index in ledger.stored.indices where ledger.stored[index].userId == "u1" {
+            ledger.stored[index].userId = "u2"
+        }
+        remote.boundUserId = "u2"
+        appliedScopes = []
         service.configure(userId: "u2")
         service.performImmediateRefresh()
 

@@ -28,39 +28,42 @@ struct ProfileXpProgressSection<ProgressionLinks: View>: View {
                         .foregroundStyle(Color.red.opacity(0.9))
                 }
 
-                if let xp = viewModel.serverFinalXp {
+                // §3.1.1 item 29c: the headline is ALWAYS the displayed total — the one number the
+                // licence card, rank and toast band show. It used to switch to the server-only total
+                // the moment the progression snapshot arrived, dropping by the pending amount (OD-17).
+                // Synced XP and the pending line are sub-lines under it.
+                VStack(alignment: .leading, spacing: 4) {
                     HStack {
-                        Text("profile.xp.server_total".localized)
+                        Text("profile.xp.local_fallback_total".localized)
                             .font(.system(.body, design: .rounded))
                             .foregroundStyle(Color.Theme.primaryBlue)
                         Spacer()
-                        Text("\(xp)")
+                        Text("\(viewModel.displayedTotalXp)")
                             .font(.system(.body, design: .rounded))
                             .fontWeight(.semibold)
                             .foregroundStyle(Color.Theme.softBrown)
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("profile.xp.server_total".localized)
-                    .accessibilityValue("\(xp)")
-                } else {
-                    VStack(alignment: .leading, spacing: 4) {
+                    .accessibilityLabel("profile.xp.local_fallback_total".localized)
+                    .accessibilityValue("\(viewModel.displayedTotalXp)")
+
+                    if let xp = viewModel.serverFinalXp {
                         HStack {
-                            Text("profile.xp.local_fallback_total".localized)
-                                .font(.system(.body, design: .rounded))
-                                .foregroundStyle(Color.Theme.primaryBlue)
+                            Text("profile.xp.server_total".localized)
                             Spacer()
-                            Text("\(viewModel.displayedTotalXp)")
-                                .font(.system(.body, design: .rounded))
-                                .fontWeight(.semibold)
-                                .foregroundStyle(Color.Theme.softBrown)
+                            Text("\(xp)")
                         }
+                        .font(.system(.caption, design: .rounded))
+                        .foregroundStyle(Color.Theme.softBrown)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("profile.xp.server_total".localized)
+                        .accessibilityValue("\(xp)")
+                    } else {
                         Text(viewModel.ledgerProvisionalPending > 0 ? "profile.xp.local_fallback_note".localized : "profile.xp.server_total_loading".localized)
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("profile.xp.local_fallback_total".localized)
-                    .accessibilityValue("\(viewModel.displayedTotalXp)")
                 }
 
                 if viewModel.ledgerProvisionalPending > 0 {

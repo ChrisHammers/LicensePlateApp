@@ -17,15 +17,9 @@ final class XpProgressViewModel: ObservableObject {
     @Published private(set) var lastUpdated: Date?
     @Published private(set) var lastError: String?
 
-    var displayedTotalXp: Int {
-        ProgressionDisplayTotalsResolver.resolve(
-            userId: userId,
-            ledgerEvents: (try? xpLedger.ledgerEvents(userId: userId)) ?? [],
-            serverSnapshot: UserProgressionRepository.shared.snapshot,
-            verifiedGrantSum: verifiedProvider().verified,
-            hasReceivedGrantSnapshot: XpGrantRemoteRepository.shared.hasReceivedInitialSnapshot
-        ).displayedTotalXp
-    }
+    /// Set by `refresh()` from the same resolve as `ledgerProvisionalPending`, so view bodies read
+    /// it without a ledger fetch and the headline always agrees with its sub-lines (§3.1.1 item 29c).
+    @Published private(set) var displayedTotalXp: Int = 0
 
     var isUsingLocalFallback: Bool {
         UserProgressionRepository.shared.snapshot == nil
@@ -89,21 +83,23 @@ final class XpProgressViewModel: ObservableObject {
         let verified = verifiedProvider()
         verifiedServerXp = verified.verified
         isXpGrantLedgerVerified = verified.matchesServerTotal
+        let events: [XpLedgerEvent]
         do {
-            let events = try xpLedger.ledgerEvents(userId: userId)
-            let totals = ProgressionDisplayTotalsResolver.resolve(
-                userId: userId,
-                ledgerEvents: events,
-                serverSnapshot: snapshot,
-                verifiedGrantSum: verified.verified,
-                hasReceivedGrantSnapshot: XpGrantRemoteRepository.shared.hasReceivedInitialSnapshot
-            )
-            ledgerProvisionalPending = totals.openProvisionalXp
+            events = try xpLedger.ledgerEvents(userId: userId)
             lastError = nil
         } catch {
             lastError = error.localizedDescription
-            ledgerProvisionalPending = 0
+            events = []
         }
+        let totals = ProgressionDisplayTotalsResolver.resolve(
+            userId: userId,
+            ledgerEvents: events,
+            serverSnapshot: snapshot,
+            verifiedGrantSum: verified.verified,
+            hasReceivedGrantSnapshot: XpGrantRemoteRepository.shared.hasReceivedInitialSnapshot
+        )
+        ledgerProvisionalPending = totals.openProvisionalXp
+        displayedTotalXp = totals.displayedTotalXp
         lastUpdated = Date()
     }
 }

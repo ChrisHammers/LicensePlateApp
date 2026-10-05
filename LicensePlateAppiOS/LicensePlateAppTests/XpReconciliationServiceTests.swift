@@ -126,6 +126,73 @@ struct XpReconciliationServiceTests {
         #expect(active.reduce(0) { $0 + $1.xpDelta } == 10)
     }
 
+    /// §3.1.1 item 29e. The final row is written in the SAME save that voids the provisional one.
+    /// The ledger's standalone `append` fails throughout (a failed save): before the fix the void
+    /// had already been saved when that append threw, stranding the find voided with no final and
+    /// the displayed total one base award lower. Settlement must not need the standalone append.
+    @Test func settlementVoidsTheProvisionalAndAppendsTheFinalInOneWrite() throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let key = XpLedgerKeyBuilder.uniquenessKey(
+            userId: "u1",
+            sessionId: sessionId,
+            gameInstanceId: gameId,
+            itemId: "TX",
+            xpCategory: .baseRegionDiscovery
+        ).storageString
+        let ledger = MockXpLedgerRepository()
+        ledger.stored = [
+            XpLedgerEvent(
+                userId: "u1",
+                sessionId: sessionId,
+                gameInstanceId: gameId,
+                sourceEventId: "find-1",
+                sourceEventType: TripActivityEventKind.regionFound.rawValue,
+                itemId: "TX",
+                grantKind: .provisionalDiscoveryXp,
+                status: .provisional,
+                xpDelta: 10,
+                reasonCode: .discoveryClaimPendingResolution,
+                xpUniquenessKey: key,
+                metadata: [XpLedgerMetadataKey.originalDiscoveryEventId: "find-1"]
+            )
+        ]
+        ledger.appendError = XpLedgerRepositoryError.noModelContext
+
+        let events = MockTripActivityEventRepository()
+        let games = MockGameInstanceRepository()
+        let trips = MockTripSessionRepository()
+        seedCompetitiveGame(sessionId: sessionId, gameId: gameId, games: games, trips: trips)
+        let svc = XpReconciliationService(
+            xpLedger: ledger,
+            resolutionRepo: MockDiscoveryResolutionRepository(),
+            tripActivityEvents: events,
+            gameRepository: games,
+            tripSessionRepository: trips,
+            clawbackHandler: { _ in }
+        )
+
+        let resolution = DiscoveryResolution(
+            resolutionId: "xp_res:v1:find-1:accepted_first",
+            sourceEventId: "find-1",
+            sessionId: sessionId,
+            gameInstanceId: gameId,
+            itemId: "TX",
+            actorUserId: "u1",
+            finalOutcome: .acceptedFirst,
+            tripScoringOutcome: .acceptedFirst,
+            personalHistoryOutcome: .acceptedFirst,
+            finalXpAward: 10,
+            xpReason: .competitiveFirstFinder
+        )
+        try svc.consumeResolution(resolution, gameMode: .competitive, tripMode: .multiplayer)
+
+        let rows = ledger.stored.filter { $0.xpUniquenessKey == key }
+        #expect(rows.contains { $0.status == .voided && $0.grantKind == .provisionalDiscoveryXp })
+        #expect(rows.contains { $0.status == .final && $0.grantKind == .finalDiscoveryAward && $0.xpDelta == 10 })
+        #expect(rows.filter { $0.status != .voided }.reduce(0) { $0 + $1.xpDelta } == 10)
+    }
+
     @Test func consumeAcceptedLateKeepsBase10WithNoClawback() throws {
         _ = try makeContext()
         let sessionId = UUID()
