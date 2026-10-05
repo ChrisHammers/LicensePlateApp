@@ -50,11 +50,17 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     /// Upper bound on a single `appendEventToRemote` await so a hung `httpsCallable` cannot block all later flushes.
     static let gameplayAppendRemoteTimeoutNanoseconds: UInt64 = 45_000_000_000
 
-    /// After transient `game not found`, wait before flushing so `publishFullSession` can create `games/{id}` on Firestore.
-    private static let gameplayGameNotFoundRetryDelayNanoseconds: UInt64 = 3_500_000_000
+    /// How long the retry wake-up waits past a parked row's `nextRetryAt` before draining, so the row
+    /// reads as due (`fetchFailedRetryDue` filters `nextRetryAt <= now`). Half a second keeps the
+    /// transient `game not found` re-drive at exactly the 3.5 s it always used (3 s + 0.5 s).
+    private static let gameplayRetryWakeupSlackSeconds: TimeInterval = 0.5
 
     /// Max retries for transient `game not found` before treating like a permanent sync failure.
     private static let gameplayGameNotFoundMaxAttempts = 10
+
+    /// Cap on the retry wake-up's offline probe interval (§3.1.1 item 31), which doubles from
+    /// `gameplayBackoffBaseSeconds` while every probe finds the device offline.
+    private static let gameplayOfflineProbeMaxSeconds: TimeInterval = 900
 
     /// Max extra `fetchPending()` passes per `processPendingSyncItems` so large offline backlogs drain without another user action.
     private static let maxGameplayBacklogDrainPasses = 10
@@ -111,6 +117,26 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     /// re-attempt) or by `suspendProcessingForPurge` (to bail).
     private var childConsentResumeWaiters: [CheckedContinuation<Void, Never>] = []
     private var processingSuspendedForPurge = false
+    /// §3.1.1 item 31 — the ONE coalesced wake-up that retries rows parked on a retryable failure
+    /// (transient, timeout, membership/App Check, `game not found`) when their backoff ends. Every
+    /// other trigger (a new find's debounce, a reachability edge, foreground, launch) is gated on
+    /// `gameplaySyncOnlineProvider`, so a monitor stuck at "offline" after the network came back
+    /// left a parked find waiting for a relaunch. This one deliberately is not.
+    private var gameplayRetryWakeupTask: Task<Void, Never>?
+    private var gameplayRetryWakeupDue: Date?
+    /// When the wake-up should retry each row it is responsible for — parked by this coordinator on a
+    /// retryable failure and not attempted since — by queue row id: the row's `nextRetryAt`, or for a
+    /// row parked OFFLINE (due at once, see the drain) the next probe. Lets a drain re-arm the wake-up
+    /// for a row whose backoff ends later than the one that just fired, and retire it when none is left.
+    /// Kept across a purge suspension: a sign-out that fails leaves these rows with the account.
+    private var gameplayRetryParkedDueByItemId: [String: Date] = [:]
+    /// Base of the transient / timeout backoff (doubling, capped at 3600 s); membership / App Check
+    /// uses half of it (30 s, capped at 900 s); the offline probe starts at it. Tests shorten it.
+    private var gameplayBackoffBaseSeconds: TimeInterval = 60
+    /// Consecutive drains stopped because the device was offline (§3.1.1 item 31). The next probe is
+    /// `gameplayBackoffBaseSeconds` doubled this many times, capped at `gameplayOfflineProbeMaxSeconds`;
+    /// any answer from the server resets it.
+    private var gameplayOfflineProbeCount = 0
 
     init(repository: SyncQueueRepositoryProtocol, userSyncExecutor: UserSyncExecutorProtocol? = nil) {
         self.repository = repository
@@ -148,6 +174,11 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         appendRemoteTimeoutNanoseconds = nanoseconds
     }
 
+    /// Tests shorten the retry backoff so a parked row's `nextRetryAt` lands in milliseconds (§3.1.1 item 31).
+    func setGameplayBackoffBaseSecondsForTesting(_ seconds: TimeInterval) {
+        gameplayBackoffBaseSeconds = seconds
+    }
+
     func scheduleDebouncedGameplaySyncFlushIfOnline() {
         guard !processingSuspendedForPurge else {
             GameplaySyncDiagnostics.log("flush.skip reason=suspended trigger=debounce")
@@ -163,6 +194,11 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                 // a device whose reachability reads offline keeps receiving and keeps
                 // importing while every one of its own finds waits here (§3.1.1 item 22).
                 GameplaySyncDiagnostics.log("flush.skip reason=offline trigger=debounce")
+                // §3.1.1 item 31: a find skipped here is never attempted, so it is never parked and
+                // no failure arms the wake-up for it. Arm it as a probe: a monitor that is wrong gets
+                // the find up within one base interval; a device that really is offline pays one
+                // fast -1009, which spends nothing.
+                self.scheduleGameplayRetryWakeup(at: Date().addingTimeInterval(self.gameplayBackoffBaseSeconds))
                 return
             }
             await self.processPendingSyncItems()
@@ -310,6 +346,10 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         processingSuspendedForPurge = true
         gameplayDebouncedFlushTask?.cancel()
         gameplayDebouncedFlushTask = nil
+        // The wake-up must not drain mid-wipe. Its parked rows stay registered: a sign-out that fails
+        // keeps them with the account, and `resumeProcessingAfterPurge` re-arms for them; after a
+        // wipe that succeeded the re-armed drain finds nothing and the drain-end filter drops them.
+        cancelGameplayRetryWakeup()
         pendingAnotherGameplayFlush = false
         pendingChildConsentResume = false
         let waiters = childConsentResumeWaiters
@@ -320,10 +360,15 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
     }
 
     func resumeProcessingAfterPurge() {
-        if processingSuspendedForPurge {
+        let wasSuspended = processingSuspendedForPurge
+        if wasSuspended {
             GameplaySyncDiagnostics.log("queue resumed after purge")
         }
         processingSuspendedForPurge = false
+        // §3.1.1 item 31: the suspension cancelled the retry wake-up.
+        if wasSuspended, let nextDue = gameplayRetryParkedDueByItemId.values.min() {
+            scheduleGameplayRetryWakeup(at: nextDue)
+        }
     }
 
     func enqueueForSync(sessionId: UUID, eventId: String) throws {
@@ -410,15 +455,45 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         }
     }
 
-    /// Wakes the queue after `nextRetryAt` for transient `game not found` (no user action required).
-    private func scheduleProcessPendingAfterGameplayRetryDelay() {
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: Self.gameplayGameNotFoundRetryDelayNanoseconds)
-            await self?.processPendingSyncItems()
+    /// §3.1.1 item 31. Records a row just parked on a retryable failure and makes sure the ONE
+    /// wake-up fires by its `nextRetryAt` (no user action, no reachability edge required).
+    private func parkForRetryWakeup(itemId: String, until due: Date) {
+        gameplayRetryParkedDueByItemId[itemId] = due
+        scheduleGameplayRetryWakeup(at: due)
+    }
+
+    /// Coalesced: an already-scheduled wake-up that is due no later than `due` covers this row too;
+    /// an earlier `due` cancels and reschedules it. When it fires it drains WITHOUT consulting
+    /// `gameplaySyncOnlineProvider` — the drain itself never checks it, and a truly offline attempt
+    /// fails fast (-1009), spends no row's budget and stops the drain, doubling only the probe
+    /// interval toward 900 s — so a monitor that lies costs one cheap call per probe and never a
+    /// parked find.
+    private func scheduleGameplayRetryWakeup(at due: Date) {
+        if gameplayRetryWakeupTask != nil, let scheduled = gameplayRetryWakeupDue, scheduled <= due {
+            return
+        }
+        gameplayRetryWakeupTask?.cancel()
+        gameplayRetryWakeupDue = due
+        let delaySeconds = max(due.timeIntervalSinceNow, 0) + Self.gameplayRetryWakeupSlackSeconds
+        GameplaySyncDiagnostics.log("retry.wakeup in=\(Int(delaySeconds.rounded(.up)))s")
+        gameplayRetryWakeupTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delaySeconds * 1_000_000_000))
+            guard let self, !Task.isCancelled else { return }
+            self.gameplayRetryWakeupTask = nil
+            self.gameplayRetryWakeupDue = nil
+            GameplaySyncDiagnostics.log("retry.wakeup fired")
+            await self.processPendingSyncItems()
         }
     }
 
+    private func cancelGameplayRetryWakeup() {
+        gameplayRetryWakeupTask?.cancel()
+        gameplayRetryWakeupTask = nil
+        gameplayRetryWakeupDue = nil
+    }
+
     private func processPendingSyncItemsBody() async {
+        let drainStartedAt = Date()
         var acceptedProgressionSourceEventIds = Set<String>()
         // FR-28: while the unconsented-child hold is on, skip the gameplay drain
         // entirely (queued events simply hold) but still run user-profile sync below.
@@ -441,8 +516,20 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
             #endif
         }
         var gameplayDrainPass = 0
-        while !gameplayHeld, gameplayDrainPass < Self.maxGameplayBacklogDrainPasses {
-            let pending = (try? repository.fetchPending()) ?? []
+        gameplayDrain: while !gameplayHeld, gameplayDrainPass < Self.maxGameplayBacklogDrainPasses {
+            let pending: [SyncQueueItem]
+            do {
+                pending = try repository.fetchPending()
+            } catch SyncQueueRepositoryError.noModelContext where gameplayDrainPass == 0 {
+                // §3.1.1 item 31: a launch flush can run before the queue repository has its
+                // ModelContext. That is not an empty queue — the old `try? … ?? []` logged
+                // "flush end verdicts=none" and spent the profile-sync throttle on a drain that
+                // never read the queue. Any other fetch error keeps the old fallback.
+                GameplaySyncDiagnostics.log("flush.skip reason=repository-unconfigured")
+                return
+            } catch {
+                pending = []
+            }
             let retryDue = (try? repository.fetchFailedRetryDue()) ?? []
             let candidates = Dictionary(uniqueKeysWithValues: (pending + retryDue).map { ($0.id, $0) }).values.sorted { $0.createdAt < $1.createdAt }
 
@@ -453,6 +540,8 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
             GameplaySyncDiagnostics.log("drain pass=\(gameplayDrainPass + 1) rows=\(gameplayItems.count) (queue pending=\(pending.count) retryDue=\(retryDue.count))")
 
             for item in gameplayItems {
+                // Attempted now: a re-park below re-registers it with the retry wake-up.
+                gameplayRetryParkedDueByItemId[item.id] = nil
                 guard let sessionStr = item.payloadSessionId,
                       let eventId = item.payloadEventId,
                       let sessionUUID = UUID(uuidString: sessionStr) else {
@@ -472,6 +561,8 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                     let outcome = try await Self.withRemoteTimeout(nanoseconds: appendRemoteTimeoutNanoseconds) { [self] in
                         try await self.gameplayEventAppender(event)
                     }
+                    // The server answered: the device is online, so the offline probe starts over.
+                    gameplayOfflineProbeCount = 0
                     let gameIdStr = event.payload?[TripActivityEventPayloadKey.gameInstanceId] ?? ""
                     switch outcome {
                     case .accepted(let lateReplay):
@@ -571,9 +662,10 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                                 try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionUUID)
                             }
                             verdict("failed(game-not-found)", item, resolvedEvent, "retryIn=3s republish=1 cap=\(Self.gameplayGameNotFoundMaxAttempts)")
+                            // 3 s so `publishFullSession` can create `games/{id}` on Firestore first.
                             let nextRetryAt = Date().addingTimeInterval(3)
                             try? repository.markFailed(id: item.id, nextRetryAt: nextRetryAt)
-                            scheduleProcessPendingAfterGameplayRetryDelay()
+                            parkForRetryWakeup(itemId: item.id, until: nextRetryAt)
                             continue
                         }
                         AnalyticsService.shared.log(.gameplayEventServerRejected(
@@ -596,12 +688,32 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                             try? await TripCanonicalRemoteSyncService.shared.publishFullSession(sessionId: sessionUUID)
                         }
                         let attempts = max(item.attemptCount, 0) + 1
-                        let delaySeconds = min(pow(2.0, Double(attempts - 1)) * 30.0, 900.0)
+                        let delaySeconds = min(pow(2.0, Double(attempts - 1)) * (gameplayBackoffBaseSeconds / 2), 900.0)
                         verdict("failed(membership-or-appcheck)", item, resolvedEvent,
-                                "eligibleIn=\(Int(delaySeconds))s republish=1 code=\((error as NSError).code) msg=\(GameplaySyncDiagnostics.message(error))")
+                                "retryIn=\(Int(delaySeconds))s republish=1 code=\((error as NSError).code) msg=\(GameplaySyncDiagnostics.message(error))")
                         let nextRetryAt = Date().addingTimeInterval(delaySeconds)
                         try? repository.markFailed(id: item.id, nextRetryAt: nextRetryAt)
+                        parkForRetryWakeup(itemId: item.id, until: nextRetryAt)
                         continue
+                    }
+                    if Self.isDeviceOfflineGameplayFailure(error) {
+                        // §3.1.1 item 31: the request never left the device. That is a fact about
+                        // the DEVICE, not a verdict on this row, so it spends none of the row's
+                        // budget (`markHeld`) and leaves it due at once for the next trigger — a
+                        // reachability edge, foreground, relaunch — exactly as the rows behind it,
+                        // which the drain stops before: each would fail the same way, and a failed
+                        // attempt would park it on its own doubling backoff that nothing clears on
+                        // reconnect. The wake-up probes on the coordinator's interval instead.
+                        let probeSeconds = min(
+                            pow(2.0, Double(gameplayOfflineProbeCount)) * gameplayBackoffBaseSeconds,
+                            Self.gameplayOfflineProbeMaxSeconds
+                        )
+                        gameplayOfflineProbeCount += 1
+                        verdict("failed(offline)", item, resolvedEvent,
+                                "eligibleIn=0s retryIn=\(Int(probeSeconds))s drainStopped=1 domain=\((error as NSError).domain) code=\((error as NSError).code) msg=\(GameplaySyncDiagnostics.message(error))")
+                        try? repository.markHeld(id: item.id, nextRetryAt: nil)
+                        parkForRetryWakeup(itemId: item.id, until: Date().addingTimeInterval(probeSeconds))
+                        break gameplayDrain
                     }
                     // FR-28h replay verdicts are named explicitly so the classification is
                     // deliberate rather than an accident of `failedPrecondition` catch-all.
@@ -630,11 +742,12 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
                             ))
                         }
                         let attempts = max(item.attemptCount, 0) + 1
-                        let delaySeconds = min(pow(2.0, Double(attempts - 1)) * 60.0, 3600.0)
+                        let delaySeconds = min(pow(2.0, Double(attempts - 1)) * gameplayBackoffBaseSeconds, 3600.0)
                         verdict(error is GameplayAppendRemoteTimedOutError ? "failed(timeout)" : "failed(transient)", item, resolvedEvent,
-                                "eligibleIn=\(Int(delaySeconds))s domain=\((error as NSError).domain) code=\((error as NSError).code) msg=\(GameplaySyncDiagnostics.message(error))")
+                                "retryIn=\(Int(delaySeconds))s domain=\((error as NSError).domain) code=\((error as NSError).code) msg=\(GameplaySyncDiagnostics.message(error))")
                         let nextRetryAt = Date().addingTimeInterval(delaySeconds)
                         try? repository.markFailed(id: item.id, nextRetryAt: nextRetryAt)
+                        parkForRetryWakeup(itemId: item.id, until: nextRetryAt)
                     }
                 }
             }
@@ -659,6 +772,21 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
             // queue that still holds unsent finds reads retryDue=0; this is the honest count.
             + " queuedSessions=\((try? repository.nonTerminalGameplaySessionIds().count) ?? -1)"
         )
+        // §3.1.1 item 31: re-arm the wake-up for a row still parked (one whose backoff ends later
+        // than the one that just fired, or the offline probe), or retire it when none is left — a
+        // debounce probe included, since this drain attempted its find. An entry that was already
+        // due when this drain STARTED and is still here was eligible and not attempted — a held
+        // drain, the pass cap, an offline stop (whose probe covers it) — so whatever holds it is not
+        // the timer's to retry; dropping it is also what stops a held queue from re-firing every
+        // 0.5 s. One that fell due DURING the drain (a long drain, a short backoff) is kept and
+        // fires at once.
+        gameplayRetryParkedDueByItemId = gameplayRetryParkedDueByItemId.filter { $0.value > drainStartedAt }
+        if let nextDue = gameplayRetryParkedDueByItemId.values.min() {
+            scheduleGameplayRetryWakeup(at: nextDue)
+        } else if gameplayRetryWakeupTask != nil {
+            GameplaySyncDiagnostics.log("retry.wakeup cleared reason=none-parked")
+            cancelGameplayRetryWakeup()
+        }
         if !gameplayStillPending, gameplaySyncOnlineProvider() {
             ProgressionXpDriftAfterSyncReporter.shared.scheduleEvaluationAfterSuccessfulGameplayDrain(
                 recentlyAcceptedProgressionSourceEventIds: acceptedProgressionSourceEventIds,
@@ -783,6 +911,17 @@ final class SyncCoordinator: SyncCoordinatorProtocol {
         guard ns.domain == FunctionsErrorDomain else { return false }
         guard let code = FunctionsErrorCode(rawValue: ns.code), code == .failedPrecondition else { return false }
         return ns.localizedDescription.lowercased().contains("game not found")
+    }
+
+    /// §3.1.1 item 31. `NSURLErrorNotConnectedToInternet` (-1009) / `NSURLErrorDataNotAllowed` (-1020),
+    /// directly or as the underlying error: the request never left the device, so the server judged
+    /// nothing. Any other network error (a timeout, a dropped connection) may have reached it.
+    private static func isDeviceOfflineGameplayFailure(_ error: Error) -> Bool {
+        let offlineCodes = [NSURLErrorNotConnectedToInternet, NSURLErrorDataNotAllowed]
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain, offlineCodes.contains(ns.code) { return true }
+        guard let underlying = ns.userInfo[NSUnderlyingErrorKey] as? NSError else { return false }
+        return underlying.domain == NSURLErrorDomain && offlineCodes.contains(underlying.code)
     }
 
     /// App Check rejection or missing trip membership after a silently failed publish — keep retrying.

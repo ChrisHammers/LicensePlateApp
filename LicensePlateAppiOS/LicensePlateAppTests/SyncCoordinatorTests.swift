@@ -260,6 +260,304 @@ struct SyncCoordinatorTests {
         #expect(try repo.hasNonTerminalGameplayItem(forEventId: "evt-purge") == false)
     }
 
+    // MARK: - §3.1.1 item 31: a parked upload retries on its own wake-up
+
+    /// An isolated queue (not `SyncQueueRepository.shared`): these tests wait on real time, so a
+    /// shared repository could be re-pointed at another test's context mid-wait.
+    private func isolatedQueue() throws -> (SyncQueueRepository, ModelContext) {
+        let ctx = try makeContext()
+        let repo = SyncQueueRepository()
+        repo.setModelContext(ctx)
+        return (repo, ctx)
+    }
+
+    /// Suspends on real time so main-actor tasks (the retry wake-up) can run; returns early once
+    /// `done()` holds.
+    private func waitOnMainActor(upTo seconds: TimeInterval, until done: () -> Bool = { false }) async {
+        let deadline = Date().addingTimeInterval(seconds)
+        while Date() < deadline, !done() {
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+    }
+
+    /// A coordinator whose monitor reads offline throughout and whose first upload fails -1009.
+    private func offlineParkingCoordinator(
+        repo: SyncQueueRepository,
+        sessionId: UUID,
+        onUpload: @escaping () -> Int
+    ) -> SyncCoordinator {
+        let coordinator = drainingCoordinator(repo: repo, sessionId: sessionId) { _ in
+            if onUpload() == 1 {
+                throw NSError(domain: NSURLErrorDomain, code: -1009)
+            }
+            return .accepted(lateReplay: false)
+        }
+        coordinator.setGameplaySyncOnlineProvider { false }
+        // 0.2 s rather than 60 s: the -1009 leaves the row due at once but STOPS the flush, so only
+        // the wake-up (the offline probe, base 0.2 s) can make the second upload happen.
+        coordinator.setGameplayBackoffBaseSecondsForTesting(0.2)
+        return coordinator
+    }
+
+    /// A gameplay row enqueued with a given retry budget already spent, so its transient backoff
+    /// (`2^attemptCount × base`) is longer than a fresh row's.
+    private func enqueueGameplayRow(
+        _ repo: SyncQueueRepository,
+        sessionId: UUID,
+        eventId: String,
+        attemptCount: Int = 0,
+        createdAt: Date = .now
+    ) throws {
+        try repo.enqueue(SyncQueueItem(
+            id: UUID().uuidString,
+            kind: .gameplayEvent,
+            state: .pending,
+            attemptCount: attemptCount,
+            createdAt: createdAt,
+            updatedAt: createdAt,
+            payloadSessionId: sessionId.uuidString,
+            payloadEventId: eventId
+        ))
+    }
+
+    /// The owner's simulator log: `verdict failed(transient) … code=-1009 … eligibleIn=60s`, then
+    /// `reachability online=1→0`, and the monitor never reported `0→1` after Wi-Fi came back. Every
+    /// wake-up the queue had was gated on that monitor, so the find waited for a relaunch. Here the
+    /// monitor reads offline throughout: ONE flush, no reachability edge, no new find — the row's own
+    /// wake-up must retry it.
+    @Test func aParkedUploadRetriesOnItsOwnWakeUpWhileTheMonitorStaysOffline() async throws {
+        let (repo, ctx) = try isolatedQueue()
+        let sessionId = UUID()
+        var uploads = 0
+        let coordinator = offlineParkingCoordinator(repo: repo, sessionId: sessionId) {
+            uploads += 1
+            return uploads
+        }
+
+        try coordinator.enqueueForSync(sessionId: sessionId, eventId: "evt-parked")
+        await coordinator.processPendingSyncItems()
+        #expect(uploads == 1, "the first attempt fails -1009 and parks the row")
+        #expect(try queueRow(ctx, eventId: "evt-parked")?.state == SyncQueueItemState.failed.rawValue)
+
+        await waitOnMainActor(upTo: 5) { uploads >= 2 }
+
+        #expect(uploads == 2, "the wake-up retried the row with the monitor still reading offline")
+        #expect(try repo.hasNonTerminalGameplayItem(forEventId: "evt-parked") == false)
+    }
+
+    /// The wake-up must not drain mid-wipe: suspending cancels it. A sign-out that FAILS resumes
+    /// processing with the account's rows still queued (item 22), so resuming re-arms the wake-up for
+    /// them rather than leaving them to trigger-only retries.
+    @Test func suspendingForPurgeCancelsTheRetryWakeUpAndResumingReArmsIt() async throws {
+        let (repo, _) = try isolatedQueue()
+        let sessionId = UUID()
+        var uploads = 0
+        let coordinator = offlineParkingCoordinator(repo: repo, sessionId: sessionId) {
+            uploads += 1
+            return uploads
+        }
+
+        try coordinator.enqueueForSync(sessionId: sessionId, eventId: "evt-purged")
+        await coordinator.processPendingSyncItems()
+        #expect(uploads == 1)
+
+        coordinator.suspendProcessingForPurge()
+        // Well past the 0.2 s probe plus the wake-up's 0.5 s slack.
+        await waitOnMainActor(upTo: 1.5)
+        #expect(uploads == 1, "a cancelled wake-up never drains")
+        #expect(try repo.hasNonTerminalGameplayItem(forEventId: "evt-purged"))
+
+        coordinator.resumeProcessingAfterPurge()
+        await waitOnMainActor(upTo: 5) { uploads >= 2 }
+
+        #expect(uploads == 2, "the failed sign-out's resume re-armed the wake-up for the parked row")
+        #expect(try repo.hasNonTerminalGameplayItem(forEventId: "evt-purged") == false)
+    }
+
+    /// Review blocker on item 31. A -1009 proves the request never left the device, so it is not a
+    /// verdict on the row: the drain stops at the first one instead of attempting every pending find
+    /// (each would fail the same way and park on its own doubling backoff that nothing clears on
+    /// reconnect), and the attempted row spends none of the budget the `game not found` cap counts.
+    /// The rows stay pending / due, so the reachability edge, foreground or relaunch drains all of
+    /// them in order, as before item 31.
+    @Test func anOfflineFailureStopsTheDrainAndSpendsNoRetryBudget() async throws {
+        let (repo, ctx) = try isolatedQueue()
+        let sessionId = UUID()
+        var uploadedEventIds: [String] = []
+        let coordinator = drainingCoordinator(repo: repo, sessionId: sessionId) { event in
+            uploadedEventIds.append(event.id)
+            throw NSError(domain: NSURLErrorDomain, code: NSURLErrorNotConnectedToInternet)
+        }
+        coordinator.setGameplaySyncOnlineProvider { false }
+
+        let start = Date()
+        try enqueueGameplayRow(repo, sessionId: sessionId, eventId: "evt-first", createdAt: start)
+        try enqueueGameplayRow(repo, sessionId: sessionId, eventId: "evt-second", createdAt: start.addingTimeInterval(1))
+        await coordinator.processPendingSyncItems()
+
+        #expect(uploadedEventIds == ["evt-first"], "one probe per drain, not one per pending find")
+        let first = try queueRow(ctx, eventId: "evt-first")
+        #expect(first?.state == SyncQueueItemState.failed.rawValue)
+        #expect(first?.attemptCount == 0, "an offline attempt spends none of the row's budget")
+        #expect(first?.nextRetryAt == nil, "due at once for the next trigger, not after a backoff")
+        #expect(try queueRow(ctx, eventId: "evt-second")?.state == SyncQueueItemState.pending.rawValue)
+        #expect(try repo.hasPendingOrRetryDueGameplayItems())
+    }
+
+    /// Review should-fix on item 31. A monitor stuck at offline while the network is up strands every
+    /// NEW find too: the debounce skips it, so it is never attempted, never parked and never armed a
+    /// wake-up. The skip now arms one as a probe — no failure, no reachability edge required.
+    @Test func aFindSkippedByAStuckOfflineMonitorIsUploadedByTheProbe() async throws {
+        let (repo, _) = try isolatedQueue()
+        let sessionId = UUID()
+        var uploads = 0
+        let coordinator = drainingCoordinator(repo: repo, sessionId: sessionId) { _ in
+            uploads += 1
+            return .accepted(lateReplay: false)
+        }
+        coordinator.setGameplaySyncOnlineProvider { false }
+        coordinator.setGameplayBackoffBaseSecondsForTesting(0.2)
+
+        try coordinator.enqueueForSync(sessionId: sessionId, eventId: "evt-skipped")
+        coordinator.scheduleDebouncedGameplaySyncFlushIfOnline()
+        // 0.65 s debounce (skipped: "offline"), then the 0.2 s probe plus 0.5 s slack.
+        await waitOnMainActor(upTo: 5) { uploads >= 1 }
+
+        #expect(uploads == 1)
+        #expect(try repo.hasNonTerminalGameplayItem(forEventId: "evt-skipped") == false)
+    }
+
+    /// Drain-end logic, the FR-28 hold. A row is parked, then the hold goes on. The wake-up fires
+    /// ONCE, finds the queue held, and is not re-armed: the parked entry was due before that drain
+    /// started, so it is the hold's to resume, not the timer's. (Kept, it would re-fire every 0.5 s.)
+    @Test func aRetryWakeUpThatFindsTheQueueHeldFiresOnceAndIsNotReArmed() async throws {
+        let (repo, _) = try isolatedQueue()
+        let sessionId = UUID()
+        var uploads = 0
+        var held = false
+        var drains = 0
+        let coordinator = drainingCoordinator(repo: repo, sessionId: sessionId) { _ in
+            uploads += 1
+            held = true
+            throw NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut)
+        }
+        // Read exactly once at the start of every drain, so it counts them.
+        coordinator.setGameplayCloudSyncHoldProvider {
+            drains += 1
+            return held
+        }
+        coordinator.setGameplayBackoffBaseSecondsForTesting(0.2)
+
+        try coordinator.enqueueForSync(sessionId: sessionId, eventId: "evt-held")
+        await coordinator.processPendingSyncItems()
+        #expect(uploads == 1)
+        #expect(drains == 1)
+
+        // The wake-up fires at ~0.7 s; a spinning one would fire again every 0.5 s after that.
+        await waitOnMainActor(upTo: 2.5)
+
+        #expect(drains == 2, "one wake-up drain, then nothing re-armed")
+        #expect(uploads == 1)
+        #expect(try repo.hasNonTerminalGameplayItem(forEventId: "evt-held"))
+    }
+
+    /// Drain-end logic, the re-arm. Two rows park on backoffs of different lengths; the wake-up for
+    /// the earlier one retries only that one, and the drain re-arms for the later one — which would
+    /// otherwise be stranded until some other trigger.
+    @Test func aRowParkedOnALongerBackoffIsRetriedOnAReArmedWakeUp() async throws {
+        let (repo, ctx) = try isolatedQueue()
+        let sessionId = UUID()
+        var attemptsByEventId: [String: Int] = [:]
+        var drains = 0
+        let coordinator = drainingCoordinator(repo: repo, sessionId: sessionId) { event in
+            attemptsByEventId[event.id, default: 0] += 1
+            if attemptsByEventId[event.id] == 1 {
+                throw NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut)
+            }
+            return .accepted(lateReplay: false)
+        }
+        coordinator.setGameplayCloudSyncHoldProvider {
+            drains += 1
+            return false
+        }
+        coordinator.setGameplayBackoffBaseSecondsForTesting(0.3)
+
+        let start = Date()
+        // Fresh: parks 0.3 s. Three attempts already spent: parks 2^3 × 0.3 = 2.4 s.
+        try enqueueGameplayRow(repo, sessionId: sessionId, eventId: "evt-short", createdAt: start)
+        try enqueueGameplayRow(repo, sessionId: sessionId, eventId: "evt-long", attemptCount: 3, createdAt: start.addingTimeInterval(1))
+        await coordinator.processPendingSyncItems()
+        #expect(attemptsByEventId == ["evt-short": 1, "evt-long": 1])
+
+        await waitOnMainActor(upTo: 6) {
+            attemptsByEventId["evt-short"] == 2 && attemptsByEventId["evt-long"] == 2
+        }
+
+        #expect(attemptsByEventId == ["evt-short": 2, "evt-long": 2])
+        #expect(try queueRow(ctx, eventId: "evt-short")?.state == SyncQueueItemState.completed.rawValue)
+        #expect(try queueRow(ctx, eventId: "evt-long")?.state == SyncQueueItemState.completed.rawValue)
+        #expect(drains == 3, "the first flush, the short row's wake-up, the re-armed one for the long row")
+
+        // Nothing is left parked, so nothing fires again.
+        await waitOnMainActor(upTo: 1)
+        #expect(drains == 3)
+    }
+
+    /// Drain-end logic, the clear. A drain driven by something else (here a direct flush after the
+    /// row fell due) retires the last parked row, so it cancels the wake-up still scheduled for it.
+    @Test func aDrainThatRetiresTheLastParkedRowCancelsTheScheduledWakeUp() async throws {
+        let (repo, ctx) = try isolatedQueue()
+        let sessionId = UUID()
+        var uploads = 0
+        var drains = 0
+        let coordinator = drainingCoordinator(repo: repo, sessionId: sessionId) { _ in
+            uploads += 1
+            if uploads == 1 {
+                throw NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut)
+            }
+            return .accepted(lateReplay: false)
+        }
+        coordinator.setGameplayCloudSyncHoldProvider {
+            drains += 1
+            return false
+        }
+        // Parks 1 s, so its wake-up is scheduled ~1.5 s out.
+        coordinator.setGameplayBackoffBaseSecondsForTesting(1)
+
+        try coordinator.enqueueForSync(sessionId: sessionId, eventId: "evt-cleared")
+        await coordinator.processPendingSyncItems()
+        #expect(uploads == 1)
+
+        let row = try queueRow(ctx, eventId: "evt-cleared")
+        row?.nextRetryAt = .distantPast
+        try ctx.save()
+        await coordinator.processPendingSyncItems()
+        #expect(uploads == 2)
+        #expect(drains == 2)
+
+        await waitOnMainActor(upTo: 2.5)
+        #expect(drains == 2, "the cancelled wake-up never drained")
+    }
+
+    /// §3.1.1 item 31d. A launch flush can run before the queue repository has its ModelContext. The
+    /// fetch THREW, which used to read as an empty queue (`flush end verdicts=none … queuedSessions=-1`)
+    /// and still ran the profile section, spending its 30 s throttle on nothing. It now skips early,
+    /// so the first flush after the context lands still syncs the profile.
+    @Test func aFlushBeforeTheQueueHasAContextSkipsWithoutSpendingTheProfileThrottle() async throws {
+        let repo = SyncQueueRepository()
+        let executor = MockUserSyncExecutor()
+        let coordinator = SyncCoordinator(repository: repo, userSyncExecutor: executor)
+
+        await coordinator.processPendingSyncItems()
+        #expect(executor.syncedUserIds.isEmpty)
+
+        repo.setModelContext(try makeContext())
+        try coordinator.enqueueUserProfileSync(userId: "user-launch")
+        await coordinator.processPendingSyncItems()
+
+        #expect(executor.syncedUserIds == ["user-launch"], "the unconfigured flush must not spend the profile throttle")
+    }
+
 }
 
 @MainActor
