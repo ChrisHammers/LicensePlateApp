@@ -87,7 +87,9 @@ enum XpGainToastAggregator {
         }
         switch regions.count {
         case 0:
-            return group.titleKeySingle.localized
+            // No plate to name (§3.1.1 item 30: a remote base grant whose scope did not parse). The
+            // discovery titles all take a plate argument, so use the existing generic "XP earned".
+            return "xp.toast.group.other.single".localized
         case 1:
             return group.titleKeySingle.localized(regions[0])
         case 2:

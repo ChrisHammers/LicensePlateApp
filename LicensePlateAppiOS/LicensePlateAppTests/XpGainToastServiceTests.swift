@@ -74,7 +74,7 @@ struct XpGainToastServiceTests {
         )
     }
 
-    @Test func eligibilityRejectsNonPositiveLedgerAndDuplicateDiscoveryRemote() {
+    @Test func eligibilityRejectsNonPositiveLedgerRowsAndAdmitsTheBaseDiscoveryGrant() {
         let negative = sampleLedgerRow(xpDelta: -6, grantKind: .reconciliationAdjustment)
         #expect(!XpGainToastEligibility.shouldToastLedgerRow(negative))
 
@@ -88,12 +88,14 @@ struct XpGainToastServiceTests {
         )
         #expect(XpGainToastEligibility.shouldToastLedgerRow(milestone))
 
+        // §3.1.1 item 30 (was `!`): the base find grant is no longer excluded by REASON. Whether it
+        // toasts is decided per award in XpGainToastService, against the account's local base rows.
         let discoveryRemote = sampleGrant(
             grantId: "remote-discovery",
             amount: 10,
             reason: UserXpGrantReason.regionFoundBaseDiscovery.rawValue
         )
-        #expect(!XpGainToastEligibility.shouldToastRemoteGrant(discoveryRemote))
+        #expect(XpGainToastEligibility.shouldToastRemoteGrant(discoveryRemote))
 
         let achievementGrant = sampleGrant(
             grantId: "ach-grant",
@@ -104,14 +106,40 @@ struct XpGainToastServiceTests {
         #expect(XpGainToastEligibility.shouldToastRemoteGrant(achievementGrant))
     }
 
-    @Test func mapperSkipsDuplicateDiscoveryRemoteGrant() {
+    /// §3.1.1 item 30 (replaces `mapperSkipsDuplicateDiscoveryRemoteGrant`, which pinned the old
+    /// reason-level exclusion). The base grant maps to the SAME discovery line a local find produces,
+    /// naming the plate its scope carries; a key with no plate falls back to the existing generic
+    /// "XP earned" title rather than a raw "Discovered %@".
+    @Test func mapperMapsABaseDiscoveryGrantToTheDiscoveryLineNamingThePlate() {
         let catalog = ProgressionCatalog.bundledDefault
-        let discoveryRemote = sampleGrant(
+        let named = UserXpGrant(
             grantId: "remote-discovery",
+            amount: 10,
+            reason: UserXpGrantReason.regionFoundBaseDiscovery.rawValue,
+            sourceType: "activity_event",
+            sourceId: "find-on-device-a",
+            idempotencyKey: "xp_scope|v1|u1|S|G|us-ca|base_region_discovery"
+        )
+        let event = XpGainToastSourceMapper.ingestEvent(from: named, catalog: catalog)
+        #expect(event?.groupId == "discovery")
+        #expect(event?.xpAmount == 10)
+        #expect(event?.displayToken == "California")
+        #expect(event?.isProvisionalDiscovery == false)
+
+        let unnamed = sampleGrant(
+            grantId: "remote-discovery-doc-id",
             amount: 10,
             reason: UserXpGrantReason.regionFoundBaseDiscovery.rawValue
         )
-        #expect(XpGainToastSourceMapper.ingestEvent(from: discoveryRemote, catalog: catalog) == nil)
+        let unnamedEvent = XpGainToastSourceMapper.ingestEvent(from: unnamed, catalog: catalog)
+        #expect(unnamedEvent?.groupId == "discovery")
+        #expect(unnamedEvent?.displayToken == nil)
+        let presentation = XpGainToastAggregator.aggregate(
+            events: unnamedEvent.map { [$0] } ?? [],
+            catalog: catalog,
+            dismissDuration: 4
+        )
+        #expect(presentation.lines.first?.title == "xp.toast.group.other.single".localized)
     }
 
     @Test func mapperIncludesAchievementRemoteGrant() {
@@ -347,12 +375,19 @@ struct XpGainToastServiceTests {
         service.configure(userId: "u1")
         service.performImmediateRefresh()
 
-        try? ledger.append(sampleLedgerRow(id: "row-1"))
+        let row = sampleLedgerRow(id: "row-1")
+        try? ledger.append(row)
+        // §3.1.1 item 30: the discovery grant is the server mirror of THIS row — it carries the row's
+        // base scope as `idempotencyKey` — which is what now keeps it from toasting a second time
+        // (it used to be the reason-level exclusion, with any key at all).
         remote.grants = [
-            sampleGrant(
+            UserXpGrant(
                 grantId: "remote-discovery",
                 amount: 10,
-                reason: UserXpGrantReason.regionFoundBaseDiscovery.rawValue
+                reason: UserXpGrantReason.regionFoundBaseDiscovery.rawValue,
+                sourceType: "activity_event",
+                sourceId: row.sourceEventId,
+                idempotencyKey: XpServerScopeKey.baseDiscoveryTotalOnlyScope(for: row) ?? "unexpected-nil"
             ),
             sampleGrant(grantId: "remote-win", amount: 15)
         ]
@@ -1163,20 +1198,15 @@ struct XpGainToastServiceTests {
         #expect(service.presentation == nil)
     }
 
-    /// (11) The three reason-level exclusions are untouched.
-    @Test func baseDiscoveryAndReturnStreakGrantsAreStillExcluded() async {
+    /// (11) The reason-level exclusions left after §3.1.1 item 30: return streak here, the migration
+    /// seal above. The base find grant (asserted excluded here until item 30) is now matched per
+    /// award — the item-30 tests below — and its local rows still have no MIRRORED scope.
+    @Test func returnStreakGrantIsStillExcludedByReason() async {
         let ledger = MockXpLedgerRepository()
         let remote = MockXpGainToastRemoteReader()
         let service = sealedService(ledger: ledger, remote: remote)
 
         remote.grants = [
-            scopedGrant(
-                grantId: "g-base",
-                amount: 10,
-                reason: .regionFoundBaseDiscovery,
-                sourceId: "evt-1",
-                idempotencyKey: "xp_scope|v1|u1|s1|g1|TX|base_region_discovery"
-            ),
             scopedGrant(
                 grantId: "g-streak",
                 amount: 15,
@@ -1437,5 +1467,312 @@ struct XpGainToastServiceTests {
         service.performImmediateRefresh()
 
         #expect(service.presentation == nil)
+    }
+
+    // MARK: - §3.1.1 item 30 — base find grants, matched per award
+    //
+    // One account on two devices (item 19): a find made on the OTHER device reaches this one only as
+    // a `region_found_base_discovery` grant, whose `idempotencyKey` is the base scope
+    // `xp_scope|v1|<uid>|<sessionId>|<gameInstanceId>|<regionId>|base_region_discovery`. A local base
+    // row with that scope already announced the award; no such row makes the grant its announcement.
+
+    private static let baseSessionId = UUID(uuidString: "AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE")!
+    private static let baseGameId = UUID(uuidString: "11111111-2222-4333-8444-5555555555FF")!
+
+    /// The server's string, written out rather than derived from the client builder, so drift on
+    /// either side fails these tests (the source-level pin is (19) below).
+    private func baseScope(regionId: String) -> String {
+        "xp_scope|v1|u1|\(Self.baseSessionId.uuidString)|\(Self.baseGameId.uuidString)|\(regionId)|base_region_discovery"
+    }
+
+    /// A competitive base find row exactly as `XpReconciliationService` mints it on this device.
+    private func baseRow(
+        id: String,
+        regionId: String,
+        sourceEventId: String,
+        status: XpLedgerStatus = .provisional,
+        grantKind: XpGrantKind = .provisionalDiscoveryXp,
+        reasonCode: XpReasonCode = .discoveryClaimPendingResolution,
+        createdAt: Date = .now
+    ) -> XpLedgerEvent {
+        XpLedgerEvent(
+            id: id,
+            userId: "u1",
+            sessionId: Self.baseSessionId,
+            gameInstanceId: Self.baseGameId,
+            sourceEventId: sourceEventId,
+            sourceEventType: "region_found",
+            itemId: regionId,
+            grantKind: grantKind,
+            status: status,
+            xpDelta: 10,
+            reasonCode: reasonCode,
+            xpUniquenessKey: XpLedgerKeyBuilder.uniquenessKey(
+                userId: "u1",
+                sessionId: Self.baseSessionId,
+                gameInstanceId: Self.baseGameId,
+                itemId: regionId,
+                xpCategory: .baseRegionDiscovery
+            ).storageString,
+            createdAt: createdAt,
+            metadata: [XpLedgerMetadataKey.originalDiscoveryEventId: sourceEventId]
+        )
+    }
+
+    private func baseGrant(grantId: String, regionId: String, sourceId: String) -> UserXpGrant {
+        scopedGrant(
+            grantId: grantId,
+            amount: 10,
+            reason: .regionFoundBaseDiscovery,
+            sourceId: sourceId,
+            idempotencyKey: baseScope(regionId: regionId)
+        )
+    }
+
+    /// (18a) The owner's report: the account's other device found California and this device has no
+    /// row for it. The +10 was counted and never announced; now it toasts exactly once, naming the
+    /// plate like the finding device's own line, and is handled — the next refresh is silent.
+    @Test func baseGrantWithNoLocalRowToastsOnceNamingThePlate() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(ledger: ledger, remote: remote)
+
+        remote.grants = [baseGrant(grantId: "g-base-a", regionId: "us-ca", sourceId: "find-on-device-a")]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.lines.count == 1)
+        #expect(service.presentation?.lines.first?.id == "discovery")
+        #expect(service.presentation?.lines.first?.title == "xp.toast.group.discovery.single".localized("California"))
+        #expect(service.presentation?.totalXp == 10)
+        service.dismissManually()
+
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+    }
+
+    /// (18b) This device's own find: the row and its server grant land in the same refresh. The row
+    /// is the announcement; the grant is acked on the base scope, not added to the burst.
+    @Test func baseGrantMirroringThisDevicesOwnFindDoesNotToastASecondTime() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(ledger: ledger, remote: remote)
+
+        try? ledger.append(baseRow(id: "base-b", regionId: "us-tx", sourceEventId: "find-on-device-b"))
+        remote.grants = [baseGrant(grantId: "g-base-b", regionId: "us-tx", sourceId: "find-on-device-b")]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.lines.count == 1)
+        #expect(service.presentation?.lines.first?.title == "xp.toast.group.discovery.single".localized("Texas"))
+        #expect(service.presentation?.totalXp == 10)
+    }
+
+    /// (18b) The same plate found on BOTH of the account's devices in the same game. The server pays
+    /// the base award once, under the shared scope, off whichever event lands first — device A's —
+    /// so its grant names A's event. Device B already announced its own find from its provisional
+    /// row; A's grant must not announce that plate a second time on B.
+    @Test func samePlateFoundOnBothDevicesIsAnnouncedOnceOnTheSecondDevice() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(ledger: ledger, remote: remote)
+
+        try? ledger.append(baseRow(id: "base-b", regionId: "us-tx", sourceEventId: "find-on-device-b"))
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == 10)
+        service.dismissManually()
+
+        remote.grants = [baseGrant(grantId: "g-base-a", regionId: "us-tx", sourceId: "find-on-device-a")]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+    }
+
+    /// (18b) Across a relaunch the row is absorbed into the ledger baseline and never mapped; the
+    /// base join reads every row, so it still claims its grant. The scope names the plate: another
+    /// plate's grant in the same snapshot is still announced.
+    @Test func baselineAbsorbedBaseRowStillClaimsItsGrantAndOnlyItsPlate() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        try? ledger.append(
+            baseRow(
+                id: "base-old",
+                regionId: "us-tx",
+                sourceEventId: "find-old",
+                createdAt: Date(timeIntervalSince1970: 1_000)
+            )
+        )
+        let service = sealedService(ledger: ledger, remote: remote)
+        #expect(service.presentation == nil)
+
+        remote.grants = [
+            baseGrant(grantId: "g-base-old", regionId: "us-tx", sourceId: "find-old"),
+            baseGrant(grantId: "g-base-other", regionId: "us-ca", sourceId: "find-on-device-a"),
+        ]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.lines.count == 1)
+        #expect(service.presentation?.lines.first?.title == "xp.toast.group.discovery.single".localized("California"))
+        #expect(service.presentation?.totalXp == 10)
+    }
+
+    /// (18b) A VOIDED row is an award taken back locally, not an announcement that still stands, so it
+    /// claims no scope (as in item 14's baseline) and a later grant for that plate is announced.
+    @Test func voidedBaseRowDoesNotClaimTheGrant() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        try? ledger.append(
+            baseRow(
+                id: "base-voided",
+                regionId: "us-tx",
+                sourceEventId: "find-voided",
+                status: .voided,
+                createdAt: Date(timeIntervalSince1970: 1_000)
+            )
+        )
+        let service = sealedService(ledger: ledger, remote: remote)
+
+        remote.grants = [baseGrant(grantId: "g-base-a", regionId: "us-tx", sourceId: "find-on-device-a")]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.totalXp == 10)
+    }
+
+    /// (18c) A second delivery of the same grant document — the listener re-sending it after it
+    /// dropped out of view — does not re-toast.
+    @Test func aReDeliveredBaseGrantDoesNotReToast() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(ledger: ledger, remote: remote)
+
+        remote.grants = [baseGrant(grantId: "g-base-a", regionId: "us-ca", sourceId: "find-on-device-a")]
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == 10)
+        service.dismissManually()
+
+        remote.grants = []
+        service.performImmediateRefresh()
+        remote.grants = [baseGrant(grantId: "g-base-a", regionId: "us-ca", sourceId: "find-on-device-a")]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+    }
+
+    /// (18e) The grant first, the row after. A late competitive find this device logged when another
+    /// player's find of the plate was already in its log writes NO provisional row; the server pays the
+    /// base award off `srvrej_<id>` under the shared scope, and the final row is written only when the
+    /// callable's `superseded` response is consumed. When that response is lost (the upload timeout,
+    /// a drop after commit) the grant lands first and is the find's announcement — so the final row
+    /// the retry writes must not announce the same +10 again (item 14).
+    @Test func baseRowWrittenAfterItsGrantToastedDoesNotToastASecondTime() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        let service = sealedService(ledger: ledger, remote: remote)
+
+        remote.grants = [baseGrant(grantId: "g-base-late", regionId: "us-ca", sourceId: "srvrej_find-late")]
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == 10)
+        service.dismissManually()
+
+        try? ledger.append(
+            baseRow(
+                id: "base-late-final",
+                regionId: "us-ca",
+                sourceEventId: "find-late",
+                status: .final,
+                grantKind: .finalDiscoveryAward,
+                reasonCode: .competitiveLateFinder
+            )
+        )
+        service.performImmediateRefresh()
+
+        #expect(service.presentation == nil)
+    }
+
+    /// (18e) The row-side join is bounded to grants this device TOASTED. A base grant absorbed as
+    /// history before the seal announced nothing here, so this device's own find of that plate —
+    /// its row written after the seal — is still announced.
+    @Test func anAbsorbedBaseGrantDoesNotSilenceALaterRowForThatPlate() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        remote.grants = [baseGrant(grantId: "g-base-history", regionId: "us-ca", sourceId: "find-on-device-a")]
+        let service = sealedService(ledger: ledger, remote: remote)
+        #expect(service.presentation == nil)
+
+        try? ledger.append(baseRow(id: "base-b", regionId: "us-ca", sourceEventId: "find-on-device-b"))
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.totalXp == 10)
+    }
+
+    /// (18d) OD-15 unchanged: a base grant already in view before this binding's server-confirmed
+    /// snapshot is history. Its XP counts; it is never announced — not pre-seal, not at the seal,
+    /// not after.
+    @Test func baseGrantAbsorbedBeforeTheSealDoesNotToast() async {
+        let ledger = MockXpLedgerRepository()
+        let remote = MockXpGainToastRemoteReader()
+        remote.hasReceivedServerSnapshot = false
+        remote.grants = [baseGrant(grantId: "g-base-history", regionId: "us-ca", sourceId: "find-on-device-a")]
+
+        let service = XpGainToastService(
+            xpLedger: ledger,
+            remoteReader: remote,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: "u1")
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        remote.hasReceivedServerSnapshot = true
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+    }
+
+    /// (19) The key the base join reads, pinned on BOTH sides. Server: `appendFindBonuses` pushes the
+    /// base component under `baseRegionDiscoveryScopeKey` with `XP_GRANT_REASON.REGION_FOUND`
+    /// (functions/src/progressionCore.ts); `progressionOnActivityEvent.ts` writes each component's
+    /// `scopeKey` as the grant's `idempotencyKey`; `buildXpGrantDocument` stores it verbatim
+    /// (functions/src/xpGrantLedgerCore.ts). Client: `baseDiscoveryTotalOnlyScope(for:)` builds the
+    /// same string from a local row, and the toast line reads the plate back out of it. Changing the
+    /// template on either side fails this test. Build-machine-only by nature (reads the functions
+    /// source via #filePath), like `TripRouteHardeningTests`.
+    @Test func baseGrantIdempotencyKeyIsPinnedToTheFunctionsSource() throws {
+        let functionsSource = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("functions/src")
+        let core = try String(
+            contentsOf: functionsSource.appendingPathComponent("progressionCore.ts"),
+            encoding: .utf8
+        )
+        let onActivityEvent = try String(
+            contentsOf: functionsSource.appendingPathComponent("progressionOnActivityEvent.ts"),
+            encoding: .utf8
+        )
+        let grantLedger = try String(
+            contentsOf: functionsSource.appendingPathComponent("xpGrantLedgerCore.ts"),
+            encoding: .utf8
+        )
+        #expect(core.contains(
+            #"return `xp_scope|v1|${input.userId}|${input.sessionId}|${gameInstanceId}|${regionId}|base_region_discovery`;"#
+        ))
+        #expect(core.contains("scopeKey: baseScope,"))
+        #expect(core.contains("reason: XP_GRANT_REASON.REGION_FOUND,"))
+        #expect(onActivityEvent.contains("idempotencyKey: c.scopeKey,"))
+        #expect(grantLedger.contains(#"REGION_FOUND: "region_found_base_discovery","#))
+        #expect(grantLedger.contains("idempotencyKey: input.idempotencyKey,"))
+        #expect(UserXpGrantReason.regionFoundBaseDiscovery.rawValue == "region_found_base_discovery")
+
+        // The client builds the server's string from the same inputs (`userId` = the payload's
+        // participantId, the session document id, the payload's gameInstanceId and regionId).
+        let serverKey = baseScope(regionId: "us-ca")
+        let row = baseRow(id: "pin", regionId: "us-ca", sourceEventId: "find-pin")
+        #expect(XpServerScopeKey.baseDiscoveryTotalOnlyScope(for: row) == serverKey)
+        #expect(XpGainToastEligibility.localBaseDiscoveryScopeKeys(in: [row]) == [serverKey])
+        #expect(XpServerScopeKey.regionId(fromBaseDiscoveryScope: serverKey) == "us-ca")
+        // The repository's document-id fallback (`activityEventComponentXpGrantId`) parses the same.
+        #expect(XpServerScopeKey.regionId(fromBaseDiscoveryScope: "activity|find-pin|u1|\(serverKey)") == "us-ca")
+        #expect(XpServerScopeKey.regionId(fromBaseDiscoveryScope: "lifetime_unique_region|v1|u1|us-ca") == nil)
     }
 }

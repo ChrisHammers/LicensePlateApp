@@ -312,7 +312,7 @@ struct LedgerPendingXpTotalsSupersededFindTests {
         )
         // The base discovery award has no mirrored scope here: it retires by event id (or its
         // `srvrej_` form) or, total-only, on `baseDiscoveryTotalOnlyScope` (item 29a), and its
-        // server mirror is excluded from toasting by reason.
+        // server grant is matched against the toast on that same scope, grant-side only (item 30).
         #expect(XpServerScopeKey.mirrored(for: Self.finalDiscoveryRow()) == nil)
     }
 

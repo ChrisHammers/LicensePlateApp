@@ -9,7 +9,9 @@
 //  Neutral home (§3.1.1 item 17): both the XP toast (`XpGainToastEligibility`, item 14) and the
 //  displayed-total read model (`LedgerPendingXpTotals`) join on these strings, so the derivation
 //  lives in Model with exactly ONE implementation rather than being reached for across layers.
-//  The one documented exception is total-only: `baseDiscoveryTotalOnlyScope(for:)` (§3.1.1 item 29a).
+//  The one documented exception is `baseDiscoveryTotalOnlyScope(for:)` (§3.1.1 item 29a), which the
+//  displayed total joins both ways and the toast joins grant-side, and row-side only against a base
+//  grant this device itself toasted (§3.1.1 item 30).
 //
 
 import Foundation
@@ -114,9 +116,10 @@ enum XpServerScopeKey {
             return sessionScopedCompletionScopeKey(prefix: "trip_competitive_first", row: row)
 
         // ---- Base discovery, in all four of its local labels. The server mirror is
-        //      `region_found_base_discovery`, which `shouldToastRemoteGrant` already excludes by
-        //      reason; giving these rows a scope would add a second rule for an award that has one.
-        //      (The displayed TOTAL joins them on `baseDiscoveryTotalOnlyScope(for:)` instead.)
+        //      `region_found_base_discovery`, joined on `baseDiscoveryTotalOnlyScope(for:)` instead:
+        //      by the displayed TOTAL both ways (§3.1.1 item 29a), by the toast grant-side, and
+        //      row-side only against a base grant this device toasted (§3.1.1 item 30). A scope HERE
+        //      would also let an absorbed base grant silence this device's own announcement of its find.
         case .soloNewDiscovery, .collaborativeSharedFinder, .competitiveLateFinder,
              .discoveryClaimPendingResolution:
             return nil
@@ -153,11 +156,13 @@ enum XpServerScopeKey {
     /// `trip_sessions/{id}` document id and `gameInstanceId` / `regionId` are the payload strings —
     /// all `UUID.uuidString` (UPPERCASE) on this client, per the CASING note on `mirrored(for:)`.
     ///
-    /// TOTAL-ONLY (§3.1.1 item 29a). `LedgerPendingXpTotals` retires a base row on this scope; the XP
-    /// toast must NOT, which is why it is deliberately not a case of `mirrored(for:)`. The toast
-    /// joins `mirrored(for:)` against every grant's `idempotencyKey`, and the server's base grant
-    /// carries this scope — so the finding device would stop announcing its own find whenever the
-    /// account's other device got there first, a toast rule this item does not change. The total
+    /// TOTAL-ONLY for rows (§3.1.1 item 29a). `LedgerPendingXpTotals` retires a base row on this
+    /// scope; the XP toast must NOT silence a row on it by any grant it has merely SEEN, which is why
+    /// it is deliberately not a case of `mirrored(for:)`. The toast joins `mirrored(for:)` against
+    /// every grant's `idempotencyKey`, absorbed history included, and the server's base grant carries
+    /// this scope — so the finding device would stop announcing its own find whenever the account's
+    /// other device got there first. (Item 30 silences a row only on a base grant this device already
+    /// TOASTED, the one case where the row would announce the same award twice.) The total
     /// needs it because the same account can find the same plate in the same game on two devices:
     /// the server pays the base award once, under THIS scope, off whichever event lands first, and
     /// stamps the second event with no increment (`functions/src/progressionOnActivityEvent.ts`
@@ -170,6 +175,13 @@ enum XpServerScopeKey {
     /// (`XpReconciliationService.handleCommittedActivityEventThrowing`) plus the four settled labels
     /// `XpAwardRuleEngine.xpNetAndReason` gives a positive base amount. `competitive_first_finder` is
     /// the BASE award locally (its +5 server component has a scope of its own), so it belongs here.
+    ///
+    /// TOAST JOIN (§3.1.1 item 30). `XpGainToastService` matches each `region_found_base_discovery`
+    /// grant's `idempotencyKey` against this scope of the account's non-voided local base rows: a
+    /// match is a find this device already announced (or absorbed) from its own row, so the grant is
+    /// acked silently; no match is a find made on the account's OTHER device (item 19: one account,
+    /// two devices), and the grant is its one announcement. A row written AFTER that announcement
+    /// (same scope) is then acked silently in turn — never on a grant that was absorbed or suppressed.
     static func baseDiscoveryTotalOnlyScope(for row: XpLedgerEvent) -> String? {
         guard row.grantKind == .provisionalDiscoveryXp || row.grantKind == .finalDiscoveryAward else {
             return nil
@@ -186,6 +198,20 @@ enum XpServerScopeKey {
               row.gameInstanceId != XpLedgerGlobalScope.gameInstanceId else { return nil }
         return "xp_scope|v1|\(row.userId)|\(row.sessionId.uuidString)|\(row.gameInstanceId.uuidString)"
             + "|\(row.itemId)|base_region_discovery"
+    }
+
+    /// The `regionId` segment of a base discovery award scope — the shape
+    /// `baseDiscoveryTotalOnlyScope(for:)` builds and the server writes as a
+    /// `region_found_base_discovery` grant's `idempotencyKey` — or `nil` for any other string.
+    /// §3.1.1 item 30: a grant carries no plate of its own, and the toast line names the plate.
+    /// Read from the END (`…|<regionId>|base_region_discovery`), so the repository's document-id
+    /// fallback (`activity|<eventId>|<uid>|<scope>`, `activityEventComponentXpGrantId` in
+    /// `functions/src/xpGrantLedgerCore.ts`) parses the same way.
+    static func regionId(fromBaseDiscoveryScope scope: String) -> String? {
+        let parts = scope.split(separator: "|", omittingEmptySubsequences: false)
+        guard parts.count >= 7, parts.last == "base_region_discovery" else { return nil }
+        let regionId = parts[parts.count - 2]
+        return regionId.isEmpty ? nil : String(regionId)
     }
 
     /// `<prefix>|v1|<uid>|<gameInstanceId>` for a completion row scoped to one game instance.

@@ -59,7 +59,22 @@ enum XpGainToastSourceMapper {
             grantReason: grant.reason
         ) else { return nil }
 
-        let displayToken: String? = groupId == "achievement" ? grant.achievementId : nil
+        let displayToken: String?
+        switch groupId {
+        case "achievement":
+            displayToken = grant.achievementId
+        case "discovery":
+            // §3.1.1 item 30: a base find made on the account's other device. The grant carries no
+            // plate field, but its scope names one (`XpServerScopeKey.regionId(fromBaseDiscoveryScope:)`),
+            // so the line reads like the finding device's own. No plate → the aggregator's generic title.
+            if let regionId = XpServerScopeKey.regionId(fromBaseDiscoveryScope: grant.idempotencyKey) {
+                displayToken = regionName(for: regionId)
+            } else {
+                displayToken = nil
+            }
+        default:
+            displayToken = nil
+        }
 
         return XpGainToastIngestEvent(
             sourceId: "grant|\(grant.grantId)",

@@ -395,6 +395,50 @@ struct LocalCompletionXpLedgerTests {
         #expect(service.presentation?.totalXp == afterLocal + rewards.gameEndedBonusXp)
     }
 
+    /// §3.1.1 item 30, end to end over the real writer. The base row `XpReconciliationService` mints
+    /// for this device's find carries the scope the server writes on its base grant — built here
+    /// from the event's own payload, as `baseRegionDiscoveryScopeKey` does. The account's other
+    /// device found the same plate first, so the server paid that scope off the OTHER event; its
+    /// grant must not announce the plate a second time here.
+    @Test func baseGrantFromTheOtherDeviceForAPlateThisDeviceFoundDoesNotReToast() throws {
+        let uid = "one-account-two-devices"
+        let trip = try makeLocalTrip(participantIds: [uid], gameMode: .collaborative)
+
+        let remote = StubToastRemoteReader()
+        remote.hasReceivedInitialSnapshot = true
+        remote.boundUserId = uid
+        let service = XpGainToastService(
+            xpLedger: trip.ledger,
+            remoteReader: remote,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: uid)
+        service.performImmediateRefresh()
+
+        let find = regionFound(id: "find-on-this-device", trip: trip, regionId: "us-tx", participantId: uid, at: Date())
+        try commit(find, into: trip)
+        service.performImmediateRefresh()
+        let afterLocal = try #require(service.presentation).totalXp
+
+        let payload = try #require(find.payload)
+        let serverScope = "xp_scope|v1|\(uid)|\(trip.sessionId.uuidString)"
+            + "|\(payload[TripActivityEventPayloadKey.gameInstanceId] ?? "")"
+            + "|\(payload[TripActivityEventPayloadKey.regionId] ?? "")|base_region_discovery"
+        remote.grants = [
+            UserXpGrant(
+                grantId: "g-base-other-device",
+                amount: rewards.baseDiscoveryXp,
+                reason: UserXpGrantReason.regionFoundBaseDiscovery.rawValue,
+                sourceType: "activity_event",
+                sourceId: "find-on-the-other-device",
+                idempotencyKey: serverScope
+            )
+        ]
+        service.performImmediateRefresh()
+
+        #expect(service.presentation?.totalXp == afterLocal)
+    }
+
     // MARK: - Toast: local row and its later server grant are one award, not two
 
     @Test func serverGrantMirroringALocalCompletionRowSharesItsAwardKey() throws {

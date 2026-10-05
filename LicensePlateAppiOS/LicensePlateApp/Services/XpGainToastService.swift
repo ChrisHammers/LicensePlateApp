@@ -22,8 +22,9 @@
 //     Accepted loss, by design: a grant that first becomes visible INSIDE the sealing snapshot never
 //     toasts — i.e. anything written since this device's last server-confirmed snapshot: one round
 //     trip on an online launch, the whole offline stretch on an offline launch. Anything that also
-//     wrote a local ledger row toasted from the ledger anyway, so the exposure is an achievement or
-//     a peer-authored competitive placement landing in that window (its XP still counts).
+//     wrote a local ledger row toasted from the ledger anyway, so the exposure is an achievement, a
+//     peer-authored competitive placement, or (§3.1.1 item 30) a find made on the account's other
+//     device landing in that window (its XP still counts).
 //
 
 import Combine
@@ -82,6 +83,14 @@ final class XpGainToastService: ObservableObject {
     /// suppressed, or toasted. A local row that mirrors one of those scopes would announce XP the
     /// server has already paid and already told this device about (the other device / reinstall case).
     private var acknowledgedGrantScopeKeys = Set<String>()
+    /// §3.1.1 item 30 — `idempotencyKey`s of `region_found_base_discovery` grants this device actually
+    /// ANNOUNCED (mapped into a burst), because no local base row claimed them. A base row written
+    /// later for the same (session, game, plate) — e.g. a late competitive find whose `superseded`
+    /// response was lost and whose final row lands on the retry — would announce the same award a
+    /// second time, so it is acked silently on `XpServerScopeKey.baseDiscoveryTotalOnlyScope(for:)`.
+    /// Never filled from absorbed history or from a suppressed grant: neither announced anything here,
+    /// and letting them silence a row would swallow this device's own find.
+    private var toastedBaseGrantScopeKeys = Set<String>()
     /// PROCESS-lifetime, deliberately NOT cleared by `configure` or `resetForSignOut`: ledger row ids
     /// this process has already presented. `configure` starts a new identity epoch and drops every ack
     /// set, while `establishLedgerBaseline` refuses to absorb provisional rows created in THIS process
@@ -154,6 +163,7 @@ final class XpGainToastService: ObservableObject {
         acknowledgedLocalAwardKeys.removeAll()
         acknowledgedMirroredScopeKeys.removeAll()
         acknowledgedGrantScopeKeys.removeAll()
+        toastedBaseGrantScopeKeys.removeAll()
         burstEvents.removeAll()
         rankProgressBaselineXp = nil
         // A new identity epoch re-earns BOTH halves of the baseline.
@@ -182,6 +192,7 @@ final class XpGainToastService: ObservableObject {
         acknowledgedLocalAwardKeys.removeAll()
         acknowledgedMirroredScopeKeys.removeAll()
         acknowledgedGrantScopeKeys.removeAll()
+        toastedBaseGrantScopeKeys.removeAll()
         burstEvents.removeAll()
         rankProgressBaselineXp = nil
         hasLedgerBaseline = false
@@ -319,6 +330,19 @@ final class XpGainToastService: ObservableObject {
                 acknowledgedIds.insert(key)
                 continue
             }
+            // §3.1.1 item 30, the row-after-grant direction: this find was already announced from its
+            // base grant, which arrived before any local row claimed it. Handled for this process like
+            // the grant-scope branch above.
+            if let baseScope = XpServerScopeKey.baseDiscoveryTotalOnlyScope(for: row),
+               toastedBaseGrantScopeKeys.contains(baseScope) {
+                acknowledgedIds.insert(key)
+                presentedLedgerRowIds.insert(row.id)
+                suppressedRows += 1
+                XpToastDiagnostics.log(
+                    "ledger.dedup row=\(row.id.suffix(8)) reason=\(row.reasonCode.rawValue) via=baseGrantToasted scope=\(XpToastDiagnostics.redactedScope(baseScope))"
+                )
+                continue
+            }
             guard let event = XpGainToastSourceMapper.ingestEvent(from: row, catalog: catalog) else {
                 acknowledgedIds.insert(key)
                 continue
@@ -332,6 +356,12 @@ final class XpGainToastService: ObservableObject {
             newEvents.append(event)
             sourceMix.insert("ledger")
         }
+
+        // §3.1.1 item 30: built from EVERY row of this user, not just the unacked ones, so a find whose
+        // row was absorbed into the ledger baseline (a relaunch) still claims its base grant.
+        let localBaseScopes: Set<String> = grants.isEmpty
+            ? []
+            : XpGainToastEligibility.localBaseDiscoveryScopeKeys(in: ledgerRows)
 
         for grant in grants {
             let key = "grant|\(grant.grantId)"
@@ -358,11 +388,29 @@ final class XpGainToastService: ObservableObject {
                 )
                 continue
             }
+            // §3.1.1 item 30: the base find award, matched per award like the joins above. A local
+            // base row for the same (session, game, plate) already announced it — this device's own
+            // find, or the same plate found on both of the account's devices — so the grant is acked
+            // and the row stays the announcement. With no such row the find was made on the account's
+            // other device: the grant falls through, toasts once, its id is acked below, and its scope
+            // silences a base row written for it later (`toastedBaseGrantScopeKeys`).
+            if grant.reason == UserXpGrantReason.regionFoundBaseDiscovery.rawValue,
+               localBaseScopes.contains(grant.idempotencyKey) {
+                acknowledgedIds.insert(key)
+                suppressedGrants += 1
+                XpToastDiagnostics.log(
+                    "remote.dedup idTail=\(grant.grantId.suffix(10)) reason=\(grant.reason) via=baseScope scope=\(XpToastDiagnostics.redactedScope(grant.idempotencyKey))"
+                )
+                continue
+            }
             guard let event = XpGainToastSourceMapper.ingestEvent(from: grant, catalog: catalog) else {
                 acknowledgedIds.insert(key)
                 continue
             }
             acknowledgedIds.insert(key)
+            if grant.reason == UserXpGrantReason.regionFoundBaseDiscovery.rawValue {
+                toastedBaseGrantScopeKeys.insert(grant.idempotencyKey)
+            }
             newEvents.append(event)
             sourceMix.insert("remote")
         }
