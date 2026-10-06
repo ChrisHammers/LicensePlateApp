@@ -80,20 +80,20 @@ struct LedgerPendingXpTotals: Equatable, Sendable {
     ///    in the same transaction that increments `totalXp`
     ///    (`functions/src/progressionOnActivityEvent.ts:118-178`).
     ///
-    /// 2. **The server-rejection form of the event id** (§3.1.1 item 17). When this device's
-    ///    competitive find loses to an earlier one, its `region_found` is never written remotely at
-    ///    all: `gameplayEventResolver` writes `srvrej_<clientEventId>` instead, and progression
-    ///    grants base + `lifetime_unique_region` + `first_find_of_day` off THAT document
-    ///    (`functions/src/progressionCore.ts`, `KIND_DISCOVERY_REJECTED`). `appliedProgressionEvents`
-    ///    therefore only ever holds the `srvrej_` id, while the local rows — the final discovery
-    ///    award plus the two provisional bonuses — carry the client id that
-    ///    `SyncCoordinator` has already deleted the event for. Without this join they never retire
-    ///    and inflate the displayed total by the whole find, permanently.
+    /// 2. **The server-rejection form of the event id** (§3.1.1 items 17 and 24). When the server
+    ///    rejects this device's find — a competitive find that loses to an earlier one, or a find on
+    ///    a trip the server reads as solo while a partner who has left holds the plate — its
+    ///    `region_found` is never written remotely at all: `gameplayEventResolver` writes
+    ///    `srvrej_<clientEventId>` instead, and progression grants base + `lifetime_unique_region` +
+    ///    `first_find_of_day` off THAT document (`functions/src/progressionCore.ts`,
+    ///    `rejectionPaysFind`). `appliedProgressionEvents` therefore only ever holds the `srvrej_`
+    ///    id, while the local rows — the final discovery award plus the two provisional bonuses —
+    ///    carry the client id that `SyncCoordinator` has already deleted the event for. Without this
+    ///    join they never retire and inflate the displayed total by the whole find, permanently.
     ///
-    ///    Invariant this join relies on: a `srvrej_` id only matters here when progression paid off
-    ///    that rejection — `progressionCore` returns components for `server_rejected_late_competitive`
-    ///    alone. A rejection that earned nothing may also be stamped, but its local rows earn nothing
-    ///    either (`targetNet == 0` voids the bonuses), so retiring them is still correct.
+    ///    Invariant this join relies on: progression pays every `srvrej_` rejection the callable
+    ///    returns for this device's own find (late competitive, invalid participant), so the rows
+    ///    retire in the same snapshot that the payment lands in `totalXp`.
     ///
     /// 3. **The mirrored server award scope** (`XpServerScopeKey.mirrored(for:)`). Id-independent:
     ///    an applied scope means that award's amount is inside `totalXp`, whichever event paid it —

@@ -68,10 +68,6 @@ final class MockXpLedgerRepository: XpLedgerRepositoryProtocol {
         stored.filter { $0.xpUniquenessKey == key }.sorted(by: sortLedger)
     }
 
-    func ledgerEvents(sourceEventId: String) throws -> [XpLedgerEvent] {
-        stored.filter { $0.sourceEventId == sourceEventId }.sorted(by: sortLedger)
-    }
-
     func ledgerEvents(userId: String) throws -> [XpLedgerEvent] {
         stored.filter { $0.userId == userId }.sorted(by: sortLedger)
     }
@@ -100,23 +96,17 @@ final class MockXpLedgerRepository: XpLedgerRepositoryProtocol {
     }
 
     @discardableResult
-    func voidProvisionalRows(forUniquenessKey key: String, resolvedAt: Date) throws -> Int {
+    func voidProvisionalRows(
+        forUniquenessKey key: String,
+        resolvedAt: Date,
+        appending replacement: XpLedgerEvent?
+    ) throws -> Int {
         var sum = 0
         for index in stored.indices where stored[index].xpUniquenessKey == key && stored[index].status == .provisional {
             sum += stored[index].xpDelta
             stored[index].status = .voided
             stored[index].resolvedAt = resolvedAt
         }
-        return sum
-    }
-
-    @discardableResult
-    func voidProvisionalRows(
-        forUniquenessKey key: String,
-        resolvedAt: Date,
-        appending replacement: XpLedgerEvent?
-    ) throws -> Int {
-        let sum = try voidProvisionalRows(forUniquenessKey: key, resolvedAt: resolvedAt)
         if let replacement { stored.append(replacement) }
         return sum
     }

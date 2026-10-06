@@ -454,10 +454,10 @@ final class XpGainToastService: ObservableObject {
                 if let awardKey = XpGainToastEligibility.localAwardKey(for: row) {
                     acknowledgedLocalAwardKeys.insert(awardKey)
                 }
-                // §3.1.1 item 14. Unlike the two lines above this one checks `status`: a VOIDED bonus
-                // row (clawed back by `XpReconciliationService.voidLocalFindBonuses`) keeps a positive
-                // `xpDelta`, and registering its scope after a relaunch would swallow the only
-                // announcement of a later, genuine server grant for that same scope.
+                // §3.1.1 item 14. Unlike the two lines above this one checks `status`: a VOIDED row
+                // keeps a positive `xpDelta`, and registering its scope after a relaunch would swallow
+                // the only announcement of a later, genuine server grant for that same scope.
+                // Defensive since §3.1.1 item 24: settlement voids only base rows, which mirror no scope.
                 if row.status != .voided,
                    let scope = XpGainToastEligibility.mirroredServerScopeKey(for: row),
                    acknowledgedMirroredScopeKeys.insert(scope).inserted {

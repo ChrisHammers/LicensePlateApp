@@ -9,6 +9,7 @@ import {
   KIND_REGION_FOUND,
   KIND_DISCOVERY_REJECTED,
   REJECTION_SERVER_LATE_COMPETITIVE,
+  REJECTION_INVALID_PARTICIPANT,
   replayDiscoveriesFromDocs,
 } from "./gameplayEventResolver";
 import { parseCommonConfigGameMode, parseTeamsDataBase64 } from "./publicLifetimeStatsCore";
@@ -341,6 +342,29 @@ function sumComponents(components: ProgressionComponentGrant[]): ProgressionUser
   return d;
 }
 
+/**
+ * Whether a `discovery_rejected` still pays the find (base + lifetime-unique + first-of-day,
+ * never the competitive +5). Two rejections do, both of them never accepted as a `region_found`:
+ *
+ * - a late competitive find (`server_rejected_late_competitive`);
+ * - §3.1.1 item 24 (OD-17): a find refused because the trip now reads as solo while a partner
+ *   who has left still holds the plate (`rejected_invalid_participant`). The device already
+ *   showed that find's XP, and a shown number never goes down.
+ *
+ * A superseded finder already received `region_found` XP, so that rejection pays nothing.
+ *
+ * `rejected_invalid_participant` is ALSO the reason a client writes for its own tap-time
+ * rejection — a find it refused and never credited — which the resolver passes through under
+ * the client's event id. Only the server's rejection carries `serverResolvedAt` (the FR-76
+ * allowlist strips it from anything a client sends), so that key is what proves the server
+ * wrote it. Neither the reason nor the `srvrej_` id can: a client names its own event ids.
+ */
+function rejectionPaysFind(payload: Record<string, string>): boolean {
+  const reason = payload[PK.rejectionReason];
+  if (reason === REJECTION_SERVER_LATE_COMPETITIVE) return true;
+  return reason === REJECTION_INVALID_PARTICIPANT && Boolean(payload[PK.serverResolvedAt]);
+}
+
 function appendFindBonuses(input: {
   uid: string;
   sessionId: string;
@@ -510,9 +534,7 @@ export function previewProgressionComponentsForActivityEvent(input: {
   }
 
   if (input.kind === KIND_DISCOVERY_REJECTED) {
-    const reason = payload[PK.rejectionReason];
-    // Only late competitive (never accepted). Superseded finders already received region_found XP.
-    if (reason !== REJECTION_SERVER_LATE_COMPETITIVE) {
+    if (!rejectionPaysFind(payload)) {
       return {};
     }
     const participantId = payload[PK.participantId] || (input.actorId ?? "");

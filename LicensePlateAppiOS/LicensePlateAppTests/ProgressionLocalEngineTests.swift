@@ -301,4 +301,93 @@ struct ProgressionLocalEngineTests {
         #expect(d.acceptedRegionFindCount == 0)
         #expect(d.totalXp == 0)
     }
+
+    /// §3.1.1 item 24. The server's invalid-participant rejection pays the find, so it counts as
+    /// pending base until the server stamps it — otherwise the find drops out of the local totals
+    /// between the supersede and the stamp. The device's own tap-time rejection carries the same
+    /// reason but no `serverResolvedAt`; it earned nothing and must never count.
+    @Test func serverInvalidParticipantRejectionCountsPendingButTheDevicesOwnDoesNot() {
+        let reason = DiscoveryRejectionReason.rejectedInvalidParticipant.rawValue
+        let serverRejection = TripActivityEvent(
+            id: "srvrej_rf-solo",
+            sessionId: sessionId,
+            kind: .discoveryRejected,
+            timestamp: Date(timeIntervalSince1970: 3),
+            actorId: "u1",
+            payload: [
+                TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+                TripActivityEventPayloadKey.regionId: "US-CA",
+                TripActivityEventPayloadKey.participantId: "u1",
+                TripActivityEventPayloadKey.rejectionReason: reason,
+                TripActivityEventPayloadKey.clientAttemptEventId: "rf-solo",
+                TripActivityEventPayloadKey.serverResolvedAt: "1786755660",
+            ]
+        )
+        let tapTimeRejection = TripActivityEvent(
+            id: "local-rejection",
+            sessionId: sessionId,
+            kind: .discoveryRejected,
+            timestamp: Date(timeIntervalSince1970: 4),
+            actorId: "u1",
+            payload: [
+                TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+                TripActivityEventPayloadKey.regionId: "US-NY",
+                TripActivityEventPayloadKey.participantId: "u1",
+                TripActivityEventPayloadKey.rejectionReason: reason,
+            ]
+        )
+        let games: [UUID: ProgressionGameSnapshot] = [
+            gameId: ProgressionGameSnapshot(id: gameId, gameMode: .collaborative, teams: []),
+        ]
+        func pending(applied: Set<String>) -> ProgressionPendingDelta {
+            ProgressionLocalEngine.pendingDeltaForSession(
+                sortedSessionEvents: [serverRejection, tapTimeRejection],
+                rosterUserIds: ["u1"],
+                subjectUserId: "u1",
+                serverAppliedEventIds: applied,
+                gamesById: games,
+                rewards: rewards
+            )
+        }
+
+        #expect(ProgressionLocalEngine.serverRejectionPaysFind(serverRejection))
+        #expect(!ProgressionLocalEngine.serverRejectionPaysFind(tapTimeRejection))
+        let beforeStamp = pending(applied: [])
+        #expect(beforeStamp.totalXp == rewards.xp.baseDiscoveryXp)
+        #expect(beforeStamp.acceptedRegionFindCount == 1)
+        let afterStamp = pending(applied: ["srvrej_rf-solo"])
+        #expect(afterStamp.totalXp == 0)
+        #expect(afterStamp.acceptedRegionFindCount == 0)
+    }
+
+    /// §3.1.1 item 24. A find the server paid off its `srvrej_` rejection does not count as pending,
+    /// even while the local `region_found` is still queued (the callable's response never arrived):
+    /// otherwise it counts on top of the server total and drops when the retry deletes it.
+    @Test func regionFoundPaidOffItsServerRejectionIsNotPending() {
+        let find = TripActivityEvent(
+            id: "rf-queued",
+            sessionId: sessionId,
+            kind: .regionFound,
+            timestamp: Date(timeIntervalSince1970: 1),
+            actorId: "u1",
+            payload: [
+                TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+                TripActivityEventPayloadKey.regionId: "US-CA",
+                TripActivityEventPayloadKey.participantId: "u1",
+                TripActivityEventPayloadKey.inputMethod: "list",
+            ]
+        )
+        let games: [UUID: ProgressionGameSnapshot] = [
+            gameId: ProgressionGameSnapshot(id: gameId, gameMode: .collaborative, teams: []),
+        ]
+        let d = ProgressionLocalEngine.pendingDeltaForSession(
+            sortedSessionEvents: [find],
+            rosterUserIds: ["u1"],
+            subjectUserId: "u1",
+            serverAppliedEventIds: [XpServerScopeKey.serverRejectionEventId(forClientEventId: "rf-queued")],
+            gamesById: games,
+            rewards: rewards
+        )
+        #expect(d == .zero)
+    }
 }

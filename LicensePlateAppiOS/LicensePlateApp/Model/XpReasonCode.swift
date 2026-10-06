@@ -24,10 +24,6 @@ enum XpReasonCode: String, Codable, CaseIterable, Sendable {
     case tripParticipation = "trip_participation"
     case tripCompetitiveFirstPlace = "trip_competitive_first_place"
     case returnStreakDaily = "return_streak_daily"
-    case duplicateNoXp = "duplicate_no_xp"
-    case personalRefindNoXp = "personal_refind_no_xp"
-    case spamToggleNoXp = "spam_toggle_no_xp"
-    case riskRejectedNoXp = "risk_rejected_no_xp"
     /// Legacy — unused for awards after XP grant rework.
     case tripCompletion = "trip_completion"
     case milestoneUnlock = "milestone_unlock"

@@ -46,7 +46,7 @@ struct XpFeedProjectionBuilderTests {
                 itemId: "TX",
                 grantKind: .reconciliationAdjustment,
                 status: .final,
-                xpDelta: -6,
+                xpDelta: 5,
                 reasonCode: .competitiveLateFinder,
                 xpUniquenessKey: key,
                 createdAt: Date(timeIntervalSince1970: 200)
@@ -58,5 +58,6 @@ struct XpFeedProjectionBuilderTests {
         #expect(lines[0].xpDisplayText.contains("10"))
         #expect(lines[1].state == .final)
         #expect(lines[1].title.contains("TX"))
+        #expect(lines[1].xpDisplayText.contains("+5"))
     }
 }

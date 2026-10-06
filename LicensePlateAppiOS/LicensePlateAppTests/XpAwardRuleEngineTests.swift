@@ -47,22 +47,28 @@ struct XpAwardRuleEngineTests {
         #expect(c.xpReason == .competitiveLateFinder)
     }
 
-    @Test func duplicateNet0() {
+    /// §3.1.1 item 24. A collaborative game reaches `.acceptedLate` only through the server's
+    /// invalid-participant rejection; nobody won a race, so the find keeps the label its provisional
+    /// row carried rather than reading "competitive late finder".
+    @Test func collaborativeAcceptedLateKeepsTheSharedLabel() {
         let r = DiscoveryResolution(
             sourceEventId: "e1",
             sessionId: UUID(),
             gameInstanceId: UUID(),
             itemId: "TX",
             actorUserId: "u1",
-            finalOutcome: .rejectedDuplicate,
-            tripScoringOutcome: .rejectedDuplicate,
-            personalHistoryOutcome: .rejectedDuplicate,
+            finalOutcome: .acceptedLate,
+            tripScoringOutcome: .acceptedLate,
+            personalHistoryOutcome: .acceptedLate,
             finalXpAward: 0,
             xpReason: .discoveryClaimPendingResolution
         )
-        let c = XpAwardRuleEngine.compute(from: r, gameMode: .competitive, tripMode: .multiplayer, rewards: rewards)
-        #expect(c.xpNet == 0)
-        #expect(c.xpReason == .duplicateNoXp)
+        let multiplayer = XpAwardRuleEngine.compute(from: r, gameMode: .collaborative, tripMode: .multiplayer, rewards: rewards)
+        #expect(multiplayer.xpNet == rewards.xp.baseDiscoveryXp)
+        #expect(multiplayer.xpReason == .collaborativeSharedFinder)
+        let solo = XpAwardRuleEngine.compute(from: r, gameMode: .collaborative, tripMode: .solo, rewards: rewards)
+        #expect(solo.xpNet == rewards.xp.baseDiscoveryXp)
+        #expect(solo.xpReason == .soloNewDiscovery)
     }
 
     @Test func soloAcceptedFirstUsesSoloReason() {

@@ -1019,8 +1019,8 @@ struct XpGainToastServiceTests {
         #expect(service.presentation == nil)
     }
 
-    /// (6) ...but a VOIDED row is not an announcement. `voidLocalFindBonuses` leaves `xpDelta`
-    /// positive, so the baseline's `xpDelta > 0` branch alone would register a clawed-back award and
+    /// (6) ...but a VOIDED row is not an announcement. A voided row keeps its positive `xpDelta`, so
+    /// the baseline's `xpDelta > 0` branch alone would register an award that was not kept and
     /// swallow the only announcement of a genuinely later grant for the same scope.
     @Test func voidedBaselineBonusRowDoesNotSuppressALaterGrant() async {
         let ledger = MockXpLedgerRepository()

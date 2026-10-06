@@ -15,10 +15,6 @@ enum DiscoveryResolutionOutcome: String, Codable, CaseIterable, Sendable {
     case acceptedFirst = "accepted_first"
     case acceptedLate = "accepted_late"
     case acceptedShared = "accepted_shared"
-    case rejectedDuplicate = "rejected_duplicate"
-    case rejectedPersonalDuplicate = "rejected_personal_duplicate"
-    case rejectedRisk = "rejected_risk"
-    case rejectedInvalidState = "rejected_invalid_state"
 }
 
 /// Trip-scoring layer outcome (separate type from discovery XP semantics).
@@ -27,20 +23,12 @@ enum TripScoringOutcome: String, Codable, CaseIterable, Sendable {
     case acceptedFirst = "accepted_first"
     case acceptedLate = "accepted_late"
     case acceptedShared = "accepted_shared"
-    case rejectedDuplicate = "rejected_duplicate"
-    case rejectedPersonalDuplicate = "rejected_personal_duplicate"
-    case rejectedRisk = "rejected_risk"
-    case rejectedInvalidState = "rejected_invalid_state"
 }
 
-/// Personal travel-history layer outcome (refinds, duplicates, etc.).
+/// Personal travel-history layer outcome.
 enum PersonalHistoryOutcome: String, Codable, CaseIterable, Sendable {
     case pending = "pending"
     case acceptedFirst = "accepted_first"
     case acceptedLate = "accepted_late"
     case acceptedShared = "accepted_shared"
-    case rejectedDuplicate = "rejected_duplicate"
-    case rejectedPersonalDuplicate = "rejected_personal_duplicate"
-    case rejectedRisk = "rejected_risk"
-    case rejectedInvalidState = "rejected_invalid_state"
 }

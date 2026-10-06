@@ -82,11 +82,6 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
     }
 
     @discardableResult
-    func voidProvisionalRows(forUniquenessKey key: String, resolvedAt: Date) throws -> Int {
-        try voidProvisionalRows(forUniquenessKey: key, resolvedAt: resolvedAt, appending: nil)
-    }
-
-    @discardableResult
     func voidProvisionalRows(
         forUniquenessKey key: String,
         resolvedAt: Date,
@@ -154,15 +149,6 @@ final class XpLedgerRepository: ObservableObject, XpLedgerRepositoryProtocol {
         try repairKeysRetiredByIdentityRebind(matching: key)
         let descriptor = FetchDescriptor<XpLedgerEventEntity>(
             predicate: #Predicate<XpLedgerEventEntity> { $0.xpUniquenessKey == key }
-        )
-        let rows = try ctx.fetch(descriptor)
-        return sortedDomainEvents(from: rows, statuses: nil)
-    }
-
-    func ledgerEvents(sourceEventId: String) throws -> [XpLedgerEvent] {
-        guard let ctx = modelContext else { throw XpLedgerRepositoryError.noModelContext }
-        let descriptor = FetchDescriptor<XpLedgerEventEntity>(
-            predicate: #Predicate<XpLedgerEventEntity> { $0.sourceEventId == sourceEventId }
         )
         let rows = try ctx.fetch(descriptor)
         return sortedDomainEvents(from: rows, statuses: nil)

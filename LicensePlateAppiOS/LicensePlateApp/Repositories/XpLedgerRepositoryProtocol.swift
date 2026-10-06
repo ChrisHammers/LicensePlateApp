@@ -19,7 +19,6 @@ protocol XpLedgerRepositoryProtocol: AnyObject {
     func appendIfAbsent(_ event: XpLedgerEvent) throws -> Bool
     func ledgerEvents(userId: String, sessionId: UUID, gameInstanceId: UUID, itemId: String?) throws -> [XpLedgerEvent]
     func ledgerEvents(forUniquenessKey: String) throws -> [XpLedgerEvent]
-    func ledgerEvents(sourceEventId: String) throws -> [XpLedgerEvent]
     func ledgerEvents(
         userId: String,
         sessionId: UUID,
@@ -40,12 +39,9 @@ protocol XpLedgerRepositoryProtocol: AnyObject {
     func ledgerEvents(userId: String) throws -> [XpLedgerEvent]
     /// Ledger rows for this user scoped to one trip session, sorted by `createdAt` then `id`.
     func ledgerEvents(userId: String, sessionId: UUID) throws -> [XpLedgerEvent]
-    /// Settlement exception to append-only: mark open provisional rows voided for a uniqueness key.
-    /// Returns the sum of voided provisional `xpDelta` values.
-    @discardableResult
-    func voidProvisionalRows(forUniquenessKey key: String, resolvedAt: Date) throws -> Int
-    /// Settlement (§3.1.1 item 29e): voids the open provisional rows for `key` AND inserts `replacement`
-    /// in ONE save, so the award can never be left voided with no final row in its place.
+    /// Settlement exception to append-only (§3.1.1 item 29e): voids the open provisional rows for
+    /// `key` AND inserts `replacement` in ONE save, so the award can never be left voided with no
+    /// final row in its place.
     /// Returns the sum of voided provisional `xpDelta` values.
     @discardableResult
     func voidProvisionalRows(

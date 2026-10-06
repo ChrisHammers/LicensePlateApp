@@ -792,7 +792,6 @@
 "xp.pending.badge.short" = "Pendiente";
 "xp.pending.badge.a11y" = "Resolución competitiva pendiente";
 "xp.discovery.badge.accepted_late" = "No fue el primero";
-"xp.discovery.badge.adjusted_after_sync" = "Hallazgo rechazado";
 
 "xp.toast.grant.competitive_win.title" = "Victoria competitiva";
 "xp.toast.grant.competitive_win.subtitle" = "Primer lugar en este juego";
@@ -1012,13 +1011,10 @@
 "reward.popup.kicker.rank_up" = "SUBISTE DE RANGO";
 "reward.popup.kicker.achievement" = "HITO DESBLOQUEADO";
 "reward.popup.kicker.unlock" = "NUEVO DESBLOQUEO";
-"reward.popup.kicker.xp_removed" = "XP ELIMINADO";
 "reward.popup.rank_up.detail" = "Alcanzaste el rango %d.";
 "reward.popup.rank_up.detail_unlocks" = "Rango %d · Desbloqueaste %@";
 "reward.popup.xp_bonus" = "+%@ XP";
 "reward.popup.continue" = "Toca para continuar";
-"reward.popup.xp_removed.title" = "-%d XP · %@";
-"reward.popup.xp_removed.detail" = "Este hallazgo no se contó tras la sincronización. Se actualizó tu XP.";
 "reward.popup.achievement_removed.title" = "Hito eliminado";
 "reward.popup.achievement_removed.detail" = "“%@” no se confirmó y se eliminó de tus hitos desbloqueados.";
 

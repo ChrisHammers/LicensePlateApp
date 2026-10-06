@@ -18,8 +18,6 @@ struct RegionRowStatusBadgeView: View {
             return "medal.fill"
         case .acceptedLate:
             return "person.2.fill"
-        case .adjustedAfterSync:
-            return "arrow.triangle.2.circlepath"
         case .informational:
             return "info.circle.fill"
         }
@@ -33,8 +31,6 @@ struct RegionRowStatusBadgeView: View {
             return Color.Theme.accentYellow
         case .acceptedLate:
             return Color.Theme.permissionOrange
-        case .adjustedAfterSync:
-            return Color.Theme.permissionOrangeDark
         case .informational:
             return Color.Theme.primaryBlue
         }
@@ -48,8 +44,6 @@ struct RegionRowStatusBadgeView: View {
             return Color.Theme.primaryBlue
         case .acceptedLate:
             return Color.Theme.permissionOrange
-        case .adjustedAfterSync:
-            return Color.Theme.permissionOrangeDark
         case .informational:
             return Color.Theme.primaryBlue
         }
@@ -63,8 +57,6 @@ struct RegionRowStatusBadgeView: View {
             return Color.Theme.accentYellow.opacity(0.20)
         case .acceptedLate:
             return Color.Theme.permissionOrange.opacity(0.12)
-        case .adjustedAfterSync:
-            return Color.Theme.permissionOrangeDark.opacity(0.12)
         case .informational:
             return Color.Theme.primaryBlue.opacity(0.10)
         }
@@ -78,8 +70,6 @@ struct RegionRowStatusBadgeView: View {
             return Color.Theme.accentYellow.opacity(0.65)
         case .acceptedLate:
             return Color.Theme.permissionOrange.opacity(0.50)
-        case .adjustedAfterSync:
-            return Color.Theme.permissionOrangeDark.opacity(0.50)
         case .informational:
             return Color.Theme.primaryBlue.opacity(0.35)
         }
@@ -129,7 +119,6 @@ struct XpPendingBadgeView: View {
         XpPendingBadgeView()
         RegionRowStatusBadgeView(text: "First finder".localized, style: .firstFinder)
         RegionRowStatusBadgeView(text: "xp.discovery.badge.accepted_late".localized, style: .acceptedLate)
-        RegionRowStatusBadgeView(text: "xp.discovery.badge.adjusted_after_sync".localized, style: .adjustedAfterSync)
     }
     .padding()
 }

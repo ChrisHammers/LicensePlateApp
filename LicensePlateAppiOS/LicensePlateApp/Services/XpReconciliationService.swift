@@ -18,21 +18,10 @@ enum DiscoveryXpResolutionSettledUserInfoKey {
     static let gameInstanceId = "gameInstanceId"
 }
 
-struct XpClawbackNotice: Equatable, Sendable {
-    var regionId: String
-    var xpRemoved: Int
-    var sourceEventId: String
-    var sessionId: UUID
-    var gameInstanceId: UUID
-}
-
 @MainActor
 final class XpReconciliationService {
 
     static let shared = XpReconciliationService()
-
-    /// Last clawback produced by settlement (consumed by toast / reward presentation).
-    private(set) var lastClawbackNotice: XpClawbackNotice?
 
     private let xpLedger: XpLedgerRepositoryProtocol
     private let resolutionRepo: DiscoveryResolutionRepositoryProtocol
@@ -40,7 +29,6 @@ final class XpReconciliationService {
     private let gameRepository: GameInstanceRepositoryProtocol
     private let tripSessionRepository: TripSessionRepositoryProtocol
     private let rewardsConfig: ProgressionRewardsConfigProviding
-    private let clawbackHandler: ((XpClawbackNotice) -> Void)?
 
     init(
         xpLedger: XpLedgerRepositoryProtocol = XpLedgerRepository.shared,
@@ -48,8 +36,7 @@ final class XpReconciliationService {
         tripActivityEvents: TripActivityEventRepositoryProtocol = TripActivityEventRepository.shared,
         gameRepository: GameInstanceRepositoryProtocol = GameInstanceRepository.shared,
         tripSessionRepository: TripSessionRepositoryProtocol = TripSessionRepository.shared,
-        rewardsConfig: ProgressionRewardsConfigProviding = ProgressionRewardsConfigProvider.shared,
-        clawbackHandler: ((XpClawbackNotice) -> Void)? = nil
+        rewardsConfig: ProgressionRewardsConfigProviding = ProgressionRewardsConfigProvider.shared
     ) {
         self.xpLedger = xpLedger
         self.resolutionRepo = resolutionRepo
@@ -57,12 +44,6 @@ final class XpReconciliationService {
         self.gameRepository = gameRepository
         self.tripSessionRepository = tripSessionRepository
         self.rewardsConfig = rewardsConfig
-        self.clawbackHandler = clawbackHandler
-    }
-
-    func consumeLastClawbackNotice() -> XpClawbackNotice? {
-        defer { lastClawbackNotice = nil }
-        return lastClawbackNotice
     }
 
     /// Called after a gameplay event is durably inserted (same timing as progression observer).
@@ -433,40 +414,24 @@ final class XpReconciliationService {
             finalEvent = nil
         }
 
-        var voidedProvisionalXp = try xpLedger.voidProvisionalRows(
+        // The find's two local bonus rows (lifetime-first, first-of-day) are never voided here: every
+        // outcome keeps the find, and the server pays both bonuses — off the `region_found`, or off
+        // its own `srvrej_<clientEventId>` rejection for a late competitive or (§3.1.1 item 24) an
+        // invalid-participant find (`functions/src/progressionCore.ts`, `rejectionPaysFind`). They
+        // retire against the server total in `LedgerPendingXpTotals.isServerApplied`.
+        try xpLedger.voidProvisionalRows(
             forUniquenessKey: baseKey,
             resolvedAt: resolvedAt,
             appending: finalEvent
         )
-        if targetNet == 0 {
-            // A find that resolved to nothing keeps none of its bonuses either. Scoped to rows this
-            // find minted, so an earlier accepted find's first-of-day row is untouched.
-            //
-            // §3.1.1 item 17 correction (2026-09-19): the previous note here claimed this covers "a
-            // live local +20/+10 the server will never grant" on a rejected plate. That was wrong
-            // about the case the owner actually plays. A LATE COMPETITIVE find does not reach this
-            // branch at all — `GameplayXpSyncSupport` maps `server_rejected_late_competitive` to
-            // `.acceptedLate`, so `targetNet == baseDiscoveryXp > 0` — and the server DOES grant
-            // both bonuses there, off its own `srvrej_<clientEventId>` rejection document
-            // (`functions/src/progressionCore.ts`, `KIND_DISCOVERY_REJECTED`). Those rows are not
-            // voided; they are retired against the server total by
-            // `LedgerPendingXpTotals.isServerApplied`. This branch only runs for outcomes that earn no
-            // XP: for the two that reach the server as rejections (invalid participant, risk)
-            // progression writes no components at all; a personal re-find is written and stamped
-            // remotely, but with no fresh components.
-            voidedProvisionalXp += try voidLocalFindBonuses(
-                sourceEventId: resolution.sourceEventId,
-                resolvedAt: resolvedAt
-            )
-        }
 
+        // Tops the base award up when a final row already exists below the settled amount. Never
+        // downward: a shown number never goes down (OD-17).
         let rowsAfterFinal = try xpLedger.ledgerEvents(forUniquenessKey: baseKey)
             .filter { $0.status != .voided }
         let netAfterFinal = rowsAfterFinal.reduce(0) { $0 + $1.xpDelta }
-        let rawDelta = targetNet - netAfterFinal
-        // Allow negative clawbacks so rejected finds clear provisional XP.
-        let delta = rawDelta
-        if delta != 0 {
+        let delta = max(0, targetNet - netAfterFinal)
+        if delta > 0 {
             var meta: [String: String] = [XpLedgerMetadataKey.resolutionId: resolution.resolutionId]
             meta[XpLedgerMetadataKey.originalDiscoveryEventId] = resolution.sourceEventId
             let adjustment = XpLedgerEvent(
@@ -485,40 +450,6 @@ final class XpReconciliationService {
                 metadata: meta
             )
             try xpLedger.append(adjustment)
-        } else if targetNet == 0 {
-            // Idempotency marker when clawback only voided provisional rows.
-            let marker = XpLedgerEvent(
-                userId: resolution.actorUserId,
-                sessionId: resolution.sessionId,
-                gameInstanceId: resolution.gameInstanceId,
-                sourceEventId: resolution.resolutionId,
-                sourceEventType: "discovery_resolution",
-                itemId: resolution.itemId,
-                grantKind: .reconciliationAdjustment,
-                status: .final,
-                xpDelta: 0,
-                reasonCode: award.xpReason,
-                xpUniquenessKey: baseKey,
-                resolvedAt: resolvedAt,
-                metadata: [
-                    XpLedgerMetadataKey.resolutionId: resolution.resolutionId,
-                    XpLedgerMetadataKey.originalDiscoveryEventId: resolution.sourceEventId,
-                ]
-            )
-            try xpLedger.append(marker)
-        }
-
-        if targetNet == 0, voidedProvisionalXp > 0 {
-            let notice = XpClawbackNotice(
-                regionId: resolution.itemId,
-                xpRemoved: voidedProvisionalXp,
-                sourceEventId: resolution.sourceEventId,
-                sessionId: resolution.sessionId,
-                gameInstanceId: resolution.gameInstanceId
-            )
-            lastClawbackNotice = notice
-            clawbackHandler?(notice)
-            XpClawbackPresentationService.shared.enqueue(notice)
         }
 
         NotificationCenter.default.post(
@@ -529,19 +460,6 @@ final class XpReconciliationService {
                 DiscoveryXpResolutionSettledUserInfoKey.gameInstanceId: resolution.gameInstanceId,
             ]
         )
-    }
-
-    /// Voids the local lifetime-first / first-of-day rows minted by one find. Returns the XP removed.
-    private func voidLocalFindBonuses(sourceEventId: String, resolvedAt: Date) throws -> Int {
-        let bonusReasons: Set<XpReasonCode> = [.lifetimeUniqueRegion, .firstFindOfDay]
-        let keys = try xpLedger.ledgerEvents(sourceEventId: sourceEventId)
-            .filter { $0.status == .provisional && bonusReasons.contains($0.reasonCode) }
-            .map(\.xpUniquenessKey)
-        var removed = 0
-        for key in Set(keys) {
-            removed += try xpLedger.voidProvisionalRows(forUniquenessKey: key, resolvedAt: resolvedAt)
-        }
-        return removed
     }
 
     private func expectedProvisionalXp(

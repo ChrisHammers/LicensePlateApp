@@ -48,10 +48,6 @@ private struct LicensePlateRowStatesPreview: View {
                     presentation: LicensePlateRowPreviewData.acceptedLate
                 )
                 rowCard(
-                    title: "Status badge: Adjusted after sync",
-                    presentation: LicensePlateRowPreviewData.adjustedAfterSync
-                )
-                rowCard(
                     title: "Disabled row",
                     presentation: LicensePlateRowPreviewData.notFound,
                     isDisabled: true
@@ -126,14 +122,6 @@ private enum LicensePlateRowPreviewData {
         findersAccessibilityValue: "Morgan found this region first. Alex found it second."
     )
 
-    static let adjustedAfterSync = makePresentation(
-        isVisuallyFound: true,
-        detailLine: "xp.discovery.badge.adjusted_after_sync".localized,
-        detailStyle: .adjustedAfterSync,
-        orderedFinders: [finderMorgan, finderAlex, finderJordan],
-        findersAccessibilityValue: "Morgan found this region first. Alex found it second. Jordan found it third."
-    )
-
     private static let finderAlex = FinderAvatarPresentation(
         participantId: "user-alex",
         displayName: "Alex",
@@ -148,14 +136,6 @@ private enum LicensePlateRowPreviewData {
         avatarId: "scout_otter",
         legacyFallbackImageName: nil,
         foundAt: Date(timeIntervalSince1970: 90)
-    )
-
-    private static let finderJordan = FinderAvatarPresentation(
-        participantId: "user-jordan",
-        displayName: "Jordan",
-        avatarId: nil,
-        legacyFallbackImageName: "dog_blue",
-        foundAt: Date(timeIntervalSince1970: 110)
     )
 
     private static func makePresentation(

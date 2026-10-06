@@ -3,7 +3,7 @@
 //  LicensePlateApp
 //
 //  Pure rules for rank celebration vs provisional XP.
-//  Offline play may celebrate from provisional totals; clawback UX handles rare rejects.
+//  Offline play may celebrate from provisional totals; settlement never takes shown XP back (OD-17).
 //
 
 import Foundation

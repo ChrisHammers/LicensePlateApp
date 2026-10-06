@@ -30,30 +30,6 @@ struct XpLedgerRepositoryTests {
         ).storageString
     }
 
-    @Test func appendAndFetchBySourceEventId() throws {
-        _ = try makeContext()
-        let sessionId = UUID()
-        let gameId = UUID()
-        let key = sampleKey(sessionId: sessionId, gameId: gameId)
-        let e1 = XpLedgerEvent(
-            userId: "u1",
-            sessionId: sessionId,
-            gameInstanceId: gameId,
-            sourceEventId: "src-99",
-            sourceEventType: "region_found",
-            itemId: "CA",
-            grantKind: .provisionalDiscoveryXp,
-            status: .provisional,
-            xpDelta: 10,
-            reasonCode: .discoveryClaimPendingResolution,
-            xpUniquenessKey: key
-        )
-        try XpLedgerRepository.shared.append(e1)
-        let bySource = try XpLedgerRepository.shared.ledgerEvents(sourceEventId: "src-99")
-        #expect(bySource.count == 1)
-        #expect(bySource[0].xpDelta == 10)
-    }
-
     @Test func appendBaseDiscoveryIfAbsentIdempotent() throws {
         _ = try makeContext()
         let sessionId = UUID()
@@ -109,7 +85,7 @@ struct XpLedgerRepositoryTests {
             grantKind: .reconciliationAdjustment,
             status: .final,
             xpDelta: -5,
-            reasonCode: .duplicateNoXp,
+            reasonCode: .competitiveLateFinder,
             xpUniquenessKey: key
         )
         #expect(throws: XpLedgerRepositoryError.self) {
@@ -154,7 +130,7 @@ struct XpLedgerRepositoryTests {
                 grantKind: .reconciliationAdjustment,
                 status: .final,
                 xpDelta: -3,
-                reasonCode: .duplicateNoXp,
+                reasonCode: .competitiveLateFinder,
                 xpUniquenessKey: keyAdj
             )
         )
@@ -210,7 +186,7 @@ struct XpLedgerRepositoryTests {
                 grantKind: .reconciliationAdjustment,
                 status: .voided,
                 xpDelta: 0,
-                reasonCode: .duplicateNoXp,
+                reasonCode: .competitiveLateFinder,
                 xpUniquenessKey: key1
             )
         )
@@ -340,6 +316,5 @@ struct XpLedgerRepositoryTests {
 
         let rows = try XpLedgerRepository.shared.ledgerEvents(userId: "u-decode")
         #expect(rows.map(\.id) == ["good-row"])
-        #expect(try XpLedgerRepository.shared.ledgerEvents(sourceEventId: "e-bad").isEmpty)
     }
 }

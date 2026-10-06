@@ -49,8 +49,7 @@ struct LocalLedgerConsentReplayReconciliationTests {
             resolutionRepo: DiscoveryResolutionRepository.shared,
             tripActivityEvents: events,
             gameRepository: games,
-            tripSessionRepository: trips,
-            clawbackHandler: { _ in }
+            tripSessionRepository: trips
         )
     }
 
@@ -620,7 +619,11 @@ struct LocalLedgerConsentReplayReconciliationTests {
         #expect(Set(live.filter { $0.reasonCode == .firstFindOfDay }.map(\.itemId)) == ["2026-08-10", "2026-08-11"])
     }
 
-    @Test func rejectedFindClawsBackItsOwnBonusesOnly() throws {
+    /// §3.1.1 item 24 (OD-17). The server rejects a find this device already credited because the
+    /// trip now reads as solo while a partner who has left holds the plate. That find keeps
+    /// everything it showed: the base settles to a final row, its lifetime-first bonus stays open
+    /// until the server pays it off the `srvrej_` rejection, and nothing is voided or written negative.
+    @Test func invalidParticipantFindKeepsEverythingItShowed() throws {
         _ = try makeContext()
         let sessionId = UUID()
         let gameId = UUID()
@@ -644,7 +647,7 @@ struct LocalLedgerConsentReplayReconciliationTests {
             dayKey: "2026-08-10"
         )
         let rejected = regionFoundEvent(
-            id: "dup-NY",
+            id: "left-NY",
             sessionId: sessionId,
             gameId: gameId,
             regionId: "NY",
@@ -657,30 +660,47 @@ struct LocalLedgerConsentReplayReconciliationTests {
         let svc = makeService(events: events, games: games, trips: trips)
         svc.handleCommittedActivityEvent(accepted)
         svc.handleCommittedActivityEvent(rejected)
+        let shownBefore = try liveRows(forUserId: consentedUid).reduce(0) { $0 + $1.xpDelta }
 
+        let outcome = try #require(
+            GameplayXpSyncSupport.discoveryOutcome(
+                forServerRejectionReason: DiscoveryRejectionReason.rejectedInvalidParticipant.rawValue
+            )
+        )
+        #expect(outcome == .acceptedLate)
         try svc.consumeResolution(
             DiscoveryResolution(
-                resolutionId: "xp_res:v1:dup-NY:rejected_duplicate",
-                sourceEventId: "dup-NY",
+                resolutionId: "xp_res:v1:left-NY:\(outcome.rawValue)",
+                sourceEventId: "left-NY",
                 sessionId: sessionId,
                 gameInstanceId: gameId,
                 itemId: "NY",
                 actorUserId: consentedUid,
-                finalOutcome: .rejectedDuplicate,
-                tripScoringOutcome: .rejectedDuplicate,
-                personalHistoryOutcome: .rejectedDuplicate,
-                finalXpAward: 0,
-                xpReason: .duplicateNoXp
+                finalOutcome: outcome,
+                tripScoringOutcome: .acceptedLate,
+                personalHistoryOutcome: .acceptedLate,
+                finalXpAward: GameProgressionXPRewards.baseDiscoveryXp,
+                xpReason: .soloNewDiscovery
             ),
             gameMode: .collaborative,
             tripMode: .solo
         )
 
-        let live = try liveRows(forUserId: consentedUid)
-        // NY's lifetime-first is gone; CA's survives, and so does the day bonus the accepted find earned.
-        #expect(Set(live.filter { $0.reasonCode == .lifetimeUniqueRegion }.map(\.itemId)) == ["CA"])
+        let all = try XpLedgerRepository.shared.ledgerEvents(userId: consentedUid)
+        let live = all.filter { $0.status != .voided }
+        #expect(live.reduce(0) { $0 + $1.xpDelta } == shownBefore)
+        #expect(!all.contains { $0.xpDelta < 0 })
+        #expect(!all.contains { $0.grantKind == .reconciliationAdjustment })
+        // Both finds keep their lifetime-first bonus, still provisional, and the day bonus survives.
+        #expect(Set(live.filter { $0.reasonCode == .lifetimeUniqueRegion }.map(\.itemId)) == ["CA", "NY"])
+        #expect(live.filter { $0.reasonCode == .lifetimeUniqueRegion }.allSatisfy { $0.status == .provisional })
         #expect(live.filter { $0.reasonCode == .firstFindOfDay }.count == 1)
-        #expect(live.first { $0.reasonCode == .firstFindOfDay }?.sourceEventId == "ok-CA")
+        // The base settles to a final row under the label its provisional row carried.
+        let nyBase = try baseDiscoveryRows(userId: consentedUid, sessionId: sessionId, gameId: gameId, regionId: "NY")
+        #expect(nyBase.count == 1)
+        #expect(nyBase.first?.grantKind == .finalDiscoveryAward)
+        #expect(nyBase.first?.xpDelta == GameProgressionXPRewards.baseDiscoveryXp)
+        #expect(nyBase.first?.reasonCode == .soloNewDiscovery)
     }
 
     // MARK: - Day-key semantics (must match the server's, incl. FR-28h staleness)
@@ -817,7 +837,8 @@ struct LocalLedgerConsentReplayReconciliationTests {
         // 3. Settlement must be able to close it.
         let voided = try XpLedgerRepository.shared.voidProvisionalRows(
             forUniquenessKey: consentedKey,
-            resolvedAt: Date()
+            resolvedAt: Date(),
+            appending: nil
         )
         #expect(voided == GameProgressionXPRewards.baseDiscoveryXp)
         #expect(try liveRows(forUserId: consentedUid).isEmpty)

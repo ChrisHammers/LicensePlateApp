@@ -82,8 +82,6 @@ enum DiscoveryUiProjectionBuilder {
             return nil
         case .acceptedLate:
             return "xp.discovery.badge.accepted_late".localized
-        case .rejectedDuplicate, .rejectedPersonalDuplicate, .rejectedRisk, .rejectedInvalidState:
-            return "xp.discovery.badge.adjusted_after_sync".localized
         default:
             return nil
         }

@@ -170,7 +170,6 @@ final class AchievementUnlockCelebrationService: ObservableObject {
         userAchievementRemoteRepository.stopListening()
         achievementUnlockSyncService.resetForSignOut()
         rewardPresenter.reset()
-        XpClawbackPresentationService.shared.resetForSignOut()
     }
 
     /// ONLY for a genuine account purge (hard sign-out to a fresh guest, delete account), from

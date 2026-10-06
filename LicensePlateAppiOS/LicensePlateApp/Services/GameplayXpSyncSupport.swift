@@ -53,7 +53,8 @@ enum GameplayXpSyncSupport {
         }
     }
 
-    /// Competitive supersede: late find removed; apply canonical resolution for the superseded finder.
+    /// The server wrote a rejection in place of this device's find: the local find is removed and its
+    /// XP settles through the canonical resolution for this finder.
     static func applyResolutionForSupersededRegionFound(
         sessionId: UUID,
         supersededLocalId: String,
@@ -70,18 +71,9 @@ enum GameplayXpSyncSupport {
         let actor = p[TripActivityEventPayloadKey.participantId] ?? uploadedRegionFound.actorId ?? ""
         guard !actor.isEmpty else { return }
 
-        guard let reasonRaw = rejection.payload?[TripActivityEventPayloadKey.rejectionReason] else { return }
-
-        let discoveryOutcome: DiscoveryResolutionOutcome
-        switch reasonRaw {
-        case DiscoveryRejectionReason.serverRejectedLateCompetitive.rawValue,
-            DiscoveryRejectionReason.serverRejectedSupersededByEarlierTimestamp.rawValue:
-            discoveryOutcome = .acceptedLate
-        case DiscoveryRejectionReason.rejectedInvalidParticipant.rawValue:
-            discoveryOutcome = .rejectedInvalidState
-        default:
-            return
-        }
+        guard let reasonRaw = rejection.payload?[TripActivityEventPayloadKey.rejectionReason],
+              let discoveryOutcome = Self.discoveryOutcome(forServerRejectionReason: reasonRaw)
+        else { return }
 
         guard let game = try? GameInstanceRepository.shared.instance(byId: gameInstanceId),
               let trip = try? TripSessionRepository.shared.session(byId: sessionId) else { return }
@@ -106,6 +98,29 @@ enum GameplayXpSyncSupport {
             AnalyticsService.shared.log(
                 .persistenceSaveFailed(context: "xp_sync_superseded_region_found", error: error.localizedDescription)
             )
+        }
+    }
+
+    /// How a server rejection of this device's own uploaded `region_found` settles that find's XP,
+    /// or `nil` for a reason that settles nothing.
+    ///
+    /// Every one keeps its base award: the device recorded the find and already showed its XP, and
+    /// a shown number never goes down (OD-17). For the two reasons the callable returns for this
+    /// device's own find — late competitive, and (§3.1.1 item 24) invalid participant, where the
+    /// server reads the trip as solo because the partner who holds the plate has left, in either
+    /// game mode — the server pays base + lifetime-unique + first-of-day off its `srvrej_` document
+    /// (`functions/src/progressionCore.ts`, `rejectionPaysFind`), so the local rows retire through
+    /// `LedgerPendingXpTotals` join 2 in the same snapshot that payment lands.
+    nonisolated static func discoveryOutcome(
+        forServerRejectionReason reasonRaw: String
+    ) -> DiscoveryResolutionOutcome? {
+        switch reasonRaw {
+        case DiscoveryRejectionReason.serverRejectedLateCompetitive.rawValue,
+            DiscoveryRejectionReason.serverRejectedSupersededByEarlierTimestamp.rawValue,
+            DiscoveryRejectionReason.rejectedInvalidParticipant.rawValue:
+            return .acceptedLate
+        default:
+            return nil
         }
     }
 

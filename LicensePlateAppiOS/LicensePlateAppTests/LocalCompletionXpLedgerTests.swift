@@ -73,8 +73,7 @@ struct LocalCompletionXpLedgerTests {
             tripActivityEvents: events,
             gameRepository: games,
             tripSessionRepository: trips,
-            rewardsConfig: StubRewardsConfigProvider(),
-            clawbackHandler: { _ in }
+            rewardsConfig: StubRewardsConfigProvider()
         )
 
         return LocalTrip(

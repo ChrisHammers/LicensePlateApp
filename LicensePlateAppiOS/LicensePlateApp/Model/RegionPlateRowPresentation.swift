@@ -11,7 +11,6 @@ enum RegionPlateRowStatusStyle: Equatable, Sendable {
     case pending
     case firstFinder
     case acceptedLate
-    case adjustedAfterSync
     case informational
 }
 
@@ -112,9 +111,6 @@ enum RegionPlateRowPresentationBuilder {
         }
         if badgeText == "xp.discovery.badge.accepted_late".localized {
             return .acceptedLate
-        }
-        if badgeText == "xp.discovery.badge.adjusted_after_sync".localized {
-            return .adjustedAfterSync
         }
         return .informational
     }

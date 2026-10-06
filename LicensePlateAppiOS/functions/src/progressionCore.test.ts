@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest";
 import * as admin from "firebase-admin";
-import { KIND_REGION_FOUND, KIND_DISCOVERY_REJECTED, PK, REJECTION_SERVER_LATE_COMPETITIVE } from "./gameplayEventResolver";
+import {
+  KIND_REGION_FOUND,
+  KIND_DISCOVERY_REJECTED,
+  PK,
+  REJECTION_SERVER_LATE_COMPETITIVE,
+  REJECTION_INVALID_PARTICIPANT,
+} from "./gameplayEventResolver";
 import {
   baseRegionDiscoveryScopeKey,
   competitiveFirstPlaceParticipantIds,
@@ -145,6 +151,44 @@ describe("progressionCore", () => {
       XP_AMOUNTS.baseDiscoveryXp + XP_AMOUNTS.lifetimeUniqueRegionFindBonusXp
     );
     expect(d.u2?.acceptedRegionFindCount).toBe(1);
+  });
+
+  it("server-authored invalid-participant discovery_rejected awards base + unique without first-finder", () => {
+    const d = previewProgressionDeltasForActivityEvent({
+      kind: KIND_DISCOVERY_REJECTED,
+      actorId: "u2",
+      payload: {
+        [PK.gameInstanceId]: gid,
+        [PK.regionId]: "US-TX",
+        [PK.participantId]: "u2",
+        [PK.rejectionReason]: REJECTION_INVALID_PARTICIPANT,
+        [PK.serverResolvedAt]: "1786755660",
+      },
+      memberUserIds: ["u2"],
+      gameDocs: [mockGameDoc(gid, "competitive")],
+      activityEventDocs: [],
+    });
+    expect(d.u2?.totalXp).toBe(
+      XP_AMOUNTS.baseDiscoveryXp + XP_AMOUNTS.lifetimeUniqueRegionFindBonusXp
+    );
+    expect(d.u2?.acceptedRegionFindCount).toBe(1);
+  });
+
+  it("client-authored invalid-participant discovery_rejected (no serverResolvedAt) awards nothing", () => {
+    const d = previewProgressionDeltasForActivityEvent({
+      kind: KIND_DISCOVERY_REJECTED,
+      actorId: "u2",
+      payload: {
+        [PK.gameInstanceId]: gid,
+        [PK.regionId]: "US-TX",
+        [PK.participantId]: "u2",
+        [PK.rejectionReason]: REJECTION_INVALID_PARTICIPANT,
+      },
+      memberUserIds: ["u2"],
+      gameDocs: [mockGameDoc(gid, "competitive")],
+      activityEventDocs: [],
+    });
+    expect(d).toEqual({});
   });
 
   it("builds scoped key with user/session/game/region", () => {

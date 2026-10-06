@@ -70,6 +70,11 @@ enum ProgressionLocalEngine {
             switch event.kind {
             case .regionFound:
                 guard !serverAppliedEventIds.contains(event.id) else { continue }
+                // The server paid this find off its own `srvrej_` rejection (`LedgerPendingXpTotals`
+                // join 2) while the local find is still queued — a callable response that never arrived.
+                guard !serverAppliedEventIds.contains(
+                    XpServerScopeKey.serverRejectionEventId(forClientEventId: event.id)
+                ) else { continue }
                 guard let pid = regionFoundParticipantId(event), pid == subjectUserId else { continue }
                 guard let key = baseDiscoveryScopedKey(for: event, participantId: pid) else { continue }
                 guard firstFindEventIdByScopedKey[key] == event.id else { continue }
@@ -79,12 +84,10 @@ enum ProgressionLocalEngine {
 
             case .discoveryRejected:
                 guard !serverAppliedEventIds.contains(event.id) else { continue }
-                guard let reason = event.payload?[TripActivityEventPayloadKey.rejectionReason],
-                      reason == DiscoveryRejectionReason.serverRejectedLateCompetitive.rawValue
-                else { continue }
+                guard serverRejectionPaysFind(event) else { continue }
                 guard let pid = regionFoundParticipantId(event), pid == subjectUserId else { continue }
                 guard let key = baseDiscoveryScopedKey(for: event, participantId: pid) else { continue }
-                // Prefer region_found provisional when both exist; only count late reject if no accepted find scope.
+                // Prefer region_found provisional when both exist; only count the rejection if no accepted find scope.
                 if firstFindEventIdByScopedKey[key] != nil { continue }
                 delta.totalXp += rewards.xp.baseDiscoveryXp
                 delta.acceptedRegionFindCount += 1
@@ -111,6 +114,26 @@ enum ProgressionLocalEngine {
         }
 
         return delta
+    }
+
+    /// Mirror of the server's `rejectionPaysFind` (`functions/src/progressionCore.ts`): whether a
+    /// `discovery_rejected` still pays its find. A late competitive rejection does, and so does
+    /// (§3.1.1 item 24) the server's invalid-participant rejection — a find on a trip the server
+    /// reads as solo while a partner who has left holds the plate. This device writes the same
+    /// invalid-participant reason for a find it refuses at tap time, which earns nothing; only the
+    /// server's copy carries `serverResolvedAt`, which no client can send.
+    static func serverRejectionPaysFind(_ event: TripActivityEvent) -> Bool {
+        guard let payload = event.payload,
+              let reason = payload[TripActivityEventPayloadKey.rejectionReason]
+        else { return false }
+        switch reason {
+        case DiscoveryRejectionReason.serverRejectedLateCompetitive.rawValue:
+            return true
+        case DiscoveryRejectionReason.rejectedInvalidParticipant.rawValue:
+            return !(payload[TripActivityEventPayloadKey.serverResolvedAt] ?? "").isEmpty
+        default:
+            return false
+        }
     }
 
     /// Every XP award a completion event produces, for every subject — the single local mirror of the

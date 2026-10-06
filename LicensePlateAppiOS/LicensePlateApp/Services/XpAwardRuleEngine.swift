@@ -60,6 +60,17 @@ enum XpAwardRuleEngine {
             case .collaborative: return (baseDiscovery, .collaborativeSharedFinder)
             }
         case .acceptedLate:
+            // A collaborative game reaches `.acceptedLate` only through the server's invalid-participant
+            // rejection (§3.1.1 item 24: the partner who holds the plate has left). Nobody won a race
+            // there, so the find settles under the same label as a shared one.
+            guard gameMode == .competitive else {
+                return xpNetAndReason(
+                    finalOutcome: .acceptedShared,
+                    gameMode: gameMode,
+                    tripMode: tripMode,
+                    rewards: rewards
+                )
+            }
             return (baseDiscovery, .competitiveLateFinder)
         case .acceptedShared:
             // A solo trip's game is collaborative by construction, so the sync path resolves every
@@ -71,14 +82,6 @@ enum XpAwardRuleEngine {
                 return (baseDiscovery, .soloNewDiscovery)
             }
             return (baseDiscovery, .collaborativeSharedFinder)
-        case .rejectedDuplicate:
-            return (0, .duplicateNoXp)
-        case .rejectedPersonalDuplicate:
-            return (0, .personalRefindNoXp)
-        case .rejectedRisk:
-            return (0, .riskRejectedNoXp)
-        case .rejectedInvalidState:
-            return (0, .duplicateNoXp)
         }
     }
 }

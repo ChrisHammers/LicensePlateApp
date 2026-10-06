@@ -18,14 +18,15 @@ import Foundation
 
 enum XpServerScopeKey {
 
-    /// `srvrej_<clientEventId>` — the activity-event document id the server authors when this
-    /// device's competitive `region_found` loses to an earlier find.
+    /// `srvrej_<clientEventId>` — the activity-event document id the server authors when it rejects
+    /// this device's `region_found`: a competitive find that loses to an earlier one, or (§3.1.1
+    /// item 24) a find on a trip the server reads as solo while a partner who has left holds the plate.
     ///
     /// The client's own event is NEVER written remotely on that path
-    /// (`functions/src/gameplayEventResolver.ts`, `serverRejectionEventId` :513-514, written at
-    /// :767-812), and `progressionCore.previewProgressionComponentsForActivityEvent` grants the
-    /// base discovery + both find bonuses off THAT document
-    /// (`functions/src/progressionCore.ts` `KIND_DISCOVERY_REJECTED` branch, :523-542). So
+    /// (`functions/src/gameplayEventResolver.ts`, `serverRejectionEventId`, written in the
+    /// `rejected_duplicate || rejected_invalid_participant` branch), and
+    /// `progressionCore.previewProgressionComponentsForActivityEvent` grants the base discovery +
+    /// both find bonuses off THAT document (`functions/src/progressionCore.ts`, `rejectionPaysFind`). So
     /// `appliedProgressionEvents` records `srvrej_<clientEventId>` and never `<clientEventId>` —
     /// which is why a retirement keyed on the local id alone leaves the rows open forever.
     static func serverRejectionEventId(forClientEventId clientEventId: String) -> String {
@@ -134,11 +135,6 @@ enum XpServerScopeKey {
 
         // ---- Return streak keeps its reason-level exclusion in `shouldToastRemoteGrant`.
         case .returnStreakDaily:
-            return nil
-
-        // ---- No-XP markers: never positive, so they never reach a toast or a scope ack.
-        //      `spam_toggle_no_xp` additionally has no writer anywhere in the app.
-        case .duplicateNoXp, .personalRefindNoXp, .spamToggleNoXp, .riskRejectedNoXp:
             return nil
 
         // ---- Dead cases. `trip_completion` is legacy and unused as a reason code; `milestone_unlock`

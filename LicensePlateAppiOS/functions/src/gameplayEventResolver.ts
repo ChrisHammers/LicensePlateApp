@@ -46,7 +46,7 @@ export {
 const CLIENT_FORBIDDEN_KINDS = new Set<string>([KIND_PARTICIPANT_INVITED, KIND_PARTICIPANT_JOINED]);
 
 export const REJECTION_SERVER_LATE_COMPETITIVE = "server_rejected_late_competitive";
-const REJECTION_INVALID_PARTICIPANT = "rejected_invalid_participant";
+export const REJECTION_INVALID_PARTICIPANT = "rejected_invalid_participant";
 export const REJECTION_SUPERSEDED_BY_EARLIER_TIMESTAMP = "server_rejected_superseded_by_earlier_timestamp";
 
 export type AppendResolution = "accepted" | "superseded" | "passthrough";
@@ -808,8 +808,9 @@ export async function resolveGameplayAppendTransaction(
         }
         // OD-16 — the DEVICE's day is the truth, and this payload is built field by field
         // (the ACCEPTED path spreads `incomingPayload`, so it keeps `xpDayKey` for free).
-        // A late-competitive rejection still pays the find bonuses, so `progressionCore`
-        // needs the day key here; without it, it falls back to the UTC day of THIS doc's
+        // Both rejections written here still pay the find bonuses — late competitive, and
+        // (§3.1.1 item 24, OD-17) invalid participant — so `progressionCore` needs the day
+        // key here; without it, it falls back to the UTC day of THIS doc's
         // server timestamp. An evening find in the Americas is then billed under tomorrow,
         // minting a second `first_find_of_day|v1|<uid>|<day>` scope — the bonus is paid
         // twice in one real day — and the client's toast dedup, keyed on the LOCAL day,

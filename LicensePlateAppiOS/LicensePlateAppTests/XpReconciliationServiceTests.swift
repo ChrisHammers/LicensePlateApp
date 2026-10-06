@@ -31,8 +31,7 @@ struct XpReconciliationServiceTests {
             resolutionRepo: DiscoveryResolutionRepository.shared,
             tripActivityEvents: events,
             gameRepository: games,
-            tripSessionRepository: trips,
-            clawbackHandler: { _ in }
+            tripSessionRepository: trips
         )
     }
 
@@ -168,8 +167,7 @@ struct XpReconciliationServiceTests {
             resolutionRepo: MockDiscoveryResolutionRepository(),
             tripActivityEvents: events,
             gameRepository: games,
-            tripSessionRepository: trips,
-            clawbackHandler: { _ in }
+            tripSessionRepository: trips
         )
 
         let resolution = DiscoveryResolution(
@@ -193,7 +191,7 @@ struct XpReconciliationServiceTests {
         #expect(rows.filter { $0.status != .voided }.reduce(0) { $0 + $1.xpDelta } == 10)
     }
 
-    @Test func consumeAcceptedLateKeepsBase10WithNoClawback() throws {
+    @Test func consumeAcceptedLateKeepsBase10AndWritesNothingNegative() throws {
         _ = try makeContext()
         let sessionId = UUID()
         let gameId = UUID()
@@ -204,15 +202,7 @@ struct XpReconciliationServiceTests {
         let trips = MockTripSessionRepository()
         seedCompetitiveGame(sessionId: sessionId, gameId: gameId, games: games, trips: trips)
 
-        var clawbacks: [XpClawbackNotice] = []
-        let svc = XpReconciliationService(
-            xpLedger: XpLedgerRepository.shared,
-            resolutionRepo: DiscoveryResolutionRepository.shared,
-            tripActivityEvents: events,
-            gameRepository: games,
-            tripSessionRepository: trips,
-            clawbackHandler: { clawbacks.append($0) }
-        )
+        let svc = makeService(events: events, games: games, trips: trips)
 
         let resolution = DiscoveryResolution(
             resolutionId: "xp_res:v1:find-1:accepted_late",
@@ -241,45 +231,17 @@ struct XpReconciliationServiceTests {
         let activeNet = active.reduce(0) { $0 + $1.xpDelta }
         #expect(activeNet == 10)
         #expect(active.contains { $0.grantKind == .finalDiscoveryAward && $0.xpDelta == 10 })
-        #expect(clawbacks.isEmpty)
+        #expect(!rows.contains { $0.xpDelta < 0 })
+        #expect(!rows.contains { $0.grantKind == .reconciliationAdjustment })
     }
 
-    @Test func consumeRejectedDuplicateClawsBackPreviouslyGrantedXp() throws {
+    /// §3.1.1 item 24 / OD-17. Settlement may top a base award up, never down. A find whose base
+    /// already carries more than the settled amount (a final plus a positive adjustment from an
+    /// earlier settlement) keeps every row and gets no negative adjustment.
+    @Test func settlementNeverWritesANegativeAdjustment() throws {
         _ = try makeContext()
         let sessionId = UUID()
         let gameId = UUID()
-        try competitiveProvisionalSeed(sessionId: sessionId, gameId: gameId, xpDelta: 10)
-
-        let events = MockTripActivityEventRepository()
-        let games = MockGameInstanceRepository()
-        let trips = MockTripSessionRepository()
-        seedCompetitiveGame(sessionId: sessionId, gameId: gameId, games: games, trips: trips)
-
-        var clawbacks: [XpClawbackNotice] = []
-        let svc = XpReconciliationService(
-            xpLedger: XpLedgerRepository.shared,
-            resolutionRepo: DiscoveryResolutionRepository.shared,
-            tripActivityEvents: events,
-            gameRepository: games,
-            tripSessionRepository: trips,
-            clawbackHandler: { clawbacks.append($0) }
-        )
-
-        let resolution = DiscoveryResolution(
-            resolutionId: "xp_res:v1:find-1:rejected_duplicate",
-            sourceEventId: "find-1",
-            sessionId: sessionId,
-            gameInstanceId: gameId,
-            itemId: "TX",
-            actorUserId: "u1",
-            finalOutcome: .rejectedDuplicate,
-            tripScoringOutcome: .rejectedDuplicate,
-            personalHistoryOutcome: .rejectedDuplicate,
-            finalXpAward: 0,
-            xpReason: .duplicateNoXp
-        )
-        try svc.consumeResolution(resolution, gameMode: .competitive, tripMode: .multiplayer)
-
         let key = XpLedgerKeyBuilder.uniquenessKey(
             userId: "u1",
             sessionId: sessionId,
@@ -287,10 +249,57 @@ struct XpReconciliationServiceTests {
             itemId: "TX",
             xpCategory: .baseRegionDiscovery
         ).storageString
+        for (id, kind, delta) in [
+            ("earlier-final", XpGrantKind.finalDiscoveryAward, 10),
+            ("earlier-top-up", XpGrantKind.reconciliationAdjustment, 5),
+        ] {
+            try XpLedgerRepository.shared.append(
+                XpLedgerEvent(
+                    id: id,
+                    userId: "u1",
+                    sessionId: sessionId,
+                    gameInstanceId: gameId,
+                    sourceEventId: "find-1",
+                    sourceEventType: TripActivityEventKind.regionFound.rawValue,
+                    itemId: "TX",
+                    grantKind: kind,
+                    status: .final,
+                    xpDelta: delta,
+                    reasonCode: .competitiveFirstFinder,
+                    xpUniquenessKey: key,
+                    metadata: [XpLedgerMetadataKey.resolutionId: "xp_res:v1:find-1:accepted_first"]
+                )
+            )
+        }
+
+        let events = MockTripActivityEventRepository()
+        let games = MockGameInstanceRepository()
+        let trips = MockTripSessionRepository()
+        seedCompetitiveGame(sessionId: sessionId, gameId: gameId, games: games, trips: trips)
+        let svc = makeService(events: events, games: games, trips: trips)
+
+        try svc.consumeResolution(
+            DiscoveryResolution(
+                resolutionId: "xp_res:v1:find-1:accepted_late",
+                sourceEventId: "find-1",
+                sessionId: sessionId,
+                gameInstanceId: gameId,
+                itemId: "TX",
+                actorUserId: "u1",
+                finalOutcome: .acceptedLate,
+                tripScoringOutcome: .acceptedLate,
+                personalHistoryOutcome: .acceptedLate,
+                finalXpAward: 10,
+                xpReason: .competitiveLateFinder
+            ),
+            gameMode: .competitive,
+            tripMode: .multiplayer
+        )
+
         let rows = try XpLedgerRepository.shared.ledgerEvents(forUniquenessKey: key)
-        let activeNet = rows.filter { $0.status != .voided }.reduce(0) { $0 + $1.xpDelta }
-        #expect(activeNet == 0)
-        #expect(clawbacks.count == 1)
+        #expect(rows.count == 2)
+        #expect(!rows.contains { $0.xpDelta < 0 })
+        #expect(rows.filter { $0.status != .voided }.reduce(0) { $0 + $1.xpDelta } == 15)
     }
 
     @Test func secondCompetitiveFindSameUserDoesNotMintMoreBaseXp() throws {
