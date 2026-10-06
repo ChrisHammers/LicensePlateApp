@@ -27,15 +27,11 @@ struct ProgressionLocalEngineTests {
                 TripActivityEventPayloadKey.inputMethod: "list",
             ]
         )
-        let games: [UUID: ProgressionGameSnapshot] = [
-            gameId: ProgressionGameSnapshot(id: gameId, gameMode: .competitive, teams: []),
-        ]
         let d = ProgressionLocalEngine.pendingDeltaForSession(
             sortedSessionEvents: [e1],
             rosterUserIds: ["u1", "u2"],
             subjectUserId: "u1",
             serverAppliedEventIds: [],
-            gamesById: games,
             rewards: rewards
         )
         #expect(d.totalXp == rewards.xp.baseDiscoveryXp)
@@ -56,21 +52,17 @@ struct ProgressionLocalEngineTests {
                 TripActivityEventPayloadKey.inputMethod: "list",
             ]
         )
-        let games: [UUID: ProgressionGameSnapshot] = [
-            gameId: ProgressionGameSnapshot(id: gameId, gameMode: .competitive, teams: []),
-        ]
         let d = ProgressionLocalEngine.pendingDeltaForSession(
             sortedSessionEvents: [e1],
             rosterUserIds: ["u1"],
             subjectUserId: "u1",
             serverAppliedEventIds: ["rf1"],
-            gamesById: games,
             rewards: rewards
         )
         #expect(d == .zero)
     }
 
-    @Test func collaborativeGameEndedDoesNotAwardCompetitiveFirstPlace() {
+    @Test func gameEndedPendsTheFindAndTheGameEndedBonus() {
         let rf = TripActivityEvent(
             id: "rf1",
             sessionId: sessionId,
@@ -92,80 +84,72 @@ struct ProgressionLocalEngineTests {
             actorId: "u1",
             payload: [TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString]
         )
-        let games: [UUID: ProgressionGameSnapshot] = [
-            gameId: ProgressionGameSnapshot(id: gameId, gameMode: .collaborative, teams: []),
-        ]
         let d = ProgressionLocalEngine.pendingDeltaForSession(
             sortedSessionEvents: [rf, ge],
             rosterUserIds: ["u1", "u2"],
             subjectUserId: "u1",
             serverAppliedEventIds: [],
-            gamesById: games,
             rewards: rewards
         )
-        #expect(d.competitiveFirstPlaceFinishes == 0)
-        #expect(d.everCompetitiveFirstPlace == false)
         #expect(d.totalXp == rewards.xp.baseDiscoveryXp + rewards.xp.gameEndedBonusXp)
     }
 
-    @Test func competitiveTieAwardsBothFirstPlacePending() {
-        let rf1 = TripActivityEvent(
-            id: "rf1",
-            sessionId: sessionId,
-            kind: .regionFound,
-            timestamp: Date(timeIntervalSince1970: 1),
-            actorId: "u1",
-            payload: [
-                TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
-                TripActivityEventPayloadKey.regionId: "US-CA",
-                TripActivityEventPayloadKey.participantId: "u1",
-                TripActivityEventPayloadKey.inputMethod: "list",
-            ]
-        )
-        let rf2 = TripActivityEvent(
-            id: "rf2",
-            sessionId: sessionId,
-            kind: .regionFound,
-            timestamp: Date(timeIntervalSince1970: 2),
-            actorId: "u2",
-            payload: [
-                TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
-                TripActivityEventPayloadKey.regionId: "US-NV",
-                TripActivityEventPayloadKey.participantId: "u2",
-                TripActivityEventPayloadKey.inputMethod: "list",
-            ]
-        )
+    /// §3.1.1 item 25: placement, trip victory and participation are server-decided, so a game and
+    /// trip end pend only the outcome-independent bonuses — for the clear local winner by contribution
+    /// too. The engine takes no game mode at all; competitive-mode coverage lives in
+    /// `LocalCompletionXpLedgerTests.competitiveGameAndTripEndMintNoServerDecidedRows`.
+    @Test func aClearLocalWinnerPendsOnlyTheOutcomeIndependentBonuses() {
+        func find(_ id: String, _ who: String, _ region: String, at seconds: TimeInterval) -> TripActivityEvent {
+            TripActivityEvent(
+                id: id,
+                sessionId: sessionId,
+                kind: .regionFound,
+                timestamp: Date(timeIntervalSince1970: seconds),
+                actorId: who,
+                payload: [
+                    TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString,
+                    TripActivityEventPayloadKey.regionId: region,
+                    TripActivityEventPayloadKey.participantId: who,
+                    TripActivityEventPayloadKey.inputMethod: "list",
+                ]
+            )
+        }
         let ge = TripActivityEvent(
             id: "ge1",
             sessionId: sessionId,
             kind: .gameEnded,
-            timestamp: Date(timeIntervalSince1970: 3),
+            timestamp: Date(timeIntervalSince1970: 4),
             actorId: "u1",
             payload: [TripActivityEventPayloadKey.gameInstanceId: gameId.uuidString]
         )
-        let games: [UUID: ProgressionGameSnapshot] = [
-            gameId: ProgressionGameSnapshot(id: gameId, gameMode: .competitive, teams: []),
-        ]
-        let d1 = ProgressionLocalEngine.pendingDeltaForSession(
-            sortedSessionEvents: [rf1, rf2, ge],
-            rosterUserIds: ["u1", "u2"],
-            subjectUserId: "u1",
-            serverAppliedEventIds: [],
-            gamesById: games,
-            rewards: rewards
+        let te = TripActivityEvent(
+            id: "te1",
+            sessionId: sessionId,
+            kind: .tripEnded,
+            timestamp: Date(timeIntervalSince1970: 5),
+            actorId: "u1"
         )
-        let d2 = ProgressionLocalEngine.pendingDeltaForSession(
-            sortedSessionEvents: [rf1, rf2, ge],
-            rosterUserIds: ["u1", "u2"],
-            subjectUserId: "u2",
-            serverAppliedEventIds: [],
-            gamesById: games,
-            rewards: rewards
-        )
-        #expect(d1.competitiveFirstPlaceFinishes == 1)
-        #expect(d2.competitiveFirstPlaceFinishes == 1)
-        #expect(d1.totalXp == rewards.xp.baseDiscoveryXp + rewards.xp.gameEndedBonusXp + rewards.xp.competitiveFirstPlaceFinishBonusXp)
-        #expect(d2.totalXp == rewards.xp.baseDiscoveryXp + rewards.xp.gameEndedBonusXp + rewards.xp.competitiveFirstPlaceFinishBonusXp)
+        let events = [find("rf1", "u1", "US-CA", at: 1), find("rf2", "u1", "US-NV", at: 2), find("rf3", "u2", "US-OR", at: 3), ge, te]
+        func pending(_ subject: String) -> ProgressionPendingDelta {
+            ProgressionLocalEngine.pendingDeltaForSession(
+                sortedSessionEvents: events,
+                rosterUserIds: ["u1", "u2"],
+                subjectUserId: subject,
+                serverAppliedEventIds: [],
+                rewards: rewards
+            )
+        }
+        let completion = rewards.xp.gameEndedBonusXp + rewards.xp.tripEndedBonusXp
+        let winner = pending("u1")
+        let runnerUp = pending("u2")
+        #expect(winner.totalXp == rewards.xp.baseDiscoveryXp * 2 + completion)
+        #expect(runnerUp.totalXp == rewards.xp.baseDiscoveryXp + completion)
+
+        let components = [ge, te].flatMap {
+            ProgressionLocalEngine.completionComponents(for: $0, rosterUserIds: ["u1", "u2"], rewards: rewards)
+        }
+        #expect(Set(components.map(\.reason.rawValue)) == [XpReasonCode.gameEnded.rawValue, XpReasonCode.tripEnded.rawValue])
+        #expect(components.count == 4)
     }
 
     @Test func sameScopedRefindDoesNotAddPendingAgain() {
@@ -205,15 +189,11 @@ struct ProgressionLocalEngineTests {
                 TripActivityEventPayloadKey.participantId: "u1",
             ]
         )
-        let games: [UUID: ProgressionGameSnapshot] = [
-            gameId: ProgressionGameSnapshot(id: gameId, gameMode: .competitive, teams: []),
-        ]
         let d = ProgressionLocalEngine.pendingDeltaForSession(
             sortedSessionEvents: [found1, removed, found2],
             rosterUserIds: ["u1"],
             subjectUserId: "u1",
             serverAppliedEventIds: [],
-            gamesById: games,
             rewards: rewards
         )
         #expect(d.acceptedRegionFindCount == 1)
@@ -246,16 +226,11 @@ struct ProgressionLocalEngineTests {
                 TripActivityEventPayloadKey.participantId: "u1",
             ]
         )
-        let games: [UUID: ProgressionGameSnapshot] = [
-            gameId: ProgressionGameSnapshot(id: gameId, gameMode: .collaborative, teams: []),
-            game2: ProgressionGameSnapshot(id: game2, gameMode: .collaborative, teams: []),
-        ]
         let d = ProgressionLocalEngine.pendingDeltaForSession(
             sortedSessionEvents: [g1, g2],
             rosterUserIds: ["u1"],
             subjectUserId: "u1",
             serverAppliedEventIds: [],
-            gamesById: games,
             rewards: rewards
         )
         #expect(d.acceptedRegionFindCount == 2)
@@ -287,15 +262,11 @@ struct ProgressionLocalEngineTests {
                 TripActivityEventPayloadKey.participantId: "u1",
             ]
         )
-        let games: [UUID: ProgressionGameSnapshot] = [
-            gameId: ProgressionGameSnapshot(id: gameId, gameMode: .collaborative, teams: []),
-        ]
         let d = ProgressionLocalEngine.pendingDeltaForSession(
             sortedSessionEvents: [found1, found2],
             rosterUserIds: ["u1"],
             subjectUserId: "u1",
             serverAppliedEventIds: ["rf1"],
-            gamesById: games,
             rewards: rewards
         )
         #expect(d.acceptedRegionFindCount == 0)
@@ -336,16 +307,12 @@ struct ProgressionLocalEngineTests {
                 TripActivityEventPayloadKey.rejectionReason: reason,
             ]
         )
-        let games: [UUID: ProgressionGameSnapshot] = [
-            gameId: ProgressionGameSnapshot(id: gameId, gameMode: .collaborative, teams: []),
-        ]
         func pending(applied: Set<String>) -> ProgressionPendingDelta {
             ProgressionLocalEngine.pendingDeltaForSession(
                 sortedSessionEvents: [serverRejection, tapTimeRejection],
                 rosterUserIds: ["u1"],
                 subjectUserId: "u1",
                 serverAppliedEventIds: applied,
-                gamesById: games,
                 rewards: rewards
             )
         }
@@ -377,15 +344,11 @@ struct ProgressionLocalEngineTests {
                 TripActivityEventPayloadKey.inputMethod: "list",
             ]
         )
-        let games: [UUID: ProgressionGameSnapshot] = [
-            gameId: ProgressionGameSnapshot(id: gameId, gameMode: .collaborative, teams: []),
-        ]
         let d = ProgressionLocalEngine.pendingDeltaForSession(
             sortedSessionEvents: [find],
             rosterUserIds: ["u1"],
             subjectUserId: "u1",
             serverAppliedEventIds: [XpServerScopeKey.serverRejectionEventId(forClientEventId: "rf-queued")],
-            gamesById: games,
             rewards: rewards
         )
         #expect(d == .zero)

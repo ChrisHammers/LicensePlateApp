@@ -85,15 +85,13 @@ final class UserProgressionService: ObservableObject, ProgressionLocalAppendObse
             sessionIds = []
         }
 
-        var sessionPayloads: [(sortedEvents: [TripActivityEvent], rosterUserIds: [String], gamesById: [UUID: ProgressionGameSnapshot])] = []
+        var sessionPayloads: [(sortedEvents: [TripActivityEvent], rosterUserIds: [String])] = []
         for sid in sessionIds {
             guard let trip = try? TripSessionRepository.shared.session(byId: sid) else { continue }
             let roster = trip.participants.filter { $0.leftAt == nil }.map(\.userId)
             guard roster.contains(uid) else { continue }
             guard let evs = try? eventRepository.events(sessionId: sid, limit: nil) else { continue }
-            guard let games = try? GameInstanceRepository.shared.fetchByTripSession(sessionId: sid) else { continue }
-            let gamesById = Dictionary(uniqueKeysWithValues: games.map { ($0.id, $0.progressionGameSnapshot) })
-            sessionPayloads.append((sortedEvents: evs, rosterUserIds: roster, gamesById: gamesById))
+            sessionPayloads.append((sortedEvents: evs, rosterUserIds: roster))
         }
 
         let pending = ProgressionLocalEngine.pendingDeltaAcrossSessions(

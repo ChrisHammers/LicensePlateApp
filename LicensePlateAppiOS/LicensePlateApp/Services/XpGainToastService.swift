@@ -23,8 +23,9 @@
 //     toasts — i.e. anything written since this device's last server-confirmed snapshot: one round
 //     trip on an online launch, the whole offline stretch on an offline launch. Anything that also
 //     wrote a local ledger row toasted from the ledger anyway, so the exposure is an achievement, a
-//     peer-authored competitive placement, or (§3.1.1 item 30) a find made on the account's other
-//     device landing in that window (its XP still counts).
+//     competitive placement, trip victory or trip participation (server-decided since §3.1.1 item 25,
+//     so this device's own as well as a peer's), or (§3.1.1 item 30) a find made on the account's
+//     other device landing in that window (its XP still counts).
 //
 
 import Combine

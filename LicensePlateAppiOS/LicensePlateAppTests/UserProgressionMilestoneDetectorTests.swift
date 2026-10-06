@@ -81,9 +81,7 @@ struct UserProgressionMilestoneDetectorTests {
         )
         let pending = ProgressionPendingDelta(
             totalXp: 10,
-            acceptedRegionFindCount: 1,
-            competitiveFirstPlaceFinishes: 0,
-            everCompetitiveFirstPlace: false
+            acceptedRegionFindCount: 1
         )
         let eff = UserProgressionEffectiveTotals.combined(server: server, pending: pending)
         #expect(eff.totalXp == 15)

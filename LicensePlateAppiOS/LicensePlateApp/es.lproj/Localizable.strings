@@ -851,7 +851,7 @@
 "profile.xp.pending_beyond_next_band_caption" = "Lo pendiente continúa más allá del siguiente rango.";
 
 "tripSummary.xp_recap.title" = "XP y ajustes";
-"tripSummary.xp_recap.subtitle" = "Desde el libro mayor del viaje en este dispositivo.";
+"tripSummary.xp_recap.subtitle" = "XP de este viaje. Las bonificaciones por posición y participación aparecen cuando el viaje se sincroniza.";
 "tripSummary.xp_recap.state.provisional" = "Pendiente";
 "tripSummary.xp_recap.state.final" = "Final";
 
@@ -880,10 +880,6 @@
 "game.progression.local_engine_trip_caption" = "Se aplica a eventos de este viaje aún no listados en la progresión del servidor.";
 "game.progression.trip_pending_xp" = "XP pendiente (este viaje)";
 "game.progression.trip_pending_finds" = "Hallazgos de región pendientes (este viaje)";
-"game.progression.trip_pending_first_places" = "Primeros lugares pendientes (este viaje)";
-"game.progression.ever_competitive_first" = "Pendiente: algún 1.º lugar (este viaje)";
-"game.progression.bool_yes" = "Sí";
-"game.progression.bool_no" = "No";
 "game.progression.section_ledger_projection" = "Proyección del libro local (dispositivo)";
 "game.progression.local_ledger_caption" = "Basado en el libro XP append-only de este dispositivo (ver lista abajo).";
 "game.progression.local_total_xp_game" = "XP neto (este juego, libro)";

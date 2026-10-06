@@ -15,8 +15,10 @@ enum XpReasonCode: String, Codable, CaseIterable, Sendable {
     case firstFindOfDay = "first_find_of_day"
     case gameEnded = "game_ended"
     case gameFullClear = "game_full_clear"
-    /// Raw values mirror `UserXpGrantReason` / server `XP_GRANT_REASON` so local rows and
-    /// server grants group identically in the XP toast catalog.
+    /// Raw values mirror `UserXpGrantReason` / server `XP_GRANT_REASON`. For `trip_ended` (like
+    /// `game_ended` and `game_full_clear` above) that pairs the local row with the server grant in
+    /// the XP toast catalog. The five `serverDecidedCompletion` reasons never label a local row
+    /// (§3.1.1 item 25); their raw values are how `XpFeedProjectionBuilder` parses the server grant.
     case competitiveFirstPlaceFinish = "competitive_first_place_finish"
     case competitiveSecondPlace = "competitive_second_place_finish"
     case competitiveThirdPlace = "competitive_third_place_finish"
@@ -27,4 +29,13 @@ enum XpReasonCode: String, Codable, CaseIterable, Sendable {
     /// Legacy — unused for awards after XP grant rework.
     case tripCompletion = "trip_completion"
     case milestoneUnlock = "milestone_unlock"
+
+    /// Completion awards the server alone decides, from the events it holds at game / trip end
+    /// (§3.1.1 item 25, OD-17): competitive placement, trip competitive first and trip
+    /// participation. No local ledger row ever carries one; the server's `xp_grants` row is the
+    /// award's only source. `XpServerScopeKey.mirrored(for:)` keeps its own exhaustive arm for them.
+    static let serverDecidedCompletion: Set<XpReasonCode> = [
+        .competitiveFirstPlaceFinish, .competitiveSecondPlace, .competitiveThirdPlace,
+        .tripParticipation, .tripCompetitiveFirstPlace,
+    ]
 }

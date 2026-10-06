@@ -59,8 +59,6 @@ enum XpProgressionDebugExporter {
         struct PendingDeltaPayload: Codable, Sendable {
             var totalXp: Int
             var acceptedRegionFindCount: Int
-            var competitiveFirstPlaceFinishes: Int
-            var everCompetitiveFirstPlace: Bool
         }
 
         struct ConfiguredXpSource: Codable, Sendable {
@@ -325,9 +323,7 @@ enum XpProgressionDebugExporter {
     private static func pendingPayload(_ pending: ProgressionPendingDelta) -> Payload.PendingDeltaPayload {
         Payload.PendingDeltaPayload(
             totalXp: pending.totalXp,
-            acceptedRegionFindCount: pending.acceptedRegionFindCount,
-            competitiveFirstPlaceFinishes: pending.competitiveFirstPlaceFinishes,
-            everCompetitiveFirstPlace: pending.everCompetitiveFirstPlace
+            acceptedRegionFindCount: pending.acceptedRegionFindCount
         )
     }
 
@@ -705,6 +701,21 @@ enum XpProgressionDebugExporter {
             resolvedAt: event.resolvedAt.map { iso.string(from: $0) },
             metadata: event.metadata
         )
+    }
+}
+
+/// Minimal game metadata (mirrors server `commonConfig` + teams) for the competitive-win diagnostics
+/// above. Moved here from `ProgressionLocalEngine` in §3.1.1 item 25, when the engine stopped
+/// estimating placement and this exporter became its only reader.
+private struct ProgressionGameSnapshot: Sendable {
+    var id: UUID
+    var gameMode: GameMode
+    var teams: [TripTeam]
+}
+
+private extension GameInstance {
+    var progressionGameSnapshot: ProgressionGameSnapshot {
+        ProgressionGameSnapshot(id: id, gameMode: commonConfig.gameMode, teams: teams)
     }
 }
 

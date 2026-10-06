@@ -664,14 +664,6 @@ struct LicensePlateGameView: View {
                         label: "game.progression.trip_pending_finds".localized,
                         value: String(p.acceptedRegionFindCount)
                     )
-                    progressionStatRow(
-                        label: "game.progression.trip_pending_first_places".localized,
-                        value: String(p.competitiveFirstPlaceFinishes)
-                    )
-                    progressionStatRow(
-                        label: "game.progression.ever_competitive_first".localized,
-                        value: p.everCompetitiveFirstPlace ? "game.progression.bool_yes".localized : "game.progression.bool_no".localized
-                    )
                     Divider()
                     Text("game.progression.section_ledger_projection".localized)
                         .font(.headline)

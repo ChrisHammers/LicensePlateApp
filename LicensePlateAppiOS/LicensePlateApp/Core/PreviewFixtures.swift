@@ -773,6 +773,44 @@ enum PreviewSummaryFixtures {
             locationMetadata: nil
         )
     }
+
+    /// §3.1.1 item 25: the recap's XP section after the server has decided placement — this device's
+    /// own pending game-ended line next to the server's Final 1st-place line, built by the real
+    /// `XpFeedProjectionBuilder`.
+    static func tripSummaryCompetitiveWithXpRecap() -> TripSummary {
+        var summary = tripSummaryCompetitiveTied()
+        let gameEnded = XpLedgerEvent(
+            id: "preview-xp-game-ended",
+            userId: PreviewConstants.userId1,
+            sessionId: summary.sessionId,
+            gameInstanceId: PreviewConstants.gameInstanceId1,
+            sourceEventId: "preview-game-ended",
+            sourceEventType: TripActivityEventKind.gameEnded.rawValue,
+            itemId: XpReasonCode.gameEnded.rawValue,
+            grantKind: .tripCompletion,
+            status: .provisional,
+            xpDelta: 50,
+            reasonCode: .gameEnded,
+            xpUniquenessKey: "preview-xp-game-ended-key",
+            createdAt: PreviewConstants.fixedDateEnded
+        )
+        let firstPlace = UserXpGrant(
+            grantId: "preview-grant-first-place",
+            amount: 25,
+            reason: UserXpGrantReason.competitiveFirstPlaceFinish.rawValue,
+            sourceType: "activity_event",
+            sourceId: "preview-game-ended",
+            idempotencyKey: "competitive_place|1|v1|\(PreviewConstants.userId1)|\(PreviewConstants.gameInstanceId1.uuidString)",
+            sessionId: summary.sessionId.uuidString,
+            grantedAt: PreviewConstants.fixedDateEnded.addingTimeInterval(60)
+        )
+        summary.xpRecapLines = XpFeedProjectionBuilder.lines(
+            from: [gameEnded],
+            serverGrants: [firstPlace],
+            sessionId: summary.sessionId
+        ) { $0 }
+        return summary
+    }
 }
 
 // MARK: - PreviewInviteFixtures (TripInvite is @Model — use in preview with modelContainer and insert)

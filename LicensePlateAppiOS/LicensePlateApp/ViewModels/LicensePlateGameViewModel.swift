@@ -603,19 +603,12 @@ final class LicensePlateGameViewModel: ObservableObject {
 
         let events = (try? tripActivityEventRepository.events(sessionId: sessionId, limit: nil)) ?? []
         let roster = currentSession.participants.filter { $0.leftAt == nil }.map(\.userId)
-        var gamesById: [UUID: ProgressionGameSnapshot] = [:]
-        if let games = try? gameInstanceRepository.fetchByTripSession(sessionId: sessionId) {
-            gamesById = Dictionary(uniqueKeysWithValues: games.map { ($0.id, $0.progressionGameSnapshot) })
-        } else {
-            gamesById = [game.id: game.progressionGameSnapshot]
-        }
         let server = UserProgressionRepository.shared.snapshot ?? UserProgressionSnapshot.empty
         sessionProgressionPending = ProgressionLocalEngine.pendingDeltaForSession(
             sortedSessionEvents: events,
             rosterUserIds: roster,
             subjectUserId: uid,
-            serverAppliedEventIds: server.appliedProgressionEventIds,
-            gamesById: gamesById
+            serverAppliedEventIds: server.appliedProgressionEventIds
         )
         let rows = (try? xpLedger.ledgerEvents(userId: uid, sessionId: sessionId)) ?? []
         let now = Date()

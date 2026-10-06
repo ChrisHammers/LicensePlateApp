@@ -8,25 +8,20 @@
 import Foundation
 
 /// Local-only progression increments from events not yet listed in `appliedProgressionEvents` (Step 16 addendum).
+/// No competitive wins: placement is server-decided (§3.1.1 item 25), so there is nothing local to add.
 struct ProgressionPendingDelta: Equatable, Sendable {
     var totalXp: Int
     var acceptedRegionFindCount: Int
-    var competitiveFirstPlaceFinishes: Int
-    var everCompetitiveFirstPlace: Bool
 
     static let zero = ProgressionPendingDelta(
         totalXp: 0,
-        acceptedRegionFindCount: 0,
-        competitiveFirstPlaceFinishes: 0,
-        everCompetitiveFirstPlace: false
+        acceptedRegionFindCount: 0
     )
 
     static func + (a: ProgressionPendingDelta, b: ProgressionPendingDelta) -> ProgressionPendingDelta {
         ProgressionPendingDelta(
             totalXp: a.totalXp + b.totalXp,
-            acceptedRegionFindCount: a.acceptedRegionFindCount + b.acceptedRegionFindCount,
-            competitiveFirstPlaceFinishes: a.competitiveFirstPlaceFinishes + b.competitiveFirstPlaceFinishes,
-            everCompetitiveFirstPlace: a.everCompetitiveFirstPlace || b.everCompetitiveFirstPlace
+            acceptedRegionFindCount: a.acceptedRegionFindCount + b.acceptedRegionFindCount
         )
     }
 }
@@ -54,7 +49,8 @@ struct UserProgressionSnapshot: Equatable, Sendable {
     )
 }
 
-/// Server totals plus local pending (offline) projection for UI and analytics.
+/// Server totals plus local pending (offline) projection for UI and analytics. The competitive wins
+/// are the server's alone (§3.1.1 item 25: placement is server-decided).
 struct UserProgressionEffectiveTotals: Equatable, Sendable {
     var totalXp: Int
     var acceptedRegionFindCount: Int
@@ -67,8 +63,8 @@ struct UserProgressionEffectiveTotals: Equatable, Sendable {
         UserProgressionEffectiveTotals(
             totalXp: server.totalXp + pending.totalXp,
             acceptedRegionFindCount: server.acceptedRegionFindCount + pending.acceptedRegionFindCount,
-            competitiveFirstPlaceFinishes: server.competitiveFirstPlaceFinishes + pending.competitiveFirstPlaceFinishes,
-            everCompetitiveFirstPlace: server.everCompetitiveFirstPlace || pending.everCompetitiveFirstPlace,
+            competitiveFirstPlaceFinishes: server.competitiveFirstPlaceFinishes,
+            everCompetitiveFirstPlace: server.everCompetitiveFirstPlace,
             hasPendingLocalProgression: pending != .zero
         )
     }

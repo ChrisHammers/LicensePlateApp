@@ -885,7 +885,7 @@
 "profile.xp.pending_beyond_next_band_caption" = "Pending continues past the next rank and beyond.";
 
 "tripSummary.xp_recap.title" = "XP & adjustments";
-"tripSummary.xp_recap.subtitle" = "From your trip ledger on this device.";
+"tripSummary.xp_recap.subtitle" = "XP from this trip. Placement and participation bonuses appear once the trip syncs.";
 "tripSummary.xp_recap.state.provisional" = "Pending";
 "tripSummary.xp_recap.state.final" = "Final";
 
@@ -915,10 +915,6 @@
 "game.progression.local_engine_trip_caption" = "Applies to events on this trip not yet listed in server applied progression.";
 "game.progression.trip_pending_xp" = "Pending XP (this trip)";
 "game.progression.trip_pending_finds" = "Pending region finds (this trip)";
-"game.progression.trip_pending_first_places" = "Pending 1st-place finishes (this trip)";
-"game.progression.ever_competitive_first" = "Pending: ever 1st place (this trip)";
-"game.progression.bool_yes" = "Yes";
-"game.progression.bool_no" = "No";
 "game.progression.section_ledger_projection" = "Local ledger projection (device)";
 "game.progression.local_ledger_caption" = "Built from the append-only XP ledger on this device (see list below).";
 "game.progression.local_total_xp_game" = "Net XP (this game, ledger)";

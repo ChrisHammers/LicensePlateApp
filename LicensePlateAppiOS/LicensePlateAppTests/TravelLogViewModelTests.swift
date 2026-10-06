@@ -280,6 +280,94 @@ struct TravelLogViewModelTests {
         #expect(viewModel.selectedSummary?.xpRecapLines.isEmpty == false)
     }
 
+    /// §3.1.1 item 25: placement, trip victory and participation are server-decided, so the recap
+    /// lists them only once the signed-in user's grant for THIS trip exists — never before.
+    @Test func openSummaryListsServerDecidedXpOnlyOnceTheGrantExists() async throws {
+        let sessionId = UUID()
+        let gameId = UUID()
+        let uid = "recap_grant_user"
+
+        let session = TripSession(
+            id: sessionId,
+            name: "Recap grant trip",
+            status: .ended,
+            createdAt: Date().addingTimeInterval(-200),
+            endedAt: Date().addingTimeInterval(-100),
+            participants: [TripParticipant(userId: uid, role: .owner), TripParticipant(userId: "peer", role: .member)]
+        )
+        let lpData = try JSONEncoder().encode(LicensePlateGameConfig())
+        let game = GameInstance(
+            id: gameId,
+            definitionId: GameType.licensePlate.rawValue,
+            sessionId: sessionId,
+            ruleSet: GameRuleSet(gameDefinitionId: "license_plate"),
+            commonConfig: CommonGameConfig(lifecycleState: .ended, gameMode: .competitive),
+            gameSpecificPayloadType: "license_plate",
+            gameSpecificPayloadVersion: "1",
+            gameSpecificPayloadData: lpData
+        )
+        let mockTrip = MockTripSessionRepository()
+        mockTrip.seed(session)
+        let mockGame = MockGameInstanceRepository()
+        mockGame.seed(game)
+
+        let auth = FirebaseAuthService()
+        auth.currentUser = AppUser(id: uid, userName: "U", firebaseUID: uid)
+
+        var grants: [UserXpGrant]? = []
+        var askedFor: [String] = []
+        let viewModel = TravelLogViewModel(
+            travelLogRepository: MockTravelLogRepository(),
+            tripSessionRepository: mockTrip,
+            gameInstanceRepository: mockGame,
+            tripActivityEventRepository: MockTripActivityEventRepository(),
+            authService: auth,
+            xpLedger: MockXpLedgerRepository(),
+            grantsProvider: { requested in
+                askedFor.append(requested)
+                return grants
+            }
+        )
+
+        viewModel.openSummary(sessionId: sessionId)
+        #expect(viewModel.selectedSummary?.xpRecapLines.isEmpty == true)
+
+        grants = [
+            UserXpGrant(
+                grantId: "g-participation",
+                amount: 50,
+                reason: UserXpGrantReason.tripParticipation.rawValue,
+                sourceType: "activity_event",
+                sourceId: "trip-end-1",
+                idempotencyKey: "trip_participation|v1|\(uid)|\(sessionId.uuidString)",
+                sessionId: sessionId.uuidString,
+                grantedAt: Date()
+            ),
+            UserXpGrant(
+                grantId: "g-other-trip",
+                amount: 25,
+                reason: UserXpGrantReason.competitiveFirstPlaceFinish.rawValue,
+                sourceType: "activity_event",
+                sourceId: "game-end-elsewhere",
+                idempotencyKey: "competitive_place|1|v1|\(uid)|\(UUID().uuidString)",
+                sessionId: UUID().uuidString,
+                grantedAt: Date()
+            ),
+        ]
+        viewModel.openSummary(sessionId: sessionId)
+
+        let lines = try #require(viewModel.selectedSummary?.xpRecapLines)
+        #expect(lines.map(\.id) == ["grant|g-participation"])
+        #expect(lines.first?.itemId == XpReasonCode.tripParticipation.rawValue)
+        #expect(lines.first?.state == .final)
+        #expect(askedFor.allSatisfy { $0 == uid })
+
+        // A listener rebind or error leaves no snapshot in hand: the Final line already shown stays.
+        grants = nil
+        viewModel.openSummary(sessionId: sessionId)
+        #expect(viewModel.selectedSummary?.xpRecapLines.map(\.id) == ["grant|g-participation"])
+    }
+
     @Test func anonymousUserShowsThreeNewestSavedTripsAndHiddenCount() async throws {
         let uid = "anon_saved_trips"
         let auth = FirebaseAuthService()

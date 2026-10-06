@@ -399,6 +399,35 @@ struct XpGainToastServiceTests {
         #expect(service.presentation?.totalXp == 25)
     }
 
+    /// §3.1.1 item 25: placement, trip victory and participation are announced by their grant alone,
+    /// so each reason must reach its own catalog line — never the generic "XP earned" fallback.
+    /// Pins mapping that item 25 did not change but now relies on; it passes on the pre-item-25 code
+    /// too, so it is not regression coverage for the item.
+    @Test func serverDecidedCompletionGrantsMapToTheirOwnLines() {
+        let catalog = ProgressionCatalog.bundledDefault
+        let expectedGroup: [(UserXpGrantReason, String, String)] = [
+            (.competitiveFirstPlaceFinish, "competitive_place", "xp.toast.group.competitive_place.single"),
+            (.competitiveSecondPlaceFinish, "competitive_place", "xp.toast.group.competitive_place.single"),
+            (.competitiveThirdPlaceFinish, "competitive_place", "xp.toast.group.competitive_place.single"),
+            (.tripParticipation, "trip_participation", "xp.toast.group.trip_participation.single"),
+            (.tripCompetitiveFirstPlace, "trip_competitive_first", "xp.toast.group.trip_competitive_first.single"),
+        ]
+        for (reason, groupId, titleKey) in expectedGroup {
+            let grant = sampleGrant(grantId: "g-\(reason.rawValue)", amount: 25, reason: reason.rawValue)
+            #expect(XpGainToastEligibility.shouldToastRemoteGrant(grant), "\(reason.rawValue)")
+            let event = XpGainToastSourceMapper.ingestEvent(from: grant, catalog: catalog)
+            #expect(event?.groupId == groupId, "\(reason.rawValue)")
+            let presentation = XpGainToastAggregator.aggregate(
+                events: event.map { [$0] } ?? [],
+                catalog: catalog,
+                dismissDuration: 4
+            )
+            #expect(presentation.lines.count == 1, "\(reason.rawValue)")
+            #expect(presentation.lines.first?.title == titleKey.localized, "\(reason.rawValue)")
+            #expect(presentation.lines.first?.xpAmount == 25, "\(reason.rawValue)")
+        }
+    }
+
     @Test func rankBandBuilderComputesProgressSegments() {
         let catalog = ProgressionCatalog.bundledDefault
         let band = XpGainToastRankBandBuilder.build(
@@ -1223,8 +1252,10 @@ struct XpGainToastServiceTests {
         ) == nil)
     }
 
-    /// (12) The mapping itself, byte-for-byte against `functions/src/progressionCore.ts:281-316`, and
-    /// exhaustive: every `XpReasonCode` not listed here must map to `nil`.
+    /// (12) The mapping itself, byte-for-byte against `functions/src/progressionCore.ts:281-295` and
+    /// `:306-308`, and exhaustive: every `XpReasonCode` not listed here must map to `nil`. §3.1.1
+    /// item 25: the server-decided completion awards (placement, trip victory, participation) are
+    /// probed as well-formed completion rows below and still map to `nil` — no local row carries them.
     @Test func mirroredServerScopeKeyMatchesTheServerFormatForEveryMappedReason() {
         let sessionId = UUID(uuidString: "11111111-2222-3333-4444-555555555555")!
         let gameInstanceId = UUID(uuidString: "66666666-7777-8888-9999-AAAAAAAAAAAA")!
@@ -1234,12 +1265,7 @@ struct XpGainToastServiceTests {
             .firstFindOfDay: "first_find_of_day|v1|u1|2026-09-18",
             .gameEnded: "game_ended|v1|u1|\(gameInstanceId.uuidString)",
             .gameFullClear: "game_full_clear|v1|u1|\(gameInstanceId.uuidString)",
-            .competitiveFirstPlaceFinish: "competitive_place|1|v1|u1|\(gameInstanceId.uuidString)",
-            .competitiveSecondPlace: "competitive_place|2|v1|u1|\(gameInstanceId.uuidString)",
-            .competitiveThirdPlace: "competitive_place|3|v1|u1|\(gameInstanceId.uuidString)",
             .tripEnded: "trip_ended|v1|u1|\(sessionId.uuidString)",
-            .tripParticipation: "trip_participation|v1|u1|\(sessionId.uuidString)",
-            .tripCompetitiveFirstPlace: "trip_competitive_first|v1|u1|\(sessionId.uuidString)",
         ]
 
         for reason in XpReasonCode.allCases {

@@ -61,6 +61,12 @@ final class TravelLogViewModel: ObservableObject {
     private let gameInstanceRepository: GameInstanceRepositoryProtocol
     private let tripActivityEventRepository: TripActivityEventRepositoryProtocol
     private let xpLedger: XpLedgerRepositoryProtocol
+    /// The signed-in uid's server XP grants, for the recap's completion lines (§3.1.1 item 25), or
+    /// `nil` while no snapshot for that uid is in hand (a listener bind, rebind or error).
+    private let grantsProvider: (String) -> [UserXpGrant]?
+    /// The last grant set a snapshot delivered. `xp_grants` is append-only, so while the provider
+    /// has none the recap keeps these rather than dropping a Final line it already showed (OD-17).
+    private var lastSnapshotGrants: (uid: String, grants: [UserXpGrant])?
     private let savedTripAccessPolicy: SavedTripAccessPolicy
     private let analytics: AnalyticsLogging
     private var authService: FirebaseAuthService
@@ -76,6 +82,7 @@ final class TravelLogViewModel: ObservableObject {
         tripActivityEventRepository: TripActivityEventRepositoryProtocol,
         authService: FirebaseAuthService,
         xpLedger: XpLedgerRepositoryProtocol = XpLedgerRepository.shared,
+        grantsProvider: ((String) -> [UserXpGrant]?)? = nil,
         savedTripAccessPolicy: SavedTripAccessPolicy = .shared,
         analytics: AnalyticsLogging = AnalyticsService.shared,
         previewEntries: [TravelLogEntry]? = nil,
@@ -87,6 +94,13 @@ final class TravelLogViewModel: ObservableObject {
         self.gameInstanceRepository = gameInstanceRepository
         self.tripActivityEventRepository = tripActivityEventRepository
         self.xpLedger = xpLedger
+        // Fails closed while the grants repository is bound to another identity. `grants` is emptied
+        // on every bind, listen error and unbind, so it is read only behind a snapshot for this uid.
+        self.grantsProvider = grantsProvider ?? { uid in
+            let repo = XpGrantRemoteRepository.shared
+            guard repo.boundUserId == uid, repo.hasReceivedInitialSnapshot else { return nil }
+            return repo.grants
+        }
         self.savedTripAccessPolicy = savedTripAccessPolicy
         self.analytics = analytics
         self.authService = authService
@@ -98,6 +112,16 @@ final class TravelLogViewModel: ObservableObject {
         }
         if let ledger = xpLedger as? XpLedgerRepository {
             ledger.objectWillChange
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] _ in self?.refreshOpenSummaryXpRecapIfNeeded() }
+                .store(in: &cancellables)
+        }
+        if grantsProvider == nil {
+            // A completion grant (placement, participation, a peer's fixed bonus) landing while the
+            // recap is open shows at once.
+            // `objectWillChange` fires before `grants` changes; the main-queue hop is what lets the
+            // rebuild read the new grants.
+            XpGrantRemoteRepository.shared.objectWillChange
                 .receive(on: DispatchQueue.main)
                 .sink { [weak self] _ in self?.refreshOpenSummaryXpRecapIfNeeded() }
                 .store(in: &cancellables)
@@ -269,12 +293,26 @@ final class TravelLogViewModel: ObservableObject {
             let itemTitle: (String) -> String = { itemId in
                 PlateRegion.all.first { $0.id == itemId }?.name ?? itemId
             }
-            summary.xpRecapLines = XpFeedProjectionBuilder.lines(from: ledgerRows, itemTitle: itemTitle)
+            summary.xpRecapLines = XpFeedProjectionBuilder.lines(
+                from: ledgerRows,
+                serverGrants: recapGrants(uid: uid),
+                sessionId: sessionId,
+                itemTitle: itemTitle
+            )
         }
         // GPS Step 9 — attach simplified route polyline + stats when a route was tracked.
         let routePoints = (try? TripRoutePointRepository.shared.points(tripSessionId: sessionId)) ?? []
         summary.locationMetadata = TripRouteSummaryBuilder.locationMetadata(from: routePoints)
         return summary
+    }
+
+    private func recapGrants(uid: String) -> [UserXpGrant] {
+        if let grants = grantsProvider(uid) {
+            lastSnapshotGrants = (uid, grants)
+            return grants
+        }
+        guard let last = lastSnapshotGrants, last.uid == uid else { return [] }
+        return last.grants
     }
 
     func clearSelection() {

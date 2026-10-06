@@ -56,10 +56,10 @@ enum XpServerScopeKey {
     ///   * `firstFindOfDayScopeKey`         (:285-287) `first_find_of_day|v1|<uid>|<dayKey>`
     ///   * `gameEndedScopeKey`              (:289-291) `game_ended|v1|<uid>|<gameInstanceId>`
     ///   * `gameFullClearScopeKey`          (:293-295) `game_full_clear|v1|<uid>|<gameInstanceId>`
-    ///   * `competitivePlaceScopeKey`       (:297-304) `competitive_place|<n>|v1|<uid>|<gameInstanceId>`
     ///   * `tripEndedScopeKey`              (:306-308) `trip_ended|v1|<uid>|<sessionId>`
-    ///   * `tripParticipationScopeKey`      (:310-312) `trip_participation|v1|<uid>|<sessionId>`
-    ///   * `tripCompetitiveFirstScopeKey`   (:314-316) `trip_competitive_first|v1|<uid>|<sessionId>`
+    ///
+    /// The server-decided completion awards (`competitive_place|<n>`, `trip_participation`,
+    /// `trip_competitive_first`) have no entry: since §3.1.1 item 25 no local row carries them.
     ///
     /// These are SERVER scope strings, NOT `XpUniquenessKey.storageString`: the local storage key
     /// lowercases its UUID segments on purpose (`Model/XpUniquenessKey.swift:36-37`,
@@ -103,18 +103,15 @@ enum XpServerScopeKey {
             return gameScopedCompletionScopeKey(prefix: "game_ended", row: row)
         case .gameFullClear:
             return gameScopedCompletionScopeKey(prefix: "game_full_clear", row: row)
-        case .competitiveFirstPlaceFinish:
-            return gameScopedCompletionScopeKey(prefix: "competitive_place|1", row: row)
-        case .competitiveSecondPlace:
-            return gameScopedCompletionScopeKey(prefix: "competitive_place|2", row: row)
-        case .competitiveThirdPlace:
-            return gameScopedCompletionScopeKey(prefix: "competitive_place|3", row: row)
         case .tripEnded:
             return sessionScopedCompletionScopeKey(prefix: "trip_ended", row: row)
-        case .tripParticipation:
-            return sessionScopedCompletionScopeKey(prefix: "trip_participation", row: row)
-        case .tripCompetitiveFirstPlace:
-            return sessionScopedCompletionScopeKey(prefix: "trip_competitive_first", row: row)
+
+        // ---- Server-decided completion awards (§3.1.1 item 25, OD-17). Competitive placement, trip
+        //      competitive first and trip participation are never written as local rows, so there is
+        //      no row to mirror: their grant toasts as the award's one announcement.
+        case .competitiveFirstPlaceFinish, .competitiveSecondPlace, .competitiveThirdPlace,
+             .tripParticipation, .tripCompetitiveFirstPlace:
+            return nil
 
         // ---- Base discovery, in all four of its local labels. The server mirror is
         //      `region_found_base_discovery`, joined on `baseDiscoveryTotalOnlyScope(for:)` instead:

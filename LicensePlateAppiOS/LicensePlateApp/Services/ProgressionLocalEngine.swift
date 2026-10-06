@@ -2,55 +2,35 @@
 //  ProgressionLocalEngine.swift
 //  LicensePlateApp
 //
-//  Pure local progression pending delta (parity with `progressionCore.ts` XP amounts and
-//  `TripParticipantRanking` for competitive places). Replays full session events in order; only counts
-//  events whose ids are not in `serverAppliedEventIds`.
+//  Pure local progression pending delta (parity with `progressionCore.ts` XP amounts). Replays full
+//  session events in order; only counts events whose ids are not in `serverAppliedEventIds`.
+//  Competitive placement, trip competitive first and trip participation are server-decided
+//  (§3.1.1 item 25, OD-17) and are never estimated here.
 //
 
 import Foundation
 
-/// Minimal game metadata for local progression (mirrors server `commonConfig` + teams).
-struct ProgressionGameSnapshot: Sendable {
-    var id: UUID
-    var gameMode: GameMode
-    var teams: [TripTeam]
-}
-
 /// One idempotent XP award produced by a completion event (`game_completed` / `game_ended` / `trip_ended`)
-/// for one subject. Mirrors a server `ProgressionComponentGrant` from `progressionCore.awardsForEvent`,
-/// so the same amounts land locally and on the server and reconciliation is a no-op.
+/// for one subject — only the outcome-independent ones (`game_full_clear`, `game_ended`, `trip_ended`).
+/// Mirrors a server `ProgressionComponentGrant` from `progressionCore.awardsForEvent`, so the same
+/// amounts land locally and on the server and reconciliation is a no-op.
 struct ProgressionCompletionComponent: Equatable, Sendable {
     var subjectUserId: String
     var amount: Int
     var reason: XpReasonCode
     /// Game this award belongs to; `nil` for trip-scoped awards.
     var gameInstanceId: UUID?
-    var isCompetitiveFirstPlaceFinish: Bool
-
-    init(
-        subjectUserId: String,
-        amount: Int,
-        reason: XpReasonCode,
-        gameInstanceId: UUID?,
-        isCompetitiveFirstPlaceFinish: Bool = false
-    ) {
-        self.subjectUserId = subjectUserId
-        self.amount = amount
-        self.reason = reason
-        self.gameInstanceId = gameInstanceId
-        self.isCompetitiveFirstPlaceFinish = isCompetitiveFirstPlaceFinish
-    }
 }
 
 enum ProgressionLocalEngine {
 
-    /// Pending progression for one trip session: full ordered events, roster for merge, games by id.
+    /// Pending progression for one trip session: full ordered events, and the roster the completion
+    /// bonuses are paid to.
     static func pendingDeltaForSession(
         sortedSessionEvents: [TripActivityEvent],
         rosterUserIds: [String],
         subjectUserId: String,
         serverAppliedEventIds: Set<String>,
-        gamesById: [UUID: ProgressionGameSnapshot],
         rewards: ProgressionRewardsConfig = ProgressionRewardsConfigProvider.shared.current
     ) -> ProgressionPendingDelta {
         guard !subjectUserId.isEmpty else { return .zero }
@@ -61,12 +41,9 @@ enum ProgressionLocalEngine {
             subjectUserId: subjectUserId
         )
 
-        var window: [TripActivityEvent] = []
         var delta = ProgressionPendingDelta.zero
 
         for event in orderedEvents {
-            window.append(event)
-
             switch event.kind {
             case .regionFound:
                 guard !serverAppliedEventIds.contains(event.id) else { continue }
@@ -96,16 +73,10 @@ enum ProgressionLocalEngine {
                 guard !serverAppliedEventIds.contains(event.id) else { continue }
                 for component in completionComponents(
                     for: event,
-                    windowIncludingEvent: window,
                     rosterUserIds: rosterUserIds,
-                    gamesById: gamesById,
                     rewards: rewards
                 ) where component.subjectUserId == subjectUserId {
                     delta.totalXp += component.amount
-                    if component.isCompetitiveFirstPlaceFinish {
-                        delta.competitiveFirstPlaceFinishes += 1
-                        delta.everCompetitiveFirstPlace = true
-                    }
                 }
 
             default:
@@ -136,36 +107,19 @@ enum ProgressionLocalEngine {
         }
     }
 
-    /// Every XP award a completion event produces, for every subject — the single local mirror of the
-    /// server's `awardsForEvent`. Used both for pending totals and for local provisional ledger rows,
-    /// so the two projections of the same offline play can never disagree.
+    /// Every XP award a completion event produces on this device, for every roster member — the local
+    /// mirror of the OUTCOME-INDEPENDENT half of the server's `awardsForEvent`: `game_full_clear`,
+    /// `game_ended` and `trip_ended`. Used both for pending totals and for local provisional ledger
+    /// rows, so the two projections of the same offline play can never disagree.
     ///
-    /// `windowIncludingEvent` must be the session's events in timestamp order up to and including `event`.
+    /// Competitive placement (1st/2nd/3rd), trip competitive first and trip participation depend on
+    /// other players' finds, so they are server-decided (§3.1.1 item 25, OD-17): decided from the
+    /// events the server holds when it processes the `game_ended` / `trip_ended`, never minted or
+    /// estimated here, and announced by their `xp_grants` when they land.
     static func completionComponents(
         for event: TripActivityEvent,
-        windowIncludingEvent window: [TripActivityEvent],
         rosterUserIds: [String],
-        gamesById: [UUID: ProgressionGameSnapshot],
         rewards: ProgressionRewardsConfig = ProgressionRewardsConfigProvider.shared.current
-    ) -> [ProgressionCompletionComponent] {
-        // Ranking merges in contribution-only ids; the server drops non-members before applying
-        // (`uids.filter(memberUserIds.includes)`), so only roster members can be awarded here.
-        let rosterSet = Set(rosterUserIds)
-        return rawCompletionComponents(
-            for: event,
-            windowIncludingEvent: window,
-            rosterUserIds: rosterUserIds,
-            gamesById: gamesById,
-            rewards: rewards
-        ).filter { rosterSet.contains($0.subjectUserId) }
-    }
-
-    private static func rawCompletionComponents(
-        for event: TripActivityEvent,
-        windowIncludingEvent window: [TripActivityEvent],
-        rosterUserIds: [String],
-        gamesById: [UUID: ProgressionGameSnapshot],
-        rewards: ProgressionRewardsConfig
     ) -> [ProgressionCompletionComponent] {
         switch event.kind {
         case .gameCompleted:
@@ -181,7 +135,7 @@ enum ProgressionLocalEngine {
 
         case .gameEnded:
             guard let gameId = gameInstanceUUID(from: event) else { return [] }
-            var components = rosterUserIds.map {
+            return rosterUserIds.map {
                 ProgressionCompletionComponent(
                     subjectUserId: $0,
                     amount: rewards.xp.gameEndedBonusXp,
@@ -190,47 +144,8 @@ enum ProgressionLocalEngine {
                 )
             }
 
-            guard let game = gamesById[gameId], game.gameMode == .competitive else { return components }
-
-            let discoveries = TripActivityEventDiscoveryReplay.replay(events: window, gameInstanceFilter: gameId).discoveries
-            // FR-28h: placement XP is an OUTCOME — a late replay may not change who placed.
-            // The find's own discovery XP is unaffected; only the podium is frozen.
-            let outcome = CompetitiveOutcomeEligibility.outcomeInputs(
-                discoveries: discoveries,
-                mode: game.gameMode,
-                teams: game.teams
-            )
-            // An all-late competitive game has no frozen result: every participant would
-            // tie at zero and all of them would take first place.
-            guard !outcome.discoveries.isEmpty else { return components }
-            let raw = ParticipantContributionBuilder.contributionSummary(
-                discoveries: outcome.discoveries,
-                credits: outcome.credits
-            )
-            let roster = rosterUserIds.map { TripParticipant(userId: $0) }
-            let merged = TripRosterContributionMerge.merge(roster: roster, contributions: raw)
-            let ranked = TripParticipantRanking.rankContributions(merged)
-            for entry in ranked {
-                let placement: (amount: Int, reason: XpReasonCode)?
-                switch entry.rank {
-                case 1: placement = (rewards.xp.competitiveFirstPlaceFinishBonusXp, .competitiveFirstPlaceFinish)
-                case 2: placement = (rewards.xp.competitiveSecondPlaceFinishBonusXp, .competitiveSecondPlace)
-                case 3: placement = (rewards.xp.competitiveThirdPlaceFinishBonusXp, .competitiveThirdPlace)
-                default: placement = nil
-                }
-                guard let placement else { continue }
-                components.append(ProgressionCompletionComponent(
-                    subjectUserId: entry.contribution.participantId,
-                    amount: placement.amount,
-                    reason: placement.reason,
-                    gameInstanceId: gameId,
-                    isCompetitiveFirstPlaceFinish: entry.rank == 1
-                ))
-            }
-            return components
-
         case .tripEnded:
-            var components = rosterUserIds.map {
+            return rosterUserIds.map {
                 ProgressionCompletionComponent(
                     subjectUserId: $0,
                     amount: rewards.xp.tripEndedBonusXp,
@@ -239,41 +154,6 @@ enum ProgressionLocalEngine {
                 )
             }
 
-            let allDiscoveries = TripActivityEventDiscoveryReplay.replay(events: window, gameInstanceFilter: nil).discoveries
-            let finders = Set(allDiscoveries.map(\.participantId))
-            for uid in rosterUserIds where finders.contains(uid) {
-                components.append(ProgressionCompletionComponent(
-                    subjectUserId: uid,
-                    amount: rewards.xp.tripParticipationBonusXp,
-                    reason: .tripParticipation,
-                    gameInstanceId: nil
-                ))
-            }
-
-            guard gamesById.values.contains(where: { $0.gameMode == .competitive }) else { return components }
-
-            // FR-28h: trip-level competitive first place is likewise frozen at trip end,
-            // and suppressed entirely when nothing outcome-eligible remains.
-            let outcomeDiscoveries = CompetitiveOutcomeEligibility.outcomeEligible(allDiscoveries)
-            guard !outcomeDiscoveries.isEmpty else { return components }
-            let tripCredits = tripLevelCredits(discoveries: outcomeDiscoveries, gamesById: gamesById)
-            let raw = ParticipantContributionBuilder.contributionSummary(
-                discoveries: outcomeDiscoveries,
-                credits: tripCredits
-            )
-            let roster = rosterUserIds.map { TripParticipant(userId: $0) }
-            let merged = TripRosterContributionMerge.merge(roster: roster, contributions: raw)
-            let ranked = TripParticipantRanking.rankContributions(merged)
-            for entry in ranked where entry.rank == 1 {
-                components.append(ProgressionCompletionComponent(
-                    subjectUserId: entry.contribution.participantId,
-                    amount: rewards.xp.tripCompetitiveFirstPlaceBonusXp,
-                    reason: .tripCompetitiveFirstPlace,
-                    gameInstanceId: nil
-                ))
-            }
-            return components
-
         default:
             return []
         }
@@ -281,7 +161,7 @@ enum ProgressionLocalEngine {
 
     /// Sum pending across multiple sessions (e.g. offline play in more than one trip).
     static func pendingDeltaAcrossSessions(
-        sessions: [(sortedEvents: [TripActivityEvent], rosterUserIds: [String], gamesById: [UUID: ProgressionGameSnapshot])],
+        sessions: [(sortedEvents: [TripActivityEvent], rosterUserIds: [String])],
         subjectUserId: String,
         serverAppliedEventIds: Set<String>,
         rewards: ProgressionRewardsConfig = ProgressionRewardsConfigProvider.shared.current
@@ -293,29 +173,10 @@ enum ProgressionLocalEngine {
                 rosterUserIds: session.rosterUserIds,
                 subjectUserId: subjectUserId,
                 serverAppliedEventIds: serverAppliedEventIds,
-                gamesById: session.gamesById,
                 rewards: rewards
             )
         }
         return acc
-    }
-
-    private static func tripLevelCredits(
-        discoveries: [GameDiscovery],
-        gamesById: [UUID: ProgressionGameSnapshot]
-    ) -> [GameCredit] {
-        var credits: [GameCredit] = []
-        let byGame = Dictionary(grouping: discoveries, by: \.gameInstanceId)
-        for (gameId, gameDisco) in byGame {
-            guard let game = gamesById[gameId] else { continue }
-            let byTarget = Dictionary(grouping: gameDisco, by: \.targetId)
-            credits.append(contentsOf: DiscoveryRulesEngine.creditsForDiscoveries(
-                mode: game.gameMode,
-                discoveriesByTarget: byTarget,
-                teams: game.teams
-            ))
-        }
-        return credits
     }
 
     private static func regionFoundParticipantId(_ event: TripActivityEvent) -> String? {
@@ -358,11 +219,5 @@ enum ProgressionLocalEngine {
             }
         }
         return firstByKey
-    }
-}
-
-extension GameInstance {
-    var progressionGameSnapshot: ProgressionGameSnapshot {
-        ProgressionGameSnapshot(id: id, gameMode: commonConfig.gameMode, teams: teams)
     }
 }

@@ -99,8 +99,8 @@ struct LedgerPendingXpTotals: Equatable, Sendable {
     ///    an applied scope means that award's amount is inside `totalXp`, whichever event paid it —
     ///    so it also covers a once-per-lifetime or once-per-day bonus the account earned on another
     ///    device, which the server will never grant this device a second time.
-    ///    It covers the COMPLETION awards too (`game_ended`, `trip_ended`, placements …): those rows
-    ///    are provisional, and their scope being applied means another event — a peer's, or this
+    ///    It covers the COMPLETION awards too (`game_ended`, `game_full_clear`, `trip_ended`): those
+    ///    rows are provisional, and their scope being applied means another event — a peer's, or this
     ///    account's other device — already paid that award.
     ///
     /// 4. **The base discovery award's server scope** (`XpServerScopeKey.baseDiscoveryTotalOnlyScope(for:)`,

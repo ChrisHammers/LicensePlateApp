@@ -21,7 +21,6 @@ struct LocalCompletionXpLedgerTests {
         var sessionId: UUID
         var gameId: UUID
         var events: MockTripActivityEventRepository
-        var games: MockGameInstanceRepository
         var trips: MockTripSessionRepository
         var ledger: MockXpLedgerRepository
         var service: XpReconciliationService
@@ -80,7 +79,6 @@ struct LocalCompletionXpLedgerTests {
             sessionId: sessionId,
             gameId: gameId,
             events: events,
-            games: games,
             trips: trips,
             ledger: ledger,
             service: service
@@ -175,6 +173,10 @@ struct LocalCompletionXpLedgerTests {
         rewards.lifetimeUniqueRegionFindBonusXp + rewards.firstFindOfDayBonusXp
     }
 
+    /// §3.1.1 item 25: decided by the server from the events it holds at game / trip end, so no
+    /// local ledger row ever carries one of these reasons.
+    private let serverDecidedReasons = XpReasonCode.serverDecidedCompletion
+
     // MARK: - Reproduction: local solo play, never synced
 
     @Test func localSoloPlayShowsFindAndCompletionXpWithoutServer() throws {
@@ -191,12 +193,12 @@ struct LocalCompletionXpLedgerTests {
             // bonuses are no longer server-only, so unsynced local play earns them too.
             + singleFirstFindBonuses
             + rewards.gameEndedBonusXp
-            + rewards.competitiveFirstPlaceFinishBonusXp
             + rewards.tripEndedBonusXp
-            + rewards.tripParticipationBonusXp
-            + rewards.tripCompetitiveFirstPlaceBonusXp
+            // §3.1.1 item 25: placement, trip victory and participation are server-decided, so
+            // none of them is shown before the server pays it.
 
         #expect(try displayedXp(ledger: trip.ledger, userId: uid) == expected)
+        #expect(try !trip.ledger.ledgerEvents(userId: uid).contains { serverDecidedReasons.contains($0.reasonCode) })
     }
 
     @Test func localCompletionXpMatchesProgressionLocalEnginePending() throws {
@@ -208,13 +210,11 @@ struct LocalCompletionXpLedgerTests {
         try commit(gameEnded(id: "game-end-1", trip: trip, at: t0.addingTimeInterval(1)), into: trip)
         try commit(tripEnded(id: "trip-end-1", trip: trip, endedBy: uid, at: t0.addingTimeInterval(2)), into: trip)
 
-        let game = try #require(try trip.games.instance(byId: trip.gameId))
         let enginePending = ProgressionLocalEngine.pendingDeltaForSession(
             sortedSessionEvents: try trip.events.events(sessionId: trip.sessionId, limit: nil),
             rosterUserIds: [uid],
             subjectUserId: uid,
             serverAppliedEventIds: [],
-            gamesById: [trip.gameId: game.progressionGameSnapshot],
             rewards: ProgressionRewardsConfig.bundledDefault
         )
 
@@ -292,7 +292,9 @@ struct LocalCompletionXpLedgerTests {
 
     /// Owner field report: on a sync-held child account the discovery toast pops but the trip-ended
     /// toast never does. Drives the real `XpGainToastService` over the rows the real writer produced.
-    @Test func heldChildEndingTripLocallyGetsCompletionToastThenNoDuplicateFromServerGrant() throws {
+    /// §3.1.1 item 25: trip participation is server-decided, so it is NOT part of the local toast —
+    /// the server's grant announces it once, while its `trip_ended` grant stays deduplicated.
+    @Test func heldChildEndingTripLocallyToastsTripEndedThenOnlyTheServerAnnouncesParticipation() throws {
         let uid = "child-awaiting-consent"
         let trip = try makeLocalTrip(participantIds: [uid], gameMode: .collaborative)
         let t0 = Date()
@@ -317,10 +319,10 @@ struct LocalCompletionXpLedgerTests {
 
         let presentation = try #require(service.presentation)
         let groupIds = Set(presentation.lines.map(\.id))
-        // The discovery toast always worked; these two are what the owner never saw.
+        // The discovery toast always worked; trip_ended is what the owner never saw.
         #expect(groupIds.contains("discovery"))
         #expect(groupIds.contains("trip_ended"))
-        #expect(groupIds.contains("trip_participation"))
+        #expect(!groupIds.contains("trip_participation"))
         // Owner parity ruling 2026-08-15: a held child earns the find bonuses too, so their
         // toast groups fire without any server involvement.
         #expect(groupIds.contains("lifetime_unique"))
@@ -329,10 +331,10 @@ struct LocalCompletionXpLedgerTests {
         let expectedBurst = rewards.baseDiscoveryXp
             + singleFirstFindBonuses
             + rewards.tripEndedBonusXp
-            + rewards.tripParticipationBonusXp
         #expect(presentation.totalXp == expectedBurst)
 
-        // Consent lands, sync drains, and the server grants the same trip_ended event.
+        // Consent lands, sync drains, and the server grants the same trip_ended event plus the
+        // participation it decided from the finds it now holds.
         remote.hasReceivedInitialSnapshot = true
         remote.grants = [
             UserXpGrant(
@@ -354,8 +356,13 @@ struct LocalCompletionXpLedgerTests {
         ]
         service.performImmediateRefresh()
 
-        // Same awards already toasted locally — the burst must not grow.
-        #expect(service.presentation?.totalXp == expectedBurst)
+        // trip_ended was already toasted locally; participation is new money, announced once.
+        let afterGrants = try #require(service.presentation)
+        #expect(afterGrants.totalXp == expectedBurst + rewards.tripParticipationBonusXp)
+        #expect(afterGrants.lines.first { $0.id == "trip_participation" }?.xpAmount == rewards.tripParticipationBonusXp)
+
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == expectedBurst + rewards.tripParticipationBonusXp)
     }
 
     @Test func grantForAnEventThisDeviceNeverRecordedStillToasts() throws {
@@ -522,7 +529,9 @@ struct LocalCompletionXpLedgerTests {
         #expect(try !trip.ledger.ledgerEvents(userId: owner).isEmpty)
     }
 
-    @Test func tripParticipationBonusOnlyForParticipantsWhoFound() throws {
+    /// §3.1.1 item 25: trip participation is server-decided, so the trip end mints it for nobody —
+    /// not even the finder — while the outcome-independent trip-ended bonus still lands for everyone.
+    @Test func tripEndMintsTripEndedForEveryoneAndParticipationForNoOne() throws {
         let finder = "finder-1"
         let idler = "idler-2"
         let trip = try makeLocalTrip(participantIds: [finder, idler], gameMode: .collaborative)
@@ -534,7 +543,7 @@ struct LocalCompletionXpLedgerTests {
         let finderRows = try trip.ledger.ledgerEvents(userId: finder)
         let idlerRows = try trip.ledger.ledgerEvents(userId: idler)
 
-        #expect(finderRows.contains { $0.reasonCode == .tripParticipation })
+        #expect(!finderRows.contains { $0.reasonCode == .tripParticipation })
         #expect(!idlerRows.contains { $0.reasonCode == .tripParticipation })
         // Both are on the roster, so both still get the trip-ended bonus.
         #expect(finderRows.contains { $0.reasonCode == .tripEnded })
@@ -550,9 +559,11 @@ struct LocalCompletionXpLedgerTests {
         #expect(try trip.ledger.ledgerEvents(userId: uid).isEmpty)
     }
 
-    // MARK: - Competitive placement parity
+    // MARK: - Server-decided completion awards (§3.1.1 item 25)
 
-    @Test func competitivePlacementsAwardedLocallyByContribution() throws {
+    /// The winner and the runner-up each get the outcome-independent game-ended and trip-ended rows;
+    /// neither gets a placement, trip-victory or participation row, whatever the local ranking says.
+    @Test func competitiveGameAndTripEndMintNoServerDecidedRows() throws {
         let winner = "winner-1"
         let runnerUp = "runner-2"
         let trip = try makeLocalTrip(participantIds: [winner, runnerUp], gameMode: .competitive)
@@ -562,6 +573,7 @@ struct LocalCompletionXpLedgerTests {
         try commit(regionFound(id: "f2", trip: trip, regionId: "us-ca", participantId: winner, at: t0.addingTimeInterval(1)), into: trip)
         try commit(regionFound(id: "f3", trip: trip, regionId: "us-ny", participantId: runnerUp, at: t0.addingTimeInterval(2)), into: trip)
         try commit(gameEnded(id: "game-end-1", trip: trip, at: t0.addingTimeInterval(3)), into: trip)
+        try commit(tripEnded(id: "trip-end-1", trip: trip, endedBy: winner, at: t0.addingTimeInterval(4)), into: trip)
 
         let winnerRows = try trip.ledger.ledgerEvents(userId: winner)
         let runnerRows = try trip.ledger.ledgerEvents(userId: runnerUp)
@@ -569,11 +581,133 @@ struct LocalCompletionXpLedgerTests {
         #expect(winnerRows.contains { $0.reasonCode == .competitiveFirstFinder || $0.reasonCode == .discoveryClaimPendingResolution })
         #expect(winnerRows.first { $0.reasonCode == .gameEnded }?.xpDelta == rewards.gameEndedBonusXp)
         #expect(runnerRows.first { $0.reasonCode == .gameEnded }?.xpDelta == rewards.gameEndedBonusXp)
+        #expect(winnerRows.first { $0.reasonCode == .tripEnded }?.xpDelta == rewards.tripEndedBonusXp)
+        #expect(runnerRows.first { $0.reasonCode == .tripEnded }?.xpDelta == rewards.tripEndedBonusXp)
 
-        let winnerPlacement = winnerRows.first { $0.reasonCode == .competitiveFirstPlaceFinish }
-        let runnerPlacement = runnerRows.first { $0.reasonCode == .competitiveSecondPlace }
-        #expect(winnerPlacement?.xpDelta == rewards.competitiveFirstPlaceFinishBonusXp)
-        #expect(runnerPlacement?.xpDelta == rewards.competitiveSecondPlaceFinishBonusXp)
+        #expect(!winnerRows.contains { serverDecidedReasons.contains($0.reasonCode) })
+        #expect(!runnerRows.contains { serverDecidedReasons.contains($0.reasonCode) })
+    }
+
+    /// The pending sum — open ledger rows and the engine's estimate alike — holds only what this
+    /// device decides: the finds and the outcome-independent completion bonuses. The clear local
+    /// winner's 1st place, trip victory and participation are not in it.
+    @Test func pendingSumNeverIncludesAServerDecidedAward() throws {
+        let winner = "winner-1"
+        let runnerUp = "runner-2"
+        let trip = try makeLocalTrip(participantIds: [winner, runnerUp], gameMode: .competitive)
+        let t0 = Date()
+
+        try commit(regionFound(id: "f1", trip: trip, regionId: "us-tx", participantId: winner, at: t0), into: trip)
+        try commit(regionFound(id: "f2", trip: trip, regionId: "us-ca", participantId: winner, at: t0.addingTimeInterval(1)), into: trip)
+        try commit(regionFound(id: "f3", trip: trip, regionId: "us-ny", participantId: runnerUp, at: t0.addingTimeInterval(2)), into: trip)
+        try commit(gameEnded(id: "game-end-1", trip: trip, at: t0.addingTimeInterval(3)), into: trip)
+        try commit(tripEnded(id: "trip-end-1", trip: trip, endedBy: winner, at: t0.addingTimeInterval(4)), into: trip)
+
+        let expected = rewards.baseDiscoveryXp * 2 + rewards.gameEndedBonusXp + rewards.tripEndedBonusXp
+
+        let sessionRows = try trip.ledger.ledgerEvents(userId: winner).filter { $0.sessionId == trip.sessionId }
+        #expect(LedgerPendingXpTotals.openProvisionalSum(from: sessionRows, appliedProgressionEventIds: []) == expected)
+
+        let enginePending = ProgressionLocalEngine.pendingDeltaForSession(
+            sortedSessionEvents: try trip.events.events(sessionId: trip.sessionId, limit: nil),
+            rosterUserIds: [winner, runnerUp],
+            subjectUserId: winner,
+            serverAppliedEventIds: [],
+            rewards: ProgressionRewardsConfig.bundledDefault
+        )
+        #expect(enginePending.totalXp == expected)
+    }
+
+    /// The whole OD-17 path for this device's own competitive game end. The local game-ended row
+    /// toasts at once; when the server's grants for that same event land, its game_ended mirror is
+    /// deduplicated and the 1st place it decided is announced exactly once, on its own line, never
+    /// again on a later refresh. The displayed total only ever rises: the local rows retire in the
+    /// same snapshot that adds the server's payment.
+    @Test func placementGrantWithNoLocalRowToastsOnceAndTheDisplayedTotalNeverDrops() throws {
+        let winner = "winner-1"
+        let runnerUp = "runner-2"
+        let trip = try makeLocalTrip(participantIds: [winner, runnerUp], gameMode: .competitive)
+        let t0 = Date()
+
+        let remote = StubToastRemoteReader()
+        remote.hasReceivedInitialSnapshot = true
+        remote.boundUserId = winner
+        let service = XpGainToastService(
+            xpLedger: trip.ledger,
+            remoteReader: remote,
+            wiresLiveUpdates: false
+        )
+        service.configure(userId: winner)
+        service.performImmediateRefresh()
+
+        try commit(regionFound(id: "find-1", trip: trip, regionId: "us-tx", participantId: winner, at: t0), into: trip)
+        try commit(gameEnded(id: "game-end-1", trip: trip, at: t0.addingTimeInterval(1)), into: trip)
+        service.performImmediateRefresh()
+
+        let local = try #require(service.presentation)
+        #expect(local.lines.contains { $0.id == "game_ended" })
+        #expect(!local.lines.contains { $0.id == "competitive_place" })
+        let localBurst = rewards.baseDiscoveryXp + singleFirstFindBonuses + rewards.gameEndedBonusXp
+        #expect(local.totalXp == localBurst)
+        let displayedBeforeServer = try displayedXp(ledger: trip.ledger, userId: winner)
+        #expect(displayedBeforeServer == localBurst)
+
+        // The server processes the same game_ended: it pays game_ended (already shown) and decides
+        // 1st place from the finds it holds.
+        remote.grants = [
+            UserXpGrant(
+                grantId: "g-game-ended",
+                amount: rewards.gameEndedBonusXp,
+                reason: UserXpGrantReason.gameEnded.rawValue,
+                sourceType: "activity_event",
+                sourceId: "game-end-1",
+                idempotencyKey: "game_ended|v1|\(winner)|\(trip.gameId.uuidString)"
+            ),
+            UserXpGrant(
+                grantId: "g-first-place",
+                amount: rewards.competitiveFirstPlaceFinishBonusXp,
+                reason: UserXpGrantReason.competitiveFirstPlaceFinish.rawValue,
+                sourceType: "activity_event",
+                sourceId: "game-end-1",
+                idempotencyKey: "competitive_place|1|v1|\(winner)|\(trip.gameId.uuidString)"
+            ),
+        ]
+        service.performImmediateRefresh()
+
+        let afterGrants = try #require(service.presentation)
+        #expect(afterGrants.totalXp == localBurst + rewards.competitiveFirstPlaceFinishBonusXp)
+        #expect(afterGrants.lines.first { $0.id == "competitive_place" }?.xpAmount
+            == rewards.competitiveFirstPlaceFinishBonusXp)
+        #expect(afterGrants.lines.first { $0.id == "game_ended" }?.xpAmount == rewards.gameEndedBonusXp)
+
+        // Not re-announced: neither on the next refresh nor after the toast is gone.
+        service.performImmediateRefresh()
+        #expect(service.presentation?.totalXp == localBurst + rewards.competitiveFirstPlaceFinishBonusXp)
+        service.dismissManually()
+        service.performImmediateRefresh()
+        #expect(service.presentation == nil)
+
+        // The server snapshot that carries the payment also stamps both events.
+        let serverSnapshot = UserProgressionSnapshot(
+            totalXp: localBurst + rewards.competitiveFirstPlaceFinishBonusXp,
+            acceptedRegionFindCount: 1,
+            competitiveFirstPlaceFinishes: 1,
+            everCompetitiveFirstPlace: true,
+            lastUpdatedAt: Date(),
+            appliedProgressionEventIds: ["find-1", "game-end-1"],
+            appliedProgressionScopeKeys: []
+        )
+        let displayedAfterServer = ProgressionDisplayTotalsResolver.resolve(
+            userId: winner,
+            ledgerEvents: try trip.ledger.ledgerEvents(userId: winner),
+            serverSnapshot: serverSnapshot,
+            verifiedGrantSum: nil,
+            hasReceivedGrantSnapshot: false
+        )
+        #expect(displayedAfterServer.openProvisionalXp == 0)
+        #expect(displayedAfterServer.displayedTotalXp >= displayedBeforeServer)
+        #expect(displayedAfterServer.displayedTotalXp
+            == displayedBeforeServer + rewards.competitiveFirstPlaceFinishBonusXp)
     }
 }
 
@@ -588,8 +722,8 @@ private struct StubRewardsConfigProvider: ProgressionRewardsConfigProviding {
 private final class StubToastRemoteReader: XpGainToastRemoteReading {
     var grants: [UserXpGrant] = []
     var hasReceivedInitialSnapshot = false
-    // §3.1.1 item 12: SEALED by default, and each test sets `boundUserId` to its own uid. Both tests
-    // below seal on the first `performImmediateRefresh()`, when `grants` is still empty, so the
+    // §3.1.1 item 12: SEALED by default, and each test sets `boundUserId` to its own uid. Every test
+    // above seals on the first `performImmediateRefresh()`, when `grants` is still empty, so the
     // grants they add afterwards arrive POST-seal and keep exercising the paths they were written
     // for — the acknowledgedLocalAwardKeys dedup, and the peer grant that must still toast. Leaving
     // the stub unsealed (or `boundUserId` nil, under the fail-closed uid guard) would instead have

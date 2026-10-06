@@ -285,7 +285,8 @@ final class XpReconciliationService {
         return true
     }
 
-    /// Local provisional rows for completion XP (`game_completed` / `game_ended` / `trip_ended`).
+    /// Local provisional rows for the outcome-independent completion XP (`game_completed` /
+    /// `game_ended` / `trip_ended`).
     ///
     /// Without these, completion XP exists only as a pending *total* and never as an itemized ledger row,
     /// so offline play shows find XP but no game/trip bonuses on the profile, rank, toast, or recap.
@@ -293,6 +294,11 @@ final class XpReconciliationService {
     /// `awardsForEvent` the pending totals use, so the later server grant reconciles to a no-op: every row
     /// carries `sourceEventId == event.id`, and `LedgerPendingXpTotals` stops counting a row once that id
     /// lands in `appliedProgressionEvents`.
+    ///
+    /// Competitive placement, trip competitive first and trip participation get NO row here: they are
+    /// server-decided (§3.1.1 item 25, OD-17), so this device never shows a number the server might not
+    /// pay. Their `xp_grants` announce them when they land (`XpGainToastService`), and the trip recap
+    /// lists them from those grants (`XpFeedProjectionBuilder`).
     private func handleCompletionEventThrowing(_ event: TripActivityEvent) throws {
         guard let trip = try tripSessionRepository.session(byId: event.sessionId) else { return }
         guard trip.status != .cancelled else { return }
@@ -300,17 +306,9 @@ final class XpReconciliationService {
         let rosterUserIds = trip.participants.filter { $0.leftAt == nil }.map(\.userId)
         guard !rosterUserIds.isEmpty else { return }
 
-        let games = try gameRepository.fetchByTripSession(sessionId: event.sessionId)
-        let gamesById = Dictionary(
-            games.map { ($0.id, $0.progressionGameSnapshot) },
-            uniquingKeysWith: { first, _ in first }
-        )
-
         let components = ProgressionLocalEngine.completionComponents(
             for: event,
-            windowIncludingEvent: try sessionWindow(upToAndIncluding: event),
             rosterUserIds: rosterUserIds,
-            gamesById: gamesById,
             rewards: rewardsConfig.current
         )
 
@@ -338,17 +336,6 @@ final class XpReconciliationService {
             )
             _ = try xpLedger.appendIfAbsent(row)
         }
-    }
-
-    /// Session events in timestamp order up to and including `event`, matching the replay window
-    /// `ProgressionLocalEngine` uses when it reaches the same event.
-    private func sessionWindow(upToAndIncluding event: TripActivityEvent) throws -> [TripActivityEvent] {
-        let all = try tripActivityEvents.events(sessionId: event.sessionId, limit: nil)
-            .sorted { $0.timestamp < $1.timestamp }
-        guard let index = all.firstIndex(where: { $0.id == event.id }) else {
-            return all + [event]
-        }
-        return Array(all.prefix(through: index))
     }
 
     /// Persists resolution, closes provisional rows, and writes a final local mirror only when cloud confirms XP.

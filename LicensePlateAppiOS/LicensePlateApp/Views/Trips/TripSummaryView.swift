@@ -771,6 +771,12 @@ struct TripSummaryView: View {
     }
 }
 
+#Preview("Competitive — XP recap with server placement") {
+    NavigationStack {
+        TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryCompetitiveWithXpRecap(), currentUserId: nil, onDismiss: nil)
+    }
+}
+
 #Preview("Collaborative — three finders, one region") {
     NavigationStack {
         TripSummaryView(summary: PreviewSummaryFixtures.tripSummaryCollaborativeThreeFindersOneRegion(), currentUserId: nil, onDismiss: nil)
