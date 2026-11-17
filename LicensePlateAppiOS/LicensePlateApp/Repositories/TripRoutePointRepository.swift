@@ -67,6 +67,25 @@ final class TripRoutePointRepository {
         }
     }
 
+    /// FR-105 (F-65) launch retention pass: deletes every stored point belonging to any of
+    /// `tripSessionIds` in one store delete and one save, and returns how many of those trips
+    /// had points. One lookup (only the `tripSessionId` column) when nothing matches, and no
+    /// write — so trips pruned on an earlier launch cost nothing beyond that lookup.
+    @discardableResult
+    func deletePoints(tripSessionIds: [UUID]) throws -> Int {
+        guard let modelContext else { throw TripRoutePointRepositoryError.noModelContext }
+        guard !tripSessionIds.isEmpty else { return 0 }
+        let idStrings = tripSessionIds.map(\.uuidString)
+        let predicate = #Predicate<TripRoutePointEntity> { idStrings.contains($0.tripSessionId) }
+        var descriptor = FetchDescriptor<TripRoutePointEntity>(predicate: predicate)
+        descriptor.propertiesToFetch = [\.tripSessionId]
+        let tripsWithPoints = Set(try modelContext.fetch(descriptor).map(\.tripSessionId))
+        guard !tripsWithPoints.isEmpty else { return 0 }
+        try modelContext.delete(model: TripRoutePointEntity.self, where: predicate)
+        try modelContext.save()
+        return tripsWithPoints.count
+    }
+
     func deletePoints(tripSessionId: UUID) throws {
         guard let modelContext else { throw TripRoutePointRepositoryError.noModelContext }
         let sessionIdString = tripSessionId.uuidString

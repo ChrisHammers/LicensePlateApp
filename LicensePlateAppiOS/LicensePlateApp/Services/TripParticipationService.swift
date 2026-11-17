@@ -70,13 +70,17 @@ final class TripParticipationService: TripParticipationServiceProtocol {
     private let tripActivityEventRecording: TripActivityEventRecordingProtocol
     private let pendingTripLeaveRepository: PendingTripLeaveRepositoryProtocol
     private weak var authService: FirebaseAuthService?
+    private let routeTracking: TripRouteTrackingService
 
+    /// `nil` route tracking resolves to the live service inside this main-actor init.
     init(
         tripSessionRepository: TripSessionRepositoryProtocol,
         tripActivityEventRecording: TripActivityEventRecordingProtocol,
         pendingTripLeaveRepository: PendingTripLeaveRepositoryProtocol,
-        authService: FirebaseAuthService?
+        authService: FirebaseAuthService?,
+        routeTracking: TripRouteTrackingService? = nil
     ) {
+        self.routeTracking = routeTracking ?? .shared
         self.tripSessionRepository = tripSessionRepository
         self.tripActivityEventRecording = tripActivityEventRecording
         self.pendingTripLeaveRepository = pendingTripLeaveRepository
@@ -113,6 +117,11 @@ final class TripParticipationService: TripParticipationServiceProtocol {
             try? pendingTripLeaveRepository.deletePending(sessionId: sessionId, userId: userId)
             throw error
         }
+
+        // FR-105 (F-65): the left trip stays `active` locally (the eviction path needs the user
+        // on the roster, and the leaver loses read access to the server's end), so the
+        // retention pass would never age its route out — drop it now.
+        routeTracking.tripWasLeft(sessionId: sessionId)
 
         let event = TripActivityEvent(
             sessionId: sessionId,

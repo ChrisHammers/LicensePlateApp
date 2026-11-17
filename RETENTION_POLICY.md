@@ -1,6 +1,6 @@
 # RoadTrip Royale — Data Retention Policy (NP-3)
 
-**Status: OWNER-APPROVED 2026-08-30 — not yet published** (publication rides NP-2; counsel review rides the standing launch caveat). Drafted 2026-08-30 from
+**Status: OWNER-APPROVED 2026-08-30 — not yet published** (publication rides NP-2; counsel review rides the standing launch caveat). Row 13 (on-device route points) added 2026-11-17 on the owner's decision (`COPPA_SRS_v4.md` OD-12, FR-105); its window is pinned to the app's constant by both the functions and the iOS test suites; row text awaiting the owner's read. Drafted 2026-08-30 from
 `COPPA_SRS_v3.md` FR-77/FR-78/OD-3 and the shipped retention code. This document is the
 §312.10 *written data retention policy* the amended COPPA Rule requires; the
 public-facing rendering ships with NP-2's notice-text work and must match this
@@ -52,6 +52,7 @@ drift, the functions suite fails.
 | 10 | **Third-party data (Google Analytics)** | Aggregate product analytics | None per-user; no account identifier is ever sent (child sessions send nothing pre-consent) | Device-side analytics data **reset at account deletion**; Google deletes user-level and event-level analytics data from its servers after **2 months** (the GA4 data-retention setting — owner-set 2026-11-17; aggregate reports are not covered by that setting) | Client `resetAnalyticsData()` at deletion + GA4 retention setting — documented mechanism (FR-78(b) decision) |
 | 11 | **Inactive accounts** | Providing the service | Road-trip play is episodic by nature — a year between family trips is normal use, not abandonment — and a child's account holds their side of the family's shared trip history, with the parent's review and deletion rights live the entire time | **36 months** without authenticated activity, all ages (owner-decided 2026-08-30; a bounded window with a parent in control throughout is not indefinite retention) | `purgeInactiveAccounts` (nightly) — ENFORCED |
 | 12 | **Location payloads on ended-trip events** (coarse find locations; adult accounts only — child events never carry location) | Showing where a discovery happened during the trip's life | The place-trail's value decays; the trip history itself (names, discoveries, scores) is the product's purpose and is retained with the account | Location keys stripped from events older than **36 months** (owner-decided 2026-08-30); gameplay bookkeeping untouched | `ageEndedTripLocationPayloads` (nightly) — ENFORCED |
+| 13 | **On-device trip route points** (the GPS route recorded for a trip's map; kept in the app's database on the player's device and never sent to our servers — an iPhone backup the family makes may include it, and we do not control those copies; recorded only when location tracking is on for that trip) | Drawing the trip's route map in the trip recap | Lets the family look back at where a trip went; holding it on the device only keeps it out of our systems entirely | Deleted from the device at the first app launch more than **36 months** after the trip ends (owner-decided 2026-11-17, the same window as row 12); deleted at once when the player signs out from their profile or deletes their account, and with the app if it is uninstalled | On-device maintenance pass at every app launch (`LocalRouteRetentionService`), plus the local wipe at profile sign-out and account deletion (`LocalUserDataPurgeService`) — ENFORCED |
 
 Never-consented children who never enter a share code have **no server-side data at
 all** under the local-first model — there is nothing to schedule.
@@ -75,5 +76,5 @@ rationale stated in the row). Both were adopted-but-unbuilt at first drafting;
 `inactiveAccountRetention.ts` and `locationPayloadAging.ts`** — so the launch
 condition they carried (build the jobs or delete the rows) is discharged. Row 9's
 vendor deletion is live code behind an unprovisioned production API key (see
-`currentRevenueCatApiKey`). The parity test pins rows 1–5 and 11–12 to the shipped
+`currentRevenueCatApiKey`). The parity test pins rows 1–5, 11–12 and 13 (13 from both the functions and iOS suites) to the shipped
 constants.*

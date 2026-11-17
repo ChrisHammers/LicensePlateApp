@@ -157,6 +157,24 @@ final class TripSessionRepository: ObservableObject, TripSessionRepositoryProtoc
         return TripSessionPersistence.toDomain(entity)
     }
 
+    /// FR-105 (F-65): ids of finished trips — status `ended` or `cancelled` — whose `endedAt`
+    /// is strictly before `cutoff`. A live (`created`/`active`) trip or one with no end date is
+    /// never returned. Status and date both filter in the store, and only the `id` column is
+    /// fetched.
+    func finishedSessionIds(endedBefore cutoff: Date) throws -> [UUID] {
+        guard let ctx = modelContext else { throw TripSessionRepositoryError.noModelContext }
+        let ended = TripSessionState.ended.rawValue
+        let cancelled = TripSessionState.cancelled.rawValue
+        var descriptor = FetchDescriptor<TripSessionEntity>(
+            predicate: #Predicate<TripSessionEntity> { entity in
+                (entity.status == ended || entity.status == cancelled)
+                    && (entity.endedAt.flatMap { $0 < cutoff } == true)
+            }
+        )
+        descriptor.propertiesToFetch = [\.id]
+        return try ctx.fetch(descriptor).compactMap { UUID(uuidString: $0.id) }
+    }
+
     /// Placeholder for future sync; entity does not yet have lastSyncedAt.
     func lastSyncedAt(sessionId: UUID) -> Date? {
         nil

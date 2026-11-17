@@ -82,6 +82,31 @@ describe("NP-3 ↔ code parity (FR-77 acceptance)", () => {
     expect(row).toContain("ENFORCED");
   });
 
+  it("on-device route points state the v4 OD-12 thirty-six months, enforced by the app as 1095 days", () => {
+    // Row 13 (FR-105, added 2026-11-17) is enforced on the device, not by a job here, so the
+    // constant lives in Swift. Read it from the app source and hold it to the server's
+    // ended-trip location window it mirrors ("like server") and to the policy text. The iOS
+    // suite pins the same row from its side (LocalRouteRetentionServiceTests).
+    const swiftSource = readFileSync(
+      resolve(
+        dirname(fileURLToPath(import.meta.url)),
+        "../../LicensePlateApp/Services/LocalRouteRetentionService.swift"
+      ),
+      "utf8"
+    );
+    const match = swiftSource.match(/static let routePointRetentionDaysDefault = (\d+)/);
+    expect(match, "LocalRouteRetentionService.swift must declare routePointRetentionDaysDefault").not.toBeNull();
+    const clientDays = Number((match as RegExpMatchArray)[1]);
+    expect(clientDays).toBe(1095);
+    expect(clientDays).toBe(LOCATION_PAYLOAD_RETENTION_DAYS_DEFAULT);
+    const row = scheduleRow("On-device trip route points");
+    expect(row).toContain("**36 months**");
+    expect(row).toContain("never sent to our servers");
+    expect(row).toContain("LocalRouteRetentionService");
+    expect(row).toContain("LocalUserDataPurgeService");
+    expect(row).toContain("ENFORCED");
+  });
+
   it("invite/share-code grace states the shipped 30 days", () => {
     expect(EXPIRED_RECORD_DELETION_GRACE_DAYS).toBe(30);
     expect(scheduleRow("Invites and share codes")).toContain(

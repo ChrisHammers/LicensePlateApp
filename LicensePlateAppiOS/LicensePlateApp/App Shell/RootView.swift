@@ -231,6 +231,10 @@ struct RootView: View {
             FriendUserIdsRepository.shared.setModelContext(modelContext)
             LocalPlayIdentityRepository.shared.setModelContext(modelContext)
             EntitlementService.shared.setModelContext(modelContext)
+            // FR-105 (F-65): local route-point retention, once per launch, after the trip and
+            // route repositories are bound. Enqueued rather than run inline so it never holds
+            // up the rest of launch; a fixed two lookups when nothing is past the window.
+            Task { @MainActor in LocalRouteRetentionService.shared.pruneExpiredRoutePoints() }
             LifetimeStatsCoordinator.shared.authService = authService
             let syncCoordinator = SyncCoordinator.shared
             syncCoordinator.setUserSyncExecutor(UserSyncExecutor(authService: authService, userRepository: UserRepository.shared))

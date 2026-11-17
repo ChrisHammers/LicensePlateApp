@@ -102,6 +102,18 @@ final class TripRouteTrackingService: ObservableObject {
         routePoints = []
     }
 
+    /// Voluntary leave (FR-105): the leaver's local copy stays live and never reaches the
+    /// Travel Log, so its route could never render and would never age out — drop it. Unlike
+    /// cancel, the in-memory ribbon is cleared only if it belonged to the left trip.
+    func tripWasLeft(sessionId: UUID) {
+        let wasTracked = activeTripSessionId == sessionId
+        tripDidEnd(sessionId: sessionId)
+        try? repository.deletePoints(tripSessionId: sessionId)
+        if wasTracked {
+            routePoints = []
+        }
+    }
+
     /// Hard sign-out: stop capture without flushing points (store is about to be wiped).
     func stopForAccountPurge() {
         locationCancellable = nil
