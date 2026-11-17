@@ -183,7 +183,7 @@ The framework the owner specified: redaction happens at *our* interface, before 
 - **(e) Grant is per-scope and atomic with the consent row** (v3 FR-64's transaction, extended to carry the scope vector).
 - **(f) Accessibility and localization**: each card is one VoiceOver element with label = scope name, value = granted/declined, hint = what changes; Dynamic Type to accessibility sizes without clipping; state never by color alone (icon + text); ×3 locales; consent-text version bumped per OQ-2 discipline.
 
-*Accept:* scope-matrix snapshot tests; per-scope anchor resolution test ×3 locales; declining `analytics_internal` verifiably stops v3 FR-72 collection for that child; core cannot be declined while joining; a11y audit on the flow; the frozen scopes cannot be granted through any client or server path.
+*Accept:* scope-matrix snapshot tests; per-scope anchor resolution test ×3 locales; declining `analytics_internal` verifiably stops v3 FR-72 collection for that child; core cannot be declined while joining; a11y audit on the flow; the frozen scopes cannot be granted through any client or server path. **[Owner rulings 2026-11-17 (v3 §7.1 Q1, Q2): at launch the `analytics_internal` card is FROZEN — visible, disabled, "not available yet" — alongside the three reserved scopes, so (b)'s "declinable, default off" applies only once it is un-frozen; after consent only the guardian of record may change a child's scopes.]**
 
 ### FR-104 (F-64) — Material changes re-open consent, and consented parents are told
 
@@ -194,7 +194,7 @@ The framework the owner specified: redaction happens at *our* interface, before 
 - **(e) Re-affirmation reuses FR-103's cards**, showing only the stale scopes, with a diff line ("what changed"). It does **not** re-run FR-59 verification — the guardian is already verified; this is a scope re-acknowledgment, and the consent row records `reaffirmedAt` + the new version vector while preserving the original `verifiedAt` evidence.
 - **(f) Version discipline.** The OQ-2 rule (a version string is a date+commit pin or date+slug, bumped in the same commit as the wording change) extends to scope versions. v3 FR-83(e)'s hash-lock test extends: a scope's policy text changing without its version bumping fails tests.
 
-*Accept:* bump-a-scope integration test — consented guardians get push + email + badge, unconsented get nothing, collection for that scope halts until re-affirmed; badge clears only on completion; core-stale leaves local play working; re-affirmation writes the new vector without touching `verifiedAt`; hash-lock test catches an unbumped copy change; localization ×3.
+*Accept:* bump-a-scope integration test — consented guardians get push + email + badge, unconsented get nothing, collection for that scope halts until re-affirmed; badge clears only on completion; core-stale leaves local play working; re-affirmation writes the new vector without touching `verifiedAt`; hash-lock test catches an unbumped copy change; localization ×3. **[Owner ruling 2026-11-17 (v3 §7.1 Q3): a MATERIAL change is collecting more, showing it to more people, sending it to a new recipient company, or using it for a new purpose; reductions and wording clarifications are not. Applied default (not objected to): two counters — the consent-text version bumps on any wording change and is evidence on new grants; the per-scope practice version bumps only on a material change and drives staleness — which amends (f): the hash-lock test pins the text version.]**
 
 ### FR-105 (F-65) — Local route data has a retention bound too
 
@@ -207,7 +207,7 @@ Local `TripRoutePointEntity` rows are not collection and carry no COPPA retentio
 - Account deletion and sign-out already clear local stores; pinned by test here rather than assumed.
 - The published retention policy (NP-3) states the local window alongside the server windows. Stating a practice you don't implement is the deception exposure; this makes the sentence true.
 
-*Accept:* pruning test with fixtures either side of the window; regeneration test (an old trip opens with no route section and no error); NP-3 ↔ constant parity pinned by the v3 FR-77 test pattern.
+*Accept:* pruning test with fixtures either side of the window; regeneration test (an old trip opens with no route section and no error); NP-3 ↔ constant parity pinned by the v3 FR-77 test pattern. **[OD-12 decided 2026-11-17: 36 months (1095 days), not the proposed 90 days. Building in worktree `.claude/worktrees/f65-local-route-retention`.]**
 
 ### FR-106 (F-66, FROZEN) — Family path sharing
 
@@ -278,7 +278,7 @@ Everything in v3 and v2.1 not named here **stands and must not regress** — in 
   2. **Child collection gate** — already specified (v3 FR-72(a)): a child's analytics starts only when consented **and** `analytics_internal` is granted. Not in question.
   3. **What OD-11 actually asked** — whether the consent screen's toggle renders pre-checked or unchecked. That is a UI default, not a collection default.
   Since (2) already requires an affirmative grant before any collection, an unchecked toggle is the only state consistent with the code. A pre-checked box would show "on" while the enforcement holds it off — misleading *and* the pattern the FTC reads worst. **Resolved as unchecked/off**, matching landed behavior; no owner action required.
-- **OD-12 (tuning, defaults acceptable): FR-101(b) endpoint trim radius = 1.5 km; FR-105 local route retention = 90 days.**
+- **OD-12 (tuning, defaults acceptable): FR-101(b) endpoint trim radius = 1.5 km; FR-105 local route retention = 90 days.** **DECIDED 2026-11-17 (owner): FR-105 local route retention = 36 months, "like server"** (1095 days, the server-side location window of v3 OD-3); the 1.5 km trim half shipped with F-61.
 - **OD-13 (blocks F-66, and F-66 is frozen regardless): family path sharing.** Requires: FR-59 landed, counsel review per v3 OD-1, and an explicit un-freeze. Do not treat FR-106's existence as approval.
 - **OD-14 — DECIDED 2026-08-15 (owner): Option A.** Play continues, cloud collection pauses, backlog drains on re-affirmation. Analysis retained below.
 - **OD-14 (analysis): what happens to a consented child while a *core* scope is stale.**

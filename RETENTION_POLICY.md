@@ -59,7 +59,7 @@ all** under the local-first model — there is nothing to schedule.
 ## 3. Review
 
 This policy is reviewed with the written information-security program
-(`SECURITY_PROGRAM.md`, §312.8(b) — FR-82, pending) on that program's annual cadence,
+(`SECURITY_PROGRAM.md`, §312.8(b) — FR-82, owner-approved 2026-11-17) on that program's annual cadence,
 and whenever a retention class is added or a window changes. Changes to windows are
 owner decisions recorded in `COPPA_SRS_v3.md` (OD-3 lineage) before the constants
 change.
