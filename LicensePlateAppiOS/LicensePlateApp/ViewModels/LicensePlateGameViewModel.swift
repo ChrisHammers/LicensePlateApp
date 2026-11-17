@@ -880,7 +880,7 @@ final class LicensePlateGameViewModel: ObservableObject {
                 tripId: sessionId.uuidString,
                 gameInstanceId: game.id.uuidString,
                 targetId: regionID,
-                participantId: participantId.isEmpty ? nil : participantId,
+                participantIdLength: participantId.isEmpty ? nil : participantId.count,
                 tripParticipantCount: currentSession.participants.count,
                 gameMode: game.commonConfig.gameMode.rawValue
             ))
@@ -915,7 +915,7 @@ final class LicensePlateGameViewModel: ObservableObject {
                 tripId: sessionId.uuidString,
                 gameInstanceId: game.id.uuidString,
                 targetId: regionID,
-                participantId: participantId.isEmpty ? nil : participantId,
+                participantIdLength: participantId.isEmpty ? nil : participantId.count,
                 mode: game.commonConfig.gameMode.rawValue
             ))
             refreshCompetitiveProjections()
@@ -967,7 +967,7 @@ final class LicensePlateGameViewModel: ObservableObject {
                 gameInstanceId: game.id.uuidString,
                 targetId: regionID,
                 outcome: result.outcome.rawValue,
-                participantId: participantId.isEmpty ? nil : participantId
+                participantIdLength: participantId.isEmpty ? nil : participantId.count
             ))
             FirstSessionAnalyticsService.shared.recordFirstFindIfNeeded(
                 tripSessionId: sessionId,
@@ -1072,7 +1072,7 @@ final class LicensePlateGameViewModel: ObservableObject {
             tripId: sessionId.uuidString,
             gameInstanceId: game.id.uuidString,
             targetId: regionID,
-            participantId: participantId
+            participantIdLength: participantId.count
         ))
         return removeDiscovery(regionID: regionID)
     }
@@ -1118,13 +1118,13 @@ final class LicensePlateGameViewModel: ObservableObject {
                 tripId: sessionId.uuidString,
                 gameInstanceId: game.id.uuidString,
                 targetId: regionID,
-                participantId: participantId
+                participantIdLength: participantId.count
             ))
             AnalyticsService.shared.log(.discoveryUnfind(
                 tripId: sessionId.uuidString,
                 gameInstanceId: game.id.uuidString,
                 targetId: regionID,
-                participantId: participantId
+                participantIdLength: participantId.count
             ))
             errorMessage = nil
             refreshFoundRegions()

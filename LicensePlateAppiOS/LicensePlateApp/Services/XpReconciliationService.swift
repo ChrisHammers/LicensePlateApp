@@ -479,14 +479,14 @@ final class XpReconciliationService {
                 tripId: sessionId.uuidString,
                 gameInstanceId: gameInstanceId.uuidString,
                 targetId: regionId,
-                participantId: participantId
+                participantIdLength: participantId.count
             ))
         } else {
             AnalyticsService.shared.log(.xpGrantSkippedAlreadyGranted(
                 tripId: sessionId.uuidString,
                 gameInstanceId: gameInstanceId.uuidString,
                 targetId: regionId,
-                participantId: participantId
+                participantIdLength: participantId.count
             ))
         }
     }

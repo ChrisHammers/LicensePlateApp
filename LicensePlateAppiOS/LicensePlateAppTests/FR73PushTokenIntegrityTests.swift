@@ -160,8 +160,11 @@ final class MessagingConfigureProbe {
 @MainActor
 struct DeferredStartupPlanVisibilityTests {
 
-    private func makeService(_ probe: MessagingConfigureProbe) -> DeferredSDKStartupService {
-        let deps = DeferredSDKStartupService.Dependencies(
+    private func makeService(
+        _ probe: MessagingConfigureProbe,
+        isConsentedChild: Bool = false
+    ) -> DeferredSDKStartupService {
+        var deps = DeferredSDKStartupService.Dependencies(
             isAgeGateResolved: { true },
             hasPurchasesAPIKey: { false },
             currentAuthUserId: { nil },
@@ -175,6 +178,7 @@ struct DeferredStartupPlanVisibilityTests {
             identifyPurchases: { _ in },
             startAds: { _ in }
         )
+        deps.isConsentedChild = { isConsentedChild }
         let service = DeferredSDKStartupService(dependencies: deps)
         probe.service = service
         return service
@@ -201,7 +205,7 @@ struct DeferredStartupPlanVisibilityTests {
     /// separates them from an unconsented child.
     @Test func aChildDirectedSessionStillReleasesMessaging() {
         let probe = MessagingConfigureProbe()
-        let service = makeService(probe)
+        let service = makeService(probe, isConsentedChild: true)
         service.installAtLaunch(isFirebaseConfigured: true)
 
         service.apply(posture: .childDirected)

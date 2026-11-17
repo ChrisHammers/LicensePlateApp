@@ -3,7 +3,8 @@
 //  LicensePlateAppTests
 //
 //  COPPA F-9 (FR-46) + F-15 (FR-56/FR-57): the SDK-startup deferral policy and its delta
-//  application, ads SDK included.
+//  application, ads SDK included. COPPA F-28 (FR-72(a)): child analytics collection is
+//  consent-scoped. COPPA F-29 (FR-73): an ineligible session mints no push token.
 //  Pure and deterministic — injectable seams only, no Firebase, no RevenueCat, no timing.
 //
 
@@ -55,25 +56,27 @@ struct DeferredSDKStartupPolicyTests {
         #expect(plan.startsAds)
     }
 
-    /// FR-32/FR-34/FR-56 postures: a resolved child still gets family-trip push and
-    /// internal-ops analytics, and is never handed to RevenueCat or to the ad network.
-    @Test func resolvedChildStartsMessagingAndAnalyticsOnly() {
+    /// FR-32/FR-34/FR-56 postures: a resolved child still gets the family-trip push plan,
+    /// and is never handed to RevenueCat or to the ad network. FR-72(a): with no
+    /// `analytics_internal` scope (F-21 not built), analytics collection stays OFF.
+    @Test func resolvedChildStartsMessagingOnly() {
         let plan = plan(ageResolved: true, posture: .childDirected)
         #expect(plan.startsMessaging)
-        #expect(plan.startsAnalyticsCollection)
+        #expect(plan.startsAnalyticsCollection == false)
         #expect(plan.startsPurchases == false)
         #expect(plan.startsAds == false)
     }
 
     /// FR-57 (overturns the old ratcheted-anonymous purchase carve-out): a device that
     /// has hosted a child hands its anonymous uid to NEITHER commerce SDK nor ad SDK,
-    /// answered epoch or not. Push and internal-ops analytics still release.
-    @Test func ratchetedAnonymousWithAnAnswerStartsNeitherPurchasesNorAds() {
+    /// answered epoch or not. Push still releases; FR-72(a) / OD-14b keep analytics
+    /// collection off — the resolution guard alone did NOT, once the epoch was answered.
+    @Test func ratchetedAnonymousWithAnAnswerStartsNeitherPurchasesNorAdsNorAnalytics() {
         let plan = plan(ageResolved: true, posture: .ratchetedAnonymous)
         #expect(plan.startsPurchases == false)
         #expect(plan.startsAds == false)
         #expect(plan.startsMessaging)
-        #expect(plan.startsAnalyticsCollection)
+        #expect(plan.startsAnalyticsCollection == false)
     }
 
     /// The whole matrix in one place: four postures × four startups, at the only age
@@ -83,8 +86,8 @@ struct DeferredSDKStartupPolicyTests {
         // posture → (messaging, analytics, purchases, ads)
         let expected: [(ChildSessionPosture, Bool, Bool, Bool, Bool)] = [
             (.unresolved,        false, false, false, false),
-            (.childDirected,     true,  true,  false, false),
-            (.ratchetedAnonymous, true, true,  false, false),
+            (.childDirected,     true,  false, false, false),
+            (.ratchetedAnonymous, true, false, false, false),
             (.confirmedNonChild, true,  true,  true,  true),
         ]
         for (posture, messaging, analytics, purchases, ads) in expected {
@@ -118,6 +121,105 @@ struct DeferredSDKStartupPolicyTests {
         #expect(plan(ageResolved: true, posture: .confirmedNonChild, apiKey: false).startsPurchases == false)
     }
 
+    // MARK: FR-72(a) — analytics collection is consent-scoped
+
+    /// Every posture × consented/unconsented × F-21 scope × cooldown × Firebase configured ×
+    /// age answered. Collection starts for exactly two shapes of cell: a confirmed adult, and a
+    /// CONSENTED `.childDirected` session whose scope seam is true. The scope alone can never
+    /// open it for an unconsented child, and no child posture opens while the seam is false.
+    @Test func analyticsCollectionMatrixOverEveryPostureConsentScopeHoldAndFirebase() {
+        let postures: [ChildSessionPosture] = [.unresolved, .childDirected, .ratchetedAnonymous, .confirmedNonChild]
+        for posture in postures {
+            for unconsented in [false, true] {
+                for scope in [false, true] {
+                    for held in [false, true] {
+                        for firebase in [false, true] {
+                            for ageResolved in [false, true] {
+                                let plan = DeferredSDKStartupPolicy.plan(
+                                    isAgeGateResolved: ageResolved,
+                                    isUnder13RetryCooldownHeld: held,
+                                    posture: posture,
+                                    isFirebaseConfigured: firebase,
+                                    hasPurchasesAPIKey: true,
+                                    isUnconsentedChild: unconsented,
+                                    isConsentedChildAnalyticsScopeGranted: scope
+                                )
+                                let open = firebase && ageResolved && !held && (
+                                    posture == .confirmedNonChild
+                                        || (posture == .childDirected && !unconsented && scope)
+                                )
+                                #expect(
+                                    plan.startsAnalyticsCollection == open,
+                                    "\(posture.rawValue) unconsented=\(unconsented) scope=\(scope) held=\(held) firebase=\(firebase) answered=\(ageResolved)"
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// The baseline ruling: until F-21 passes the scope, NO child session collects —
+    /// consented, unconsented, provisional or held alike.
+    @Test func withTheSeamAtItsDefaultNoChildPostureEverCollects() {
+        for unconsented in [false, true] {
+            for posture in [ChildSessionPosture.childDirected, .ratchetedAnonymous, .unresolved] {
+                let plan = DeferredSDKStartupPolicy.plan(
+                    isAgeGateResolved: true,
+                    hasAccountProvenance: true,
+                    posture: posture,
+                    isFirebaseConfigured: true,
+                    hasPurchasesAPIKey: true,
+                    isUnconsentedChild: unconsented
+                )
+                #expect(plan.startsAnalyticsCollection == false, "\(posture.rawValue) unconsented=\(unconsented)")
+            }
+        }
+    }
+
+    /// The scope opens a consented child only; it cannot open an unconsented child, and
+    /// it has no say over any non-child posture.
+    @Test func theScopeAloneCannotOpenAnUnconsentedChild() {
+        func analytics(_ posture: ChildSessionPosture, unconsented: Bool) -> Bool {
+            DeferredSDKStartupPolicy.plan(
+                isAgeGateResolved: true,
+                posture: posture,
+                isFirebaseConfigured: true,
+                hasPurchasesAPIKey: true,
+                isUnconsentedChild: unconsented,
+                isConsentedChildAnalyticsScopeGranted: true
+            ).startsAnalyticsCollection
+        }
+        #expect(analytics(.childDirected, unconsented: false))
+        #expect(analytics(.childDirected, unconsented: true) == false)
+        #expect(analytics(.ratchetedAnonymous, unconsented: false) == false)
+        #expect(analytics(.unresolved, unconsented: false) == false)
+    }
+
+    /// FR-72(a) moves analytics only: messaging, purchases and ads are the same plan with
+    /// or without the consent inputs (the FR-73 consent half is applied by the service).
+    @Test func consentInputsChangeNothingButAnalytics() {
+        for posture in [ChildSessionPosture.unresolved, .childDirected, .ratchetedAnonymous, .confirmedNonChild] {
+            let base = plan(ageResolved: true, posture: posture)
+            for unconsented in [false, true] {
+                for scope in [false, true] {
+                    let p = DeferredSDKStartupPolicy.plan(
+                        isAgeGateResolved: true,
+                        posture: posture,
+                        isFirebaseConfigured: true,
+                        hasPurchasesAPIKey: true,
+                        isUnconsentedChild: unconsented,
+                        isConsentedChildAnalyticsScopeGranted: scope
+                    )
+                    #expect(p.startsMessaging == base.startsMessaging)
+                    #expect(p.startsPurchases == base.startsPurchases)
+                    #expect(p.startsAds == base.startsAds)
+                }
+            }
+        }
+    }
+
     @Test func resolutionPredicateRequiresBothHalves() {
         #expect(DeferredSDKStartupPolicy.isAgeResolutionComplete(
             isAgeGateResolved: true, posture: .confirmedNonChild))
@@ -140,10 +242,15 @@ struct DeferredSDKStartupServiceTests {
         var ageResolved = false
         var hasAPIKey = true
         var authUserId: String?
+        var unconsentedChild = false
+        /// FR-73's positive consent evidence. `true` by default so a `.childDirected` world
+        /// models a configured, consented child; `false` models the pre-`configure` window.
+        var consentedChild = true
+        var analyticsScopeGranted = false
         var events: [String] = []
 
         func makeService() -> DeferredSDKStartupService {
-            let deps = DeferredSDKStartupService.Dependencies(
+            var deps = DeferredSDKStartupService.Dependencies(
                 isAgeGateResolved: { [weak self] in self?.ageResolved ?? false },
                 hasPurchasesAPIKey: { [weak self] in self?.hasAPIKey ?? false },
                 currentAuthUserId: { [weak self] in self?.authUserId },
@@ -154,6 +261,9 @@ struct DeferredSDKStartupServiceTests {
                 identifyPurchases: { [weak self] in self?.events.append("rcIdentify(\($0 ?? "nil"))") },
                 startAds: { [weak self] in self?.events.append("adsStart(\($0.rawValue))") }
             )
+            deps.isUnconsentedChild = { [weak self] in self?.unconsentedChild ?? false }
+            deps.isConsentedChild = { [weak self] in self?.consentedChild ?? false }
+            deps.isConsentedChildAnalyticsScopeGranted = { [weak self] in self?.analyticsScopeGranted ?? false }
             return DeferredSDKStartupService(dependencies: deps)
         }
     }
@@ -207,7 +317,8 @@ struct DeferredSDKStartupServiceTests {
         #expect(world.events.isEmpty)
     }
 
-    /// A child session resolves too — it just never reaches RevenueCat or the ads SDK.
+    /// A consented child session resolves too — it never reaches RevenueCat or the ads SDK,
+    /// and (FR-72(a), no F-21 scope yet) never turns analytics collection on.
     @Test func resolvedChildReleasesWithoutTouchingPurchasesOrAds() {
         let world = World()
         let service = world.makeService()
@@ -218,7 +329,158 @@ struct DeferredSDKStartupServiceTests {
         world.authUserId = "child1"
         service.apply(posture: .childDirected)
 
-        #expect(world.events == ["fcmAutoInit(true)", "fcmConfigure", "analytics(true)"])
+        #expect(world.events == ["fcmAutoInit(true)", "fcmConfigure"])
+    }
+
+    // MARK: FR-72(a) — the F-21 seam
+
+    /// The seam ships unwired: the production dependency set answers `false`, so every
+    /// child session runs with collection off until F-21 wires the scope. A ship-state pin,
+    /// not a behaviour test — F-21 is expected to change it.
+    @Test func theLiveScopeSeamIsUnwiredAndFalse() {
+        #expect(DeferredSDKStartupService.Dependencies.live().isConsentedChildAnalyticsScopeGranted() == false)
+    }
+
+    /// Through the service: the seam turns collection on for a consented child only, and
+    /// losing the scope (or consent) turns it back off.
+    @Test func theScopeSeamOpensAndClosesCollectionForAConsentedChildOnly() {
+        let world = World()
+        let service = world.makeService()
+        service.installAtLaunch(isFirebaseConfigured: true)
+        world.ageResolved = true
+        world.authUserId = "child1"
+        service.apply(posture: .childDirected)
+        world.events.removeAll()
+
+        world.analyticsScopeGranted = true
+        service.apply(posture: .childDirected)
+        #expect(world.events == ["analytics(true)"])
+
+        world.events.removeAll()
+        world.unconsentedChild = true          // revocation: scope alone cannot hold it open
+        service.apply(posture: .childDirected)
+        #expect(world.events == ["fcmAutoInit(false)", "analytics(false)"])
+    }
+
+    @Test func theScopeSeamNeverOpensAnUnconsentedChild() {
+        let world = World()
+        let service = world.makeService()
+        service.installAtLaunch(isFirebaseConfigured: true)
+        world.events.removeAll()
+        world.ageResolved = true
+        world.authUserId = "child1"
+        world.unconsentedChild = true
+        world.analyticsScopeGranted = true
+
+        service.apply(posture: .childDirected)
+
+        #expect(world.events.contains("analytics(true)") == false)
+        #expect(service.currentPlan.startsAnalyticsCollection == false)
+    }
+
+    // MARK: FR-73 — an ineligible session mints no push token
+
+    /// The confirmed finding, as a test: an unconsented child is age-resolved, so the plan
+    /// releases messaging — but FCM auto-init and `configure` (APNs registration + the first
+    /// `Messaging.token()`) must not run, because minting is the act of creating the
+    /// persistent identifier.
+    @Test func anUnconsentedChildNeitherAutoInitsNorConfiguresMessaging() {
+        let world = World()
+        let service = world.makeService()
+        service.installAtLaunch(isFirebaseConfigured: true)
+        world.events.removeAll()
+        world.ageResolved = true
+        world.authUserId = "child1"
+        world.unconsentedChild = true
+
+        service.apply(posture: .childDirected)
+        service.apply(posture: .childDirected)
+
+        #expect(world.events.isEmpty)
+        // The FR-46 half of the plan is unchanged — PushTokenEligibilityPolicy still reads it.
+        #expect(service.currentPlan.startsMessaging)
+    }
+
+    /// Consent arriving re-runs the routine under the SAME posture and plan; messaging then
+    /// starts exactly once. Revocation turns auto-init back off without re-configuring.
+    @Test func consentStartsMessagingOnceAndRevocationStopsAutoInit() {
+        let world = World()
+        let service = world.makeService()
+        service.installAtLaunch(isFirebaseConfigured: true)
+        world.ageResolved = true
+        world.authUserId = "child1"
+        world.unconsentedChild = true
+        service.apply(posture: .childDirected)
+        world.events.removeAll()
+
+        world.unconsentedChild = false         // `.userProfilesMerged` → `.profileMerge`
+        service.apply(posture: .childDirected)
+        service.apply(posture: .childDirected)
+        #expect(world.events == ["fcmAutoInit(true)", "fcmConfigure"])
+
+        world.events.removeAll()
+        world.unconsentedChild = true
+        service.apply(posture: .childDirected)
+        #expect(world.events == ["fcmAutoInit(false)"])
+
+        world.events.removeAll()
+        world.unconsentedChild = false
+        service.apply(posture: .childDirected)
+        #expect(world.events == ["fcmAutoInit(true)"])
+    }
+
+    /// Eligible sessions are unchanged: an adult and a consented child configure messaging
+    /// exactly as before the pre-mint gate.
+    @Test func eligibleSessionsStillStartMessaging() {
+        for posture in [ChildSessionPosture.confirmedNonChild, .childDirected] {
+            let world = World()
+            let service = world.makeService()
+            service.installAtLaunch(isFirebaseConfigured: true)
+            world.events.removeAll()
+            world.ageResolved = true
+            world.hasAPIKey = false
+            service.apply(posture: posture)
+            #expect(Array(world.events.prefix(2)) == ["fcmAutoInit(true)", "fcmConfigure"], "\(posture.rawValue)")
+        }
+    }
+
+    /// The pre-`configure` window: `ChildRestrictedModeService` is not wired yet, so a
+    /// Keychain-restored, server-flagged child reads neither unconsented NOR consented. The
+    /// absence of "unconsented" must not be read as consent — nothing is minted until the
+    /// post-bootstrap re-run supplies positive evidence, and then it configures exactly once.
+    @Test func aChildPostureWithoutPositiveConsentEvidenceMintsNothing() {
+        let world = World()
+        let service = world.makeService()
+        service.installAtLaunch(isFirebaseConfigured: true)
+        world.events.removeAll()
+        world.ageResolved = true
+        world.authUserId = "child1"
+        world.unconsentedChild = false
+        world.consentedChild = false
+
+        service.apply(posture: .childDirected)
+        #expect(world.events.isEmpty)
+        #expect(service.isMessagingEnabled == false)
+
+        world.consentedChild = true            // `configure` + the `.identityTransition` re-run
+        service.apply(posture: .childDirected)
+        #expect(world.events == ["fcmAutoInit(true)", "fcmConfigure"])
+        #expect(service.isMessagingEnabled)
+    }
+
+    /// The consent-evidence term is child-only: an adult never consults it.
+    @Test func anAdultNeedsNoConsentEvidence() {
+        let world = World()
+        let service = world.makeService()
+        service.installAtLaunch(isFirebaseConfigured: true)
+        world.events.removeAll()
+        world.ageResolved = true
+        world.hasAPIKey = false
+        world.consentedChild = false
+
+        service.apply(posture: .confirmedNonChild)
+
+        #expect(Array(world.events.prefix(2)) == ["fcmAutoInit(true)", "fcmConfigure"])
     }
 
     // MARK: Guest → registered link
@@ -285,9 +547,9 @@ struct DeferredSDKStartupServiceTests {
 
     // MARK: Mid-session flag flip (FR-23 seam)
 
-    /// A server-side flip to child mid-session drops the RevenueCat identity (FR-34) and
-    /// leaves the internal-ops analytics + push postures running (FR-32).
-    @Test func adultToChildDropsThePurchaseIdentityOnly() {
+    /// A server-side flip to child mid-session drops the RevenueCat identity (FR-34),
+    /// leaves push running (FR-32), and stops analytics collection (FR-72(a), no scope).
+    @Test func adultToChildDropsThePurchaseIdentityAndStopsAnalytics() {
         let world = World()
         let service = world.makeService()
         service.installAtLaunch(isFirebaseConfigured: true)
@@ -298,11 +560,11 @@ struct DeferredSDKStartupServiceTests {
 
         service.apply(posture: .childDirected)
 
-        #expect(world.events == ["rcIdentify(nil)"])
+        #expect(world.events == ["analytics(false)", "rcIdentify(nil)"])
     }
 
-    /// A parent correction back to adult re-identifies and starts the ads SDK for the
-    /// first time, and still never re-configures what is already configured.
+    /// A parent correction back to adult starts analytics collection, re-identifies and
+    /// starts the ads SDK for the first time, and never re-configures what is configured.
     @Test func childToAdultCorrectionReIdentifiesAndStartsAds() {
         let world = World()
         let service = world.makeService()
@@ -314,7 +576,7 @@ struct DeferredSDKStartupServiceTests {
 
         service.apply(posture: .confirmedNonChild)
 
-        #expect(world.events == ["rcConfigure", "rcIdentify(u1)", "adsStart(confirmedNonChild)"])
+        #expect(world.events == ["analytics(true)", "rcConfigure", "rcIdentify(u1)", "adsStart(confirmedNonChild)"])
     }
 
     // MARK: Ads (FR-56)

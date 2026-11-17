@@ -16,7 +16,6 @@ import Firebase
 @MainActor
 protocol AnalyticsLogging: AnyObject {
     func log(_ event: AnalyticsService.Event)
-    func log(_ name: String, parameters: [String: Any])
     func setUserProperty(_ value: String?, forName name: String)
 }
 
@@ -134,7 +133,6 @@ class AnalyticsService: AnalyticsLogging {
         case tripParticipantLeaveServerCompleted(tripSessionId: String)
         /// Step 14 — Firestore `members` snapshot no longer includes this user; local roster aligned.
         case tripParticipantLeaveReconciled(tripSessionId: String)
-        case participantRemovedFromTrip(tripId: String, actorParticipantId: String?)
 
         // Combined games (Step 06)
         case combinedTripSetupOpened
@@ -229,8 +227,9 @@ class AnalyticsService: AnalyticsLogging {
         case achievementUnlockSyncFailed(candidateCount: Int, errorSummary: String)
         case returnStreakDailyXpClaimSucceeded(dayKey: String, currentStreak: Int, granted: Bool, alreadyClaimed: Bool)
         case returnStreakDailyXpClaimFailed(dayKey: String, currentStreak: Int, errorSummary: String)
-        case xpGrantAwarded(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
-        case xpGrantSkippedAlreadyGranted(tripId: String, gameInstanceId: String, targetId: String, participantId: String)
+        /// FR-72(c): the participant is carried as its length only — no Firebase uid leaves the catalog.
+        case xpGrantAwarded(tripId: String, gameInstanceId: String, targetId: String, participantIdLength: Int)
+        case xpGrantSkippedAlreadyGranted(tripId: String, gameInstanceId: String, targetId: String, participantIdLength: Int)
         case xpGainToastPresented(lineCount: Int, totalXp: Int, coalesced: Bool, sourceMix: String, groupIds: String)
         case xpGainToastDismissed(reason: String)
 
@@ -273,13 +272,13 @@ class AnalyticsService: AnalyticsLogging {
         // Risk advisory (Step 11)
         case riskAdvisoryDetected(flags: [String], tripId: String)
 
-        // Discovery outcome (Step 03 — rules engine)
-        case discoveryOutcomeRecorded(tripId: String, gameInstanceId: String, targetId: String, outcome: String, participantId: String?)
-        case discoveryRejectedDuplicate(tripId: String, gameInstanceId: String, targetId: String, participantId: String?, mode: String)
-        case discoveryRejectedInvalidParticipant(tripId: String, gameInstanceId: String, targetId: String, participantId: String?, tripParticipantCount: Int, gameMode: String)
-        case discoveryRemovalConfirmed(tripId: String, gameInstanceId: String, targetId: String, participantId: String?) // almost a duplicate of Unfind, but based on the cooldown service, which I basically disabled.
+        // Discovery outcome (Step 03 — rules engine). FR-72(c): participant as length only, no uid.
+        case discoveryOutcomeRecorded(tripId: String, gameInstanceId: String, targetId: String, outcome: String, participantIdLength: Int?)
+        case discoveryRejectedDuplicate(tripId: String, gameInstanceId: String, targetId: String, participantIdLength: Int?, mode: String)
+        case discoveryRejectedInvalidParticipant(tripId: String, gameInstanceId: String, targetId: String, participantIdLength: Int?, tripParticipantCount: Int, gameMode: String)
+        case discoveryRemovalConfirmed(tripId: String, gameInstanceId: String, targetId: String, participantIdLength: Int?) // almost a duplicate of Unfind, but based on the cooldown service, which I basically disabled.
         case discoveryRetapBlockedByCooldown(tripId: String, gameInstanceId: String, targetId: String)
-        case discoveryUnfind(tripId: String, gameInstanceId: String, targetId: String, participantId: String?)
+        case discoveryUnfind(tripId: String, gameInstanceId: String, targetId: String, participantIdLength: Int?)
 
         // Step 13 — Cloud gameplay resolver / sync
         case gameplayEventServerAccepted(tripSessionId: String, gameInstanceId: String, eventKind: String)
@@ -443,7 +442,6 @@ class AnalyticsService: AnalyticsLogging {
             case .tripParticipantLeaveInitiated: return "trip_participant_leave_initiated"
             case .tripParticipantLeaveServerCompleted: return "trip_participant_leave_server_completed"
             case .tripParticipantLeaveReconciled: return "trip_participant_leave_reconciled"
-            case .participantRemovedFromTrip: return "participant_removed_from_trip"
             case .combinedTripSetupOpened: return "combined_trip_setup_opened"
             case .tripSetupOpened: return "trip_setup_opened"
             case .gameSetupOpened: return "game_setup_opened"
@@ -695,10 +693,6 @@ class AnalyticsService: AnalyticsLogging {
                 return ["trip_session_id": tripSessionId]
             case .tripParticipantLeaveReconciled(let tripSessionId):
                 return ["trip_session_id": tripSessionId]
-            case .participantRemovedFromTrip(let tripId, let actorParticipantId):
-                var p: [String: Any] = ["trip_session_id": tripId]
-                if let id = actorParticipantId { p["actor_participant_id"] = id }
-                return p
             case .combinedTripSetupOpened, .tripSetupOpened, .gameSetupOpened:
                 return nil
             case .gameSetupAddGameOpened(let tripSessionId):
@@ -857,19 +851,19 @@ class AnalyticsService: AnalyticsLogging {
                     "current_streak": currentStreak,
                     "error_summary": errorSummary
                 ]
-            case .xpGrantAwarded(let tripId, let gameInstanceId, let targetId, let participantId):
+            case .xpGrantAwarded(let tripId, let gameInstanceId, let targetId, let participantIdLength):
                 return [
                     "trip_session_id": tripId,
                     "game_instance_id": gameInstanceId,
                     "target_id": targetId,
-                    "participant_id": participantId
+                    "participant_id_length": participantIdLength
                 ]
-            case .xpGrantSkippedAlreadyGranted(let tripId, let gameInstanceId, let targetId, let participantId):
+            case .xpGrantSkippedAlreadyGranted(let tripId, let gameInstanceId, let targetId, let participantIdLength):
                 return [
                     "trip_session_id": tripId,
                     "game_instance_id": gameInstanceId,
                     "target_id": targetId,
-                    "participant_id": participantId
+                    "participant_id_length": participantIdLength
                 ]
             case .xpGainToastPresented(let lineCount, let totalXp, let coalesced, let sourceMix, let groupIds):
                 return [
@@ -948,15 +942,15 @@ class AnalyticsService: AnalyticsLogging {
                 return ["event_name": eventName, "error": error]
             case .riskAdvisoryDetected(let flags, let tripId):
                 return ["risk_flags": flags.joined(separator: ","), "trip_session_id": tripId]
-            case .discoveryOutcomeRecorded(let tripId, let gameInstanceId, let targetId, let outcome, let participantId):
+            case .discoveryOutcomeRecorded(let tripId, let gameInstanceId, let targetId, let outcome, let participantIdLength):
                 var p: [String: Any] = ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "outcome": outcome]
-                if let id = participantId { p["participant_id"] = id }
+                if let length = participantIdLength { p["participant_id_length"] = length }
                 return p
-            case .discoveryRejectedDuplicate(let tripId, let gameInstanceId, let targetId, let participantId, let mode):
+            case .discoveryRejectedDuplicate(let tripId, let gameInstanceId, let targetId, let participantIdLength, let mode):
                 var p: [String: Any] = ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId, "mode": mode]
-                if let id = participantId { p["participant_id"] = id }
+                if let length = participantIdLength { p["participant_id_length"] = length }
                 return p
-            case .discoveryRejectedInvalidParticipant(let tripId, let gameInstanceId, let targetId, let participantId, let tripParticipantCount, let gameMode):
+            case .discoveryRejectedInvalidParticipant(let tripId, let gameInstanceId, let targetId, let participantIdLength, let tripParticipantCount, let gameMode):
                 var p: [String: Any] = [
                     "trip_session_id": tripId,
                     "game_instance_id": gameInstanceId,
@@ -964,17 +958,17 @@ class AnalyticsService: AnalyticsLogging {
                     "trip_participant_count": tripParticipantCount,
                     "game_mode": gameMode
                 ]
-                if let id = participantId { p["participant_id"] = id }
+                if let length = participantIdLength { p["participant_id_length"] = length }
                 return p
-            case .discoveryRemovalConfirmed(let tripId, let gameInstanceId, let targetId, let participantId):
+            case .discoveryRemovalConfirmed(let tripId, let gameInstanceId, let targetId, let participantIdLength):
                 var p: [String: Any] = ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId]
-                if let id = participantId { p["participant_id"] = id }
+                if let length = participantIdLength { p["participant_id_length"] = length }
                 return p
             case .discoveryRetapBlockedByCooldown(let tripId, let gameInstanceId, let targetId):
                 return ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId]
-            case .discoveryUnfind(let tripId, let gameInstanceId, let targetId, let participantId):
+            case .discoveryUnfind(let tripId, let gameInstanceId, let targetId, let participantIdLength):
                 var p: [String: Any] = ["trip_session_id": tripId, "game_instance_id": gameInstanceId, "target_id": targetId]
-                if let id = participantId { p["participant_id"] = id }
+                if let length = participantIdLength { p["participant_id_length"] = length }
                 return p
             case .gameplayEventServerAccepted(let tripSessionId, let gameInstanceId, let eventKind):
                 return [
@@ -1163,14 +1157,6 @@ class AnalyticsService: AnalyticsLogging {
         #endif
     }
 
-    /// Log with custom parameters
-    func log(_ eventName: String, parameters: [String: Any] = [:]) {
-        Analytics.logEvent(eventName, parameters: parameters)
-        #if DEBUG
-        Self.debugPrintEvent(eventName, parameters: parameters)
-        #endif
-    }
-
     #if DEBUG
     private static func debugPrintEvent(_ name: String, parameters: [String: Any]) {
         let paramStr = parameters.isEmpty ? "" : " " + parameters.map { "\($0.key)=\($0.value)" }.joined(separator: ", ")
@@ -1215,7 +1201,8 @@ class AnalyticsService: AnalyticsLogging {
     // MARK: - Deferred startup (COPPA F-9, FR-46)
 
     /// FR-46: Analytics COLLECTION is held off for an age-unresolved session and released
-    /// once the posture is known. Distinct from FR-32's ad-personalization property
+    /// once the posture is known (adults only until F-21's `analytics_internal` scope; see
+    /// `DeferredSDKStartupPolicy`, FR-72(a)). Distinct from FR-32's ad-personalization property
     /// above, which the posture routine applies FIRST — so collection is never enabled
     /// while a child session's personalization posture is still un-applied.
     ///
@@ -1223,6 +1210,22 @@ class AnalyticsService: AnalyticsLogging {
     /// explicitly in both directions at every launch.
     func setAnalyticsCollectionEnabled(_ enabled: Bool) {
         Analytics.setAnalyticsCollectionEnabled(enabled)
+    }
+
+    // MARK: - Deletion (COPPA F-28, FR-72(d))
+
+    /// Clears the device's analytics data and app-instance id. Called by account deletion
+    /// (`FirebaseAuthService.finalizeDeletedAccountLocally`) and by the server-deleted child
+    /// detach (`detachAnonymousIdentityLocally`, `.serverDeletedIdentity`); FR-78 covers the
+    /// server side.
+    func resetAnalyticsData() {
+        #if DEBUG
+        let before = Analytics.appInstanceID() ?? "nil"
+        #endif
+        Analytics.resetAnalyticsData()
+        #if DEBUG
+        print("[Analytics] resetAnalyticsData: app_instance_id \(before) → \(Analytics.appInstanceID() ?? "nil")")
+        #endif
     }
 }
 

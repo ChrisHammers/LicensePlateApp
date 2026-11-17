@@ -13,7 +13,6 @@ import FirebaseAuth
 import FirebaseFirestore
 import FirebaseCore
 import FirebaseFunctions
-import FirebaseAnalytics
 import AuthenticationServices
 import GoogleSignIn
 import Network
@@ -501,6 +500,12 @@ class FirebaseAuthService: ObservableObject {
         defer { detachesInFlightUids.remove(uid) }
 
         AgeGateStore.shared.markIdentityDetached(userId: uid)
+        // COPPA F-28 (FR-72(d)): a parent's deletion of the child's data reaches this device
+        // here, not through `finalizeDeletedAccountLocally`, so the device analytics data
+        // (and app-instance id) is reset on this path too. A reset, not a log.
+        if reason == .serverDeletedIdentity {
+            AnalyticsService.shared.resetAnalyticsData()
+        }
         // Device pass 2026-08-16 (bug 1): the detach has to settle the WHOLE session, not
         // just the uid. A "waiting for your family's approval" flag that outlives the
         // identity it was recorded for is one half of a hybrid — the screen would keep
@@ -1744,6 +1749,9 @@ class FirebaseAuthService: ObservableObject {
 
         // Server already deleted users/{uid} (incl. fcmToken); drop only the device token.
         await FirebaseMessagingService.shared.deleteDeviceTokenAfterAccountDeletion()
+        // COPPA F-28 (FR-72(d)): the account is gone server-side, so the device analytics
+        // data is reset here — before the throwing purge, so a purge failure cannot skip it.
+        AnalyticsService.shared.resetAnalyticsData()
 
         // §3.1.1 item 22: the purge suspends the gameplay queue. A throw anywhere below used
         // to leave it suspended — silently, for the rest of the process — so no find could
@@ -1766,7 +1774,6 @@ class FirebaseAuthService: ObservableObject {
         }
         GIDSignIn.sharedInstance.signOut()
         await RevenueCatEntitlementBridge.shared.identify(userId: nil)
-        Analytics.resetAnalyticsData()
 
         try createFreshLocalGuestUser()
         if isOnline {

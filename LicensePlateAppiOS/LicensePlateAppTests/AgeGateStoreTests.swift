@@ -404,6 +404,5 @@ private final class AnalyticsSpy: AnalyticsLogging {
         events.append(event)
     }
 
-    func log(_ name: String, parameters: [String: Any]) {}
     func setUserProperty(_ value: String?, forName name: String) {}
 }

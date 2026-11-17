@@ -11,25 +11,14 @@ import Foundation
 @MainActor
 final class MockAnalyticsService: AnalyticsLogging {
     var loggedEvents: [AnalyticsService.Event] = []
-    var loggedNames: [(name: String, parameters: [String: Any])] = []
-    var screenViewName: String?
 
     func log(_ event: AnalyticsService.Event) {
         loggedEvents.append(event)
-    }
-
-    func log(_ name: String, parameters: [String: Any]) {
-        loggedNames.append((name, parameters))
-        if name == "screen_view", let screen = parameters["screen_name"] as? String {
-            screenViewName = screen
-        }
     }
 
     func setUserProperty(_ value: String?, forName name: String) {}
 
     func reset() {
         loggedEvents.removeAll()
-        loggedNames.removeAll()
-        screenViewName = nil
     }
 }

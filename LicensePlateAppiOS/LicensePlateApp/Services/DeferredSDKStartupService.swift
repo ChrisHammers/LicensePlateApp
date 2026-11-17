@@ -18,6 +18,13 @@
 //  Firebase core, App Check and Crashlytics are internal-ops and deliberately absent:
 //  FR-46 lets them start immediately, and they still do, in `didFinishLaunching`.
 //
+//  COPPA F-28 (FR-72(a)) narrows #2 past age resolution: collection starts for a confirmed
+//  adult, and for a child only when the child is consented AND F-21's `analytics_internal`
+//  scope is granted. That scope is not built yet, so every child session runs with
+//  collection off (`isConsentedChildAnalyticsScopeGranted` is the one seam F-21 wires).
+//  COPPA F-29 (FR-73) narrows #1: an unconsented child is age-resolved but may hold no
+//  push token, so FCM is neither auto-inited nor configured for them — no token is minted.
+//
 //  This is NOT a second posture mechanism. `ChildSessionPostureCoordinator` remains the
 //  one apply-postures routine; it calls `apply(posture:)` here as its last step, so every
 //  identity transition, every `.userProfilesMerged` (FR-23) and the age answer itself
@@ -89,16 +96,17 @@ enum DeferredSDKStartupPolicy {
         isUnder13RetryCooldownHeld: Bool = false,
         posture: ChildSessionPosture,
         isFirebaseConfigured: Bool,
-        hasPurchasesAPIKey: Bool
+        hasPurchasesAPIKey: Bool,
+        isUnconsentedChild: Bool = false,
+        isConsentedChildAnalyticsScopeGranted: Bool = false
     ) -> DeferredSDKStartupPlan {
         // FR-74(b) (F-30): a 13+ answer inside the under-13 deterrence window is "held at
         // the `.ratchetedAnonymous` equivalent — no ads, no analytics, no location, no
         // purchases, no RevenueCat". The posture alone gets four of the five (ads and
         // purchases via `isAdDisplayEligible`/`suppressesPurchases`, location via
-        // `forcesLocationOff`), but NOT analytics collection: a genuine
-        // `.ratchetedAnonymous` session is age-UNRESOLVED, which is what keeps its
-        // collection off today, and the held session has an answer. Deferring everything
-        // is what makes "equivalent" literally true rather than nearly true.
+        // `forcesLocationOff`), but not analytics collection on its own; FR-72(a)'s posture
+        // term below now keeps `.ratchetedAnonymous` collection off, and deferring
+        // everything is what makes "equivalent" literally true rather than nearly true.
         guard !isUnder13RetryCooldownHeld else { return .allDeferred }
         guard isAgeResolutionComplete(
             isAgeGateResolved: isAgeGateResolved,
@@ -110,8 +118,19 @@ enum DeferredSDKStartupPolicy {
         return DeferredSDKStartupPlan(
             // Both are Firebase-side; with no Firebase app configured there is nothing
             // to start (offline-only mode, `initializeFirebase()` returned false).
+            // Messaging is FR-46's half only; the consent half is `PushTokenEligibilityPolicy`,
+            // applied by the service before anything is minted (FR-73).
             startsMessaging: isFirebaseConfigured,
-            startsAnalyticsCollection: isFirebaseConfigured,
+            // FR-72(a): a confirmed adult, or a consented child with the
+            // `analytics_internal` scope. The scope cannot open it for an unconsented
+            // child, and `.ratchetedAnonymous` stays off even with an answer (OD-14b keeps
+            // analytics under strict asymmetric trust there).
+            startsAnalyticsCollection: isFirebaseConfigured && (
+                posture == .confirmedNonChild
+                    || (posture == .childDirected
+                        && !isUnconsentedChild
+                        && isConsentedChildAnalyticsScopeGranted)
+            ),
             // FR-34: a child session never reaches a purchase flow, so RevenueCat is
             // never handed a child identity at all — the strictest reading of "start
             // with the appropriate posture" for an SDK whose only purpose is purchasing.
@@ -146,6 +165,26 @@ final class DeferredSDKStartupService {
         /// FR-74(b): the retry-deterrence hold. Fail-open default (`false` = not held) —
         /// an unwired harness must not manufacture a restriction no device state supports.
         var isUnder13RetryCooldownHeld: () -> Bool = { false }
+        /// FR-73: FR-28's consent half of push eligibility (and of FR-72(a)'s child term).
+        /// Fail-open default (`false` = not an unconsented child), same rationale as the
+        /// cooldown hold; `live()` wires the real projection.
+        var isUnconsentedChild: () -> Bool = { false }
+        /// FR-73: POSITIVE consent evidence, required before a `.childDirected` session may
+        /// mint a push token. `isUnconsentedChild` alone fails open while
+        /// `ChildRestrictedModeService` is still unconfigured (RootView wires it only after
+        /// the Remote Config fetch, and the auth listener can release the SDKs first): a
+        /// Keychain-restored, server-flagged child with no device answer reads `.notChild`
+        /// there. Fail-closed default; the post-bootstrap posture re-run releases a
+        /// consented child.
+        var isConsentedChild: () -> Bool = { false }
+        /// FR-72(a) — THE F-21 SEAM. Whether this session's consented child has the
+        /// `analytics_internal` consent scope (FR-65) granted. F-21 wires it to
+        /// "`ChildRestrictedModeService.childSessionState == .consentedChild` AND the
+        /// server-side scope is granted"; until then it is deliberately NOT overridden in
+        /// `live()`, so every child session runs with collection off. It is only read when
+        /// the posture routine re-runs: if the scope is stored outside `users/{uid}`, F-21
+        /// must add its own `applyPostures` trigger.
+        var isConsentedChildAnalyticsScopeGranted: () -> Bool = { false }
         var setMessagingAutoInitEnabled: (Bool) -> Void
         var configureMessaging: () -> Void
         var setAnalyticsCollectionEnabled: (Bool) -> Void
@@ -168,6 +207,8 @@ final class DeferredSDKStartupService {
                     )
                 },
                 isUnder13RetryCooldownHeld: { AgeGateStore.shared.isUnder13RetryCooldownHeld() },
+                isUnconsentedChild: { ChildRestrictedModeService.shared.isRestrictedUnconsentedChild },
+                isConsentedChild: { ChildRestrictedModeService.shared.childSessionState == .consentedChild },
                 setMessagingAutoInitEnabled: {
                     FirebaseMessagingService.shared.setAutoInitEnabled($0)
                 },
@@ -190,6 +231,12 @@ final class DeferredSDKStartupService {
     private var isFirebaseConfigured = false
     private var applied: DeferredSDKStartupPlan = .allDeferred
     private var hasConfiguredMessaging = false
+    /// FR-73: the messaging state actually applied, which is `plan.startsMessaging` AND
+    /// push eligibility. Tracked apart from the plan so consent arriving under an unchanged
+    /// plan still starts messaging, and revocation still stops it. `FirebaseMessagingService`
+    /// reads it as the startup half of every mint/persist guard, so its refresh paths inherit
+    /// this fail-closed consent evidence too.
+    private(set) var isMessagingEnabled = false
     private var hasConfiguredPurchases = false
     private var hasIdentifiedPurchases = false
     private var identifiedPurchaseUserId: String?
@@ -212,6 +259,7 @@ final class DeferredSDKStartupService {
     func installAtLaunch(isFirebaseConfigured: Bool) {
         self.isFirebaseConfigured = isFirebaseConfigured
         applied = .allDeferred
+        isMessagingEnabled = false
         guard isFirebaseConfigured else { return }
         deps.setMessagingAutoInitEnabled(false)
         deps.setAnalyticsCollectionEnabled(false)
@@ -226,20 +274,22 @@ final class DeferredSDKStartupService {
                 isUnder13RetryCooldownHeld: deps.isUnder13RetryCooldownHeld(),
                 posture: posture,
                 isFirebaseConfigured: isFirebaseConfigured,
-                hasPurchasesAPIKey: deps.hasPurchasesAPIKey()
+                hasPurchasesAPIKey: deps.hasPurchasesAPIKey(),
+                isUnconsentedChild: deps.isUnconsentedChild(),
+                isConsentedChildAnalyticsScopeGranted: deps.isConsentedChildAnalyticsScopeGranted()
             ),
             posture: posture
         )
     }
 
     private func applyPlan(_ plan: DeferredSDKStartupPlan, posture: ChildSessionPosture) {
-        // COPPA F-29 (FR-73): `currentPlan` is no longer a diagnostic — it is one of the two
-        // inputs `PushTokenEligibilityPolicy` reads at the moment a token is handed over, and
-        // `configureMessaging()` below triggers exactly such a fetch. Publishing the new plan
-        // BEFORE any delta action runs is what stops that fetch observing a stale
-        // `startsMessaging: false` for the very plan that just released it (a self-inflicted
-        // suppression, not a leak, but a real one). Deltas are computed against the local
-        // `previous`, so the emit-only-changes behaviour is byte-for-byte unchanged.
+        // COPPA F-29 (FR-73): `isMessagingEnabled` is one of the two inputs
+        // `FirebaseMessagingService`'s eligibility guard reads at the moment a token is
+        // handed over, and `configureMessaging()` below triggers exactly such a fetch. It
+        // (like the plan) is published BEFORE that call, so the fetch never observes a stale
+        // `false` for the very release that triggered it (a self-inflicted suppression, not a
+        // leak, but a real one). Deltas are computed against the local `previous` (FCM's
+        // against `isMessagingEnabled`), so only changes are emitted.
         let previous = applied
         applied = plan
 
@@ -247,9 +297,18 @@ final class DeferredSDKStartupService {
         // delegate + first token fetch) is a one-time bootstrap — re-registering on every
         // later transition would be pointless network work, and sign-out token clearing
         // is already owned by `FirebaseAuthService`.
-        if plan.startsMessaging != previous.startsMessaging {
-            deps.setMessagingAutoInitEnabled(plan.startsMessaging)
-            if plan.startsMessaging, !hasConfiguredMessaging {
+        // FR-73: gated on push eligibility, not the plan alone. Minting is itself the act of
+        // creating the persistent identifier, so an unconsented child gets neither auto-init
+        // nor `configure` (no APNs or FCM token) until consent re-runs the routine. A child
+        // posture needs positive consent evidence, not merely the absence of unconsented.
+        let allowsMessaging = PushTokenEligibilityPolicy.allowsTokenRegistration(
+            startsMessaging: plan.startsMessaging,
+            isUnconsentedChild: deps.isUnconsentedChild()
+        ) && (posture != .childDirected || deps.isConsentedChild())
+        if allowsMessaging != isMessagingEnabled {
+            isMessagingEnabled = allowsMessaging
+            deps.setMessagingAutoInitEnabled(allowsMessaging)
+            if allowsMessaging, !hasConfiguredMessaging {
                 hasConfiguredMessaging = true
                 deps.configureMessaging()
             }

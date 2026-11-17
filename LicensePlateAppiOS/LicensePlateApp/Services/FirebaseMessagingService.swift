@@ -39,6 +39,13 @@ import FirebaseAuth
 /// window (uid provisioned, family not yet joined) and the sticky post-revocation child
 /// (`isChildAccount` still true, family gone). `firestore.rules` carries the same test as the
 /// server-side backstop, and `writeChildMembershipRevocation` deletes what already exists.
+///
+/// `DeferredSDKStartupService` asks this policy BEFORE it enables FCM auto-init or calls
+/// `configureForResolvedSession`, and additionally requires positive consent evidence for a
+/// `.childDirected` posture (the consent projection reads `.notChild` until RootView
+/// configures it). The guards below take the service's applied `isMessagingEnabled` as their
+/// `startsMessaging` half, so the explicit refresh paths and rotations inherit that
+/// fail-closed evidence instead of re-deriving the plan alone.
 enum PushTokenEligibilityPolicy {
     static func allowsTokenRegistration(
         startsMessaging: Bool,
@@ -61,7 +68,7 @@ final class FirebaseMessagingService: NSObject {
         super.init()
         self.isTokenRegistrationAllowedProvider = {
             PushTokenEligibilityPolicy.allowsTokenRegistration(
-                startsMessaging: DeferredSDKStartupService.shared.currentPlan.startsMessaging,
+                startsMessaging: DeferredSDKStartupService.shared.isMessagingEnabled,
                 isUnconsentedChild: ChildRestrictedModeService.shared.isRestrictedUnconsentedChild
             )
         }
@@ -90,10 +97,11 @@ final class FirebaseMessagingService: NSObject {
     }
 
     /// FR-46 release point, called by `DeferredSDKStartupService` once the session's age
-    /// posture is known. For a child session this registers exactly what family-trip
-    /// notifications need: the token is the same device token, and *which* pushes a child
-    /// can receive is decided server-side (FR-38 restricts a child to family trips), so
-    /// there is no separate client-side registration to narrow.
+    /// posture is known AND `PushTokenEligibilityPolicy` allows a token (FR-73: never for an
+    /// unconsented child, so nothing is minted for them). For a consented child this
+    /// registers exactly what family-trip notifications need: the token is the same device
+    /// token, and *which* pushes a child can receive is decided server-side (FR-38 restricts
+    /// a child to family trips), so there is no separate client-side registration to narrow.
     func configureForResolvedSession() {
         configure(application: .shared)
     }

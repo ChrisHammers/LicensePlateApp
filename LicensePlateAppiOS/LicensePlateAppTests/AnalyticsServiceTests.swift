@@ -24,10 +24,6 @@ final class AnalyticsLoggingSpy: AnalyticsLogging {
         loggedEvents.append(LoggedEvent(name: event.name, parameters: event.parameters))
     }
 
-    func log(_ name: String, parameters: [String: Any]) {
-        loggedEvents.append(LoggedEvent(name: name, parameters: parameters.isEmpty ? nil : parameters))
-    }
-
     func setUserProperty(_ value: String?, forName name: String) {}
 
     func clear() {
@@ -217,15 +213,6 @@ struct AnalyticsServiceTests {
         #expect(spy.loggedEvents[2].parameters?["session_id"] as? String == "sid-456")
     }
 
-    @Test @MainActor func spyRecordsRawNameAndParameters() async throws {
-        let spy = AnalyticsLoggingSpy()
-        spy.log("custom_event", parameters: ["key": "value"])
-
-        #expect(spy.loggedEvents.count == 1)
-        #expect(spy.loggedEvents[0].name == "custom_event")
-        #expect(spy.loggedEvents[0].parameters?["key"] as? String == "value")
-    }
-
     // MARK: - Step 10.5 new event names and parameters
 
     @Test @MainActor func lifecycleEventNamesAndParameters() async throws {
@@ -405,5 +392,160 @@ struct AnalyticsServiceTests {
 
         // Unknown params are counted, not silently discarded without a trace.
         #expect(event.parameters?["dropped_param_count"] as? Int == 2)
+    }
+}
+
+// MARK: - COPPA F-28 (FR-72): config floor, catalog audit, deletion reset
+
+struct FR72ChildAnalyticsTests {
+
+    /// FR-72(b), extending v2.1 FR-44's key-list discipline to a build-product check. Unit
+    /// tests are app-hosted, so `Bundle.main` is the BUILT app and this reads the shipped
+    /// Info.plist, not a source copy.
+    @Test func shippedInfoPlistCarriesTheAnalyticsConfigFloor() throws {
+        let info = try #require(Bundle.main.infoDictionary)
+        let mustBeFalse = [
+            "FIREBASE_ANALYTICS_COLLECTION_ENABLED",
+            "FirebaseMessagingAutoInitEnabled",
+            "GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_PERSONALIZATION_SIGNALS",
+            "GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_STORAGE",
+            "GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_USER_DATA",
+            // FR-72(b)
+            "GOOGLE_ANALYTICS_IDFV_COLLECTION_ENABLED",
+            "FirebaseAutomaticScreenReportingEnabled",
+        ]
+        for key in mustBeFalse {
+            #expect((info[key] as? Bool) == false, "\(key) must be present and false")
+        }
+    }
+
+    /// FR-72(c) catalog shape: the cases that used to carry a participant / user id now emit
+    /// no uid-naming key and carry the participant as an `Int` length only. The String
+    /// arguments are app-internal opaque ids (trip/game/target), which FR-72(c) keeps, so the
+    /// sentinel cannot reach a value here; the list is hand-picked, and coverage of NEW cases
+    /// rests on the source tripwire below, not on this test.
+    @Test @MainActor func noEventParameterCarriesAFirebaseUid() {
+        let uid = "UIDSENTINEL0123456789abcdefXY"
+        let events: [AnalyticsService.Event] = [
+            .xpGrantAwarded(tripId: "trip-1", gameInstanceId: "game-1", targetId: "CA", participantIdLength: uid.count),
+            .xpGrantSkippedAlreadyGranted(tripId: "trip-1", gameInstanceId: "game-1", targetId: "CA", participantIdLength: uid.count),
+            .discoveryOutcomeRecorded(tripId: "trip-1", gameInstanceId: "game-1", targetId: "CA", outcome: "accepted", participantIdLength: uid.count),
+            .discoveryRejectedDuplicate(tripId: "trip-1", gameInstanceId: "game-1", targetId: "CA", participantIdLength: uid.count, mode: "solo"),
+            .discoveryRejectedInvalidParticipant(tripId: "trip-1", gameInstanceId: "game-1", targetId: "CA", participantIdLength: uid.count, tripParticipantCount: 2, gameMode: "solo"),
+            .discoveryRemovalConfirmed(tripId: "trip-1", gameInstanceId: "game-1", targetId: "CA", participantIdLength: uid.count),
+            .discoveryUnfind(tripId: "trip-1", gameInstanceId: "game-1", targetId: "CA", participantIdLength: uid.count),
+            .publicLifetimeStatsListenerUpdated(userIdLength: uid.count),
+        ]
+        let forbiddenKeys: Set<String> = [
+            "participant_id", "actor_participant_id", "user_id", "uid", "firebase_uid",
+            "member_id", "child_id", "parent_id", "friend_id", "email", "username",
+        ]
+        for event in events {
+            let parameters = event.parameters ?? [:]
+            #expect(!parameters.isEmpty, "\(event.name) lost its parameters")
+            for (key, value) in parameters {
+                #expect(!forbiddenKeys.contains(key), "\(event.name).\(key)")
+                #expect(!String(describing: value).contains(uid), "\(event.name).\(key) carries the uid")
+            }
+        }
+        #expect(AnalyticsService.Event.xpGrantAwarded(
+            tripId: "t", gameInstanceId: "g", targetId: "CA", participantIdLength: uid.count
+        ).parameters?["participant_id_length"] as? Int == uid.count)
+    }
+
+    /// FR-72(c) tripwire over the source, for the cases the value audit cannot build: no uid
+    /// key literal in the catalog, no String-typed participant/user id associated value, no
+    /// analytics call site fed from an account identifier, and no SDK logging/identity call
+    /// outside `AnalyticsService`. Build-machine-only by nature (walks the tree via
+    /// #filePath), like `TripRouteHardeningTests`.
+    @Test func noAnalyticsCallSiteOrCatalogCaseCarriesAUid() throws {
+        let appDir = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("LicensePlateApp")
+        let catalogURL = appDir.appendingPathComponent("Services/AnalyticsService.swift")
+        let catalog = try String(contentsOf: catalogURL, encoding: .utf8)
+
+        for literal in ["\"participant_id\"", "\"actor_participant_id\"", "\"user_id\"", "\"uid\""] {
+            #expect(!catalog.contains(literal), "catalog key \(literal)")
+        }
+        // Case-insensitive, so camelCase shapes (`actorParticipantId`, `memberUserId`,
+        // `firebaseUid`, `ownerUserId`) trip it as well as the lower-case prefixes.
+        let idValue = try Regex(#"(participant|user|actor|member|child|parent|friend|owner|host|captain)(user)?(id|uid)s?\s*:\s*\[?String"#).ignoresCase()
+        #expect(catalog.firstMatch(of: idValue) == nil, "a uid-shaped String id is back in the catalog")
+        let bareUid = try Regex(#"\buid\s*:\s*\[?String"#).ignoresCase()
+        #expect(catalog.firstMatch(of: bareUid) == nil, "a String uid is back in the catalog")
+
+        var scanned = 0
+        let enumerator = try #require(FileManager.default.enumerator(at: appDir, includingPropertiesForKeys: nil))
+        for case let url as URL in enumerator where url.pathExtension == "swift" {
+            guard let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            scanned += 1
+            if url.lastPathComponent != "AnalyticsService.swift" {
+                #expect(!source.contains("Analytics.logEvent("), "\(url.lastPathComponent)")
+                #expect(!source.contains("Analytics.resetAnalyticsData("), "\(url.lastPathComponent)")
+            }
+            #expect(!source.contains(".setUserID("), "\(url.lastPathComponent)")
+            // The singleton and the injected `AnalyticsLogging` (ViewModels, RiskAssessment).
+            for prefix in ["AnalyticsService.shared.log(", "analytics.log(", "analytics?.log("] {
+                for call in Self.calls(of: prefix, in: source) {
+                    for token in ["firebaseUID", "currentUser?.uid", "currentUser?.id", ".uid"] {
+                        #expect(!call.contains(token), "\(url.lastPathComponent): \(call.prefix(80))")
+                    }
+                }
+            }
+        }
+        #expect(scanned > 100, "the walk did not find the app sources")
+    }
+
+    /// FR-72(d): account deletion resets the device's analytics data, through the one
+    /// analytics seam, and BEFORE the throwing local purge so a purge failure cannot skip it.
+    @Test func accountDeletionResetsAnalyticsBeforeThePurge() throws {
+        let authURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("LicensePlateApp/Services/FirebaseAuthService.swift")
+        let source = try String(contentsOf: authURL, encoding: .utf8)
+        let start = try #require(source.range(of: "func finalizeDeletedAccountLocally()"))
+        let rest = source[start.upperBound...]
+        let end = rest.range(of: "\n    func ")?.lowerBound ?? rest.endIndex
+        let body = rest[..<end]
+        let reset = try #require(body.range(of: "AnalyticsService.shared.resetAnalyticsData()"))
+        let purge = try #require(body.range(of: "purgeAllLocalUserData("))
+        #expect(reset.lowerBound < purge.lowerBound)
+    }
+
+    /// FR-72(d), the other deletion path: a parent deleting the child's data reaches the
+    /// child's device as a `.serverDeletedIdentity` detach, which resets analytics too.
+    @Test func serverDeletedChildDetachResetsAnalytics() throws {
+        let authURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("LicensePlateApp/Services/FirebaseAuthService.swift")
+        let source = try String(contentsOf: authURL, encoding: .utf8)
+        let start = try #require(source.range(of: "func detachAnonymousIdentityLocally("))
+        let rest = source[start.upperBound...]
+        let end = rest.range(of: "\n    private func ")?.lowerBound ?? rest.endIndex
+        let body = rest[..<end]
+        let guardRange = try #require(body.range(of: "if reason == .serverDeletedIdentity {"))
+        let reset = try #require(body.range(of: "AnalyticsService.shared.resetAnalyticsData()"))
+        #expect(guardRange.upperBound < reset.lowerBound)
+    }
+
+    /// Balanced-paren extraction of every `prefix(...)` call in `source`.
+    private static func calls(of prefix: String, in source: String) -> [Substring] {
+        var result: [Substring] = []
+        var searchStart = source.startIndex
+        while let hit = source.range(of: prefix, range: searchStart..<source.endIndex) {
+            var depth = 1
+            var index = hit.upperBound
+            while depth > 0, index < source.endIndex {
+                if source[index] == "(" { depth += 1 } else if source[index] == ")" { depth -= 1 }
+                index = source.index(after: index)
+            }
+            result.append(source[hit.lowerBound..<index])
+            searchStart = index
+        }
+        return result
     }
 }
