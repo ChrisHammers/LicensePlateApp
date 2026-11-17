@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "consentTextVersion": "1.0.0-2026-08-10",
+  "scopes": [
+    {
+      "id": "core",
+      "availability": "required",
+      "practiceVersion": 1,
+      "policyAnchor": "privacy-children-core"
+    },
+    {
+      "id": "analytics_internal",
+      "availability": "frozen",
+      "practiceVersion": 1,
+      "policyAnchor": "privacy-children-analytics"
+    },
+    {
+      "id": "ads_child_directed",
+      "availability": "frozen",
+      "practiceVersion": 1,
+      "policyAnchor": "privacy-children-ads"
+    },
+    {
+      "id": "location_family_shared",
+      "availability": "frozen",
+      "practiceVersion": 1,
+      "policyAnchor": "privacy-children-location"
+    },
+    {
+      "id": "cross_family_visibility",
+      "availability": "frozen",
+      "practiceVersion": 1,
+      "policyAnchor": "privacy-children-cross-family"
+    }
+  ]
+}

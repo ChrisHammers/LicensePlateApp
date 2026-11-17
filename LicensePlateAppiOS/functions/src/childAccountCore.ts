@@ -78,6 +78,218 @@ export const CONSENT_POLICY_VERSIONS: Readonly<Record<string, string>> = {
   privacyPolicy: "2026-08-11.no-real-names",
 };
 
+// ---------------------------------------------------------------------------
+// Consent scope catalog (v3 FR-65 / v4 FR-103, F-21 slice 1)
+//
+// One closed list of consent scopes, in display order. Lattice precedent: the
+// Swift `ConsentScopeCatalog` mirrors these constants, and the test-only fixture
+// `consentScopeCatalog.v1.json` (byte-identical to the copy in LicensePlateAppTests/)
+// pins both sides — `consentScopeParity.test.ts` here, `ConsentScopeCatalogParityTests`
+// in Swift. Nothing loads the JSON at runtime.
+//
+// Slice 1 adds these constants and pure helpers only; no entry point calls them yet.
+// ---------------------------------------------------------------------------
+
+export const CONSENT_SCOPE_IDS = [
+  "core",
+  "analytics_internal",
+  "ads_child_directed",
+  "location_family_shared",
+  "cross_family_visibility",
+] as const;
+
+export type ConsentScopeId = (typeof CONSENT_SCOPE_IDS)[number];
+
+/**
+ * `required`: always part of a consent; `frozen`: not offered at launch, recorded as
+ * `unavailable`; `optional`: exists in the type only — no scope uses it at launch.
+ */
+export type ConsentScopeAvailability = "required" | "optional" | "frozen";
+
+export interface ConsentScopeCatalogEntry {
+  id: ConsentScopeId;
+  availability: ConsentScopeAvailability;
+  /** In-app Privacy Policy anchor for this scope (`rtr-legal://<policyAnchor>`). */
+  policyAnchor: string;
+}
+
+export const CONSENT_SCOPE_CATALOG: readonly ConsentScopeCatalogEntry[] = [
+  { id: "core", availability: "required", policyAnchor: "privacy-children-core" },
+  {
+    id: "analytics_internal",
+    availability: "frozen",
+    policyAnchor: "privacy-children-analytics",
+  },
+  { id: "ads_child_directed", availability: "frozen", policyAnchor: "privacy-children-ads" },
+  {
+    id: "location_family_shared",
+    availability: "frozen",
+    policyAnchor: "privacy-children-location",
+  },
+  {
+    id: "cross_family_visibility",
+    availability: "frozen",
+    policyAnchor: "privacy-children-cross-family",
+  },
+];
+
+/** Per-scope practice version (FR-104): a positive integer, bumped only on a material change. */
+export const CONSENT_SCOPE_PRACTICE_VERSIONS: Readonly<Record<ConsentScopeId, number>> = {
+  core: 1,
+  analytics_internal: 1,
+  ads_child_directed: 1,
+  location_family_shared: 1,
+  cross_family_visibility: 1,
+};
+
+export type ConsentScopeState = "granted" | "declined" | "unavailable";
+
+/** Always carries all five keys. */
+export type ConsentScopeVector = Record<
+  ConsentScopeId,
+  { state: ConsentScopeState; practiceVersion: number }
+>;
+
+export type ConsentScopeSelectionRejectionReason =
+  | "not_an_array"
+  | "unknown_scope"
+  | "duplicate_scope"
+  | "required_scope_missing"
+  | "frozen_scope_selected";
+
+export type ConsentScopeSelectionResult =
+  | { ok: true; selection: ConsentScopeId[] }
+  | { ok: false; reason: ConsentScopeSelectionRejectionReason };
+
+function isConsentScopeId(value: unknown): value is ConsentScopeId {
+  return (
+    typeof value === "string" && (CONSENT_SCOPE_IDS as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Validates a client-sent scope selection. Checks run in this order, and the first
+ * failure is the reason: an array; of known ids; with no duplicates; every required
+ * scope present; no frozen scope. At launch the only valid selection is ["core"].
+ * The selection comes back in catalog order.
+ */
+export function validateConsentScopeSelection(raw: unknown): ConsentScopeSelectionResult {
+  if (!Array.isArray(raw)) return { ok: false, reason: "not_an_array" };
+  if (!raw.every(isConsentScopeId)) return { ok: false, reason: "unknown_scope" };
+  const ids = raw as ConsentScopeId[];
+  if (new Set(ids).size !== ids.length) return { ok: false, reason: "duplicate_scope" };
+  for (const entry of CONSENT_SCOPE_CATALOG) {
+    if (entry.availability === "required" && !ids.includes(entry.id)) {
+      return { ok: false, reason: "required_scope_missing" };
+    }
+  }
+  for (const entry of CONSENT_SCOPE_CATALOG) {
+    if (entry.availability === "frozen" && ids.includes(entry.id)) {
+      return { ok: false, reason: "frozen_scope_selected" };
+    }
+  }
+  return {
+    ok: true,
+    selection: CONSENT_SCOPE_CATALOG.map((entry) => entry.id).filter((id) => ids.includes(id)),
+  };
+}
+
+/**
+ * Builds the full vector for a selection that passed `validateConsentScopeSelection`:
+ * frozen scopes are `unavailable`, selected scopes `granted`, any other scope `declined`,
+ * each at its current practice version. With the launch selection ["core"] this gives
+ * core = granted@1 and the other four = unavailable@1.
+ */
+export function buildScopeVector(selection: readonly ConsentScopeId[]): ConsentScopeVector {
+  const vector = {} as ConsentScopeVector;
+  for (const entry of CONSENT_SCOPE_CATALOG) {
+    const state: ConsentScopeState =
+      entry.availability === "frozen"
+        ? "unavailable"
+        : selection.includes(entry.id)
+          ? "granted"
+          : "declined";
+    vector[entry.id] = { state, practiceVersion: CONSENT_SCOPE_PRACTICE_VERSIONS[entry.id] };
+  }
+  return vector;
+}
+
+export type StoredScopeVectorRejectionReason =
+  | "not_an_object"
+  | "missing_scope"
+  | "unknown_scope"
+  | "malformed_scope_entry"
+  | "invalid_state"
+  | "required_scope_not_granted"
+  | "frozen_scope_not_unavailable"
+  | "optional_scope_unavailable"
+  | "practice_version_mismatch";
+
+export type StoredScopeVectorResult =
+  | { ok: true; vector: ConsentScopeVector }
+  | { ok: false; reason: StoredScopeVectorRejectionReason };
+
+const CONSENT_SCOPE_STATES: readonly string[] = ["granted", "declined", "unavailable"];
+
+/**
+ * Re-checks a vector read back from storage before it is committed as evidence:
+ * exactly the catalog's keys, each an object with no field besides `state` and
+ * `practiceVersion`; every required scope `granted`; every frozen scope
+ * `unavailable`; an optional scope `granted` or `declined`; and every practiceVersion
+ * equal to the current one (a drift means the request predates a material change).
+ * On success the vector returned is a fresh object rebuilt from the checked fields.
+ */
+export function validateStoredScopeVector(
+  vector: unknown,
+  catalog: readonly ConsentScopeCatalogEntry[] = CONSENT_SCOPE_CATALOG,
+  practiceVersions: Readonly<Record<ConsentScopeId, number>> = CONSENT_SCOPE_PRACTICE_VERSIONS
+): StoredScopeVectorResult {
+  if (typeof vector !== "object" || vector === null || Array.isArray(vector)) {
+    return { ok: false, reason: "not_an_object" };
+  }
+  const record = vector as Record<string, unknown>;
+  const catalogIds: readonly string[] = catalog.map((entry) => entry.id);
+  if (Object.keys(record).some((key) => !catalogIds.includes(key))) {
+    return { ok: false, reason: "unknown_scope" };
+  }
+  const checked = {} as ConsentScopeVector;
+  for (const entry of catalog) {
+    const value = record[entry.id];
+    if (value === undefined) {
+      return { ok: false, reason: "missing_scope" };
+    }
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      Array.isArray(value) ||
+      Object.keys(value).some((key) => key !== "state" && key !== "practiceVersion")
+    ) {
+      return { ok: false, reason: "malformed_scope_entry" };
+    }
+    const { state, practiceVersion } = value as Record<string, unknown>;
+    if (typeof state !== "string" || !CONSENT_SCOPE_STATES.includes(state)) {
+      return { ok: false, reason: "invalid_state" };
+    }
+    if (entry.availability === "required" && state !== "granted") {
+      return { ok: false, reason: "required_scope_not_granted" };
+    }
+    if (entry.availability === "frozen" && state !== "unavailable") {
+      return { ok: false, reason: "frozen_scope_not_unavailable" };
+    }
+    if (entry.availability === "optional" && state === "unavailable") {
+      return { ok: false, reason: "optional_scope_unavailable" };
+    }
+    if (practiceVersion !== practiceVersions[entry.id]) {
+      return { ok: false, reason: "practice_version_mismatch" };
+    }
+    checked[entry.id] = {
+      state: state as ConsentScopeState,
+      practiceVersion: practiceVersions[entry.id],
+    };
+  }
+  return { ok: true, vector: checked };
+}
+
 /** FR-2: the only reasons a manager may CLEAR the flag (corrections, not withdrawals). */
 export const CHILD_STATUS_CORRECTION_REASONS: readonly string[] = [
   "flag_set_in_error",

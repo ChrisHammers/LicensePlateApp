@@ -8,17 +8,23 @@ import {
   CHILD_CONSENT_REVOCATION_REASONS,
   CHILD_CONSENT_SCOPE,
   CHILD_STATUS_CORRECTION_REASONS,
+  CONSENT_SCOPE_CATALOG,
+  CONSENT_SCOPE_IDS,
+  CONSENT_SCOPE_PRACTICE_VERSIONS,
   buildChildRegistrationDeclaredMetadata,
   buildConsentCorrectedMetadata,
   buildConsentGrantedMetadata,
   buildConsentRevokedMetadata,
+  buildScopeVector,
   consentMetadataPiiViolations,
   evaluateApprovalChildDeclaration,
   isChildAccountUserData,
   isUnconsentedChildUserData,
   sanitizedChildLinkedPlatforms,
+  validateConsentScopeSelection,
   validateExpectedAgeOutYearMonth,
   validateSetChildStatusInput,
+  validateStoredScopeVector,
 } from "./childAccountCore";
 import { AUDIT_RETENTION_EXEMPT_EVENT_TYPES } from "./retentionCore";
 
@@ -45,6 +51,192 @@ describe("consent event types", () => {
       "analytics_limited",
     ]);
     expect(CHILD_CONSENT_SCOPE.join(" ")).not.toMatch(/location|ads/);
+  });
+});
+
+describe("consent scope catalog (FR-65 / FR-103)", () => {
+  it("five ids in display order; core required, the other four frozen", () => {
+    expect([...CONSENT_SCOPE_IDS]).toEqual([
+      "core",
+      "analytics_internal",
+      "ads_child_directed",
+      "location_family_shared",
+      "cross_family_visibility",
+    ]);
+    expect(CONSENT_SCOPE_CATALOG.map((entry) => entry.id)).toEqual([...CONSENT_SCOPE_IDS]);
+    expect(CONSENT_SCOPE_CATALOG.map((entry) => entry.availability)).toEqual([
+      "required",
+      "frozen",
+      "frozen",
+      "frozen",
+      "frozen",
+    ]);
+  });
+
+  it("every scope has a positive integer practice version, and only catalog scopes do", () => {
+    expect(Object.keys(CONSENT_SCOPE_PRACTICE_VERSIONS).sort()).toEqual(
+      [...CONSENT_SCOPE_IDS].sort()
+    );
+    for (const id of CONSENT_SCOPE_IDS) {
+      const version = CONSENT_SCOPE_PRACTICE_VERSIONS[id];
+      expect(Number.isInteger(version)).toBe(true);
+      expect(version).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("validateConsentScopeSelection", () => {
+  it('accepts exactly ["core"] at launch', () => {
+    expect(validateConsentScopeSelection(["core"])).toEqual({ ok: true, selection: ["core"] });
+  });
+
+  it.each([
+    ["an empty array", [], "required_scope_missing"],
+    ["undefined", undefined, "not_an_array"],
+    ["a bare string", "core", "not_an_array"],
+    ["a duplicate", ["core", "core"], "duplicate_scope"],
+    ["an unknown id", ["core", "x"], "unknown_scope"],
+    ["a non-string entry", ["core", 1], "unknown_scope"],
+    ["a frozen scope without core", ["analytics_internal"], "required_scope_missing"],
+    ["core plus a frozen scope", ["core", "ads_child_directed"], "frozen_scope_selected"],
+  ])("rejects %s", (_label, raw, reason) => {
+    expect(validateConsentScopeSelection(raw)).toEqual({ ok: false, reason });
+  });
+});
+
+describe("buildScopeVector", () => {
+  const launchVector = {
+    core: { state: "granted", practiceVersion: 1 },
+    analytics_internal: { state: "unavailable", practiceVersion: 1 },
+    ads_child_directed: { state: "unavailable", practiceVersion: 1 },
+    location_family_shared: { state: "unavailable", practiceVersion: 1 },
+    cross_family_visibility: { state: "unavailable", practiceVersion: 1 },
+  };
+
+  it("the launch selection gives core granted@1 and the other four unavailable@1", () => {
+    expect(buildScopeVector(["core"])).toEqual(launchVector);
+  });
+
+  it("always carries all five keys, in catalog order", () => {
+    expect(Object.keys(buildScopeVector(["core"]))).toEqual([...CONSENT_SCOPE_IDS]);
+    expect(Object.keys(buildScopeVector([]))).toEqual([...CONSENT_SCOPE_IDS]);
+  });
+
+  it("a frozen scope is unavailable even if a caller passes it", () => {
+    expect(buildScopeVector(["core", "analytics_internal"])).toEqual(launchVector);
+  });
+});
+
+describe("validateStoredScopeVector", () => {
+  const launch = () =>
+    JSON.parse(JSON.stringify(buildScopeVector(["core"]))) as Record<string, any>;
+
+  it("accepts the launch vector", () => {
+    const vector = launch();
+    expect(validateStoredScopeVector(vector)).toEqual({ ok: true, vector });
+  });
+
+  it("rejects a vector that is not an object", () => {
+    expect(validateStoredScopeVector(undefined)).toEqual({ ok: false, reason: "not_an_object" });
+    expect(validateStoredScopeVector(null)).toEqual({ ok: false, reason: "not_an_object" });
+    expect(validateStoredScopeVector(["core"])).toEqual({ ok: false, reason: "not_an_object" });
+  });
+
+  it("rejects core not granted", () => {
+    const vector = launch();
+    vector.core.state = "declined";
+    expect(validateStoredScopeVector(vector)).toEqual({
+      ok: false,
+      reason: "required_scope_not_granted",
+    });
+  });
+
+  it("rejects a missing core key and any other missing key", () => {
+    const noCore = launch();
+    delete noCore.core;
+    expect(validateStoredScopeVector(noCore)).toEqual({ ok: false, reason: "missing_scope" });
+    const noFrozen = launch();
+    delete noFrozen.cross_family_visibility;
+    expect(validateStoredScopeVector(noFrozen)).toEqual({ ok: false, reason: "missing_scope" });
+  });
+
+  it("rejects an unknown key", () => {
+    const vector = launch();
+    vector.gameplay = { state: "granted", practiceVersion: 1 };
+    expect(validateStoredScopeVector(vector)).toEqual({ ok: false, reason: "unknown_scope" });
+  });
+
+  it("rejects a present entry that is not a plain {state, practiceVersion} object", () => {
+    for (const bad of ["granted", 1, null, ["granted", 1]]) {
+      const vector = launch();
+      vector.core = bad;
+      expect(validateStoredScopeVector(vector)).toEqual({
+        ok: false,
+        reason: "malformed_scope_entry",
+      });
+    }
+    const extraField = launch();
+    extraField.core.note = "x";
+    expect(validateStoredScopeVector(extraField)).toEqual({
+      ok: false,
+      reason: "malformed_scope_entry",
+    });
+  });
+
+  it("returns a fresh vector, not the stored object", () => {
+    const vector = launch();
+    const result = validateStoredScopeVector(vector);
+    expect(result).toEqual({ ok: true, vector });
+    if (!result.ok) throw new Error("expected ok");
+    expect(result.vector).not.toBe(vector);
+    expect(result.vector.core).not.toBe(vector.core);
+  });
+
+  it("rejects a state outside the closed set", () => {
+    const vector = launch();
+    vector.core.state = "yes";
+    expect(validateStoredScopeVector(vector)).toEqual({ ok: false, reason: "invalid_state" });
+  });
+
+  it.each(["granted", "declined"])("rejects a frozen scope set to %s", (state) => {
+    const vector = launch();
+    vector.location_family_shared.state = state;
+    expect(validateStoredScopeVector(vector)).toEqual({
+      ok: false,
+      reason: "frozen_scope_not_unavailable",
+    });
+  });
+
+  it("rejects a practice-version drift on any scope", () => {
+    for (const id of CONSENT_SCOPE_IDS) {
+      const vector = launch();
+      vector[id].practiceVersion = CONSENT_SCOPE_PRACTICE_VERSIONS[id] + 1;
+      expect(validateStoredScopeVector(vector)).toEqual({
+        ok: false,
+        reason: "practice_version_mismatch",
+      });
+    }
+    const missingVersion = launch();
+    delete missingVersion.core.practiceVersion;
+    expect(validateStoredScopeVector(missingVersion)).toEqual({
+      ok: false,
+      reason: "practice_version_mismatch",
+    });
+  });
+
+  it("an optional scope may be granted or declined, never unavailable", () => {
+    const catalog = CONSENT_SCOPE_CATALOG.map((entry) =>
+      entry.id === "analytics_internal" ? { ...entry, availability: "optional" as const } : entry
+    );
+    for (const state of ["granted", "declined"]) {
+      const vector = launch();
+      vector.analytics_internal.state = state;
+      expect(validateStoredScopeVector(vector, catalog).ok).toBe(true);
+    }
+    expect(validateStoredScopeVector(launch(), catalog)).toEqual({
+      ok: false,
+      reason: "optional_scope_unavailable",
+    });
   });
 });
 
