@@ -127,7 +127,7 @@ struct ContentView: View {
             // Mark boundaries as loaded after splash screen has rendered
             // This ensures the splash screen is visible before transitioning
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                // Boundaries are already loaded in AppDelegate, so we can safely mark as complete
+                // Nothing pre-loads boundaries at launch; region data loads lazily on first use
                 boundariesLoaded = true
             }
         }

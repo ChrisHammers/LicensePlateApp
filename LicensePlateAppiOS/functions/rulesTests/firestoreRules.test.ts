@@ -1677,6 +1677,57 @@ describe("F-6 rework: users docs reject firstName/lastName", () => {
   });
 });
 
+// F-37 (FR-81(d)): there is no profile-image feature (Storage is unlinked), so
+// `userImageURL` is denylisted on users/{uid}. The check is on the merged document,
+// so a doc that already holds the key is writable only by a write that deletes it
+// (`firestoreDataFromAppUser` sends FieldValue.delete() on every profile sync).
+describe("F-37: users docs reject userImageURL", () => {
+  beforeEach(async () => {
+    await seed({
+      "users/imaged": { userName: "Imaged", userImageURL: "https://example.invalid/a.jpg" },
+      "users/plain": { userName: "Plain" },
+    });
+  });
+
+  it("allows a clean create (control)", async () => {
+    await assertSucceeds(
+      setDoc(doc(registered("fresh10"), "users/fresh10"), { userName: "Fresh10" })
+    );
+  });
+
+  it("denies creates carrying userImageURL", async () => {
+    await assertFails(
+      setDoc(doc(registered("fresh11"), "users/fresh11"), {
+        userName: "Fresh11",
+        userImageURL: "https://example.invalid/b.jpg",
+      })
+    );
+  });
+
+  it("denies updates introducing userImageURL", async () => {
+    await assertFails(
+      updateDoc(doc(registered("plain"), "users/plain"), {
+        userImageURL: "https://example.invalid/c.jpg",
+      })
+    );
+  });
+
+  it("denies updates that leave an existing userImageURL in place", async () => {
+    await assertFails(
+      updateDoc(doc(registered("imaged"), "users/imaged"), { userName: "Imaged_v2" })
+    );
+  });
+
+  it("allows the profile-sync write that strips userImageURL via FieldValue.delete()", async () => {
+    await assertSucceeds(
+      updateDoc(doc(registered("imaged"), "users/imaged"), {
+        userImageURL: deleteField(),
+        userName: "Imaged_v2",
+      })
+    );
+  });
+});
+
 // ---------------------------------------------------------------------------
 // FR-80 (F-36, fresh-audit finding M-2) — username content policy is enforced
 // server-side, not just by the client's `UsernameProfanityFilter` /

@@ -3214,7 +3214,6 @@ class FirebaseAuthService: ObservableObject {
             existingUser.userName = firestoreUser.userName
             existingUser.email = firestoreUser.email
             existingUser.phoneNumber = firestoreUser.phoneNumber
-            existingUser.userImageURL = firestoreUser.userImageURL
             existingUser.linkedPlatforms = firestoreUser.linkedPlatforms
             existingUser.avatarId = firestoreUser.avatarId
             existingUser.equippedBadgeId = firestoreUser.equippedBadgeId
@@ -3269,9 +3268,8 @@ class FirebaseAuthService: ObservableObject {
         // Email/phone live on private/contact only (not peer-readable public profile).
         data["email"] = FieldValue.delete()
         data["phoneNumber"] = FieldValue.delete()
-        if let userImageURL = user.userImageURL {
-            data["userImageURL"] = userImageURL
-        }
+        // No profile-image feature exists (F-37 / FR-81(d)); strip any dev-doc value.
+        data["userImageURL"] = FieldValue.delete()
         if let avatarId = user.avatarId {
             data["avatarId"] = avatarId
         }
@@ -3321,7 +3319,6 @@ class FirebaseAuthService: ObservableObject {
         // firstName/lastName are never read: real names are not collected (F-6 rework).
         let email = data["email"] as? String
         let phoneNumber = data["phoneNumber"] as? String
-        let userImageURL = data["userImageURL"] as? String
         let avatarId = data["avatarId"] as? String
         let equippedBadgeId = data["equippedBadgeId"] as? String
         let equippedLicenseCosmeticId = data["equippedLicenseCosmeticId"] as? String
@@ -3403,7 +3400,6 @@ class FirebaseAuthService: ObservableObject {
             phoneNumber: phoneNumber,
             createdAt: createdAt,
             lastUpdated: lastUpdated,
-            userImageURL: userImageURL,
             deviceIdentifier: deviceIdentifier,
             isUsernameManuallyChanged: isUsernameManuallyChanged,
             isEmailPublic: isEmailPublic,

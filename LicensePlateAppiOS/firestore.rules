@@ -104,6 +104,7 @@ service cloud.firestore {
     // Reads are document-level, so anything a peer must not see cannot live on users/{uid}:
     // contact goes to private/contact, the push token to private/fcm (FR-43 / audit E1).
     // firstName/lastName: real names are never collected (owner decision, F-6 rework).
+    // userImageURL: no profile-image feature exists; Firebase Storage is unlinked (F-37).
     // Deleting a field with FieldValue.delete() keeps it out of request.resource.data, so
     // migration writes that strip these keys still pass.
     // entitlementTags may remain on merge results; clients must not *change* them
@@ -119,7 +120,8 @@ service cloud.firestore {
         "firstName",
         "lastName",
         "fcmToken",
-        "fcmTokenUpdatedAt"
+        "fcmTokenUpdatedAt",
+        "userImageURL"
       ]) && userDocLinkedPlatformsAreSanitized();
     }
 

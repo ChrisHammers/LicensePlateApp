@@ -175,7 +175,7 @@ struct AppPreferences {
         }
     }
     
-    /// Get the default map provider (Google Maps)
+    /// Get the default map provider (Apple Maps)
     static func defaultMapProvider() -> AppMapProvider {
         return .apple
     }

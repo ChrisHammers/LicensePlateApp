@@ -77,7 +77,6 @@ enum AuthProfileSyncPolicy {
             local.email = cloud.email
         }
         local.phoneNumber = cloud.phoneNumber
-        local.userImageURL = cloud.userImageURL
         local.linkedPlatforms = cloud.linkedPlatforms
         local.avatarId = cloud.avatarId
         local.equippedBadgeId = cloud.equippedBadgeId

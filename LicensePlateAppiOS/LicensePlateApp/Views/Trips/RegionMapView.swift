@@ -25,9 +25,11 @@ struct RegionMapView: View {
     @AppStorage("appMapProvider") private var appMapProviderRaw: String = AppPreferences.defaultMapProvider().rawValue
     @AppStorage(NewTripDefaultsKeys.showMyActiveTripOnSmallMap) private var showActiveTripRoute = true
     @ObservedObject private var routeTracking = TripRouteTrackingService.shared
+    @ObservedObject private var childPostures = ChildSessionPostureCoordinator.shared
 
+    /// F-37 (FR-81(e)): Google only in DEBUG, switch on, confirmed adult.
     private var mapProvider: AppMapProvider {
-        AppMapProvider(rawValue: appMapProviderRaw) ?? AppPreferences.defaultMapProvider()
+        MapProviderPolicy.resolvedProvider(storedRaw: appMapProviderRaw, posture: childPostures.currentPosture)
     }
 
     private var routeCoordinates: [CLLocationCoordinate2D] {
