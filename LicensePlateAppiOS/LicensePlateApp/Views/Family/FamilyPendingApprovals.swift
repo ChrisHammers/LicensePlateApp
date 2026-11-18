@@ -345,6 +345,7 @@ struct PendingApprovalRow: View {
 
             if ChildApprovalPolicy.showsConsentBlock(draft: childDraft) {
                 FamilyChildConsentBlock(
+                    kind: .join,
                     draft: childDraft.consent,
                     yearOptions: expectedAgeOutYearOptions,
                     onConsentAcknowledgedChange: onConsentAcknowledgedChange,

@@ -3,8 +3,8 @@
  *
  * Db-parameterized so `fakeFirestore.ts` tests can pin the batch shapes, follow-ons and
  * consent rows exactly. The callable wiring (App Check, auth guards, clientMetadata
- * normalization) lives in `familyChildStatus.ts`; `approveFamilyJoinRequest_CaptainStep`'s
- * FR-25 extension lives in `family.ts` and shares `applyChildProtectionsAfterFlagSet`.
+ * normalization) lives in `familyChildStatus.ts`. `applyChildProtectionsAfterFlagSet` is
+ * shared with the post-confirmation follow-ups in `consentRequests.ts`.
  *
  * FR-4 write discipline: the flag set itself is ONE batched write
  * (`users/{uid}.isChildAccount` + `members/{uid}.isChild` + linkedPlatforms strip).
@@ -25,6 +25,7 @@ import {
 import {
   CHILD_CONSENT_EVENT_TYPES,
   CHILD_STATUS_MANAGER_ROLES,
+  buildScopeVector,
   isChildAccountUserData,
   sanitizedChildLinkedPlatforms,
   validateSetChildStatusInput,
@@ -61,7 +62,7 @@ const defaultDeps: ChildStatusFlowDeps = {
 };
 
 function throwRejection(rejection: ChildStatusRejection): never {
-  throw new functions.https.HttpsError(rejection.code, rejection.message);
+  throw new functions.https.HttpsError(rejection.code, rejection.message, rejection.details);
 }
 
 /**
@@ -190,6 +191,9 @@ export async function setFamilyMemberChildStatusFlow(
     consentAcknowledged?: unknown;
     guardianAffirmed?: unknown;
     expectedAgeOutYearMonth?: unknown;
+    /** F-21: required on isChild:true (validated before any write). */
+    consentScopes?: unknown;
+    consentTextVersion?: unknown;
     clientMetadata: ClientMetadata | null;
   },
   deps: ChildStatusFlowDeps = defaultDeps
@@ -215,6 +219,8 @@ export async function setFamilyMemberChildStatusFlow(
     consentAcknowledged: input.consentAcknowledged,
     guardianAffirmed: input.guardianAffirmed,
     expectedAgeOutYearMonth: input.expectedAgeOutYearMonth,
+    consentScopes: input.consentScopes,
+    consentTextVersion: input.consentTextVersion,
     nowYear: new Date().getUTCFullYear(),
   });
   if (decision.kind === "reject") {
@@ -282,6 +288,8 @@ export async function setFamilyMemberChildStatusFlow(
       guardianEmail,
       childUserName: targetUserName,
       expectedAgeOutYearMonth: decision.expectedAgeOutYearMonth,
+      scopeVector: buildScopeVector(decision.consentScopes),
+      consentTextVersion: decision.consentTextVersion,
     });
 
     return {

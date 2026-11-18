@@ -54,7 +54,7 @@ vi.mock("firebase-admin", async () => {
 });
 
 import type { FakeFirestore } from "./testSupport/fakeFirestore";
-import { confirmGuardianConsent } from "./testSupport/consentTestHelpers";
+import { confirmGuardianConsent, LAUNCH_CONSENT_PAYLOAD } from "./testSupport/consentTestHelpers";
 import {
   approveFamilyJoinRequest_CaptainStep,
   createFamily,
@@ -288,6 +288,7 @@ describe("CB-7 link (b): the flag clear is not attestation-free", () => {
       isChild: true,
       consentAcknowledged: true,
       guardianAffirmed: true,
+      ...LAUNCH_CONSENT_PAYLOAD,
     });
     // FR-59.1: admission now completes at the guardian's emailed confirmation.
     const outcome = await confirmGuardianConsent(db(), {

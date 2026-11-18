@@ -94,7 +94,7 @@ import {
   buildPendingRequestIdentity,
 } from "./familyJoinRequestIntegrity";
 import { deleteProvisionalChildAccountIfNeverConsented } from "./provisionalChildAccounts";
-import { confirmGuardianConsent } from "./testSupport/consentTestHelpers";
+import { confirmGuardianConsent, LAUNCH_CONSENT_PAYLOAD } from "./testSupport/consentTestHelpers";
 import { JOIN_REQUEST_AWAITING_GUARDIAN_STATUS } from "./consentRequestsCore";
 
 function db(): FakeFirestore {
@@ -321,6 +321,7 @@ describe("F-44 (b/c): approve with a duplicate present", () => {
       isChild: true,
       consentAcknowledged: true,
       guardianAffirmed: true,
+      ...LAUNCH_CONSENT_PAYLOAD,
     });
 
     // FR-59.1: approve no longer admits — it opens the guardian confirmation.
@@ -356,6 +357,7 @@ describe("F-44 (b/c): approve with a duplicate present", () => {
       isChild: true,
       consentAcknowledged: true,
       guardianAffirmed: true,
+      ...LAUNCH_CONSENT_PAYLOAD,
     });
 
     await confirmGuardianConsent(db(), { familyId, childUserId: "kid" });
@@ -388,6 +390,7 @@ describe("F-44 (b/c): approve with a duplicate present", () => {
         isChild: true,
         consentAcknowledged: true,
         guardianAffirmed: true,
+        ...LAUNCH_CONSENT_PAYLOAD,
       });
       // The child's push moved to the confirmation step (FR-59.1); the throwing
       // token must not undo the committed admission there either.
@@ -406,6 +409,7 @@ describe("F-44 (b/c): approve with a duplicate present", () => {
       isChild: true,
       consentAcknowledged: true,
       guardianAffirmed: true,
+      ...LAUNCH_CONSENT_PAYLOAD,
     };
 
     await run.approve("captain", payload);
@@ -492,6 +496,7 @@ describe("F-44 (b/d): decline clears wedged rows", () => {
         isChild: true,
         consentAcknowledged: true,
         guardianAffirmed: true,
+        ...LAUNCH_CONSENT_PAYLOAD,
       })
     ).rejects.toMatchObject({
       code: "failed-precondition",

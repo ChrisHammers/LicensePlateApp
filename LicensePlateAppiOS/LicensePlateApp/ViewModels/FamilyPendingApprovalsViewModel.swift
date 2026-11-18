@@ -398,6 +398,13 @@ final class FamilyPendingApprovalsViewModel: ObservableObject {
                 await refreshPendingRequests()
                 return false
             }
+            // F-21 (FR-65): the server refused this build's consent text or scope selection;
+            // only an app update fixes it.
+            if approve, FamilyChildApprovalRejection.requiresAppUpdate(error) {
+                errorMessage = FamilyChildApprovalRejection.updateRequiredMessageKey.localized
+                showError = true
+                return false
+            }
             errorMessage = error.localizedDescription
             showError = true
             return false

@@ -63,7 +63,7 @@ vi.mock("firebase-admin", async () => {
 });
 
 import type { FakeFirestore } from "./testSupport/fakeFirestore";
-import { confirmGuardianConsent } from "./testSupport/consentTestHelpers";
+import { confirmGuardianConsent, LAUNCH_CONSENT_PAYLOAD } from "./testSupport/consentTestHelpers";
 import { FakeWriteBatch } from "./testSupport/fakeFirestore";
 import {
   approveFamilyJoinRequest_CaptainStep,
@@ -169,6 +169,7 @@ const CHILD_APPROVAL = {
   isChild: true,
   consentAcknowledged: true,
   guardianAffirmed: true,
+  ...LAUNCH_CONSENT_PAYLOAD,
 };
 
 /**

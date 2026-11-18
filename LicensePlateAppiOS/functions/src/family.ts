@@ -22,6 +22,7 @@ import {
 import { canRemoveFamilyMember } from "./familyMemberRemovalPolicy";
 import {
   CHILD_TARGET_NOT_SEARCHABLE_MESSAGE,
+  buildScopeVector,
   evaluateApprovalChildDeclaration,
   isChildWithActiveFamilyUserData,
   isUnconsentedChildUserData,
@@ -43,10 +44,8 @@ import {
 import { stageJoinRequestRetirement } from "./pendingJoinRequestExpiry";
 import {
   writeChildConsentCorrected,
-  writeChildConsentGranted,
   writeChildMembershipRevocation,
 } from "./childConsent";
-import { applyChildProtectionsAfterFlagSet } from "./familyChildStatusFlows";
 import { sweepLiveTripsAfterFamilyMembershipExit } from "./childTripRosterInvariants";
 import { assertCallerIsNotChild } from "./childAccessGuards";
 import { consumeInviteRateLimit } from "./inviteRateLimit";
@@ -794,12 +793,10 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
 
     const batch = db.batch();
 
-    // COPPA FR-25: child follow-ons that must run only after the membership batch
-    // commits (index purge, invite/friend cleanup, consent record).
-    let childFollowUp:
-      | { kind: "grant"; expectedAgeOutYearMonth?: number; targetUserData: Record<string, unknown> }
-      | { kind: "clear_new_guardian"; correctionReason: string }
-      | null = null;
+    // COPPA FR-25: the correction record, which must run only after the membership batch
+    // commits. (A child grant never reaches that batch: it exits into the consent-request
+    // path below.)
+    let childFollowUp: { kind: "clear_new_guardian"; correctionReason: string } | null = null;
 
     if (response === "approve") {
       // FR-66(a): only a request an invite produced may be approved. Decline stays open
@@ -832,19 +829,21 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
         guardianAffirmed: data?.guardianAffirmed,
         correctionReason: data?.correctionReason,
         expectedAgeOutYearMonth: data?.expectedAgeOutYearMonth,
+        // F-21: validated before any write; a wrong version or selection is refused
+        // with details.reason (consent_text_outdated / consent_scopes_invalid).
+        consentScopes: data?.consentScopes,
+        consentTextVersion: data?.consentTextVersion,
         targetIsChildAccount: targetUserData.isChildAccount === true,
         nowYear: new Date().getUTCFullYear(),
       });
       if (childDecision.kind === "reject") {
-        throw new functions.https.HttpsError(childDecision.code, childDecision.message);
+        throw new functions.https.HttpsError(
+          childDecision.code,
+          childDecision.message,
+          childDecision.details
+        );
       }
-      if (childDecision.kind === "grant") {
-        childFollowUp = {
-          kind: "grant",
-          expectedAgeOutYearMonth: childDecision.expectedAgeOutYearMonth,
-          targetUserData,
-        };
-      } else if (childDecision.kind === "clear_new_guardian") {
+      if (childDecision.kind === "clear_new_guardian") {
         // FR-66(b): evidence is necessary but not sufficient — a fabricated guardian can
         // supply a reason and tick both boxes. The family itself must also look real.
         await assertGuardianClearSeasoning(db, {
@@ -901,9 +900,9 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
           newRole,
           childUserName:
             typeof targetUserData.userName === "string" ? targetUserData.userName : "",
-          expectedAgeOutYearMonth: childFollowUp?.kind === "grant"
-            ? childFollowUp.expectedAgeOutYearMonth
-            : undefined,
+          expectedAgeOutYearMonth: childDecision.expectedAgeOutYearMonth,
+          scopeVector: buildScopeVector(childDecision.consentScopes),
+          consentTextVersion: childDecision.consentTextVersion,
         });
 
         const awaitingBatch = db.batch();
@@ -1285,29 +1284,8 @@ export const approveFamilyJoinRequest_CaptainStep = enforcedCallable(
       }
     }
 
-    // COPPA FR-4/FR-25 follow-ons (non-atomic, idempotent; the F-5b syncer exclusion is
-    // the purge backstop). Runs only after the membership batch has committed.
-    if (childFollowUp?.kind === "grant") {
-      const membersSnapshot = await db
-        .collection(`families/${familyId}/members`)
-        .get();
-      const cleanup = await applyChildProtectionsAfterFlagSet(db, {
-        childUserId: requestData.userId,
-        familyMemberIds: membersSnapshot.docs.map((doc) => doc.id),
-        childUserData: childFollowUp.targetUserData,
-      });
-
-      await writeChildConsentGranted(db, {
-        familyId,
-        childUserId: requestData.userId,
-        actorId: userId,
-        actorRole: memberRole,
-        method: "family_admission",
-        expectedAgeOutYearMonth: childFollowUp.expectedAgeOutYearMonth,
-        removedFriendEdgeCount: cleanup.removedFriendEdgeCount,
-        clientMetadata,
-      });
-    } else if (childFollowUp?.kind === "clear_new_guardian") {
+    // COPPA FR-25: the correction record. Runs only after the membership batch has committed.
+    if (childFollowUp?.kind === "clear_new_guardian") {
       // FR-25: new guardian explicitly declared not-a-child. Flag already cleared in the
       // batch; search indexes rebuild via the normal profile-sync triggers.
       //

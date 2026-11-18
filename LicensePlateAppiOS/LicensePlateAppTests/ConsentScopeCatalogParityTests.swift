@@ -72,6 +72,9 @@ struct ConsentScopeCatalogParityTests {
     @Test func consentTextVersionMatchesTheCanonicalCatalog() throws {
         let catalog = try loadCanonicalCatalog()
         #expect(ConsentScopeCatalog.consentTextVersion == catalog.consentTextVersion)
+        // F-21 slice 2 (landed 2026-11-17): the scope cards, consent_ack and Privacy
+        // section 12 text. A literal pin, so a fixture edit alone cannot move it.
+        #expect(ConsentScopeCatalog.consentTextVersion == "2026-11-17.consent-scopes")
     }
 
     @Test func launchSelectionIsExactlyTheRequiredScopes() {

@@ -63,7 +63,11 @@ import {
 } from "./family";
 import { createShareCode, redeemShareCode } from "./shareCodes";
 import {
+  claimConsentRequestEmail,
   commitGuardianConfirmation,
+  consentRequestEvidenceMatches,
+  createConsentRequestForApproval,
+  createMemberFlagConsentRequest,
   confirmationFailurePage,
   confirmParentalConsent,
   reconcileConsentRecords,
@@ -93,7 +97,24 @@ import {
 import {
   confirmGuardianConsent,
   findLiveConsentRequest,
+  LAUNCH_CONSENT_PAYLOAD,
 } from "./testSupport/consentTestHelpers";
+import {
+  CONSENT_NOTICE_TEXT_VERSION,
+  CONSENT_POLICY_VERSIONS,
+  CONSENT_TEXT_VERSION,
+  buildScopeVector,
+} from "./childAccountCore";
+
+/** The evidence a slice-2 request carries (F-21), as stored at creation. */
+function launchEvidence(): Record<string, unknown> {
+  return {
+    scopeVector: buildScopeVector(["core"]),
+    consentTextVersion: CONSENT_TEXT_VERSION,
+    noticeTextVersion: CONSENT_NOTICE_TEXT_VERSION,
+    policyVersions: { ...CONSENT_POLICY_VERSIONS },
+  };
+}
 
 function db(): FakeFirestore {
   return holder.db as FakeFirestore;
@@ -141,6 +162,7 @@ const CHILD_APPROVAL = {
   isChild: true,
   consentAcknowledged: true,
   guardianAffirmed: true,
+  ...LAUNCH_CONSENT_PAYLOAD,
 };
 
 async function childAwaiting(): Promise<{ familyId: string; requestId: string }> {
@@ -744,6 +766,7 @@ describe("member_flag: refusal-by-silence removes the member, never the account"
       method: "email_plus",
       assuranceLevel: 1,
       nonceHash: hashConsentNonce("cc".repeat(16)),
+      ...launchEvidence(),
     });
   }
 
@@ -1174,5 +1197,413 @@ describe("the FR-64 reconcile re-derives the grant-time guarantee from stored st
     });
     expect(abandoned.plusNoticeAbandoned).toEqual([requestId]);
     expect(abandoned.plusNoticeOverdue).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. F-21 slice 2 — the scope vector and version evidence (FR-65 / FR-103 / FR-64)
+// ---------------------------------------------------------------------------
+
+function grantedRows(): Array<Record<string, unknown>> {
+  return [...db().store.entries()]
+    .filter(
+      ([path, data]) =>
+        path.startsWith("audit_logs/") && data.eventType === "AUDIT_PARENTAL_CONSENT_GRANTED"
+    )
+    .map(([, data]) => data);
+}
+
+function consentRequestDocs(): Array<[string, Record<string, unknown>]> {
+  return [...db().store.entries()].filter(([path]) =>
+    path.startsWith(`${CONSENT_REQUESTS_COLLECTION}/`)
+  );
+}
+
+/** A join child whose row is still `pending` (no approve yet). */
+async function childPendingRow(): Promise<{ familyId: string; requestId: string }> {
+  const { familyId } = await run.createFamily("captain", "Hammers");
+  const { code } = await run.createShareCode("captain", familyId);
+  const { inviteId } = await run.redeemShareCode("kid", code);
+  await run.acceptInvite("kid", inviteId);
+  const rows = [...db().store.entries()].filter(
+    ([path, data]) =>
+      path.startsWith(`families/${familyId}/pending/`) && data.status === "pending"
+  );
+  return { familyId, requestId: rows[0][0].split("/").pop()! };
+}
+
+const UPDATE_MESSAGE =
+  "This version of RoadTrip Royale can't approve a child. Update the app to the latest version and try again.";
+
+describe("F-21: the join entry point validates the consent text and scopes before any write", () => {
+  it.each([
+    ["an older consent text version", { consentTextVersion: "1.0.0-2026-08-10" }, "consent_text_outdated"],
+    ["a pre-F-21 payload (neither field)", { consentTextVersion: undefined, consentScopes: undefined }, "consent_text_outdated"],
+    ["an empty selection", { consentScopes: [] }, "consent_scopes_invalid"],
+    ["a frozen scope selected", { consentScopes: ["core", "analytics_internal"] }, "consent_scopes_invalid"],
+  ])("%s → failed-precondition with details.reason; row untouched, no request", async (_l, patch, reason) => {
+    const { familyId, requestId } = await childPendingRow();
+
+    const error = await run
+      .approve("captain", { familyId, requestId, ...CHILD_APPROVAL, ...patch })
+      .catch((e) => e);
+    expect(error).toMatchObject({
+      code: "failed-precondition",
+      message: UPDATE_MESSAGE,
+      details: { reason },
+    });
+    expect(db().store.get(`families/${familyId}/pending/${requestId}`)?.status).toBe("pending");
+    expect(consentRequestDocs()).toHaveLength(0);
+    expect(db().store.get(`families/${familyId}/members/kid`)).toBeUndefined();
+  });
+});
+
+describe("F-21: consent requests store the evidence at creation, for both kinds", () => {
+  it("join_admission: vector, the client's text version, the notice version and policy versions", async () => {
+    const { familyId } = await childAwaiting();
+    const found = findLiveConsentRequest(db(), { familyId, childUserId: "kid" })!;
+    expect(found.data).toMatchObject({ kind: "join_admission", ...launchEvidence() });
+    expect(found.data.scopeVector).toEqual({
+      core: { state: "granted", practiceVersion: 1 },
+      analytics_internal: { state: "unavailable", practiceVersion: 1 },
+      ads_child_directed: { state: "unavailable", practiceVersion: 1 },
+      location_family_shared: { state: "unavailable", practiceVersion: 1 },
+      cross_family_visibility: { state: "unavailable", practiceVersion: 1 },
+    });
+  });
+
+  it("member_flag: the same evidence", async () => {
+    db().seed("families/famM", { name: "The Ms" });
+    const { requestId } = await createMemberFlagConsentRequest(db() as never, {
+      familyId: "famM",
+      childUserId: "flagged",
+      guardianUid: "captain",
+      guardianRole: "creator",
+      guardianEmail: "captain@example.com",
+      childUserName: "Flagged",
+      expectedAgeOutYearMonth: 203801,
+      scopeVector: buildScopeVector(["core"]),
+      consentTextVersion: CONSENT_TEXT_VERSION,
+    });
+    expect(db().store.get(`${CONSENT_REQUESTS_COLLECTION}/${requestId}`)).toMatchObject({
+      kind: "member_flag",
+      ...launchEvidence(),
+    });
+  });
+});
+
+describe("F-21: a live request is reused only for identical evidence", () => {
+  function seedLive(id: string, extra: Record<string, unknown>): void {
+    db().seed(`${CONSENT_REQUESTS_COLLECTION}/${id}`, {
+      kind: "join_admission",
+      familyId: "famR",
+      childUserId: "kid",
+      guardianUid: "captain",
+      guardianEmail: "captain@example.com",
+      status: "pending",
+      expiresAtMillis: Date.now() + 60_000,
+      ...extra,
+    });
+  }
+  const create = () =>
+    createConsentRequestForApproval(db() as never, {
+      familyId: "famR",
+      childUserId: "kid",
+      joinRequestId: "row1",
+      guardianUid: "captain",
+      guardianRole: "creator",
+      guardianEmail: "captain@example.com",
+      newRole: "scout",
+      childUserName: "Speedy",
+      scopeVector: buildScopeVector(["core"]),
+      consentTextVersion: CONSENT_TEXT_VERSION,
+    });
+
+  it("an identical live request is reused — no new request, no new email", async () => {
+    seedLive("same", launchEvidence());
+    await expect(create()).resolves.toEqual({ requestId: "same", reusedExisting: true });
+    expect(consentRequestDocs()).toHaveLength(1);
+  });
+
+  it.each([
+    ["no vector (a pre-F-21 request)", { ...launchEvidence(), scopeVector: undefined }],
+    [
+      "a different vector",
+      {
+        ...launchEvidence(),
+        scopeVector: {
+          ...buildScopeVector(["core"]),
+          core: { state: "granted", practiceVersion: 2 },
+        },
+      },
+    ],
+    ["a different consent text version", { ...launchEvidence(), consentTextVersion: "2026-01-01.old" }],
+    ["a different notice text version", { ...launchEvidence(), noticeTextVersion: "2026-01-01.notice" }],
+    [
+      "different policy versions",
+      { ...launchEvidence(), policyVersions: { ...CONSENT_POLICY_VERSIONS, privacyPolicy: "old" } },
+    ],
+  ])("%s is superseded (address and link nonce purged) and a fresh request is made", async (_l, evidence) => {
+    // Still queued: superseded before its email trigger ran, so no claim strips the nonce.
+    seedLive("old", { ...(evidence as Record<string, unknown>), pendingLinkNonce: "ab".repeat(16) });
+    const result = await create();
+    expect(result.reusedExisting).toBe(false);
+    expect(result.requestId).not.toBe("old");
+    const old = db().store.get(`${CONSENT_REQUESTS_COLLECTION}/old`)!;
+    expect(old.status).toBe("superseded");
+    expect(old.guardianEmail).toBe("__delete__");
+    expect(old.pendingLinkNonce).toBe("__delete__");
+    expect(db().store.get(`${CONSENT_REQUESTS_COLLECTION}/${result.requestId}`)).toMatchObject({
+      status: "pending",
+      ...launchEvidence(),
+    });
+  });
+
+  it("the predicate ignores key order (Firestore maps are unordered)", () => {
+    const reordered = {
+      ...launchEvidence(),
+      policyVersions: {
+        privacyPolicy: CONSENT_POLICY_VERSIONS.privacyPolicy,
+        termsOfService: CONSENT_POLICY_VERSIONS.termsOfService,
+      },
+    };
+    expect(
+      consentRequestEvidenceMatches(reordered, {
+        scopeVector: buildScopeVector(["core"]),
+        consentTextVersion: CONSENT_TEXT_VERSION,
+        noticeTextVersion: CONSENT_NOTICE_TEXT_VERSION,
+        policyVersions: CONSENT_POLICY_VERSIONS,
+      })
+    ).toBe(true);
+  });
+});
+
+describe("F-21: the email trigger claims only a pending request with a valid vector", () => {
+  function seedQueued(id: string, extra: Record<string, unknown>): void {
+    db().seed(`${CONSENT_REQUESTS_COLLECTION}/${id}`, {
+      status: "pending",
+      emailDelivery: { state: "queued" },
+      pendingLinkNonce: "ab".repeat(16),
+      ...launchEvidence(),
+      ...extra,
+    });
+  }
+  const claim = (id: string) =>
+    claimConsentRequestEmail(
+      db() as never,
+      db().collection(CONSENT_REQUESTS_COLLECTION).doc(id) as never
+    );
+
+  it("claims a pending request with a valid vector and strips the raw nonce", async () => {
+    seedQueued("ok", {});
+    await expect(claim("ok")).resolves.toEqual({ kind: "send", nonce: "ab".repeat(16) });
+    const doc = db().store.get(`${CONSENT_REQUESTS_COLLECTION}/ok`)!;
+    expect(doc.emailDelivery).toEqual({ state: "sending" });
+    expect(doc.pendingLinkNonce).toBe("__delete__");
+  });
+
+  it("skips a request superseded before the trigger ran, and leaves it alone", async () => {
+    seedQueued("gone", { status: "superseded" });
+    await expect(claim("gone")).resolves.toEqual({ kind: "skipped" });
+    expect(db().store.get(`${CONSENT_REQUESTS_COLLECTION}/gone`)!.emailDelivery).toEqual({
+      state: "queued",
+    });
+  });
+
+  it("refuses a request with no vector: delivery failed, nonce dropped, nothing to send", async () => {
+    seedQueued("novector", { scopeVector: undefined });
+    await expect(claim("novector")).resolves.toEqual({ kind: "refused" });
+    const doc = db().store.get(`${CONSENT_REQUESTS_COLLECTION}/novector`)!;
+    expect((doc.emailDelivery as Record<string, unknown>).state).toBe("failed");
+    expect(typeof (doc.emailDelivery as Record<string, unknown>).failedAtMillis).toBe("number");
+    expect(doc.pendingLinkNonce).toBe("__delete__");
+  });
+
+  it("a second claim of the same request is skipped (trigger retries never double-send)", async () => {
+    seedQueued("twice", {});
+    await claim("twice");
+    db().store.set(`${CONSENT_REQUESTS_COLLECTION}/twice`, {
+      ...db().store.get(`${CONSENT_REQUESTS_COLLECTION}/twice`)!,
+      pendingLinkNonce: undefined,
+    });
+    await expect(claim("twice")).resolves.toEqual({ kind: "skipped" });
+  });
+});
+
+describe("F-21: both FR-64 commits record the evidence from the transaction's fresh read", () => {
+  // A valid but non-current policy map, written onto the stored request AFTER creation:
+  // if the commit recorded current constants (or anything but the fresh read), it would
+  // not carry this value.
+  const STORED_POLICY = { termsOfService: "tos-at-request", privacyPolicy: "pp-at-request" };
+
+  function setStoredPolicy(requestId: string): void {
+    const path = `${CONSENT_REQUESTS_COLLECTION}/${requestId}`;
+    db().store.set(path, { ...db().store.get(path)!, policyVersions: STORED_POLICY });
+  }
+
+  function expectedEvidence(requestId: string): Record<string, unknown> {
+    return {
+      consentScopes: buildScopeVector(["core"]),
+      consentTextVersion: CONSENT_TEXT_VERSION,
+      noticeTextVersion: CONSENT_NOTICE_TEXT_VERSION,
+      policyVersions: STORED_POLICY,
+      consentRequestId: requestId,
+    };
+  }
+
+  function seedMemberFlag(): void {
+    db().seed("families/famM", { name: "The Ms", creatorId: "captain", status: "active" });
+    db().seed("families/famM/members/captain", { role: "creator" });
+    db().seed("users/flagged", {
+      userName: "Flagged",
+      isChildAccount: true,
+      activeFamilyId: "famM",
+    });
+    db().seed("families/famM/members/flagged", {
+      role: "scout",
+      isChild: true,
+      consentPending: true,
+    });
+    db().seed(`${CONSENT_REQUESTS_COLLECTION}/mf2`, {
+      kind: "member_flag",
+      familyId: "famM",
+      childUserId: "flagged",
+      guardianUid: "captain",
+      guardianRole: "creator",
+      guardianEmail: "captain@example.com",
+      expectedAgeOutYearMonth: 203801,
+      status: "pending",
+      expiresAtMillis: Date.now() + 60_000,
+      method: "email_plus",
+      assuranceLevel: 1,
+      ...launchEvidence(),
+    });
+  }
+
+  it("join and member_flag write identical evidence into the GRANTED row and guardianship", async () => {
+    const { familyId } = await childAwaiting();
+    const joinRequestId = findLiveConsentRequest(db(), { familyId, childUserId: "kid" })!.requestId;
+    setStoredPolicy(joinRequestId);
+    expect((await confirmGuardianConsent(db(), { familyId, childUserId: "kid" })).committed).toBe(
+      true
+    );
+
+    seedMemberFlag();
+    setStoredPolicy("mf2");
+    expect(
+      (await confirmGuardianConsent(db(), { familyId: "famM", childUserId: "flagged" })).committed
+    ).toBe(true);
+
+    const rows = grantedRows();
+    expect(rows).toHaveLength(2);
+    const joinRow = rows.find((row) => row.subjectId === "kid")!;
+    const flagRow = rows.find((row) => row.subjectId === "flagged")!;
+    expect(joinRow.metadata).toMatchObject(expectedEvidence(joinRequestId));
+    expect(flagRow.metadata).toMatchObject(expectedEvidence("mf2"));
+    for (const row of [joinRow, flagRow]) {
+      expect(row.metadata).not.toHaveProperty("consentScope");
+    }
+
+    for (const [child, requestId] of [
+      ["kid", joinRequestId],
+      ["flagged", "mf2"],
+    ] as const) {
+      const guardianship = db().store.get(`users/${child}/private/guardianship`)!;
+      expect(guardianship).toMatchObject(expectedEvidence(requestId));
+      expect(guardianship.consentScopesUpdatedAtMillis).toBe(guardianship.grantedAtMillis);
+      expect((guardianship.consentScopes as Record<string, any>).core.state).toBe("granted");
+    }
+  });
+
+  type Mutation = (vector: Record<string, any>) => void;
+  const tamper: Array<[string, Mutation]> = [
+    ["a frozen scope granted", (v) => (v.analytics_internal.state = "granted")],
+    ["core missing", (v) => delete v.core],
+    ["a practice-version drift", (v) => (v.cross_family_visibility.practiceVersion = 2)],
+  ];
+
+  it.each(tamper)(
+    "join: a stored vector with %s refuses with scope_selection_invalid and writes nothing",
+    async (_l, mutate) => {
+      const { familyId, requestId: rowId } = await childAwaiting();
+      const found = findLiveConsentRequest(db(), { familyId, childUserId: "kid" })!;
+      const path = `${CONSENT_REQUESTS_COLLECTION}/${found.requestId}`;
+      const vector = JSON.parse(JSON.stringify(found.data.scopeVector));
+      mutate(vector);
+      db().store.set(path, { ...db().store.get(path)!, scopeVector: vector });
+      const before = new Map(db().store);
+
+      const outcome = await confirmGuardianConsent(db(), { familyId, childUserId: "kid" });
+      expect(outcome).toEqual({ committed: false, reason: "scope_selection_invalid" });
+      expect(db().store).toEqual(before);
+      expect(db().store.get(`families/${familyId}/members/kid`)).toBeUndefined();
+      expect(db().store.get("users/kid")?.activeFamilyId).toBeUndefined();
+      expect(db().store.get("users/kid/private/guardianship")).toBeUndefined();
+      expect(db().store.get(`families/${familyId}/pending/${rowId}`)?.status).toBe(
+        JOIN_REQUEST_AWAITING_GUARDIAN_STATUS
+      );
+      expect(db().store.get(path)?.status).toBe("pending");
+      expect(grantedRows()).toHaveLength(0);
+    }
+  );
+
+  it.each(tamper)(
+    "member_flag: a stored vector with %s refuses with scope_selection_invalid and writes nothing",
+    async (_l, mutate) => {
+      seedMemberFlag();
+      const path = `${CONSENT_REQUESTS_COLLECTION}/mf2`;
+      const vector = JSON.parse(JSON.stringify(db().store.get(path)!.scopeVector));
+      mutate(vector);
+      db().store.set(path, { ...db().store.get(path)!, scopeVector: vector });
+      const before = new Map(db().store);
+
+      const outcome = await confirmGuardianConsent(db(), {
+        familyId: "famM",
+        childUserId: "flagged",
+      });
+      expect(outcome).toEqual({ committed: false, reason: "scope_selection_invalid" });
+      expect(db().store).toEqual(before);
+      expect(db().store.get("families/famM/members/flagged")?.consentPending).toBe(true);
+      expect(db().store.get("users/flagged/private/guardianship")).toBeUndefined();
+      expect(grantedRows()).toHaveLength(0);
+    }
+  );
+
+  it("a request with no vector at all (pre-F-21) refuses the same way", async () => {
+    const { familyId } = await childAwaiting();
+    const found = findLiveConsentRequest(db(), { familyId, childUserId: "kid" })!;
+    const path = `${CONSENT_REQUESTS_COLLECTION}/${found.requestId}`;
+    db().store.set(path, { ...db().store.get(path)!, scopeVector: undefined });
+    const outcome = await confirmGuardianConsent(db(), { familyId, childUserId: "kid" });
+    expect(outcome).toEqual({ committed: false, reason: "scope_selection_invalid" });
+    expect(grantedRows()).toHaveLength(0);
+  });
+
+  it("an injected failure inside the transaction leaves member, activeFamilyId, audit row and guardianship ALL absent", async () => {
+    const { familyId } = await childAwaiting();
+    const { FakeTransaction } = await import("./testSupport/fakeFirestore");
+    const originalSet = FakeTransaction.prototype.set;
+    // Throw on the LAST write the join commit queues (the audit row), after the member
+    // doc, the user update, the row, the request and guardianship are already queued.
+    const spy = vi
+      .spyOn(FakeTransaction.prototype, "set")
+      .mockImplementation(function (this: unknown, ref: any, data: any, options?: any) {
+        if (String(ref.path).startsWith("audit_logs/")) {
+          throw new Error("injected commit failure");
+        }
+        return originalSet.call(this as never, ref, data, options);
+      });
+    try {
+      await expect(
+        confirmGuardianConsent(db(), { familyId, childUserId: "kid" })
+      ).rejects.toThrow("injected commit failure");
+    } finally {
+      spy.mockRestore();
+    }
+    expect(db().store.get(`families/${familyId}/members/kid`)).toBeUndefined();
+    expect(db().store.get("users/kid")?.activeFamilyId).toBeUndefined();
+    expect(db().store.get("users/kid/private/guardianship")).toBeUndefined();
+    expect(grantedRows()).toHaveLength(0);
+    expect(findLiveConsentRequest(db(), { familyId, childUserId: "kid" })).not.toBeNull();
   });
 });

@@ -976,18 +976,50 @@ struct PrivacyView: View {
     /// COPPA F-8: see `TermsView.scrollToSectionTitle`.
     var scrollToSectionTitle: String?
 
+    /// FR-103(c): a consent card's "Read this part of the Privacy Policy" opens its own
+    /// section 12 subsection. Takes precedence over `scrollToSectionTitle` when both are set.
+    var scrollToAnchor: ConsentScopePolicyAnchor?
+
     /// The section the child-consent copy references (Privacy Policy section 12).
     static var childrenSectionTitle: String {
         "12. Children".localized
     }
 
-    private struct PolicySection: Identifiable {
-        var id: String { title }
+    struct PolicySection: Identifiable {
+        var id: String { anchor?.rawValue ?? title }
         let title: String
         let body: String
+        /// Set on the section 12 subsections only; it is their scroll id.
+        var anchor: ConsentScopePolicyAnchor? = nil
     }
 
-    private var sections: [PolicySection] {
+    /// One section 12 subsection per consent scope, in catalog order. Semantic keys rather
+    /// than the sentence keys the rest of this document uses, on purpose: this is versioned
+    /// consent text (`CONSENT_TEXT_VERSION`).
+    struct ChildrenSubsection: Equatable {
+        let anchor: ConsentScopePolicyAnchor
+        let titleKey: String
+        let bodyKey: String
+    }
+
+    static let childrenIntroBodyKey = "privacy.section12.intro.body"
+    static let lastUpdatedKey = "privacy.last_updated"
+
+    static let childrenSubsections: [ChildrenSubsection] = [
+        ChildrenSubsection(anchor: .core, titleKey: "privacy.section12.core.title", bodyKey: "privacy.section12.core.body"),
+        ChildrenSubsection(anchor: .analytics, titleKey: "privacy.section12.analytics.title", bodyKey: "privacy.section12.analytics.body"),
+        ChildrenSubsection(anchor: .ads, titleKey: "privacy.section12.ads.title", bodyKey: "privacy.section12.ads.body"),
+        ChildrenSubsection(anchor: .location, titleKey: "privacy.section12.location.title", bodyKey: "privacy.section12.location.body"),
+        ChildrenSubsection(anchor: .crossFamily, titleKey: "privacy.section12.cross_family.title", bodyKey: "privacy.section12.cross_family.body"),
+    ]
+
+    /// The anchors the rendered section list actually registers as scroll ids
+    /// (PrivacyPolicyAnchorTests pins this to every `ConsentScopePolicyAnchor`).
+    static var sectionAnchors: [ConsentScopePolicyAnchor] {
+        sections.compactMap(\.anchor)
+    }
+
+    static var sections: [PolicySection] {
         [
             PolicySection(
                 title: "1. Who We Are".localized,
@@ -1035,8 +1067,15 @@ struct PrivacyView: View {
             ),
             PolicySection(
                 title: "12. Children".localized,
-                body: "RoadTrip Royale is made for families. Children under 13 — or the applicable age of digital consent where you live — may play only through a family group created and managed by a parent or legal guardian, who consents to the collection of the child’s information as described in this policy. We do not knowingly collect personal information directly from children outside parent-managed play, and we do not knowingly serve personalized advertising to children. Parents and guardians can review or delete their child’s information, or withdraw consent, by contacting support@roadtriproyale.com.".localized
+                body: childrenIntroBodyKey.localized
             ),
+        ] + childrenSubsections.map { subsection in
+            PolicySection(
+                title: subsection.titleKey.localized,
+                body: subsection.bodyKey.localized,
+                anchor: subsection.anchor
+            )
+        } + [
             PolicySection(
                 title: "13. Security".localized,
                 body: "We protect your information with technical and organizational safeguards, including encryption in transit, authenticated access, and server-side security rules. No system is perfectly secure. If a breach affects your personal data, we will notify you as required by applicable law.".localized
@@ -1067,11 +1106,11 @@ struct PrivacyView: View {
                             .foregroundStyle(Color.Theme.primaryBlue)
                             .accessibilityAddTraits(.isHeader)
 
-                        Text("Last updated: August 8, 2026".localized)
+                        Text(Self.lastUpdatedKey.localized)
                             .font(.system(.caption, design: .rounded))
                             .foregroundStyle(Color.Theme.softBrown)
 
-                        ForEach(sections) { section in
+                        ForEach(Self.sections) { section in
                             Text(section.title)
                                 .font(.system(.headline, design: .rounded))
                                 .fontWeight(.semibold)
@@ -1088,8 +1127,11 @@ struct PrivacyView: View {
                     .padding()
                 }
                 .onAppear {
-                    guard let scrollToSectionTitle else { return }
-                    proxy.scrollTo(scrollToSectionTitle, anchor: .top)
+                    if let scrollToAnchor {
+                        proxy.scrollTo(scrollToAnchor.rawValue, anchor: .top)
+                    } else if let scrollToSectionTitle {
+                        proxy.scrollTo(scrollToSectionTitle, anchor: .top)
+                    }
                 }
             }
         }
@@ -1138,5 +1180,11 @@ struct PrivacyView: View {
 #Preview("Privacy Policy") {
     NavigationStack {
         PrivacyView()
+    }
+}
+
+#Preview("Privacy Policy — opened at 12.3") {
+    NavigationStack {
+        PrivacyView(scrollToAnchor: .ads)
     }
 }

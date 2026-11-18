@@ -16,21 +16,30 @@
 //  `family.child.guardian_affirmation` in ANY locale must bump that constant in the
 //  same commit.
 //
+//  F-21 (FR-65 / FR-103): the scope cards, the full-policy links line and the consent
+//  checkbox are also consent evidence, versioned by `CONSENT_TEXT_VERSION`; the approve
+//  and Mark-as-a-child payloads send the version this build shows.
+//
 
 import SwiftUI
 
 struct FamilyChildConsentBlock: View {
+    /// Which consent path this is: approving a join request, or marking an existing
+    /// member as a child. It picks the core card's required-reason line and whether the
+    /// turns-13 attestation is required.
+    let kind: ConsentScopeCardPolicy.ApprovalKind
     let draft: ChildConsentDraft
     let yearOptions: [Int]
-    /// Owner ruling 2026-08-28: true in the mark-existing-member-as-child context,
-    /// where the attestation is the only possible age-out source and the server
-    /// refuses without it — the label drops "(optional)" and the confirm gate
-    /// (`isCompleteForMemberFlag`) requires the pick. Approve-flow callers keep the
-    /// default (there the gate-derived marker exists).
-    var attestationRequired: Bool = false
     let onConsentAcknowledgedChange: (Bool) -> Void
     let onGuardianAffirmedChange: (Bool) -> Void
     let onExpectedAgeOutYearMonthChange: (Int?) -> Void
+
+    /// Owner ruling 2026-08-28: required in the mark-existing-member-as-child context,
+    /// where the attestation is the only possible age-out source and the server refuses
+    /// without it — the label drops "(optional)" and the confirm gate
+    /// (`isCompleteForMemberFlag`) requires the pick. On the join path the gate-derived
+    /// marker exists, so it stays optional.
+    private var attestationRequired: Bool { kind == .memberFlag }
 
     private var ageOutLabelKey: String {
         attestationRequired ? "family.child.age_out_label_required" : "family.child.age_out_label"
@@ -38,7 +47,7 @@ struct FamilyChildConsentBlock: View {
 
     /// The document a parent tapped through to, presented over this block so consent is
     /// never abandoned to go read it.
-    @State private var presentedPolicyLink: ChildConsentPolicyLink?
+    @State private var presentedPolicy: PresentedPolicy?
 
     /// Partial month/year selections while the parent is mid-pick; the composed YYYYMM
     /// reaches the draft only when both halves exist (and clears when either clears).
@@ -69,12 +78,12 @@ struct FamilyChildConsentBlock: View {
         )
     }
 
-    /// The policy summary with its two citations rendered as links. The markdown is
-    /// parsed at runtime (the string is already localized, so `LocalizedStringKey`'s
+    /// The full-policy links line with its two citations rendered as links. The markdown
+    /// is parsed at runtime (the string is already localized, so `LocalizedStringKey`'s
     /// markdown handling is not usable here); a malformed translation degrades to plain
     /// text rather than losing the copy.
-    private var policySummary: AttributedString {
-        let raw = "family.child.policy_summary".localized
+    private var fullPolicyLinks: AttributedString {
+        let raw = ConsentScopeCardPolicy.fullPolicyLinksKey.localized
         return (try? AttributedString(
             markdown: raw,
             options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
@@ -89,7 +98,21 @@ struct FamilyChildConsentBlock: View {
                 .foregroundStyle(Color.Theme.primaryBlue)
                 .accessibleHeader("family.child.consent_section_title".localized)
 
-            Text(policySummary)
+            Text(ConsentScopeCardPolicy.sectionTitleKey.localized)
+                .font(.system(.subheadline, design: .rounded))
+                .fontWeight(.semibold)
+                .foregroundStyle(Color.Theme.primaryBlue)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibleHeader(ConsentScopeCardPolicy.sectionTitleKey.localized)
+
+            Text(ConsentScopeCardPolicy.sectionIntroKey.localized)
+                .font(.system(.footnote, design: .rounded))
+                .foregroundStyle(Color.Theme.softBrown)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ConsentScopeCardList(mode: .approval(kind: kind))
+
+            Text(fullPolicyLinks)
                 .font(.system(.caption, design: .rounded))
                 .foregroundStyle(Color.Theme.softBrown)
                 .tint(Color.Theme.primaryBlue)
@@ -166,24 +189,47 @@ struct FamilyChildConsentBlock: View {
             selectedMonth = ExpectedAgeOutYearOptions.month(of: draft.expectedAgeOutYearMonth)
             selectedYear = ExpectedAgeOutYearOptions.year(of: draft.expectedAgeOutYearMonth)
         }
-        // Intercept our own citation links; anything else goes to the system unchanged.
+        // Intercept our own citation and scope-card links; anything else goes to the
+        // system unchanged.
         .environment(\.openURL, OpenURLAction { url in
-            guard let link = ChildConsentPolicyLink.from(url: url) else { return .systemAction }
-            presentedPolicyLink = link
+            guard let policy = PresentedPolicy.from(url: url) else { return .systemAction }
+            presentedPolicy = policy
             return .handled
         })
-        .sheet(item: $presentedPolicyLink) { link in
+        .sheet(item: $presentedPolicy) { policy in
             // Same presentation the onboarding disclaimer uses; the documents own their
             // own Done button and dismiss themselves.
             NavigationStack {
-                switch link {
-                case .termsOfService:
+                switch policy {
+                case .document(.termsOfService):
                     TermsView(scrollToSectionTitle: TermsView.childEligibilitySectionTitle)
-                case .privacyPolicy:
+                case .document(.privacyPolicy):
                     PrivacyView(scrollToSectionTitle: PrivacyView.childrenSectionTitle)
+                case .privacySubsection(let anchor):
+                    PrivacyView(scrollToAnchor: anchor)
                 }
             }
         }
+    }
+}
+
+/// What the consent block's sheet shows: a whole cited document (the links line), or the
+/// Privacy Policy opened at one scope's section 12 subsection (a card's policy link).
+private enum PresentedPolicy: Identifiable {
+    case document(ChildConsentPolicyLink)
+    case privacySubsection(ConsentScopePolicyAnchor)
+
+    var id: String {
+        switch self {
+        case .document(let link): return link.rawValue
+        case .privacySubsection(let anchor): return anchor.rawValue
+        }
+    }
+
+    static func from(url: URL) -> PresentedPolicy? {
+        if let link = ChildConsentPolicyLink.from(url: url) { return .document(link) }
+        if let anchor = ConsentScopePolicyAnchor.from(url: url) { return .privacySubsection(anchor) }
+        return nil
     }
 }
 
@@ -331,51 +377,60 @@ struct FamilyChildCorrectionBlock: View {
         )
         .padding()
     }
-    .environment(\.dynamicTypeSize, .accessibility3)
+    .environment(\.dynamicTypeSize, .accessibility5)
 }
 
-#Preview("Consent block — empty") {
-    FamilyChildConsentBlock(
-        draft: ChildConsentDraft(),
-        yearOptions: Array(2026...2039),
-        onConsentAcknowledgedChange: { _ in },
-        onGuardianAffirmedChange: { _ in },
-        onExpectedAgeOutYearMonthChange: { _ in }
-    )
-    .padding()
+#Preview("Consent block — join, empty") {
+    ScrollView {
+        FamilyChildConsentBlock(
+            kind: .join,
+            draft: ChildConsentDraft(),
+            yearOptions: Array(2026...2039),
+            onConsentAcknowledgedChange: { _ in },
+            onGuardianAffirmedChange: { _ in },
+            onExpectedAgeOutYearMonthChange: { _ in }
+        )
+        .padding()
+    }
 }
 
-#Preview("Consent block — attestation required (member flag)") {
-    FamilyChildConsentBlock(
-        draft: ChildConsentDraft(),
-        yearOptions: Array(2026...2039),
-        attestationRequired: true,
-        onConsentAcknowledgedChange: { _ in },
-        onGuardianAffirmedChange: { _ in },
-        onExpectedAgeOutYearMonthChange: { _ in }
-    )
-    .padding()
+#Preview("Consent block — Mark as a child (attestation required)") {
+    ScrollView {
+        FamilyChildConsentBlock(
+            kind: .memberFlag,
+            draft: ChildConsentDraft(),
+            yearOptions: Array(2026...2039),
+            onConsentAcknowledgedChange: { _ in },
+            onGuardianAffirmedChange: { _ in },
+            onExpectedAgeOutYearMonthChange: { _ in }
+        )
+        .padding()
+    }
 }
 
 #Preview("Consent block — complete, dark") {
-    FamilyChildConsentBlock(
-        draft: ChildConsentDraft(
-            consentAcknowledged: true,
-            guardianAffirmed: true,
-            expectedAgeOutYearMonth: 203103
-        ),
-        yearOptions: Array(2026...2039),
-        onConsentAcknowledgedChange: { _ in },
-        onGuardianAffirmedChange: { _ in },
-        onExpectedAgeOutYearMonthChange: { _ in }
-    )
-    .padding()
+    ScrollView {
+        FamilyChildConsentBlock(
+            kind: .join,
+            draft: ChildConsentDraft(
+                consentAcknowledged: true,
+                guardianAffirmed: true,
+                expectedAgeOutYearMonth: 203103
+            ),
+            yearOptions: Array(2026...2039),
+            onConsentAcknowledgedChange: { _ in },
+            onGuardianAffirmedChange: { _ in },
+            onExpectedAgeOutYearMonthChange: { _ in }
+        )
+        .padding()
+    }
     .preferredColorScheme(.dark)
 }
 
 #Preview("Consent block — accessibility text size") {
     ScrollView {
         FamilyChildConsentBlock(
+            kind: .memberFlag,
             draft: ChildConsentDraft(consentAcknowledged: true),
             yearOptions: Array(2026...2039),
             onConsentAcknowledgedChange: { _ in },
@@ -384,5 +439,5 @@ struct FamilyChildCorrectionBlock: View {
         )
         .padding()
     }
-    .environment(\.dynamicTypeSize, .accessibility3)
+    .environment(\.dynamicTypeSize, .accessibility5)
 }

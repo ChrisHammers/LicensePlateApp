@@ -13,7 +13,7 @@
 //
 //  `ConsentScopeCardPolicy` is the pure model of which scope cards an approval or manage
 //  surface shows and which localization KEYS each card uses. It resolves no strings:
-//  the keys are plain constants, and no view renders them yet.
+//  the keys are plain constants, and `ConsentScopeCardList` (slice 2) renders them.
 //
 
 import Foundation
@@ -57,7 +57,7 @@ nonisolated enum ConsentScopeId: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    // Copy-deck keys. Plain constants: nothing resolves them in this slice.
+    // Copy-deck keys. Plain constants; the views resolve them.
 
     var nameKey: String {
         switch self {
@@ -105,7 +105,7 @@ nonisolated enum ConsentScopeId: String, CaseIterable, Identifiable, Sendable {
 nonisolated enum ConsentScopeCatalog {
     /// Equals `CONSENT_TEXT_VERSION` in `childAccountCore.ts` (pinned through the fixture
     /// by both parity suites). Bumped only together with that constant and the fixture.
-    static let consentTextVersion = "1.0.0-2026-08-10"
+    static let consentTextVersion = "2026-11-17.consent-scopes"
 
     /// The only valid selection at launch: core is required, every other scope is frozen.
     static let launchSelection: [ConsentScopeId] = [.core]

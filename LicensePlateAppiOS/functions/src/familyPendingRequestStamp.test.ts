@@ -51,7 +51,7 @@ vi.mock("firebase-admin", async () => {
 });
 
 import type { FakeFirestore } from "./testSupport/fakeFirestore";
-import { confirmGuardianConsent } from "./testSupport/consentTestHelpers";
+import { confirmGuardianConsent, LAUNCH_CONSENT_PAYLOAD } from "./testSupport/consentTestHelpers";
 import { FakeWriteBatch } from "./testSupport/fakeFirestore";
 import {
   approveFamilyJoinRequest_CaptainStep,
@@ -291,6 +291,7 @@ describe("FR-88: every resolution clears the stamp", () => {
       isChild: true,
       consentAcknowledged: true,
       guardianAffirmed: true,
+      ...LAUNCH_CONSENT_PAYLOAD,
     });
     // FR-59.1: the stamp STAYS through awaiting-guardian — a family is still deciding,
     // and clearing it early would blank the child's "waiting" state mid-consent.
@@ -373,6 +374,7 @@ describe("FR-88: every resolution clears the stamp", () => {
         isChild: true,
         consentAcknowledged: true,
         guardianAffirmed: true,
+        ...LAUNCH_CONSENT_PAYLOAD,
       });
       // The duplicate retires at APPROVE (it is a duplicate of this same decision);
       // the stamp clear rides the guardian confirmation with the admission itself.

@@ -6,11 +6,17 @@ import {
   AUDIT_PARENTAL_CONSENT_REVOKED,
   CHILD_CONSENT_EVENT_TYPES,
   CHILD_CONSENT_REVOCATION_REASONS,
-  CHILD_CONSENT_SCOPE,
   CHILD_STATUS_CORRECTION_REASONS,
+  CONSENT_NOTICE_TEXT_VERSION,
+  CONSENT_POLICY_VERSIONS,
+  CONSENT_SCOPES_INVALID_MESSAGE,
+  CONSENT_SCOPES_INVALID_REASON,
   CONSENT_SCOPE_CATALOG,
   CONSENT_SCOPE_IDS,
   CONSENT_SCOPE_PRACTICE_VERSIONS,
+  CONSENT_TEXT_OUTDATED_MESSAGE,
+  CONSENT_TEXT_OUTDATED_REASON,
+  CONSENT_TEXT_VERSION,
   buildChildRegistrationDeclaredMetadata,
   buildConsentCorrectedMetadata,
   buildConsentGrantedMetadata,
@@ -24,6 +30,7 @@ import {
   validateConsentScopeSelection,
   validateExpectedAgeOutYearMonth,
   validateSetChildStatusInput,
+  validateStoredConsentEvidence,
   validateStoredScopeVector,
 } from "./childAccountCore";
 import { AUDIT_RETENTION_EXEMPT_EVENT_TYPES } from "./retentionCore";
@@ -44,13 +51,24 @@ describe("consent event types", () => {
     expect(AUDIT_CHILD_REGISTRATION_DECLARED).toBe("AUDIT_CHILD_REGISTRATION_DECLARED");
   });
 
-  it("consentScope covers gameplay/search/analytics and NEVER location or ads (§11.1)", () => {
-    expect([...CHILD_CONSENT_SCOPE]).toEqual([
-      "gameplay",
-      "search_excluded",
-      "analytics_limited",
-    ]);
-    expect(CHILD_CONSENT_SCOPE.join(" ")).not.toMatch(/location|ads/);
+});
+
+describe("F-21 version counters (slice 2, landed 2026-11-17)", () => {
+  it("pins the consent text, notice text and privacy policy versions", () => {
+    expect(CONSENT_TEXT_VERSION).toBe("2026-11-17.consent-scopes");
+    expect(CONSENT_NOTICE_TEXT_VERSION).toBe("2026-11-17.notice-v1");
+    expect(CONSENT_POLICY_VERSIONS.privacyPolicy).toBe("2026-11-17.consent-scopes");
+    // Terms of Service text did not change in this slice.
+    expect(CONSENT_POLICY_VERSIONS.termsOfService).toBe("2026-08-09.c54758ed");
+  });
+
+  it("the rejection messages are the approved copy (shown raw by older builds)", () => {
+    const approved =
+      "This version of RoadTrip Royale can't approve a child. Update the app to the latest version and try again.";
+    expect(CONSENT_TEXT_OUTDATED_MESSAGE).toBe(approved);
+    expect(CONSENT_SCOPES_INVALID_MESSAGE).toBe(approved);
+    expect(CONSENT_TEXT_OUTDATED_REASON).toBe("consent_text_outdated");
+    expect(CONSENT_SCOPES_INVALID_REASON).toBe("consent_scopes_invalid");
   });
 });
 
@@ -240,6 +258,66 @@ describe("validateStoredScopeVector", () => {
   });
 });
 
+describe("validateStoredConsentEvidence (F-21)", () => {
+  const stored = () => ({
+    scopeVector: JSON.parse(JSON.stringify(buildScopeVector(["core"]))),
+    consentTextVersion: CONSENT_TEXT_VERSION,
+    noticeTextVersion: CONSENT_NOTICE_TEXT_VERSION,
+    policyVersions: { ...CONSENT_POLICY_VERSIONS },
+    guardianEmail: "never-copied@example.com",
+  });
+
+  it("returns exactly the four evidence fields from a well-formed request", () => {
+    expect(validateStoredConsentEvidence(stored())).toEqual({
+      consentScopes: buildScopeVector(["core"]),
+      consentTextVersion: CONSENT_TEXT_VERSION,
+      noticeTextVersion: CONSENT_NOTICE_TEXT_VERSION,
+      policyVersions: { ...CONSENT_POLICY_VERSIONS },
+    });
+  });
+
+  it("does not compare the text versions with today's constants", () => {
+    const older = { ...stored(), consentTextVersion: "2026-01-01.x", noticeTextVersion: "n" };
+    expect(validateStoredConsentEvidence(older)?.consentTextVersion).toBe("2026-01-01.x");
+  });
+
+  it.each([
+    ["a missing document", () => undefined],
+    ["no vector (a pre-F-21 request)", () => ({ ...stored(), scopeVector: undefined })],
+    [
+      "a frozen scope granted",
+      () => {
+        const s = stored();
+        s.scopeVector.ads_child_directed.state = "granted";
+        return s;
+      },
+    ],
+    [
+      "core missing",
+      () => {
+        const s = stored();
+        delete s.scopeVector.core;
+        return s;
+      },
+    ],
+    [
+      "a practice-version drift",
+      () => {
+        const s = stored();
+        s.scopeVector.core.practiceVersion = 2;
+        return s;
+      },
+    ],
+    ["no consentTextVersion", () => ({ ...stored(), consentTextVersion: undefined })],
+    ["an empty noticeTextVersion", () => ({ ...stored(), noticeTextVersion: "" })],
+    ["no policyVersions", () => ({ ...stored(), policyVersions: undefined })],
+    ["empty policyVersions", () => ({ ...stored(), policyVersions: {} })],
+    ["a non-string policy version", () => ({ ...stored(), policyVersions: { privacyPolicy: 3 } })],
+  ])("refuses %s", (_label, make) => {
+    expect(validateStoredConsentEvidence(make() as never)).toBeNull();
+  });
+});
+
 describe("child flag predicates", () => {
   it("missing flag or missing doc means adult", () => {
     expect(isChildAccountUserData(undefined)).toBe(false);
@@ -303,6 +381,8 @@ describe("validateSetChildStatusInput (FR-2)", () => {
     consentAcknowledged: true,
     guardianAffirmed: true,
     expectedAgeOutYearMonth: undefined,
+    consentScopes: ["core"] as unknown,
+    consentTextVersion: CONSENT_TEXT_VERSION as unknown,
     nowYear: NOW_YEAR,
   };
 
@@ -360,6 +440,8 @@ describe("validateSetChildStatusInput (FR-2)", () => {
     expect(decision).toEqual({
       kind: "set",
       expectedAgeOutYearMonth: (NOW_YEAR + 3) * 100 + 9,
+      consentScopes: ["core"],
+      consentTextVersion: CONSENT_TEXT_VERSION,
     });
 
     const invalid = validateSetChildStatusInput({
@@ -389,6 +471,61 @@ describe("validateSetChildStatusInput (FR-2)", () => {
     const decision = validateSetChildStatusInput({ ...base, isChild: "true" });
     expect(decision.kind === "reject" && decision.code).toBe("invalid-argument");
   });
+
+  // F-21 (FR-65 / FR-103): the consent text version and the scope selection.
+  const attested = { expectedAgeOutYearMonth: (NOW_YEAR + 3) * 100 + 9 };
+
+  it("set-true with another (or no) consent text version is refused with details.reason", () => {
+    for (const consentTextVersion of [undefined, "", "1.0.0-2026-08-10", 7]) {
+      expect(
+        validateSetChildStatusInput({ ...base, ...attested, consentTextVersion })
+      ).toEqual({
+        kind: "reject",
+        code: "failed-precondition",
+        message: CONSENT_TEXT_OUTDATED_MESSAGE,
+        details: { reason: "consent_text_outdated" },
+      });
+    }
+  });
+
+  it.each([
+    ["absent", undefined],
+    ["empty", []],
+    ["a frozen scope added", ["core", "analytics_internal"]],
+    ["an unknown id", ["core", "x"]],
+    ["a duplicate", ["core", "core"]],
+  ])("set-true with a scope selection that is %s is refused with details.reason", (_l, consentScopes) => {
+    expect(validateSetChildStatusInput({ ...base, ...attested, consentScopes })).toEqual({
+      kind: "reject",
+      code: "failed-precondition",
+      message: CONSENT_SCOPES_INVALID_MESSAGE,
+      details: { reason: "consent_scopes_invalid" },
+    });
+  });
+
+  it("the text version is checked before the selection", () => {
+    const decision = validateSetChildStatusInput({
+      ...base,
+      ...attested,
+      consentScopes: undefined,
+      consentTextVersion: undefined,
+    });
+    expect(decision.kind === "reject" && decision.details).toEqual({
+      reason: "consent_text_outdated",
+    });
+  });
+
+  it("a clear ignores the consent fields entirely", () => {
+    expect(
+      validateSetChildStatusInput({
+        ...base,
+        isChild: false,
+        correctionReason: "child_turned_13",
+        consentScopes: undefined,
+        consentTextVersion: undefined,
+      })
+    ).toEqual({ kind: "clear", correctionReason: "child_turned_13" });
+  });
 });
 
 describe("evaluateApprovalChildDeclaration (FR-1 / FR-25)", () => {
@@ -398,6 +535,8 @@ describe("evaluateApprovalChildDeclaration (FR-1 / FR-25)", () => {
     guardianAffirmed: undefined as unknown,
     correctionReason: undefined as unknown,
     expectedAgeOutYearMonth: undefined as unknown,
+    consentScopes: ["core"] as unknown,
+    consentTextVersion: CONSENT_TEXT_VERSION as unknown,
     targetIsChildAccount: false,
     nowYear: NOW_YEAR,
   };
@@ -440,8 +579,57 @@ describe("evaluateApprovalChildDeclaration (FR-1 / FR-25)", () => {
           expectedAgeOutYearMonth: (NOW_YEAR + 4) * 100 + 2,
           targetIsChildAccount,
         })
-      ).toEqual({ kind: "grant", expectedAgeOutYearMonth: (NOW_YEAR + 4) * 100 + 2 });
+      ).toEqual({
+        kind: "grant",
+        expectedAgeOutYearMonth: (NOW_YEAR + 4) * 100 + 2,
+        consentScopes: ["core"],
+        consentTextVersion: CONSENT_TEXT_VERSION,
+      });
     }
+  });
+
+  const childAck = { payloadIsChild: true, consentAcknowledged: true, guardianAffirmed: true };
+
+  it("F-21: isChild true with another (or no) consent text version is refused with details.reason", () => {
+    for (const consentTextVersion of [undefined, "1.0.0-2026-08-10"]) {
+      expect(
+        evaluateApprovalChildDeclaration({ ...base, ...childAck, consentTextVersion })
+      ).toEqual({
+        kind: "reject",
+        code: "failed-precondition",
+        message: CONSENT_TEXT_OUTDATED_MESSAGE,
+        details: { reason: "consent_text_outdated" },
+      });
+    }
+  });
+
+  it("F-21: isChild true with an invalid scope selection is refused with details.reason", () => {
+    for (const consentScopes of [undefined, [], ["core", "ads_child_directed"], "core"]) {
+      expect(
+        evaluateApprovalChildDeclaration({ ...base, ...childAck, consentScopes })
+      ).toEqual({
+        kind: "reject",
+        code: "failed-precondition",
+        message: CONSENT_SCOPES_INVALID_MESSAGE,
+        details: { reason: "consent_scopes_invalid" },
+      });
+    }
+  });
+
+  it("F-21: adult approvals and the new-guardian clear need no consent fields", () => {
+    const noConsent = { consentScopes: undefined, consentTextVersion: undefined };
+    expect(evaluateApprovalChildDeclaration({ ...base, ...noConsent })).toEqual({ kind: "none" });
+    expect(
+      evaluateApprovalChildDeclaration({
+        ...base,
+        ...noConsent,
+        payloadIsChild: false,
+        targetIsChildAccount: true,
+        consentAcknowledged: true,
+        guardianAffirmed: true,
+        correctionReason: "child_turned_13",
+      })
+    ).toEqual({ kind: "clear_new_guardian", correctionReason: "child_turned_13" });
   });
 
   it("isChild false clears sticky targets with full evidence, and is a no-op otherwise", () => {
@@ -563,33 +751,57 @@ describe("sanitizedChildLinkedPlatforms (FR-35b)", () => {
 });
 
 describe("consent metadata (§11.1) — uid-only, no PII ever", () => {
+  // Deliberately NOT the current constants: the builder must record what the request
+  // stored, so a row's versions are the ones the captain and guardian actually saw.
+  const evidence = {
+    consentScopes: buildScopeVector(["core"]),
+    consentTextVersion: "2026-01-01.older-text",
+    noticeTextVersion: "2026-01-01.notice-older",
+    policyVersions: { termsOfService: "t-old", privacyPolicy: "p-old" },
+    consentRequestId: "req123",
+  };
   const granted = buildConsentGrantedMetadata({
     familyId: "fam1",
     childUserId: "kid",
     actorRole: "creator",
-    method: "manager_set",
-    expectedAgeOutYearMonth: 2031,
+    method: "email_plus",
+    expectedAgeOutYearMonth: 203107,
     removedFriendEdgeCount: 2,
+    assuranceLevel: 1,
+    ageOutYearMonth: 203107,
+    ...evidence,
   });
 
-  it("GRANTED carries exactly the schema keys", () => {
+  it("GRANTED carries exactly the schema keys — the F-21 evidence, and no legacy consentScope", () => {
     expect(Object.keys(granted).sort()).toEqual(
       [
         "familyId",
         "childUserId",
         "actorRole",
-        "consentScope",
+        "consentScopes",
         "policyVersions",
         "consentTextVersion",
+        "noticeTextVersion",
+        "consentRequestId",
         "affirmationVersion",
         "guardianAffirmed",
         "method",
         "expectedAgeOutYearMonth",
         "removedFriendEdgeCount",
+        "assuranceLevel",
+        "ageOutYearMonth",
       ].sort()
     );
     expect(granted.guardianAffirmed).toBe(true);
-    expect(granted.consentScope).toEqual([...CHILD_CONSENT_SCOPE]);
+    expect(granted).not.toHaveProperty("consentScope");
+  });
+
+  it("GRANTED records the evidence it was given, not the current constants", () => {
+    expect(granted.consentScopes).toEqual(buildScopeVector(["core"]));
+    expect(granted.consentTextVersion).toBe("2026-01-01.older-text");
+    expect(granted.noticeTextVersion).toBe("2026-01-01.notice-older");
+    expect(granted.policyVersions).toEqual({ termsOfService: "t-old", privacyPolicy: "p-old" });
+    expect(granted.consentRequestId).toBe("req123");
   });
 
   it("GRANTED omits optional keys when absent", () => {
@@ -597,7 +809,9 @@ describe("consent metadata (§11.1) — uid-only, no PII ever", () => {
       familyId: "fam1",
       childUserId: "kid",
       actorRole: "creator",
-      method: "family_admission",
+      method: "email_plus",
+      ageOutYearMonth: 203107,
+      ...evidence,
     });
     expect(minimal).not.toHaveProperty("expectedAgeOutYearMonth");
     expect(minimal).not.toHaveProperty("removedFriendEdgeCount");

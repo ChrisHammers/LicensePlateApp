@@ -8,8 +8,14 @@ import {
   requestChildDataDeletionFlow,
   setFamilyMemberChildStatusFlow,
 } from "./familyChildStatusFlows";
-import { consentMetadataPiiViolations } from "./childAccountCore";
-import { confirmGuardianConsent } from "./testSupport/consentTestHelpers";
+import {
+  CONSENT_NOTICE_TEXT_VERSION,
+  CONSENT_POLICY_VERSIONS,
+  CONSENT_TEXT_VERSION,
+  buildScopeVector,
+  consentMetadataPiiViolations,
+} from "./childAccountCore";
+import { confirmGuardianConsent, LAUNCH_CONSENT_PAYLOAD } from "./testSupport/consentTestHelpers";
 import { writeChildMembershipRevocation } from "./childConsent";
 import type { ClientMetadata } from "./clientMetadata";
 import type { SearchIndexHints } from "./userResidueCleanup";
@@ -133,6 +139,7 @@ describe("setFamilyMemberChildStatusFlow", () => {
     guardianAffirmed: true as unknown,
     // Owner ruling 2026-08-28: required for set-true — the only age-out source.
     expectedAgeOutYearMonth: ATTESTED as unknown,
+    ...LAUNCH_CONSENT_PAYLOAD,
     clientMetadata: CLIENT_METADATA,
   };
 
@@ -191,6 +198,53 @@ describe("setFamilyMemberChildStatusFlow", () => {
         stubDeps([])
       )
     ).rejects.toThrow(/correctionReason/);
+  });
+
+  // F-21 (FR-65 / FR-103): the consent text version and scope selection are checked
+  // BEFORE any write, and the HttpsError carries details.reason for the client's mapping.
+  it.each([
+    ["an older consent text version", { consentTextVersion: "1.0.0-2026-08-10" }, "consent_text_outdated"],
+    ["no consent text version (a pre-F-21 build)", { consentTextVersion: undefined, consentScopes: undefined }, "consent_text_outdated"],
+    ["no scope selection", { consentScopes: undefined }, "consent_scopes_invalid"],
+    ["a frozen scope selected", { consentScopes: ["core", "location_family_shared"] }, "consent_scopes_invalid"],
+  ])("set-true with %s is refused with details.reason and writes nothing", async (_label, patch, reason) => {
+    const db = new FakeFirestore();
+    seedFamily(db);
+    db.seed("users/parent/private/contact", { email: "parent@example.com" });
+    const purges: RecordedPurge[] = [];
+    const before = new Map(db.store);
+
+    const error = await setFamilyMemberChildStatusFlow(
+      asFirestore(db),
+      { ...baseInput, ...patch },
+      stubDeps(purges)
+    ).catch((e) => e);
+    expect(error).toMatchObject({
+      code: "failed-precondition",
+      message:
+        "This version of RoadTrip Royale can't approve a child. Update the app to the latest version and try again.",
+      details: { reason },
+    });
+    expect(db.store).toEqual(before);
+    expect(db.writeCount).toBe(0);
+    expect(purges).toEqual([]);
+  });
+
+  it("set-true stores the scope vector and the version evidence on the member_flag request", async () => {
+    const db = new FakeFirestore();
+    seedFamily(db);
+    db.seed("users/parent/private/contact", { email: "parent@example.com" });
+    await setFamilyMemberChildStatusFlow(asFirestore(db), baseInput, stubDeps([]));
+
+    const rows = consentRequestRows(db);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      kind: "member_flag",
+      scopeVector: buildScopeVector(["core"]),
+      consentTextVersion: CONSENT_TEXT_VERSION,
+      noticeTextVersion: CONSENT_NOTICE_TEXT_VERSION,
+      policyVersions: { ...CONSENT_POLICY_VERSIONS },
+    });
   });
 
   it("set-true: FR-4 batch + follow-ons + awaiting email_plus (no inline GRANTED)", async () => {

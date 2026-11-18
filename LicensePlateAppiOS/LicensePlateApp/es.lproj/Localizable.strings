@@ -1331,7 +1331,20 @@
 "11. Account Deletion" = "11. Eliminación de la cuenta";
 "You can delete your account and associated data from within the app in Settings, or by emailing support@roadtriproyale.com from the email address on your account. Deleting the app from your device does not by itself delete data already synced to your account." = "Puedes eliminar tu cuenta y los datos asociados desde la app en Configuración, o escribiendo a support@roadtriproyale.com desde el correo electrónico de tu cuenta. Borrar la app de tu dispositivo no elimina por sí solo los datos ya sincronizados con tu cuenta.";
 "12. Children" = "12. Menores";
-"RoadTrip Royale is made for families. Children under 13 — or the applicable age of digital consent where you live — may play only through a family group created and managed by a parent or legal guardian, who consents to the collection of the child’s information as described in this policy. We do not knowingly collect personal information directly from children outside parent-managed play, and we do not knowingly serve personalized advertising to children. Parents and guardians can review or delete their child’s information, or withdraw consent, by contacting support@roadtriproyale.com." = "RoadTrip Royale está hecho para familias. Los menores de 13 años — o de la edad de consentimiento digital aplicable donde vivas — solo pueden jugar a través de un grupo familiar creado y administrado por un padre, una madre o un tutor legal, quien consiente la recopilación de la información del menor según se describe en esta política. No recopilamos a sabiendas información personal directamente de menores fuera del juego administrado por sus padres, y no mostramos a sabiendas publicidad personalizada a menores. Los padres y tutores pueden revisar o eliminar la información de su hijo, o retirar su consentimiento, contactándonos en support@roadtriproyale.com.";
+// PrivacyView header date and section 12 (FR-103(c)). The privacy.section12.* keys are versioned
+// consent text: see the F-21 note at the family.consent_scope.* keys.
+"privacy.last_updated" = "Última actualización: 17 de noviembre de 2026";
+"privacy.section12.intro.body" = "RoadTrip Royale está hecho para familias. Los menores de 13 años solo pueden jugar en línea como parte de un grupo familiar creado y administrado por un padre, una madre o un tutor legal, quien primero debe dar su consentimiento. El padre o la madre aprueba al menor en la app, donde cada parte del consentimiento se muestra como una tarjeta independiente, y luego lo confirma por correo electrónico. Hoy una parte, Juego en familia, es obligatoria; las demás partes no están disponibles y no se recopila nada para ellas. Los menores nunca ven anuncios, y nunca vendemos la información de un menor. Un padre o una madre puede revisar la información del menor, eliminarla o retirar su consentimiento en cualquier momento en la app, en Configuración de la familia, o contactando a Hammers Tech LLC, 59 Coventry Lane, Trumbull, CT 06611, 203-268-9171, support@roadtriproyale.com.";
+"privacy.section12.core.title" = "12.1 Juego en familia (obligatorio)";
+"privacy.section12.core.body" = "Cuando un padre o una madre confirma el consentimiento, recopilamos y almacenamos el apodo del menor, un avatar de caricatura elegido del conjunto de la app, su actividad de juego (placas encontradas, puntajes, rangos, logros y los viajes a los que se une), el mes y el año en que el menor cumple 13 años, un ID de cuenta que crea la app, cuándo se creó la cuenta y cuándo se usó por última vez y, si las notificaciones están activadas, un token de notificaciones para su dispositivo. Para que la app funcione, también recibimos datos básicos del dispositivo (modelo del teléfono, versión de iOS y versión de la app) e informes de fallos. Usamos esto solo para hacer funcionar el juego: guardar en línea el progreso del menor y compartirlo con su familia. Los miembros de la familia del menor pueden ver el apodo, el avatar y los puntajes, y las personas que están en un viaje con el menor (siempre de la familia) pueden ver ese viaje; ningún otro jugador puede hacerlo. Solo le enviamos al menor notificaciones sobre su familia, sus viajes y recordatorios de juego, como mantener una racha, nunca promociones. Google (Firebase) almacena y procesa esta información por nosotros, Apple entrega las notificaciones, y los otros servicios que usamos se enumeran en la sección 7. Esta parte es obligatoria para que un menor esté en una familia, porque un juego en familia no puede funcionar sin ella. Un menor que no está en una familia puede seguir jugando en su propio dispositivo, y su actividad de juego se queda en ese dispositivo.";
+"privacy.section12.analytics.title" = "12.2 Analítica de uso (no disponible)";
+"privacy.section12.analytics.body" = "No recopilamos analítica de uso de los menores. La analítica se desactiva siempre que un menor tiene la sesión iniciada. Esta opción no está disponible. Si algún día la ofrecemos, actualizaremos esta sección y primero se lo preguntaremos a un padre, una madre o un tutor que sea capitán de la familia del menor; seguiría desactivada a menos que acepte.";
+"privacy.section12.ads.title" = "12.3 Anuncios para niños (no disponible)";
+"privacy.section12.ads.body" = "Los menores nunca ven anuncios en RoadTrip Royale, y no usamos la información de un menor para publicidad. Esta opción no está disponible. Si algún día la ofrecemos, actualizaremos esta sección y primero se lo preguntaremos a un padre, una madre o un tutor que sea capitán de la familia del menor; seguiría desactivada a menos que acepte.";
+"privacy.section12.location.title" = "12.4 Ubicación compartida con la familia (no disponible)";
+"privacy.section12.location.body" = "No recopilamos la ubicación de un menor. Las funciones de ubicación están desactivadas para todas las cuentas infantiles. Esta opción no está disponible. Si algún día la ofrecemos, actualizaremos esta sección y primero se lo preguntaremos a un padre, una madre o un tutor que sea capitán de la familia del menor; seguiría desactivada a menos que acepte.";
+"privacy.section12.cross_family.title" = "12.5 Visible para otras familias (no disponible)";
+"privacy.section12.cross_family.body" = "El apodo, el avatar y la actividad de juego de un menor solo son visibles para los miembros de su propia familia. Los menores no se pueden encontrar mediante la búsqueda, no pueden agregar amigos y no pueden ser contactados por jugadores fuera de su familia; no hay chat ni mensajería. Esta opción no está disponible. Si algún día la ofrecemos, actualizaremos esta sección y primero se lo preguntaremos a un padre, una madre o un tutor que sea capitán de la familia del menor; seguiría desactivada a menos que acepte.";
 "13. Security" = "13. Seguridad";
 "We protect your information with technical and organizational safeguards, including encryption in transit, authenticated access, and server-side security rules. No system is perfectly secure. If a breach affects your personal data, we will notify you as required by applicable law." = "Protegemos tu información con salvaguardas técnicas y organizativas, incluidos el cifrado en tránsito, el acceso autenticado y reglas de seguridad del lado del servidor. Ningún sistema es perfectamente seguro. Si una filtración afecta tus datos personales, te lo notificaremos según lo exija la ley aplicable.";
 "14. International Transfers" = "14. Transferencias internacionales";
@@ -1460,12 +1473,57 @@
 "family.child.a11y.checked" = "Marcado";
 "family.child.a11y.unchecked" = "Sin marcar";
 "family.child.consent_section_title" = "Consentimiento de los padres";
-"family.child.policy_summary" = "Los menores juegan solo dentro de tu familia. Guardamos su nombre de usuario y avatar, su actividad de viajes, sus descubrimientos y sus estadísticas totales. Sin anuncios, sin ubicación, sin búsqueda y sin amigos. Puedes revisar o eliminar sus datos cuando quieras en Configuración de la familia. Consulta la [sección 2 de los Términos del servicio](rtr-legal://terms) y la [sección 12 del Aviso de privacidad](rtr-legal://privacy).";
-"family.child.consent_ack" = "He leído cómo RoadTrip Royale maneja los datos de un menor (Términos del servicio, sección 2; Aviso de privacidad, sección 12) y doy mi consentimiento en nombre de este menor.";
-"family.child.consent_ack_hint" = "Confirma que leíste los términos sobre datos de menores";
-"family.child.policy_links_hint" = "Usa el rotor de enlaces para abrir los Términos del servicio o el Aviso de privacidad";
+"family.child.consent_ack" = "Leí las tarjetas de arriba, la sección 2 de los Términos del servicio y la sección 12 de la Política de privacidad, y doy mi consentimiento en nombre de este menor para el Juego en familia.";
+"family.child.consent_ack_hint" = "Confirma que leíste las tarjetas y las políticas, y que das tu consentimiento para el Juego en familia";
+"family.child.policy_links_hint" = "Usa el rotor de enlaces para abrir los Términos del servicio o la Política de privacidad";
 "family.child.guardian_affirmation" = "Confirmo que soy el padre, la madre o el tutor legal de este menor y que tengo al menos 18 años.";
 "family.child.guardian_affirmation_hint" = "Obligatorio para dar el consentimiento de los padres";
+// F-21 (FR-65 / FR-103): per-scope consent cards. These keys, family.child.consent_ack(_hint)
+// and the privacy.section12.* keys are VERSIONED CONSENT TEXT: any wording change in ANY
+// locale must bump CONSENT_TEXT_VERSION in functions/src/childAccountCore.ts (and
+// ConsentScopeCatalog.consentTextVersion plus both fixture copies) in the same commit.
+"family.consent_scope.section_title" = "Lo que estás aceptando";
+"family.consent_scope.section_intro" = "Cada tarjeta es una parte de tu consentimiento. El Juego en familia es obligatorio. Las otras cuatro todavía no están disponibles, y no se recopila nada para ellas.";
+"family.consent_scope.core.name" = "Juego en familia";
+"family.consent_scope.core.meaning" = "Guarda en línea la actividad de juego de tu hijo y la comparte con tu familia.";
+"family.consent_scope.core.collected" = "Qué se recopila: un apodo, un avatar de caricatura del conjunto de la app, la actividad de juego (placas encontradas, puntajes, rangos, logros y los viajes a los que se une), el mes y el año en que tu hijo cumple 13 años, un ID de cuenta que crea la app, cuándo se creó la cuenta y cuándo se usó por última vez, y un token de notificaciones si las notificaciones están activadas. Para que la app funcione, también recibimos datos básicos del dispositivo (modelo del teléfono, versión de iOS y versión de la app) e informes de fallos.";
+"family.consent_scope.core.who_sees" = "Quién lo ve: los miembros de tu familia ven el apodo, el avatar y los puntajes, y las personas que están en un viaje con tu hijo (siempre de la familia) ven ese viaje. Ningún otro jugador puede verlo. Google Firebase lo almacena por nosotros; la Política de privacidad enumera los otros servicios que usamos.";
+"family.consent_scope.core.notifications" = "Notificaciones: sobre tu familia, tus viajes y recordatorios de juego, como mantener una racha. Nunca anuncios ni promociones.";
+"family.consent_scope.core.required_reason.join" = "Obligatorio para unirse a una familia. Un juego en familia no puede funcionar sin guardar y compartir la actividad de juego, así que esto no se puede desactivar. Si prefieres no aceptarlo, no confirmes: tu hijo puede seguir jugando en este dispositivo, pero su actividad de juego se queda en el dispositivo y no se unirá a la familia.";
+"family.consent_scope.core.required_reason.member_flag" = "Obligatorio para seguir en la familia. Un juego en familia no puede funcionar sin guardar y compartir la actividad de juego, así que esto no se puede desactivar. Si prefieres no aceptarlo, no confirmes: la solicitud vence, tu hijo sale de la familia y su cuenta se conserva, protegida y en pausa.";
+"family.consent_scope.state.required" = "Obligatorio";
+"family.consent_scope.state.agreed" = "Aceptado";
+"family.consent_scope.state.unavailable" = "Aún no disponible";
+"family.consent_scope.frozen_reason" = "Desactivado para todos los menores. Si algún día lo ofrecemos, primero se le preguntará a un padre, una madre o un tutor que sea capitán de tu familia, y seguirá desactivado a menos que diga que sí.";
+"family.consent_scope.analytics_internal.name" = "Analítica de uso";
+"family.consent_scope.analytics_internal.meaning" = "Nos mostraría qué partes de la app se usan, para poder mejorarla.";
+"family.consent_scope.analytics_internal.collected" = "Qué se recopila: nada. La analítica está desactivada para todos los menores.";
+"family.consent_scope.ads_child_directed.name" = "Anuncios para niños";
+"family.consent_scope.ads_child_directed.meaning" = "Mostraría anuncios adecuados para niños.";
+"family.consent_scope.ads_child_directed.collected" = "Qué se recopila: nada. Los menores nunca ven anuncios en RoadTrip Royale.";
+"family.consent_scope.location_family_shared.name" = "Ubicación compartida con la familia";
+"family.consent_scope.location_family_shared.meaning" = "Mostraría a tu familia las rutas de los viajes de tu hijo.";
+"family.consent_scope.location_family_shared.collected" = "Qué se recopila: nada. La ubicación está desactivada para todos los menores.";
+"family.consent_scope.cross_family_visibility.name" = "Visible para otras familias";
+"family.consent_scope.cross_family_visibility.meaning" = "Permitiría que jugadores fuera de tu familia vean el apodo y los puntajes de tu hijo.";
+"family.consent_scope.cross_family_visibility.collected" = "Qué se recopila: nada adicional. Tu hijo solo es visible dentro de tu familia.";
+"family.consent_scope.who_sees_nobody" = "Quién lo ve: nadie. No se recopila nada.";
+"family.consent_scope.cross_family_visibility.who_sees" = "Quién lo ve: solo tu familia.";
+"family.consent_scope.policy_link" = "Leer esta parte de la Política de privacidad";
+"family.consent_scope.full_policy_links" = "Todos los detalles: [sección 2 de los Términos del servicio](rtr-legal://terms) y [sección 12 de la Política de privacidad](rtr-legal://privacy).";
+"family.consent_scope.update_required" = "Para aprobar a un menor, primero actualiza RoadTrip Royale a la versión más reciente.";
+"family.consent_scope.a11y.value.required" = "Obligatorio, incluido";
+"family.consent_scope.a11y.value.agreed" = "Aceptado";
+"family.consent_scope.a11y.value.unavailable" = "Desactivado, aún no disponible";
+"family.consent_scope.a11y.hint.core" = "Obligatorio para que tu hijo juegue en tu familia. Guarda en línea su actividad de juego y la muestra a tu familia.";
+"family.consent_scope.a11y.hint.unavailable" = "Aún no disponible. No se recopila nada para esto.";
+"family.consent_scope.a11y.action.policy" = "Abrir esta parte de la Política de privacidad";
+"family.consent_scope.manage_title" = "Lo que aceptó un padre o una madre";
+"family.consent_scope.manage_footer" = "Se estableció cuando un padre o una madre confirmó el consentimiento por correo electrónico. Por ahora no se puede cambiar nada aquí.";
+"family.consent_scope.manage_pending" = "Esperando que un padre o una madre confirme por correo electrónico. Esto se completará cuando lo haga.";
+"family.consent_scope.manage_ended" = "El consentimiento terminó para este menor, así que por ahora no hay nada aceptado.";
+"family.consent_scope.manage_none" = "No hay nada registrado.";
+"family.consent_scope.manage_unavailable" = "No se puede cargar en este momento. Las protecciones de tu hijo no cambian.";
 "family.child.age_out_label" = "Cuándo cumple 13 (opcional)";
 "family.child.age_out_label_required" = "Cuándo cumple 13";
 "family.member.consent_pending_subtitle" = "Esperando tu confirmación por correo";
@@ -1543,7 +1601,7 @@
 "family.child.inventory.friend_links" = "Conexiones de amigos";
 "family.child.inventory.vendors_title" = "Terceros";
 "family.child.inventory.vendor_revenuecat" = "Compras (RevenueCat): se eliminan junto con la cuenta cuando eliminas sus datos.";
-"family.child.inventory.vendor_analytics" = "Analíticas: nunca se envía un identificador de cuenta; los datos de analíticas del dispositivo se restablecen al eliminar sus datos.";
+"family.child.inventory.vendor_analytics" = "Analíticas: desactivadas para cuentas infantiles. No se envía nada a analíticas mientras tiene la sesión iniciada.";
 "family.child.inventory.profile_title" = "Perfil";
 "family.child.inventory.identifiers_title" = "Identificadores y contacto";
 "family.child.inventory.generated_at" = "Generado";

@@ -1510,6 +1510,18 @@ class FamilyRepository: ObservableObject, FamilyChildStatusManaging {
             return error
         }
 
+        // F-21 (FR-65): the server refused this build's consent text or scope selection.
+        // Only an app update fixes that, so say so instead of the generic not-allowed line.
+        if FamilyChildApprovalRejection.requiresAppUpdate(error) {
+            return NSError(
+                domain: nsError.domain,
+                code: nsError.code,
+                userInfo: [
+                    NSLocalizedDescriptionKey: FamilyChildApprovalRejection.updateRequiredMessageKey.localized
+                ]
+            )
+        }
+
         let message: String
         switch code {
         case .permissionDenied:

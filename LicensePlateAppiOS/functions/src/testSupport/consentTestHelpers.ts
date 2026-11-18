@@ -18,6 +18,17 @@ import {
   consentRequestKind,
 } from "../consentRequestsCore";
 import type { FakeFirestore } from "./fakeFirestore";
+import { CONSENT_TEXT_VERSION } from "../childAccountCore";
+
+/**
+ * F-21: the consent fields the current app sends on every isChild:true approve /
+ * set-child payload (top level, beside clientMetadata). Spread into test payloads so
+ * they exercise the real gate rather than bypass it.
+ */
+export const LAUNCH_CONSENT_PAYLOAD = {
+  consentScopes: ["core"],
+  consentTextVersion: CONSENT_TEXT_VERSION,
+} as const;
 
 export function findLiveConsentRequest(
   db: FakeFirestore,

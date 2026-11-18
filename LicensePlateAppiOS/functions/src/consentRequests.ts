@@ -55,9 +55,15 @@ import {
 } from "./consentRequestsCore";
 import {
   AUDIT_PARENTAL_CONSENT_GRANTED,
+  CONSENT_NOTICE_TEXT_VERSION,
+  CONSENT_POLICY_VERSIONS,
   buildConsentGrantedMetadata,
   consentMetadataPiiViolations,
   sanitizedChildLinkedPlatforms,
+  validateStoredConsentEvidence,
+  validateStoredScopeVector,
+  type ConsentScopeVector,
+  type StoredConsentEvidence,
 } from "./childAccountCore";
 import {
   familyMembershipGrantUserUpdate,
@@ -128,7 +134,53 @@ export interface CreateConsentRequestInput {
   expectedAgeOutYearMonth?: number;
   /** Defaults to join_admission (every pre-existing caller and document). */
   kind?: ConsentRequestKind;
+  /**
+   * F-21 (FR-65 / FR-103): the vector built from the captain's validated selection, and
+   * the consent text version the captain's app sent (already equality-checked). The
+   * request also freezes the notice text version and the policy versions at creation.
+   */
+  scopeVector: ConsentScopeVector;
+  consentTextVersion: string;
   nowMillis?: number;
+}
+
+/**
+ * F-21: a live request is reused only when it carries exactly the evidence a new one
+ * would: the same vector, the same consent text version, and the notice text and
+ * policy versions current now. Anything else (including a request from before the
+ * vector existed) is superseded, so no email ever goes out for terms other than the
+ * ones the captain just approved.
+ */
+export function consentRequestEvidenceMatches(
+  existing: Record<string, unknown>,
+  expected: {
+    scopeVector: ConsentScopeVector;
+    consentTextVersion: string;
+    noticeTextVersion: string;
+    policyVersions: Readonly<Record<string, string>>;
+  }
+): boolean {
+  const stored = validateStoredConsentEvidence(existing);
+  if (!stored) return false;
+  return (
+    canonicalJson(stored.consentScopes) === canonicalJson(expected.scopeVector) &&
+    stored.consentTextVersion === expected.consentTextVersion &&
+    stored.noticeTextVersion === expected.noticeTextVersion &&
+    canonicalJson(stored.policyVersions) === canonicalJson(expected.policyVersions)
+  );
+}
+
+/** Key-order-independent JSON for deep equality of plain data (Firestore maps are unordered). */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 export interface CreateConsentRequestResult {
@@ -149,6 +201,12 @@ export async function createConsentRequestForApproval(
   input: CreateConsentRequestInput
 ): Promise<CreateConsentRequestResult> {
   const now = input.nowMillis ?? Date.now();
+  const evidence = {
+    scopeVector: input.scopeVector,
+    consentTextVersion: input.consentTextVersion,
+    noticeTextVersion: CONSENT_NOTICE_TEXT_VERSION,
+    policyVersions: { ...CONSENT_POLICY_VERSIONS },
+  };
 
   const live = await db
     .collection(CONSENT_REQUESTS_COLLECTION)
@@ -160,16 +218,24 @@ export async function createConsentRequestForApproval(
 
   for (const doc of live.docs) {
     const expiresAtMillis = doc.data().expiresAtMillis;
-    if (typeof expiresAtMillis === "number" && expiresAtMillis > now) {
+    if (
+      typeof expiresAtMillis === "number" &&
+      expiresAtMillis > now &&
+      consentRequestEvidenceMatches(doc.data(), evidence)
+    ) {
       return { requestId: doc.id, reusedExisting: true };
     }
-    // Lapsed but not yet swept: retire it so exactly one live request exists. The
-    // superseded request will never send another notice, so its copy of the
-    // guardian's address has no remaining §312.5(c)(1) purpose — purge it here.
+    // Lapsed but not yet swept, or live with different evidence (F-21): retire it so
+    // exactly one live request exists, for the terms just approved. The superseded
+    // request will never send another notice, so its copy of the guardian's address
+    // has no remaining §312.5(c)(1) purpose — purge it here. Its raw link nonce goes too:
+    // a request superseded before its email trigger ran is skipped by the claim, which
+    // would otherwise leave that copy of the credential in place.
     await doc.ref.update({
       status: CONSENT_REQUEST_STATUS.superseded,
       resolvedAtMillis: now,
       guardianEmail: admin.firestore.FieldValue.delete(),
+      pendingLinkNonce: admin.firestore.FieldValue.delete(),
     });
   }
 
@@ -211,6 +277,12 @@ export async function createConsentRequestForApproval(
     // deletes it the moment the send is claimed. It never outlives delivery, so no
     // durable copy of the credential exists server-side.
     pendingLinkNonce: nonce,
+    // F-21 evidence, frozen at creation and never purged (only guardianEmail is). The
+    // FR-64 transaction copies these, re-validated, into the GRANTED row and guardianship.
+    scopeVector: evidence.scopeVector,
+    consentTextVersion: evidence.consentTextVersion,
+    noticeTextVersion: evidence.noticeTextVersion,
+    policyVersions: evidence.policyVersions,
   };
   if (kind === CONSENT_REQUEST_KIND.joinAdmission) {
     requestDoc.joinRequestId = input.joinRequestId;
@@ -238,6 +310,8 @@ export async function createMemberFlagConsentRequest(
     guardianEmail: string;
     childUserName: string;
     expectedAgeOutYearMonth: number;
+    scopeVector: ConsentScopeVector;
+    consentTextVersion: string;
     nowMillis?: number;
   }
 ): Promise<CreateConsentRequestResult> {
@@ -258,6 +332,48 @@ function confirmEndpointBaseUrl(): string {
   return `https://us-central1-${projectId}.cloudfunctions.net/confirmParentalConsent`;
 }
 
+export type ConsentEmailClaim =
+  | { kind: "send"; nonce: string }
+  | { kind: "skipped" }
+  | { kind: "refused" };
+
+/**
+ * The onCreate trigger's claim, in one transaction (trigger retries must not
+ * double-send). The raw nonce is stripped in the same commit — after this, the emailed
+ * link is the only copy. Only a `pending` request with a `queued` delivery is claimed:
+ * a request superseded before its trigger ran never sends a dead link. F-21: a request
+ * with no valid scope vector is never emailed; its delivery is marked failed and the
+ * nonce is dropped, so the link the email would have carried never exists anywhere.
+ */
+export async function claimConsentRequestEmail(
+  db: Firestore,
+  requestRef: admin.firestore.DocumentReference
+): Promise<ConsentEmailClaim> {
+  return db.runTransaction(async (tx) => {
+    const fresh = await tx.get(requestRef);
+    if (!fresh.exists) return { kind: "skipped" };
+    const data = fresh.data() ?? {};
+    if (data.status !== CONSENT_REQUEST_STATUS.pending) return { kind: "skipped" };
+    if (data.emailDelivery?.state !== "queued") return { kind: "skipped" };
+    const nonce = data.pendingLinkNonce;
+    if (typeof nonce !== "string" || nonce.length === 0) return { kind: "skipped" };
+    // The delivery map is replaced whole (it was read in this transaction) rather than
+    // patched by dotted path.
+    if (!validateStoredScopeVector(data.scopeVector).ok) {
+      tx.update(requestRef, {
+        emailDelivery: { ...data.emailDelivery, state: "failed", failedAtMillis: Date.now() },
+        pendingLinkNonce: admin.firestore.FieldValue.delete(),
+      });
+      return { kind: "refused" };
+    }
+    tx.update(requestRef, {
+      emailDelivery: { ...data.emailDelivery, state: "sending" },
+      pendingLinkNonce: admin.firestore.FieldValue.delete(),
+    });
+    return { kind: "send", nonce };
+  });
+}
+
 export const onConsentRequestCreatedSendEmail = functions
   .runWith({ secrets: [resendApiKey, welcomeEmailFrom] })
   .firestore.document(`${CONSENT_REQUESTS_COLLECTION}/{requestId}`)
@@ -266,23 +382,15 @@ export const onConsentRequestCreatedSendEmail = functions
     const data = snapshot.data();
     const requestId = snapshot.id;
 
-    // Claim transactionally (trigger retries must not double-send), and strip the raw
-    // nonce in the same commit — after this, the emailed link is the only copy.
-    const claim = await db.runTransaction(async (tx) => {
-      const fresh = await tx.get(snapshot.ref);
-      if (!fresh.exists) return null;
-      const state = fresh.data()?.emailDelivery?.state;
-      if (state !== "queued") return null;
-      const nonce = fresh.data()?.pendingLinkNonce;
-      if (typeof nonce !== "string" || nonce.length === 0) return null;
-      tx.update(snapshot.ref, {
-        "emailDelivery.state": "sending",
-        pendingLinkNonce: admin.firestore.FieldValue.delete(),
-      });
-      return nonce;
-    });
-    if (claim === null) {
-      functions.logger.info(`consent email already claimed for ${requestId}`);
+    const claim = await claimConsentRequestEmail(db, snapshot.ref);
+    if (claim.kind === "skipped") {
+      functions.logger.info(`consent email not claimed for ${requestId}`);
+      return;
+    }
+    if (claim.kind === "refused") {
+      functions.logger.error(
+        `consent email refused for ${requestId}: the request carries no valid scope vector`
+      );
       return;
     }
 
@@ -294,7 +402,7 @@ export const onConsentRequestCreatedSendEmail = functions
           ? data.childUserName
           : "your family's player",
       confirmUrl: `${confirmEndpointBaseUrl()}?t=${encodeURIComponent(
-        formatConsentToken(requestId, claim)
+        formatConsentToken(requestId, claim.nonce)
       )}`,
       envLabel: consentEmailEnvLabel.value(),
       ttlHours: Math.round(CONSENT_REQUEST_TTL_MS / 3_600_000),
@@ -417,6 +525,25 @@ export function confirmationFailurePage(reason: string | undefined): string {
   return CONFIRMATION_FAILURE_PAGES[reason ?? ""] ?? PAGES.error;
 }
 
+/**
+ * F-21: the per-child scope state on `users/{child}/private/guardianship` — the same
+ * evidence the GRANTED row carries, written by both FR-64 commits in the same `tx.set`.
+ */
+function guardianshipConsentEvidence(
+  evidence: StoredConsentEvidence,
+  consentRequestId: string,
+  nowMillis: number
+): Record<string, unknown> {
+  return {
+    consentScopes: evidence.consentScopes,
+    consentTextVersion: evidence.consentTextVersion,
+    noticeTextVersion: evidence.noticeTextVersion,
+    policyVersions: evidence.policyVersions,
+    consentScopesUpdatedAtMillis: nowMillis,
+    consentRequestId,
+  };
+}
+
 export interface ConfirmableRequest {
   familyId: string;
   childUserId: string;
@@ -490,6 +617,12 @@ export async function commitGuardianConfirmation(
     if (!isValidAgeOutYearMonth(ageOutYearMonth)) {
       return { committed: false, reason: "missing_age_out_marker" };
     }
+    // F-21: the evidence comes from THIS transaction's read of the request, re-checked;
+    // anything off refuses before a single write is queued.
+    const evidence = validateStoredConsentEvidence(freshRequest.data());
+    if (!evidence) {
+      return { committed: false, reason: "scope_selection_invalid" };
+    }
 
     const memberData: Record<string, unknown> = {
       role: request.newRole,
@@ -519,6 +652,8 @@ export async function commitGuardianConfirmation(
       expectedAgeOutYearMonth: request.expectedAgeOutYearMonth ?? undefined,
       assuranceLevel: request.assuranceLevel,
       ageOutYearMonth: ageOutYearMonth as number,
+      ...evidence,
+      consentRequestId: requestRef.id,
     });
     const piiViolations = consentMetadataPiiViolations(consentMetadata);
     if (piiViolations.length > 0) {
@@ -548,6 +683,7 @@ export async function commitGuardianConfirmation(
       method: "email_plus",
       assuranceLevel: request.assuranceLevel,
       grantedAtMillis: nowMillis,
+      ...guardianshipConsentEvidence(evidence, requestRef.id, nowMillis),
     });
     tx.set(auditRef, {
       eventType: AUDIT_PARENTAL_CONSENT_GRANTED,
@@ -609,6 +745,11 @@ async function commitMemberFlagConfirmation(
     if (!isValidAgeOutYearMonth(attestedAgeOut)) {
       return { committed: false, reason: "missing_age_out_marker" };
     }
+    // F-21: same evidence gate as the join shape — fresh read, re-checked, no writes on failure.
+    const evidence = validateStoredConsentEvidence(freshRequest.data());
+    if (!evidence) {
+      return { committed: false, reason: "scope_selection_invalid" };
+    }
 
     const consentMetadata = buildConsentGrantedMetadata({
       familyId: request.familyId,
@@ -618,6 +759,8 @@ async function commitMemberFlagConfirmation(
       expectedAgeOutYearMonth: attestedAgeOut,
       assuranceLevel: request.assuranceLevel,
       ageOutYearMonth: attestedAgeOut,
+      ...evidence,
+      consentRequestId: requestRef.id,
     });
     const piiViolations = consentMetadataPiiViolations(consentMetadata);
     if (piiViolations.length > 0) {
@@ -640,6 +783,7 @@ async function commitMemberFlagConfirmation(
       method: "email_plus",
       assuranceLevel: request.assuranceLevel,
       grantedAtMillis: nowMillis,
+      ...guardianshipConsentEvidence(evidence, requestRef.id, nowMillis),
     });
     tx.set(auditRef, {
       eventType: AUDIT_PARENTAL_CONSENT_GRANTED,

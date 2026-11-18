@@ -247,8 +247,25 @@ describe("FR-7: users diff-guard protects isChildAccount and entitlementTags", (
         childUserId: "kid",
         guardianUid: "adult",
         status: "pending",
+        // F-21 slice 2: the request now also holds the consent evidence. Still server-only.
+        scopeVector: {
+          core: { state: "granted", practiceVersion: 1 },
+          analytics_internal: { state: "unavailable", practiceVersion: 1 },
+          ads_child_directed: { state: "unavailable", practiceVersion: 1 },
+          location_family_shared: { state: "unavailable", practiceVersion: 1 },
+          cross_family_visibility: { state: "unavailable", practiceVersion: 1 },
+        },
+        consentTextVersion: "2026-11-17.consent-scopes",
+        noticeTextVersion: "2026-11-17.notice-v1",
+        policyVersions: { privacyPolicy: "2026-11-17.consent-scopes" },
       },
     });
+    // F-21: no client may rewrite the evidence the confirmation will record.
+    await assertFails(
+      updateDoc(doc(registered("adult"), "consent_requests/req1"), {
+        "scopeVector.analytics_internal.state": "granted",
+      })
+    );
     await assertFails(getDoc(doc(registered("adult"), "consent_requests/req1")));
     await assertFails(getDoc(doc(registered("kid"), "consent_requests/req1")));
     await assertFails(
@@ -761,6 +778,68 @@ describe("FR-73(a): private/fcm writes are barred to unconsented children", () =
     await assertFails(
       setDoc(doc(registered("adult"), "users/adult/private/lastLoginLocationData"), { x: 1 })
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F-21 slice 2 — the per-child scope state on private/guardianship is server-only.
+// Regression tests: they pass on the rules as they stood before slice 2 (guardianship is
+// outside the private/ allowlist) and pin that the new consentScopes fields stay there.
+// ---------------------------------------------------------------------------
+
+describe("F-21: guardianship with consentScopes stays closed to every client", () => {
+  const scopes = {
+    core: { state: "granted", practiceVersion: 1 },
+    analytics_internal: { state: "unavailable", practiceVersion: 1 },
+    ads_child_directed: { state: "unavailable", practiceVersion: 1 },
+    location_family_shared: { state: "unavailable", practiceVersion: 1 },
+    cross_family_visibility: { state: "unavailable", practiceVersion: 1 },
+  };
+
+  beforeEach(async () => {
+    await seed({
+      "families/fam1": { name: "Fam", creatorId: "guardian", status: "active" },
+      "families/fam1/members/guardian": { role: "creator" },
+      "families/fam1/members/cap": { role: "captain" },
+      "families/fam1/members/famkid": { role: "scout", isChild: true },
+      "users/guardian": { userName: "Guardian", activeFamilyId: "fam1" },
+      "users/cap": { userName: "Cap", activeFamilyId: "fam1" },
+      "users/famkid": { userName: "FamKid", isChildAccount: true, activeFamilyId: "fam1" },
+      "users/famkid/private/guardianship": {
+        guardianUid: "guardian",
+        familyId: "fam1",
+        method: "email_plus",
+        assuranceLevel: 1,
+        grantedAtMillis: 1,
+        consentScopes: scopes,
+        consentTextVersion: "2026-11-17.consent-scopes",
+        noticeTextVersion: "2026-11-17.notice-v1",
+        policyVersions: { privacyPolicy: "2026-11-17.consent-scopes" },
+        consentScopesUpdatedAtMillis: 1,
+        consentRequestId: "req1",
+      },
+    });
+  });
+
+  const path = "users/famkid/private/guardianship";
+  const grantAll = { "consentScopes.analytics_internal.state": "granted" };
+
+  it("the consented child can neither read nor change it", async () => {
+    await assertFails(getDoc(doc(anonymous("famkid"), path)));
+    await assertFails(updateDoc(doc(anonymous("famkid"), path), grantAll));
+    await assertFails(deleteDoc(doc(anonymous("famkid"), path)));
+  });
+
+  it("a captain of the child's family can neither read nor change it", async () => {
+    await assertFails(getDoc(doc(registered("cap"), path)));
+    await assertFails(updateDoc(doc(registered("cap"), path), grantAll));
+    await assertFails(setDoc(doc(registered("cap"), path), { consentScopes: scopes }));
+  });
+
+  it("the recorded guardian can neither read nor change it", async () => {
+    await assertFails(getDoc(doc(registered("guardian"), path)));
+    await assertFails(updateDoc(doc(registered("guardian"), path), grantAll));
+    await assertFails(deleteDoc(doc(registered("guardian"), path)));
   });
 });
 

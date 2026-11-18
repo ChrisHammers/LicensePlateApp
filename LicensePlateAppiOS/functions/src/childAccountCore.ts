@@ -34,17 +34,6 @@ export const CHILD_CONSENT_EVENT_TYPES: readonly string[] = [
 ];
 
 /**
- * What parental consent covers (§11.1). Location and ads are deliberately absent:
- * all location flags are forced off for child sessions (FR-33) and child sessions see
- * no ads at MVP (FR-19/D-6). Widening this list requires legal review (OQ-2).
- */
-export const CHILD_CONSENT_SCOPE: readonly string[] = [
-  "gameplay",
-  "search_excluded",
-  "analytics_limited",
-];
-
-/**
  * Versions stamped on every consent capture (FR-31). These are the durable
  * evidence of exactly which wording a parent consented to, so the DISCIPLINE
  * matters more than the format: ANY edit to the consent copy, the guardian
@@ -55,7 +44,7 @@ export const CHILD_CONSENT_SCOPE: readonly string[] = [
  * A date+slug version ("YYYY-MM-DD.slug") is acceptable when the wording change
  * lands in the same change as the bump — the change itself is the pin.
  */
-export const CONSENT_TEXT_VERSION = "1.0.0-2026-08-10";
+export const CONSENT_TEXT_VERSION = "2026-11-17.consent-scopes";
 export const AFFIRMATION_VERSION = "1.0.0-2026-08-10";
 
 /**
@@ -73,10 +62,31 @@ export const AFFIRMATION_TEXT_HASH =
 
 export const CONSENT_POLICY_VERSIONS: Readonly<Record<string, string>> = {
   termsOfService: "2026-08-09.c54758ed",
-  // 2026-08-11: data-collection paragraph rewritten — real names are no longer
-  // collected anywhere in the app (F-6 rework, owner decision).
-  privacyPolicy: "2026-08-11.no-real-names",
+  // 2026-11-17 (F-21 slice 2): §12 rewritten — the intro plus the per-scope subsections
+  // 12.1–12.5 the consent cards link to, and the "Last updated" date.
+  privacyPolicy: "2026-11-17.consent-scopes",
 };
+
+/**
+ * SHA-256 hex digest of the app-shown consent text that CONSENT_TEXT_VERSION covers
+ * (F-21 / FR-103): the values of `CONSENT_TEXT_KEYS` in `consentTextLock.test.ts`, in
+ * that fixed order, for en, es and fr. The test recomputes it from the live
+ * `Localizable.strings` files on every run, so changing any of those strings without
+ * bumping CONSENT_TEXT_VERSION (and the fixture + Swift constant with it) fails the
+ * suite. Update the hash only together with a version bump.
+ */
+export const CONSENT_TEXT_HASH =
+  "d40407aaf657e820a72f16c39cfeef4e2d200db1847838e3f856169a409a40a7";
+
+/**
+ * Version of the server-only consent notice text (F-21 versionBump, counter 2): the
+ * request email, the plus notice, the confirmation pages and the two rejection
+ * messages below. Stamped on every consent request at creation and copied into the
+ * GRANTED row. Never sent by or compared with the client, so a notice-text fix needs
+ * no app release. Slice 3 moves that text into one module and adds a hash lock;
+ * until then this constant is pinned by value only.
+ */
+export const CONSENT_NOTICE_TEXT_VERSION = "2026-11-17.notice-v1";
 
 // ---------------------------------------------------------------------------
 // Consent scope catalog (v3 FR-65 / v4 FR-103, F-21 slice 1)
@@ -87,7 +97,9 @@ export const CONSENT_POLICY_VERSIONS: Readonly<Record<string, string>> = {
 // pins both sides — `consentScopeParity.test.ts` here, `ConsentScopeCatalogParityTests`
 // in Swift. Nothing loads the JSON at runtime.
 //
-// Slice 1 adds these constants and pure helpers only; no entry point calls them yet.
+// Both child-consent entry points validate a selection with `validateConsentScopeSelection`;
+// the request stores `buildScopeVector`'s result; both FR-64 commits re-check it with
+// `validateStoredConsentEvidence` before recording it.
 // ---------------------------------------------------------------------------
 
 export const CONSENT_SCOPE_IDS = [
@@ -402,13 +414,66 @@ export interface ChildStatusRejection {
   kind: "reject";
   code: "invalid-argument" | "failed-precondition" | "permission-denied" | "not-found";
   message: string;
+  /** Passed through as the HttpsError's `details`; the client keys its copy off `reason`. */
+  details?: { reason: string };
 }
 
 function reject(
   code: ChildStatusRejection["code"],
-  message: string
+  message: string,
+  details?: { reason: string }
 ): ChildStatusRejection {
-  return { kind: "reject", code, message };
+  return details ? { kind: "reject", code, message, details } : { kind: "reject", code, message };
+}
+
+/** `details.reason` when the client sent a consent text version other than CONSENT_TEXT_VERSION. */
+export const CONSENT_TEXT_OUTDATED_REASON = "consent_text_outdated";
+/** `details.reason` when the client's scope selection fails `validateConsentScopeSelection`. */
+export const CONSENT_SCOPES_INVALID_REASON = "consent_scopes_invalid";
+
+/**
+ * The HttpsError messages for the two reasons above (approved copy deck,
+ * notice.reject.*; the same text on purpose). Builds without the reason mapping show
+ * the raw message, so it must read as an instruction to the captain. Server text,
+ * under CONSENT_NOTICE_TEXT_VERSION.
+ */
+export const CONSENT_TEXT_OUTDATED_MESSAGE =
+  "This version of RoadTrip Royale can't approve a child. Update the app to the latest version and try again.";
+export const CONSENT_SCOPES_INVALID_MESSAGE =
+  "This version of RoadTrip Royale can't approve a child. Update the app to the latest version and try again.";
+
+export type ConsentCaptureCheck =
+  | { ok: true; consentScopes: ConsentScopeId[]; consentTextVersion: string }
+  | { ok: false; rejection: ChildStatusRejection };
+
+/**
+ * F-21 (FR-65 / FR-103): the consent-text and scope gate shared by both child-consent
+ * entry points. The text version is checked first: a build that shows other wording is
+ * refused even when its selection happens to be valid, so no request is ever stamped
+ * with a version the captain did not see.
+ */
+export function checkConsentCapture(input: {
+  consentScopes?: unknown;
+  consentTextVersion?: unknown;
+}): ConsentCaptureCheck {
+  if (input.consentTextVersion !== CONSENT_TEXT_VERSION) {
+    return {
+      ok: false,
+      rejection: reject("failed-precondition", CONSENT_TEXT_OUTDATED_MESSAGE, {
+        reason: CONSENT_TEXT_OUTDATED_REASON,
+      }),
+    };
+  }
+  const selection = validateConsentScopeSelection(input.consentScopes);
+  if (!selection.ok) {
+    return {
+      ok: false,
+      rejection: reject("failed-precondition", CONSENT_SCOPES_INVALID_MESSAGE, {
+        reason: CONSENT_SCOPES_INVALID_REASON,
+      }),
+    };
+  }
+  return { ok: true, consentScopes: selection.selection, consentTextVersion: CONSENT_TEXT_VERSION };
 }
 
 export type ExpectedAgeOutYearResult =
@@ -454,7 +519,12 @@ export type SetChildStatusDecision =
   | ChildStatusRejection
   // Required, not optional (owner ruling 2026-08-28): the attestation is the only
   // possible age-out source for a mid-membership child — the validator enforces it.
-  | { kind: "set"; expectedAgeOutYearMonth: number }
+  | {
+      kind: "set";
+      expectedAgeOutYearMonth: number;
+      consentScopes: ConsentScopeId[];
+      consentTextVersion: string;
+    }
   | { kind: "clear"; correctionReason: string };
 
 /**
@@ -472,6 +542,9 @@ export function validateSetChildStatusInput(input: {
   consentAcknowledged: unknown;
   guardianAffirmed: unknown;
   expectedAgeOutYearMonth: unknown;
+  /** F-21: required on isChild:true, ignored otherwise. */
+  consentScopes?: unknown;
+  consentTextVersion?: unknown;
   nowYear: number;
 }): SetChildStatusDecision {
   if (!input.actorRole || !CHILD_STATUS_MANAGER_ROLES.includes(input.actorRole)) {
@@ -497,6 +570,10 @@ export function validateSetChildStatusInput(input: {
         "Marking a member as a child requires consentAcknowledged and guardianAffirmed"
       );
     }
+    const capture = checkConsentCapture(input);
+    if (!capture.ok) {
+      return capture.rejection;
+    }
     const yearMonth = validateExpectedAgeOutYearMonth(
       input.expectedAgeOutYearMonth,
       input.nowYear
@@ -515,7 +592,12 @@ export function validateSetChildStatusInput(input: {
         "Marking an existing member as a child requires the month and year they turn 13"
       );
     }
-    return { kind: "set", expectedAgeOutYearMonth: yearMonth.yearMonth };
+    return {
+      kind: "set",
+      expectedAgeOutYearMonth: yearMonth.yearMonth,
+      consentScopes: capture.consentScopes,
+      consentTextVersion: capture.consentTextVersion,
+    };
   }
 
   if (
@@ -535,7 +617,12 @@ export function validateSetChildStatusInput(input: {
 export type ApprovalChildDecision =
   | ChildStatusRejection
   | { kind: "none" }
-  | { kind: "grant"; expectedAgeOutYearMonth: number | undefined }
+  | {
+      kind: "grant";
+      expectedAgeOutYearMonth: number | undefined;
+      consentScopes: ConsentScopeId[];
+      consentTextVersion: string;
+    }
   | { kind: "clear_new_guardian"; correctionReason: string };
 
 /**
@@ -561,6 +648,9 @@ export function evaluateApprovalChildDeclaration(input: {
   guardianAffirmed: unknown;
   correctionReason: unknown;
   expectedAgeOutYearMonth: unknown;
+  /** F-21: required on isChild:true, ignored otherwise. */
+  consentScopes?: unknown;
+  consentTextVersion?: unknown;
   targetIsChildAccount: boolean;
   nowYear: number;
 }): ApprovalChildDecision {
@@ -587,6 +677,10 @@ export function evaluateApprovalChildDeclaration(input: {
         "Approving a child requires consentAcknowledged and guardianAffirmed"
       );
     }
+    const capture = checkConsentCapture(input);
+    if (!capture.ok) {
+      return capture.rejection;
+    }
     const yearMonth = validateExpectedAgeOutYearMonth(
       input.expectedAgeOutYearMonth,
       input.nowYear
@@ -594,7 +688,12 @@ export function evaluateApprovalChildDeclaration(input: {
     if (!yearMonth.ok) {
       return reject("invalid-argument", yearMonth.message);
     }
-    return { kind: "grant", expectedAgeOutYearMonth: yearMonth.yearMonth };
+    return {
+      kind: "grant",
+      expectedAgeOutYearMonth: yearMonth.yearMonth,
+      consentScopes: capture.consentScopes,
+      consentTextVersion: capture.consentTextVersion,
+    };
   }
 
   if (!input.targetIsChildAccount) {
@@ -737,12 +836,65 @@ export interface ConsentGrantedMetadataInput {
   removedFriendEdgeCount?: number;
   /** FR-59.2/FR-108: the assurance level of the method that produced this capture. */
   assuranceLevel?: number;
+  /** AGEOUT FR-110(b): the FR-64 transactions refuse to commit without it. */
+  ageOutYearMonth: number;
   /**
-   * AGEOUT FR-110(b): required on email_plus captures (the FR-64 transaction refuses to
-   * commit without it). Optional here only so the legacy `family_admission` writer keeps
-   * compiling until it is deleted with the F-17 cutover.
+   * F-21 (FR-65 / FR-103) evidence, all copied from the consent request the FR-64
+   * transaction re-read (`validateStoredConsentEvidence`), never from current constants.
    */
-  ageOutYearMonth?: number;
+  consentScopes: ConsentScopeVector;
+  consentTextVersion: string;
+  noticeTextVersion: string;
+  policyVersions: Readonly<Record<string, string>>;
+  consentRequestId: string;
+}
+
+export interface StoredConsentEvidence {
+  consentScopes: ConsentScopeVector;
+  consentTextVersion: string;
+  noticeTextVersion: string;
+  policyVersions: Record<string, string>;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0;
+}
+
+/**
+ * F-21: re-checks the evidence a consent request stored at creation before an FR-64
+ * transaction records it. The vector must pass `validateStoredScopeVector` (so a frozen
+ * scope granted, a missing core or a practice-version drift all fail), both text
+ * versions must be non-empty strings and policyVersions a non-empty map of strings.
+ * The text versions are NOT compared with today's constants: the record states what the
+ * captain was shown when the request was made. Pure; `null` means refuse.
+ */
+export function validateStoredConsentEvidence(
+  requestData: Record<string, unknown> | undefined | null
+): StoredConsentEvidence | null {
+  if (!requestData) return null;
+  const vector = validateStoredScopeVector(requestData.scopeVector);
+  if (!vector.ok) return null;
+  const { consentTextVersion, noticeTextVersion, policyVersions } = requestData;
+  if (!isNonEmptyString(consentTextVersion) || !isNonEmptyString(noticeTextVersion)) {
+    return null;
+  }
+  if (
+    typeof policyVersions !== "object" ||
+    policyVersions === null ||
+    Array.isArray(policyVersions)
+  ) {
+    return null;
+  }
+  const policyEntries = Object.entries(policyVersions as Record<string, unknown>);
+  if (policyEntries.length === 0 || !policyEntries.every(([, value]) => isNonEmptyString(value))) {
+    return null;
+  }
+  return {
+    consentScopes: vector.vector,
+    consentTextVersion,
+    noticeTextVersion,
+    policyVersions: Object.fromEntries(policyEntries) as Record<string, string>,
+  };
 }
 
 /** GRANTED — a verifiable-parental-consent capture (FR-1 / FR-2 set-true / FR-25). */
@@ -753,9 +905,11 @@ export function buildConsentGrantedMetadata(
     familyId: input.familyId,
     childUserId: input.childUserId,
     actorRole: input.actorRole,
-    consentScope: [...CHILD_CONSENT_SCOPE],
-    policyVersions: { ...CONSENT_POLICY_VERSIONS },
-    consentTextVersion: CONSENT_TEXT_VERSION,
+    consentScopes: input.consentScopes,
+    policyVersions: { ...input.policyVersions },
+    consentTextVersion: input.consentTextVersion,
+    noticeTextVersion: input.noticeTextVersion,
+    consentRequestId: input.consentRequestId,
     affirmationVersion: AFFIRMATION_VERSION,
     guardianAffirmed: true,
     method: input.method,

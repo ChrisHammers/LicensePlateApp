@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "consentTextVersion": "1.0.0-2026-08-10",
+  "consentTextVersion": "2026-11-17.consent-scopes",
   "scopes": [
     {
       "id": "core",

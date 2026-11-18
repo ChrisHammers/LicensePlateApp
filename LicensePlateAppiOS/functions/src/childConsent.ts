@@ -17,16 +17,13 @@ import type { ClientMetadata } from "./clientMetadata";
 import {
   AUDIT_CHILD_REGISTRATION_DECLARED,
   AUDIT_PARENTAL_CONSENT_CORRECTED,
-  AUDIT_PARENTAL_CONSENT_GRANTED,
   AUDIT_PARENTAL_CONSENT_REVOKED,
   buildChildRegistrationDeclaredMetadata,
   buildConsentCorrectedMetadata,
-  buildConsentGrantedMetadata,
   buildConsentRevokedMetadata,
   consentMetadataPiiViolations,
   type ChildConsentRevocationReason,
   type ConsentCorrectedMetadataInput,
-  type ConsentGrantedMetadataInput,
 } from "./childAccountCore";
 
 type Firestore = admin.firestore.Firestore;
@@ -39,23 +36,6 @@ function assertUidOnly(metadata: Record<string, unknown>): Record<string, unknow
     );
   }
   return metadata;
-}
-
-export async function writeChildConsentGranted(
-  db: Firestore,
-  input: ConsentGrantedMetadataInput & {
-    actorId: string;
-    clientMetadata: ClientMetadata | null;
-  }
-): Promise<void> {
-  await writeAuditLogTo(db, {
-    eventType: AUDIT_PARENTAL_CONSENT_GRANTED,
-    actorId: input.actorId,
-    subjectType: "user",
-    subjectId: input.childUserId,
-    metadata: assertUidOnly(buildConsentGrantedMetadata(input)),
-    clientMetadata: input.clientMetadata,
-  });
 }
 
 export async function writeChildConsentCorrected(

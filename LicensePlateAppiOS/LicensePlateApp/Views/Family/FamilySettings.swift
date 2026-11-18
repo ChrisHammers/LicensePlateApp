@@ -634,11 +634,12 @@ private struct FamilyChildConsentSheet: View {
 
                     Section {
                         FamilyChildConsentBlock(
+                            // Mark as a child: the member_flag card copy, and (owner ruling
+                            // 2026-08-28) the turns-13 attestation is required here, since it
+                            // is an existing member's only age-out source.
+                            kind: .memberFlag,
                             draft: viewModel.childConsentDraft,
                             yearOptions: viewModel.expectedAgeOutYearOptions,
-                            // Owner ruling 2026-08-28: an existing member's only age-out
-                            // source is this attestation — required here, optional at approve.
-                            attestationRequired: true,
                             onConsentAcknowledgedChange: { viewModel.setChildConsentAcknowledged($0) },
                             onGuardianAffirmedChange: { viewModel.setChildGuardianAffirmed($0) },
                             onExpectedAgeOutYearMonthChange: { viewModel.setChildExpectedAgeOutYearMonth($0) }

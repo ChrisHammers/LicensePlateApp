@@ -217,6 +217,19 @@ enum FamilyChildStatusAnalyticsSource: String, Sendable {
 /// (client-metadata-cloud-calls rule).
 enum FamilyChildStatusPayload {
 
+    /// F-21 (FR-65): the scope selection and the consent-text version this build showed.
+    /// Sent ONLY with a child consent (`isChild: true`); the server equality-gates the
+    /// version and validates the selection, and never reads either on an adult or a clear.
+    static let consentScopesField = "consentScopes"
+    static let consentTextVersionField = "consentTextVersion"
+
+    private static func addingConsentScopeFields(to payload: [String: Any]) -> [String: Any] {
+        var payload = payload
+        payload[consentScopesField] = ConsentScopeCatalog.launchSelection.map(\.rawValue)
+        payload[consentTextVersionField] = ConsentScopeCatalog.consentTextVersion
+        return payload
+    }
+
     /// `setFamilyMemberChildStatus` — set branch (FR-2 set-true / FR-4).
     static func setChild(
         familyId: String,
@@ -233,7 +246,7 @@ enum FamilyChildStatusPayload {
         if let yearMonth = consent.expectedAgeOutYearMonth {
             payload["expectedAgeOutYearMonth"] = yearMonth
         }
-        return payload
+        return addingConsentScopeFields(to: payload)
     }
 
     /// `setFamilyMemberChildStatus` — clear branch (FR-5 correction only).
@@ -299,7 +312,7 @@ enum FamilyChildStatusPayload {
         if let yearMonth = declaration.consent.expectedAgeOutYearMonth {
             payload["expectedAgeOutYearMonth"] = yearMonth
         }
-        return payload
+        return addingConsentScopeFields(to: payload)
     }
 }
 
@@ -308,10 +321,11 @@ enum FamilyChildStatusPayload {
 /// The two legal documents the consent copy cites (FR-31). A parent must be able to read
 /// them in place, before affirming.
 ///
-/// The references are markdown links inside the localized copy rather than separate
-/// buttons, so the RENDERED WORDING IS UNCHANGED — only the markup is new, which keeps
-/// this out of `CONSENT_TEXT_VERSION` territory. Markdown links in a SwiftUI `Text` are
-/// real links to VoiceOver (link trait + links rotor), not styled text.
+/// The references are markdown links inside the localized full-policy links line
+/// (`family.consent_scope.full_policy_links`) rather than separate buttons. Markdown links
+/// in a SwiftUI `Text` are real links to VoiceOver (link trait + links rotor), not styled
+/// text. The scope cards' per-section links are `ConsentScopePolicyAnchor`, a separate type,
+/// so `allCases` here stays exactly terms + privacy.
 enum ChildConsentPolicyLink: String, Identifiable, CaseIterable, Sendable {
     case termsOfService = "terms"
     case privacyPolicy = "privacy"
@@ -372,8 +386,41 @@ protocol FamilyChildStatusManaging: AnyObject {
 /// it could read the target's flag; this covers the unreadable-target race.
 ///
 /// Text matching follows the existing `FriendsFamilyInviteAnalytics` precedent — the
-/// server sends no machine-readable `details.reason` on this path.
+/// server sends no machine-readable `details.reason` for that rejection.
+///
+/// F-21 (FR-65): the two consent-scope rejections DO carry `details.reason`, on both the
+/// approve and the Mark-as-a-child callables. Either one means this build's consent text
+/// or scope selection is not what the server records, so the only fix is an app update.
 enum FamilyChildApprovalRejection {
+    static let consentTextOutdatedReason = "consent_text_outdated"
+    static let consentScopesInvalidReason = "consent_scopes_invalid"
+    /// The one message both reasons map to.
+    static let updateRequiredMessageKey = "family.consent_scope.update_required"
+
+    static func isConsentTextOutdated(_ error: Error) -> Bool {
+        failedPreconditionReason(error) == consentTextOutdatedReason
+    }
+
+    static func isConsentScopesInvalid(_ error: Error) -> Bool {
+        failedPreconditionReason(error) == consentScopesInvalidReason
+    }
+
+    static func requiresAppUpdate(_ error: Error) -> Bool {
+        isConsentTextOutdated(error) || isConsentScopesInvalid(error)
+    }
+
+    /// `details.reason` of a callable `failed-precondition`, the precedent being
+    /// `ChildRestrictedModeService.isChildRestrictionRejection`.
+    private static func failedPreconditionReason(_ error: Error) -> String? {
+        let nsError = error as NSError
+        guard nsError.domain == FunctionsErrorDomain,
+              FunctionsErrorCode(rawValue: nsError.code) == .failedPrecondition,
+              let details = nsError.userInfo[FunctionsErrorDetailsKey] as? [String: Any] else {
+            return nil
+        }
+        return details["reason"] as? String
+    }
+
     static func isMissingExplicitChildDeclaration(_ error: Error) -> Bool {
         let nsError = error as NSError
         guard nsError.domain == FunctionsErrorDomain,

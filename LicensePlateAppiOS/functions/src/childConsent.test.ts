@@ -3,7 +3,6 @@ import type * as admin from "firebase-admin";
 import { FakeFirestore } from "./testSupport/fakeFirestore";
 import {
   writeChildConsentCorrected,
-  writeChildConsentGranted,
   writeChildMembershipRevocation,
   writeChildRegistrationDeclared,
 } from "./childConsent";
@@ -32,36 +31,6 @@ function auditRows(db: FakeFirestore): Array<Record<string, unknown>> {
 }
 
 describe("childConsent writers", () => {
-  it("GRANTED row: event type, actor/subject, uid-only metadata, clientMetadata sibling", async () => {
-    const db = new FakeFirestore();
-    await writeChildConsentGranted(asFirestore(db), {
-      familyId: "fam1",
-      childUserId: "kid",
-      actorId: "parent",
-      actorRole: "creator",
-      method: "manager_set",
-      expectedAgeOutYearMonth: 2031,
-      removedFriendEdgeCount: 1,
-      clientMetadata: CLIENT_METADATA,
-    });
-
-    const rows = auditRows(db);
-    expect(rows).toHaveLength(1);
-    const row = rows[0];
-    expect(row.eventType).toBe("AUDIT_PARENTAL_CONSENT_GRANTED");
-    expect(row.actorId).toBe("parent");
-    expect(row.subjectType).toBe("user");
-    expect(row.subjectId).toBe("kid");
-    // clientMetadata is a SIBLING field, never nested inside metadata.
-    expect(row.clientMetadata).toEqual(CLIENT_METADATA);
-    const metadata = row.metadata as Record<string, unknown>;
-    expect(metadata).not.toHaveProperty("clientMetadata");
-    expect(consentMetadataPiiViolations(metadata)).toEqual([]);
-    expect(metadata.guardianAffirmed).toBe(true);
-    expect(metadata.consentTextVersion).toBeTruthy();
-    expect(metadata.affirmationVersion).toBeTruthy();
-  });
-
   it("REVOKED rows accept every enumerated exit reason and omit clientMetadata on background paths", async () => {
     const db = new FakeFirestore();
     for (const reason of CHILD_CONSENT_REVOCATION_REASONS) {

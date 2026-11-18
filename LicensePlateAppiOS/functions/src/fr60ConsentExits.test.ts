@@ -44,7 +44,7 @@ vi.mock("firebase-admin", async () => {
 });
 
 import type { FakeFirestore } from "./testSupport/fakeFirestore";
-import { confirmGuardianConsent } from "./testSupport/consentTestHelpers";
+import { confirmGuardianConsent, LAUNCH_CONSENT_PAYLOAD } from "./testSupport/consentTestHelpers";
 import {
   approveFamilyJoinRequest_CaptainStep,
   createFamily,
@@ -274,6 +274,7 @@ describe("FR-60(c): admission clears the redemption-window marker", () => {
       isChild: true,
       consentAcknowledged: true,
       guardianAffirmed: true,
+      ...LAUNCH_CONSENT_PAYLOAD,
     });
     // FR-59.1: admission (and with it the marker delete) commits at the guardian's
     // emailed confirmation, not at the captain's tap.
@@ -309,6 +310,7 @@ describe("FR-60(c): admission clears the redemption-window marker", () => {
       isChild: true,
       consentAcknowledged: true,
       guardianAffirmed: true,
+      ...LAUNCH_CONSENT_PAYLOAD,
     });
     const outcome = await confirmGuardianConsent(db(), {
       familyId,

@@ -93,13 +93,19 @@ struct ChildConsentPolicyLinkTests {
         }
     }
 
-    /// The citations became links by adding markdown markup only. The RENDERED wording
-    /// must stay byte-identical, because that text is consent evidence — a real wording
-    /// change would require bumping CONSENT_TEXT_VERSION server-side.
-    @Test func policySummaryRendersWithoutAnyVisibleMarkup() throws {
-        let raw = "family.child.policy_summary".localized
+    /// F-21: the deleted policy summary's two citations moved into the full-policy links
+    /// line. Read from the English bundle explicitly so the exact rendered wording is
+    /// pinned regardless of the simulator's language.
+    private func fullPolicyLinksMarkdown() throws -> String {
+        try ConsentTextBundles.value(
+            for: ConsentScopeCardPolicy.fullPolicyLinksKey,
+            language: "en"
+        )
+    }
+
+    @Test func fullPolicyLinksRenderWithoutAnyVisibleMarkup() throws {
         let attributed = try AttributedString(
-            markdown: raw,
+            markdown: try fullPolicyLinksMarkdown(),
             options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         )
         let rendered = String(attributed.characters)
@@ -109,26 +115,38 @@ struct ChildConsentPolicyLinkTests {
         #expect(!rendered.contains("["))
         #expect(rendered.contains("Terms of Service section 2"))
         #expect(rendered.contains("Privacy Policy section 12"))
-        #expect(rendered == """
-        Children play only inside your family. We keep their username and avatar, trip \
-        activity, discoveries, and lifetime stats. No ads, no location, no search, no \
-        friends. You can review or delete their data any time in Family Settings. See \
-        Terms of Service section 2 and Privacy Policy section 12.
-        """)
+        #expect(rendered == "Full details: Terms of Service section 2 and Privacy Policy section 12.")
     }
 
-    /// Both citations must actually carry a link attribute — VoiceOver needs real links,
-    /// not styled text.
-    @Test func bothCitationsCarryLinkAttributes() throws {
-        let attributed = try AttributedString(
-            markdown: "family.child.policy_summary".localized,
-            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        )
-        let linked = attributed.runs.compactMap { run -> ChildConsentPolicyLink? in
-            guard let url = run.link else { return nil }
-            return ChildConsentPolicyLink.from(url: url)
+    /// Both citations must actually carry a link attribute, in every language — VoiceOver
+    /// needs real links, not styled text, and the block's handler resolves exactly these.
+    @Test func bothCitationsCarryLinkAttributesInEveryLanguage() throws {
+        for language in ConsentTextBundles.languages {
+            let attributed = try AttributedString(
+                markdown: try ConsentTextBundles.value(
+                    for: ConsentScopeCardPolicy.fullPolicyLinksKey,
+                    language: language
+                ),
+                options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+            )
+            let linked = attributed.runs.compactMap { run -> ChildConsentPolicyLink? in
+                guard let url = run.link else { return nil }
+                return ChildConsentPolicyLink.from(url: url)
+            }
+            #expect(linked.count == 2, "\(language)")
+            #expect(Set(linked) == Set(ChildConsentPolicyLink.allCases), "\(language)")
         }
-        #expect(Set(linked) == Set(ChildConsentPolicyLink.allCases))
+    }
+
+    /// The scope cards' anchors are a separate type, so this one keeps meaning exactly the
+    /// two cited documents.
+    @Test func policyLinkCasesStayTermsAndPrivacy() {
+        #expect(ChildConsentPolicyLink.allCases == [.termsOfService, .privacyPolicy])
+        for anchor in ConsentScopePolicyAnchor.allCases {
+            let url = try? #require(anchor.url)
+            #expect(url.flatMap(ChildConsentPolicyLink.from(url:)) == nil)
+            #expect(url.flatMap(ConsentScopePolicyAnchor.from(url:)) == anchor)
+        }
     }
 }
 
@@ -373,6 +391,104 @@ struct FamilyChildStatusPayloadTests {
         #expect(payload["isChild"] == nil)
     }
 
+    // MARK: F-21 (FR-65): scope selection + consent-text version
+
+    @Test func setChildPayloadCarriesTheLaunchScopesAndTheConsentTextVersion() {
+        let payload = FamilyChildStatusPayload.setChild(
+            familyId: "fam-1",
+            memberUserId: "child-1",
+            consent: ChildConsentDraft(consentAcknowledged: true, guardianAffirmed: true)
+        )
+        #expect(payload["consentScopes"] as? [String] == ["core"])
+        #expect(payload["consentTextVersion"] as? String == "2026-11-17.consent-scopes")
+        #expect(payload["consentTextVersion"] as? String == ConsentScopeCatalog.consentTextVersion)
+    }
+
+    @Test func childApprovalPayloadCarriesTheLaunchScopesAndTheConsentTextVersion() {
+        let payload = FamilyChildStatusPayload.respondToPendingRequest(
+            familyId: "fam-1",
+            requestId: "req-1",
+            approve: true,
+            declaration: ChildApprovalDraft(
+                isChild: true,
+                consent: ChildConsentDraft(consentAcknowledged: true, guardianAffirmed: true)
+            )
+        )
+        #expect(payload["isChild"] as? Bool == true)
+        #expect(payload["consentScopes"] as? [String] == ["core"])
+        #expect(payload["consentTextVersion"] as? String == ConsentScopeCatalog.consentTextVersion)
+    }
+
+    @Test func clearAndAdultPayloadsCarryNoScopeFields() {
+        var correction = ChildApprovalDraft(isChild: false)
+        correction.correction = ChildCorrectionDraft(
+            reason: .childTurned13,
+            statusAcknowledged: true,
+            guardianAffirmed: true
+        )
+        let payloads: [[String: Any]] = [
+            // setFamilyMemberChildStatus(isChild: false)
+            FamilyChildStatusPayload.clearChild(
+                familyId: "f", memberUserId: "m", correctionReason: .flagSetInError
+            ),
+            // Adult approvals: unanswered, plain false, and a completed correction.
+            FamilyChildStatusPayload.respondToPendingRequest(
+                familyId: "f", requestId: "r", approve: true, declaration: nil
+            ),
+            FamilyChildStatusPayload.respondToPendingRequest(
+                familyId: "f", requestId: "r", approve: true, declaration: ChildApprovalDraft(isChild: false)
+            ),
+            FamilyChildStatusPayload.respondToPendingRequest(
+                familyId: "f", requestId: "r", approve: true, declaration: correction
+            ),
+            // A decline never carries a declaration at all.
+            FamilyChildStatusPayload.respondToPendingRequest(
+                familyId: "f",
+                requestId: "r",
+                approve: false,
+                declaration: ChildApprovalDraft(
+                    isChild: true,
+                    consent: ChildConsentDraft(consentAcknowledged: true, guardianAffirmed: true)
+                )
+            )
+        ]
+        for payload in payloads {
+            #expect(payload["consentScopes"] == nil)
+            #expect(payload["consentTextVersion"] == nil)
+        }
+    }
+
+    /// The scope fields ride top-level beside `clientMetadata`, never inside it, and the
+    /// metadata never swallows them.
+    @Test func scopeFieldsStayTopLevelBesideClientMetadata() {
+        let childPayloads: [[String: Any]] = [
+            FamilyChildStatusPayload.setChild(
+                familyId: "f",
+                memberUserId: "m",
+                consent: ChildConsentDraft(consentAcknowledged: true, guardianAffirmed: true)
+            ),
+            FamilyChildStatusPayload.respondToPendingRequest(
+                familyId: "f",
+                requestId: "r",
+                approve: true,
+                declaration: ChildApprovalDraft(
+                    isChild: true,
+                    consent: ChildConsentDraft(consentAcknowledged: true, guardianAffirmed: true)
+                )
+            )
+        ]
+        for payload in childPayloads {
+            let sent = payload.addingClientMetadata()
+            #expect(sent["consentScopes"] as? [String] == ["core"])
+            #expect(sent["consentTextVersion"] as? String == ConsentScopeCatalog.consentTextVersion)
+            let metadata = sent["clientMetadata"] as? [String: Any]
+            #expect(metadata != nil)
+            #expect(metadata?["consentScopes"] == nil)
+            #expect(metadata?["consentTextVersion"] == nil)
+            #expect(payload["clientMetadata"] == nil)
+        }
+    }
+
     /// client-metadata-cloud-calls rule: sibling field, never nested in the payload.
     @Test func clientMetadataRidesAsASiblingField() {
         let payload = FamilyChildStatusPayload
@@ -410,6 +526,7 @@ struct FamilyChildStatusPayloadTests {
 
 // MARK: - Server rejection mapping (FR-25 race)
 
+@MainActor
 struct FamilyChildApprovalRejectionTests {
 
     private func callableError(_ code: FunctionsErrorCode, _ message: String) -> NSError {
@@ -438,6 +555,68 @@ struct FamilyChildApprovalRejectionTests {
             NSLocalizedDescriptionKey: "approval must explicitly declare isChild"
         ])
         #expect(!FamilyChildApprovalRejection.isMissingExplicitChildDeclaration(error))
+    }
+
+    // MARK: F-21 (FR-65): consent-scope rejections read details.reason
+
+    private func reasonError(
+        _ reason: String,
+        code: FunctionsErrorCode = .failedPrecondition,
+        domain: String = FunctionsErrorDomain
+    ) -> NSError {
+        NSError(
+            domain: domain,
+            code: code.rawValue,
+            userInfo: [
+                NSLocalizedDescriptionKey: "server English message",
+                FunctionsErrorDetailsKey: ["reason": reason]
+            ]
+        )
+    }
+
+    @Test func consentTextOutdatedRequiresAnAppUpdate() {
+        let error = reasonError("consent_text_outdated")
+        #expect(FamilyChildApprovalRejection.isConsentTextOutdated(error))
+        #expect(!FamilyChildApprovalRejection.isConsentScopesInvalid(error))
+        #expect(FamilyChildApprovalRejection.requiresAppUpdate(error))
+    }
+
+    @Test func consentScopesInvalidRequiresAnAppUpdate() {
+        let error = reasonError("consent_scopes_invalid")
+        #expect(FamilyChildApprovalRejection.isConsentScopesInvalid(error))
+        #expect(!FamilyChildApprovalRejection.isConsentTextOutdated(error))
+        #expect(FamilyChildApprovalRejection.requiresAppUpdate(error))
+    }
+
+    @Test func otherReasonsCodesAndDomainsAreNotAnAppUpdate() {
+        #expect(!FamilyChildApprovalRejection.requiresAppUpdate(reasonError("unconsented_child")))
+        #expect(!FamilyChildApprovalRejection.requiresAppUpdate(
+            reasonError("consent_text_outdated", code: .invalidArgument)
+        ))
+        #expect(!FamilyChildApprovalRejection.requiresAppUpdate(
+            reasonError("consent_text_outdated", domain: "Other")
+        ))
+        // No details at all: the message alone never counts.
+        #expect(!FamilyChildApprovalRejection.requiresAppUpdate(
+            callableError(.failedPrecondition, "consent_text_outdated")
+        ))
+    }
+
+    /// Both callables' error surfaces show the one update line. The Mark-as-a-child path
+    /// goes through the repository's mapping; the approve path's view model uses the key.
+    @Test func bothReasonsMapToTheUpdateRequiredLine() {
+        #expect(FamilyChildApprovalRejection.updateRequiredMessageKey == "family.consent_scope.update_required")
+        for reason in ["consent_text_outdated", "consent_scopes_invalid"] {
+            let mapped = FamilyRepository.childStatusCallableError(reasonError(reason)) as NSError
+            #expect(
+                mapped.localizedDescription
+                    == FamilyChildApprovalRejection.updateRequiredMessageKey.localized
+            )
+            #expect(mapped.localizedDescription != FamilyChildApprovalRejection.updateRequiredMessageKey)
+        }
+        // Any other failed-precondition keeps the generic line.
+        let other = FamilyRepository.childStatusCallableError(reasonError("unconsented_child")) as NSError
+        #expect(other.localizedDescription == "family.child.error.not_allowed".localized)
     }
 }
 
